@@ -400,6 +400,9 @@ class ListingResumeUpload(models.Model):
     stored_file = models.FileField(upload_to="listing-resumes/", storage=private_file_storage)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self) -> str:
+        return self.original_name
+
 
 class JobRoleTemplate(models.Model):
     """A common job ("Sales Executive") with what it usually needs, so employers and job seekers

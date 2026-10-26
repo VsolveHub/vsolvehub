@@ -202,7 +202,7 @@ function ApplyHeader({
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
+                className="inline-flex min-h-11 sm:min-h-8 sm:h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
               >
                 <ListChecks size={14} aria-hidden />
                 <span>Steps</span>

@@ -162,7 +162,7 @@ function UnitCard({
         </div>
       ) : unit.professional || unit.status === "HELD" || unit.status === "PAYMENT_PENDING" ? (
         <div className="mt-3">
-          <MockProfessionalCard serviceName={unit.lines[0]?.label} />
+          <MockProfessionalCard professional={unit.professional} />
         </div>
       ) : null}
 

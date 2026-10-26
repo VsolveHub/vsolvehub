@@ -47,7 +47,9 @@ ignore = [
 "**/models.py" = ["RUF012"]
 "**/models/*.py" = ["RUF012"]
 "config/settings/*.py" = ["F403", "F405"]
-"tests/**/*.py" = ["S101"]
+# A test's expected value *is* the specification: `assert refund.amount_paise == 45000` reads
+# better than a constant named for it. Same call already made for listings tests and seeds.
+"tests/**/*.py" = ["S101", "PLR2004"]
 "tests/listings/**/*.py" = ["S101", "E501", "PLR2004", "I001", "F401"]
 # Seed commands drive real endpoints and assert the responses, and use `random` for spread.
 # Neither is a security property: every one of them refuses to run outside `DEBUG`.
@@ -112,6 +114,9 @@ module = [
   "botocore.*",
   "celery",
   "environ",
+  # Arrives with drf-spectacular; no typeshed stubs are published for it.
+  "jsonschema",
+  "jsonschema.*",
 ]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]

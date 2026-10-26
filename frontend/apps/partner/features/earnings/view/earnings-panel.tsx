@@ -1,6 +1,7 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Spinner, formatMoney , formatDate} from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Skeleton, Spinner, formatMoney, formatDate } from "@vsolve/ui";
+import Link from "next/link";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
@@ -88,10 +89,11 @@ export function EarningsPanel() {
 
   if (balance.isPending) {
     return (
-      <Card className="flex items-center gap-2 p-6 text-text-secondary">
-        <Spinner size="sm" />
-        Loading your earnings…
-      </Card>
+      <div className="space-y-5" aria-busy="true" aria-label="Loading your earnings">
+        <Skeleton className="h-32 w-full rounded-[var(--radius-card)]" />
+        <Skeleton className="h-48 w-full rounded-[var(--radius-card)]" />
+        <Skeleton className="h-64 w-full rounded-[var(--radius-card)]" />
+      </div>
     );
   }
 
@@ -244,7 +246,10 @@ export function EarningsPanel() {
             </p>
           ) : (
             <p className="text-sm text-text-secondary">
-              No payout account yet.
+              No payout account yet.{" "}
+              <Link href="/me/profile" className="font-semibold text-action underline-offset-2 hover:underline">
+                Add your bank details
+              </Link>
             </p>
           )}
         </div>

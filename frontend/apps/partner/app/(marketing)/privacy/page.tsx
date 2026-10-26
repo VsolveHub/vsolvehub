@@ -3,7 +3,10 @@ import { ShieldCheck } from "lucide-react";
 import { LegalPage } from "@/components/legal-page";
 
 export const dynamic = "force-static";
-export const metadata: Metadata = { title: "Privacy Policy" };
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "How V Solve Hub collects, uses and protects the personal data of its service partners.",
+};
 
 export default function PrivacyPage() {
   return (

@@ -286,7 +286,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
             cleaned[name] = text
         return cleaned
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0912
         attrs = super().validate(attrs)
         structured = attrs.get("structured_fields")
         if structured is not None:
@@ -344,7 +344,10 @@ class PartnerListingSerializer(ListingSummarySerializer):
             if min_p < 1:
                 raise serializers.ValidationError(
                     {
-                        "salary_min_paise": "Enter a minimum pay in paise. The client sends rupees converted on submit."
+                        "salary_min_paise": (
+                            "Enter a minimum pay in paise. "
+                            "The client sends rupees converted on submit."
+                        )
                     }
                 )
             if max_p < min_p:

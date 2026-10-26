@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { ReviewsWorkspace } from "@/features/partner-review/view/reviews-workspace";
+
+export const metadata: Metadata = { title: "Partner applications" };
 
 /**
  * Partner application review.

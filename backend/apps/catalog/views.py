@@ -1,13 +1,14 @@
 """Read-only public catalog API."""
 
 from django.utils.cache import patch_cache_control
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalog.selectors import (
+    active_promo_banners,
     public_categories,
     public_service_by_slug,
     public_service_index,
@@ -15,6 +16,7 @@ from apps.catalog.selectors import (
 )
 from apps.catalog.serializers import (
     CategorySerializer,
+    PromoBannerSerializer,
     ServiceCardSerializer,
     ServiceDetailSerializer,
     ServiceIndexItemSerializer,
@@ -73,3 +75,30 @@ class ServiceDetailView(APIView):
 
 class ServiceConfigurationView(ServiceDetailView):
     """Stable configuration endpoint retained separately for booking-workspace caching."""
+
+
+class PromoBannerListView(APIView):
+    """Display-only promotional banners for service pages. Never read by pricing."""
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Catalog"],
+        parameters=[
+            OpenApiParameter(
+                "category",
+                str,
+                required=False,
+                description="Category slug; adds that category's banners to the site-wide ones.",
+            )
+        ],
+        responses={200: PromoBannerSerializer(many=True)},
+    )
+    def get(self, request: Request) -> Response:
+        category_slug = request.query_params.get("category") or None
+        response = Response(
+            PromoBannerSerializer(active_promo_banners(category_slug), many=True).data
+        )
+        patch_cache_control(response, public=True, max_age=60)
+        return response

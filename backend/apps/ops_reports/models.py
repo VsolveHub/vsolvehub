@@ -11,11 +11,17 @@ class OpsReportSettings(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="TDS rate (e.g. 1.00 for 1%) to apply on settlement reports. If unset, column is omitted.",
+        help_text=(
+            "TDS rate (e.g. 1.00 for 1%) to apply on settlement reports. "
+            "If unset, column is omitted."
+        ),
     )
 
     class Meta:
         verbose_name_plural = "Ops report settings"
+
+    def __str__(self) -> str:
+        return f"ops-report-settings:{self.pk}"
 
 
 class OpsReportPreset(models.Model):
@@ -34,6 +40,9 @@ class OpsReportPreset(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class OpsDashboardPreference(models.Model):
     """Operator preference for pinned tiles on the home dashboard."""
@@ -43,6 +52,12 @@ class OpsDashboardPreference(models.Model):
     )
     pinned_tiles = models.JSONField(
         default=list,
-        help_text="List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability']",
+        help_text=(
+            "List of tile IDs pinned by the operator. e.g. ['open_cases', "
+            "'overdue_bookings', 'captured_today', 'wallet_liability']"
+        ),
     )
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"dashboard:{self.operator_id}"

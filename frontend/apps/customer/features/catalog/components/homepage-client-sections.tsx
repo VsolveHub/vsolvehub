@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dialog, formatMoney } from "@vsolve/ui";
+import { Dialog, formatMoney, useHydrated } from "@vsolve/ui";
 import { describeError, fetchCachedQuery, queryKeys, SESSION_STATE } from "@vsolve/query";
 import { fetchServiceDetail } from "@/features/catalog/client-queries";
 import {
@@ -397,7 +397,7 @@ export function HeroSplitCarousel() {
       {/* Navigation Buttons */}
       <button
         onClick={handlePrev}
-        className="absolute left-4 top-1/2 -translate-y-1/2 size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
+        className="absolute bottom-3 right-16 size-10 md:bottom-auto md:right-auto md:left-4 md:top-1/2 md:-translate-y-1/2 md:size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
         aria-label="Previous slide"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="size-4 rotate-180">
@@ -406,7 +406,7 @@ export function HeroSplitCarousel() {
       </button>
       <button
         onClick={handleNext}
-        className="absolute right-4 top-1/2 -translate-y-1/2 size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
+        className="absolute bottom-3 right-4 size-10 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
         aria-label="Next slide"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
@@ -415,16 +415,23 @@ export function HeroSplitCarousel() {
       </button>
 
       {/* Dot Indicators */}
-      <div className="absolute bottom-4 left-8 flex gap-1.5 z-20">
+      {/* Each dot sits in a 44px-tall button: the dot alone was a 6px tap target. */}
+      <div className="absolute bottom-1 left-7 flex z-20">
         {CAROUSEL_SLIDES.map((_, idx) => (
           <button
             key={idx}
+            type="button"
             onClick={() => setCurrentIdx(idx)}
-            className={`size-1.5 rounded-full transition-all duration-300 ${
-              idx === currentIdx ? "w-5 bg-navy-900" : "bg-navy-900/30"
-            }`}
+            className="flex h-11 items-center px-[3px]"
             aria-label={`Go to slide ${idx + 1}`}
-          />
+            aria-current={idx === currentIdx ? "true" : undefined}
+          >
+            <span
+              className={`block h-1.5 rounded-full transition-all duration-300 ${
+                idx === currentIdx ? "w-5 bg-navy-900" : "w-1.5 bg-navy-900/30"
+              }`}
+            />
+          </button>
         ))}
       </div>
     </section>
@@ -642,6 +649,10 @@ function CustomerReviewsMarquee() {
 export function HomepageClientSections() {
   const queryClient = useQueryClient();
   const cartQuery = useCart();
+  // The server renders with no cart; the browser may already hold one in the query cache.
+  // Reading it before hydration drew a quantity stepper where the server drew "Add +" and
+  // React threw a hydration mismatch. Until hydrated, render exactly what the server did.
+  const hydrated = useHydrated();
   const addItem = useAddCartItem();
   const updateItem = useUpdateCartItem();
   const removeItem = useRemoveCartItem();
@@ -789,7 +800,7 @@ export function HomepageClientSections() {
   };
 
   const renderItemAction = (slug: string) => {
-    const cart = cartQuery.data;
+    const cart = hydrated ? cartQuery.data : undefined;
     const cartItem = cart?.items.find((item) => item.service_slug === slug);
 
     if (cartItem) {
@@ -862,7 +873,7 @@ export function HomepageClientSections() {
       <section className="flex flex-col gap-5">
         <div>
           <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Best Sellers</h2>
-          <p className="text-sm md:text-base text-text-secondary mt-1">Most booked services in your city</p>
+          <p className="text-sm md:text-base text-text-secondary mt-1">Popular quick fixes with a fixed starting price</p>
         </div>
 
         <HomepageServiceRow items={BEST_SELLERS} renderAction={renderItemAction} />
@@ -880,7 +891,7 @@ export function HomepageClientSections() {
           </div>
           <Link
             href="/catalog/electrician"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
+            className="-my-3.5 inline-flex items-center gap-1 py-3.5 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
@@ -939,7 +950,7 @@ export function HomepageClientSections() {
           </div>
           <Link
             href="/catalog/plumber"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
+            className="-my-3.5 inline-flex items-center gap-1 py-3.5 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
@@ -960,7 +971,7 @@ export function HomepageClientSections() {
           </div>
           <Link
             href="/catalog/technician"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
+            className="-my-3.5 inline-flex items-center gap-1 py-3.5 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">

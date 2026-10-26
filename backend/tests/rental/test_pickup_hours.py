@@ -103,7 +103,7 @@ def test_invalid_schedules_are_refused_and_nothing_is_saved(rental_world, days, 
         save_pickup_hours(partner=partner, days=days)
     assert refused.value.code == code
     # The old schedule survives a refused save.
-    assert RentalPickupDay.objects.filter(partner=partner).count() == 7  # noqa: PLR2004
+    assert RentalPickupDay.objects.filter(partner=partner).count() == 7
 
 
 def test_payload_lists_seven_days_monday_first(rental_world):
@@ -215,7 +215,7 @@ def test_booking_on_open_days_goes_through(rental_world):
         end_date=saturday + timedelta(days=1),
         hold_deposit_for_demo=True,
     )
-    assert booking.end_date.weekday() == 6  # noqa: PLR2004
+    assert booking.end_date.weekday() == 6
 
 
 # --- publishing ------------------------------------------------------------------------------

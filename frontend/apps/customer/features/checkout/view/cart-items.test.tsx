@@ -148,9 +148,10 @@ describe("an empty cart", () => {
   });
 });
 
-describe("the cart version", () => {
-  it("is shown, because every command is checked against it", () => {
+describe("the cart count", () => {
+  it("counts the services without exposing the internal cart version", () => {
     render(<CartVersionNote cart={twoItems} />);
-    expect(screen.getByText(/2 services · saved version/)).toHaveTextContent("4");
+    expect(screen.getByText("2 services in your cart")).toBeInTheDocument();
+    expect(screen.queryByText(/version/)).not.toBeInTheDocument();
   });
 });

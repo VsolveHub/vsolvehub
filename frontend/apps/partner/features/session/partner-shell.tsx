@@ -141,6 +141,17 @@ function NoPartnerAccess({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+/**
+ * Routes whose own content already renders a title and a way back, so the
+ * generic `FocusedHeader` only duplicates it under the fallback title
+ * "Details": the job-post wizard needs its own step-aware "Back" (step back,
+ * not browser-history back) beside its real title, and the day-hire guide has
+ * its own "← Work" link and `<h1>`.
+ */
+export function hasOwnFocusedHeader(pathname: string): boolean {
+  return pathname === "/listings/post" || pathname === "/work/how-day-hire-works";
+}
+
 function FocusedHeader({
   pathname,
   titleOverride,
@@ -450,7 +461,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
               </div>
             </header>
           </div>
-        ) : chromeMode === "focused" ? (
+        ) : chromeMode === "focused" && !hasOwnFocusedHeader(pathname) ? (
           <FocusedHeader pathname={pathname} titleOverride={headerTitle} />
         ) : null}
 

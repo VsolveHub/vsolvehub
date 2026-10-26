@@ -19,12 +19,21 @@ type PageProps = {
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Book a service",
-  // A half-configured booking form is not a useful search result, and indexing
-  // it would compete with the catalog page that is.
-  robots: { index: false, follow: true },
-};
+/**
+ * Names the service in the tab. `getServiceConfiguration` is `cache`d, so this
+ * shares the page's own read rather than adding one; an unknown slug keeps the
+ * generic title and the page itself answers with `notFound()`.
+ */
+export async function generateMetadata({ params }: Pick<PageProps, "params">): Promise<Metadata> {
+  const { service: serviceSlug } = await params;
+  const service = await getServiceConfiguration(serviceSlug).catch(() => null);
+  return {
+    title: service ? `Book ${service.name}` : "Book a service",
+    // A half-configured booking form is not a useful search result, and indexing
+    // it would compete with the catalog page that is.
+    robots: { index: false, follow: true },
+  };
+}
 
 export default async function BookingPage({ params, searchParams }: PageProps) {
   const { service: serviceSlug } = await params;

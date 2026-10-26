@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | V Solve Hub",
+  title: "Privacy Policy",
   description: "Learn how V Solve Hub collects, uses, and protects your personal data.",
 };
 
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
       <div className="bg-[#041227] text-white py-16 px-4 sm:px-6 relative overflow-hidden">
         <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:24px_24px]" />
         <div className="mx-auto max-w-[1216px] relative z-10 flex flex-col items-center text-center">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[#8EA2C6] hover:text-white transition-colors mb-6 group">
+          <Link href="/" className="-mt-3.5 mb-2.5 inline-flex items-center gap-1.5 py-3.5 text-xs font-bold uppercase tracking-widest text-[#8EA2C6] hover:text-white transition-colors group">
             <svg viewBox="0 0 20 20" fill="none" className="size-3.5 rotate-180 transition-transform group-hover:-translate-x-0.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 10h11m-4-4 4 4-4 4" />
             </svg>
@@ -100,7 +100,7 @@ export default function PrivacyPage() {
                 <a
                   key={sec.id}
                   href={`#${sec.id}`}
-                  className="flex items-center justify-between px-3 py-2 text-xs font-semibold text-text-secondary hover:text-[#EA580C] hover:bg-navy-50/50 rounded-lg transition-colors"
+                  className="flex min-h-11 items-center justify-between px-3 py-2 text-xs font-semibold text-text-secondary hover:text-[#EA580C] hover:bg-navy-50/50 rounded-lg transition-colors"
                 >
                   <span>{sec.title}</span>
                   <span className="text-[10px] text-text-secondary/50 font-bold font-mono">{sec.num}</span>

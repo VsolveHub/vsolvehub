@@ -122,7 +122,7 @@ def test_cancel_enquiry_http():
 
 
 def test_cancel_reservation_pre_checkin_and_refund():
-    prop, unit, partner, customer = _seed(
+    prop, unit, _partner, customer = _seed(
         booking_mode=A9VariantConfiguration.BookingMode.RESERVATION, slug="res-cancel"
     )
     check_in = date.today() + timedelta(days=5)

@@ -6,8 +6,6 @@ codes apply only in the OTP request that creates the account, and Operations can
 reverse a referral with an audit trail.
 """
 
-# ruff: noqa: PLR2004
-
 import uuid
 from datetime import timedelta
 from http import HTTPStatus

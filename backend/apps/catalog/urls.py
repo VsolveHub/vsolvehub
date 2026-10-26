@@ -3,6 +3,7 @@ from django.urls import path
 from apps.catalog.views import (
     CategoryListView,
     CategoryServiceListView,
+    PromoBannerListView,
     ServiceConfigurationView,
     ServiceDetailView,
     ServiceIndexView,
@@ -17,6 +18,7 @@ urlpatterns = [
         CategoryServiceListView.as_view(),
         name="category-service-list",
     ),
+    path("promo-banners/", PromoBannerListView.as_view(), name="promo-banner-list"),
     path("services/", ServiceIndexView.as_view(), name="service-index"),
     path("services/<slug:service_slug>/", ServiceDetailView.as_view(), name="service-detail"),
     path(

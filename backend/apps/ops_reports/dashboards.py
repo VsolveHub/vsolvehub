@@ -6,14 +6,18 @@ from django.db.models.functions import TruncDate, TruncWeek
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.carts.models import FulfilmentUnit, FulfilmentUnitLine
 from apps.cases.models import OperationsCase
 from apps.commerce.models import Booking, PaymentAttempt
 from apps.identity.models import User
 from apps.listings.models import Listing, VendorSubscription
-from apps.loyalty.models import CoinTransaction
+from apps.loyalty.models import CoinTransaction, ReferralAttribution
 from apps.notifications.models import KillSwitch
 from apps.partners.models import PartnerApplication
+from apps.rental.models import RentalBooking
+from apps.stay.models import StayEnquiry, StayReservation
 from apps.wallet.models import WalletAccount
+from apps.wallet.services import calculate_platform_wallet_liability_paise
 
 #: ``YYYY-MM-DD``, a date with no time part.
 ISO_DATE_LENGTH = 10
@@ -34,7 +38,7 @@ def _parse_bound(value: object, *, end: bool) -> datetime | None:
     return parsed
 
 
-def get_date_filters(filters: dict) -> tuple[datetime | None, datetime | None]:
+def get_date_filters(filters: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
     """The selected range as ``[start, end)``; either side may be open."""
     return (
         _parse_bound(filters.get("date_start"), end=False),
@@ -112,7 +116,7 @@ def build_series(
     ]
 
 
-def get_business_dashboard(filters: dict) -> dict:
+def get_business_dashboard(filters: dict[str, Any]) -> dict[str, Any]:
     start, end = get_date_filters(filters)
 
     b_qs = Booking.objects.filter(status="COMPLETED")
@@ -143,8 +147,6 @@ def get_business_dashboard(filters: dict) -> dict:
     open_cases = OperationsCase.objects.filter(status="OPEN").count()
 
     kill_switches_active = KillSwitch.objects.filter(is_engaged=True).count()
-
-    from apps.wallet.services import calculate_platform_wallet_liability_paise
 
     wallet_liability_paise = calculate_platform_wallet_liability_paise()
 
@@ -187,7 +189,7 @@ def get_business_dashboard(filters: dict) -> dict:
     }
 
 
-def get_customer_dashboard(filters: dict) -> dict:
+def get_customer_dashboard(filters: dict[str, Any]) -> dict[str, Any]:
     start, end = get_date_filters(filters)
 
     u_qs = User.objects.all()
@@ -205,8 +207,6 @@ def get_customer_dashboard(filters: dict) -> dict:
     if end:
         ct_qs = ct_qs.filter(created_at__lt=end)
     coin_burns = ct_qs.aggregate(t=Sum("amount"))["t"] or 0
-
-    from apps.loyalty.models import ReferralAttribution
 
     ref_qs = ReferralAttribution.objects.all()
     if start:
@@ -233,7 +233,7 @@ def get_customer_dashboard(filters: dict) -> dict:
     }
 
 
-def get_vendor_dashboard(filters: dict) -> dict:
+def get_vendor_dashboard(filters: dict[str, Any]) -> dict[str, Any]:
     start, end = get_date_filters(filters)
 
     partners = PartnerApplication.objects.values("status").annotate(count=Count("id"))
@@ -260,7 +260,7 @@ def get_vendor_dashboard(filters: dict) -> dict:
     }
 
 
-def get_booking_dashboard(filters: dict) -> dict:
+def get_booking_dashboard(filters: dict[str, Any]) -> dict[str, Any]:
     start, end = get_date_filters(filters)
 
     b_qs = Booking.objects.all()
@@ -292,13 +292,8 @@ def get_booking_dashboard(filters: dict) -> dict:
     }
 
 
-def get_categories_dashboard(filters: dict) -> dict:
+def get_categories_dashboard(filters: dict[str, Any]) -> dict[str, Any]:
     start, end = get_date_filters(filters)
-
-    from apps.carts.models import FulfilmentUnit, FulfilmentUnitLine
-    from apps.commerce.models import Booking
-    from apps.rental.models import RentalBooking
-    from apps.stay.models import StayEnquiry, StayReservation
 
     # Confirmed/active GMV only — exclude pending payment and cancelled units/bookings.
     lines = (

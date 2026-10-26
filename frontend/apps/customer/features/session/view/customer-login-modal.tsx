@@ -15,7 +15,7 @@ const LOGIN_FOOTER = (
     New here?{" "}
     <a
       href="/catalog"
-      className="font-semibold text-info-text underline-offset-4 hover:underline"
+      className="py-3 font-semibold text-info-text underline-offset-4 hover:underline"
     >
       Browse services
     </a>{" "}
@@ -104,7 +104,7 @@ export function CustomerLoginModal({
               "bg-[#F8F9FA] text-text backdrop:bg-[#F8F9FA] backdrop:backdrop-blur-none",
             ]
           : [
-              "m-auto w-[calc(100vw-1.5rem)] max-w-[960px] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-[2rem] p-0",
+              "fixed inset-0 m-auto w-[calc(100%-1.5rem)] max-w-[960px] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-[2rem] p-0",
               "bg-surface text-text shadow-overlay border border-line/60",
               "backdrop:bg-navy-900/50 backdrop:backdrop-blur-sm",
             ],

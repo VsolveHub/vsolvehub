@@ -33,7 +33,10 @@ import { ApplyShell } from "@/features/application/view/apply-shell";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your application",
+  // An object, not a string: a plain string switched off the root template for
+  // every step below, so "Personal Information" and "Your trades" showed in the
+  // tab with no brand at all.
+  title: { default: "Your application", template: "%s — V Solve Hub Partners" },
   robots: { index: false, follow: false },
 };
 

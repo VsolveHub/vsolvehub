@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/workspace/queries", () => ({
   usePartnerWorkspaceGrants: vi.fn(),
+  useSpecialtyHome: vi.fn(() => ({ home: "work", isPending: false, isError: false })),
 }));
 vi.mock("@vsolve/query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vsolve/query")>()),

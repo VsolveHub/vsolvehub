@@ -18,11 +18,14 @@ _PREFERRED_MONEY_KEYS = (
     "captured",
 )
 
+#: A PDF is for reading, not data work: past this many rows it says so and points at CSV/XLSX.
+PDF_ROW_LIMIT = 500
+
 
 def _pdf_total_label_and_amount(
     columns: list[str],
     rows: list[dict[str, Any]],
-    totals: dict,
+    totals: dict[str, Any],
 ) -> tuple[str, str]:
     """Money footer for PDF — never `len(rows)` when paise amounts exist."""
     for key in _PREFERRED_MONEY_KEYS:
@@ -39,10 +42,10 @@ def _pdf_total_label_and_amount(
         total = sum(int(row.get(preferred) or 0) for row in rows)
         return "Total Amount", f"₹{total / 100:.2f}"
 
-    return "Total Records", str(min(len(rows), 500))
+    return "Total Records", str(min(len(rows), PDF_ROW_LIMIT))
 
 
-def export_csv(report_name: str, columns: list[str], rows: list[dict[str, Any]]) -> bytes:
+def export_csv(_report_name: str, columns: list[str], rows: list[dict[str, Any]]) -> bytes:
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns)
     writer.writeheader()
@@ -52,9 +55,7 @@ def export_csv(report_name: str, columns: list[str], rows: list[dict[str, Any]])
 
 def export_xlsx(report_name: str, columns: list[str], rows: list[dict[str, Any]]) -> bytes:
     # Convert rows from dict to list
-    list_rows = []
-    for row in rows:
-        list_rows.append([row.get(col, "") for col in columns])
+    list_rows: list[list[object]] = [[row.get(col, "") for col in columns] for row in rows]
     return workbook_bytes(sheet_name=report_name, headers=columns, rows=list_rows)
 
 
@@ -62,12 +63,12 @@ def export_pdf(
     report_name: str,
     columns: list[str],
     rows: list[dict[str, Any]],
-    filters: dict,
-    totals: dict,
+    *,
+    filters: dict[str, Any],
+    totals: dict[str, Any],
     operator_name: str,
 ) -> bytes:
-    # Capped at 500 rows for PDF
-    capped_rows = rows[:500]
+    capped_rows = rows[:PDF_ROW_LIMIT]
 
     # We will format this as a basic document
     # Using the existing render_pdf which takes DocumentLine for lines
@@ -75,9 +76,7 @@ def export_pdf(
     # To display table in PDF using the receipt format, we might need a single label/amount string
     # We can concatenate column values
     for row in capped_rows:
-        label_parts = []
-        for col in columns[:3]:  # First 3 columns for label
-            label_parts.append(str(row.get(col, "")))
+        label_parts = [str(row.get(col, "")) for col in columns[:3]]
 
         amt = ""
         # Find amount column if exists
@@ -104,8 +103,10 @@ def export_pdf(
             meta.append((k.replace("_", " ").title(), str(v)))
 
     footnote = ""
-    if len(rows) > 500:
-        footnote = f"Note: Showing 500 of {len(rows)} records. Use CSV/XLSX for full export."
+    if len(rows) > PDF_ROW_LIMIT:
+        footnote = (
+            f"Note: Showing {PDF_ROW_LIMIT} of {len(rows)} records. Use CSV/XLSX for full export."
+        )
 
     total_label_str, total_amount_str = _pdf_total_label_and_amount(columns, rows, totals)
 

@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     template: "%s — V Solve Hub",
   },
   description: "Book home services with a real, eligible professional. Pay after they commit.",
+  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     siteName: "V Solve Hub",
@@ -34,6 +35,7 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#00112e",
 };
 
 /**

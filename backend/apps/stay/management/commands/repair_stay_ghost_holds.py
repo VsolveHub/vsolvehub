@@ -4,7 +4,10 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
 
+from apps.commerce.models import PaymentAttempt
+from apps.stay.models import StayReservation, UnitReservation
 from apps.stay.services import repair_stay_ghost_holds
 
 
@@ -24,11 +27,6 @@ class Command(BaseCommand):
     def handle(self, *_args: Any, **options: Any) -> None:
         commit = bool(options.get("commit"))
         if not commit:
-            from django.db.models import Q
-
-            from apps.commerce.models import PaymentAttempt
-            from apps.stay.models import StayReservation, UnitReservation
-
             qs = UnitReservation.objects.filter(
                 status=UnitReservation.Status.HELD,
                 stay_reservation__isnull=False,

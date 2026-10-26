@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.catalog.models import (
     Category,
+    PromoBanner,
     Service,
     ServiceMedia,
     ServicePolicy,
@@ -407,3 +408,14 @@ class ServiceDetailSerializer(ServiceCardSerializer):
     def get_requirement_variants(service: Service) -> list[dict[str, object]]:
         variants = getattr(service, "requirement_variants", [])
         return list(RequirementVariantSerializer(variants, many=True).data)
+
+
+class PromoBannerSerializer(serializers.ModelSerializer[PromoBanner]):
+    # `None` for a site-wide banner: the dotted source stops at a null category.
+    category_slug = serializers.CharField(
+        source="category.slug", read_only=True, allow_null=True, default=None
+    )
+
+    class Meta:
+        model = PromoBanner
+        fields = ("id", "title", "subtitle", "terms", "image_url", "category_slug")

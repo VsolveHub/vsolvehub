@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { PageHeader } from "@vsolve/ui";
 
 import { ServiceFeedbackWorkspace } from "@/features/service-feedback/view/service-feedback-workspace";
+
+export const metadata: Metadata = { title: "Service feedback" };
 
 export default function ServiceFeedbackPage() {
   return (

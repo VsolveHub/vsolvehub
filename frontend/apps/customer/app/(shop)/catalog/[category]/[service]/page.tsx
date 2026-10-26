@@ -3,7 +3,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { formatMoney } from "@vsolve/ui";
 
-import { getCategory, getService, getCategoryServices } from "@/features/catalog/queries";
+import {
+  getCategory,
+  getCategoryServices,
+  getPromoBanners,
+  getService,
+} from "@/features/catalog/queries";
 import { bookCrewHref, isCareerJobsCategory, listingsBrowseHref } from "@/lib/routes";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
 import { FitOutServicePicker } from "@/features/catalog/components/fit-out-service-picker";
@@ -14,6 +19,17 @@ import { ProcessSteps } from "@/features/catalog/components/process-steps";
 import { RecordServiceView } from "@/features/catalog/components/record-service-view";
 import { ServiceCard } from "@/features/catalog/components/service-card";
 import { AddToCartButton } from "@/features/catalog/components/add-to-cart-button";
+import { ServiceFaqSection } from "@/features/catalog/components/service-faq-section";
+import {
+  ServiceAssurance,
+  ServiceOptionDifferences,
+  ServiceProfessionals,
+} from "@/features/catalog/components/service-detail-sections";
+import { ServiceOfferBanner } from "@/features/catalog/components/service-offer-banner";
+import { PromoBanners } from "@/features/catalog/components/promo-banners";
+import { categoryHeadline } from "@/features/catalog/components/tile-desktop-rating";
+import { buildServiceFaqs } from "@/features/catalog/service-faqs";
+import { addsToServiceCopy, durationLabel, warrantyText } from "@/features/catalog/service-facts";
 
 type PageProps = { params: Promise<{ category: string; service: string }> };
 
@@ -28,14 +44,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { category, service: slug } = await params;
   const service = await getService(slug);
 
-  if (!service) return { title: "Service not found" };
+  if (!service) return { title: "Service not found", robots: { index: false } };
 
   return {
     title: service.name,
     description: service.short_description,
     alternates: { canonical: `/catalog/${category}/${service.slug}` },
     openGraph: {
-      title: `${service.name} — Vsolve Hub`,
+      title: `${service.name} — V Solve Hub`,
       description: service.short_description,
       type: "website",
       images: service.cover ? [{ url: service.cover.url, alt: service.cover.alt_text }] : undefined,
@@ -46,10 +62,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ServiceDetailPage({ params }: PageProps) {
   const { category: categorySlug, service: serviceSlug } = await params;
 
-  const [service, category, categoryServices] = await Promise.all([
+  const [service, category, categoryServices, promoBanners] = await Promise.all([
     getService(serviceSlug),
     getCategory(categorySlug),
     getCategoryServices(categorySlug),
+    getPromoBanners(categorySlug),
   ]);
 
   if (!service || !category) notFound();
@@ -83,6 +100,19 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   // Split out here rather than inside `PolicyList`, which groups the three kinds a customer
   // reads as bullet lists. A numbered sequence is a different shape and gets its own section.
   const processSteps = service.policies.filter((policy) => policy.kind === "PROCESS");
+
+  // Seeded descriptions often repeat the short one; print the long copy only when it says more.
+  const showDescription = addsToServiceCopy(service.description ?? "", service.short_description);
+  const faqs = buildServiceFaqs(service);
+  const warranty = warrantyText(service.policies);
+  const durations = service.variants.map(durationLabel).filter((label): label is string => label !== null);
+  // Facts the server published, shown at a glance the way a rate card leads with them.
+  const highlights = [
+    service.variants.length > 1 ? `${service.variants.length} options` : null,
+    // A duration chip speaks for the whole service, so only when every option shares it.
+    durations.length === service.variants.length && new Set(durations).size === 1 ? durations[0] : null,
+    warranty,
+  ].filter((item): item is string => item !== null && item !== undefined);
 
   return (
     <main className="bg-[#FAF9F7] min-h-screen pt-4 pb-16">
@@ -122,7 +152,10 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             <div className="aspect-[4/3] w-full rounded-[1.25rem] bg-surface-sunken overflow-hidden relative shadow-sm">
               <div 
                 className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105" 
-                style={{ backgroundImage: `url('${service.cover?.url || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop"}')` }} 
+                // No stock-photo fallback: a service without a cover shows the plain surface.
+                style={service.cover ? { backgroundImage: `url('${service.cover.url}')` } : undefined}
+                role={service.cover ? "img" : undefined}
+                aria-label={service.cover ? service.cover.alt_text || service.name : undefined}
               />
             </div>
           </div>
@@ -131,6 +164,21 @@ export default async function ServiceDetailPage({ params }: PageProps) {
           <div className="w-full lg:w-5/12 flex flex-col pt-2">
             <h1 className="text-balance text-[1.85rem] font-bold text-navy-900 sm:text-[2.25rem] leading-tight">{service.name}</h1>
             <p className="mt-4 text-[1rem] leading-relaxed text-text-secondary">{service.short_description}</p>
+            {highlights.length > 0 ? (
+              <ul aria-label="At a glance" className="mt-5 flex flex-wrap gap-2">
+                {highlights.map((item) => (
+                  <li
+                    key={item}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line/70 bg-white px-3 py-1.5 text-[0.8rem] font-semibold text-navy-900"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5 text-action" aria-hidden>
+                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                    </svg>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             
             <div className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-card border border-transparent">
               {service.starting_price !== null ? (
@@ -200,103 +248,61 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                   <svg className="size-[1.125rem] text-action" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
-                  Background Checked
+                  ID Verified
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Middle Section: Variants and Static Info */}
-        <div className="mt-8 flex flex-col lg:flex-row gap-8 items-start">
-          
-          <div className="w-full lg:w-1/2">
-            {service.variants.length > 0 ? (
-              <section className="rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
-                <h2 className="inline-flex items-center gap-2.5 text-[1.05rem] font-medium text-navy-900 mb-2">
-                  <svg className="size-[1.125rem] text-action" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                  What you can book
-                </h2>
-                <VariantList variants={service.variants} serviceSlug={service.slug} />
-              </section>
-            ) : service.description ? (
-              <section className="rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm h-full">
-                <h2 className="text-[1.05rem] font-medium text-navy-900 mb-4">About this service</h2>
-                <p className="whitespace-pre-line text-[0.95rem] leading-relaxed text-text-secondary">{service.description}</p>
-              </section>
-            ) : null}
-          </div>
+        {/* Section order follows how people compare a job: an offer they can use, the
+            options, what separates them, what protects them, how the visit runs, what is
+            and is not covered, who turns up, then questions. */}
+        <PromoBanners banners={promoBanners} fallbackImageUrl={category.image_url} />
+        <ServiceOfferBanner imageUrl={category.image_url} />
 
-          <div className="w-full lg:w-1/2">
-            <section className="rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm h-full">
-              <h2 className="inline-flex items-center gap-2.5 text-[1.05rem] font-medium text-navy-900 mb-6">
-                <svg className="size-[1.125rem] text-action" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                </svg>
-                Why V Solve
-              </h2>
-              <ul className="space-y-6">
-                <li className="flex gap-4">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-navy-900">
-                    <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h3 className="font-medium text-navy-900">Upfront Pricing</h3>
-                    <p className="mt-1 text-[0.875rem] text-text-secondary leading-relaxed">No hidden fees. Know the cost before work begins.</p>
-                  </div>
-                </li>
-                <li className="flex gap-4">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-navy-900">
-                    <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h3 className="font-medium text-navy-900">Verified Pros</h3>
-                    <p className="mt-1 text-[0.875rem] text-text-secondary leading-relaxed">Every technician undergoes strict background checks.</p>
-                  </div>
-                </li>
-                <li className="flex gap-4">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-navy-900">
-                    <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h3 className="font-medium text-navy-900">Satisfaction Guaranteed</h3>
-                    <p className="mt-1 text-[0.875rem] text-text-secondary leading-relaxed">We stand by our work. Your satisfaction is our priority.</p>
-                  </div>
-                </li>
-              </ul>
-            </section>
-          </div>
-        </div>
+        {service.variants.length > 0 ? (
+          <section className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+            <h2 className="text-[1.15rem] font-bold text-navy-900">What you can book</h2>
+            <VariantList
+              variants={service.variants}
+              serviceSlug={service.slug}
+              serviceCoverUrl={service.cover?.url}
+              serviceIconKey={service.icon_key}
+              serviceCopy={[service.short_description, service.description ?? ""]}
+            />
+          </section>
+        ) : null}
 
-        {/* Bottom Section: Process Steps */}
+        <ServiceOptionDifferences service={service} />
+
+        {showDescription ? (
+          <section className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+            <h2 className="text-[1.15rem] font-bold text-navy-900">About this service</h2>
+            <p className="mt-3 whitespace-pre-line text-[0.95rem] leading-relaxed text-text-secondary">{service.description}</p>
+          </section>
+        ) : null}
+
+        <ServiceAssurance service={service} />
+
         {processSteps.length > 0 ? (
-          <section className="mt-8 rounded-[1rem] bg-white p-8 sm:p-10 shadow-sm">
-            <div className="text-center mb-2">
-              <h2 className="inline-flex items-center gap-2.5 text-[1.05rem] font-medium text-navy-900">
-                <svg className="size-[1.125rem] text-action" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                The V Solve Process
-              </h2>
-            </div>
+          <section aria-labelledby="how-it-works-heading" className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+            <h2 id="how-it-works-heading" className="text-[1.15rem] font-bold text-navy-900">
+              How it works
+            </h2>
             <ProcessSteps steps={processSteps} />
           </section>
         ) : null}
 
-        {/* Existing Policy List */}
-        {service.policies.length > 0 && service.policies.filter((p) => p.kind !== "PROCESS").length > 0 ? (
+        {service.policies.some((p) => p.kind !== "PROCESS") ? (
           <section className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
             <PolicyList policies={service.policies.filter((p) => p.kind !== "PROCESS")} />
           </section>
         ) : null}
+
+        <ServiceProfessionals service={service} />
+
+        <ServiceFaqSection faqs={faqs} />
 
         {/* Related Services Section */}
         {relatedServices.length > 0 && (
@@ -326,7 +332,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             className="group inline-flex h-12 items-center justify-center rounded-full bg-white px-7 text-[0.95rem] font-medium text-navy-900 shadow-sm transition-all duration-300 hover:-translate-y-[2px] hover:shadow-md border border-line/40 hover:border-navy-300 gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             <span aria-hidden="true" className="transition-transform group-hover:-translate-x-1">&larr;</span> 
-            More {category.name.toLowerCase()} services
+            More {categoryHeadline(category.name)} services
           </Link>
         </section>
       </div>

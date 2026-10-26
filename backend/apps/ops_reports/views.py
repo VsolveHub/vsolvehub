@@ -1,5 +1,7 @@
 import logging
+from typing import cast
 
+from django.db.models import QuerySet
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -7,8 +9,10 @@ from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
+from apps.identity.models import User
 from apps.partners.permissions import IsOperationsUser
 
 from .dashboards import DASHBOARDS
@@ -33,7 +37,7 @@ class OpsReportsCatalogView(APIView):
         responses={200: OpsReportCatalogItemSerializer(many=True)},
         tags=["operations"],
     )
-    def get(self, request: Request) -> Response:
+    def get(self, _request: Request) -> Response:
         settings = OpsReportSettings.objects.first()
         tds_rate = settings.tds_rate_percent if settings and settings.tds_rate_percent else None
 
@@ -124,7 +128,14 @@ class OpsReportExportView(APIView):
             content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             filename = f"{report.id}.xlsx"
         elif self.export_format == "pdf":
-            content = export_pdf(report.name, cols, rows, filters, totals, operator_name)
+            content = export_pdf(
+                report.name,
+                cols,
+                rows,
+                filters=filters,
+                totals=totals,
+                operator_name=operator_name,
+            )
             content_type = "application/pdf"
             filename = f"{report.id}.pdf"
         else:
@@ -169,29 +180,31 @@ class OpsDashboardView(APIView):
         return Response(data)
 
 
-class OpsReportPresetListCreateView(generics.ListCreateAPIView):
+class OpsReportPresetListCreateView(generics.ListCreateAPIView[OpsReportPreset]):
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
     serializer_class = OpsReportPresetSerializer
 
-    def get_queryset(self):
-        return OpsReportPreset.objects.filter(operator=self.request.user)
+    def get_queryset(self) -> QuerySet[OpsReportPreset]:
+        return OpsReportPreset.objects.filter(operator=cast(User, self.request.user))
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: BaseSerializer[OpsReportPreset]) -> None:
         serializer.save(operator=self.request.user)
 
 
-class OpsReportPresetDetailView(generics.RetrieveUpdateDestroyAPIView):
+class OpsReportPresetDetailView(generics.RetrieveUpdateDestroyAPIView[OpsReportPreset]):
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
     serializer_class = OpsReportPresetSerializer
 
-    def get_queryset(self):
-        return OpsReportPreset.objects.filter(operator=self.request.user)
+    def get_queryset(self) -> QuerySet[OpsReportPreset]:
+        return OpsReportPreset.objects.filter(operator=cast(User, self.request.user))
 
 
-class OpsDashboardPreferenceView(generics.RetrieveUpdateAPIView):
+class OpsDashboardPreferenceView(generics.RetrieveUpdateAPIView[OpsDashboardPreference]):
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
     serializer_class = OpsDashboardPreferenceSerializer
 
-    def get_object(self):
-        obj, created = OpsDashboardPreference.objects.get_or_create(operator=self.request.user)
+    def get_object(self) -> OpsDashboardPreference:
+        obj, _created = OpsDashboardPreference.objects.get_or_create(
+            operator=cast(User, self.request.user)
+        )
         return obj

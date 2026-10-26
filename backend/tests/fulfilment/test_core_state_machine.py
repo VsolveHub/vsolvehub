@@ -175,7 +175,7 @@ def test_group_completes_only_once_every_unit_reaches_a_terminal_outcome() -> No
     )
     group = booked.group
     units = list(group.units.order_by("position"))
-    assert len(units) == 2  # noqa: PLR2004
+    assert len(units) == 2
 
     first_booking = units[0].booking
     first_booking.status = Booking.Status.COMPLETED

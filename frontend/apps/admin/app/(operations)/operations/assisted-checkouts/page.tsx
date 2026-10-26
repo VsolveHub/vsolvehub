@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { AssistedCheckoutForm } from "@/features/assisted-checkout/view/assisted-checkout-form";
+
+export const metadata: Metadata = { title: "Book for a customer" };
 
 /**
  * Assisted checkout.

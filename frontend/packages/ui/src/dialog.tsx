@@ -179,13 +179,13 @@ export function Dialog({
         if (dismissable && event.target === event.currentTarget) onOpenChange(false);
       }}
       className={cn(
-        "m-auto w-[calc(100vw-2rem)] max-w-lg overflow-hidden rounded-card p-0",
+        "fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[85dvh] overflow-hidden rounded-card p-0",
         "bg-surface text-text shadow-overlay border border-line/60",
         "backdrop:bg-navy-900/50 backdrop:backdrop-blur-sm",
         className,
       )}
     >
-      <div className="flex max-h-[85vh] flex-col overflow-hidden">
+      <div className="flex max-h-[calc(100dvh-2rem)] sm:max-h-[85dvh] flex-col overflow-hidden">
         <div className="shrink-0 flex items-start justify-between gap-4 px-5 pb-3 pt-5">
           <div className="min-w-0">
             <h2 id={`${id}-title`} className="text-base font-bold text-text">

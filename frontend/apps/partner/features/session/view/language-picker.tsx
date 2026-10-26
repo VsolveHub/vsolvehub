@@ -1,6 +1,8 @@
 "use client";
 
 import { DEFAULT_LOCALE, type Locale } from "@vsolve/ui";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -42,7 +44,16 @@ export function LanguagePicker() {
 
   return (
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-[linear-gradient(170deg,var(--color-navy-700)_0%,var(--color-navy-900)_60%,var(--color-navy-900)_100%)] px-5">
-      <div className="flex flex-col items-center gap-4.5 pt-16 pb-11">
+      <div className="pt-4">
+        <Link
+          href="/me"
+          className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-white/70 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Back to Account
+        </Link>
+      </div>
+      <div className="flex flex-col items-center gap-4.5 pt-8 pb-11">
         <div className="grid h-19 w-19 place-items-center rounded-[22px] bg-action shadow-raised">
           <Pictogram name="home" size="xl" className="text-text" />
         </div>

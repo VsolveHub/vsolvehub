@@ -29,10 +29,19 @@ import { BookCrewScreen } from "@/features/crew/view/book-crew-screen";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Book a crew",
-  robots: { index: false, follow: false },
-};
+/** Names the service in the tab; the `cache`d read is shared with the page. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ service: string }>;
+}): Promise<Metadata> {
+  const { service: serviceSlug } = await params;
+  const service = await getServiceConfiguration(serviceSlug).catch(() => null);
+  return {
+    title: service ? `Book a ${service.name} crew` : "Book a crew",
+    robots: { index: false, follow: false },
+  };
+}
 
 /** The one archetype this route serves. A5 belongs to `/requests/new/[service]`. */
 const A3 = "A3_TIME_BLOCK";

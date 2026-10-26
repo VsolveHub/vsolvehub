@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, buttonStyles, ErrorState, Skeleton } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -75,6 +75,31 @@ export function useApplicationEditor(): ApplicationEditorRenderProps {
   return value;
 }
 
+/**
+ * A save Django refused for a reason the applicant can act on, in words.
+ *
+ * Its own copy rather than the envelope message: that one names catalogue
+ * codes ("cctv-technician") the applicant has never seen.
+ */
+function describeRefusal(error: unknown): { title: string; message: string } | null {
+  if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "partner_application_incomplete") {
+    return {
+      title: "Something on this step is missing",
+      message:
+        "One of the job types you picked needs a trade that is not on your application. " +
+        "Check your trades and job types, then save again.",
+    };
+  }
+  if (error.code === "partner_transition_not_allowed") {
+    return {
+      title: "This application cannot be changed right now",
+      message: "It is with our team. You can make changes again if we ask you to.",
+    };
+  }
+  return null;
+}
+
 const ProceedDisabledSetterContext = createContext<((disabled: boolean) => void) | null>(
   null,
 );
@@ -116,8 +141,11 @@ export function ApplicationEditor(props: ApplicationEditorProps) {
 
   // A 404 is "you have not started yet", which is a state, not a failure.
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
+  // A refetch of a 404 is `isPending` again (there is no data to keep), and
+  // showing the skeleton then would unmount `Editor` and drop the draft.
+  const hasAnswered = query.dataUpdatedAt > 0 || query.errorUpdatedAt > 0;
 
-  if (query.isPending) {
+  if (query.isPending && !hasAnswered) {
     /*
       The shape of the step, not a spinner on an empty page.
 
@@ -193,8 +221,13 @@ function Editor({
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
 
+  // A domain refusal (incomplete, not allowed now) arrives with `details` of
+  // `{message, code}`, which `fieldErrors` would print as two "fields":
+  // "message: Select the required skills for: cctv-technician." and
+  // "code: partner_application_incomplete". It is one sentence, not field errors.
+  const refusal = describeRefusal(save.error);
   const fieldErrors =
-    save.error instanceof ApiRequestError ? save.error.fieldErrors : {};
+    save.error instanceof ApiRequestError && refusal === null ? save.error.fieldErrors : {};
   const fieldMessages = Object.entries(fieldErrors).flatMap(([field, messages]) =>
     messages.map((message) => `${field}: ${message}`),
   );
@@ -288,7 +321,13 @@ function Editor({
           proceedDisabled={proceedDisabled || childProceedDisabled}
           saved={save.isSuccess && !dirty}
           conflict={isVersionConflict(save.error)}
-          failed={save.isError && !isVersionConflict(save.error) && fieldMessages.length === 0}
+          refusal={refusal}
+          failed={
+            save.isError &&
+            !isVersionConflict(save.error) &&
+            refusal === null &&
+            fieldMessages.length === 0
+          }
           requestId={save.error instanceof ApiRequestError ? save.error.requestId : null}
           fieldMessages={fieldMessages}
         />
@@ -306,6 +345,7 @@ function EditorDock({
   proceedDisabled,
   saved,
   conflict,
+  refusal,
   failed,
   requestId,
   fieldMessages,
@@ -318,6 +358,7 @@ function EditorDock({
   proceedDisabled: boolean;
   saved: boolean;
   conflict: boolean;
+  refusal: { title: string; message: string } | null;
   failed: boolean;
   requestId: string | null;
   fieldMessages: readonly string[];
@@ -336,6 +377,16 @@ function EditorDock({
             severity="warning"
             title="Someone else changed this application"
             message="We have reloaded the latest version so you can see it before saving again. Your last change was not applied."
+          />
+        ) : null}
+
+        {refusal ? (
+          <ErrorState
+            inline
+            severity="warning"
+            title={refusal.title}
+            message={refusal.message}
+            reference={requestId}
           />
         ) : null}
 
@@ -358,22 +409,16 @@ function EditorDock({
           </ul>
         ) : null}
 
-        {saved && !conflict && !failed ? (
+        {saved && !conflict && !failed && refusal === null ? (
           <p role="status" className="text-[0.8125rem] font-bold text-success-text text-center">
             ✓ Changes saved securely.
           </p>
         ) : null}
 
         <div className="flex items-center gap-2.5">
-          <Link href={backHref} className="shrink-0">
-            <Button
-              variant="outline"
-              size="lg"
-              className="font-bold text-sm h-12 px-5"
-            >
+          <Link href={backHref} className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
               Back
-            </Button>
-          </Link>
+            </Link>
           <Button
             size="lg"
             block

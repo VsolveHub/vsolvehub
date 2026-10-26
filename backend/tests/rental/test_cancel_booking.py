@@ -40,7 +40,7 @@ def _customer_client(user):
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-cancel-test", name="Rental Cancel Test")
     sub = Subcategory.objects.create(category=category, slug="tools-cancel", name="Tools")
     service = Service.objects.create(

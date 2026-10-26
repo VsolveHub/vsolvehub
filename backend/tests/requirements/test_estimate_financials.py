@@ -1,7 +1,5 @@
 """Server-owned estimate shape, tax, fee and installment arithmetic."""
 
-# ruff: noqa: PLR2004 - exact paise outcomes are the assertions under test
-
 from datetime import timedelta
 from decimal import Decimal
 from http import HTTPStatus

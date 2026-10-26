@@ -30,7 +30,7 @@ class Command(BaseCommand):
     help = "Seeds A7 rental taxonomy, ACTIVE configs, and demo rental E2E data."
 
     @transaction.atomic
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:  # noqa: PLR0912, PLR0915
         category, _ = Category.objects.get_or_create(
             slug="rental-services",
             defaults={

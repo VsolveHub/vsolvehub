@@ -6,7 +6,7 @@ import { PartnerRentalBookingsWorkspace } from "@/features/rentals/view/rental-b
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Rental bookings | Vsolve Partners",
+  title: "Rental bookings",
   description: "Customer reservations across your rental ads",
   robots: { index: false, follow: false },
 };

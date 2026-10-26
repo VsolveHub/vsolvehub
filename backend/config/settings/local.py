@@ -1,5 +1,6 @@
 """Local development settings."""
 
+import socket
 from pathlib import Path
 
 import environ
@@ -70,8 +71,6 @@ def _local_dev_frontend_origins() -> list[str]:
     http://localhost:3002, so credentialed API calls fail CORS/CSRF and the
     console looks down.
     """
-
-    import socket
 
     ports = (3000, 3001, 3002)
     hosts = ["localhost", "127.0.0.1"]

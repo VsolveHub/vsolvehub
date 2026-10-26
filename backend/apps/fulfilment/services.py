@@ -15,7 +15,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.carts.models import BookingGroup, FulfilmentUnit
-from apps.commerce.models import Booking
+from apps.commerce.models import Booking, FinancialException
+from apps.commerce.services.base import _open_exception
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError, BookingVersionConflictApiError
 from apps.fulfilment.models import BookingStatusHistory, CustomerContactAttempt, WorkTask
 from apps.identity.models import User
@@ -514,10 +515,9 @@ def declare_booking_late(*, booking_id: UUID) -> Booking | None:
 
 def cancel_booking_group_on_refund(*, payment_attempt: Any, refund: Any) -> None:
     """Cancel FulfilmentUnit bookings after a full BOOKING_GROUP refund — no new Refund rows."""
-    from apps.carts.models import FulfilmentUnit
-    from apps.commerce.models import Booking, FinancialException
-    from apps.commerce.services.base import _open_exception
-    from apps.fulfilment.cancellation.cancel import _release_booking_reservation
+    from apps.fulfilment.cancellation.cancel import (  # noqa: PLC0415 - avoids a module import cycle
+        _release_booking_reservation,
+    )
 
     unit_ids = set(payment_attempt.allocations.values_list("fulfilment_unit_id", flat=True))
     if not unit_ids:
@@ -532,9 +532,7 @@ def cancel_booking_group_on_refund(*, payment_attempt: Any, refund: Any) -> None
             )
 
     for unit_id in unit_ids:
-        booking = (
-            Booking.objects.filter(fulfilment_unit_id=unit_id).order_by("-version").first()
-        )
+        booking = Booking.objects.filter(fulfilment_unit_id=unit_id).order_by("-version").first()
         if booking is None:
             continue
 

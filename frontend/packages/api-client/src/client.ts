@@ -86,6 +86,8 @@ const CSRF_BOOTSTRAP_PATH = "/api/v1/auth/csrf/";
 
 /** Django's stable code for a rejected or rotated CSRF token (contract 1.3.0). */
 const CSRF_FAILED_CODE = "csrf_failed";
+/** Endpoints whose success starts a new session (and so a new CSRF token). */
+const SIGN_IN_PATHS = new Set(["/api/v1/auth/otp/verify/", "/api/v1/auth/firebase/verify/"]);
 
 /**
  * Codes that mean "there is no usable session", whatever status carries them.
@@ -315,10 +317,18 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
       return request;
     },
 
-    onResponse({ response, id }) {
+    onResponse({ request, response, id }) {
       const receivedAtMs = Date.now();
       const sentAtMs = sentAtByRequestId.get(id);
       sentAtByRequestId.delete(id);
+
+      // Django rotates the CSRF token when it signs someone in, so the token
+      // held from before is dead the moment the login succeeds. Dropping it here
+      // means the next write fetches a fresh one, instead of spending a `403
+      // csrf_failed` and a retry — the first `roles/switch` after every sign-in.
+      if (response.ok && SIGN_IN_PATHS.has(new URL(request.url, "http://x").pathname)) {
+        csrf.invalidate();
+      }
 
       if (sentAtMs !== undefined) {
         timingByResponse.set(response, { sentAtMs, receivedAtMs });

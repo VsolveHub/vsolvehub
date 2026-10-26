@@ -9,6 +9,7 @@ import { useIsViewportClaimed } from "@/lib/focus-mode";
 import { BottomNav, SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
 import { FixedBackButton } from "./fixed-back-button";
+import { OfflineBanner } from "./offline-banner";
 import {
   appChromeLayout,
   CUSTOMER_VIEWPORT_WIDTH_CLASS,
@@ -109,6 +110,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
       <div className={hideMobileChrome ? "hidden md:block" : undefined}>
         <BottomNav />
       </div>
+      <OfflineBanner />
     </>
   );
 }

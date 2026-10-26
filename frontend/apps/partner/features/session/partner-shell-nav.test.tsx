@@ -29,7 +29,7 @@ vi.mock("@/features/notifications/view/booking-alert-audio", () => ({
   prepareBookingAlertsFromGesture: () => undefined,
 }));
 
-const { BottomTabBar, DesktopPrimaryNav, getPartnerChromeMode } = await import(
+const { BottomTabBar, DesktopPrimaryNav, getPartnerChromeMode, hasOwnFocusedHeader } = await import(
   "./partner-shell"
 );
 
@@ -66,6 +66,19 @@ describe("getPartnerChromeMode", () => {
     // hands a stranger's route the partner dock.
     expect(getPartnerChromeMode("/stays-archive")).toBe("focused");
     expect(getPartnerChromeMode("/rentals-archive")).toBe("focused");
+  });
+});
+
+describe("hasOwnFocusedHeader", () => {
+  it("suppresses the shell's generic focused header where a route renders its own", () => {
+    expect(hasOwnFocusedHeader("/listings/post")).toBe(true);
+    expect(hasOwnFocusedHeader("/work/how-day-hire-works")).toBe(true);
+  });
+
+  it("leaves every other focused route to FocusedHeader", () => {
+    expect(hasOwnFocusedHeader("/work/offers")).toBe(false);
+    expect(hasOwnFocusedHeader("/work/jobs/abc")).toBe(false);
+    expect(hasOwnFocusedHeader("/listings/abc")).toBe(false);
   });
 });
 
@@ -137,10 +150,7 @@ describe("PartnerShell primary nav chrome", () => {
       "href",
       "/stays/enquiries",
     );
-    expect(screen.getByRole("link", { name: /Bookings/i })).toHaveAttribute(
-      "href",
-      "/stays/bookings",
-    );
+    expect(screen.queryByRole("link", { name: /Bookings/i })).not.toBeInTheDocument();
   });
 
   it("rental host: Bookings is offered and Enquiries never is", () => {

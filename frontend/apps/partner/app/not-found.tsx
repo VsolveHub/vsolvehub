@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+// Without this the 404 carried the home page's title, so the tab read as if it had loaded.
+export const metadata: Metadata = { title: "Page not found" };
 
 export default function NotFound() {
   return (
@@ -8,8 +12,7 @@ export default function NotFound() {
       </p>
       <h1 className="mt-3 text-2xl font-bold text-ink-900">Partner page not found</h1>
       <p className="mt-3 text-sm text-gray-500">
-        The route may be old, or it may belong to a future Partner onboarding or
-        workstream milestone.
+        The link may be old or mistyped. Head back to the partner home to keep going.
       </p>
       <Link
         href="/"

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { cn } from "@vsolve/ui";
+import { cn, useHydrated } from "@vsolve/ui";
 import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@/features/checkout/queries";
 
 type AddToCartButtonProps = {
@@ -30,7 +30,11 @@ export function AddToCartButton({
   const isUpdating = updateItem.isPending;
   const isRemoving = removeItem.isPending;
 
-  const cart = cartQuery.data;
+  // The server renders with no cart; the browser may already hold one in the query cache.
+  // Reading it before hydration drew a quantity stepper where the server drew "Add" and React
+  // threw a hydration mismatch. Until hydrated, render exactly what the server did.
+  const hydrated = useHydrated();
+  const cart = hydrated ? cartQuery.data : undefined;
   const cartItem = cart?.items.find((item) => item.variant_id === variantId);
   const cartUnavailable = cartQuery.isLoading || cart === undefined;
 
@@ -85,27 +89,28 @@ export function AddToCartButton({
   if (cartItem) {
     const quantityShellClass =
       size === "compact"
-        ? "inline-flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border border-line bg-white px-3 text-xs sm:text-sm font-bold text-navy-900 sm:w-auto shadow-2xs"
-        : "flex h-11 w-full items-center justify-between gap-4 rounded-xl border-2 border-line bg-white px-5 text-sm font-bold text-navy-900 shadow-2xs";
+        ? "inline-flex min-h-10 w-full items-center justify-between gap-2 rounded-xl border border-line bg-white pl-3 pr-1 text-xs sm:text-sm font-bold text-navy-900 sm:w-auto shadow-2xs"
+        : "flex h-11 w-full items-center justify-between gap-4 rounded-xl border-2 border-line bg-white pl-5 pr-1 text-sm font-bold text-navy-900 shadow-2xs";
 
     return (
       <div className={quantityShellClass}>
         <Link
           href="/cart"
-          className="inline-flex items-center gap-1 text-action hover:underline font-bold text-xs sm:text-sm"
+          className="inline-flex min-h-10 items-center gap-1 text-action hover:underline font-bold text-xs sm:text-sm"
         >
           View Cart
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 4.5 5.5 5.5-5.5 5.5" />
           </svg>
         </Link>
-        <div className="flex items-center gap-3">
+        {/* 40px steppers: a 24px "-" beside a 24px "+" is a mis-tap waiting to happen. */}
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={handleDecrement}
             disabled={isUpdating || isRemoving}
             aria-label="Remove one"
-            className="text-action font-extrabold text-lg px-1.5 hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+            className="inline-flex size-10 items-center justify-center rounded-full text-action font-extrabold text-lg hover:bg-[#FFF0E5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
           >
             -
           </button>
@@ -117,7 +122,7 @@ export function AddToCartButton({
             onClick={handleIncrement}
             disabled={isUpdating}
             aria-label="Add one"
-            className="text-action font-extrabold text-lg px-1.5 hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+            className="inline-flex size-10 items-center justify-center rounded-full text-action font-extrabold text-lg hover:bg-[#FFF0E5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
           >
             +
           </button>

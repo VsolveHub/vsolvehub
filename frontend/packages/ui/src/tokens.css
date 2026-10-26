@@ -58,6 +58,7 @@
   --color-navy-700: #00246b; /* body text and links */
   --color-navy-800: #001a4e;
   --color-navy-900: #00112e;
+  --color-navy-950: #000817;
 
   /* Warm neutrals, tinted toward the signal colour so greys never read
      cold-blue beside it — but far lighter than a cream wash. */
@@ -256,6 +257,15 @@
      remove the markup, then remove these. */
   --color-aurora-1: #2dd4bf;
   --color-aurora-2: #34d399;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* ============================================================================

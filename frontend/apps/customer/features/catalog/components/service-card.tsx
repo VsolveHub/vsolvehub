@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { formatMoney } from "@vsolve/ui";
+import { formatMoney, useHydrated } from "@vsolve/ui";
 import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@/features/checkout/queries";
 import type { ServiceCard as ServiceCardData } from "../queries";
 import { serviceHref } from "../service-href";
+import { isServiceCoverUrl } from "../service-cover";
+import { ServicePhoto } from "./category-artwork";
 
 export function ServiceCard({
   service,
@@ -27,7 +29,11 @@ export function ServiceCard({
   const isUpdating = updateItem.isPending;
   const isRemoving = removeItem.isPending;
 
-  const cart = cartQuery.data;
+  // The server renders with no cart; the browser may already hold one in the query cache.
+  // Reading it before hydration drew a quantity stepper where the server drew "Add" and React
+  // threw a hydration mismatch. Until hydrated, render exactly what the server did.
+  const hydrated = useHydrated();
+  const cart = hydrated ? cartQuery.data : undefined;
   const cartItem = cart?.items.find(
     (item) => item.variant_id === service.bookable_variant_id
   );
@@ -167,29 +173,37 @@ export function ServiceCard({
     );
   };
 
-  /**
-   * The lead card: wider and louder, but no longer illustrated.
-   *
-   * ## Why the image half is gone
-   *
-   * It was one hardcoded stock photograph of a cupboard hinge, served to every
-   * service in the catalogue — a plumber's leak repair and a pest-control visit
-   * both wore it. That is not decoration, it is a small lie about what is being
-   * booked, and `ServiceCard` has no cover field to tell the truth with. FE-9's
-   * rule for listings: a list row costs one image per service, and a listing is
-   * where that bill comes due. The service's own page still carries a real
-   * cover, which is where an image can be about the thing it sits next to.
-   *
-   * What still distinguishes this card is structural rather than pictorial — it
-   * spans both columns, sets its title a size larger, and gives the description
-   * three lines instead of the sibling's clamp. The remaining column takes the
-   * full width, because a two-column card with one column removed and the other
-   * still at `md:w-1/2` leaves half the card empty.
-   */
+  const imageUrl = service.cover?.url ?? "";
+  const isCoverIcon = imageUrl
+    ? isServiceCoverUrl(imageUrl) || imageUrl.includes("/catalog/tiles/")
+    : false;
+
   if (isLarge) {
     return (
-      <div className="group md:col-span-2 flex flex-col min-h-[14rem] overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
-        <div className="flex flex-col w-full flex-1 p-6 md:p-8">
+      <div className="group md:col-span-2 flex flex-col md:flex-row overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
+        <Link
+          href={serviceHref(service, categorySlug)}
+          className="relative md:w-5/12 aspect-[16/10] md:aspect-auto overflow-hidden bg-[#F4F1EC] shrink-0 block cursor-pointer"
+        >
+          {imageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={imageUrl}
+              alt={service.cover?.alt_text || service.name}
+              loading="lazy"
+              className={
+                isCoverIcon
+                  ? "size-full object-contain p-6 transition-transform duration-500 group-hover:scale-105"
+                  : "size-full object-cover transition-transform duration-500 group-hover:scale-105"
+              }
+            />
+          ) : (
+            <div className="size-full bg-surface-sunken grid place-items-center text-text-secondary min-h-[12rem]">
+              <ServicePhoto imageUrl="" iconKey={service.icon_key} className="size-full rounded-none shadow-none" />
+            </div>
+          )}
+        </Link>
+        <div className="flex flex-col md:w-7/12 flex-1 p-6 md:p-8 justify-between">
           <Link
             href={serviceHref(service, categorySlug)}
             className="flex-1 flex flex-col cursor-pointer"
@@ -230,40 +244,64 @@ export function ServiceCard({
   }
 
   return (
-    <div className="group md:col-span-1 flex min-h-[14rem] flex-col rounded-card border border-transparent bg-white p-5 md:p-6 shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised">
+    <div className="group md:col-span-1 flex flex-col overflow-hidden rounded-card border border-transparent bg-white shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised">
       <Link
         href={serviceHref(service, categorySlug)}
-        className="flex-1 flex flex-col cursor-pointer"
+        className="flex flex-col cursor-pointer"
       >
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <h3 className="text-balance text-[1.15rem] font-bold leading-snug text-navy-900 transition-colors group-hover:text-action">
-            {service.name}
-          </h3>
-          {isPopular && (
-            <span className="inline-flex items-center rounded-full bg-[#FFF0E5] px-2.5 py-0.5 text-[0.65rem] font-bold text-action tracking-wide">
-              Popular
-            </span>
+        <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#F4F1EC]">
+          {imageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={imageUrl}
+              alt={service.cover?.alt_text || service.name}
+              loading="lazy"
+              className={
+                isCoverIcon
+                  ? "size-full object-contain p-4 transition-transform duration-500 group-hover:scale-105"
+                  : "size-full object-cover transition-transform duration-500 group-hover:scale-105"
+              }
+            />
+          ) : (
+            <div className="size-full bg-surface-sunken grid place-items-center text-text-secondary">
+              <ServicePhoto imageUrl="" iconKey={service.icon_key} className="size-full rounded-none shadow-none" />
+            </div>
           )}
         </div>
 
-        <p className="mt-2 line-clamp-3 flex-1 text-[0.925rem] leading-relaxed text-text-secondary">
-          {service.short_description || `Complete service carried out at your address by a verified professional.`}
-        </p>
+        <div className="p-5 md:p-6 pb-0 flex flex-col flex-1">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h3 className="text-balance text-[1.15rem] font-bold leading-snug text-navy-900 transition-colors group-hover:text-action">
+              {service.name}
+            </h3>
+            {isPopular && (
+              <span className="inline-flex items-center rounded-full bg-[#FFF0E5] px-2.5 py-0.5 text-[0.65rem] font-bold text-action tracking-wide shrink-0">
+                Popular
+              </span>
+            )}
+          </div>
+
+          <p className="mt-2 line-clamp-3 flex-1 text-[0.925rem] leading-relaxed text-text-secondary">
+            {service.short_description || `Complete service carried out at your address by a verified professional.`}
+          </p>
+        </div>
       </Link>
 
-      <div className="mt-6 flex items-end justify-between gap-3 border-t border-line/50 pt-5">
-        {service.starting_price !== null ? (
-          <div className="min-w-0">
-            <span className="block text-[0.65rem] font-bold uppercase tracking-wider text-text-muted">
-              Starts at
-            </span>
-            <span data-numeric className="mt-1 block text-lg font-extrabold tabular-nums text-navy-900">
-              {formatMoney(service.starting_price.amount_paise)}
-            </span>
-          </div>
-        ) : null}
+      <div className="p-5 md:p-6 pt-4 flex-1 flex flex-col justify-end">
+        <div className="flex items-end justify-between gap-3 border-t border-line/50 pt-5">
+          {service.starting_price !== null ? (
+            <div className="min-w-0">
+              <span className="block text-[0.65rem] font-bold uppercase tracking-wider text-text-muted">
+                Starts at
+              </span>
+              <span data-numeric className="mt-1 block text-lg font-extrabold tabular-nums text-navy-900">
+                {formatMoney(service.starting_price.amount_paise)}
+              </span>
+            </div>
+          ) : null}
 
-        {renderCartAction("h-8", "text-xs")}
+          {renderCartAction("h-8", "text-xs")}
+        </div>
       </div>
     </div>
   );

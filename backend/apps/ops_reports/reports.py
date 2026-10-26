@@ -1,40 +1,45 @@
+import logging
 from datetime import datetime
 from typing import Any
-
-from django.utils import timezone
 
 from apps.commerce.models import Booking, PaymentAttempt, TaxDocument
 from apps.listings.models import VendorSubscription
 from apps.partners.models import PartnerBusinessProfile
 from apps.payouts.models import PartnerLedgerEntry
+from apps.rental.models import RentalBooking
+from apps.stay.models import StayEnquiry, StayReservation
 from apps.wallet.models import WalletTransaction
+
+from .models import OpsReportSettings
+
+logger = logging.getLogger(__name__)
 
 
 class ReportDefinition:
-    def __init__(self, id: str, name: str, filters: list[str], columns: list[str]):
-        self.id = id
+    def __init__(self, report_id: str, name: str, filters: list[str], columns: list[str]):
+        self.id = report_id
         self.name = name
         self.filters = filters
         self.columns = columns
 
-    def execute(self, filters: dict[str, Any]) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         raise NotImplementedError
 
 
-def get_date_range(filters: dict) -> tuple[datetime | None, datetime | None]:
+def get_date_range(filters: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
     start = filters.get("date_start")
     end = filters.get("date_end")
     if start and isinstance(start, str):
-        start = timezone.datetime.fromisoformat(start)
+        start = datetime.fromisoformat(start)
     if end and isinstance(end, str):
-        end = timezone.datetime.fromisoformat(end)
+        end = datetime.fromisoformat(end)
     return start, end
 
 
 class BookingsReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="bookings",
+            report_id="bookings",
             name="Bookings",
             filters=["date_start", "date_end", "service", "status", "archetype"],
             columns=[
@@ -48,7 +53,7 @@ class BookingsReport(ReportDefinition):
             ],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = Booking.objects.select_related("order", "partner").all()
         start, end = get_date_range(filters)
         if start:
@@ -104,9 +109,9 @@ class BookingsReport(ReportDefinition):
 
 
 class PaymentsReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="payments",
+            report_id="payments",
             name="Payments",
             filters=["date_start", "date_end", "purpose", "status"],
             columns=[
@@ -120,7 +125,7 @@ class PaymentsReport(ReportDefinition):
             ],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = PaymentAttempt.objects.all()
         start, end = get_date_range(filters)
         if start:
@@ -158,9 +163,9 @@ class PaymentsReport(ReportDefinition):
 
 
 class SettlementReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="settlement",
+            report_id="settlement",
             name="Settlement",
             filters=["date_start", "date_end", "partner_id", "status"],
             columns=[
@@ -177,7 +182,7 @@ class SettlementReport(ReportDefinition):
             ],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = PartnerLedgerEntry.objects.select_related("partner").all()
         start, end = get_date_range(filters)
         if start:
@@ -188,8 +193,6 @@ class SettlementReport(ReportDefinition):
             qs = qs.filter(partner_id=filters["partner_id"])
         if filters.get("status"):
             qs = qs.filter(status=filters["status"])
-
-        from .models import OpsReportSettings
 
         settings = OpsReportSettings.objects.first()
         tds_rate = settings.tds_rate_percent if settings and settings.tds_rate_percent else None
@@ -241,9 +244,9 @@ class SettlementReport(ReportDefinition):
 
 
 class TaxDocumentsReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="tax_documents",
+            report_id="tax_documents",
             name="Tax Documents",
             filters=["date_start", "date_end", "kind", "is_test"],
             columns=[
@@ -257,7 +260,7 @@ class TaxDocumentsReport(ReportDefinition):
             ],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = TaxDocument.objects.all()
         start, end = get_date_range(filters)
         if start:
@@ -291,15 +294,15 @@ class TaxDocumentsReport(ReportDefinition):
 
 
 class WalletReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="wallet",
+            report_id="wallet",
             name="Wallet",
             filters=["date_start", "date_end", "status", "kind"],
             columns=["id", "customer_id", "kind", "status", "amount_paise", "created_at"],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = WalletTransaction.objects.select_related("wallet").all()
         start, end = get_date_range(filters)
         if start:
@@ -333,15 +336,15 @@ class WalletReport(ReportDefinition):
 
 
 class SubscriptionsReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="subscriptions",
+            report_id="subscriptions",
             name="Vendor Subscriptions",
             filters=["date_start", "date_end", "status", "plan_id"],
             columns=["id", "poster_id", "plan_name", "status", "price_paise", "created_at"],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = VendorSubscription.objects.select_related("plan").all()
         start, end = get_date_range(filters)
         if start:
@@ -373,9 +376,9 @@ class SubscriptionsReport(ReportDefinition):
 
 
 class StayReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="stays",
+            report_id="stays",
             name="Stays (Enquiries & Reservations)",
             filters=["date_start", "date_end", "status", "mode"],
             columns=[
@@ -393,10 +396,8 @@ class StayReport(ReportDefinition):
             ],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
-        from apps.stay.models import StayEnquiry, StayReservation
-
-        rows = []
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
         start, end = get_date_range(filters)
 
         # Include enquiries
@@ -408,22 +409,22 @@ class StayReport(ReportDefinition):
                 eq = eq.filter(created_at__lte=end)
             if filters.get("status"):
                 eq = eq.filter(status=filters["status"])
-            for e in eq[:2500]:
-                rows.append(
-                    {
-                        "id": str(e.id),
-                        "type": "ENQUIRY",
-                        "created_at": e.created_at.strftime("%d/%m/%Y"),
-                        "property_title": e.property.title,
-                        "host_id": str(e.property.host_id),
-                        "customer_id": str(e.customer_id)[:8] + "...MASK",
-                        "status": e.status,
-                        "check_in": str(e.check_in),
-                        "check_out": str(e.check_out),
-                        "nights": e.nights,
-                        "total_paise": e.total_quote_paise,
-                    }
-                )
+            rows.extend(
+                {
+                    "id": str(e.id),
+                    "type": "ENQUIRY",
+                    "created_at": e.created_at.strftime("%d/%m/%Y"),
+                    "property_title": e.property.title,
+                    "host_id": str(e.property.host_id),
+                    "customer_id": str(e.customer_id)[:8] + "...MASK",
+                    "status": e.status,
+                    "check_in": str(e.check_in),
+                    "check_out": str(e.check_out),
+                    "nights": e.nights,
+                    "total_paise": e.total_quote_paise,
+                }
+                for e in eq[:2500]
+            )
 
         # Include reservations (if model exists)
         if not filters.get("mode") or filters["mode"] == "RESERVATION":
@@ -435,24 +436,25 @@ class StayReport(ReportDefinition):
                     rq = rq.filter(created_at__lte=end)
                 if filters.get("status"):
                     rq = rq.filter(status=filters["status"])
-                for r in rq[:2500]:
-                    rows.append(
-                        {
-                            "id": str(r.id),
-                            "type": "RESERVATION",
-                            "created_at": r.created_at.strftime("%d/%m/%Y"),
-                            "property_title": r.property.title,
-                            "host_id": str(r.property.host_id),
-                            "customer_id": str(r.customer_id)[:8] + "...MASK",
-                            "status": r.status,
-                            "check_in": str(r.check_in),
-                            "check_out": str(r.check_out),
-                            "nights": r.nights,
-                            "total_paise": r.total_paise,
-                        }
-                    )
+                rows.extend(
+                    {
+                        "id": str(r.id),
+                        "type": "RESERVATION",
+                        "created_at": r.created_at.strftime("%d/%m/%Y"),
+                        "property_title": r.property.title,
+                        "host_id": str(r.property.host_id),
+                        "customer_id": str(r.customer_id)[:8] + "...MASK",
+                        "status": r.status,
+                        "check_in": str(r.check_in),
+                        "check_out": str(r.check_out),
+                        "nights": r.nights,
+                        "total_paise": r.total_paise,
+                    }
+                    for r in rq[:2500]
+                )
             except Exception:
-                pass  # StayReservation may not be migrated yet
+                # StayReservation may not be migrated yet; the report still returns enquiries.
+                logger.warning("Stay reservations unavailable for the stays report", exc_info=True)
 
         totals = {
             "enquiries": sum(1 for r in rows if r["type"] == "ENQUIRY"),
@@ -463,9 +465,9 @@ class StayReport(ReportDefinition):
 
 
 class RentalReport(ReportDefinition):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            id="rentals",
+            report_id="rentals",
             name="Rentals",
             filters=["date_start", "date_end", "status"],
             columns=[
@@ -482,9 +484,7 @@ class RentalReport(ReportDefinition):
             ],
         )
 
-    def execute(self, filters: dict) -> tuple[list[dict], dict]:
-        from apps.rental.models import RentalBooking
-
+    def execute(self, filters: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         qs = RentalBooking.objects.select_related("asset", "deposit").all()
         start, end = get_date_range(filters)
         if start:

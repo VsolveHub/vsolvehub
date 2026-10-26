@@ -49,7 +49,7 @@ export function ApplyPanel({
           </p>
           <Link
             href="/listings/my-applications"
-            className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-control bg-navy-900 px-4 py-2 text-xs font-semibold text-warm-0 transition hover:bg-navy-800"
+            className="mt-4 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control bg-navy-900 px-4 py-2 text-sm font-semibold text-warm-0 transition hover:bg-navy-800"
           >
             View in My Applications &rarr;
           </Link>
@@ -68,7 +68,7 @@ export function ApplyPanel({
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-control bg-navy-900 px-4 py-2.5 text-xs font-semibold text-warm-0 shadow-card transition hover:bg-navy-800"
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-navy-900 px-4 py-2.5 text-sm font-semibold text-warm-0 shadow-card transition hover:bg-navy-800"
           >
             <LogIn className="size-4" />
             Sign In / Register

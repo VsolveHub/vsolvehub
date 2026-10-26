@@ -1,7 +1,5 @@
 """Dashboard trend series and the inclusive end date."""
 
-# ruff: noqa: PLR2004
-
 from datetime import datetime, timedelta
 
 import pytest

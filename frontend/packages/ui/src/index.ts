@@ -54,6 +54,8 @@ export { EmptyState } from "./empty-state";
 export type { EmptyStateProps } from "./empty-state";
 export { Skeleton, SkeletonText, SkeletonRegion } from "./skeleton";
 export type { SkeletonProps } from "./skeleton";
+export { ProgressiveImage } from "./progressive-image";
+export type { ProgressiveImageProps } from "./progressive-image";
 export { ToastProvider, useToast } from "./toast";
 export { ServiceRatingDialog, ServiceRatingList } from "./service-rating";
 export type {

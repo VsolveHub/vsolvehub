@@ -7,8 +7,10 @@ import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 import type { MainCategory, OfferableService } from "@/features/catalog/queries";
 import { toggle } from "../model/draft";
 import {
+  findSkillForCategory,
   isTradeCategorySelected,
   selectedTradeCategories,
+  syncRequiredSkills,
   toggleTradeCategorySelection,
   variantIdsForCategory,
 } from "../model/main-categories";
@@ -35,6 +37,30 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
     () => selectedTradeCategories(mainCategories, reference.skills, draft.skillCodes),
     [draft.skillCodes, mainCategories, reference.skills],
   );
+
+  const categorySkillCodes = useMemo(
+    () =>
+      mainCategories
+        .map((category) => findSkillForCategory(reference.skills, category)?.code)
+        .filter((code): code is string => code !== undefined),
+    [mainCategories, reference.skills],
+  );
+
+  // Every change to the selection goes through here, so the skills the chosen
+  // job types need travel with them. See `syncRequiredSkills`.
+  function select(next: { skillCodes?: readonly string[]; serviceVariantIds: readonly string[] }) {
+    update({
+      serviceVariantIds: [...next.serviceVariantIds],
+      skillCodes: syncRequiredSkills({
+        skillCodes: next.skillCodes ?? draft.skillCodes,
+        previousVariantIds: draft.serviceVariantIds,
+        nextVariantIds: next.serviceVariantIds,
+        services,
+        skills: reference.skills,
+        categorySkillCodes,
+      }),
+    });
+  }
 
   const selectableServices = useMemo(() => {
     const activeNames = new Set(selectedCategories.map((category) => category.name));
@@ -101,7 +127,7 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                   checked={checked}
                   disabled={isReadOnly}
                   onChange={() =>
-                    update(
+                    select(
                       toggleTradeCategorySelection(
                         category,
                         reference.skills,
@@ -126,13 +152,13 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                             type="button"
                             onClick={() => {
                               if (allServicesSelected) {
-                                update({
+                                select({
                                   serviceVariantIds: draft.serviceVariantIds.filter(
                                     (id) => !allCategoryIds.includes(id),
                                   ),
                                 });
                               } else {
-                                update({
+                                select({
                                   serviceVariantIds: Array.from(
                                     new Set([...draft.serviceVariantIds, ...allCategoryIds]),
                                   ),
@@ -150,7 +176,10 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                         {categoryServices.map((service) => {
                           const needsSkill =
                             service.requiredSkillCode.length > 0 &&
-                            !draft.skillCodes.includes(service.requiredSkillCode);
+                            !draft.skillCodes.includes(service.requiredSkillCode) &&
+                            !reference.skills.some(
+                              (skill) => skill.code === service.requiredSkillCode,
+                            );
 
                           return (
                             <div key={service.variantId} className="flex flex-col gap-1">
@@ -158,7 +187,7 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                                 checked={draft.serviceVariantIds.includes(service.variantId)}
                                 disabled={isReadOnly}
                                 onChange={() =>
-                                  update({
+                                  select({
                                     serviceVariantIds: toggle(
                                       draft.serviceVariantIds,
                                       service.variantId,
@@ -170,8 +199,10 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                               />
                               {needsSkill &&
                               draft.serviceVariantIds.includes(service.variantId) ? (
+                                // Only reachable now when the skill is not one
+                                // Django offers: `select` adds every other one.
                                 <Badge tone="warning">
-                                  Requires {service.requiredSkillCode.replace(/-/g, " ")} trade
+                                  Not open to new applicants yet. Untick it to continue.
                                 </Badge>
                               ) : null}
                             </div>

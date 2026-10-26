@@ -31,7 +31,10 @@ export function PartnerGlobalPopup() {
     if (shouldSelect) switchRole.mutate(PARTNER_ROLE);
   }, [shouldSelect, switchRole]);
 
-  const partnerReady = !session.isPending && hasPartner;
+  // Active, not merely held: Django refuses the stream (403) until the switch
+  // above has landed, so opening it on `hasPartner` alone spent a refusal and
+  // a reconnect after every sign-in.
+  const partnerReady = !session.isPending && hasPartner && activeRole === PARTNER_ROLE;
 
   return (
     <PartnerLiveDelivery

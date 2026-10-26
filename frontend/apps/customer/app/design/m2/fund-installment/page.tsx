@@ -11,7 +11,7 @@ import {
  * stage shown is the first installment — the advance is already paid, which is
  * what the four-segment rail is saying.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Fund an installment — M2", robots: { index: false, follow: false } };
 
 export default function FundInstallmentPage() {
   return (

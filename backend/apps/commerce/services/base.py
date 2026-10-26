@@ -15,7 +15,9 @@ from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
 
+from apps.carts.models import FulfilmentUnit
 from apps.commerce.models import (
+    Booking,
     DocumentSequence,
     FinancialException,
     Order,
@@ -209,13 +211,17 @@ def _cancel_domain_booking_on_refund(*, attempt: PaymentAttempt, refund: Refund)
         PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
         PaymentAttempt.Purpose.A7_RENTAL_DEPOSIT,
     ):
-        from apps.rental.services import cancel_booking_on_refund
+        from apps.rental.services import (  # noqa: PLC0415 - avoids a module import cycle
+            cancel_booking_on_refund,
+        )
 
         cancel_booking_on_refund(payment_attempt_id=attempt.id)
         return
 
     if attempt.purpose == PaymentAttempt.Purpose.A9_STAY_RESERVATION:
-        from apps.stay.services import cancel_reservation_on_refund
+        from apps.stay.services import (  # noqa: PLC0415 - avoids a module import cycle
+            cancel_reservation_on_refund,
+        )
 
         cancel_reservation_on_refund(payment_attempt_id=attempt.id)
         return
@@ -223,17 +229,19 @@ def _cancel_domain_booking_on_refund(*, attempt: PaymentAttempt, refund: Refund)
     if attempt.purpose != PaymentAttempt.Purpose.BOOKING_GROUP:
         return
 
-    from apps.carts.models import FulfilmentUnit
-    from apps.commerce.models import Booking
-    from apps.fulfilment.services import cancel_booking_group_on_refund
-    from apps.payouts.services import reverse_booking_earning_for_refund
+    from apps.fulfilment.services import (  # noqa: PLC0415 - avoids a module import cycle
+        cancel_booking_group_on_refund,
+    )
+    from apps.payouts.services import (  # noqa: PLC0415 - avoids a module import cycle
+        reverse_booking_earning_for_refund,
+    )
 
     cancel_booking_group_on_refund(payment_attempt=attempt, refund=refund)
 
     unit_ids = list(attempt.allocations.values_list("fulfilment_unit_id", flat=True))
     if not unit_ids:
         group_id = attempt.booking_group_id
-        if group_id is None and refund.order_id is not None:
+        if group_id is None and refund.order is not None:
             group_id = refund.order.booking_group_id
         if group_id is not None:
             unit_ids = list(

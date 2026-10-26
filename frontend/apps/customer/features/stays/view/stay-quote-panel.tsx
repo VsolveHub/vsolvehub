@@ -282,7 +282,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={adultCount <= 1}
                 onClick={() => setAdultCount((n) => Math.max(1, n - 1))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Decrease adults"
               >
                 –
@@ -292,7 +292,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={adultCount + childCount >= maxGuests}
                 onClick={() => setAdultCount((n) => Math.min(n + 1, maxGuests - childCount))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Increase adults"
               >
                 +
@@ -311,7 +311,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={childCount <= 0}
                 onClick={() => setChildCount((n) => Math.max(0, n - 1))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Decrease children"
               >
                 –
@@ -321,7 +321,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={adultCount + childCount >= maxGuests}
                 onClick={() => setChildCount((n) => Math.min(n + 1, maxGuests - adultCount))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Increase children"
               >
                 +

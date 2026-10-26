@@ -148,11 +148,13 @@ export function PartnerStayEnquiriesWorkspace() {
       <SectionNav label="Stay sections" items={STAY_SECTIONS} />
 
       <Card>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Enquiry status filter">
           {ENQUIRY_FILTERS.map((option) => (
             <button
               key={option}
               type="button"
+              role="tab"
+              aria-selected={filter === option}
               onClick={() => setFilter(option)}
               className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                 filter === option
@@ -216,7 +218,7 @@ export function PartnerStayEnquiriesWorkspace() {
                     {enquiry.customer_phone ? (
                       <a
                         href={`tel:${enquiry.customer_phone}`}
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover sm:flex-none"
+                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover sm:flex-none"
                       >
                         <Phone className="size-4" aria-hidden />
                         Call

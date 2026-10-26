@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, EmptyState, Skeleton } from "@vsolve/ui";
+import { buttonStyles, EmptyState, Skeleton } from "@vsolve/ui";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -96,9 +96,7 @@ export function VisitDetailScreen({
           title="We could not find that visit"
           description="It may have been cancelled, or the slot may have gone back. Your other visits are on the request."
           action={
-            <Link href={requestHref(requirementId)}>
-              <Button variant="outline">Back to your request</Button>
-            </Link>
+            <Link href={requestHref(requirementId)} className={buttonStyles({ variant: "outline" })}>Back to your request</Link>
           }
         />
       </PageFrame>
