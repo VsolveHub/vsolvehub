@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.81.0)
- * Checksum: c7e421250e4aa232
+ * Checksum: 860372a5fb5a778f
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4962,6 +4962,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["partner_application_documents_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/application/documents/{document_id}/access/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_application_documents_access_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13270,6 +13286,27 @@ export interface components {
          * @enum {string}
          */
         PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "OTHER";
+        PartnerDocumentApplicantAccess: {
+            document: components["schemas"]["PartnerDocumentDetailMetadata"];
+            /** Format: uri */
+            access_url: string;
+            /** Format: date-time */
+            expires_at?: string;
+        };
+        PartnerDocumentDetailMetadata: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            label: string;
+            status: string;
+            version: number;
+            file_name: string;
+            mime_type: string;
+            file_size: number;
+            /** Format: date-time */
+            uploaded_at: string;
+            rejection_reason?: string | null;
+        };
         PartnerDocumentReviewAccess: {
             /** Format: uri */
             readonly review_url: string;
@@ -30047,6 +30084,51 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_documents_access_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerDocumentApplicantAccess"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

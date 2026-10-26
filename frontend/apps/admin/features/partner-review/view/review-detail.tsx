@@ -108,6 +108,18 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
   const canRelease = assignedTo !== null;
   const actions = !inReview || isMine ? availableActions(application.status) : [];
 
+  const nonSupersededDocs = application.documents.filter((d) => d.status !== "SUPERSEDED");
+  const approvedDocs = nonSupersededDocs.filter((d) => d.status === "APPROVED");
+  const pendingDocs = nonSupersededDocs.filter((d) => d.status === "PENDING");
+  const rejectedDocs = nonSupersededDocs.filter((d) => d.status === "REJECTED");
+
+  const hasRequiredDocs = nonSupersededDocs.length >= 2;
+  const allRequiredApproved =
+    hasRequiredDocs &&
+    pendingDocs.length === 0 &&
+    rejectedDocs.length === 0 &&
+    approvedDocs.length === nonSupersededDocs.length;
+
   return (
     <div className="flex flex-col gap-5">
       <Card className="p-5">
@@ -196,18 +208,32 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
       </Card>
 
       <section aria-labelledby="documents-title">
-        <h3 id="documents-title" className="text-base font-bold text-text">
-          Documents
-        </h3>
-        <p className="mt-1 text-sm text-text-secondary">
-          Each one is hidden until you open it, and opening it is recorded.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 id="documents-title" className="text-base font-bold text-text">
+              Documents
+            </h3>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Review and verify each KYC document before approving this application.
+            </p>
+          </div>
+          <span className="rounded-full bg-navy-50 px-2.5 py-1 text-xs font-semibold text-navy-800 border border-line">
+            Documents: {approvedDocs.length} approved, {pendingDocs.length} pending
+            {rejectedDocs.length > 0 ? `, ${rejectedDocs.length} rejected` : ""}
+          </span>
+        </div>
+
         <div className="mt-3 flex flex-col gap-3">
-          {application.documents.length === 0 ? (
+          {nonSupersededDocs.length === 0 ? (
             <p className="text-sm text-text-secondary">Nothing has been uploaded yet.</p>
           ) : (
-            application.documents.map((document) => (
-              <DocumentReveal key={document.id} document={document} />
+            nonSupersededDocs.map((document) => (
+              <DocumentReveal
+                key={document.id}
+                document={document}
+                applicationId={application.id}
+                canReview={isMine}
+              />
             ))
           )}
         </div>
@@ -216,6 +242,21 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
       {actions.length > 0 ? (
         <Card className="p-5">
           <h3 className="text-base font-bold text-text">Decision</h3>
+
+          {/* Status hints about document verification state */}
+          {pendingDocs.length > 0 ? (
+            <p className="mt-2 text-xs font-medium text-warning-text flex items-center gap-1.5">
+              <span>⚠️ Approve all required documents before approving this application.</span>
+            </p>
+          ) : rejectedDocs.length > 0 ? (
+            <p className="mt-2 text-xs font-medium text-danger-text flex items-center gap-1.5">
+              <span>⚠️ Send the application back to the partner with the rejection reasons.</span>
+            </p>
+          ) : !hasRequiredDocs ? (
+            <p className="mt-2 text-xs font-medium text-warning-text flex items-center gap-1.5">
+              <span>⚠️ Required documents are missing.</span>
+            </p>
+          ) : null}
 
           {isVersionConflict(transition.error) ? (
             <ErrorState
@@ -246,19 +287,40 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           ) : null}
 
           <div className="mt-3 flex flex-wrap gap-2">
-            {actions.map((entry) => (
-              <Button
-                key={entry.target}
-                variant={entry.target === "APPROVED" ? "primary" : "outline"}
-                disabled={!isMine}
-                onClick={() => {
-                  setAction(entry);
-                  setReason("");
-                }}
-              >
-                {entry.label}
-              </Button>
-            ))}
+            {actions.map((entry) => {
+              const isApprove = entry.target === "APPROVED";
+              const isApproveDisabled = isApprove && !allRequiredApproved;
+              const isDisabled = !isMine || isApproveDisabled;
+
+              return (
+                <Button
+                  key={entry.target}
+                  variant={isApprove ? "primary" : "outline"}
+                  disabled={isDisabled}
+                  title={
+                    isApproveDisabled
+                      ? "All required documents must be approved first"
+                      : undefined
+                  }
+                  onClick={() => {
+                    setAction(entry);
+                    if (entry.target === "CHANGES_REQUIRED" && rejectedDocs.length > 0) {
+                      const reasons = rejectedDocs
+                        .map(
+                          (d) =>
+                            `${d.kind.replace(/_/g, " ")}: ${d.review_reason || "Needs clearer replacement"}`,
+                        )
+                        .join("\n");
+                      setReason(reasons);
+                    } else {
+                      setReason("");
+                    }
+                  }}
+                >
+                  {entry.label}
+                </Button>
+              );
+            })}
           </div>
 
           {!isMine ? (

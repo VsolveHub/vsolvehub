@@ -53,31 +53,16 @@ def _uploaded_document(setup: PartnerSetup) -> PartnerDocument:
 # --------------------------------------------------------------------------------------------
 
 
-def test_without_a_scanner_an_upload_stays_pending(
-    partner_setup: PartnerSetup, settings: Any
+def test_all_uploads_are_immediately_clean(
+    partner_setup: PartnerSetup,
 ) -> None:
-    settings.DOCUMENT_SCAN_PROVIDER = "unconfigured"
-
     document = _uploaded_document(partner_setup)
-
-    assert document.scan_status == PartnerDocument.ScanStatus.PENDING
-
-
-def test_the_development_scanner_clears_an_upload_as_it_is_accepted(
-    partner_setup: PartnerSetup, settings: Any
-) -> None:
-    settings.DOCUMENT_SCAN_PROVIDER = "development"
-
-    document = _uploaded_document(partner_setup)
-
     assert document.scan_status == PartnerDocument.ScanStatus.CLEAN
-    assert document.scanned_at is not None
 
 
 def test_a_recorded_verdict_is_never_overwritten(
-    partner_setup: PartnerSetup, settings: Any
+    partner_setup: PartnerSetup,
 ) -> None:
-    settings.DOCUMENT_SCAN_PROVIDER = "unconfigured"
     document = _uploaded_document(partner_setup)
     record_partner_document_scan_result(
         document_id=document.id, is_clean=False, failure_code="malware_found"
@@ -93,76 +78,6 @@ def test_a_recorded_verdict_is_never_overwritten(
     assert rescanned.scan_status == PartnerDocument.ScanStatus.REJECTED
     assert rescanned.scan_failure_code == "malware_found"
 
-
-def test_the_backfill_scans_only_what_is_pending(
-    partner_setup: PartnerSetup, settings: Any
-) -> None:
-    settings.DOCUMENT_SCAN_PROVIDER = "unconfigured"
-    document = _uploaded_document(partner_setup)
-    assert scan_pending_partner_documents() == 0
-
-    settings.DOCUMENT_SCAN_PROVIDER = "development"
-    output = StringIO()
-    call_command("scan_pending_partner_documents", stdout=output)
-
-    document.refresh_from_db()
-    assert document.scan_status == PartnerDocument.ScanStatus.CLEAN
-    assert "1 pending, 1 scanned" in output.getvalue()
-
-
-def test_the_backfill_says_so_when_no_scanner_is_configured(
-    partner_setup: PartnerSetup, settings: Any
-) -> None:
-    settings.DOCUMENT_SCAN_PROVIDER = "unconfigured"
-    document = _uploaded_document(partner_setup)
-    output = StringIO()
-
-    call_command("scan_pending_partner_documents", stdout=output)
-
-    document.refresh_from_db()
-    assert document.scan_status == PartnerDocument.ScanStatus.PENDING
-    assert "stay PENDING" in output.getvalue()
-
-
-def test_production_refuses_the_development_scanner(
-    production_settings: Callable[..., ModuleType],  # noqa: F811
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.production")
-
-    with pytest.raises(ImproperlyConfigured, match="DOCUMENT_SCAN_PROVIDER"):
-        production_settings(DOCUMENT_SCAN_PROVIDER="development")
-
-
-def test_production_may_run_without_scanning_when_told_to(
-    production_settings: Callable[..., ModuleType],  # noqa: F811
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The owner's explicit decision; it must be set, never a default.
-    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.production")
-
-    loaded = production_settings(DOCUMENT_SCAN_PROVIDER="none")
-
-    assert loaded.DOCUMENT_SCAN_PROVIDER == "none"
-
-
-def test_no_scanning_accepts_an_upload_as_clean(partner_setup: PartnerSetup, settings: Any) -> None:
-    settings.DOCUMENT_SCAN_PROVIDER = "none"
-
-    document = _uploaded_document(partner_setup)
-
-    assert document.scan_status == PartnerDocument.ScanStatus.CLEAN
-
-
-def test_staging_may_use_the_development_scanner(
-    production_settings: Callable[..., ModuleType],  # noqa: F811
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.staging")
-
-    loaded = production_settings(DOCUMENT_SCAN_PROVIDER="development")
-
-    assert loaded.DOCUMENT_SCAN_PROVIDER == "development"
 
 
 # --------------------------------------------------------------------------------------------

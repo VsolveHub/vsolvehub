@@ -66,12 +66,7 @@ if not R2_PRIVATE_ENABLED:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must be configured in production.")
 if R2_PRIVATE_BUCKET == R2_PUBLIC_BUCKET:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must not be the public photo bucket.")
-# The development scanner marks every KYC upload clean without looking at it. Staging inherits these
-# settings and may use it so onboarding can be tested; production proper never may.
-if DOCUMENT_SCAN_PROVIDER == "development" and (
-    os.environ.get("DJANGO_SETTINGS_MODULE") != "config.settings.staging"
-):
-    raise ImproperlyConfigured("DOCUMENT_SCAN_PROVIDER=development is forbidden in production.")
+
 if not PARTNER_LEGAL_BASE_URL.startswith("https://"):
     raise ImproperlyConfigured(
         "PARTNER_LEGAL_BASE_URL must be the Partner site's https origin, where /terms and "

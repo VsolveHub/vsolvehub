@@ -11961,6 +11961,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+  /api/v1/partner/application/documents/{document_id}/access/:
+    get:
+      operationId: partner_application_documents_access_retrieve
+      parameters:
+      - in: path
+        name: document_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDocumentApplicantAccess'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/partner/application/documents/uploads/:
     post:
@@ -32849,6 +32887,56 @@ components:
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
         * `OTHER` - Other
+    PartnerDocumentApplicantAccess:
+      type: object
+      properties:
+        document:
+          $ref: '#/components/schemas/PartnerDocumentDetailMetadata'
+        access_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - access_url
+      - document
+    PartnerDocumentDetailMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        label:
+          type: string
+        status:
+          type: string
+        version:
+          type: integer
+        file_name:
+          type: string
+        mime_type:
+          type: string
+        file_size:
+          type: integer
+        uploaded_at:
+          type: string
+          format: date-time
+        rejection_reason:
+          type: string
+          nullable: true
+      required:
+      - file_name
+      - file_size
+      - id
+      - kind
+      - label
+      - mime_type
+      - status
+      - uploaded_at
+      - version
     PartnerDocumentReviewAccess:
       type: object
       properties:

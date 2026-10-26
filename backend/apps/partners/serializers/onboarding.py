@@ -132,7 +132,7 @@ class OperationsDocumentReviewSerializer(serializers.Serializer[dict[str, object
     decision = serializers.ChoiceField(
         choices=(PartnerDocument.Status.APPROVED, PartnerDocument.Status.REJECTED),
     )
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    reason = serializers.CharField(required=False, default="", allow_blank=True, max_length=2000)
 
 
 class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str, object]]):
@@ -159,6 +159,36 @@ class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str,
 class PartnerDocumentReviewAccessSerializer(serializers.Serializer[dict[str, object]]):
     review_url = serializers.URLField(read_only=True)
     expires_at = serializers.DateTimeField(read_only=True)
+
+
+class PartnerDocumentDetailMetadataSerializer(serializers.ModelSerializer[PartnerDocument]):
+    label = serializers.CharField(read_only=True)
+    file_name = serializers.CharField(read_only=True)
+    mime_type = serializers.CharField(source="content_type", read_only=True)
+    file_size = serializers.IntegerField(source="size_bytes", read_only=True)
+    rejection_reason = serializers.CharField(source="review_reason", read_only=True, allow_null=True)
+
+    class Meta:
+        model = PartnerDocument
+        fields = (
+            "id",
+            "kind",
+            "label",
+            "status",
+            "version",
+            "file_name",
+            "mime_type",
+            "file_size",
+            "uploaded_at",
+            "rejection_reason",
+        )
+        read_only_fields = fields
+
+
+class PartnerDocumentApplicantAccessSerializer(serializers.Serializer[dict[str, object]]):
+    document = PartnerDocumentDetailMetadataSerializer(read_only=True)
+    access_url = serializers.URLField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True, required=False)
 
 
 class PartnerConsentSerializer(serializers.ModelSerializer[PartnerConsent]):

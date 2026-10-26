@@ -54,6 +54,8 @@ export interface DocumentUploadProps {
   /** Set when a reviewer rejected the previous version of this document. */
   replacing?: boolean;
   disabled?: boolean;
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 export function DocumentUpload({
@@ -62,6 +64,8 @@ export function DocumentUpload({
   expectedVersion,
   replacing = false,
   disabled = false,
+  onSuccess,
+  onCancel,
 }: DocumentUploadProps) {
   const upload = useUploadDocument();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +91,7 @@ export function DocumentUpload({
       // The file is no longer needed the moment Django has it.
       setPendingFile(null);
       if (inputRef.current) inputRef.current.value = "";
+      onSuccess?.();
     } catch (error) {
       setProgress({ phase: "failed", percent: 0 });
       setFailure(
@@ -142,12 +147,23 @@ export function DocumentUpload({
 
   return (
     <div className="mt-3">
-      <label
-        htmlFor={inputId}
-        className="block text-sm font-bold text-text mb-1"
-      >
-        {replacing ? `Replace your ${label.toLowerCase()}` : `Upload your ${label.toLowerCase()}`}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-bold text-text"
+        >
+          {replacing ? `Replace your ${label.toLowerCase()}` : `Upload your ${label.toLowerCase()}`}
+        </label>
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs font-semibold text-text-secondary hover:text-text underline cursor-pointer"
+          >
+            Cancel
+          </button>
+        ) : null}
+      </div>
 
       {/* Modern Drag and Drop Zone */}
       <div

@@ -8,6 +8,7 @@ live in `operations`; the M2 registration surface lives in `m2_registration` and
 
 from http import HTTPStatus
 from typing import cast
+import uuid
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -34,6 +35,7 @@ from apps.partners.serializers import (
     PartnerApplicationSerializer,
     PartnerApplicationUpdateSerializer,
     PartnerConsentDocumentSerializer,
+    PartnerDocumentApplicantAccessSerializer,
     PartnerDocumentFinalizeSerializer,
     PartnerDocumentSerializer,
     PartnerDocumentUploadRequestSerializer,
@@ -51,6 +53,7 @@ from apps.partners.serializers import (
 from apps.partners.services import (
     ScheduleExceptionInput,
     ScheduleRuleInput,
+    create_partner_document_applicant_access,
     finalize_partner_document_upload,
     go_offline,
     go_online,
@@ -326,6 +329,34 @@ class PartnerDocumentCreateView(ThrottledWriteMixin, APIView):
             PartnerDocumentSerializer(document).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class PartnerDocumentAccessView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Partner application"],
+        responses={
+            200: PartnerDocumentApplicantAccessSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, document_id: uuid.UUID) -> Response:
+        try:
+            document, signed = create_partner_document_applicant_access(
+                user=cast(User, request.user),
+                document_id=document_id,
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        payload = {
+            "document": document,
+            "access_url": signed.review_url,
+            "expires_at": signed.expires_at,
+        }
+        return Response(PartnerDocumentApplicantAccessSerializer(payload).data)
 
 
 class PartnerScheduleView(APIView):
