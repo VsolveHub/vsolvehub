@@ -387,7 +387,7 @@ export function PartnerRentalsWorkspace() {
           <StatCard label="Total items" value={allAssets.length} icon={<PackageOpen className="size-4" />} />
           <StatCard label="🟢 Live on store" value={liveCount} icon={<CheckCircle2 className="size-4 text-positive-text" />} />
           <StatCard label="🟡 Paused / Disabled" value={pausedCount} icon={<Power className="size-4 text-warning-text" />} />
-          <StatCard label="Drafts & Review" value={draftCount} icon={<Clock className="size-4 text-text-secondary" />} />
+          <StatCard label="Drafts" value={draftCount} icon={<Clock className="size-4 text-text-secondary" />} />
         </div>
       ) : null}
 
@@ -816,7 +816,7 @@ export function PartnerRentalsWorkspace() {
                     : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
                 )}
               >
-                Drafts & Review ({draftCount})
+                Drafts ({draftCount})
               </button>
             </div>
           </div>

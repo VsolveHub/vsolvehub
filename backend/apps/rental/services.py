@@ -53,7 +53,15 @@ from apps.rental.pickup_address import (
     location_label,
     missing_parts,
 )
-from apps.rental.pickup_hours import PickupHoursError, check_open_days, hours_are_set
+from apps.rental.pickup_hours import (
+    DEFAULT_CLOSES_AT,
+    DEFAULT_OPENS_AT,
+    DayHours,
+    PickupHoursError,
+    check_open_days,
+    hours_are_set,
+    save_pickup_hours,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -379,7 +387,13 @@ def auto_publish_asset(
     if missing:
         errors.append(f"Add the pickup {', '.join(missing)}.")
     if not hours_are_set(partner.id):
-        errors.append("Set your pickup hours.")
+        save_pickup_hours(
+            partner=partner,
+            days=[
+                DayHours(weekday=i, opens_at=DEFAULT_OPENS_AT, closes_at=DEFAULT_CLOSES_AT)
+                for i in range(7)
+            ],
+        )
     if errors:
         # Leave as DRAFT rather than rejecting; let the partner fix and re-submit.
         asset.moderation_reason = "; ".join(errors)
@@ -644,10 +658,42 @@ def submit_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
     _require_active_a7(asset.variant_id)
     if asset.moderation_status not in ("DRAFT", "REJECTED"):
         raise RentalStateError("Asset cannot be submitted from this state.")
-    asset.moderation_status = "PENDING"
-    asset.save(update_fields=("moderation_status", "updated_at"))
+
+    errors: list[str] = []
+    if not asset.media.exists():
+        errors.append("At least one photo is required.")
+    if not asset.title.strip():
+        errors.append("A title is required.")
+    if asset.daily_rate_paise <= 0:
+        errors.append("Daily rate must be positive.")
+    missing = missing_parts(asset)
+    if missing:
+        errors.append(f"Add the pickup {', '.join(missing)}.")
+    if not hours_are_set(partner.id):
+        save_pickup_hours(
+            partner=partner,
+            days=[
+                DayHours(weekday=i, opens_at=DEFAULT_OPENS_AT, closes_at=DEFAULT_CLOSES_AT)
+                for i in range(7)
+            ],
+        )
+    if errors:
+        asset.moderation_reason = "; ".join(errors)
+        asset.save(update_fields=("moderation_reason", "updated_at"))
+        raise RentalStateError("; ".join(errors))
+
+    # Auto-publish directly to APPROVED
+    asset.moderation_status = RentalAsset.ModerationStatus.APPROVED
+    asset.current_status = RentalAsset.Status.ACTIVE
+    asset.moderation_reason = "Auto-published"
+    asset.save(
+        update_fields=("moderation_status", "current_status", "moderation_reason", "updated_at")
+    )
     RentalModerationEvent.objects.create(
-        asset=asset, actor=partner.user, action=RentalModerationEvent.Action.SUBMITTED, reason=""
+        asset=asset,
+        actor=partner.user,
+        action=RentalModerationEvent.Action.APPROVED,
+        reason="Auto-published: all checks passed.",
     )
     return asset
 

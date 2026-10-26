@@ -39,7 +39,7 @@ export function RentalAssetCard({
           ? "Ad disabled. It will no longer show in customer search."
           : action === "resume"
             ? "Ad enabled. It is now live for bookings."
-            : "Item submitted for review.",
+            : "Ad published! It is now live for bookings.",
         "success",
       );
     },
@@ -146,19 +146,19 @@ export function RentalAssetCard({
 
           {isDraft ? (
             <p className="mt-1 rounded-control bg-surface-sunken px-2.5 py-1.5 text-xs text-text-secondary">
-              Draft. Add photos, pickup address and pickup hours to submit for review.
+              Draft. Add photos and pickup details, then publish to go live.
             </p>
           ) : null}
 
           {isRejected ? (
             <p className="mt-1 rounded-control bg-danger-surface px-2.5 py-1.5 text-xs text-danger-text">
-              Admin requested updates before this item can go live. Edit this ad to make updates and submit for review.
+              Updates required before this item can go live. Edit this ad to make updates and publish.
             </p>
           ) : null}
 
           {isPendingReview ? (
             <p className="mt-1 rounded-control bg-surface-sunken px-2.5 py-1.5 text-xs text-text-secondary">
-              Submitted for review. It goes live once approved by Operations.
+              Publishing item…
             </p>
           ) : null}
 
@@ -206,7 +206,7 @@ export function RentalAssetCard({
               onClick={() => act.mutate("submit")}
             >
               <Send className="mr-1.5 size-3.5" aria-hidden />
-              {act.isPending ? "Submitting…" : "Submit for review"}
+              {act.isPending ? "Publishing…" : "Publish ad"}
             </Button>
           ) : null}
 
