@@ -15,6 +15,7 @@ import { AddToCartButton } from "./add-to-cart-button";
 import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
 import { useServiceDetail } from "../client-queries";
 import { serviceHref } from "../service-href";
+import { addsToServiceCopy, durationLabel } from "../service-facts";
 import type { Category, ServiceCard } from "../queries";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
@@ -159,16 +160,21 @@ function WhatYouCanBookModal({
                     {/* Right Info */}
                     <div className="min-w-0 flex-1 flex flex-col gap-1">
                       <h4 className="text-base font-bold text-navy-900 leading-snug">{variant.name}</h4>
-                      {variant.description ? (
+                      {/* Same rules as the service page's option list: no repeat of the
+                          service sentence, and a published duration instead of "Priced on
+                          booking", which contradicted the price printed beside it. */}
+                      {addsToServiceCopy(
+                        variant.description,
+                        service.short_description,
+                        detail.description ?? "",
+                      ) ? (
                         <p className="text-xs sm:text-sm text-text-secondary leading-relaxed line-clamp-2">
                           {variant.description}
                         </p>
                       ) : null}
-                      <p className="mt-0.5 text-xs italic text-text-muted">
-                        {variant.task_lines && variant.task_lines.length > 0
-                          ? `${variant.task_lines.length} tasks you can choose from`
-                          : "Priced on booking"}
-                      </p>
+                      {durationLabel(variant) ? (
+                        <p className="mt-0.5 text-xs text-text-muted">{durationLabel(variant)}</p>
+                      ) : null}
                     </div>
                   </div>
 

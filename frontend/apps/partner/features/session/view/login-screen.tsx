@@ -41,6 +41,25 @@ const NAV = [
   { href: "/contact", label: "Support" },
 ];
 
+/**
+ * Field errors as sentences.
+ *
+ * The flow passes Django's field message through unchanged, and for a wrong
+ * code that message is currently the bare error code — the screen printed
+ * `invalid_otp` under the field. Anything shaped like a machine code is
+ * translated here; a real sentence from Django is left as it is.
+ */
+const FIELD_ERROR_COPY: Record<string, string> = {
+  invalid_otp: "That code is not right, or it has expired. Check the code, or request a new one.",
+  invalid_phone_number: "Enter a valid 10-digit mobile number.",
+};
+
+function readableFieldError(message: string | null | undefined): string | null {
+  if (!message) return null;
+  if (!/^[a-z][a-z0-9_]*$/.test(message)) return message;
+  return FIELD_ERROR_COPY[message] ?? "That did not work. Check what you entered and try again.";
+}
+
 function LoginShell({ children }: { children: ReactNode }) {
   return <div className="min-h-screen bg-canvas text-text relative">{children}</div>;
 }
@@ -67,6 +86,8 @@ export function LoginScreen() {
   const flow = usePhoneAuthFlow(getApiClient());
   const flowWithAudio = {
     ...flow,
+    phoneError: readableFieldError(flow.phoneError),
+    codeError: readableFieldError(flow.codeError),
     onRequestCode: () => {
       prepareBookingAlertsFromGesture();
       flow.onRequestCode();
@@ -174,7 +195,12 @@ export function LoginScreen() {
 
       {/* Page Content */}
       <main className="mx-auto w-full max-w-md px-4 pt-24 sm:pt-28 pb-16">
-        <Card className="overflow-hidden p-0 shadow-xl border border-line-strong rounded-3xl bg-surface">
+        {/* `padding="none"`, not `p-0`: Card's own `p-6` wins over a className
+            (see card.tsx), which framed the dark header in a white border. */}
+        <Card
+          padding="none"
+          className="overflow-hidden shadow-xl border border-line-strong rounded-3xl bg-surface"
+        >
           {/* Header Card Accent */}
           <div className="bg-[#00112e] px-6 py-7 text-white relative overflow-hidden">
             <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 bg-signal-500/10 rounded-full blur-2xl" />
@@ -183,10 +209,14 @@ export function LoginScreen() {
                 Partner Sign In
               </span>
               <h1 className="text-2xl font-extrabold tracking-tight text-white">
-                Welcome Back
+                Welcome back
               </h1>
-              <p className="mt-1.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Enter your registered 10-digit mobile number to access your Partner account and job offers.
+              {/* Follows the step: on the code step this still asked for the
+                  number the person had already entered. */}
+              <p className="mt-1.5 text-sm text-slate-300 leading-relaxed">
+                {flow.phase === "code"
+                  ? "Almost there. Enter the code we sent to your phone to sign in."
+                  : "Sign in with the mobile number you registered with to see your account and job offers."}
               </p>
             </div>
           </div>
@@ -195,8 +225,9 @@ export function LoginScreen() {
           <div className="p-6 sm:p-7">
             <OtpForm
               {...flowWithAudio}
-              heading="Your Mobile Number"
+              heading={flow.phase === "code" ? "Enter your code" : "Your mobile number"}
               headingLevel={2}
+              phoneDigits={10}
               // No form-level `description`. `OtpForm` already prints "We will
               // send a 6-digit code by SMS." against the field itself, and the
               // hero above already explains what the number is for — so this
@@ -205,19 +236,17 @@ export function LoginScreen() {
               // itself down for no added meaning.
               verifyLabel="Verify & Sign In"
               footer={
-                <div className="rounded-2xl bg-surface-sunken p-4 border border-line mt-4">
-                  <p className="text-xs leading-relaxed text-text">
-                    <strong className="text-navy-900 font-bold">New to V Solve Hub?</strong>{" "}
-                    <Link
-                      href="/apply"
-                      className="inline-flex min-h-11 items-center font-bold text-signal-700 underline underline-offset-4 hover:text-signal-800"
-                    >
-                      Register as a New Partner
-                    </Link>
-                  </p>
-                  <p className="mt-1 text-[11px] text-text-muted">
+                <div className="mt-1 flex flex-col gap-1 rounded-2xl border border-line bg-surface-sunken p-4">
+                  <p className="text-sm font-bold text-navy-900">New to V Solve Hub?</p>
+                  <p className="text-xs leading-relaxed text-text-muted">
                     Takes only 5 minutes. Free to join with weekly payouts.
                   </p>
+                  <Link
+                    href="/apply"
+                    className="mt-1 inline-flex min-h-11 items-center self-start text-sm font-bold text-signal-700 underline underline-offset-4 hover:text-signal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                  >
+                    Register as a new Partner
+                  </Link>
                 </div>
               }
             />

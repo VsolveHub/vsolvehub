@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Badge, Button, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, buttonStyles, ErrorState, Spinner } from "@vsolve/ui";
 import Link from "next/link";
 
 import { isListingTrack } from "../model/steps";
@@ -154,16 +154,12 @@ export function DocumentsStep() {
 
       {/* Navigation actions */}
       <div className="flex items-center justify-between pt-4 border-t border-line gap-3">
-        <Link href="/apply/consent" className="shrink-0">
-          <Button variant="outline" size="lg" className="font-bold text-sm h-12 px-5">
+        <Link href="/apply/consent" className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
             Back
-          </Button>
-        </Link>
-        <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"}>
-          <Button size="lg" className="font-bold text-sm h-12 px-5 shadow-md">
+          </Link>
+        <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"} className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-5 shadow-md" })}>
             {isListingTrack(query.data?.track) ? "Continue to review" : "Continue to Working Hours"}
-          </Button>
-        </Link>
+          </Link>
       </div>
     </div>
   );

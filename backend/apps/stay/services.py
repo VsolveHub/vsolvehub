@@ -311,7 +311,7 @@ def store_stay_review_photo(*, customer: Any, upload: Any) -> StayReviewPhoto:
     )
 
 
-def _stored_name_from_url(url: str, folder: str) -> str | None:
+def _stored_name_from_url(url: str, folder: str | tuple[str, ...]) -> str | None:
     return public_stored_name(url, folder=folder)
 
 

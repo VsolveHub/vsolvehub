@@ -280,11 +280,13 @@ export function PartnerRentalBookingsWorkspace() {
       <SectionNav label="Rental sections" items={RENTAL_SECTIONS} />
 
       <Card>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Booking status filter">
           {BOOKING_STATUS_FILTERS.map((status) => (
             <button
               key={status}
               type="button"
+              role="tab"
+              aria-selected={bookingStatusFilter === status}
               onClick={() => setBookingStatusFilter(status)}
               className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                 bookingStatusFilter === status

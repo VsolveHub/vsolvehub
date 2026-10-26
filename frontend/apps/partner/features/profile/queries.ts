@@ -26,13 +26,23 @@ export function isNoProfileYet(error: unknown): boolean {
   return error instanceof ApiRequestError && error.status === 404;
 }
 
-export function usePartnerProfile() {
+/**
+ * `enabled` is for the marketing chrome, which renders for visitors and
+ * applicants alike: Django answers `403` to anyone without the `partner` role,
+ * and every one of those refusals is a red line in the console.
+ */
+export function usePartnerProfile({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
+    enabled,
     queryKey: queryKeys.partner.me(),
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/me/")),
     ...SESSION_STATE,
+    // 401, 403 and 404 are answers about who is asking. Asking again gets the
+    // same answer, so only transport and server failures are retried.
     retry: (failureCount, error) =>
-      error instanceof ApiRequestError && error.status === 404 ? false : failureCount < 2,
+      error instanceof ApiRequestError && [401, 403, 404].includes(error.status)
+        ? false
+        : failureCount < 2,
   });
 }
 

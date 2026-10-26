@@ -1,6 +1,6 @@
 """Unit and API tests for customer prepaid wallet (ADR-0010, M3-BE-211..215)."""
 
-# ruff: noqa: PLR2004, S106
+# ruff: noqa: S106
 
 from http import HTTPStatus
 

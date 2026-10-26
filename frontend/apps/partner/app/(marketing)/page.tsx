@@ -355,15 +355,10 @@ export default function LandingPage() {
 
           {/* Bottom Action CTA */}
           <div className="mt-14 text-center">
-            <Link href="/apply">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
+            <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
                 <span>Start Your Partner Application</span>
                 <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>
@@ -522,14 +517,9 @@ export default function LandingPage() {
                 Register complete work teams for daily workforce dispatch, commercial renovations, and high-volume corporate contracts.
               </p>
             </div>
-            <Link href="/apply/capabilities" className="shrink-0">
-              <button
-                type="button"
-                className="rounded-full bg-white px-5 py-2.5 text-xs font-bold text-[#00112e] hover:bg-navy-50 transition-colors shadow-md"
-              >
+            <Link href="/apply/capabilities" className="inline-block shrink-0 rounded-full bg-white px-5 py-2.5 text-xs font-bold text-[#00112e] hover:bg-navy-50 transition-colors shadow-md text-center">
                 Apply for Specialist Work →
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>
@@ -667,23 +657,13 @@ export default function LandingPage() {
             Join 5,000+ happy technicians across Telangana. Zero upfront cost, weekly automatic payouts, and instant local job offers.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/apply">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-7 py-3.5 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/30 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
+            <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-7 py-3.5 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/30 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
                 <span>Register as a Partner Now</span>
                 <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
-            <Link href="/contact">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 py-3.5 text-sm font-bold text-white hover:bg-white/20 transition-all"
-              >
+              </Link>
+            <Link href="/contact" className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 py-3.5 text-sm font-bold text-white hover:bg-white/20 transition-all">
                 <span>Contact Support</span>
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>

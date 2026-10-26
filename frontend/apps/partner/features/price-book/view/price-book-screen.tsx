@@ -3,6 +3,8 @@
 import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
 import { Button, Card, ErrorState, cn, formatMoney } from "@vsolve/ui";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { asyncStateFrom, AsyncSection } from "@/components/async-section";
@@ -35,6 +37,15 @@ export function PriceBookScreen() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6">
+      <div className="mb-2">
+        <Link
+          href="/me"
+          className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Back to Account
+        </Link>
+      </div>
       <h1 className="text-headline text-text">Your rate card</h1>
       <p className="mt-1 text-body text-text-secondary">
         Set once. Every estimate fills in from here.

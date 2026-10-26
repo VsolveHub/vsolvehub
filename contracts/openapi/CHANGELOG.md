@@ -1,5 +1,16 @@
 # API Contract Changelog
 
+## 1.79.0 - Safety stories and promo banners
+
+Additive.
+
+- `GET /safety-stories/` (`PublicSafetyStory`): active, published safety stories for customers.
+- `GET, POST /ops/stories/` and `GET, PATCH, DELETE /ops/stories/{story_id}/` (`OpsSafetyStory`,
+  `OpsSafetyStoryCreateRequest`, `PatchedOpsSafetyStoryUpdateRequest`): Operations endpoints for
+  managing safety stories.
+- `GET /promo-banners/` (`PromoBanner`): display-only promotional banners filtered by `?category=`.
+- Removed: none. Renamed: none.
+
 ## 1.78.0 - Contact form, published cancellation policy, honest receipts
 
 Additive.

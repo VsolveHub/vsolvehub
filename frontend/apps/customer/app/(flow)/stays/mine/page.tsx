@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { usePagedList } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
-import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
+import { buttonStyles, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import {
   fetchMyStayEnquiriesPage,
@@ -60,8 +60,8 @@ function MyStays() {
   }
 
   const explore = (
-    <Link href="/stays">
-      <Button className="font-bold">Explore Rooms & Stays</Button>
+    <Link href="/stays" className={buttonStyles({ className: "font-bold" })}>
+      Explore Rooms & Stays
     </Link>
   );
 
@@ -70,7 +70,7 @@ function MyStays() {
       <div className="flex flex-col gap-2">
         <Link
           href="/stays"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary transition hover:text-text"
+          className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-bold text-text-secondary transition hover:text-text"
         >
           <ArrowLeft className="size-3.5" />
           Back to Stays & PG
@@ -82,10 +82,11 @@ function MyStays() {
               Your enquiries and visits, with the owner&apos;s number to call.
             </p>
           </div>
-          <Link href="/stays">
-            <Button size="sm" variant="secondary" className="font-bold">
-              + Explore Stays
-            </Button>
+          <Link
+            href="/stays"
+            className={buttonStyles({ size: "sm", variant: "secondary", className: "min-h-11 font-bold" })}
+          >
+            + Explore Stays
           </Link>
         </div>
       </div>
@@ -98,7 +99,7 @@ function MyStays() {
             role="tab"
             aria-selected={activeTab === tab.key}
             onClick={() => setTab(tab.key)}
-            className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+            className={`inline-flex min-h-11 items-center rounded-full px-4 py-1.5 text-xs font-bold transition ${
               activeTab === tab.key
                 ? "bg-action text-white"
                 : "border border-line bg-surface text-text-secondary hover:text-text"

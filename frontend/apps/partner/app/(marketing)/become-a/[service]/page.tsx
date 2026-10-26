@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Clock, Wallet, MapPin, ArrowRight } from "lucide-react";
 import { SERVICE_CATALOG } from "@vsolve/config";
-import { Button } from "@vsolve/ui";
+import { buttonStyles } from "@vsolve/ui";
 import { Medallion, type Tone } from "@/components/graphics";
 import { serviceVisual } from "@/components/service-visuals";
 
@@ -18,13 +18,18 @@ function getService(slug: string) {
   return SERVICE_CATALOG.find((s) => s.slug === slug);
 }
 
+/** "an AC Technician", "an Employer", "an RO Technician"; "a Plumber". */
+function withArticle(name: string): string {
+  return `${/^[aeiou]/i.test(name) || /^RO\b/.test(name) ? "an" : "a"} ${name}`;
+}
+
 export async function generateMetadata(
   { params }: { params: Promise<{ service: string }> },
 ): Promise<Metadata> {
   const { service } = await params;
   const svc = getService(service);
-  if (!svc) return {};
-  const title = `Become a ${svc.name} Partner`;
+  if (!svc) return { title: "Page not found" };
+  const title = `Become ${withArticle(svc.name)} Partner`;
   return {
     title,
     description: `Sign up as a verified ${svc.name.toLowerCase()} on V Solve Hub. ${svc.tagline} Earn daily across Telangana.`,
@@ -70,11 +75,9 @@ export default async function BecomeAServicePage(
         </div>
         <h1 className="mt-6 text-4xl font-bold text-ink-900">Become a {svc.name} Partner</h1>
         <p className="mt-4 text-lg text-gray-500">{svc.tagline}</p>
-        <Link href={`/login?service=${svc.slug}`} className="mt-8 inline-block">
-          <Button size="lg">
+        <Link href={`/login?service=${svc.slug}`} className={buttonStyles({ size: "lg", className: "mt-8" })}>
             Start your application <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
+          </Link>
       </div>
 
       <div className="mx-auto mt-16 grid max-w-4xl gap-6 sm:grid-cols-3">

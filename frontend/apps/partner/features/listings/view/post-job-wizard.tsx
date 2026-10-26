@@ -433,7 +433,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
         <button
           type="button"
           onClick={() => (step === 0 || (editId && step === 1) ? router.push("/listings") : setStep(step - 1))}
-          className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-surface"
+          className="inline-flex size-11 min-h-11 min-w-11 items-center justify-center rounded-full border border-line bg-surface transition-colors hover:bg-surface-hover"
           aria-label="Back"
         >
           <ArrowLeft className="size-4" />

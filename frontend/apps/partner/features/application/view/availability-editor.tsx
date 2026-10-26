@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button } from "@vsolve/ui";
+import { Badge, Button, buttonStyles } from "@vsolve/ui";
 import { Plus, Trash2, X, Clock, Edit2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -387,15 +387,9 @@ export function AvailabilityEditor({
       {/* Save & Navigation Action Dock */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur px-4 py-3 shadow-lg">
         <div className="mx-auto max-w-[560px] flex items-center justify-between gap-3">
-          <Link href="/apply/documents" className="shrink-0">
-            <Button
-              variant="outline"
-              size="lg"
-              className="font-bold text-sm h-12 px-5"
-            >
+          <Link href="/apply/documents" className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
               Back
-            </Button>
-          </Link>
+            </Link>
 
           <div className="flex items-center gap-2.5">
             <Button
@@ -408,11 +402,9 @@ export function AvailabilityEditor({
             >
               {hasChanges ? "Save Hours" : "Saved"}
             </Button>
-            <Link href="/apply/review">
-              <Button size="lg" className="font-bold text-sm h-12 px-5 shadow-md">
+            <Link href="/apply/review" className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-5 shadow-md" })}>
                 Review Application
-              </Button>
-            </Link>
+              </Link>
           </div>
         </div>
       </div>

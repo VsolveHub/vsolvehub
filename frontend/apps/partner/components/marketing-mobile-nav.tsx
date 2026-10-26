@@ -28,7 +28,11 @@ export function MarketingMobileNav({
   const close = () => setOpen(false);
 
   const session = useCurrentSession(getApiClient());
-  const profile = usePartnerProfile();
+  // Only someone holding the role can read a profile; asking for anyone else
+  // is a guaranteed 403.
+  const profile = usePartnerProfile({
+    enabled: Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)),
+  });
 
   const isApprovedPartner =
     Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)) ||
@@ -110,60 +114,30 @@ export function MarketingMobileNav({
         <div className="mt-auto space-y-2.5 border-t border-line pt-5">
           {isApprovedPartner ? (
             <>
-              <Link href="/home" onClick={close} className="block">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-center gap-2 rounded-full bg-emerald-600 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500 transition-all active:scale-[0.99]"
-                >
+              <Link href="/home" onClick={close} className="w-full flex items-center justify-center gap-2 rounded-full bg-emerald-600 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500 transition-all active:scale-[0.99]">
                   <span>Open Partner App</span>
-                </button>
-              </Link>
-              <Link href="/me" onClick={close} className="block">
-                <button
-                  type="button"
-                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
-                >
+                </Link>
+              <Link href="/me" onClick={close} className="block w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors text-center">
                   My Profile & Settings
-                </button>
-              </Link>
+                </Link>
             </>
           ) : isLoggedIn ? (
             <>
-              <Link href="/apply" onClick={close} className="block">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 py-3 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all active:scale-[0.99]"
-                >
+              <Link href="/apply" onClick={close} className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 py-3 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all active:scale-[0.99]">
                   <span>Application Dashboard</span>
-                </button>
-              </Link>
-              <Link href="/login" onClick={close} className="block">
-                <button
-                  type="button"
-                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
-                >
+                </Link>
+              <Link href="/login" onClick={close} className="block w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors text-center">
                   Switch Account
-                </button>
-              </Link>
+                </Link>
             </>
           ) : (
             <>
-              <Link href="/apply" onClick={close} className="block">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 py-3 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all active:scale-[0.99]"
-                >
+              <Link href="/apply" onClick={close} className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 py-3 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all active:scale-[0.99]">
                   <span>Become a Partner</span>
-                </button>
-              </Link>
-              <Link href="/login" onClick={close} className="block">
-                <button
-                  type="button"
-                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
-                >
+                </Link>
+              <Link href="/login" onClick={close} className="block w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors text-center">
                   Sign In to Account
-                </button>
-              </Link>
+                </Link>
             </>
           )}
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Form from "next/form";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -8,6 +9,8 @@ import {
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
 import { HomepageClientSections } from "@/features/catalog/components/homepage-client-sections";
+import { getActiveSafetyStories } from "@/features/stories/queries";
+import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { catalogCategoryHref } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -240,7 +243,10 @@ export default async function HomePage() {
   // The whole published catalogue, unfiltered (2026-08-26): the old page kept a
   // three-slug allowlist here, so no new category could ever reach the home
   // screen without a code change.
-  const categories = await getCategories();
+  const [categories, safetyStories] = await Promise.all([
+    getCategories(),
+    getActiveSafetyStories(),
+  ]);
 
   return (
     <main className="bg-[#FAF9F7] md:bg-transparent min-h-screen pb-20 md:pb-0 overflow-x-hidden">
@@ -259,7 +265,7 @@ export default async function HomePage() {
                   <path fillRule="evenodd" d="M16.403 12.652a3 3 0 0 0 0-5.304 3 3 0 0 0-3.75-3.751 3 3 0 0 0-5.305 0 3 3 0 0 0-3.751 3.75 3 3 0 0 0 0 5.305 3 3 0 0 0 3.75 3.751 3 3 0 0 0 5.305 0 3 3 0 0 0 3.751-3.75Zm-2.546-4.46a.75.75 0 0 0-1.214-.883l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
                 </svg>
               </span>
-              100% Vetted Pros
+              ID-verified pros
             </div>
 
             {/* Main Hero Container */}
@@ -296,6 +302,11 @@ export default async function HomePage() {
               </div>
             </div>
           </section>
+
+          {/* Safety Stories Section (Instagram-style 24h updates) */}
+          <div className="mt-12 mb-2">
+            <SafetyStoriesTray initialStories={safetyStories} />
+          </div>
 
           {/* Curated Services Section */}
           <section aria-labelledby="categories-heading" className="mt-20 pb-12 bg-transparent rounded-none px-0">
@@ -362,8 +373,9 @@ export default async function HomePage() {
         {/* MOBILE LAYOUT (NEW PREMIUM REDESIGN MATCHING MOCKUP) */}
         {/* ---------------------------------------------------- */}
         <div className="block md:hidden flex flex-col gap-8 pt-2">
-          {/* Search Input */}
-          <div className="relative w-full">
+          {/* Search Input — submits to the catalogue's `?q=` search, which works before
+              hydration too, so a slow connection still gets results. */}
+          <Form action="/catalog" role="search" className="relative w-full">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-text-secondary">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-4 opacity-60">
                 <circle cx="9" cy="9" r="6" />
@@ -371,11 +383,14 @@ export default async function HomePage() {
               </svg>
             </div>
             <input
-              type="text"
+              type="search"
+              name="q"
+              enterKeyHint="search"
+              aria-label="Search for a service"
               placeholder="Search for a service..."
-              className="w-full bg-[#f4f1ec] border-0 rounded-xl py-3.5 pl-11 pr-4 text-sm text-navy-900 placeholder:text-text-secondary/70 focus:outline-none focus:ring-2 focus:ring-focus-ring/25 font-medium shadow-2xs"
+              className="w-full bg-[#f4f1ec] border-0 rounded-xl py-3.5 pl-11 pr-4 text-base text-navy-900 placeholder:text-text-secondary/70 focus:outline-none focus:ring-2 focus:ring-focus-ring/25 font-medium shadow-2xs"
             />
-          </div>
+          </Form>
 
           {/* Hero Banner Card */}
           <div className="relative min-h-[190px] rounded-[1.5rem] overflow-hidden shadow-md">
@@ -397,11 +412,14 @@ export default async function HomePage() {
             </div>
           </div>
 
+          {/* Safety Stories Tray */}
+          <SafetyStoriesTray initialStories={safetyStories} />
+
           {/* Our Services Section */}
           <div className="flex flex-col gap-3.5">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-extrabold text-[#00112e]">Our Services</h2>
-              <Link href="/catalog" className="text-sm font-bold text-[#f87000] hover:text-[#fb8130] transition-colors">
+              <Link href="/catalog" className="-my-3 py-3 text-sm font-bold text-[#f87000] hover:text-[#fb8130] transition-colors">
                 See All
               </Link>
             </div>
@@ -517,7 +535,7 @@ export default async function HomePage() {
               Why V Solve Hub?
             </h2>
             
-            {/* Quality Assurance Card */}
+            {/* Upfront Price Card */}
             <div className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-4 flex items-center gap-4 shadow-card hover:shadow-md transition-shadow">
               <div className="flex size-12 items-center justify-center rounded-full bg-[#00112e] text-white shrink-0 shadow-xs">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
@@ -526,14 +544,14 @@ export default async function HomePage() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-extrabold text-[#00112e] text-sm">100% Quality Assurance</h3>
+                <h3 className="font-extrabold text-[#00112e] text-sm">Price before you pay</h3>
                 <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-                  Guaranteed satisfaction on every job.
+                  See the amount for your job before payment; extras only with your approval.
                 </p>
               </div>
             </div>
 
-            {/* Expert Training Card */}
+            {/* Skill Approval Card */}
             <div className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-4 flex items-center gap-4 shadow-card hover:shadow-md transition-shadow">
               <div className="flex size-12 items-center justify-center rounded-full bg-[#00112e] text-white shrink-0 shadow-xs">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
@@ -542,9 +560,9 @@ export default async function HomePage() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-extrabold text-[#00112e] text-sm">Expert Training</h3>
+                <h3 className="font-extrabold text-[#00112e] text-sm">Approved for each skill</h3>
                 <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-                  Professionals vetted and trained to elite standards.
+                  Professionals are ID-verified and approved for each kind of work they take.
                 </p>
               </div>
             </div>

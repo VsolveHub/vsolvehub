@@ -7,7 +7,7 @@ import { grievanceOfficerLabel, SUPPORT } from "@/lib/support";
 const phone = SUPPORT.phone;
 
 export const metadata: Metadata = {
-  title: "Contact Us & Help Center | V Solve Hub",
+  title: "Contact Us & Help Center",
   description: `${phone ? `Call or WhatsApp ${phone.display} (${SUPPORT.phoneHours}), email` : "Email"} ${SUPPORT.email}, or send us a message. Answers to common questions about booking, payments and cancellations.`,
   alternates: { canonical: "/contact" },
 };

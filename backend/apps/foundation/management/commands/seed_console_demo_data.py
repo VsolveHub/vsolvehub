@@ -966,6 +966,9 @@ class Command(BaseCommand):
                 .first()
                 or ServiceVariant.objects.filter(service__slug=right_slug).order_by("id").first()
             )
+            if left is None or right is None:
+                # A slug this catalogue does not carry: nothing to propose a rule between.
+                continue
             # Checked in both directions: a rule stores its pair canonically ordered, so the row
             # written for (switch-socket, fan) reads back as (fan, switch-socket) and a
             # one-directional lookup silently misses it.

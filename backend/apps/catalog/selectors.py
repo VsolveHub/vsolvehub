@@ -14,6 +14,7 @@ from apps.catalog.models import (
     A10VariantConfiguration,
     Category,
     M2VariantConfiguration,
+    PromoBanner,
     Service,
     ServiceMedia,
     ServicePolicy,
@@ -201,6 +202,24 @@ def public_categories() -> QuerySet[Category]:
             .order_by("display_order", "name"),
         ),
     )
+
+
+def active_promo_banners(category_slug: str | None) -> QuerySet[PromoBanner]:
+    """Banners live right now: switched on, inside their window, under an active category.
+
+    Without a category slug only the site-wide banners (no category) are returned; with one,
+    the site-wide banners plus that category's own.
+    """
+
+    now = timezone.now()
+    banners = PromoBanner.objects.filter(is_active=True).filter(
+        Q(starts_at__isnull=True) | Q(starts_at__lte=now),
+        Q(ends_at__isnull=True) | Q(ends_at__gt=now),
+    )
+    in_scope = Q(category__isnull=True)
+    if category_slug:
+        in_scope |= Q(category__slug=category_slug, category__is_active=True)
+    return banners.filter(in_scope).select_related("category")
 
 
 def public_services_for_category(category_slug: str) -> QuerySet[Service]:

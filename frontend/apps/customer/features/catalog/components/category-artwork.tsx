@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { ProgressiveImage } from "@vsolve/ui";
 
 import { iconForService } from "../icon-catalogue/service-icon";
 
@@ -171,11 +172,10 @@ export function ServicePhoto({
           isServiceCover ? "bg-[#F4F1EC]" : "bg-surface-sunken"
         } ${className ?? ""}`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <ProgressiveImage
           src={imageUrl}
           alt=""
-          loading="lazy"
+          containerClassName="size-full bg-transparent grid place-items-center"
           className={
             isServiceCover
               ? "size-[72%] object-contain object-center"

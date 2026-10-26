@@ -18,6 +18,7 @@ from apps.partners.models import PartnerApplication, PartnerCapability, PartnerP
 from apps.payouts.models import PartnerLedgerEntry
 from apps.rental.models import RentalBooking, RentalDeposit
 from apps.rental.services import (
+    RentalStateError,
     create_asset,
     create_booking,
     decide_deposit_dispute,
@@ -34,7 +35,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-deposit-refund", name="Deposit Refund")
     sub = Subcategory.objects.create(category=category, slug="cameras-refund", name="Cameras")
     service = Service.objects.create(
@@ -143,7 +144,6 @@ def test_release_deposit_idempotent_replay(rental_world):
     release_deposit(booking=booking, partner=rental_world["partner"])
     booking.refresh_from_db()
     # Second release must fail closed on status, without a second refund row.
-    from apps.rental.services import RentalStateError
 
     with pytest.raises(RentalStateError, match="not held"):
         release_deposit(booking=booking, partner=rental_world["partner"])

@@ -83,7 +83,7 @@ def record_completion_for_customer(
         grant_coins(
             customer=customer,
             trigger=CoinGrantRule.GrantTrigger.BOOKING_COMPLETED,
-            order_payable_paise=_order_payable_paise(event, stype, sid),
+            order_payable_paise=_order_payable_paise(stype, sid),
             sequence_n=count,
             source_type=stype,
             source_id=sid,
@@ -93,9 +93,7 @@ def record_completion_for_customer(
     return RecordCompletionResult(created=created)
 
 
-def _order_payable_paise(
-    event: OutboxEvent | None, source_type: str, source_id: UUID
-) -> int | None:
+def _order_payable_paise(source_type: str, source_id: UUID) -> int | None:
     """Order total for earn-tier lookup. Missing bookings leave tiered rules idle."""
     if source_type == "BOOKING":
         from apps.commerce.models import Booking  # noqa: PLC0415

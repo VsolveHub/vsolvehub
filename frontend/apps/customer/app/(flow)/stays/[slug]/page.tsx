@@ -167,7 +167,7 @@ export default function StayDetailPage() {
       <nav aria-label="Breadcrumb">
         <Link
           href="/stays"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text transition"
+          className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
         >
           <ArrowLeft className="size-3.5" />
           Back to Stays & PG

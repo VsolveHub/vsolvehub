@@ -245,7 +245,7 @@ export default function ListingDetailPage() {
             </div>
             <a
               href="#apply-panel"
-              className="inline-flex items-center justify-center rounded-control bg-action px-5 py-2 text-xs font-bold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active shrink-0"
+              className="inline-flex min-h-11 items-center justify-center rounded-control bg-action px-5 py-2 text-sm font-bold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active shrink-0"
             >
               Apply Now
             </a>

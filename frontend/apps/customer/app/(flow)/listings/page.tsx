@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useBrowseList } from "@vsolve/query";
 import {
+  ArrowLeft,
   FileCheck2,
   MapPin,
   Search,
@@ -98,7 +99,17 @@ function ListingsBrowseContent() {
   const hasActiveFilters = Boolean(draftQuery || draftLocation || selectedCategory);
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-6 px-4 pt-3 pb-8 sm:py-8">
+      <div>
+        <Link
+          href="/"
+          className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back to Home</span>
+        </Link>
+      </div>
+
       <PartAHero
         title="Find Your Next Opportunity"
         subtitle="Jobs from trusted employers. Build your career with V Solve Hub."

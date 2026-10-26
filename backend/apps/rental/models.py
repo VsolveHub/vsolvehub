@@ -162,6 +162,9 @@ class AssetReservation(models.Model):
             models.Index(fields=("asset", "status", "start_date", "end_date")),
         ]
 
+    def __str__(self) -> str:
+        return f"{self.asset_id}:{self.start_date}..{self.end_date}:{self.status}"
+
 
 class RentalDeposit(models.Model):
     class Status(models.TextChoices):
@@ -195,6 +198,9 @@ class RentalDeposit(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"deposit:{self.pk}:{self.status}"
 
 
 class RentalBooking(models.Model):
@@ -265,6 +271,9 @@ class RentalBooking(models.Model):
                 name="rental_booking_transport_fee_lte_transport",
             ),
         ]
+
+    def __str__(self) -> str:
+        return f"rental-booking:{self.pk}"
 
 
 class RentalTransportRequest(models.Model):
@@ -434,6 +443,9 @@ class RentalBookingLine(models.Model):
     unit_price_paise = models.PositiveIntegerField()
     deposit_paise = models.PositiveIntegerField(default=0)
 
+    def __str__(self) -> str:
+        return f"{self.booking_id}:{self.asset_id}x{self.quantity}"
+
 
 class RentalModerationEvent(models.Model):
     class Action(models.TextChoices):
@@ -453,6 +465,9 @@ class RentalModerationEvent(models.Model):
     action = models.CharField(max_length=20, choices=Action.choices)
     reason = models.CharField(max_length=480, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"rental-moderation:{self.asset_id}:{self.pk}"
 
 
 def overlapping_reservations(
@@ -591,6 +606,9 @@ class RentalAssetMedia(models.Model):
 
     class Meta:
         ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.caption or f"media:{self.pk}"
 
     @property
     def image_url(self) -> str:

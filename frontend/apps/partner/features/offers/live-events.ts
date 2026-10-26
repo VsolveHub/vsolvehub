@@ -1,6 +1,6 @@
 "use client";
 
-import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+import { browserApiBaseUrl } from "@/lib/api/browser";
 
 /**
  * Foreground delivery for Partner stream events over
@@ -46,9 +46,13 @@ export interface SubscribeOptions {
 const SEEN_TTL_MS = 5 * 60_000;
 const STREAM_RECONNECT_MS = 2_000;
 
-/** Same-origin relative URL when `NEXT_PUBLIC_API_BASE_URL` is empty (dev proxy). */
+/**
+ * Same-origin relative URL when the browser client uses the dev proxy — an
+ * empty `NEXT_PUBLIC_API_BASE_URL`, or a page on a different loopback host than
+ * the API (see `browserApiBaseUrl`). The stream needs the session cookie too.
+ */
 export function partnerStreamUrl(): string {
-  const base = PUBLIC_API_BASE_URL.replace(/\/$/, "");
+  const base = browserApiBaseUrl().replace(/\/$/, "");
   if (!base) return "/api/v1/partner/offers/stream/";
   return `${base}/api/v1/partner/offers/stream/`;
 }

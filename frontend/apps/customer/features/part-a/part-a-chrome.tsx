@@ -19,7 +19,7 @@ export function PartAPill({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+      className={`inline-flex min-h-11 items-center rounded-full px-4 py-1.5 text-xs font-semibold transition ${
         active
           ? "bg-action text-action-text shadow-xs"
           : "border border-line bg-surface text-text-secondary hover:border-line-strong"
@@ -61,7 +61,7 @@ export function PartAResultHeader({
         <select
           value={sort}
           onChange={(event) => onSort(event.target.value)}
-          className="rounded-control border border-line bg-surface px-2 py-1 text-xs font-semibold text-navy-900"
+          className="min-h-11 rounded-control border border-line bg-surface px-2 py-1 text-base font-semibold text-navy-900 sm:text-xs"
         >
           {options.map((opt) => (
             <option key={opt.value} value={opt.value}>

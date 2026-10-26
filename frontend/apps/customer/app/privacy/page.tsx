@@ -5,7 +5,7 @@ import { LegalDocument, type LegalSection } from "@/features/legal/legal-documen
 import { grievanceOfficerLabel, SUPPORT } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | V Solve Hub",
+  title: "Privacy Policy",
   description:
     "What personal data V Solve Hub collects, why, who it is shared with, and your rights under India's Digital Personal Data Protection Act, 2023.",
   alternates: { canonical: "/privacy" },

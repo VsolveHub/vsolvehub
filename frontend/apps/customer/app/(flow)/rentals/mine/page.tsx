@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePagedList } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
-import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
+import { buttonStyles, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { RENTAL_TAB_STATUSES, type RentalMineTab } from "@/features/rentals/model";
 import { fetchMyRentalsPage } from "@/features/rentals/queries";
@@ -33,7 +33,7 @@ export default function MyRentalsPage() {
       <div className="flex flex-col gap-2">
         <Link
           href="/rentals"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text transition"
+          className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
         >
           <ArrowLeft className="size-3.5" />
           Back to Equipment Rentals
@@ -45,10 +45,11 @@ export default function MyRentalsPage() {
               Track equipment bookings, pickup dates, and security deposit refunds.
             </p>
           </div>
-          <Link href="/rentals">
-            <Button size="sm" variant="secondary" className="font-bold">
-              + Rent Another Tool
-            </Button>
+          <Link
+            href="/rentals"
+            className={buttonStyles({ size: "sm", variant: "secondary", className: "min-h-11 font-bold" })}
+          >
+            + Rent Another Tool
           </Link>
         </div>
       </div>
@@ -60,7 +61,7 @@ export default function MyRentalsPage() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+              className={`inline-flex min-h-11 items-center rounded-full px-4 py-1.5 text-xs font-bold transition ${
                 activeTab === tab.key
                   ? "bg-action text-white"
                   : "bg-surface border border-line text-text-secondary hover:text-text"
@@ -100,8 +101,8 @@ export default function MyRentalsPage() {
                 : `No ${activeTab.toLowerCase()} rental bookings right now.`
           }
           action={
-            <Link href="/rentals">
-              <Button className="font-bold">Browse Equipment Rentals</Button>
+            <Link href="/rentals" className={buttonStyles({ className: "font-bold" })}>
+              Browse Equipment Rentals
             </Link>
           }
         />

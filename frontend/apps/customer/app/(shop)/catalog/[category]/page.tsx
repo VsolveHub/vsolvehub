@@ -6,8 +6,14 @@ import { Skeleton } from "@vsolve/ui";
 import { ChevronLeft } from "lucide-react";
 
 import { CategoryTileBrowser } from "@/features/catalog/components/category-tile-browser";
+import { categoryHeadline } from "@/features/catalog/components/tile-desktop-rating";
 import { getCategory, getCategoryServices } from "@/features/catalog/queries";
 import { isCareerJobsCategory, isRentalCategory, isStayCategory, LISTINGS_HREF, RENTALS_HREF, STAYS_HREF } from "@/lib/routes";
+import {
+  LISTINGS_DESCRIPTION,
+  RENTALS_DESCRIPTION,
+  STAYS_DESCRIPTION,
+} from "@/lib/detail-titles";
 
 type PageProps = {
   params: Promise<{ category: string }>;
@@ -31,25 +37,34 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (isCareerJobsCategory(slug)) {
     return {
       title: "Career & job openings",
+      description: LISTINGS_DESCRIPTION,
       alternates: { canonical: LISTINGS_HREF },
     };
   }
   if (isRentalCategory(slug)) {
-    return { title: "Rentals", alternates: { canonical: RENTALS_HREF } };
+    return {
+      title: "Rentals",
+      description: RENTALS_DESCRIPTION,
+      alternates: { canonical: RENTALS_HREF },
+    };
   }
   if (isStayCategory(slug)) {
-    return { title: "Stays", alternates: { canonical: STAYS_HREF } };
+    return {
+      title: "Stays",
+      description: STAYS_DESCRIPTION,
+      alternates: { canonical: STAYS_HREF },
+    };
   }
   const category = await getCategory(slug);
 
-  if (!category) return { title: "Category not found" };
+  if (!category) return { title: "Category not found", robots: { index: false } };
 
   return {
-    title: `${category.name} services`,
+    title: `${categoryHeadline(category.name)} services`,
     description: category.description,
     alternates: { canonical: `/catalog/${category.slug}` },
     openGraph: {
-      title: `${category.name} services — V Solve Hub`,
+      title: `${categoryHeadline(category.name)} services — V Solve Hub`,
       description: category.description,
       type: "website",
     },

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, EmptyState, formatMoney } from "@vsolve/ui";
+import { Button, EmptyState, formatMoney, ProgressiveImage } from "@vsolve/ui";
 import { useId } from "react";
 import { Trash2 } from "lucide-react";
 
@@ -33,20 +33,19 @@ export interface CartItemsProps {
 function CartItemThumbnail({ serviceSlug }: { serviceSlug: string }) {
   const detailQuery = useServiceDetail(serviceSlug);
   const detail = detailQuery.data;
-  const imageUrl = detail?.cover?.url ?? "";
+  const imageUrl = detail?.cover?.url || detail?.variants?.[0]?.image_url || "";
   const iconKey = detail?.icon_key ?? "service";
 
   return (
     <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
       {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <ProgressiveImage
           src={imageUrl}
           alt=""
-          loading="lazy"
+          containerClassName="size-full bg-transparent grid place-items-center"
           className={
             imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/")
-              ? "size-[80%] object-contain"
+              ? "size-[80%] object-contain m-auto"
               : "size-full object-cover"
           }
         />
@@ -105,8 +104,14 @@ function QuantityStepper({
   );
 }
 
-function ScopeSummary({ scope }: { scope: CartItem["scope"] }) {
-  const entries = Object.entries(scope).filter(([, value]) => value !== null && value !== "");
+function ScopeSummary({ scope, quantity }: { scope: CartItem["scope"]; quantity: number }) {
+  // A scope `quantity` that equals the item's own quantity is the stepper below saying
+  // the same thing; printing it twice ("quantity: 1" over "Quantity − 1 +") reads as two
+  // different settings.
+  const entries = Object.entries(scope).filter(
+    ([code, value]) =>
+      value !== null && value !== "" && !(code === "quantity" && String(value) === String(quantity)),
+  );
   if (entries.length === 0) return null;
 
   return (
@@ -147,7 +152,7 @@ function CartItemRow({
             <div className="min-w-0">
               <h3 className="text-base font-bold text-navy-900 leading-snug">{item.service_name}</h3>
               <p className="text-sm font-medium text-text-secondary mt-0.5">{item.variant_name}</p>
-              <ScopeSummary scope={item.scope} />
+              <ScopeSummary scope={item.scope} quantity={item.quantity} />
             </div>
 
             <Button
@@ -156,7 +161,7 @@ function CartItemRow({
               disabled={isPending}
               aria-label={`Remove ${item.service_name}`}
               onClick={onRemove}
-              className="size-8 p-0 grid place-items-center text-text-muted hover:text-critical hover:bg-critical-surface/20 transition-colors"
+              className="size-10 p-0 grid place-items-center text-text-muted hover:text-critical hover:bg-critical-surface/20 transition-colors"
             >
               <Trash2 className="size-4" />
             </Button>
@@ -219,8 +224,9 @@ export function CartItems({
 export function CartVersionNote({ cart }: { cart: Cart }) {
   return (
     <p className="text-sm text-text-secondary">
-      {cart.items.length} {cart.items.length === 1 ? "service" : "services"} · saved version{" "}
-      <span className="tabular-nums">{cart.version}</span>
+      {/* The version still guards every write (`expectedCartVersion`); it is not shown,
+          because "saved version 4" means nothing to the person reading their cart. */}
+      {cart.items.length} {cart.items.length === 1 ? "service" : "services"} in your cart
     </p>
   );
 }

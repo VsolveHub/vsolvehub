@@ -32,7 +32,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-expire-test", name="Rental Expire Test")
     sub = Subcategory.objects.create(category=category, slug="tools-expire", name="Tools")
     service = Service.objects.create(

@@ -71,6 +71,31 @@ export function writeStoredSession(sessionId: string): void {
   }
 }
 
+/**
+ * The last service area a Partner picked, so switching tabs or reloading does
+ * not ask them to choose it again. A UI preference, not a credential and not
+ * trusted as current: `presence-panel` still only sends it to Django inside an
+ * explicit "Go online" tap, which is where a stale or deactivated area is
+ * actually caught.
+ */
+const AREA_STORAGE_KEY = "vsolve.partner.presence.area";
+
+export function readStoredAreaId(): string | null {
+  try {
+    return storage()?.getItem(AREA_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredAreaId(areaId: string): void {
+  try {
+    storage()?.setItem(AREA_STORAGE_KEY, areaId);
+  } catch {
+    // A Partner who cannot persist this simply re-picks their area next time.
+  }
+}
+
 export function clearStoredSession(): void {
   try {
     storage()?.removeItem(STORAGE_KEY);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Building, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import { ProgressiveImage } from "@vsolve/ui";
 
 import type { StayProperty } from "../model";
 
@@ -77,11 +78,11 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
           }
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <ProgressiveImage
           src={current.url}
           alt={caption}
-          className="h-full w-full object-cover"
+          containerClassName="size-full"
+          className="size-full object-cover"
         />
 
         {slides.length > 1 ? (

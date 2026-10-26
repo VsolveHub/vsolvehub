@@ -37,8 +37,8 @@ export function ProfessionalCard({
     <div
       className={
         embedded
-          ? "flex items-center gap-4"
-          : "flex items-center gap-4 rounded-card border border-line bg-surface p-4"
+          ? "flex items-start gap-4"
+          : "flex items-start gap-4 rounded-card border border-line bg-surface p-4"
       }
     >
       <span
@@ -49,9 +49,10 @@ export function ProfessionalCard({
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-text">{professional.display_name}</p>
+        {/* Wrapped, not truncated: a clipped name is the one thing a customer checks at the door. */}
+        <p className="break-words font-semibold text-text">{professional.display_name}</p>
         {professional.headline ? (
-          <p className="truncate text-sm text-text-secondary">{professional.headline}</p>
+          <p className="text-sm text-text-secondary">{professional.headline}</p>
         ) : null}
         {professional.experience_years > 0 ? (
           <p className="text-sm text-text-secondary">
@@ -59,6 +60,25 @@ export function ProfessionalCard({
             {professional.experience_years === 1 ? "year" : "years"} of experience
           </p>
         ) : null}
+        {/* True of everyone the platform assigns: a Partner is only offered work after the
+            identity review and the per-skill approval. Nothing per-person is claimed here. */}
+        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Checks">
+          {["ID verified", "Approved for this work"].map((check) => (
+            <li
+              key={check}
+              className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-xs font-semibold text-success-text"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5" aria-hidden>
+                <path
+                  fillRule="evenodd"
+                  d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {check}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

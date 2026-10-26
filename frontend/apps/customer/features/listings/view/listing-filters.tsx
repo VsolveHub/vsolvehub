@@ -69,13 +69,13 @@ export function ListingFilters({
             value={roleSearch}
             onChange={(e) => setRoleSearch(e.target.value)}
             placeholder="Filter roles..."
-            className="h-7 w-36 rounded-full border border-line bg-surface-sunken pl-8 pr-6 text-xs text-text placeholder:text-text-muted/70 focus:w-48 focus:border-line-strong focus:outline-none transition-all"
+            className="h-11 w-40 rounded-full border border-line bg-surface-sunken pl-8 pr-10 text-base text-text sm:text-xs placeholder:text-text-muted/70 focus:w-48 focus:border-line-strong focus:outline-none transition-all"
           />
           {roleSearch && (
             <button
               type="button"
               onClick={() => setRoleSearch("")}
-              className="absolute right-2 text-text-muted hover:text-text"
+              className="absolute right-0 grid size-11 place-items-center text-text-muted hover:text-text"
               aria-label="Clear role search"
             >
               <X className="size-3" />
@@ -90,7 +90,7 @@ export function ListingFilters({
             type="button"
             key={cat.label}
             onClick={() => onSelectCategory(cat.value)}
-            className={`rounded-full px-3.5 py-1 text-xs font-semibold transition ${
+            className={`inline-flex min-h-11 items-center rounded-full px-3.5 py-1 text-xs font-semibold transition ${
               selectedCategory === cat.value
                 ? "bg-navy-900 text-warm-0 shadow-xs"
                 : "border border-line bg-surface-sunken text-text-secondary hover:border-line-strong hover:bg-surface-hover hover:text-text"
@@ -104,7 +104,7 @@ export function ListingFilters({
           <button
             type="button"
             onClick={onClearFilters}
-            className="ml-auto text-xs font-semibold text-text-link hover:underline"
+            className="ml-auto inline-flex min-h-11 items-center text-xs font-semibold text-text-link hover:underline"
           >
             Clear all filters
           </button>

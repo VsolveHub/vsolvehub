@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { ManualOfferForm } from "@/features/manual-offer/view/manual-offer-form";
+
+export const metadata: Metadata = { title: "Manual offers" };
 
 /**
  * Manual dispatch.

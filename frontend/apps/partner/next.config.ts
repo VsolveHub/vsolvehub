@@ -91,7 +91,11 @@ const nextConfig: NextConfig = {
   async rewrites() {
     if (!isDev) return [];
     return [
-      { source: "/api/:path*", destination: `${apiProxyTarget}/api/:path*/` },
+      // Forward the path exactly as the client wrote it. `:path*` drops a trailing
+      // slash, so the slashed form needs its own rule — and appending one to every
+      // call 404s the Django routes that have none (`/api/v1/stays`, `/api/v1/rentals`).
+      { source: "/api/:path*/", destination: `${apiProxyTarget}/api/:path*/` },
+      { source: "/api/:path*", destination: `${apiProxyTarget}/api/:path*` },
       // KYC documents and job evidence are served by Django in development.
       { source: "/media/:path*", destination: `${apiProxyTarget}/media/:path*` },
     ];
@@ -107,6 +111,9 @@ const nextConfig: NextConfig = {
     */
     return [
       { source: "/dashboard", destination: "/home", permanent: true },
+      // Mirrors app/work/page.tsx. That page's permanentRedirect runs after the root
+      // loading.tsx has streamed, so it answered 200 with a meta refresh, not a 308.
+      { source: "/work", destination: "/work/all", permanent: true },
       { source: "/workforce", destination: "/work/all", permanent: true },
       { source: "/projects", destination: "/work/all", permanent: true },
       { source: "/jobs", destination: "/work/all", permanent: true },
@@ -125,7 +132,7 @@ const nextConfig: NextConfig = {
       { source: "/projects/stages/:engagementId", destination: "/work/jobs/:engagementId", permanent: true },
       { source: "/workforce/crew", destination: "/me/crew", permanent: true },
       { source: "/earnings", destination: "/money", permanent: true },
-      { source: "/profile", destination: "/me", permanent: true },
+      { source: "/profile", destination: "/me/profile", permanent: true },
       { source: "/availability", destination: "/me", permanent: true },
     ];
   },

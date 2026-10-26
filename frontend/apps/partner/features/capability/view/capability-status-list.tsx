@@ -188,7 +188,7 @@ function CapabilityActionControl({
     case "SUPPORT":
       return (
         <Link
-          href="/profile"
+          href="/me/profile"
           className={
             variant === "primary"
               ? buttonStyles({ variant: "secondary", size: "sm", className: "mt-3" })

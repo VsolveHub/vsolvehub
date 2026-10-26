@@ -203,7 +203,7 @@ def test_update_asset_service(rental_world):
         description="Brand new strobe",
     )
     assert updated.title == "Updated Title"
-    assert updated.daily_rate_paise == 120000  # noqa: PLR2004
+    assert updated.daily_rate_paise == 120000
     assert updated.description == "Brand new strobe"
 
 
@@ -273,7 +273,7 @@ def test_remove_media(rental_world):
             "https://storage.vsolve.in/img2.jpg",
         ],
     )
-    assert asset.media.count() == 2  # noqa: PLR2004
+    assert asset.media.count() == 2
     media_item = asset.media.first()
 
     remove_media(asset=asset, partner=partner, media_id=media_item.id)
@@ -367,7 +367,7 @@ def test_partner_asset_api_actions(rental_world):
     )
     assert resp.status_code == status.HTTP_200_OK
     assert resp.data["title"] == "API Renamed Item"
-    assert resp.data["daily_rate_paise"] == 140000  # noqa: PLR2004
+    assert resp.data["daily_rate_paise"] == 140000
 
     # Delete via API
     resp = client.delete(f"/api/v1/partner/rentals/assets/{asset.id}")
@@ -404,8 +404,8 @@ def test_platform_fee_is_added_on_top_of_the_rental_and_not_the_deposit(rental_w
     rental_fee = 100_000 * 2
     deposit = 50_000
     assert booking.price_paise == rental_fee
-    assert booking.platform_fee_percent == 10  # noqa: PLR2004
-    assert booking.platform_fee_paise == 20_000  # noqa: PLR2004
+    assert booking.platform_fee_percent == 10
+    assert booking.platform_fee_paise == 20_000
     attempt = booking.deposit.payment_attempt
     assert attempt is not None
     assert attempt.amount_paise == rental_fee + 20_000 + deposit
@@ -427,8 +427,8 @@ def test_changing_the_platform_fee_does_not_rewrite_an_existing_booking(rental_w
     booking = _book_two_days(rental_world, _fee_asset(rental_world))
     RentalPlatformFee.objects.filter(pk=1).update(percent=25)
     booking.refresh_from_db()
-    assert booking.platform_fee_percent == 10  # noqa: PLR2004
-    assert booking.platform_fee_paise == 20_000  # noqa: PLR2004
+    assert booking.platform_fee_percent == 10
+    assert booking.platform_fee_paise == 20_000
     attempt = initiate_rental_booking_payment(booking=booking)
     assert attempt.amount_paise == booking.price_paise + booking.platform_fee_paise + 50_000
 
@@ -454,7 +454,7 @@ def test_operations_sets_the_platform_fee_and_rejects_an_out_of_range_percent():
 
     rejected = client.put("/api/v1/ops/rentals/platform-fee", {"percent": 101}, format="json")
     assert rejected.status_code == status.HTTP_400_BAD_REQUEST
-    assert RentalPlatformFee.objects.get(pk=1).percent == 10  # noqa: PLR2004
+    assert RentalPlatformFee.objects.get(pk=1).percent == 10
 
     again = APIClient().get("/api/v1/rentals/platform-fee")
     assert again.json() == {"percent": 10}

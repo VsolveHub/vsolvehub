@@ -2,7 +2,7 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Skeleton, cn } from "@vsolve/ui";
-import { ArrowRight, BedDouble, Check, Package, Sparkles, Wrench } from "lucide-react";
+import { ArrowRight, BedDouble, Check, ChevronRight, Package, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -97,48 +97,35 @@ function NotStarted() {
         </p>
       </div>
 
-      <h2 className="text-base font-bold text-navy-900">What will you do on VSolve?</h2>
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-base font-bold text-navy-900">What will you do on VSolve?</h2>
+        <p className="text-sm text-text-secondary">Tap one to start your application.</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Link
+        <TrackCard
           href="/apply/about"
-          className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <Wrench size={22} aria-hidden className="text-action" />
-          <span className="font-bold text-navy-900">Offer services</span>
-          <span className="text-sm text-text-secondary">
-            Repairs, cleaning and other work at customers&rsquo; homes. You choose your areas
-            and hours.
-          </span>
-        </Link>
-        <button
-          type="button"
+          icon={<Wrench size={22} aria-hidden />}
+          title="Offer services"
+          description="Repairs, cleaning and other work at customers’ homes. You choose your areas and hours."
+        />
+        <TrackCard
           disabled={start.isPending}
           onClick={() =>
             start.mutate({ track: "STAY_HOST" }, { onSuccess: () => router.push("/apply/about") })
           }
-          className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60"
-        >
-          <BedDouble size={22} aria-hidden className="text-action" />
-          <span className="font-bold text-navy-900">Stays</span>
-          <span className="text-sm text-text-secondary">
-            Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about
-            three minutes.
-          </span>
-        </button>
-        <button
-          type="button"
+          icon={<BedDouble size={22} aria-hidden />}
+          title="Stays"
+          description="Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about three minutes."
+        />
+        <TrackCard
           disabled={start.isPending}
           onClick={() =>
             start.mutate({ track: "RENTAL_OWNER" }, { onSuccess: () => router.push("/apply/about") })
           }
-          className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60"
-        >
-          <Package size={22} aria-hidden className="text-action" />
-          <span className="font-bold text-navy-900">Rent out items</span>
-          <span className="text-sm text-text-secondary">
-            Tools and equipment. Same short application: your details, the agreements and an ID.
-          </span>
-        </button>
+          icon={<Package size={22} aria-hidden />}
+          title="Rent out items"
+          description="Tools and equipment. Same short application: your details, the agreements and an ID."
+        />
       </div>
       {start.isError ? (
         <p className="text-sm text-danger-text">We could not start that. Please try again.</p>
@@ -149,6 +136,56 @@ function NotStarted() {
         <Promise>Nothing is shared with customers until you are approved</Promise>
       </ul>
     </section>
+  );
+}
+
+/**
+ * One way to join, drawn as something you tap.
+ *
+ * These used to be bare bordered panels — on a phone, with no hover, they read
+ * as information and an applicant asked where to apply. The trailing chevron
+ * and the pressed state are what say "this opens something".
+ */
+function TrackCard({
+  icon,
+  title,
+  description,
+  href,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+} & ({ href: string; onClick?: never; disabled?: never } | { href?: never; onClick: () => void; disabled: boolean })) {
+  const className =
+    "group flex items-center gap-3.5 rounded-card border border-line bg-surface p-4 text-left shadow-xs transition-[border-color,box-shadow,transform] hover:border-action hover:shadow-sm active:scale-[0.99] active:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60";
+  const body = (
+    <>
+      <span className="grid h-11 w-11 shrink-0 place-items-center self-start rounded-control bg-action-surface text-action">
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="font-bold text-navy-900">{title}</span>
+        <span className="text-sm text-text-secondary">{description}</span>
+      </span>
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-sunken text-navy-900 transition-colors group-hover:bg-action group-hover:text-surface group-active:bg-action group-active:text-surface">
+        <ChevronRight size={18} aria-hidden />
+      </span>
+    </>
+  );
+
+  if (href !== undefined) {
+    return (
+      <Link href={href} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className={className}>
+      {body}
+    </button>
   );
 }
 

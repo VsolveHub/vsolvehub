@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Building2,
   FileCheck2,
   MapPin,
@@ -86,19 +87,29 @@ function StaysBrowseContent() {
 
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-6 px-4 pt-3 pb-8 sm:py-8">
+      <div>
+        <Link
+          href="/"
+          className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back to Home</span>
+        </Link>
+      </div>
+
       {/* Hero / Header Section */}
-      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800 p-6 text-warm-0 shadow-raised sm:p-10">
+      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-navy-300/30 bg-navy-500/15 px-3 py-1 text-xs font-semibold text-navy-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-navy-400/30 bg-navy-800/60 px-3 py-1 text-xs font-semibold text-navy-200">
               <Building2 className="size-3.5" />
               Verified Rooms, PG & Short Stays
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-warm-0 sm:text-4xl lg:text-5xl">
+            <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
               Find Rooms, PG & Hotels
             </h1>
-            <p className="text-sm text-warm-200 sm:text-base">
+            <p className="text-sm text-navy-100/90 sm:text-base">
               Verified coliving, PG accommodation, and short stay rooms.
               Instant date quote calculations and direct host communication.
             </p>
@@ -107,7 +118,7 @@ function StaysBrowseContent() {
           <div className="flex shrink-0 items-center gap-3">
             <Link
               href="/stays/mine"
-              className="inline-flex items-center gap-2 rounded-control border border-warm-0/20 bg-warm-0/10 px-4 py-2.5 text-sm font-semibold text-warm-0 backdrop-blur-xs transition hover:bg-warm-0/20"
+              className="inline-flex items-center gap-2 rounded-control border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-xs transition hover:bg-white/20"
             >
               <FileCheck2 className="size-4 text-warm-100" />
               My Enquiries
@@ -127,7 +138,7 @@ function StaysBrowseContent() {
               value={draftQuery}
               onChange={(e) => setDraftQuery(e.target.value)}
               placeholder="Search properties (e.g. Lakeview PG, Executive Single Room)"
-              className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
+              className="w-full bg-transparent py-2.5 text-base sm:text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
             />
           </label>
 
@@ -138,11 +149,11 @@ function StaysBrowseContent() {
               value={draftLocation}
               onChange={(e) => setDraftLocation(e.target.value)}
               placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
-              className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
+              className="w-full bg-transparent py-2.5 text-base sm:text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
             />
           </label>
 
-          <Button type="submit" className="h-full px-6 font-bold">
+          <Button type="submit" className="min-h-11 px-6 font-bold sm:h-full">
             Search Stays
           </Button>
         </form>
@@ -152,7 +163,7 @@ function StaysBrowseContent() {
       <StayFilters
         activeFilters={filters}
         onChangeFilter={setFilters}
-        count={stays.length}
+        count={isLoading ? null : stays.length}
       />
 
       {/* Results Header with Count & Sort */}

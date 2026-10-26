@@ -200,7 +200,7 @@ function PayoutAccountNotice() {
         You have not given Vsolve bank details yet. Your earnings below are recorded and are
         yours; they cannot be paid out until an account is added and verified.{" "}
         <Link
-          href="/profile"
+          href="/me/profile"
           className="font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
           Add your bank details

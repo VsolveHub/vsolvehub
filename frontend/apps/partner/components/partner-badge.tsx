@@ -13,7 +13,11 @@ import { usePartnerProfile } from "@/features/profile/queries";
  */
 export function PartnerBadge({ className = "" }: { className?: string }) {
   const session = useCurrentSession(getApiClient());
-  const profile = usePartnerProfile();
+  // Only someone holding the role can read a profile; asking for anyone else
+  // is a guaranteed 403.
+  const profile = usePartnerProfile({
+    enabled: Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)),
+  });
 
   const isPro =
     Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)) ||

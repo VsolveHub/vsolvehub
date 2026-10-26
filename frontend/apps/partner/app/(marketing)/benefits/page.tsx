@@ -87,23 +87,13 @@ export default function BenefitsPage() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/apply">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
+          <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
               <span>Join as a Partner</span>
               <ArrowRight className="h-4 w-4" />
-            </button>
-          </Link>
-          <Link href="/how-it-works">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-surface border border-line-strong px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors shadow-xs"
-            >
+            </Link>
+          <Link href="/how-it-works" className="inline-flex items-center gap-2 rounded-full bg-surface border border-line-strong px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors shadow-xs">
               <span>How Onboarding Works</span>
-            </button>
-          </Link>
+            </Link>
         </div>
       </section>
 
@@ -193,15 +183,10 @@ export default function BenefitsPage() {
             Apply today in under 5 minutes. No upfront costs, guaranteed weekly bank payouts.
           </p>
           <div className="mt-8">
-            <Link href="/apply">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
+            <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
                 <span>Become a Partner Now</span>
                 <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>

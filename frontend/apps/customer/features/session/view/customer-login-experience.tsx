@@ -204,10 +204,9 @@ function CustomerLoginForm({
               <div>
                 <p className="text-sm font-bold text-navy-900">Quick &amp; Secure Login</p>
                 <p className="mt-1 text-sm leading-relaxed text-text-secondary">
-                  Use the mobile number you book with.
-                  <br />
-                  We will text you a{" "}
-                  <span className="font-semibold text-[#EA580C]">{flow.codeLength}-digit code</span>.
+                  {/* The field below already says the code comes by SMS; saying it twice
+                      made two instructions out of one. */}
+                  Use the mobile number you book with. No password needed.
                 </p>
               </div>
             </div>

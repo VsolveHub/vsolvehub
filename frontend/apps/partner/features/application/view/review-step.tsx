@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { Badge, Button, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, Button, buttonStyles, ErrorState, Spinner } from "@vsolve/ui";
 import {
   CheckCircle2,
   AlertCircle,
@@ -345,11 +345,9 @@ export function ReviewStep() {
             </label>
 
             <div className="flex items-center gap-3">
-              <Link href={listing ? "/apply/documents" : "/apply/schedule"} className="shrink-0">
-                <Button variant="outline" size="lg" className="font-bold text-sm h-12 px-5">
+              <Link href={listing ? "/apply/documents" : "/apply/schedule"} className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
                   Back
-                </Button>
-              </Link>
+                </Link>
               <Button
                 size="lg"
                 disabled={!ready || !confirmed}
