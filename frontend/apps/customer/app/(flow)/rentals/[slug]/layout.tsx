@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { RENTALS_DESCRIPTION, rentalMeta } from "@/lib/detail-titles";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * Names and describes the item in the tab and the search result.
@@ -19,9 +20,17 @@ export async function generateMetadata({
   const { slug } = await params;
   const meta = await rentalMeta(slug);
   if (meta === "missing") return { title: "Rental not found", robots: { index: false } };
+  const title = meta?.title ?? "Rental";
+  const description = meta?.description ?? RENTALS_DESCRIPTION;
   return {
-    title: meta?.title ?? "Rental",
-    description: meta?.description ?? RENTALS_DESCRIPTION,
+    title,
+    description,
+    openGraph: {
+      title: `${title} | ${SITE_NAME}`,
+      description,
+      type: "website",
+      ...(meta?.image_url ? { images: [{ url: meta.image_url, alt: title }] } : {}),
+    },
   };
 }
 

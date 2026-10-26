@@ -6,9 +6,7 @@ import { PartnerShell } from "@/features/session/partner-shell";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  // An object, not a string: a plain string here would switch off the root
-  // template for the pages below, and the brand was being repeated by hand.
-  title: { default: "Job listings", template: "%s — V Solve Hub Partners" },
+  title: "Job listings workspace",
   description: "Employer and job listing management portal for V Solve Hub hiring partners",
   robots: { index: false, follow: false },
 };

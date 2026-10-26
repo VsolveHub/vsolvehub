@@ -254,7 +254,7 @@ export default function HowItWorksPage() {
         <div className="rounded-3xl bg-[#00112e] p-8 sm:p-12 text-white text-center shadow-2xl border border-white/10 relative overflow-hidden">
           <h2 className="text-2xl sm:text-3xl font-black">Ready to Take Control of Your Earnings?</h2>
           <p className="mt-2 text-sm sm:text-base text-navy-200 max-w-xl mx-auto leading-relaxed">
-            Join 5,000+ certified technicians and professionals earning reliable income on V Solve Hub.
+            Apply today to become a verified service partner in Hyderabad with weekly direct bank payouts.
           </p>
           <div className="mt-8">
             <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">

@@ -161,7 +161,7 @@ export function PartnerHero() {
               className="vsh-hero-slideup max-w-[440px] text-[17px] leading-[1.6] text-white/72"
               style={{ animationDelay: "240ms" }}
             >
-              Join 5,000+ professionals across Telangana. Get local jobs and weekly payouts.
+              Now onboarding service professionals in Hyderabad. Get local jobs and weekly bank payouts.
             </p>
           </div>
 

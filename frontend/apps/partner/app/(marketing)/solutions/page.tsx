@@ -8,7 +8,7 @@ import { Medallion } from "@/components/graphics";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Start earning as a V Solve Hub partner",
+  title: "Start Earning as a Service Partner",
   description:
     "Join V Solve Hub as a Technician, Beauty & Wellness, Home Services or Pet Services professional. More categories coming soon.",
   alternates: { canonical: "/solutions" },

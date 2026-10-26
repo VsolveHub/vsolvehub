@@ -27,7 +27,7 @@ const BENEFITS_LIST = [
   {
     icon: Clock,
     title: "Complete Schedule & Location Freedom",
-    desc: "You are your own boss. Pick your working hours, select your local service zones across Telangana, and toggle duty online/offline whenever you want.",
+    desc: "You are your own boss. Pick your working hours, select your local service zones across Hyderabad, and toggle duty online/offline whenever you want.",
     badge: "Zero Minimum Hours",
     color: "from-amber-500 to-orange-500",
     points: [
@@ -83,7 +83,7 @@ export default function BenefitsPage() {
           Built for Your Independence & Maximum Earnings
         </h1>
         <p className="mt-4 text-base sm:text-lg text-text-secondary max-w-2xl mx-auto leading-relaxed">
-          Discover why 5,000+ skilled trade professionals choose V Solve Hub for steady local jobs, direct payouts, and complete work freedom.
+          Partner with V Solve Hub for steady local jobs, direct bank payouts, and complete schedule freedom in Hyderabad.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
@@ -141,13 +141,13 @@ export default function BenefitsPage() {
       <section className="mt-20 max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center max-w-xl mx-auto">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-signal-50 px-3.5 py-1 text-xs font-extrabold text-signal-700 border border-signal-200">
-            <TrendingUp className="h-3.5 w-3.5" /> Real Market Earnings
+            <TrendingUp className="h-3.5 w-3.5" /> Market Estimates
           </span>
           <h2 className="mt-3 text-2xl sm:text-3xl font-extrabold text-navy-900">
-            Average Monthly Payouts by Trade
+            Estimated Monthly Rates by Trade
           </h2>
           <p className="mt-2 text-sm text-text-secondary">
-            Based on active verified partner earnings across Hyderabad, Warangal, and Nizamabad.
+            Estimates of typical Hyderabad rates; your earnings depend on the jobs you accept.
           </p>
         </div>
 

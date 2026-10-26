@@ -9,15 +9,18 @@ import {
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
 import { HomepageClientSections } from "@/features/catalog/components/homepage-client-sections";
+import { JsonLd, organizationJsonLd, websiteJsonLd } from "@/features/seo/json-ld";
 import { getActiveSafetyStories } from "@/features/stories/queries";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { catalogCategoryHref } from "@/lib/routes";
+import { DEFAULT_DESCRIPTION, HOME_TITLE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "V Solve Hub — Book a verified technician",
-  description:
-    "Book home services with a real, eligible professional. See the price before you book, and pay only once someone has committed to the job.",
+  // The one page that names the brand itself, so the template must not add it again.
+  title: { absolute: HOME_TITLE },
+  description: DEFAULT_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: { title: HOME_TITLE, description: DEFAULT_DESCRIPTION, url: "/" },
 };
 
 export const revalidate = 300;
@@ -250,6 +253,7 @@ export default async function HomePage() {
 
   return (
     <main className="bg-[#FAF9F7] md:bg-transparent min-h-screen pb-20 md:pb-0 overflow-x-hidden">
+      <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
       <div className="mx-auto max-w-[1216px] md:pt-8 px-4 sm:px-6 lg:px-0">
         
         {/* ---------------------------------------------------- */}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { LISTINGS_DESCRIPTION, listingMeta } from "@/lib/detail-titles";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * Names and describes the job in the tab and the search result.
@@ -19,9 +20,16 @@ export async function generateMetadata({
   const { slug } = await params;
   const meta = await listingMeta(slug);
   if (meta === "missing") return { title: "Job opening not found", robots: { index: false } };
+  const title = meta?.title ?? "Job opening";
+  const description = meta?.description ?? LISTINGS_DESCRIPTION;
   return {
-    title: meta?.title ?? "Job opening",
-    description: meta?.description ?? LISTINGS_DESCRIPTION,
+    title,
+    description,
+    openGraph: {
+      title: `${title} | ${SITE_NAME}`,
+      description,
+      type: "website",
+    },
   };
 }
 

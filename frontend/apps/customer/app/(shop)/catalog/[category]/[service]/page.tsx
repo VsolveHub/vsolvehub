@@ -30,6 +30,7 @@ import { PromoBanners } from "@/features/catalog/components/promo-banners";
 import { categoryHeadline } from "@/features/catalog/components/tile-desktop-rating";
 import { buildServiceFaqs } from "@/features/catalog/service-faqs";
 import { addsToServiceCopy, durationLabel, warrantyText } from "@/features/catalog/service-facts";
+import { clampDescription, SERVICE_CITY, SITE_NAME } from "@/lib/site";
 
 type PageProps = { params: Promise<{ category: string; service: string }> };
 
@@ -41,20 +42,31 @@ const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 const FIT_OUT_PICKER_SERVICE = "interior-fit-out-project";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { category, service: slug } = await params;
+  const { category: categorySlug, service: slug } = await params;
   const service = await getService(slug);
 
   if (!service) return { title: "Service not found", robots: { index: false } };
 
+  const title = `${service.name} in ${SERVICE_CITY}`;
+  const priceSnippet = service.starting_price
+    ? ` From ₹${(service.starting_price.amount_paise / 100).toLocaleString("en-IN")}.`
+    : "";
+  const rawDescription =
+    (service.short_description || service.description || "") + priceSnippet ||
+    `Book verified ${service.name.toLowerCase()} in ${SERVICE_CITY} on ${SITE_NAME}.`;
+  const description = clampDescription(rawDescription);
+  const canonical = `/catalog/${categorySlug}/${service.slug}`;
+
   return {
-    title: service.name,
-    description: service.short_description,
-    alternates: { canonical: `/catalog/${category}/${service.slug}` },
+    title,
+    description,
+    alternates: { canonical },
     openGraph: {
-      title: `${service.name} — V Solve Hub`,
-      description: service.short_description,
+      title: `${title} | ${SITE_NAME}`,
+      description,
       type: "website",
-      images: service.cover ? [{ url: service.cover.url, alt: service.cover.alt_text }] : undefined,
+      url: canonical,
+      ...(service.cover ? [{ url: service.cover.url, alt: service.cover.alt_text || title }] : []),
     },
   };
 }
@@ -117,7 +129,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   return (
     <main className="bg-[#FAF9F7] min-h-screen pt-4 pb-16">
       <div className="mx-auto max-w-[1216px] px-4 sm:px-6 lg:px-8">
-        <ServiceJsonLd service={service} categorySlug={categorySlug} />
+        <ServiceJsonLd service={service} categorySlug={categorySlug} categoryName={category?.name} />
         <RecordServiceView
           slug={service.slug}
           name={service.name}

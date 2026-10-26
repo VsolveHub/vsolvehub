@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { STAYS_DESCRIPTION, stayMeta } from "@/lib/detail-titles";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * Names and describes the property in the tab and the search result.
@@ -19,9 +20,17 @@ export async function generateMetadata({
   const { slug } = await params;
   const meta = await stayMeta(slug);
   if (meta === "missing") return { title: "Stay not found", robots: { index: false } };
+  const title = meta?.title ?? "Stay";
+  const description = meta?.description ?? STAYS_DESCRIPTION;
   return {
-    title: meta?.title ?? "Stay",
-    description: meta?.description ?? STAYS_DESCRIPTION,
+    title,
+    description,
+    openGraph: {
+      title: `${title} | ${SITE_NAME}`,
+      description,
+      type: "website",
+      ...(meta?.image_url ? { images: [{ url: meta.image_url, alt: title }] } : {}),
+    },
   };
 }
 

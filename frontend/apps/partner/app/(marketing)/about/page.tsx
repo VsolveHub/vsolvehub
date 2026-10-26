@@ -30,15 +30,15 @@ const VALUES = [
   {
     icon: HeartHandshake,
     title: "Safety & Community Support",
-    desc: "From accidental insurance to a dedicated 24/7 partner helpline, our platform stands firmly behind every professional on duty.",
+    desc: "From safety guidance to a dedicated partner helpline, our platform stands firmly behind every professional on duty.",
   },
 ];
 
 const MILESTONES = [
-  { value: "5,000+", label: "Verified Skilled Partners" },
-  { value: "₹45,000+", label: "Average Monthly Partner Earnings" },
-  { value: "100%", label: "On-Time Weekly Settlements" },
-  { value: "5 Cities", label: "Active Across Telangana" },
+  { value: "Verified", label: "ID & Document Checks" },
+  { value: "Upfront", label: "Job Pricing Before Acceptance" },
+  { value: "Weekly", label: "Direct Bank Settlements" },
+  { value: "Hyderabad", label: "Now Onboarding Partners" },
 ];
 
 export default function AboutPage() {

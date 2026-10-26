@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
 import { SERVICE_CATALOG, PARTNER_ROLES } from "@vsolve/config";
 import { getAllPosts } from "@/lib/blog";
+import { SITE_URL } from "@/lib/site";
 
-const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
+const base = SITE_URL;
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
@@ -10,6 +11,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages: MetadataRoute.Sitemap = [
     { url: base, lastModified: now, changeFrequency: "weekly", priority: 1 },
     { url: `${base}/solutions`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${base}/how-it-works`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${base}/trades`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${base}/benefits`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },

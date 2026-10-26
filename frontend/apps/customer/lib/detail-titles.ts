@@ -18,7 +18,7 @@ import { createPublicApi } from "./api/public";
  */
 const api = () => createPublicApi({ revalidate: 300 });
 
-export type DetailMeta = { title: string; description: string | null };
+export type DetailMeta = { title: string; description: string | null; image_url?: string | null };
 export type DetailLookup = DetailMeta | "missing" | null;
 
 function lookupFailed(error: unknown): DetailLookup {
@@ -66,7 +66,12 @@ export async function rentalMeta(key: string): Promise<DetailLookup> {
     const rental = await request(() =>
       api().GET("/api/v1/rentals/{key}", { params: { path: { key } } }),
     );
-    return summariseDetail(rental);
+    const summary = summariseDetail(rental);
+    if (!summary) return null;
+    return {
+      ...summary,
+      image_url: rental.media?.[0]?.url ?? null,
+    };
   } catch (error) {
     return lookupFailed(error);
   }
@@ -77,7 +82,12 @@ export async function stayMeta(key: string): Promise<DetailLookup> {
     const stay = await request(() =>
       api().GET("/api/v1/stays/{key}", { params: { path: { key } } }),
     );
-    return summariseDetail(stay);
+    const summary = summariseDetail(stay);
+    if (!summary) return null;
+    return {
+      ...summary,
+      image_url: stay.media?.[0]?.url ?? null,
+    };
   } catch (error) {
     return lookupFailed(error);
   }

@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { STAYS_DESCRIPTION } from "@/lib/detail-titles";
-
 /**
  * Title for the public stays catalogue.
  *
@@ -10,10 +8,9 @@ import { STAYS_DESCRIPTION } from "@/lib/detail-titles";
  * lives here; without it the tab showed the site default.
  */
 export const metadata: Metadata = {
-  // An object, not a string: a plain string here would switch off the root
-  // template for every page below, so their titles lost "— V Solve Hub".
-  title: { default: "Rooms, PGs, hostels and hotels", template: "%s — V Solve Hub" },
-  description: STAYS_DESCRIPTION,
+  title: "Rooms, PGs & Stays in Hyderabad",
+  description:
+    "Find rooms, PGs, hotels and resorts in Hyderabad from verified hosts. Send an enquiry for free and book with V Solve Hub.",
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

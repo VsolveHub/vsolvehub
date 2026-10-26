@@ -3,9 +3,11 @@ import Link from "next/link";
 import { CalendarDays, Clock } from "lucide-react";
 import { getAllPosts, formatBlogDate, readingMinutes } from "@/lib/blog";
 
+import { SITE_URL } from "@/lib/site";
+
 export const dynamic = "force-static";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
+const siteUrl = SITE_URL;
 
 export const metadata: Metadata = {
   title: "Blog — Tips & Guides for Service Partners",

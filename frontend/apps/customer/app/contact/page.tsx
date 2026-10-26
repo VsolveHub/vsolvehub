@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { breadcrumbJsonLd, faqJsonLd, JsonLd } from "@/features/seo/json-ld";
 import { ContactForm } from "@/features/support/view/contact-form";
 import { grievanceOfficerLabel, SUPPORT } from "@/lib/support";
 
@@ -40,66 +41,64 @@ const CHANNELS: { title: string; value: string; detail: string; href: string; ex
   },
 ];
 
-const FAQS = [
+/**
+ * Plain-text answers, so the same words feed the page and the FAQPage structured data — two copies
+ * would drift. A link, where one helps, is rendered after the answer.
+ */
+const FAQS: { id: string; question: string; answer: string; link?: { href: string; label: string } }[] = [
   {
     id: "booking",
     question: "How do I book a service?",
-    answer: (
-      <>
-        Choose a service, tell us about the job and pick a time. When you check out, your request
-        goes to verified professionals near you. You are not charged at checkout — you pay only
-        once a professional has accepted your booking.
-      </>
-    ),
+    answer:
+      "Choose a service, tell us about the job and pick a time. When you check out, your request " +
+      "goes to verified professionals near you. You are not charged at checkout — you pay only " +
+      "once a professional has accepted your booking.",
   },
   {
     id: "professionals",
     question: "How are professionals checked?",
-    answer: (
-      <>
-        Every professional completes identity and document checks before they can accept work,
-        and customers rate them after every job.
-      </>
-    ),
+    answer:
+      "Every professional completes identity and document checks before they can accept work, " +
+      "and customers rate them after every job.",
   },
   {
     id: "payment",
     question: "How and when do I pay?",
-    answer: (
-      <>
-        You pay online through our payment partner, Razorpay, once a professional has accepted.
-        If nobody accepts, you are not charged. A receipt for every payment is available from your
-        booking.
-      </>
-    ),
+    answer:
+      "You pay online through our payment partner, Razorpay, once a professional has accepted. " +
+      "If nobody accepts, you are not charged. A receipt for every payment is available from " +
+      "your booking.",
   },
   {
     id: "cancellation",
     question: "Can I cancel or reschedule?",
-    answer: (
-      <>
-        Yes. Cancelling well ahead of your visit is free, and so is rescheduling with enough
-        notice. Closer to the visit a fee applies, and the app always shows the exact fee before
-        you confirm. The current fees are in our{" "}
-        <Link href="/refund-policy">Refund &amp; Cancellation Policy</Link>.
-      </>
-    ),
+    answer:
+      "Yes. Cancelling well ahead of your visit is free, and so is rescheduling with enough " +
+      "notice. Closer to the visit a fee applies, and the app always shows the exact fee before " +
+      "you confirm.",
+    link: { href: "/refund-policy", label: "See the current fees" },
   },
   {
     id: "refunds",
     question: "How long does a refund take?",
-    answer: (
-      <>
-        We start a refund as soon as it is due. It goes back to your original payment method, and
-        banks usually take 5–7 working days to show it.
-      </>
-    ),
+    answer:
+      "We start a refund as soon as it is due. It goes back to your original payment method, " +
+      "and banks usually take 5–7 working days to show it.",
   },
-] as const;
+];
 
 export default function ContactPage() {
   return (
     <main className="min-h-screen bg-[#FAF9F7] pb-16">
+      <JsonLd
+        data={[
+          faqJsonLd(FAQS),
+          breadcrumbJsonLd([
+            { name: "Home", path: "/" },
+            { name: "Contact Us", path: "/contact" },
+          ]),
+        ]}
+      />
       <div className="relative overflow-hidden bg-[#041227] px-4 py-16 text-white sm:px-6">
         <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:24px_24px] opacity-15" />
         <div className="relative z-10 mx-auto flex max-w-[1216px] flex-col items-center text-center">
@@ -187,6 +186,12 @@ export default function ContactPage() {
                 <h3 className="text-sm font-extrabold text-[#00112e]">{faq.question}</h3>
                 <p className="mt-2 text-xs leading-relaxed font-medium text-text-secondary [&_a]:font-semibold [&_a]:text-action">
                   {faq.answer}
+                  {faq.link ? (
+                    <>
+                      {" "}
+                      <Link href={faq.link.href}>{faq.link.label}</Link>.
+                    </>
+                  ) : null}
                 </p>
               </div>
             ))}
