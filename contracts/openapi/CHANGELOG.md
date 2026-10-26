@@ -1,5 +1,33 @@
 # API Contract Changelog
 
+## 1.81.0 - Partner review: decline, release, notices; active partners only
+
+**Operations**
+
+- `PartnerApplicationStatusEnum` adds `DECLINED`: final, set by the assigned reviewer from
+  `UNDER_REVIEW` with a required `reason` (`POST /operations/partner-applications/{id}/transition/`,
+  `target_status: "DECLINED"`). A declined application cannot be edited or resubmitted. The reason
+  is kept on the transition; the applicant is told only that it was not approved.
+- `POST /operations/partner-applications/{application_id}/release/` (`{expected_version}`): any
+  Operations user hands a claimed application back to the queue — `UNDER_REVIEW` returns to
+  `SUBMITTED` with no reviewer, so anyone can claim it. `409` when nobody holds it or it is not
+  waiting for review.
+
+**Partners**
+
+- Every decision — approved, changes required, declined, suspended, offboarded, reinstated —
+  writes an in-app notice to the Partner (`partner_application_*` / `partner_account_*`
+  templates). Only the change request includes Operations' words.
+- A Partner approved on the **Rent out items** track can now post rental ads; approval is the
+  permission, as it already was for stays and jobs.
+
+**Suspension now reaches every listing.** Rentals, stays and jobs from a Partner whose application
+is not `APPROVED` (suspended, offboarded) disappear from `GET /rentals`, `/stays`, `/listings` and
+their detail pages, and booking, enquiring, reserving or applying is refused. The Partner cannot
+create new ads, properties or job posts either. Reinstating brings all of it back.
+
+- Removed: none. Renamed: none.
+
 ## 1.80.0 - Rental lists page again
 
 **BREAKING for the rental lists below.** 1.71.0 paginated them; a later change returned them

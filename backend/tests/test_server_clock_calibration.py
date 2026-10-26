@@ -41,6 +41,7 @@ PRODUCTION_ENVIRONMENT = {
     "OTP_DEVELOPMENT_CODE_ENABLED": "false",
     "GEOCODING_PROVIDER": "google",
     "GOOGLE_MAPS_SERVER_KEY": "google-server-key",
+    "PARTNER_LEGAL_BASE_URL": "https://partner.example.test",
     "DOCUMENT_STORAGE_PROVIDER": "supabase",
     "SUPABASE_STORAGE_URL": "https://project.storage.supabase.co/storage/v1",
     "SUPABASE_SERVICE_ROLE_KEY": "service-role-key",

@@ -134,6 +134,9 @@ class PartnerApplication(models.Model):
         UNDER_REVIEW = "UNDER_REVIEW", "Under review"
         CHANGES_REQUIRED = "CHANGES_REQUIRED", "Changes required"
         APPROVED = "APPROVED", "Approved"
+        #: Final: Operations will not approve this applicant (a fake ID, an unsuitable fit). The
+        #: reason is kept on the transition for the audit trail, not shown to the applicant.
+        DECLINED = "DECLINED", "Declined"
         SUSPENDED = "SUSPENDED", "Suspended"
         OFFBOARDED = "OFFBOARDED", "Offboarded"
 

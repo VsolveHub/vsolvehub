@@ -477,6 +477,38 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Overdue rental return",
         "{asset_title} was due back on {end_date} and the owner has not confirmed the return.",
     ),
+    # ---- Partner application decisions -------------------------------------------------
+    #: One notice per Operations decision on a Partner's application. The decline and
+    #: suspension notices give no reason on purpose: Operations' reason can be a fraud finding,
+    #: and it is kept on the transition for the audit trail, not sent to the applicant.
+    "partner_application_approved": (
+        "You are approved",
+        "Your Vsolve Hub partner account is active. Open the app to set up and start taking work.",
+    ),
+    "partner_application_changes_required": (
+        "Changes needed on your application",
+        "Operations asked for changes: \u201c{reason}\u201d. Open your application, fix them and "
+        "send it again.",
+    ),
+    "partner_application_declined": (
+        "Your application was not approved",
+        "We cannot approve your partner application. If you think this is a mistake, contact "
+        "support.",
+    ),
+    "partner_account_suspended": (
+        "Your partner account is paused",
+        "You will not get new work, and your listings are hidden, until it is reinstated. "
+        "Contact support to find out more.",
+    ),
+    "partner_account_offboarded": (
+        "Your partner account is closed",
+        "You will not get new work, and your listings are hidden. Contact support if you have "
+        "questions.",
+    ),
+    "partner_account_reinstated": (
+        "Your partner account is active again",
+        "You can take work again, and your listings are back on the app.",
+    ),
 }
 
 

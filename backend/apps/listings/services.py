@@ -23,7 +23,7 @@ from apps.listings.models import (
     VendorSubscription,
     VendorSubscriptionPlan,
 )
-from apps.partners.capabilities import is_approved_employer
+from apps.partners.capabilities import has_approved_application, is_approved_employer
 from apps.partners.models import PartnerProfile
 
 
@@ -89,6 +89,9 @@ def can_see_matching_candidates(poster: PartnerProfile) -> bool:
 
 
 def _require_listing_capability(poster: PartnerProfile) -> None:
+    # Whatever the route to posting, a suspended or offboarded poster posts nothing new.
+    if not has_approved_application(poster):
+        raise PermissionError("Your partner account is not active.")
     # An approved "Hire staff" sign-up is the job-posting permission on its own.
     if is_approved_employer(poster):
         return
@@ -297,6 +300,7 @@ def submit_application(
         listing.status != Listing.Status.PUBLISHED
         or listing.expires_at is None
         or listing.expires_at <= now
+        or not has_approved_application(listing.poster)
     ):
         raise ListingStateError("This listing is not accepting applications.")
     cutoff = now - timedelta(hours=1)

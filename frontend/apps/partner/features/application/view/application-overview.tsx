@@ -615,8 +615,12 @@ const ARRIVED: Record<string, string> = {
   APPROVED: "You were approved",
   SUSPENDED: "Your account was suspended",
   OFFBOARDED: "Your account was closed",
+  DECLINED: "Your application was not approved",
 };
 
 function describeTransition(from: string, to: string): string {
+  // A reviewer handing it back to the queue, not the applicant sending it again.
+  if (from === "UNDER_REVIEW" && to === "SUBMITTED") return "It went back in the queue for the next reviewer";
+  if (from === "SUSPENDED" && to === "APPROVED") return "Your account was reinstated";
   return ARRIVED[to] ?? `${from} → ${to}`;
 }

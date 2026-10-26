@@ -59,6 +59,15 @@ const APPROVE: ReviewAction = {
   tone: "primary",
 };
 
+const DECLINE: ReviewAction = {
+  target: "DECLINED",
+  label: "Decline",
+  consequence:
+    "Final: the application closes and cannot be resubmitted. The Partner is told it was not approved; your reason stays in the record and is not shown to them.",
+  requiresReason: true,
+  tone: "danger",
+};
+
 const SUSPEND: ReviewAction = {
   target: "SUSPENDED",
   label: "Suspend",
@@ -102,11 +111,12 @@ const REINSTATE: ReviewAction = {
 const ACTIONS: Record<Status, readonly ReviewAction[]> = {
   DRAFT: [],
   SUBMITTED: [START_REVIEW],
-  UNDER_REVIEW: [REQUEST_CHANGES, APPROVE],
+  UNDER_REVIEW: [REQUEST_CHANGES, APPROVE, DECLINE],
   CHANGES_REQUIRED: [],
   APPROVED: [SUSPEND, OFFBOARD],
   SUSPENDED: [REINSTATE, OFFBOARD],
   OFFBOARDED: [],
+  DECLINED: [],
 };
 
 export function availableActions(status: Status): readonly ReviewAction[] {

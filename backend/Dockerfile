@@ -2,7 +2,8 @@
 #   web      gunicorn config.wsgi:application        (the default CMD; tuned in gunicorn.conf.py)
 #   worker   celery -A config worker --loglevel=info
 #   beat     celery -A config beat --loglevel=info    (exactly one instance, ever)
-#   release  python manage.py migrate --noinput       (once per deploy, before web starts)
+#   release  python manage.py release                 (once per deploy, before web starts:
+#            migrations, then the required reference data)
 # The same lines are in the Procfile for hosts that read one.
 FROM python:3.13-slim
 

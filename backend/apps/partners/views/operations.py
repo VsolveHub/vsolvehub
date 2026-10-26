@@ -62,6 +62,7 @@ from apps.partners.services import (
     ScheduleRuleInput,
     claim_partner_application,
     create_partner_document_review_access,
+    release_partner_application_review,
     replace_partner_schedule_for_operations,
     review_partner_document,
     transition_partner_application,
@@ -293,6 +294,43 @@ class OperationsPartnerApplicationClaimView(APIView):
         try:
             application = claim_partner_application(
                 reviewer=actor,
+                application_id=application_id,
+                **serializer.validated_data,
+            )
+        except PartnerSelfReviewError as exc:
+            _audit_self_review_denial(actor=actor, error=exc)
+            _raise_api_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        refreshed = operations_partner_application_detail(application.id)
+        return Response(PartnerApplicationSerializer(refreshed).data)
+
+
+class OperationsPartnerApplicationReleaseView(APIView):
+    """Give a claimed application back to the queue, so another reviewer can take it."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        tags=["Operations"],
+        request=ExpectedVersionSerializer,
+        responses={
+            200: PartnerApplicationSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                examples=[PARTNER_VERSION_CONFLICT_EXAMPLE],
+            ),
+        },
+    )
+    def post(self, request: Request, application_id: uuid.UUID) -> Response:
+        serializer = ExpectedVersionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        try:
+            application = release_partner_application_review(
+                actor=actor,
                 application_id=application_id,
                 **serializer.validated_data,
             )

@@ -78,5 +78,7 @@ describe("homeForApplication", () => {
     expect(homeForApplication("APPROVED")).toBe("/home");
     expect(homeForApplication("SUSPENDED")).toBe("/home");
     expect(homeForApplication("OFFBOARDED")).toBe("/home");
+    // Final, and not editable: the home says it was not approved.
+    expect(homeForApplication("DECLINED")).toBe("/home");
   });
 });

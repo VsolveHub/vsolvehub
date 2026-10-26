@@ -1,11 +1,13 @@
 """Operations decisions on the Partner application row itself.
 
-The reviewer wave: claiming an application for review, and the status transition that approves,
-sends it back for changes, suspends or offboards it — including the presence teardown and future
+The reviewer wave: claiming an application for review, releasing a claim so someone else can take
+it, and the status transition that approves, sends it back for changes, declines, suspends or
+offboards it — including the presence teardown and future
 work release a suspension or offboarding must drag behind it. Reviewer decisions on the *documents*
 attached to the application live in `documents`.
 """
 
+import logging
 import uuid
 
 from django.core.cache import cache
@@ -14,6 +16,8 @@ from django.utils import timezone
 
 from apps.assignments.suspension import release_future_work
 from apps.identity.models import User
+from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
 from apps.partners.exceptions import (
     PartnerApplicationIncompleteError,
     PartnerApplicationNotFoundError,
@@ -30,6 +34,114 @@ from .base import (
     _latest_required_documents_are_approved,
     _record_transition,
 )
+
+logger = logging.getLogger(__name__)
+
+#: The in-app notice each decision sends the Partner, by the status it moves to.
+_DECISION_TEMPLATES = {
+    PartnerApplication.Status.APPROVED: "partner_application_approved",
+    PartnerApplication.Status.CHANGES_REQUIRED: "partner_application_changes_required",
+    PartnerApplication.Status.DECLINED: "partner_application_declined",
+    PartnerApplication.Status.SUSPENDED: "partner_account_suspended",
+    PartnerApplication.Status.OFFBOARDED: "partner_account_offboarded",
+}
+
+
+def _notify_decision(*, application: PartnerApplication, previous_status: str, reason: str) -> None:
+    """Tell the Partner what was decided. In-app, once per version; never blocks the decision.
+
+    Only the change request carries Operations' words — the Partner needs them to fix anything.
+    A decline or suspension reason stays on the transition for the audit trail.
+    """
+    template = _DECISION_TEMPLATES.get(PartnerApplication.Status(application.status))
+    if template is None:
+        return
+    if (
+        application.status == PartnerApplication.Status.APPROVED
+        and previous_status == PartnerApplication.Status.SUSPENDED
+    ):
+        template = "partner_account_reinstated"
+    context = (
+        {"reason": reason.strip()}
+        if application.status == PartnerApplication.Status.CHANGES_REQUIRED
+        else {}
+    )
+    try:
+        with transaction.atomic():
+            request_notification(
+                recipient_id=application.partner.user_id,
+                purpose="partner_application_decision",
+                channel=NotificationIntent.Channel.IN_APP,
+                template_code=template,
+                context=context,
+                idempotency_key=f"partner-application:{application.id}:v{application.version}",
+            )
+    except Exception:
+        # The decision is already made and recorded; a notice that cannot be written is logged
+        # for follow-up rather than undoing it. Ids only — never the reason or the partner.
+        logger.exception(
+            "partner_application_decision_notice_failed",
+            extra={"application_id": str(application.id), "template": template},
+        )
+
+
+@transaction.atomic
+def release_partner_application_review(
+    *,
+    actor: User,
+    application_id: uuid.UUID,
+    expected_version: int,
+) -> PartnerApplication:
+    """Hand a claimed application back to the queue, so any reviewer can claim it.
+
+    Any Operations user may release, not only the holder: the case this exists for is a reviewer
+    who is away, and an application nobody else could touch until they came back. An application
+    under review returns to `SUBMITTED`; a resubmitted one that still names its old reviewer just
+    loses the name. The release is recorded, with who did it.
+    """
+    application = (
+        PartnerApplication.objects.select_for_update(of=("self",))
+        .select_related("partner")
+        .filter(id=application_id)
+        .first()
+    )
+    if application is None:
+        raise PartnerApplicationNotFoundError
+    if application.partner.user_id == actor.id:
+        raise PartnerSelfReviewError(
+            object_type="partner_application",
+            object_id=application.id,
+        )
+    _assert_version(application, expected_version)
+    if application.status not in {
+        PartnerApplication.Status.SUBMITTED,
+        PartnerApplication.Status.UNDER_REVIEW,
+    }:
+        raise PartnerTransitionError("Only an application waiting for review can be released.")
+    if application.review_assigned_to_id is None:
+        raise PartnerTransitionError("Nobody holds this application.")
+
+    previous_status = application.status
+    application.status = PartnerApplication.Status.SUBMITTED
+    application.review_assigned_to = None
+    application.review_assigned_at = None
+    application.version += 1
+    application.save(
+        update_fields=(
+            "status",
+            "review_assigned_to",
+            "review_assigned_at",
+            "version",
+            "updated_at",
+        ),
+    )
+    _record_transition(
+        application=application,
+        from_status=previous_status,
+        actor=actor,
+        reason_code="application_review_released",
+    )
+    return application
 
 
 @transaction.atomic
@@ -119,6 +231,7 @@ def transition_partner_application(
         PartnerApplication.Status.UNDER_REVIEW: {
             PartnerApplication.Status.CHANGES_REQUIRED,
             PartnerApplication.Status.APPROVED,
+            PartnerApplication.Status.DECLINED,
         },
         PartnerApplication.Status.APPROVED: {
             PartnerApplication.Status.SUSPENDED,
@@ -154,6 +267,7 @@ def transition_partner_application(
         in {
             PartnerApplication.Status.SUSPENDED,
             PartnerApplication.Status.OFFBOARDED,
+            PartnerApplication.Status.DECLINED,
         }
         and not reason.strip()
     ):
@@ -193,6 +307,7 @@ def transition_partner_application(
         reason_code=f"application_{target_status.lower()}",
         reason=reason,
     )
+    _notify_decision(application=application, previous_status=previous_status, reason=reason)
     if target_status in {
         PartnerApplication.Status.SUSPENDED,
         PartnerApplication.Status.OFFBOARDED,

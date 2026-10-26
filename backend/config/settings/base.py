@@ -391,7 +391,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.79.0",
+    "VERSION": "1.81.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -731,8 +731,12 @@ PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
 DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="unconfigured")
 # Malware scanning of uploaded Partner documents; see `apps.partners.scanning`. `unconfigured`
 # leaves every document PENDING (fail closed); `development` marks everything clean and is refused
-# in production.
+# in production; `none` is the owner's explicit choice to accept production uploads unscanned.
 DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="unconfigured")
+# Where the Partner site publishes its terms (`/terms`) and privacy notice (`/privacy`). The
+# release publishes those as the agreements every applicant accepts. Empty outside production,
+# where placeholder agreements at a `.test` host are used instead.
+PARTNER_LEGAL_BASE_URL = env("PARTNER_LEGAL_BASE_URL", default="")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
 PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")

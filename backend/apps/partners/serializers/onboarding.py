@@ -117,6 +117,7 @@ class OperationsTransitionSerializer(serializers.Serializer[dict[str, object]]):
             PartnerApplication.Status.UNDER_REVIEW,
             PartnerApplication.Status.CHANGES_REQUIRED,
             PartnerApplication.Status.APPROVED,
+            PartnerApplication.Status.DECLINED,
             PartnerApplication.Status.SUSPENDED,
             PartnerApplication.Status.OFFBOARDED,
         ),

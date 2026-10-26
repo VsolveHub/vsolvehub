@@ -84,6 +84,13 @@ const PRESENTATION: Record<Status, Presentation> = {
     detail: "Contact support if you believe this is wrong.",
     isWaiting: false,
   },
+  DECLINED: {
+    tone: "neutral",
+    label: "Not approved",
+    headline: "Your application was not approved",
+    detail: "We cannot approve this application. Contact support if you believe this is a mistake.",
+    isWaiting: false,
+  },
 };
 
 export interface ApplicationStatusBannerProps {

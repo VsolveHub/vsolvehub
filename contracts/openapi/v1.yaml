@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.79.0
+  version: 1.81.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -8184,6 +8184,73 @@ paths:
   /api/v1/operations/partner-applications/{application_id}/claim/:
     post:
       operationId: operations_partner_applications_claim_create
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
+          description: ''
+  /api/v1/operations/partner-applications/{application_id}/release/:
+    post:
+      operationId: operations_partner_applications_release_create
+      description: Give a claimed application back to the queue, so another reviewer
+        can take it.
       parameters:
       - in: path
         name: application_id
@@ -31942,6 +32009,7 @@ components:
       - UNDER_REVIEW
       - CHANGES_REQUIRED
       - APPROVED
+      - DECLINED
       - SUSPENDED
       - OFFBOARDED
       type: string
@@ -31951,6 +32019,7 @@ components:
         * `UNDER_REVIEW` - Under review
         * `CHANGES_REQUIRED` - Changes required
         * `APPROVED` - Approved
+        * `DECLINED` - Declined
         * `SUSPENDED` - Suspended
         * `OFFBOARDED` - Offboarded
     PartnerApplicationTransition:
@@ -44526,6 +44595,7 @@ components:
       - UNDER_REVIEW
       - CHANGES_REQUIRED
       - APPROVED
+      - DECLINED
       - SUSPENDED
       - OFFBOARDED
       type: string
@@ -44533,6 +44603,7 @@ components:
         * `UNDER_REVIEW` - UNDER_REVIEW
         * `CHANGES_REQUIRED` - CHANGES_REQUIRED
         * `APPROVED` - APPROVED
+        * `DECLINED` - DECLINED
         * `SUSPENDED` - SUSPENDED
         * `OFFBOARDED` - OFFBOARDED
     TaxDocument:

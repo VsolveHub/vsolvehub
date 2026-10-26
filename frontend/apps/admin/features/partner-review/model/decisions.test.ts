@@ -70,10 +70,18 @@ describe("available actions", () => {
     expect(targets).toEqual(["UNDER_REVIEW"]);
   });
 
-  it("lets under-review request changes or approve, not suspend", () => {
+  it("lets under-review request changes, approve or decline, not suspend", () => {
     const targets = availableActions("UNDER_REVIEW").map((action) => action.target);
-    expect(targets).toEqual(["CHANGES_REQUIRED", "APPROVED"]);
+    expect(targets).toEqual(["CHANGES_REQUIRED", "APPROVED", "DECLINED"]);
     expect(isActionAvailable("UNDER_REVIEW", "SUSPENDED")).toBe(false);
+  });
+
+  it("asks for a reason to decline, and offers nothing once declined", () => {
+    const decline = availableActions("UNDER_REVIEW").find((action) => action.target === "DECLINED");
+    expect(decline?.requiresReason).toBe(true);
+    expect(decline?.tone).toBe("danger");
+    // Final: a declined application has no way back from this screen.
+    expect(availableActions("DECLINED")).toHaveLength(0);
   });
 
   it("offers no Operations decisions while changes are outstanding", () => {

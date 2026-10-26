@@ -5,6 +5,7 @@ from apps.partners.views import (
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
+    OperationsPartnerApplicationReleaseView,
     OperationsPartnerApplicationTransitionView,
     OperationsPartnerDetailView,
     OperationsPartnerDirectoryView,
@@ -144,6 +145,11 @@ urlpatterns = [
         "operations/partner-applications/<uuid:application_id>/claim/",
         OperationsPartnerApplicationClaimView.as_view(),
         name="operations-partner-application-claim",
+    ),
+    path(
+        "operations/partner-applications/<uuid:application_id>/release/",
+        OperationsPartnerApplicationReleaseView.as_view(),
+        name="operations-partner-application-release",
     ),
     path(
         "operations/partner-applications/<uuid:application_id>/transition/",

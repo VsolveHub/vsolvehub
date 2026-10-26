@@ -4,6 +4,7 @@ from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 
 from apps.listings.models import Listing
+from apps.partners.models import PartnerApplication
 
 
 def public_listings(  # noqa: PLR0912
@@ -24,6 +25,8 @@ def public_listings(  # noqa: PLR0912
             status=Listing.Status.PUBLISHED,
             moderation_status=Listing.ModerationStatus.APPROVED,
             expires_at__gt=timezone.now(),
+            # Only while the employer's account is active: a suspension hides every post at once.
+            poster__application__status=PartnerApplication.Status.APPROVED,
         )
     )
     query = str(filters.get("q") or "").strip()

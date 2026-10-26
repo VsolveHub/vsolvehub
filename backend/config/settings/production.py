@@ -72,6 +72,11 @@ if DOCUMENT_SCAN_PROVIDER == "development" and (
     os.environ.get("DJANGO_SETTINGS_MODULE") != "config.settings.staging"
 ):
     raise ImproperlyConfigured("DOCUMENT_SCAN_PROVIDER=development is forbidden in production.")
+if not PARTNER_LEGAL_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured(
+        "PARTNER_LEGAL_BASE_URL must be the Partner site's https origin, where /terms and "
+        "/privacy are published as the agreements applicants accept."
+    )
 if DOCUMENT_STORAGE_PROVIDER not in {"r2", "supabase"}:
     raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be r2 or supabase in production.")
 if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_STORAGE_URL.startswith("https://"):

@@ -1,6 +1,6 @@
 "use client";
 
-import { describeError } from "@vsolve/query";
+import { describeError, useCurrentSession } from "@vsolve/query";
 import { Badge, Button, Card, ErrorState, Field, Spinner, Textarea } from "@vsolve/ui";
 import { useState } from "react";
 
@@ -15,8 +15,11 @@ import {
   isVersionConflict,
   useApplicationDetail,
   useClaimApplication,
+  useReleaseApplication,
   useTransitionApplication,
 } from "../queries";
+import { getApiClient } from "@/lib/api/browser";
+
 import { DocumentReveal } from "./document-reveal";
 
 /**
@@ -46,7 +49,9 @@ import { DocumentReveal } from "./document-reveal";
 export function ReviewDetail({ applicationId }: { applicationId: string | null }) {
   const detail = useApplicationDetail(applicationId);
   const claim = useClaimApplication();
+  const release = useReleaseApplication();
   const transition = useTransitionApplication();
+  const session = useCurrentSession(getApiClient());
 
   const [action, setAction] = useState<ReviewAction | null>(null);
   const [reason, setReason] = useState("");
@@ -90,8 +95,18 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
   }
 
   const application = detail.data;
-  const isMine = application.review_assigned_to_id !== null;
-  const actions = availableActions(application.status);
+  // Ownership matters only while the application waits for review: that is when
+  // the server lets the holder alone decide. Suspend and reinstate, later, are
+  // open to any reviewer.
+  const inReview = application.status === "SUBMITTED" || application.status === "UNDER_REVIEW";
+  const assignedTo = inReview ? application.review_assigned_to_id : null;
+  const myId = session.data?.user?.id ?? null;
+  // Mine only when it names me. Treating any holder as "mine" showed decision
+  // buttons on someone else's review that the server would refuse.
+  const isMine = assignedTo !== null && assignedTo === myId;
+  const heldByOther = assignedTo !== null && !isMine;
+  const canRelease = assignedTo !== null;
+  const actions = !inReview || isMine ? availableActions(application.status) : [];
 
   return (
     <div className="flex flex-col gap-5">
@@ -109,7 +124,14 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           <p className="mt-3 text-sm leading-6 text-text">{application.biography}</p>
         ) : null}
 
-        {!isMine ? (
+        {heldByOther ? (
+          <p className="mt-4 text-sm text-text-secondary">
+            Another reviewer holds this application. If they are away, release it to the queue
+            and claim it.
+          </p>
+        ) : null}
+
+        {inReview && !isMine && !heldByOther ? (
           <div className="mt-4">
             <Button
               onClick={() =>
@@ -126,6 +148,29 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
             <p className="mt-2 text-sm text-text-secondary">
               Claim it before deciding, so nobody else reviews it at the same time.
             </p>
+          </div>
+        ) : null}
+
+        {canRelease ? (
+          <div className="mt-3">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                release.mutate({
+                  applicationId: application.id,
+                  expectedVersion: application.version,
+                })
+              }
+              loading={release.isPending}
+              loadingLabel="Releasing"
+            >
+              Release to the queue
+            </Button>
+            {release.isError ? (
+              <p role="alert" className="mt-1 text-sm text-danger-text">
+                {describeError(release.error, "mutation").message}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

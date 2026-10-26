@@ -21,7 +21,7 @@ from apps.foundation.storage import public_stored_name
 from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
-from apps.partners.capabilities import is_approved_stay_host
+from apps.partners.capabilities import has_approved_application, is_approved_stay_host
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.stay.models import (
     Property,
@@ -243,7 +243,10 @@ def _stay_period(
 
 
 def _require_stay_capability(partner: Any) -> None:
-    """Approved as a stay host (the short sign-up) or holding an approved A9 capability."""
+    """Approved as a stay host (the short sign-up) or holding an approved A9 capability — and in
+    both cases with the application still approved, so a suspension stops new listings."""
+    if not has_approved_application(partner):
+        raise PermissionError("Your partner account is not active.")
     if is_approved_stay_host(partner):
         return
     if not partner.capabilities.filter(archetype="A9_STAY", status="APPROVED").exists():
@@ -1362,7 +1365,7 @@ def create_enquiry(
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.ENQUIRY:
         raise StayStateError("This property requires a reservation, not an enquiry.")
-    if prop.public_state != "PUBLISHED":
+    if prop.public_state != "PUBLISHED" or not has_approved_application(prop.host):
         raise StayStateError("Property is not open for enquiries.")
     check_out, length = _stay_period(
         prop=prop,
@@ -1542,7 +1545,15 @@ def public_properties(  # noqa: PLR0912
         status=PartnerApplication.Status.APPROVED,
         track=PartnerApplication.Track.STAY_HOST,
     )
-    host_approved = models.Exists(host_capability) | models.Exists(host_application)
+    # Whichever way the host was allowed to list, their application must still be approved: a
+    # capability is not revoked by a suspension, so it alone would keep a suspended host public.
+    host_active = PartnerApplication.objects.filter(
+        partner=models.OuterRef("host"),
+        status=PartnerApplication.Status.APPROVED,
+    )
+    host_approved = (models.Exists(host_capability) | models.Exists(host_application)) & (
+        models.Exists(host_active)
+    )
     qs = (
         Property.objects.filter(
             moderation_status=Property.ModerationStatus.APPROVED,
@@ -1637,11 +1648,11 @@ def create_reservation(
     check_out: date,
     guest_count: int = 1,
 ) -> Any:
-    prop = Property.objects.select_related("variant").get(id=_as_uuid(property_id))
+    prop = Property.objects.select_related("variant", "host").get(id=_as_uuid(property_id))
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.RESERVATION:
         raise StayStateError("Property does not support reservations.")
-    if prop.public_state != "PUBLISHED":
+    if prop.public_state != "PUBLISHED" or not has_approved_application(prop.host):
         raise StayStateError("Property is not published.")
     nights = _enforce_stay_dates(prop=prop, check_in=check_in, check_out=check_out)
 

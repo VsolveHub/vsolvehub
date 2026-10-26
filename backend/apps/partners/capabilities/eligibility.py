@@ -296,6 +296,20 @@ def workspace_grants(partner: PartnerProfile) -> list[WorkspaceGrant]:
     return grants
 
 
+def has_approved_application(partner: PartnerProfile) -> bool:
+    """The partner's application is approved right now.
+
+    The one rule every listing surface shares — rentals, stays and jobs. A capability is a
+    permission to do a kind of work; this is whether the partner may work at all. Suspending or
+    offboarding the application turns everything off at once, without touching capabilities, and
+    reinstating turns it back on.
+    """
+    return PartnerApplication.objects.filter(
+        partner=partner,
+        status=PartnerApplication.Status.APPROVED,
+    ).exists()
+
+
 def is_approved_employer(partner: PartnerProfile) -> bool:
     """A business that signed up to hire staff and whose application was approved.
 

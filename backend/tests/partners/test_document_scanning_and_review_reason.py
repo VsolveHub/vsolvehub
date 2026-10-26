@@ -134,6 +134,26 @@ def test_production_refuses_the_development_scanner(
         production_settings(DOCUMENT_SCAN_PROVIDER="development")
 
 
+def test_production_may_run_without_scanning_when_told_to(
+    production_settings: Callable[..., ModuleType],  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The owner's explicit decision; it must be set, never a default.
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.production")
+
+    loaded = production_settings(DOCUMENT_SCAN_PROVIDER="none")
+
+    assert loaded.DOCUMENT_SCAN_PROVIDER == "none"
+
+
+def test_no_scanning_accepts_an_upload_as_clean(partner_setup: PartnerSetup, settings: Any) -> None:
+    settings.DOCUMENT_SCAN_PROVIDER = "none"
+
+    document = _uploaded_document(partner_setup)
+
+    assert document.scan_status == PartnerDocument.ScanStatus.CLEAN
+
+
 def test_staging_may_use_the_development_scanner(
     production_settings: Callable[..., ModuleType],  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,

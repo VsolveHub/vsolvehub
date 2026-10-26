@@ -165,6 +165,38 @@ export function useClaimApplication() {
 }
 
 /**
+ * Hands a claimed application back to the queue so another reviewer can claim it.
+ *
+ * Any Operations user may release, not only the holder: it exists for the
+ * reviewer who is away, whose applications nobody else could otherwise touch.
+ */
+export function useReleaseApplication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ClaimInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/operations/partner-applications/{application_id}/release/",
+          {
+            params: { path: { application_id: input.applicationId } },
+            body: { expected_version: input.expectedVersion },
+          },
+        ),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerApplication(input.applicationId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "partner-application-queue"],
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
  * Requests a short-lived URL for one KYC document.
  *
  * A **mutation**, not a query, and deliberately so. Every call is an audited

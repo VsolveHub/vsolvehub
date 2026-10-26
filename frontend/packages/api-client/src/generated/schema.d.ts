@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.79.0)
- * Checksum: 73fe1d1f8a00ec30
+ * Source:   contracts/openapi/v1.yaml (version 1.81.0)
+ * Checksum: c7e421250e4aa232
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3421,6 +3421,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["operations_partner_applications_claim_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/partner-applications/{application_id}/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Give a claimed application back to the queue, so another reviewer can take it. */
+        post: operations["operations_partner_applications_release_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12935,11 +12952,12 @@ export interface components {
          *     * `UNDER_REVIEW` - Under review
          *     * `CHANGES_REQUIRED` - Changes required
          *     * `APPROVED` - Approved
+         *     * `DECLINED` - Declined
          *     * `SUSPENDED` - Suspended
          *     * `OFFBOARDED` - Offboarded
          * @enum {string}
          */
-        PartnerApplicationStatusEnum: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "SUSPENDED" | "OFFBOARDED";
+        PartnerApplicationStatusEnum: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "DECLINED" | "SUSPENDED" | "OFFBOARDED";
         PartnerApplicationTransition: {
             /** Format: uuid */
             readonly id: string;
@@ -17962,11 +17980,12 @@ export interface components {
          * @description * `UNDER_REVIEW` - UNDER_REVIEW
          *     * `CHANGES_REQUIRED` - CHANGES_REQUIRED
          *     * `APPROVED` - APPROVED
+         *     * `DECLINED` - DECLINED
          *     * `SUSPENDED` - SUSPENDED
          *     * `OFFBOARDED` - OFFBOARDED
          * @enum {string}
          */
-        TargetStatusEnum: "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "SUSPENDED" | "OFFBOARDED";
+        TargetStatusEnum: "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "DECLINED" | "SUSPENDED" | "OFFBOARDED";
         TaxDocument: {
             /** Format: uuid */
             readonly id: string;
@@ -26395,6 +26414,57 @@ export interface operations {
         };
     };
     operations_partner_applications_claim_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExpectedVersionRequest"];
+                "multipart/form-data": components["schemas"]["ExpectedVersionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_applications_release_create: {
         parameters: {
             query?: never;
             header?: never;

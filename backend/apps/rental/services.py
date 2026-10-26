@@ -24,8 +24,11 @@ from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
+from apps.partners.capabilities import has_approved_application, is_approved_rental_owner
+from apps.partners.models import PartnerApplication
 from apps.payouts.models import PartnerLedgerEntry
 from apps.payouts.services import record_adjustment, release_payout_hold, settle_rental_earning
 from apps.rental.field_options import with_suggestions
@@ -44,7 +47,6 @@ from apps.rental.models import (
     overlapping_reservations,
     overlapping_reserved_quantity,
 )
-from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.rental.pickup_address import (
     PickupAddressError,
     clean_pincode,
@@ -92,6 +94,12 @@ def _as_uuid(value: UUID | str) -> UUID:
 
 
 def _require_rental_capability(partner: Any) -> None:
+    """Approved as a rental owner (the short sign-up), or holding an approved A7 capability —
+    and in both cases with the application still approved, so a suspension stops new ads."""
+    if not has_approved_application(partner):
+        raise PermissionError("Your partner account is not active.")
+    if is_approved_rental_owner(partner):
+        return
     if not partner.capabilities.filter(archetype="A7_RENTAL", status="APPROVED").exists():
         raise PermissionError("Partner does not have an approved A7 rental capability.")
 
@@ -801,6 +809,10 @@ def create_booking(
         .select_related("partner", "variant")
         .get(id=_as_uuid(asset_id))
     )
+    if not has_approved_application(asset.partner):
+        # A suspended or offboarded owner's items are hidden from browse; a saved link must not
+        # still take a booking.
+        raise RentalStateError("This item is not available right now.")
     days = _check_bookable(asset, start_date, end_date, is_delivery=is_delivery)
     _check_stock(asset, start_date, end_date, quantity)
 
@@ -1348,6 +1360,8 @@ def public_assets(
         RentalAsset.objects.filter(
             moderation_status="APPROVED",
             current_status=RentalAsset.Status.ACTIVE,
+            # Only while the owner's account is active: suspending them hides every item at once.
+            partner__application__status=PartnerApplication.Status.APPROVED,
         )
         .select_related("partner", "variant")
         .prefetch_related("media")

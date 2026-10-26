@@ -72,7 +72,11 @@ from .presence import (
     go_online,
     heartbeat_presence,
 )
-from .review import claim_partner_application, transition_partner_application
+from .review import (
+    claim_partner_application,
+    release_partner_application_review,
+    transition_partner_application,
+)
 from .schedule import (
     _minutes,
     _replace_schedule_for_application,
@@ -133,6 +137,7 @@ __all__ = [
     "heartbeat_presence",
     "issue_partner_document_upload",
     "record_partner_document_scan_result",
+    "release_partner_application_review",
     "replace_partner_schedule",
     "replace_partner_schedule_for_operations",
     "review_partner_document",
