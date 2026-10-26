@@ -5,7 +5,7 @@ import { Building2, ShieldCheck, Award, ArrowRight, Sparkles, HeartHandshake, Tr
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "About V Solve Hub - Our Mission for Trade Professionals",
+  title: "About Us: Our Mission for Trade Professionals",
   description:
     "V Solve Hub is empowering local technicians, electricians, plumbers, and home service professionals across Telangana with dignity, modern technology, and sustainable income.",
   alternates: { canonical: "/about" },

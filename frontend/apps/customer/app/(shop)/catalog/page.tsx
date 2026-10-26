@@ -36,9 +36,9 @@ import { rankCatalogMatches } from "@/features/catalog/search";
  */
 
 export const metadata: Metadata = {
-  title: "All services",
+  title: "All Home Services in Hyderabad",
   description:
-    "Browse V Solve Hub services by category, from electrical and plumbing to beauty, cleaning and project work.",
+    "Browse every home service on V Solve Hub in Hyderabad — electricians, plumbers, AC repair, cleaning, beauty, pet care, construction and events. See prices before you book.",
   alternates: { canonical: "/catalog" },
 };
 

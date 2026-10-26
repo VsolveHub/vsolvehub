@@ -5,7 +5,7 @@ import { Zap, Wrench, Hammer, Wind, Droplets, Sparkles, ShieldAlert, Scissors, F
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Supported Trades & Services - V Solve Hub",
+  title: "Supported Trades & Services",
   description:
     "Explore high-demand trades on V Solve Hub including Electrician, Plumber, Carpenter, AC Technician, Cleaning, and Salon services.",
   alternates: { canonical: "/trades" },

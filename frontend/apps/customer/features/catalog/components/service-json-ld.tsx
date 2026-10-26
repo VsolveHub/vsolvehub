@@ -1,3 +1,6 @@
+import { breadcrumbJsonLd, JsonLd } from "@/features/seo/json-ld";
+import { absoluteUrl, SERVICE_CITY, SITE_NAME, SITE_URL } from "@/lib/site";
+
 import type { ServiceDetail } from "../queries";
 
 /**
@@ -20,12 +23,14 @@ import type { ServiceDetail } from "../queries";
 export function ServiceJsonLd({
   service,
   categorySlug,
+  categoryName,
 }: {
   service: ServiceDetail;
   categorySlug: string;
+  categoryName: string;
 }) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
-  const url = `${siteUrl}/catalog/${categorySlug}/${service.slug}`;
+  const path = `/catalog/${categorySlug}/${service.slug}`;
+  const url = absoluteUrl(path);
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -36,12 +41,13 @@ export function ServiceJsonLd({
     url,
     provider: {
       "@type": "Organization",
-      name: "Vsolve Hub",
-      url: siteUrl,
+      "@id": `${SITE_URL}/#organization`,
+      name: SITE_NAME,
+      url: SITE_URL,
     },
     areaServed: {
       "@type": "City",
-      name: "Hyderabad",
+      name: SERVICE_CITY,
     },
     ...(service.cover ? { image: service.cover.url } : {}),
     // No `offers` block at all when the service has no price. Schema.org's `AggregateOffer`
@@ -64,10 +70,16 @@ export function ServiceJsonLd({
   };
 
   return (
-    <script
-      type="application/ld+json"
-      // Content is our own catalogue copy from Django, not user input.
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+    <JsonLd
+      data={[
+        structuredData,
+        breadcrumbJsonLd([
+          { name: "Home", path: "/" },
+          { name: "Services", path: "/catalog" },
+          { name: categoryName, path: `/catalog/${categorySlug}` },
+          { name: service.name, path },
+        ]),
+      ]}
     />
   );
 }

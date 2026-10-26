@@ -6,7 +6,7 @@ import { Faq, faqJsonLd } from "@/components/faq";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Partner Payout Rates & Commission Structure - V Solve Hub",
+  title: "Partner Payout Rates & Commission",
   description:
     "Transparent partner payout rates, weekly settlement schedule, 0% joining fees, and fair platform commission structure on V Solve Hub.",
   alternates: { canonical: "/pricing" },

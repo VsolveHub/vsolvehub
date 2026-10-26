@@ -8,7 +8,7 @@ import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 import { SUPPORT } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Refund & Cancellation Policy | V Solve Hub",
+  title: "Refund & Cancellation Policy",
   description:
     "When you are charged, what cancelling costs, and how refunds reach you — for home visits, projects, crews, rentals and stays booked on V Solve Hub.",
   alternates: { canonical: "/refund-policy" },

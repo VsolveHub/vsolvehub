@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Become a Partner | V Solve Hub",
-  description: "Join the V Solve Hub network of service professionals and grow your business with eligible domestic visits.",
+  title: "Become a Partner",
+  description:
+    "Join V Solve Hub as a verified service professional in Hyderabad and get booked for home service jobs near you.",
+  alternates: { canonical: "/join-pro" },
 };
 
 const BENEFITS = [

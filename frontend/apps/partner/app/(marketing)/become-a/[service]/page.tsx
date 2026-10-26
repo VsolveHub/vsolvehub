@@ -54,7 +54,7 @@ export default async function BecomeAServicePage(
   const v = serviceVisual(svc.slug);
   const perks: { icon: typeof Clock; tone: Tone; title: string; body: string }[] = [
     { icon: Clock, tone: "brand", title: "Flexible hours", body: "Work when you want — full-time or on the side." },
-    { icon: Wallet, tone: "green", title: "Daily payouts", body: "Earnings settled straight to your bank account." },
+    { icon: Wallet, tone: "green", title: "Regular payouts", body: "Earnings paid by bank transfer in each payout run." },
     { icon: MapPin, tone: "amber", title: "Jobs near you", body: "Get matched to verified customers in your area." },
   ];
 

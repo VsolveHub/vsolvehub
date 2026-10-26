@@ -14,6 +14,7 @@ import { ProcessSteps } from "@/features/catalog/components/process-steps";
 import { RecordServiceView } from "@/features/catalog/components/record-service-view";
 import { ServiceCard } from "@/features/catalog/components/service-card";
 import { AddToCartButton } from "@/features/catalog/components/add-to-cart-button";
+import { clampDescription, SERVICE_CITY, SITE_NAME } from "@/lib/site";
 
 type PageProps = { params: Promise<{ category: string; service: string }> };
 
@@ -28,16 +29,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { category, service: slug } = await params;
   const service = await getService(slug);
 
-  if (!service) return { title: "Service not found" };
+  if (!service) return { title: "Service not found", robots: { index: false } };
 
+  const title = `${service.name} in ${SERVICE_CITY}`;
+  const price = service.starting_price
+    ? ` From ${formatMoney(service.starting_price.amount_paise)}.`
+    : "";
+  const description = clampDescription(
+    `${service.short_description}${price} Verified professionals, price shown before you book.`,
+  );
   return {
-    title: service.name,
-    description: service.short_description,
+    title,
+    description,
     alternates: { canonical: `/catalog/${category}/${service.slug}` },
     openGraph: {
-      title: `${service.name} — Vsolve Hub`,
-      description: service.short_description,
+      title: `${title} | ${SITE_NAME}`,
+      description,
       type: "website",
+      url: `/catalog/${category}/${service.slug}`,
       images: service.cover ? [{ url: service.cover.url, alt: service.cover.alt_text }] : undefined,
     },
   };
@@ -87,7 +96,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   return (
     <main className="bg-[#FAF9F7] min-h-screen pt-4 pb-16">
       <div className="mx-auto max-w-[1216px] px-4 sm:px-6 lg:px-8">
-        <ServiceJsonLd service={service} categorySlug={categorySlug} />
+        <ServiceJsonLd service={service} categorySlug={categorySlug} categoryName={category.name} />
         <RecordServiceView
           slug={service.slug}
           name={service.name}

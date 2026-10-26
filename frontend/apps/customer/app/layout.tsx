@@ -5,6 +5,7 @@ import { ToastProvider } from "@vsolve/ui";
 
 import { AppChrome } from "@/features/session/view/app-chrome";
 import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "@/features/session/view/app-chrome-layout";
+import { DEFAULT_DESCRIPTION, HOME_TITLE, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -13,21 +14,35 @@ const appFont = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
+const googleVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
 
+/**
+ * Site-wide metadata. Pages set a bare `title` ("Fan Installation in Hyderabad"); the template adds
+ * the brand once. A page title must never carry the brand itself, or it reads twice. The home page
+ * is the one exception and uses `title.absolute`.
+ */
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
   title: {
-    default: "V Solve Hub — Book a verified technician",
-    template: "%s — V Solve Hub",
+    default: HOME_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
-  description: "Book home services with a real, eligible professional. Pay after they commit.",
+  description: DEFAULT_DESCRIPTION,
   openGraph: {
     type: "website",
-    siteName: "V Solve Hub",
-    url: siteUrl,
+    siteName: SITE_NAME,
+    locale: "en_IN",
+    url: SITE_URL,
   },
-  robots: { index: true, follow: true },
+  twitter: { card: "summary_large_image" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+  },
+  formatDetection: { telephone: false },
+  ...(googleVerification ? { verification: { google: googleVerification } } : {}),
 };
 
 export const viewport = {
@@ -55,7 +70,7 @@ export const viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${appFont.variable} bg-[#FAF9F7]`} suppressHydrationWarning>
+    <html lang="en-IN" className={`${appFont.variable} bg-[#FAF9F7]`} suppressHydrationWarning>
       <body className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} bg-[#FAF9F7] antialiased`}>
         <QueryProvider showDevtools={false}>
           <ToastProvider>

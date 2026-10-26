@@ -6,7 +6,7 @@ import { PartnerShell } from "@/features/session/partner-shell";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Job Listings Workspace | Vsolve Partners",
+  title: "Job listings workspace",
   description: "Employer and job listing management portal for Vsolve hiring partners",
   robots: { index: false, follow: false },
 };
