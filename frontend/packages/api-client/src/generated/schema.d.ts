@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.81.0)
- * Checksum: 860372a5fb5a778f
+ * Checksum: 54a64bd71ff682c3
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -12417,7 +12417,8 @@ export interface components {
         OperationsDocumentReviewDecisionEnum: "APPROVED" | "REJECTED";
         OperationsDocumentReviewRequest: {
             decision: components["schemas"]["OperationsDocumentReviewDecisionEnum"];
-            reason?: string;
+            /** @default  */
+            reason: string;
         };
         /** @description One Partner, for the management screen. */
         OperationsPartnerDetail: {
@@ -13271,6 +13272,27 @@ export interface components {
             /** Format: date-time */
             readonly reviewed_at: string | null;
         };
+        PartnerDocumentApplicantAccess: {
+            readonly document: components["schemas"]["PartnerDocumentDetailMetadata"];
+            /** Format: uri */
+            readonly access_url: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        PartnerDocumentDetailMetadata: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["PartnerDocumentKindEnum"];
+            readonly label: string;
+            readonly status: components["schemas"]["PartnerDocumentStatusEnum"];
+            readonly version: number;
+            readonly file_name: string;
+            readonly mime_type: string;
+            readonly file_size: number;
+            /** Format: date-time */
+            readonly uploaded_at: string;
+            readonly rejection_reason: string | null;
+        };
         PartnerDocumentFinalizeRequest: {
             expected_version: number;
             /** Format: uuid */
@@ -13286,27 +13308,6 @@ export interface components {
          * @enum {string}
          */
         PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "OTHER";
-        PartnerDocumentApplicantAccess: {
-            document: components["schemas"]["PartnerDocumentDetailMetadata"];
-            /** Format: uri */
-            access_url: string;
-            /** Format: date-time */
-            expires_at?: string;
-        };
-        PartnerDocumentDetailMetadata: {
-            /** Format: uuid */
-            id: string;
-            kind: string;
-            label: string;
-            status: string;
-            version: number;
-            file_name: string;
-            mime_type: string;
-            file_size: number;
-            /** Format: date-time */
-            uploaded_at: string;
-            rejection_reason?: string | null;
-        };
         PartnerDocumentReviewAccess: {
             /** Format: uri */
             readonly review_url: string;
@@ -13639,7 +13640,12 @@ export interface components {
             location_text?: string;
             moderation_status?: components["schemas"]["ModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly host_id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly host_name: string;
+            readonly host_phone: string;
             /** Format: uuid */
             variant: string;
             structured_fields?: unknown;
@@ -14878,7 +14884,12 @@ export interface components {
             location_text?: string;
             moderation_status?: components["schemas"]["ModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly host_id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly host_name: string;
+            readonly host_phone: string;
             /** Format: uuid */
             variant: string;
             structured_fields?: unknown;
@@ -16158,7 +16169,10 @@ export interface components {
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
             readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly partner_name: string;
+            readonly partner_phone: string;
             /** Format: uuid */
             readonly variant: string;
             readonly structured_fields: unknown;
@@ -16191,7 +16205,10 @@ export interface components {
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
             readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly partner_name: string;
+            readonly partner_phone: string;
             /** Format: uuid */
             readonly variant: string;
             readonly structured_fields: unknown;

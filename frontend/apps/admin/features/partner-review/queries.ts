@@ -296,7 +296,7 @@ export function useReviewDocument() {
             params: { path: { document_id: input.documentId } },
             body: {
               decision: input.decision,
-              ...(input.reason ? { reason: input.reason } : {}),
+              reason: input.reason ?? "",
             },
           },
         ),

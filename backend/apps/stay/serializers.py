@@ -284,6 +284,9 @@ def _area_text(value: Decimal | None) -> str | None:
 class PropertySerializer(serializers.ModelSerializer[Property]):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
+    host_id = serializers.UUIDField(source="host.id", read_only=True)
+    partner_id = serializers.UUIDField(source="host.id", read_only=True)
+    host_phone = serializers.CharField(source="host.user.phone_number", read_only=True)
     media = PropertyMediaSerializer(many=True, read_only=True)
     reviews = StayReviewSerializer(many=True, read_only=True)
     units = UnitSerializer(many=True, read_only=True)
@@ -311,7 +314,10 @@ class PropertySerializer(serializers.ModelSerializer[Property]):
             "location_text",
             "moderation_status",
             "public_state",
+            "host_id",
+            "partner_id",
             "host_name",
+            "host_phone",
             "variant",
             "structured_fields",
             "cancellation_policy_text",

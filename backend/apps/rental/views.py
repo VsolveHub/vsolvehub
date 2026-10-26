@@ -683,7 +683,9 @@ class OpsRentalCollectionView(APIView):
         responses=page_serializer(RentalAssetSerializer, "RentalAssetPage"),
     )
     def get(self, request: Any) -> Response:
-        rows = RentalAsset.objects.select_related("partner", "variant").prefetch_related("media")
+        rows = (
+            RentalAsset.objects.select_related("partner__user", "variant").prefetch_related("media")
+        )
         rows = _filter_moderation_statuses(rows, request)
         return paginated(
             request, self, rows, RentalAssetSerializer, pagination=OperationsNewestFirstPagination

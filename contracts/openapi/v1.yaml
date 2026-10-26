@@ -11961,6 +11961,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/application/documents/{document_id}/access/:
     get:
       operationId: partner_application_documents_access_retrieve
@@ -30524,6 +30525,7 @@ components:
           $ref: '#/components/schemas/OperationsDocumentReviewDecisionEnum'
         reason:
           type: string
+          default: ''
           maxLength: 2000
       required:
       - decision
@@ -32859,6 +32861,74 @@ components:
       - status
       - uploaded_at
       - version
+    PartnerDocumentApplicantAccess:
+      type: object
+      properties:
+        document:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentDetailMetadata'
+          readOnly: true
+        access_url:
+          type: string
+          format: uri
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - access_url
+      - document
+      - expires_at
+    PartnerDocumentDetailMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        file_name:
+          type: string
+          readOnly: true
+        mime_type:
+          type: string
+          readOnly: true
+        file_size:
+          type: integer
+          readOnly: true
+        uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - file_name
+      - file_size
+      - id
+      - kind
+      - label
+      - mime_type
+      - rejection_reason
+      - status
+      - uploaded_at
+      - version
     PartnerDocumentFinalizeRequest:
       type: object
       properties:
@@ -32887,56 +32957,6 @@ components:
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
         * `OTHER` - Other
-    PartnerDocumentApplicantAccess:
-      type: object
-      properties:
-        document:
-          $ref: '#/components/schemas/PartnerDocumentDetailMetadata'
-        access_url:
-          type: string
-          format: uri
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - access_url
-      - document
-    PartnerDocumentDetailMetadata:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        kind:
-          type: string
-        label:
-          type: string
-        status:
-          type: string
-        version:
-          type: integer
-        file_name:
-          type: string
-        mime_type:
-          type: string
-        file_size:
-          type: integer
-        uploaded_at:
-          type: string
-          format: date-time
-        rejection_reason:
-          type: string
-          nullable: true
-      required:
-      - file_name
-      - file_size
-      - id
-      - kind
-      - label
-      - mime_type
-      - status
-      - uploaded_at
-      - version
     PartnerDocumentReviewAccess:
       type: object
       properties:
@@ -33814,7 +33834,18 @@ components:
         public_state:
           type: string
           readOnly: true
+        host_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         host_name:
+          type: string
+          readOnly: true
+        host_phone:
           type: string
           readOnly: true
         variant:
@@ -33921,9 +33952,12 @@ components:
       - can_review
       - created_at
       - highlights
+      - host_id
       - host_name
+      - host_phone
       - id
       - media
+      - partner_id
       - price_period
       - public_state
       - reviews
@@ -36897,7 +36931,18 @@ components:
         public_state:
           type: string
           readOnly: true
+        host_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         host_name:
+          type: string
+          readOnly: true
+        host_phone:
           type: string
           readOnly: true
         variant:
@@ -36976,9 +37021,12 @@ components:
       - can_review
       - created_at
       - highlights
+      - host_id
       - host_name
+      - host_phone
       - id
       - media
+      - partner_id
       - price_period
       - public_state
       - reviews
@@ -40176,7 +40224,14 @@ components:
         public_state:
           type: string
           readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         partner_name:
+          type: string
+          readOnly: true
+        partner_phone:
           type: string
           readOnly: true
         variant:
@@ -40237,7 +40292,9 @@ components:
       - location_text
       - media
       - moderation_status
+      - partner_id
       - partner_name
+      - partner_phone
       - pickup_address
       - pickup_address_line
       - pickup_area
@@ -40296,7 +40353,14 @@ components:
         public_state:
           type: string
           readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         partner_name:
+          type: string
+          readOnly: true
+        partner_phone:
           type: string
           readOnly: true
         variant:
@@ -40361,7 +40425,9 @@ components:
       - location_text
       - media
       - moderation_status
+      - partner_id
       - partner_name
+      - partner_phone
       - pickup_address
       - pickup_address_line
       - pickup_area

@@ -698,7 +698,7 @@ class OpsStayCollectionView(APIView):
                 "reviews",
                 "variant__a9_configurations",
             )
-            .select_related("host", "variant")
+            .select_related("host__user", "variant")
         )
         wanted = (request.query_params.get("moderation_status") or "").strip().upper()
         if wanted:
