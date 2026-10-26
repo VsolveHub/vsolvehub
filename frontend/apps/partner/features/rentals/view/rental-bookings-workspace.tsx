@@ -1,15 +1,15 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, Dialog, EmptyState, Field, Input, Textarea, formatDate, formatMoney } from "@vsolve/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import { Badge, Button, Card, Dialog, EmptyState, Field, Input, LoadMore, Textarea, formatDate, formatMoney } from "@vsolve/ui";
 import { ChevronRight } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { BookingAction } from "@/features/rentals/booking-actions";
 import {
-  fetchPartnerRentalBookings,
+  fetchPartnerRentalBookingsPage,
   partnerRentalBookingAction,
   uploadPartnerDisputePhoto,
 } from "@/features/rentals/queries";
@@ -110,11 +110,10 @@ export function PartnerRentalBookingsWorkspace() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
-  const bookings = useQuery({
-    queryKey: ["partner-rentals", "bookings", bookingStatusFilter],
-    queryFn: () =>
-      fetchPartnerRentalBookings(bookingStatusFilter === "ALL" ? undefined : bookingStatusFilter),
-  });
+  // One page at a time; the status tab is filtered on the server.
+  const bookings = usePagedList(["partner-rentals", "bookings", bookingStatusFilter], (cursor) =>
+    fetchPartnerRentalBookingsPage(bookingStatusFilter === "ALL" ? undefined : bookingStatusFilter, cursor),
+  );
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["partner-rentals"] });
@@ -158,17 +157,12 @@ export function PartnerRentalBookingsWorkspace() {
     },
   });
 
-  // Defensive client filter in case the API ignores `?status=` (stays enquiry pattern).
-  const filteredBookings = useMemo(() => {
-    const rows = bookings.data ?? [];
-    if (bookingStatusFilter === "ALL") return rows;
-    return rows.filter((booking) => (booking.status ?? "").toUpperCase() === bookingStatusFilter);
-  }, [bookings.data, bookingStatusFilter]);
+  const filteredBookings = bookings.items;
 
   // Looked up in the unfiltered list, so changing the filter while the panel is
   // open cannot blank the record the partner is reading.
   const selected = selectedId
-    ? (bookings.data ?? []).find((booking) => booking.id === selectedId) ?? null
+    ? bookings.items.find((booking) => booking.id === selectedId) ?? null
     : null;
 
   function runBookingAction(bookingId: string, action: BookingAction) {
@@ -347,6 +341,12 @@ export function PartnerRentalBookingsWorkspace() {
             </li>
           ))}
         </ul>
+        <LoadMore
+          className="mt-3"
+          hasMore={bookings.hasMore}
+          loading={bookings.loadingMore}
+          onLoadMore={bookings.loadMore}
+        />
       </Card>
 
       <RentalBookingDetailSheet

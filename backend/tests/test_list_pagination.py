@@ -11,6 +11,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 from apps.identity.models import Role, UserRole
 from apps.rental.models import RentalAsset
 from apps.rental.services import create_asset, moderate_asset, submit_asset
+from apps.stay.services import public_properties
 from apps.wallet.models import WalletTransaction
 from apps.wallet.services import credit_wallet, get_or_create_wallet
 from common.pagination import (
@@ -21,7 +22,11 @@ from common.pagination import (
     filter_statuses,
 )
 from tests.helpers import force_role_client
-from tests.rental.test_cancel_booking import _booked, rental_world  # noqa: F401
+from tests.rental.test_cancel_booking import (  # noqa: F401
+    _booked,
+    _customer_client,
+    rental_world,
+)
 
 User = get_user_model()
 #: Rows past one full page, so the second page is short and has no `next`.
@@ -172,3 +177,91 @@ def test_my_applications_filter_by_job() -> None:
     assert none.data["results"] == []
     bad = client.get("/api/v1/my/listing-applications", {"listing": "nope"})
     assert bad.status_code == HTTPStatus.BAD_REQUEST
+
+
+# --- rental lists (contract 1.79.0: paged again after a regression) -----------------------------
+
+
+def _paged(response) -> dict:
+    """A paged list answers with the shared envelope, never a bare array."""
+    assert response.status_code == HTTPStatus.OK, response.json()
+    body = response.json()
+    assert set(body) >= {"next", "previous", "results"}
+    return body
+
+
+@pytest.mark.django_db
+def test_my_rentals_page_and_filter_on_the_server(rental_world):  # noqa: F811
+    booking = _booked(rental_world)  # PENDING_PAYMENT
+    client = _customer_client(rental_world["customer"])
+
+    everything = _paged(client.get("/api/v1/me/rentals"))
+    assert [row["id"] for row in everything["results"]] == [str(booking.id)]
+    assert everything["next"] is None
+    several = _paged(client.get("/api/v1/me/rentals", {"status": "CONFIRMED,PENDING_PAYMENT"}))
+    assert [row["id"] for row in several["results"]] == [str(booking.id)]
+    other = _paged(client.get("/api/v1/me/rentals", {"status": "RETURNED"}))
+    assert other["results"] == []
+    assert client.get("/api/v1/me/rentals", {"status": "NOPE"}).status_code == (
+        HTTPStatus.BAD_REQUEST
+    )
+    assert client.get("/api/v1/me/rentals", {"cursor": " "}).status_code == (HTTPStatus.BAD_REQUEST)
+
+
+@pytest.mark.django_db
+def test_partner_rental_bookings_page_and_take_several_statuses(rental_world):  # noqa: F811
+    booking = _booked(rental_world)
+    client = force_role_client(user=rental_world["owner"], role_code="partner")
+
+    page = _paged(
+        client.get("/api/v1/partner/rentals/bookings", {"status": "PENDING_PAYMENT,CONFIRMED"})
+    )
+    assert [row["id"] for row in page["results"]] == [str(booking.id)]
+    refused = client.get("/api/v1/partner/rentals/bookings", {"status": "NOPE"})
+    assert refused.status_code == HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_ops_rental_bookings_list_is_back_and_paged(rental_world):  # noqa: F811
+    # The admin screen and dashboard kept calling this endpoint after it was removed.
+    booking = _booked(rental_world)
+
+    page = _paged(_ops_client().get("/api/v1/ops/rentals/bookings"))
+
+    assert [row["id"] for row in page["results"]] == [str(booking.id)]
+    assert page["results"][0]["partner_name"]
+
+
+@pytest.mark.django_db
+def test_ops_rental_listings_take_several_moderation_states(rental_world):  # noqa: F811
+    _booked(rental_world)  # one approved asset
+
+    page = _paged(
+        _ops_client().get("/api/v1/ops/rentals", {"moderation_status": "PENDING,APPROVED"})
+    )
+
+    assert len(page["results"]) == 1
+
+
+@pytest.mark.django_db
+def test_rental_browse_honours_limit_and_newest_first(rental_world):  # noqa: F811
+    for _ in range(EXTRA):
+        _booked(rental_world)  # an approved asset each
+    client = APIClient()
+
+    two = client.get("/api/v1/rentals", {"limit": 2}).json()
+    assert len(two) == 2  # noqa: PLR2004
+    created = [row["created_at"] for row in client.get("/api/v1/rentals").json()]
+    assert created == sorted(created, reverse=True)
+
+
+# --- stay browse: offset pages need a unique final sort key -------------------------------------
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("sort", ["newest", "price_asc", "price_desc", "rating_desc"])
+def test_every_stay_sort_ends_in_id(sort: str) -> None:
+    # Rows created in the same instant (a bulk import) would otherwise swap places between
+    # requests, so one offset page could repeat a stay and the next could skip one.
+    query = public_properties(sort=sort).query
+    assert query.order_by[-1] == "-id"

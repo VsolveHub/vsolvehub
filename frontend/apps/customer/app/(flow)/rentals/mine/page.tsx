@@ -22,8 +22,8 @@ export default function MyRentalsPage() {
   const [activeTab, setActiveTab] = useState<RentalMineTab>("ALL");
 
   const statuses = RENTAL_TAB_STATUSES[activeTab];
-  const list = usePagedList(["my-rentals", statuses], () =>
-    fetchMyRentalsPage(statuses || undefined),
+  const list = usePagedList(["my-rentals", statuses], (cursor) =>
+    fetchMyRentalsPage(statuses || undefined, cursor),
   );
   const { isLoading, error, refetch } = list;
   const filteredBookings = list.items;

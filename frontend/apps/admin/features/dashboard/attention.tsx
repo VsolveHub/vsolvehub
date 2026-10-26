@@ -52,7 +52,7 @@ export function AttentionStrip(): ReactNode {
   const customItems = useCustomItemReviews();
   const rentalListings = useQuery({
     queryKey: ["ops-rentals", "PENDING", "count"],
-    queryFn: () => fetchOpsRentalsPage(),
+    queryFn: () => fetchOpsRentalsPage(undefined, "PENDING"),
   });
   const disputes = useQuery({ queryKey: ["ops-rental-disputes"], queryFn: fetchOpsRentalDisputes });
   const deliveryQuotes = useQuery({

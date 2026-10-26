@@ -1602,6 +1602,7 @@ def public_properties(  # noqa: PLR0912
         qs = qs.annotate(sort_price=models.Subquery(cheapest)).order_by(
             price.asc(nulls_last=True) if sort == "price_asc" else price.desc(nulls_last=True),
             "-created_at",
+            "-id",
         )
     elif sort == "rating_desc":
         average = (
@@ -1612,10 +1613,12 @@ def public_properties(  # noqa: PLR0912
             .values("avg")
         )
         qs = qs.annotate(sort_rating=models.Subquery(average)).order_by(
-            models.F("sort_rating").desc(nulls_last=True), "-created_at"
+            models.F("sort_rating").desc(nulls_last=True), "-created_at", "-id"
         )
     else:
-        qs = qs.order_by("-created_at")
+        qs = qs.order_by("-created_at", "-id")
+    # Every sort ends in `id`: browse pages by offset, and rows created in the same instant (a
+    # bulk import) would otherwise swap places between requests and repeat or vanish.
 
     if offset:
         qs = qs[offset:]

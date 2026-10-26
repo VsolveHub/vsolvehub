@@ -56,28 +56,19 @@ export async function fetchPartnerRentalAssets(): Promise<PartnerRentalAsset[]> 
   return Array.isArray(data) ? data : [];
 }
 
-export async function fetchPartnerRentalBookings(status?: string): Promise<PartnerRentalBooking[]> {
-  const data = await request(() =>
+/**
+ * One page of the owner's rental bookings, newest first. `statuses` is one state or several
+ * separated by commas, filtered on the server so a tab never misses rows on unloaded pages.
+ */
+export function fetchPartnerRentalBookingsPage(
+  statuses?: string,
+  cursor?: string,
+): Promise<Page<PartnerRentalBooking>> {
+  return request(() =>
     getApiClient().GET("/api/v1/partner/rentals/bookings", {
-      params: status ? { query: { status } } : undefined,
+      params: { query: { status: statuses || undefined, cursor } },
     }),
   );
-  return Array.isArray(data) ? data : [];
-}
-
-/**
- * The endpoint returns one unpaged array, and its `status` filter matches a single value exactly,
- * so a comma-separated list sent there matches nothing. Several statuses are filtered here instead.
- */
-export async function fetchPartnerRentalBookingsPage(statuses?: string): Promise<Page<PartnerRentalBooking>> {
-  const bookings = await fetchPartnerRentalBookings();
-  const wanted = statuses ? new Set(statuses.split(",")) : null;
-  return {
-    results: wanted
-      ? bookings.filter((booking) => booking.status !== undefined && wanted.has(booking.status))
-      : bookings,
-    next: null,
-  };
 }
 
 export type RentalPhotoUpload = {

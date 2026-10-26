@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const GET = vi.fn();
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => ({ GET }) }));
 
-const { fetchMyRentalsPage } = await import("./queries");
+const { fetchMyRentalsPage, fetchRentals } = await import("./queries");
 
 function ok(data: unknown) {
   return { data, error: undefined, response: new Response(null, { status: 200 }) };
@@ -12,20 +12,18 @@ function ok(data: unknown) {
 describe("my rentals", () => {
   beforeEach(() => GET.mockReset());
 
-  it("applies the tab's statuses itself, because the endpoint takes no filter", async () => {
+  it("asks the server for the tab's statuses and the cursor's page", async () => {
     GET.mockResolvedValue(
-      ok([
-        { id: "a", status: "CONFIRMED" },
-        { id: "b", status: "CANCELLED" },
-        { id: "c", status: "HANDOVER" },
-      ]),
+      ok({ results: [{ id: "a" }], next: "https://api.test/api/v1/me/rentals?cursor=def" }),
     );
 
-    expect((await fetchMyRentalsPage("CONFIRMED,HANDOVER")).results.map((booking) => booking.id)).toEqual([
-      "a",
-      "c",
-    ]);
-    expect((await fetchMyRentalsPage()).results).toHaveLength(3);
+    const page = await fetchMyRentalsPage("CONFIRMED,HANDOVER", "abc");
+
+    expect(page.results.map((booking) => booking.id)).toEqual(["a"]);
+    expect(page.next).toContain("cursor=def");
+    expect(GET).toHaveBeenCalledWith("/api/v1/me/rentals", {
+      params: { query: { status: "CONFIRMED,HANDOVER", cursor: "abc" } },
+    });
   });
 
   it("surfaces a failed request instead of an empty list", async () => {
@@ -36,5 +34,19 @@ describe("my rentals", () => {
     });
 
     await expect(fetchMyRentalsPage()).rejects.toThrow();
+  });
+});
+
+describe("rental browse", () => {
+  beforeEach(() => GET.mockReset());
+
+  it("asks for one window of results, never the whole catalogue", async () => {
+    GET.mockResolvedValue(ok([]));
+
+    await fetchRentals({ q: "drill", limit: 24, offset: 48 });
+
+    expect(GET).toHaveBeenCalledWith("/api/v1/rentals", {
+      params: { query: expect.objectContaining({ q: "drill", limit: 24, offset: 48 }) },
+    });
   });
 });

@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const GET = vi.fn();
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => ({ GET }) }));
 
-const { fetchOpsStayEnquiriesPage, fetchOpsStays, fetchOpsStaysPage } = await import("./queries");
+const { fetchOpsRentalsPage, fetchOpsStayEnquiriesPage, fetchOpsStaysPage } = await import(
+  "./queries"
+);
 
 function ok(data: unknown) {
   return { data, error: undefined, response: new Response(null, { status: 200 }) };
@@ -17,18 +19,32 @@ function failed(status: number) {
   };
 }
 
+describe("operations rental listings", () => {
+  beforeEach(() => GET.mockReset());
+
+  it("pages on the server and filters pending ones there too", async () => {
+    GET.mockResolvedValue(ok({ results: [], next: null, previous: null }));
+
+    await fetchOpsRentalsPage("abc", "PENDING");
+
+    expect(GET).toHaveBeenCalledWith("/api/v1/ops/rentals", {
+      params: { query: { cursor: "abc", moderation_status: "PENDING" } },
+    });
+  });
+});
+
 describe("operations stay lists", () => {
   beforeEach(() => GET.mockReset());
 
-  it("reads every page of properties instead of treating the page envelope as an empty array", async () => {
-    GET.mockResolvedValueOnce(
-      ok({ results: [{ id: "p1" }], next: "https://api.test/api/v1/ops/stays?cursor=abc", previous: null }),
-    ).mockResolvedValueOnce(ok({ results: [{ id: "p2" }], next: null, previous: null }));
+  it("asks for the page the cursor names and returns the envelope as is", async () => {
+    GET.mockResolvedValue(
+      ok({ results: [{ id: "p2" }], next: null, previous: "https://api.test/api/v1/ops/stays" }),
+    );
 
-    const rows = await fetchOpsStays();
+    const page = await fetchOpsStaysPage("abc");
 
-    expect(rows.map((row) => row.id)).toEqual(["p1", "p2"]);
-    expect(GET).toHaveBeenLastCalledWith("/api/v1/ops/stays", {
+    expect(page.results.map((row) => row.id)).toEqual(["p2"]);
+    expect(GET).toHaveBeenCalledWith("/api/v1/ops/stays", {
       params: { query: { cursor: "abc", moderation_status: undefined } },
     });
   });

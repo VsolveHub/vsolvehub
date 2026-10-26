@@ -11,11 +11,17 @@ export type RentalAssetDetail = Schemas["RentalAssetDetail"];
 export type RentalBooking = Schemas["RentalBooking"];
 export type CreateBookingRequest = Schemas["CreateBookingRequest"];
 
-export function fetchRentals(params?: RentalFilterParams) {
+/**
+ * One browse page, newest first. The server never returns everything: without `limit` it sends
+ * its default page, so a caller that wants more pages uses `useBrowseList`.
+ */
+export function fetchRentals(params?: RentalFilterParams & { limit?: number; offset?: number }) {
   return request(() =>
     getApiClient().GET("/api/v1/rentals", {
       params: {
         query: {
+          limit: params?.limit,
+          offset: params?.offset,
           q: params?.q,
           location: params?.location,
           service: params?.service,
@@ -42,23 +48,19 @@ export function fetchRentalAsset(key: string) {
   );
 }
 
-export function fetchMyRentals() {
-  return request(() => getApiClient().GET("/api/v1/me/rentals"));
-}
-
 /**
- * The endpoint returns every booking in one array and takes no filters, so the tab's statuses
- * (comma-separated) are applied here and there is never a next page.
+ * One page of the customer's rentals, newest first. The tab's states (comma-separated) are
+ * filtered on the server, so a tab never hides rows that sit on a page not yet loaded.
  */
-export async function fetchMyRentalsPage(statuses?: string): Promise<Page<RentalBooking>> {
-  const bookings = await fetchMyRentals();
-  const wanted = statuses ? new Set(statuses.split(",")) : null;
-  return {
-    results: wanted
-      ? bookings.filter((booking) => booking.status !== undefined && wanted.has(booking.status))
-      : bookings,
-    next: null,
-  };
+export function fetchMyRentalsPage(
+  statuses?: string,
+  cursor?: string,
+): Promise<Page<RentalBooking>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/rentals", {
+      params: { query: { status: statuses || undefined, cursor } },
+    }),
+  );
 }
 
 export function fetchRentalTaxonomy() {

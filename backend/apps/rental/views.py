@@ -2,6 +2,7 @@ from datetime import date
 from typing import Any, NoReturn
 from uuid import UUID
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -26,6 +27,7 @@ from apps.rental.pickup_hours import (
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
+    OpsRentalBookingSerializer,
     OpsRentalDisputeDecisionSerializer,
     PartnerBookingActionSerializer,
     PartnerRentalBookingSerializer,
@@ -66,6 +68,16 @@ from apps.rental.services import (
     store_rental_photo,
     submit_asset,
     update_asset,
+)
+from common.pagination import (
+    BROWSE_PARAMETERS,
+    CURSOR_PARAMETER,
+    STATUS_PARAMETER,
+    OperationsNewestFirstPagination,
+    browse_window,
+    filter_statuses,
+    page_serializer,
+    paginated,
 )
 
 
@@ -144,6 +156,7 @@ class RentalBrowseView(APIView):
             OpenApiParameter("max_deposit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("start_date", OpenApiTypes.DATE, OpenApiParameter.QUERY),
             OpenApiParameter("end_date", OpenApiTypes.DATE, OpenApiParameter.QUERY),
+            *BROWSE_PARAMETERS,
         ],
         responses=RentalAssetSerializer(many=True),
     )
@@ -171,7 +184,10 @@ class RentalBrowseView(APIView):
             start_date=_parse_date(request.query_params.get("start_date")),
             end_date=_parse_date(request.query_params.get("end_date")),
         )
-        return Response(RentalAssetSerializer(assets, many=True).data)
+        # Never unbounded: one browse page, newest first, like `/stays` and `/listings`.
+        limit, offset = browse_window(request)
+        window = assets.order_by("-created_at", "-id")[offset : offset + limit]
+        return Response(RentalAssetSerializer(window, many=True).data)
 
 
 class RentalDetailView(APIView):
@@ -221,10 +237,14 @@ class RentalBookView(APIView):
 class MyRentalsView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
-    @extend_schema(responses=RentalBookingSerializer(many=True))
+    @extend_schema(
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(RentalBookingSerializer, "RentalBookingPage"),
+    )
     def get(self, request: Any) -> Response:
         rows = _booking_rows().filter(customer=request.user)
-        return Response(RentalBookingSerializer(rows, many=True, context={"request": request}).data)
+        rows = filter_statuses(rows, request, RentalBooking.Status.values)
+        return paginated(request, self, rows, RentalBookingSerializer)
 
 
 class MyRentalTransportView(APIView):
@@ -455,20 +475,14 @@ class PartnerBookingCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
     @extend_schema(
-        parameters=[
-            OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY),
-        ],
-        responses=PartnerRentalBookingSerializer(many=True),
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(PartnerRentalBookingSerializer, "PartnerRentalBookingPage"),
     )
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
         rows = _booking_rows().select_related("customer").filter(asset__partner=partner)
-        status_filter = (request.query_params.get("status") or "").strip().upper()
-        if status_filter:
-            rows = rows.filter(status=status_filter)
-        return Response(
-            PartnerRentalBookingSerializer(rows, many=True, context={"request": request}).data
-        )
+        rows = filter_statuses(rows, request, RentalBooking.Status.values)
+        return paginated(request, self, rows, PartnerRentalBookingSerializer)
 
 
 class PartnerBookingActionView(APIView):
@@ -649,15 +663,39 @@ class OpsRentalPlatformFeeView(APIView):
 class OpsRentalCollectionView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=RentalAssetSerializer(many=True))
-    def get(self, _request: Any) -> Response:
-        rows = (
-            RentalAsset.objects.all()
-            .select_related("partner", "variant")
-            .prefetch_related("media")
-            .prefetch_related("media")
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "moderation_status",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="One listing status, or several separated by commas (PENDING, ...).",
+            ),
+            CURSOR_PARAMETER,
+        ],
+        responses=page_serializer(RentalAssetSerializer, "RentalAssetPage"),
+    )
+    def get(self, request: Any) -> Response:
+        rows = RentalAsset.objects.select_related("partner", "variant").prefetch_related("media")
+        rows = _filter_moderation_statuses(rows, request)
+        return paginated(
+            request, self, rows, RentalAssetSerializer, pagination=OperationsNewestFirstPagination
         )
-        return Response(RentalAssetSerializer(rows, many=True).data)
+
+
+def _filter_moderation_statuses(rows: Any, request: Any) -> Any:
+    """`?moderation_status=PENDING` or `PENDING,REJECTED`. An unknown state is refused, not
+    ignored, so a typo cannot read as an empty queue."""
+    raw = (request.query_params.get("moderation_status") or "").strip()
+    if not raw:
+        return rows
+    wanted = [part.strip().upper() for part in raw.split(",") if part.strip()]
+    unknown = sorted(set(wanted) - set(RentalAsset.ModerationStatus.values))
+    if unknown:
+        raise ValidationError(
+            {"moderation_status": [f"Unknown listing status: {', '.join(unknown)}."]}
+        )
+    return rows.filter(moderation_status__in=wanted)
 
 
 class OpsRentalModerateView(APIView):
@@ -678,6 +716,54 @@ class OpsRentalModerateView(APIView):
         except RentalStateError as exc:
             _raise_domain_error(exc)
         return Response(RentalAssetSerializer(asset).data)
+
+
+class OpsRentalBookingCollectionView(APIView):
+    """Every rental booking, so Operations can see delivery requests, payments and cancellations.
+
+    `?status=` narrows to one state or several (comma list); `?q=` matches the customer's name or
+    phone, the owner's name, the equipment title, or a booking id.
+    """
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        parameters=[
+            STATUS_PARAMETER,
+            OpenApiParameter("q", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            CURSOR_PARAMETER,
+        ],
+        responses=page_serializer(OpsRentalBookingSerializer, "OpsRentalBookingPage"),
+    )
+    def get(self, request: Any) -> Response:
+        rows = _booking_rows().select_related("customer")
+        rows = filter_statuses(rows, request, RentalBooking.Status.values)
+        query = (request.query_params.get("q") or "").strip()
+        if query:
+            match = (
+                Q(customer__full_name__icontains=query)
+                | Q(customer__phone_number__icontains=query)
+                | Q(asset__partner__display_name__icontains=query)
+                | Q(asset__title__icontains=query)
+            )
+            if _is_uuid(query):
+                match |= Q(id=query)
+            rows = rows.filter(match)
+        return paginated(
+            request,
+            self,
+            rows,
+            OpsRentalBookingSerializer,
+            pagination=OperationsNewestFirstPagination,
+        )
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 class OpsRentalBookingCancelView(APIView):

@@ -20,21 +20,26 @@ function failed(status: number) {
 describe("partner rental bookings", () => {
   beforeEach(() => GET.mockReset());
 
-  it("keeps every named status, which the endpoint's exact-match filter cannot do", async () => {
-    GET.mockResolvedValue(
-      ok([
-        { id: "a", status: "CONFIRMED" },
-        { id: "b", status: "COMPLETED" },
-        { id: "c", status: "HANDOVER" },
-      ]),
-    );
+  it("asks the server for the named statuses and the cursor's page", async () => {
+    GET.mockResolvedValue(ok({ results: [{ id: "a" }], next: null, previous: null }));
 
-    const page = await fetchPartnerRentalBookingsPage("CONFIRMED,HANDOVER");
+    const page = await fetchPartnerRentalBookingsPage("CONFIRMED,HANDOVER", "abc");
 
-    expect(page.results.map((booking) => booking.id)).toEqual(["a", "c"]);
-    expect(page.next).toBeNull();
-    // Sent to the server, the comma list would match no booking at all.
-    expect(GET).toHaveBeenCalledWith("/api/v1/partner/rentals/bookings", { params: undefined });
+    expect(page.results.map((booking) => booking.id)).toEqual(["a"]);
+    // Filtered on the server, so a tab never misses rows on a page not yet loaded.
+    expect(GET).toHaveBeenCalledWith("/api/v1/partner/rentals/bookings", {
+      params: { query: { status: "CONFIRMED,HANDOVER", cursor: "abc" } },
+    });
+  });
+
+  it("sends no status for the All tab", async () => {
+    GET.mockResolvedValue(ok({ results: [], next: null, previous: null }));
+
+    await fetchPartnerRentalBookingsPage(undefined);
+
+    expect(GET).toHaveBeenCalledWith("/api/v1/partner/rentals/bookings", {
+      params: { query: { status: undefined, cursor: undefined } },
+    });
   });
 
   it("surfaces a failed request instead of an empty list", async () => {

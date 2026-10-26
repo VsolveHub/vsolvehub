@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useBrowseList } from "@vsolve/query";
 import { FileCheck2, MapPin, Search, Wrench } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { fetchRentals } from "@/features/rentals/queries";
 import { type ActiveRentalFilters, RentalCard, RentalFilters } from "@/features/rentals/view";
@@ -36,13 +36,20 @@ function RentalsBrowseContent() {
     setFilters({});
   };
 
+  /**
+   * The server sends one page at a time (24, newest first) and "Show more" asks for the next.
+   * Every filter is in the key, so changing one starts again from the first page.
+   */
   const {
-    data: rentals = [],
+    items: rentals,
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: [
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useBrowseList(
+    [
       "rentals",
       appliedQuery,
       appliedLocation,
@@ -51,7 +58,7 @@ function RentalsBrowseContent() {
       filters.minPrice,
       filters.maxPrice,
     ],
-    queryFn: () =>
+    (offset, limit) =>
       fetchRentals({
         q: appliedQuery,
         location: appliedLocation,
@@ -59,9 +66,10 @@ function RentalsBrowseContent() {
         category: filters.categorySlug,
         min_price: filters.minPrice,
         max_price: filters.maxPrice,
+        limit,
+        offset,
       }),
-    staleTime: 30_000,
-  });
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
@@ -127,17 +135,21 @@ function RentalsBrowseContent() {
       </section>
 
       {/* Filter Chips */}
-      <RentalFilters activeFilters={filters} onChangeFilter={setFilters} count={rentals.length} />
+      <RentalFilters
+        activeFilters={filters}
+        onChangeFilter={setFilters}
+        count={rentals.length}
+      />
 
       {/* State Rendering */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {Array.from({ length: 3 }).map((_, idx) => (
+          {Array.from({ length: 6 }).map((_, idx) => (
             <div key={idx} className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line p-5">
+              <Skeleton className="h-44 w-full rounded-card" />
               <Skeleton className="h-6 w-32" />
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-8 w-1/2" />
+              <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
             </div>
           ))}
         </div>
@@ -159,11 +171,19 @@ function RentalsBrowseContent() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {rentals.map((asset) => (
-            <RentalCard key={asset.id} asset={asset} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {rentals.map((asset) => (
+              <RentalCard key={asset.id} asset={asset} />
+            ))}
+          </div>
+          <LoadMore
+            hasMore={hasMore}
+            loading={loadingMore}
+            onLoadMore={loadMore}
+            label="Show more rentals"
+          />
+        </>
       )}
     </main>
   );
@@ -176,3 +196,4 @@ export default function RentalsBrowsePage() {
     </Suspense>
   );
 }
+

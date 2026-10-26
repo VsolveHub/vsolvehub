@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useBrowseList } from "@vsolve/query";
 import {
   Building2,
   FileCheck2,
   MapPin,
   Search,
 } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { fetchStays } from "@/features/stays/queries";
 import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
@@ -27,13 +27,11 @@ function StaysBrowseContent() {
   const [filters, setFilters] = useState<ActiveFilters>(
     initCategory ? { categorySlug: initCategory } : {}
   );
-  const [visible, setVisible] = useState(6);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAppliedQuery(draftQuery);
     setAppliedLocation(draftLocation);
-    setVisible(6);
   };
 
   const clearFilters = () => {
@@ -43,16 +41,22 @@ function StaysBrowseContent() {
     setAppliedLocation("");
     setFilters({});
     setSort("newest");
-    setVisible(6);
   };
 
+  /**
+   * The server sends one page at a time (24 in the chosen sort) and "Show more" asks for the next.
+   * Sort and every filter are in the key, so changing one starts again from the first page.
+   */
   const {
-    data: stays = [],
+    items: stays,
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: [
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useBrowseList(
+    [
       "stays",
       appliedQuery,
       appliedLocation,
@@ -65,7 +69,7 @@ function StaysBrowseContent() {
       filters.serviceSlug,
       sort,
     ],
-    queryFn: () =>
+    (offset, limit) =>
       fetchStays({
         q: appliedQuery,
         location: appliedLocation,
@@ -76,13 +80,10 @@ function StaysBrowseContent() {
         tenant_preference: filters.tenantPreference,
         service: filters.serviceSlug || filters.categorySlug,
         sort,
-        limit: 100,
-        offset: 0,
+        limit,
+        offset,
       }),
-    staleTime: 30_000,
-  });
-
-  const displayedStays = stays.slice(0, visible);
+  );
 
 
   return (
@@ -159,8 +160,8 @@ function StaysBrowseContent() {
       {!isLoading && stays.length > 0 ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-3">
           <p className="text-sm font-semibold text-text">
-            Showing <span className="font-bold text-action">{displayedStays.length}</span> of{" "}
-            <span className="font-bold">{stays.length}</span> {stays.length === 1 ? "stay" : "stays"}
+            Showing <span className="font-bold text-action">{stays.length}</span>{" "}
+            {stays.length === 1 ? "stay" : "stays"}
             {appliedLocation ? ` in "${appliedLocation}"` : ""}
           </p>
           <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -172,7 +173,6 @@ function StaysBrowseContent() {
               value={sort}
               onChange={(e) => {
                 setSort(e.target.value);
-                setVisible(6);
               }}
               className="rounded-control border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-text shadow-xs transition hover:border-line-strong focus:border-line-strong focus:outline-none"
             >
@@ -216,17 +216,13 @@ function StaysBrowseContent() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {displayedStays.map((property) => (
+          {stays.map((property) => (
             <StayCard key={property.id} property={property} />
           ))}
         </div>
       )}
-      {stays.length > visible ? (
-        <div className="flex justify-center pt-4">
-          <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
-            Load more ({stays.length - visible} remaining)
-          </Button>
-        </div>
+      {stays.length > 0 ? (
+        <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} label="Show more stays" />
       ) : null}
     </main>
   );

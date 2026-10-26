@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.78.0
+  version: 1.79.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5521,7 +5521,18 @@ paths:
           description: ''
   /api/v1/me/rentals:
     get:
-      operationId: me_rentals_list
+      operationId: me_rentals_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - me
       security:
@@ -5531,9 +5542,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RentalBooking'
+                $ref: '#/components/schemas/RentalBookingPage'
           description: ''
   /api/v1/me/rentals/{booking_id}/cancel:
     post:
@@ -10840,7 +10849,19 @@ paths:
           description: ''
   /api/v1/ops/rentals:
     get:
-      operationId: ops_rentals_list
+      operationId: ops_rentals_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: moderation_status
+        schema:
+          type: string
+        description: One listing status, or several separated by commas (PENDING,
+          ...).
       tags:
       - ops
       security:
@@ -10850,9 +10871,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RentalAsset'
+                $ref: '#/components/schemas/RentalAssetPage'
           description: ''
   /api/v1/ops/rentals/{asset_id}/moderate:
     post:
@@ -10886,6 +10905,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/ops/rentals/bookings:
+    get:
+      operationId: ops_rentals_bookings_retrieve
+      description: |-
+        Every rental booking, so Operations can see delivery requests, payments and cancellations.
+
+        `?status=` narrows to one state or several (comma list); `?q=` matches the customer's name or
+        phone, the owner's name, the equipment title, or a booking id.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsRentalBookingPage'
           description: ''
   /api/v1/ops/rentals/bookings/{booking_id}/cancel:
     post:
@@ -15267,12 +15320,18 @@ paths:
           description: No response body
   /api/v1/partner/rentals/bookings:
     get:
-      operationId: partner_rentals_bookings_list
+      operationId: partner_rentals_bookings_retrieve
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       - in: query
         name: status
         schema:
           type: string
+        description: One state, or several separated by commas.
       tags:
       - partner
       security:
@@ -15282,9 +15341,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PartnerRentalBooking'
+                $ref: '#/components/schemas/PartnerRentalBookingPage'
           description: ''
   /api/v1/partner/rentals/bookings/{booking_id}/{action}:
     post:
@@ -17387,6 +17444,11 @@ paths:
           type: string
           format: date
       - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Rows to return. Default 24, at most 60.
+      - in: query
         name: location
         schema:
           type: string
@@ -17402,6 +17464,11 @@ paths:
         name: min_price
         schema:
           type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+        description: Rows to skip. Default 0.
       - in: query
         name: q
         schema:
@@ -30931,6 +30998,134 @@ components:
       - paid_at
       - payout_sequence_n
       - reward_side
+    OpsRentalBooking:
+      type: object
+      description: 'Operations'' view of a booking: both parties, so a cancel or a
+        dispute call has a name.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/RentalBookingStatusEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          readOnly: true
+        price_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        platform_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        platform_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        pickup_or_delivery_mode:
+          $ref: '#/components/schemas/RentalBookingModeEnum'
+        delivery_address: {}
+        transport_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        transport_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        transport_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        amount_due_paise:
+          type: integer
+          readOnly: true
+        transport:
+          allOf:
+          - $ref: '#/components/schemas/RentalTransport'
+          nullable: true
+          readOnly: true
+        pickup_hours:
+          allOf:
+          - $ref: '#/components/schemas/PickupHours'
+          readOnly: true
+        notes:
+          type: string
+        asset:
+          allOf:
+          - $ref: '#/components/schemas/RentalAsset'
+          readOnly: true
+        deposit:
+          allOf:
+          - $ref: '#/components/schemas/RentalDeposit'
+          readOnly: true
+        handover_pin:
+          type: string
+          nullable: true
+          description: Plaintext PIN for the customer only, once the booking is paid/active.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          nullable: true
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_name:
+          type: string
+          readOnly: true
+      required:
+      - amount_due_paise
+      - asset
+      - created_at
+      - customer_name
+      - customer_phone
+      - deposit
+      - end_date
+      - handover_pin
+      - id
+      - partner_id
+      - partner_name
+      - pickup_hours
+      - price_paise
+      - quantity
+      - start_date
+      - transport
+    OpsRentalBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsRentalBooking'
+      required:
+      - next
+      - previous
+      - results
     OpsReportCatalogItem:
       type: object
       properties:
@@ -33451,6 +33646,25 @@ components:
       - quantity
       - start_date
       - transport
+    PartnerRentalBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerRentalBooking'
+      required:
+      - next
+      - previous
+      - results
     PartnerReservationActionRequest:
       type: object
       properties:
@@ -39695,6 +39909,25 @@ components:
         * `REJECTED` - Rejected
         * `REMOVED` - Removed
         * `PAUSED` - Paused
+    RentalAssetPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAsset'
+      required:
+      - next
+      - previous
+      - results
     RentalBooking:
       type: object
       properties:
@@ -39792,6 +40025,25 @@ components:
       description: |-
         * `PICKUP` - Self pickup
         * `DELIVERY` - Partner-arranged delivery
+    RentalBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalBooking'
+      required:
+      - next
+      - previous
+      - results
     RentalBookingStatusEnum:
       enum:
       - AWAITING_TRANSPORT_QUOTE

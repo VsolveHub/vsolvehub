@@ -3,7 +3,7 @@
 import { factEntries, MarketplaceQueue, moneyLine } from "@/features/moderation/marketplace-queue";
 import { RentalDisputeQueue } from "@/features/moderation/rental-disputes";
 import { RentalPlatformFeeForm } from "@/features/moderation/rental-platform-fee";
-import { fetchOpsRentals, moderateOpsRental } from "@/features/moderation/queries";
+import { fetchOpsRentalsPage, moderateOpsRental } from "@/features/moderation/queries";
 
 export default function OpsRentalsPage() {
   return (
@@ -16,9 +16,11 @@ export default function OpsRentalsPage() {
       }
       heading="Rental assets"
       queryKey="ops-rentals"
-      load={async () => {
-        const rows = await fetchOpsRentals();
-        return rows.map((row) => {
+      loadPage={async (cursor, moderationStatus) => {
+        const page = await fetchOpsRentalsPage(cursor, moderationStatus);
+        return {
+          ...page,
+          results: page.results.map((row) => {
           const media = (row as { media?: { url?: string }[] }).media;
           const daily = moneyLine(row.daily_rate_paise, "/ day");
           const deposit = moneyLine(row.deposit_paise, "deposit");
@@ -33,7 +35,8 @@ export default function OpsRentalsPage() {
             moneyLines: [daily, deposit].filter((line): line is string => Boolean(line)),
             facts: factEntries(row.structured_fields),
           };
-        });
+          }),
+        };
       }}
       moderate={moderateOpsRental}
     />

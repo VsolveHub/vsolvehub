@@ -1,5 +1,24 @@
 # API Contract Changelog
 
+## 1.79.0 - Rental lists page again
+
+**BREAKING for the rental lists below.** 1.71.0 paginated them; a later change returned them
+to unbounded arrays. They page again in the shared envelope `{next, previous, results}`: newest
+first, follow `next` (`?cursor=`) until it is `null`, 20 per page (50 for Operations). A blank or
+stale `cursor` → `400 cursor_invalid`.
+
+| Endpoint | Page component | Filters |
+|---|---|---|
+| `GET /me/rentals` | `RentalBookingPage` | `status` (one or comma list; unknown → 400) |
+| `GET /partner/rentals/bookings` | `PartnerRentalBookingPage` | `status` (one or comma list; unknown → 400) |
+| `GET /ops/rentals` | `RentalAssetPage` | `moderation_status` (one or comma list; unknown → 400) |
+| `GET /ops/rentals/bookings` | `OpsRentalBookingPage` | `status` (one or comma list), `q` — **restored**; it had been removed while the admin screen still called it |
+
+`GET /rentals` (public browse) stays an array and is bounded again like `/stays` and `/listings`:
+`limit` (default 24, max 60) and `offset`, newest first. A full page means there may be more.
+
+- Removed: none. Renamed: none.
+
 ## 1.78.0 - Contact form, published cancellation policy, honest receipts
 
 Additive.

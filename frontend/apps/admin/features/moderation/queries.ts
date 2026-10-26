@@ -66,10 +66,6 @@ export async function decideOpsRentalDispute(
   );
 }
 
-export async function fetchOpsRentals(): Promise<OpsRentalAsset[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/rentals"));
-  return Array.isArray(data) ? data : [];
-}
 
 export async function moderateOpsRental(
   assetId: string,
@@ -86,10 +82,6 @@ export async function moderateOpsRental(
 
 // The stays endpoints return cursor pages, so the "every row" fetchers walk the pages rather than
 // reading the envelope as if it were an array, which made every list come back empty.
-export function fetchOpsStays(): Promise<OpsStayProperty[]> {
-  return fetchAllPages((cursor) => fetchOpsStaysPage(cursor));
-}
-
 export function fetchOpsRentalPlatformFee() {
   return request(() => getApiClient().GET("/api/v1/ops/rentals/platform-fee"));
 }
@@ -152,9 +144,16 @@ export async function cancelOpsStayReservation(reservationId: string, reason: st
   );
 }
 
-/** The listings endpoint returns every asset in one array and takes no filters, so this is one page. */
-export async function fetchOpsRentalsPage(): Promise<Page<OpsRentalAsset>> {
-  return { results: await fetchOpsRentals(), next: null };
+/** One page of rental listings, newest first; `moderationStatus` narrows it, e.g. "PENDING". */
+export function fetchOpsRentalsPage(
+  cursor?: string,
+  moderationStatus?: string,
+): Promise<Page<OpsRentalAsset>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/rentals", {
+      params: { query: { cursor, moderation_status: moderationStatus } },
+    }),
+  );
 }
 
 export function fetchOpsStaysPage(

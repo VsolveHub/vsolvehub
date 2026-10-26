@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.78.0)
- * Checksum: 5ffe0e9e52e2cbbd
+ * Source:   contracts/openapi/v1.yaml (version 1.79.0)
+ * Checksum: 7245ed42908e0582
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2341,7 +2341,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["me_rentals_list"];
+        get: operations["me_rentals_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4480,7 +4480,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["ops_rentals_list"];
+        get: operations["ops_rentals_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4499,6 +4499,28 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["ops_rentals_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/rentals/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every rental booking, so Operations can see delivery requests, payments and cancellations.
+         *
+         *     `?status=` narrows to one state or several (comma list); `?q=` matches the customer's name or
+         *     phone, the owner's name, the equipment title, or a booking id.
+         */
+        get: operations["ops_rentals_bookings_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6278,7 +6300,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["partner_rentals_bookings_list"];
+        get: operations["partner_rentals_bookings_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12543,6 +12565,47 @@ export interface components {
             /** Format: date-time */
             readonly paid_at: string;
         };
+        /** @description Operations' view of a booking: both parties, so a cancel or a dispute call has a name. */
+        OpsRentalBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            status?: components["schemas"]["RentalBookingStatusEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            readonly quantity: number;
+            price_paise: number;
+            platform_fee_percent?: number;
+            platform_fee_paise?: number;
+            pickup_or_delivery_mode?: components["schemas"]["RentalBookingModeEnum"];
+            delivery_address?: unknown;
+            transport_paise?: number;
+            transport_fee_percent?: number;
+            transport_fee_paise?: number;
+            readonly amount_due_paise: number;
+            readonly transport: components["schemas"]["RentalTransport"] | null;
+            readonly pickup_hours: components["schemas"]["PickupHours"];
+            notes?: string;
+            readonly asset: components["schemas"]["RentalAsset"];
+            readonly deposit: components["schemas"]["RentalDeposit"];
+            /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
+            readonly handover_pin: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string | null;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly partner_name: string;
+        };
+        OpsRentalBookingPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OpsRentalBooking"][];
+        };
         OpsReportCatalogItem: {
             id: string;
             name: string;
@@ -13468,6 +13531,13 @@ export interface components {
             readonly created_at: string;
             readonly customer_name: string;
             readonly customer_phone: string | null;
+        };
+        PartnerRentalBookingPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["PartnerRentalBooking"][];
         };
         PartnerReservationActionRequest: {
             /** @default  */
@@ -15945,6 +16015,13 @@ export interface components {
          * @enum {string}
          */
         RentalAssetModerationStatusEnum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED" | "PAUSED";
+        RentalAssetPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["RentalAsset"][];
+        };
         RentalBooking: {
             /** Format: uuid */
             readonly id: string;
@@ -15979,6 +16056,13 @@ export interface components {
          * @enum {string}
          */
         RentalBookingModeEnum: "PICKUP" | "DELIVERY";
+        RentalBookingPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["RentalBooking"][];
+        };
         /**
          * @description * `AWAITING_TRANSPORT_QUOTE` - Awaiting transport quote
          *     * `PENDING_PAYMENT` - Pending payment
@@ -23633,9 +23717,14 @@ export interface operations {
             };
         };
     };
-    me_rentals_list: {
+    me_rentals_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -23647,7 +23736,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalBooking"][];
+                    "application/json": components["schemas"]["RentalBookingPage"];
                 };
             };
         };
@@ -28711,9 +28800,14 @@ export interface operations {
             };
         };
     };
-    ops_rentals_list: {
+    ops_rentals_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One listing status, or several separated by commas (PENDING, ...). */
+                moderation_status?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -28725,7 +28819,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalAsset"][];
+                    "application/json": components["schemas"]["RentalAssetPage"];
                 };
             };
         };
@@ -28753,6 +28847,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
+    ops_rentals_bookings_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                q?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsRentalBookingPage"];
                 };
             };
         };
@@ -33004,9 +33123,12 @@ export interface operations {
             };
         };
     };
-    partner_rentals_bookings_list: {
+    partner_rentals_bookings_retrieve: {
         parameters: {
             query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One state, or several separated by commas. */
                 status?: string;
             };
             header?: never;
@@ -33020,7 +33142,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PartnerRentalBooking"][];
+                    "application/json": components["schemas"]["PartnerRentalBookingPage"];
                 };
             };
         };
@@ -34905,10 +35027,14 @@ export interface operations {
             query?: {
                 category?: string;
                 end_date?: string;
+                /** @description Rows to return. Default 24, at most 60. */
+                limit?: number;
                 location?: string;
                 max_deposit?: number;
                 max_price?: number;
                 min_price?: number;
+                /** @description Rows to skip. Default 0. */
+                offset?: number;
                 q?: string;
                 service?: string;
                 start_date?: string;

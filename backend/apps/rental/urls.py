@@ -69,6 +69,11 @@ urlpatterns = [
     ),
     path("ops/rentals", views.OpsRentalCollectionView.as_view(), name="ops-rentals"),
     path(
+        "ops/rentals/bookings",
+        views.OpsRentalBookingCollectionView.as_view(),
+        name="ops-rental-bookings",
+    ),
+    path(
         "ops/rentals/platform-fee",
         views.OpsRentalPlatformFeeView.as_view(),
         name="ops-rental-platform-fee",

@@ -2,7 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { factEntries, MarketplaceQueue, moneyLine } from "@/features/moderation/marketplace-queue";
-import { fetchOpsStayEnquiries, fetchOpsStayReservations, fetchOpsStays, moderateOpsStay } from "@/features/moderation/queries";
+import {
+  fetchOpsStayEnquiries,
+  fetchOpsStayReservations,
+  fetchOpsStaysPage,
+  moderateOpsStay,
+} from "@/features/moderation/queries";
 import { Card, EmptyState, formatDate, formatMoney } from "@vsolve/ui";
 
 export default function OpsStaysPage() {
@@ -21,9 +26,11 @@ export default function OpsStaysPage() {
       <MarketplaceQueue
         heading="Stay properties"
         queryKey="ops-stays"
-        load={async () => {
-          const rows = await fetchOpsStays();
-          return rows.map((row) => {
+        loadPage={async (cursor, moderationStatus) => {
+          const page = await fetchOpsStaysPage(cursor, moderationStatus);
+          return {
+            ...page,
+            results: page.results.map((row) => {
             const media = (row as { media?: { url?: string }[] }).media;
             const nightly = row.units?.[0]?.nightly_rate_paise;
             const nightlyLine = moneyLine(nightly, "/ night");
@@ -38,7 +45,8 @@ export default function OpsStaysPage() {
               moneyLines: nightlyLine ? [nightlyLine] : [],
               facts: factEntries(row.structured_fields),
             };
-          });
+            }),
+          };
         }}
         moderate={moderateOpsStay}
       />
