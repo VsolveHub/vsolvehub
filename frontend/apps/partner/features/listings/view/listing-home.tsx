@@ -3,7 +3,7 @@
 import { fetchAllPages } from "@vsolve/query";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Card, Spinner, buttonStyles } from "@vsolve/ui";
+import { Badge, Card, Spinner, buttonStyles, useT, type Translator } from "@vsolve/ui";
 import { ArrowRight, Briefcase, CalendarClock, Clock, Plus, UserPlus, UserRoundCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -22,13 +22,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Applications are read for this many open jobs, busiest first. */
 const JOBS_READ = 8;
 
-function ago(iso: string, now: Date): string {
+function ago(iso: string, now: Date, t: Translator["t"]): string {
   const minutes = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 60000));
-  if (minutes < 60) return `${minutes || 1} min ago`;
+  if (minutes < 60) return t("listings.home.minAgo", { count: minutes || 1 });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return t("listings.home.hrAgo", { count: hours });
   const days = Math.round(hours / 24);
-  return days === 1 ? "Yesterday" : `${days} days ago`;
+  return days === 1 ? t("listings.home.yesterday") : t("listings.home.daysAgo", { count: days });
 }
 
 function interviewWhen(date: string, time: string): string {
@@ -54,6 +54,7 @@ function interviewTime(app: PartnerApplication): number {
  * coming up, and how each open job is doing.
  */
 export function ListingHome() {
+  const t = useT();
   const [now] = useState(() => new Date());
   const summary = useQuery({ queryKey: ["partner-listings", "home"], queryFn: fetchListingHome });
   const listings = useQuery({ queryKey: ["partner-listings", "list"], queryFn: fetchPartnerListings });
@@ -84,7 +85,7 @@ export function ListingHome() {
     return (
       <p className="flex items-center justify-center gap-2 py-16 text-text-secondary">
         <Spinner size="sm" />
-        Loading your jobs…
+        {t("listings.home.loadingJobs")}
       </p>
     );
   }
@@ -118,64 +119,64 @@ export function ListingHome() {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Tally label="Open jobs" value={h?.active_listings ?? open.length} icon={<Briefcase className="size-3.5" />} />
-        <Tally label="New applicants" value={h?.new_applications ?? toReview.length} tone="text-action" icon={<Users className="size-3.5" />} />
-        <Tally label="Shortlisted" value={totals.shortlisted} icon={<UserRoundCheck className="size-3.5" />} />
-        <Tally label="Hired / connected" value={totals.connected} tone="text-success-text" hint={`${totals.views} job views`} />
+        <Tally label={t("listings.home.openJobs")} value={h?.active_listings ?? open.length} icon={<Briefcase className="size-3.5" />} />
+        <Tally label={t("listings.home.newApplicants")} value={h?.new_applications ?? toReview.length} tone="text-action" icon={<Users className="size-3.5" />} />
+        <Tally label={t("listings.home.shortlisted")} value={totals.shortlisted} icon={<UserRoundCheck className="size-3.5" />} />
+        <Tally label={t("listings.home.hiredConnected")} value={totals.connected} tone="text-success-text" hint={t("listings.home.jobViewsHint", { count: totals.views })} />
       </div>
 
       {open.length === 0 ? (
         <Card padding="lg" className="flex flex-col items-center gap-3 text-center">
-          <p className="font-bold text-navy-900">No open jobs right now</p>
+          <p className="font-bold text-navy-900">{t("listings.home.noOpenJobs")}</p>
           <p className="text-sm text-text-secondary">
-            Post a job in a couple of minutes. Matching candidates are told straight away.
+            {t("listings.home.noOpenJobsHint")}
           </p>
           <Link href="/listings/post" className={buttonStyles({})}>
             <Plus className="size-4" />
-            Post a job
+            {t("listings.home.postJob")}
           </Link>
         </Card>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Group
-          title="New applicants to review"
+          title={t("listings.home.newApplicantsToReview")}
           icon={<Users className="size-4" />}
           count={toReview.length}
-          empty="No new applicants waiting."
+          empty={t("listings.home.noNewApplicants")}
         >
           {toReview.slice(0, 5).map((a) => (
             <Row
               key={a.id}
               href={`/listings/${a.listing}`}
-              title={a.applicant_name || "Applicant"}
+              title={a.applicant_name || t("listings.home.applicantFallback")}
               sub={a.listing_title}
-              meta={`Applied ${ago(a.created_at, now)}`}
-              action="Review"
+              meta={t("listings.home.appliedAgo", { time: ago(a.created_at, now, t) })}
+              action={t("listings.home.review")}
             />
           ))}
         </Group>
 
         <Group
-          title="Interviews coming up"
+          title={t("listings.home.interviewsComingUp")}
           icon={<CalendarClock className="size-4" />}
           count={interviews.length}
-          empty="No interviews booked."
+          empty={t("listings.home.noInterviewsBooked")}
         >
           {interviews.slice(0, 5).map((a) => (
             <Row
               key={a.id}
               href={`/listings/${a.listing}`}
-              title={a.applicant_name || "Candidate"}
+              title={a.applicant_name || t("listings.home.candidateFallback")}
               sub={`${a.listing_title} · ${a.interview?.mode_label ?? ""}`}
               meta={a.interview ? interviewWhen(a.interview.scheduled_date, a.interview.start_time) : ""}
               badge={
                 a.interview?.status === "ACCEPTED" ? (
-                  <Badge tone="success">Confirmed</Badge>
+                  <Badge tone="success">{t("listings.home.confirmed")}</Badge>
                 ) : a.interview?.status === "RESCHEDULE_REQUESTED" ? (
-                  <Badge tone="warning">Wants another time</Badge>
+                  <Badge tone="warning">{t("listings.home.wantsAnotherTime")}</Badge>
                 ) : (
-                  <Badge tone="neutral">Waiting for reply</Badge>
+                  <Badge tone="neutral">{t("listings.home.waitingForReply")}</Badge>
                 )
               }
             />
@@ -185,7 +186,7 @@ export function ListingHome() {
 
       {withMatches.length > 0 ? (
         <Group
-          title="Matching candidates you can invite"
+          title={t("listings.home.matchingCandidatesInvite")}
           icon={<UserPlus className="size-4" />}
           count={withMatches.reduce((sum, l) => sum + (l.counts?.matches ?? 0), 0)}
           empty=""
@@ -197,38 +198,43 @@ export function ListingHome() {
               title={l.title}
               sub={
                 summary.data?.can_see_matches
-                  ? `${l.counts?.matches ?? 0} people with a strong or good match haven't applied yet`
-                  : `${l.counts?.matches ?? 0} people match but haven't applied · upgrade to see and invite them`
+                  ? t("listings.home.matchesWaitingUnlocked", { count: l.counts?.matches ?? 0 })
+                  : t("listings.home.matchesWaitingLocked", { count: l.counts?.matches ?? 0 })
               }
               meta=""
               badge={null}
-              action={summary.data?.can_see_matches ? "See them" : "Upgrade"}
+              action={summary.data?.can_see_matches ? t("listings.home.seeThem") : t("listings.home.upgrade")}
             />
           ))}
         </Group>
       ) : null}
 
       {open.length > 0 ? (
-        <Group title="Your open jobs" icon={<Briefcase className="size-4" />} count={open.length} empty="">
+        <Group title={t("listings.home.yourOpenJobs")} icon={<Briefcase className="size-4" />} count={open.length} empty="">
           {open.slice(0, 6).map((l) => {
             const expires = l.expires_at ? new Date(l.expires_at).getTime() - now.getTime() : null;
             const soon = expires !== null && expires > 0 && expires < 3 * DAY_MS;
+            const dayCount = Math.ceil((expires ?? 0) / DAY_MS);
             return (
               <Row
                 key={l.id}
                 href={`/listings/${l.id}`}
                 title={l.title}
-                sub={`${l.counts?.applied ?? l.application_count ?? 0} applied · ${l.counts?.shortlisted ?? 0} shortlisted · ${l.counts?.interviews ?? 0} interviews`}
-                meta={`${l.counts?.views ?? 0} views`}
+                sub={t("listings.home.jobCountsLine", {
+                  applied: l.counts?.applied ?? l.application_count ?? 0,
+                  shortlisted: l.counts?.shortlisted ?? 0,
+                  interviews: l.counts?.interviews ?? 0,
+                })}
+                meta={t("listings.home.viewsCount", { count: l.counts?.views ?? 0 })}
                 badge={
                   soon ? (
                     <Badge tone="warning">
-                      <Clock className="size-3" /> Ends in {Math.ceil((expires ?? 0) / DAY_MS)} day
-                      {Math.ceil((expires ?? 0) / DAY_MS) === 1 ? "" : "s"}
+                      <Clock className="size-3" />{" "}
+                      {t(dayCount === 1 ? "listings.home.endsInDay" : "listings.home.endsInDays", { count: dayCount })}
                     </Badge>
                   ) : null
                 }
-                action="Open"
+                action={t("listings.home.open")}
               />
             );
           })}
@@ -238,10 +244,10 @@ export function ListingHome() {
       <div className="flex flex-wrap gap-2">
         <Link href="/listings/post" className={buttonStyles({})}>
           <Plus className="size-4" />
-          Post a job
+          {t("listings.home.postJob")}
         </Link>
         <Link href="/listings" className={buttonStyles({ variant: "outline" })}>
-          All jobs
+          {t("listings.home.allJobs")}
           <ArrowRight className="size-4" />
         </Link>
       </div>

@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 
-import { cn } from "@vsolve/ui";
+import { cn, useT } from "@vsolve/ui";
 
 /**
  * One priced line in an estimate.
@@ -53,6 +55,7 @@ export function LedgerRow({
   children,
   className,
 }: LedgerRowProps) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -70,7 +73,7 @@ export function LedgerRow({
 
         {amount === null ? (
           <span className="shrink-0 rounded-control border border-action-line bg-action-surface px-2.5 py-1 text-[13px] font-bold text-action-active">
-            Set price
+            {t("proposal.screens.ledger.setPrice")}
           </span>
         ) : (
           <span className="shrink-0 text-base font-extrabold tracking-[-0.02em] tabular-nums text-text">

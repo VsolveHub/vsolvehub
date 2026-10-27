@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 /**
  * The editor frame, and the three ways it was quietly wrong.
  *
@@ -82,7 +84,7 @@ function Step() {
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 }
 
 function renderEditor() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@vsolve/ui";
+import { Spinner, useT } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -19,6 +19,7 @@ export function ListingStepGuard({
   redirectTo: string;
   children: ReactNode;
 }) {
+  const t = useT();
   const query = usePartnerApplication();
   const router = useRouter();
   const listing = isListingTrack(query.data?.track);
@@ -35,7 +36,7 @@ export function ListingStepGuard({
     return (
       <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Continuing your application…
+        {t("apply.common.continuingApplication")}
       </p>
     );
   }

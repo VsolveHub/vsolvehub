@@ -2,7 +2,7 @@
 
 import { ApiClientError, ApiNetworkError } from "@vsolve/api-client";
 import { categorizeError } from "@vsolve/query";
-import { EmptyState, ErrorState, SkeletonRegion } from "@vsolve/ui";
+import { EmptyState, ErrorState, SkeletonRegion, useT } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 /**
@@ -88,6 +88,7 @@ export function asyncStateFrom<TData, TView>(
   return { status: "loading" };
 }
 
+/** `title` and `message` are catalogue keys, resolved with `t` at render time. */
 interface FailurePresentation {
   readonly title: string;
   readonly message: string;
@@ -97,9 +98,8 @@ interface FailurePresentation {
 
 const FAILURES: Record<AsyncFailure, FailurePresentation> = {
   offline: {
-    title: "You are offline",
-    message:
-      "Nothing has been lost. This will load as soon as you are back on a connection.",
+    title: "common.asyncSection.offline.title",
+    message: "common.asyncSection.offline.message",
     severity: "warning",
     canRetry: true,
   },
@@ -107,22 +107,20 @@ const FAILURES: Record<AsyncFailure, FailurePresentation> = {
     // Names the account rather than the person. Someone who has been suspended
     // knows; someone hitting a stale deep link has done nothing wrong, and this
     // wording is true for both.
-    title: "This is not available on your account",
-    message:
-      "Your access to this changed, or it was never part of your account. Contact support if you expected to see it.",
+    title: "common.asyncSection.forbidden.title",
+    message: "common.asyncSection.forbidden.message",
     severity: "warning",
     canRetry: false,
   },
   server: {
-    title: "We could not load this",
-    message: "Something went wrong on our side. Nothing has changed. Try again in a moment.",
+    title: "common.asyncSection.server.title",
+    message: "common.asyncSection.server.message",
     severity: "error",
     canRetry: true,
   },
   unavailable: {
-    title: "Not available yet",
-    message:
-      "This part of Vsolve is not switched on yet. Nothing you have entered is lost, and there is nothing you need to do.",
+    title: "common.asyncSection.unavailable.title",
+    message: "common.asyncSection.unavailable.message",
     severity: "info",
     canRetry: false,
   },
@@ -149,6 +147,8 @@ export function AsyncSection<T>({
   children,
   className,
 }: AsyncSectionProps<T>) {
+  const t = useT();
+
   if (state.status === "loading") {
     return (
       <SkeletonRegion loading label={label} className={className}>
@@ -162,14 +162,14 @@ export function AsyncSection<T>({
     return (
       <ErrorState
         className={className}
-        title={presentation.title}
-        message={presentation.message}
+        title={t(presentation.title)}
+        message={t(presentation.message)}
         severity={presentation.severity}
         reference={state.reference ?? null}
         // A retry is offered only where retrying can plausibly work. A button
         // that re-runs a request certain to fail the same way teaches people to
         // distrust every other button on the screen.
-        actionLabel={presentation.canRetry && onRetry ? "Try again" : undefined}
+        actionLabel={presentation.canRetry && onRetry ? t("common.tryAgain") : undefined}
         onAction={presentation.canRetry && onRetry ? onRetry : undefined}
       />
     );
@@ -177,7 +177,14 @@ export function AsyncSection<T>({
 
   if (isEmpty?.(state.data) === true) {
     return (
-      <>{empty ?? <EmptyState title="Nothing here yet" description="This will fill up as work arrives." />}</>
+      <>
+        {empty ?? (
+          <EmptyState
+            title={t("common.asyncSection.empty.title")}
+            description={t("common.asyncSection.empty.description")}
+          />
+        )}
+      </>
     );
   }
 

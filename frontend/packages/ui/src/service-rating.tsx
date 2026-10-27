@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "./button";
 import { cn } from "./cn";
 import { Dialog } from "./dialog";
+import { useTOrDefault } from "./i18n";
 import { Textarea } from "./input";
 
 export interface ListedServiceRating {
@@ -38,35 +39,40 @@ export function ServiceRatingDialog({
   const [hovered, setHovered] = useState(0);
   const [comment, setComment] = useState("");
   const visibleScore = hovered || score;
+  const tf = useTOrDefault();
 
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
       dismissable={!isSubmitting}
-      title={`How was ${counterpartyLabel}?`}
-      description="Choose a rating for this completed booking."
+      title={tf("ui.serviceRating.title", "How was {counterpartyLabel}?", { counterpartyLabel })}
+      description={tf("ui.serviceRating.description", "Choose a rating for this completed booking.")}
       footer={
         <Button
           block
           disabled={score === 0}
           loading={isSubmitting}
-          loadingLabel="Saving your rating"
+          loadingLabel={tf("ui.serviceRating.saving", "Saving your rating")}
           onClick={() => onSubmit(score, comment)}
         >
-          Submit rating
+          {tf("ui.serviceRating.submit", "Submit rating")}
         </Button>
       }
     >
       <div className="pb-4">
         <fieldset>
-          <legend className="sr-only">Rating out of five</legend>
+          <legend className="sr-only">{tf("ui.serviceRating.legend", "Rating out of five")}</legend>
           <div className="flex justify-center gap-1" onMouseLeave={() => setHovered(0)}>
             {[1, 2, 3, 4, 5].map((value) => (
               <button
                 key={value}
                 type="button"
-                aria-label={`${value} ${value === 1 ? "star" : "stars"}`}
+                aria-label={
+                  value === 1
+                    ? tf("ui.serviceRating.starSingular", "{value} star", { value })
+                    : tf("ui.serviceRating.starPlural", "{value} stars", { value })
+                }
                 aria-pressed={score === value}
                 className="flex size-12 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                 onMouseEnter={() => setHovered(value)}
@@ -79,12 +85,15 @@ export function ServiceRatingDialog({
             ))}
           </div>
           <p className="mt-1 min-h-6 text-center text-sm font-semibold text-text-secondary" aria-live="polite">
-            {ratingLabel(score)}
+            {ratingLabel(score, tf)}
           </p>
         </fieldset>
 
         <label className="mt-4 block text-sm font-semibold text-text" htmlFor="service-rating-note">
-          Add a short note <span className="font-normal text-text-muted">(optional)</span>
+          {tf("ui.serviceRating.addNote", "Add a short note")}{" "}
+          <span className="font-normal text-text-muted">
+            {tf("ui.serviceRating.optional", "(optional)")}
+          </span>
         </label>
         <Textarea
           id="service-rating-note"
@@ -92,7 +101,7 @@ export function ServiceRatingDialog({
           rows={3}
           maxLength={280}
           value={comment}
-          placeholder="What went well?"
+          placeholder={tf("ui.serviceRating.placeholder", "What went well?")}
           onChange={(event) => setComment(event.currentTarget.value)}
         />
         <p className="mt-1 text-right text-xs text-text-muted">{comment.length}/280</p>
@@ -108,20 +117,30 @@ export function ServiceRatingDialog({
 }
 
 export function ServiceRatingList({ ratings }: { readonly ratings: readonly ListedServiceRating[] }) {
+  const tf = useTOrDefault();
   if (ratings.length === 0) return null;
   return (
     <section aria-labelledby="service-ratings-title" className="rounded-card border border-line bg-surface p-4">
       <h2 id="service-ratings-title" className="text-sm font-semibold text-text">
-        Ratings
+        {tf("ui.serviceRating.list.heading", "Ratings")}
       </h2>
       <ul className="mt-3 divide-y divide-line">
         {ratings.map((rating) => (
           <li key={rating.id} className="py-3 first:pt-0 last:pb-0">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-text">
-                {rating.is_mine ? "Your rating" : rating.rater_role === "CUSTOMER" ? "Customer rating" : "Partner rating"}
+                {rating.is_mine
+                  ? tf("ui.serviceRating.list.yourRating", "Your rating")
+                  : rating.rater_role === "CUSTOMER"
+                    ? tf("ui.serviceRating.list.customerRating", "Customer rating")
+                    : tf("ui.serviceRating.list.partnerRating", "Partner rating")}
               </span>
-              <span className="flex items-center gap-1 text-sm font-semibold text-text" aria-label={`${rating.score} out of 5 stars`}>
+              <span
+                className="flex items-center gap-1 text-sm font-semibold text-text"
+                aria-label={tf("ui.serviceRating.list.scoreOutOfFive", "{score} out of 5 stars", {
+                  score: rating.score,
+                })}
+              >
                 <Star filled className="size-4" /> {rating.score}/5
               </span>
             </div>
@@ -145,6 +164,21 @@ function Star({ filled, className }: { readonly filled: boolean; readonly classN
   );
 }
 
-function ratingLabel(score: number): string {
-  return ["", "Needs improvement", "Fair", "Good", "Very good", "Excellent"][score] ?? "";
+const SCORE_LABEL_KEY = [
+  "",
+  "ui.serviceRating.score.1",
+  "ui.serviceRating.score.2",
+  "ui.serviceRating.score.3",
+  "ui.serviceRating.score.4",
+  "ui.serviceRating.score.5",
+] as const;
+
+const SCORE_LABEL_DEFAULT = ["", "Needs improvement", "Fair", "Good", "Very good", "Excellent"] as const;
+
+function ratingLabel(score: number, tf: ReturnType<typeof useTOrDefault>): string {
+  const key = SCORE_LABEL_KEY[score];
+  const fallback = SCORE_LABEL_DEFAULT[score];
+  if (key === undefined || fallback === undefined) return "";
+  if (key === "") return "";
+  return tf(key, fallback);
 }

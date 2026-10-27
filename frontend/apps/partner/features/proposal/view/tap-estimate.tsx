@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, QuantityStepper, cn, formatMoney } from "@vsolve/ui";
+import { Button, QuantityStepper, cn, formatMoney, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
@@ -114,10 +114,11 @@ export function TapEstimate({
   /** The row showing its inline price controls, as `work:code` / `material:code`. */
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
+  const t = useT();
 
   const work = workPresetsFor(archetype);
   const materials = materialPresetsFor(archetype);
-  const blocked = tapBlockedReason(estimate);
+  const blocked = tapBlockedReason(estimate, t);
   const total = tapTotal(estimate);
 
   function pickWork(code: string): void {
@@ -141,7 +142,7 @@ export function TapEstimate({
 
       {/* ---- What you will do ---- */}
       <section className="flex flex-col gap-2">
-        <SectionLabel count={estimate.work.length}>What you will do</SectionLabel>
+        <SectionLabel count={estimate.work.length}>{t("proposal.tap.section.work")}</SectionLabel>
 
         {estimate.work.map((code) => {
           const preset = work.find((entry) => entry.code === code);
@@ -152,13 +153,13 @@ export function TapEstimate({
             <ItemRow
               key={key}
               icon={preset.icon}
-              label={preset.label}
-              detail={`${entry?.days ?? 1} ${entry?.days === 1 ? "day" : "days"} on site`}
+              label={t(preset.labelKey)}
+              detail={t("proposal.tap.daysOnSiteDetail", { count: entry?.days ?? 1 })}
               amountPaise={entry?.amountPaise ?? null}
               open={openRow === key}
               onToggle={() => setOpenRow(openRow === key ? null : key)}
               onRemove={() => setEstimate(toggleWork(estimate, code))}
-              removeLabel={`Remove ${preset.label}`}
+              removeLabel={t("proposal.tap.removeItem", { item: t(preset.labelKey) })}
             >
               <InlinePrice
                 amountPaise={entry?.amountPaise ?? null}
@@ -170,23 +171,25 @@ export function TapEstimate({
                 onKeypad={() => setSheet({ kind: "price", of: "work", code })}
               />
               <QuantityStepper
-                label="Days on site"
+                label={t("proposal.tap.daysOnSite")}
                 value={entry?.days ?? 1}
                 onChange={(days) => setEstimate(setWorkDays(estimate, code, days))}
                 min={1}
-                decrementLabel="One day fewer on site"
-                incrementLabel="One more day on site"
+                decrementLabel={t("proposal.tap.dayFewer")}
+                incrementLabel={t("proposal.tap.dayMore")}
               />
             </ItemRow>
           );
         })}
 
-        <AddButton label="Add work" onClick={() => setSheet({ kind: "pick", of: "work" })} />
+        <AddButton label={t("proposal.tap.addWork")} onClick={() => setSheet({ kind: "pick", of: "work" })} />
       </section>
 
       {/* ---- Materials ---- */}
       <section className="flex flex-col gap-2">
-        <SectionLabel count={estimate.materials.length}>Materials you will buy</SectionLabel>
+        <SectionLabel count={estimate.materials.length}>
+          {t("proposal.tap.section.materials")}
+        </SectionLabel>
 
         {estimate.materials.map((code) => {
           const preset = materials.find((entry) => entry.code === code);
@@ -197,13 +200,16 @@ export function TapEstimate({
             <ItemRow
               key={key}
               icon={preset.icon}
-              label={preset.label}
-              detail={`${entry?.quantity ?? 1} ${preset.unit}`}
+              label={t(preset.labelKey)}
+              detail={t("proposal.tap.quantityDetail", {
+                quantity: entry?.quantity ?? 1,
+                unit: t(preset.unitKey),
+              })}
               amountPaise={entry?.amountPaise ?? null}
               open={openRow === key}
               onToggle={() => setOpenRow(openRow === key ? null : key)}
               onRemove={() => setEstimate(toggleMaterial(estimate, code))}
-              removeLabel={`Remove ${preset.label}`}
+              removeLabel={t("proposal.tap.removeItem", { item: t(preset.labelKey) })}
             >
               <InlinePrice
                 amountPaise={entry?.amountPaise ?? null}
@@ -215,19 +221,19 @@ export function TapEstimate({
                 onKeypad={() => setSheet({ kind: "price", of: "material", code })}
               />
               <QuantityStepper
-                label={`How many ${preset.unit}`}
+                label={t("proposal.tap.howMany", { unit: t(preset.unitKey) })}
                 value={entry?.quantity ?? 1}
                 onChange={(quantity) => setEstimate(setMaterialQuantity(estimate, code, quantity))}
                 min={1}
-                decrementLabel={`One fewer ${preset.unit}`}
-                incrementLabel={`One more ${preset.unit}`}
+                decrementLabel={t("proposal.tap.oneFewer", { unit: t(preset.unitKey) })}
+                incrementLabel={t("proposal.tap.oneMore", { unit: t(preset.unitKey) })}
               />
             </ItemRow>
           );
         })}
 
         <AddButton
-          label="Add materials"
+          label={t("proposal.tap.addMaterials")}
           onClick={() => setSheet({ kind: "pick", of: "material" })}
         />
       </section>
@@ -301,11 +307,12 @@ function CommitBar({
   isSubmitting: boolean;
   onSend: () => void;
 }) {
+  const t = useT();
   return (
     <div className="sticky bottom-20 -mx-4 mt-1 flex flex-col gap-2.5 border-t border-line bg-surface px-4 pt-3 pb-3 shadow-[0_-4px_12px_rgb(69_63_55/0.06)]">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-          Your price
+          {t("proposal.tap.yourPrice")}
         </span>
         <span
           aria-live="polite"
@@ -321,9 +328,9 @@ function CommitBar({
         onClick={onSend}
         disabled={blocked !== null}
         loading={isSubmitting}
-        loadingLabel="Sending"
+        loadingLabel={t("proposal.tap.sending")}
       >
-        Send to customer
+        {t("proposal.tap.sendToCustomer")}
       </Button>
 
       {blocked === null ? null : (
@@ -357,6 +364,7 @@ function TermsSection({
   onOpenChange: (open: boolean) => void;
   onChange: (next: TapEstimate) => void;
 }) {
+  const t = useT();
   const subtotal = tapSubtotal(estimate) ?? 0;
   // Eighteen per cent, shown as the arithmetic rather than named as a rate. A
   // vendor choosing between two tax options is choosing between two numbers.
@@ -365,21 +373,21 @@ function TermsSection({
 
   const summary = [
     estimate.taxBasis === "EXCLUSIVE"
-      ? "Tax on top"
+      ? t("proposal.tap.taxOnTop")
       : estimate.taxBasis === "INCLUSIVE"
-        ? "Price includes tax"
-        : "Tax not chosen",
+        ? t("proposal.tap.priceIncludesTax")
+        : t("proposal.tap.taxNotChosen"),
     warranty === undefined || warranty.code === "none"
-      ? "No guarantee"
-      : `${warranty.label} guarantee`,
+      ? t("proposal.tap.noGuarantee")
+      : t("proposal.tap.guaranteeSummary", { warranty: t(warranty.labelKey) }),
     estimate.exclusions.length === 0
-      ? "No exclusions"
-      : `${estimate.exclusions.length} exclusion${estimate.exclusions.length === 1 ? "" : "s"}`,
+      ? t("proposal.tap.noExclusions")
+      : t("proposal.tap.exclusionCount", { count: estimate.exclusions.length }),
   ].join(" · ");
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionLabel>Your terms</SectionLabel>
+      <SectionLabel>{t("proposal.tap.yourTerms")}</SectionLabel>
 
       <button
         type="button"
@@ -402,18 +410,18 @@ function TermsSection({
         <div className="flex flex-col gap-4 rounded-card border border-line bg-surface p-3">
           {askTax ? (
             <div className="flex flex-col gap-2">
-              <SubLabel>Is tax on top?</SubLabel>
+              <SubLabel>{t("proposal.tap.isTaxOnTop")}</SubLabel>
               <ChoiceCard
                 icon="more"
-                title="Tax on top"
+                title={t("proposal.tap.taxOnTop")}
                 detail={`${formatMoney(subtotal)} + ${formatMoney(gst)} = ${formatMoney(subtotal + gst)}`}
                 selected={estimate.taxBasis === "EXCLUSIVE"}
                 onSelect={() => onChange({ ...estimate, taxBasis: "EXCLUSIVE", taxPaise: gst })}
               />
               <ChoiceCard
                 icon="money"
-                title="Price includes tax"
-                detail={`Customer pays ${formatMoney(subtotal)}`}
+                title={t("proposal.tap.priceIncludesTax")}
+                detail={t("proposal.tap.customerPays", { amount: formatMoney(subtotal) })}
                 selected={estimate.taxBasis === "INCLUSIVE"}
                 onSelect={() => onChange({ ...estimate, taxBasis: "INCLUSIVE", taxPaise: 0 })}
               />
@@ -421,13 +429,13 @@ function TermsSection({
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <SubLabel>Do you guarantee your work?</SubLabel>
+            <SubLabel>{t("proposal.tap.guaranteeQuestion")}</SubLabel>
             <div className="grid grid-cols-2 min-[420px]:grid-cols-4 gap-2">
               {WARRANTY_CHOICES.map((choice) => (
                 <Tile
                   key={choice.code}
                   icon={choice.icon}
-                  label={choice.label}
+                  label={t(choice.labelKey)}
                   selected={estimate.warrantyCode === choice.code}
                   onToggle={() => onChange({ ...estimate, warrantyCode: choice.code })}
                 />
@@ -436,13 +444,13 @@ function TermsSection({
           </div>
 
           <div className="flex flex-col gap-2">
-            <SubLabel>Anything you will not do?</SubLabel>
+            <SubLabel>{t("proposal.tap.exclusionQuestion")}</SubLabel>
             <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
               {EXCLUSION_CHOICES.map((choice) => (
                 <Tile
                   key={choice.code}
                   icon={choice.icon}
-                  label={choice.label}
+                  label={t(choice.labelKey)}
                   selected={estimate.exclusions.includes(choice.code)}
                   onToggle={() => onChange(toggleExclusion(estimate, choice.code))}
                 />
@@ -487,6 +495,7 @@ function ItemRow({
   removeLabel: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -508,7 +517,7 @@ function ItemRow({
           </span>
           {amountPaise === null ? (
             <span className="shrink-0 rounded-control border border-action-line bg-action-surface px-3 py-1.5 text-sm font-bold text-action-active">
-              Set price
+              {t("proposal.tap.setPrice")}
             </span>
           ) : (
             <span className="shrink-0 text-xl font-extrabold tabular-nums tracking-[-0.02em] text-text">
@@ -549,6 +558,7 @@ function InlinePrice({
   onAdd: (rupees: number) => void;
   onKeypad: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex gap-2">
       {[1_000, 5_000, 10_000].map((step) => (
@@ -564,7 +574,9 @@ function InlinePrice({
       <button
         type="button"
         onClick={onKeypad}
-        aria-label={amountPaise === null ? "Type a price" : "Change this price"}
+        aria-label={
+          amountPaise === null ? t("proposal.tap.typePrice") : t("proposal.tap.changePrice")
+        }
         className="grid min-h-11 w-13 shrink-0 place-items-center rounded-full bg-action-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Pictogram name="price" size="sm" className="text-action-secondary-text" />
@@ -607,11 +619,12 @@ function Sheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t("common.close")}
         onClick={onClose}
         className="absolute inset-0 bg-text/40"
       />
@@ -621,7 +634,7 @@ function Sheet({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
             <Pictogram name="no" size="md" className="text-text-muted" />
@@ -651,12 +664,16 @@ function PresetSheet({
   onPickMaterial: (code: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const isWork = of === "work";
   const presets = isWork ? byRecentFirst(work) : byRecentFirst(materials);
   const chosen = isWork ? estimate.work : estimate.materials;
 
   return (
-    <Sheet title={isWork ? "Add work" : "Add materials"} onClose={onClose}>
+    <Sheet
+      title={isWork ? t("proposal.tap.addWork") : t("proposal.tap.addMaterials")}
+      onClose={onClose}
+    >
       <ul className="flex list-none flex-col gap-2 p-0">
         {presets.map((preset) => {
           const selected = chosen.includes(preset.code);
@@ -682,7 +699,9 @@ function PresetSheet({
                     selected ? "text-action-active" : "text-action-secondary",
                   )}
                 />
-                <span className="flex-1 text-base font-semibold text-text">{preset.label}</span>
+                <span className="flex-1 text-base font-semibold text-text">
+                  {t(preset.labelKey)}
+                </span>
                 <Pictogram
                   name={selected ? "done" : "more"}
                   size="md"
@@ -695,7 +714,7 @@ function PresetSheet({
       </ul>
 
       <Button block size="lg" className="mt-4" onClick={onClose}>
-        Done
+        {t("common.done")}
       </Button>
     </Sheet>
   );
@@ -724,6 +743,7 @@ function PriceSheet({
   onChange: (next: TapEstimate) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const { of, code } = sheet;
 
   if (of === "work") {
@@ -731,21 +751,21 @@ function PriceSheet({
     if (preset === undefined) return null;
     const entry = estimate.workEntries[code];
     return (
-      <Sheet title={preset.label} onClose={onClose}>
+      <Sheet title={t(preset.labelKey)} onClose={onClose}>
         <MoneyPad
-          title={preset.label}
+          title={t(preset.labelKey)}
           icon={preset.icon}
           amountPaise={entry?.amountPaise ?? null}
           onChange={(amountPaise) => onChange(setWorkAmount(estimate, code, amountPaise))}
           onDone={onClose}
         >
           <QuantityStepper
-            label="Days on site"
+            label={t("proposal.tap.daysOnSite")}
             value={entry?.days ?? 1}
             onChange={(days) => onChange(setWorkDays(estimate, code, days))}
             min={1}
-            decrementLabel="One day fewer on site"
-            incrementLabel="One more day on site"
+            decrementLabel={t("proposal.tap.dayFewer")}
+            incrementLabel={t("proposal.tap.dayMore")}
           />
         </MoneyPad>
       </Sheet>
@@ -756,21 +776,21 @@ function PriceSheet({
   if (preset === undefined) return null;
   const entry = estimate.materialEntries[code];
   return (
-    <Sheet title={preset.label} onClose={onClose}>
+    <Sheet title={t(preset.labelKey)} onClose={onClose}>
       <MoneyPad
-        title={preset.label}
+        title={t(preset.labelKey)}
         icon={preset.icon}
         amountPaise={entry?.amountPaise ?? null}
         onChange={(amountPaise) => onChange(setMaterialAmount(estimate, code, amountPaise))}
         onDone={onClose}
       >
         <QuantityStepper
-          label={`How many ${preset.unit}`}
+          label={t("proposal.tap.howMany", { unit: t(preset.unitKey) })}
           value={entry?.quantity ?? 1}
           onChange={(quantity) => onChange(setMaterialQuantity(estimate, code, quantity))}
           min={1}
-          decrementLabel={`One fewer ${preset.unit}`}
-          incrementLabel={`One more ${preset.unit}`}
+          decrementLabel={t("proposal.tap.oneFewer", { unit: t(preset.unitKey) })}
+          incrementLabel={t("proposal.tap.oneMore", { unit: t(preset.unitKey) })}
         />
       </MoneyPad>
     </Sheet>
@@ -782,6 +802,7 @@ function PriceSheet({
    -------------------------------------------------------------------------- */
 
 function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
+  const t = useT();
   return (
     <div className="flex items-baseline justify-between gap-3">
       <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
@@ -789,7 +810,7 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count?: 
       </h2>
       {count === undefined || count === 0 ? null : (
         <span className="text-[0.6875rem] font-bold text-text-muted">
-          {count} {count === 1 ? "thing" : "things"}
+          {t("proposal.tap.thingCount", { count })}
         </span>
       )}
     </div>

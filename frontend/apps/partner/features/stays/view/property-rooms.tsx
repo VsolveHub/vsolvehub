@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Field, Input, Textarea } from "@vsolve/ui";
+import { Button, Field, Input, Textarea, useT } from "@vsolve/ui";
 import { useId, useState, type FormEvent } from "react";
 
 import {
@@ -58,9 +58,7 @@ function roomStyleOf(value: string | undefined): RoomStyle {
   return value === "SHARED" || value === "PRIVATE" ? value : "MIXED";
 }
 
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
-}
+type Translate = ReturnType<typeof useT>;
 
 function draftFrom(unit: StayUnit): RoomDraft {
   return {
@@ -87,24 +85,27 @@ type ParsedRoom = {
 function parseRoom(
   draft: RoomDraft,
   roomSchema: Record<string, unknown> | undefined,
-  priceLabel: string,
+  perNight: boolean,
   style: RoomStyle,
+  t: Translate,
 ): ParsedRoom | string {
-  if (!draft.name.trim()) return "Name the room, for example “Deluxe” or “Double sharing”.";
+  if (!draft.name.trim()) return t("stays.rooms.nameMissing");
   const rate = rupeesToPaise(draft.rate);
-  if (rate === null) return `Enter the ${priceLabel.toLowerCase()} in rupees.`;
+  if (rate === null) {
+    return perNight ? t("stays.rooms.rateInvalidNight") : t("stays.rooms.rateInvalidMonth");
+  }
   const roomNumbers = splitRoomNumbers(draft.roomNumbers);
   const lower = roomNumbers.map((n) => n.toLowerCase());
   const repeated = roomNumbers.find((n, i) => lower.indexOf(n.toLowerCase()) !== i);
-  if (repeated) return `${repeated} is listed twice.`;
+  if (repeated) return t("stays.rooms.listedTwice", { number: repeated });
   const quantity = roomNumbers.length > 0 ? roomNumbers.length : wholeNumber(draft.quantity);
-  if (quantity === null) return "Number of rooms must be 1 or more.";
+  if (quantity === null) return t("stays.rooms.quantityInvalid");
   const maxGuests = style === "SHARED" ? 1 : wholeNumber(draft.maxGuests);
-  if (maxGuests === null) return "Guests per room must be 1 or more.";
+  if (maxGuests === null) return t("stays.rooms.guestsInvalid");
   const sharing = style === "PRIVATE" ? 1 : wholeNumber(draft.sharing);
-  if (sharing === null) return "People sharing must be 1 or more.";
-  const collected = collectSchemaAnswers(roomSchema, draft.attributes);
-  if ("missing" in collected) return `Choose ${collected.missing}.`;
+  if (sharing === null) return t("stays.rooms.sharingInvalid");
+  const collected = collectSchemaAnswers(roomSchema, draft.attributes, t);
+  if ("missing" in collected) return t("stays.property.chooseMissing", { field: collected.missing });
   return {
     name: draft.name.trim(),
     nightly_rate_paise: rate,
@@ -125,14 +126,16 @@ function splitRoomNumbers(input: string): string[] {
     .filter(Boolean);
 }
 
-function roomSummary(unit: StayUnit, style: RoomStyle): string {
+function roomSummary(unit: StayUnit, style: RoomStyle, t: Translate): string {
   const sharing = unit.sharing_count ?? 1;
   const parts: string[] = [];
   if (style === "SHARED") {
-    parts.push(sharing === 1 ? "single" : `${sharing} sharing`);
+    parts.push(
+      sharing === 1 ? t("stays.rooms.single") : t("stays.guestPreview.sharing", { count: sharing }),
+    );
   } else {
-    parts.push(`up to ${plural(unit.max_guests ?? 1, "guest")}`);
-    if (style === "MIXED" && sharing > 1) parts.push(`${sharing} sharing`);
+    parts.push(t("stays.rooms.upToGuests", { count: unit.max_guests ?? 1 }));
+    if (style === "MIXED" && sharing > 1) parts.push(t("stays.guestPreview.sharing", { count: sharing }));
   }
   const attributes = answersFrom(unit.attributes);
   parts.push(...Object.values(attributes).filter(Boolean));
@@ -158,11 +161,12 @@ function RoomFields({
   priceLabel: string;
   style: RoomStyle;
 }) {
+  const t = useT();
   // No datalist needed — replaced by styled select + custom reveal below.
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Room name" required>
+        <Field label={t("stays.rooms.nameLabel")} required>
           {(() => {
             // If the current name is not in the suggestions list it was typed custom.
             const isCustom = draft.name !== "" && !suggestions.includes(draft.name);
@@ -181,20 +185,20 @@ function RoomFields({
                   }}
                   className="w-full rounded-control border border-line bg-surface-sunken px-3.5 py-2.5 text-sm text-text focus:border-line-strong focus:outline-none"
                 >
-                  <option value="">— pick a room type —</option>
+                  <option value="">{t("stays.rooms.pickType")}</option>
                   {suggestions.map((name) => (
                     <option key={name} value={name}>
                       {name}
                     </option>
                   ))}
-                  <option value="__custom__">Other (type below) ↓</option>
+                  <option value="__custom__">{t("stays.rooms.otherType")}</option>
                 </select>
                 {(selectValue === "__custom__" || isCustom) && (
                   <Input
                     id={`${idPrefix}-name-custom`}
                     value={draft.name}
                     maxLength={120}
-                    placeholder="e.g. Loft Suite, Balcony Room"
+                    placeholder={t("stays.rooms.customPlaceholder")}
                     autoFocus
                     onChange={(e) => onChange({ ...draft, name: e.target.value })}
                   />
@@ -221,9 +225,9 @@ function RoomFields({
       {mode === "new" ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
-            label="Room numbers"
+            label={t("stays.rooms.numbersLabel")}
             showOptional
-            description="One per room, separated by commas — e.g. 101, 102, 103. You can rename them later."
+            description={t("stays.rooms.numbersDescription")}
           >
             <Textarea
               id={`${idPrefix}-numbers`}
@@ -235,9 +239,9 @@ function RoomFields({
           </Field>
           {splitRoomNumbers(draft.roomNumbers).length === 0 ? (
             <Field
-              label="How many of these rooms"
+              label={t("stays.rooms.quantityLabel")}
               required
-              description="Identical rooms you rent at this price. They're numbered Room 1, Room 2… until you rename them."
+              description={t("stays.rooms.quantityDescription")}
             >
               <Input
                 id={`${idPrefix}-quantity`}
@@ -248,21 +252,21 @@ function RoomFields({
             </Field>
           ) : (
             <p className="self-center text-sm text-text-secondary">
-              {plural(splitRoomNumbers(draft.roomNumbers).length, "room")} of this type.
+              {t("stays.rooms.ofThisType", { count: splitRoomNumbers(draft.roomNumbers).length })}
             </p>
           )}
         </div>
       ) : (
         <p className="text-xs text-text-secondary">
-          Add, rename or remove individual rooms in the list below.
+          {t("stays.rooms.editHint")}
         </p>
       )}
       <div className={`grid gap-3 ${style === "MIXED" ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
         {style !== "SHARED" ? (
           <Field
-            label="Guests per room"
+            label={t("stays.rooms.guestsLabel")}
             required
-            description="Most people one booking of this room can bring."
+            description={t("stays.rooms.guestsDescription")}
           >
             <Input
               id={`${idPrefix}-guests`}
@@ -274,9 +278,9 @@ function RoomFields({
         ) : null}
         {style !== "PRIVATE" ? (
           <Field
-            label="People sharing this room"
+            label={t("stays.rooms.sharingLabel")}
             required
-            description="1 for a single room, 2 for double sharing, and so on."
+            description={t("stays.rooms.sharingDescription")}
           >
             <Input
               id={`${idPrefix}-sharing`}
@@ -312,6 +316,7 @@ export function PropertyRooms({
   property: StayProperty;
   variant: StayTaxonomyVariant | undefined;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const idBase = useId();
   const [adding, setAdding] = useState((property.units ?? []).length === 0);
@@ -324,7 +329,8 @@ export function PropertyRooms({
 
   const roomSchema = variant?.room_schema;
   const style = roomStyleOf(property.room_style);
-  const priceLabel = property.price_period === "NIGHT" ? "Price per night" : "Rent per month";
+  const perNight = property.price_period === "NIGHT";
+  const priceLabel = perNight ? t("stays.rooms.pricePerNight") : t("stays.rooms.rentPerMonth");
   const hasRoomQuestions = Object.keys(schemaPropertyMap(roomSchema)).length > 0;
   const suggestions = variant?.room_name_suggestions?.length
     ? variant.room_name_suggestions
@@ -355,7 +361,7 @@ export function PropertyRooms({
 
   function onAdd(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseRoom(newRoom, roomSchema, priceLabel, style);
+    const parsed = parseRoom(newRoom, roomSchema, perNight, style, t);
     if (typeof parsed === "string") return setNewError(parsed);
     setNewError(null);
     create.mutate(parsed);
@@ -363,7 +369,7 @@ export function PropertyRooms({
 
   function onSave(event: FormEvent, unit: StayUnit) {
     event.preventDefault();
-    const parsed = parseRoom(editDraft, roomSchema, priceLabel, style);
+    const parsed = parseRoom(editDraft, roomSchema, perNight, style, t);
     if (typeof parsed === "string") return setEditError(parsed);
     setEditError(null);
     // The count is managed room by room below, so an edit never sends it.
@@ -383,19 +389,19 @@ export function PropertyRooms({
     <section className="flex flex-col gap-3 rounded-card border border-line bg-surface-sunken p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="font-bold text-navy-900">Rooms and availability</h3>
+          <h3 className="font-bold text-navy-900">{t("stays.rooms.heading")}</h3>
           <p className="text-xs text-text-secondary">
-            🟢 Available · ⚪ Not available (switched off) · 🔴 Booked
+            {t("stays.rooms.legend")}
           </p>
         </div>
         {!adding ? (
           <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
-            Add a room type
+            {t("stays.rooms.addType")}
           </Button>
         ) : null}
       </div>
       {units.length === 0 && !adding ? (
-        <p className="text-sm text-text-secondary">No rooms yet. Add one to publish.</p>
+        <p className="text-sm text-text-secondary">{t("stays.rooms.empty")}</p>
       ) : null}
 
       <ul className="flex flex-col gap-3">
@@ -414,15 +420,15 @@ export function PropertyRooms({
                   style={style}
                 />
                 <p className="text-xs text-text-secondary">
-                  New prices apply to new bookings. Guests already booked keep their price.
+                  {t("stays.rooms.priceChangeNote")}
                 </p>
                 {editError ? <p className="text-sm text-danger-text">{editError}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" size="sm" disabled={update.isPending}>
-                    {update.isPending ? "Saving…" : "Save room type"}
+                    {update.isPending ? t("stays.visitingHours.saving") : t("stays.rooms.saveType")}
                   </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                 </div>
               </form>
@@ -433,7 +439,7 @@ export function PropertyRooms({
               property={property}
               unit={unit}
               pricePeriod={property.price_period}
-              summary={roomSummary(unit, style)}
+              summary={roomSummary(unit, style, t)}
               onEdit={() => {
                 setEditingId(unit.id);
                 setEditDraft(draftFrom(unit));
@@ -462,17 +468,17 @@ export function PropertyRooms({
           <RoomPhotosDraft urls={newPhotos} onChange={setNewPhotos} />
           {!hasRoomQuestions ? null : (
             <p className="text-xs text-text-secondary">
-              Room details like AC are asked per room type, so one property can have both kinds.
+              {t("stays.rooms.perTypeHint")}
             </p>
           )}
           {newError ? <p className="text-sm text-danger-text">{newError}</p> : null}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm" disabled={create.isPending}>
-              {create.isPending ? "Adding…" : "Add room type"}
+              {create.isPending ? t("stays.rooms.adding") : t("stays.rooms.addTypeSubmit")}
             </Button>
             {units.length > 0 ? (
               <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             ) : null}
           </div>

@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { Translator } from "@vsolve/ui";
 
 /**
  * Reading `VisitSlotGrid` into something a picker can render.
@@ -38,6 +39,13 @@ import type { Schemas } from "@vsolve/api-client";
 
 export type VisitSlotGrid = Schemas["VisitSlotGrid"];
 export type UnavailableReason = Schemas["UnavailableReasonEnum"];
+
+/**
+ * What the sentence builders in `features/visit/model` need from the active
+ * translator: `t` for the words and `locale` for the weekday/month names `Intl`
+ * produces. A `Translator` from `useTranslator()` satisfies it as is.
+ */
+export type VisitTranslator = Pick<Translator, "t" | "locale">;
 
 export interface SlotOption {
   /** The signed token. Opaque: posted back exactly as received, never parsed. */
@@ -86,15 +94,18 @@ export interface SlotGridView {
   readonly slotCount: number;
 }
 
-const REASON_COPY: Record<UnavailableReason, string> = {
-  PAST: "Already gone",
-  TOO_SOON: "Too soon to reach",
-  OUTSIDE_OPERATING_WINDOW: "Outside working hours here",
-  NO_CAPACITY: "You are not free",
+const REASON_KEY: Record<UnavailableReason, string> = {
+  PAST: "visit.slotGrid.reason.past",
+  TOO_SOON: "visit.slotGrid.reason.tooSoon",
+  OUTSIDE_OPERATING_WINDOW: "visit.slotGrid.reason.outsideOperatingWindow",
+  NO_CAPACITY: "visit.slotGrid.reason.noCapacity",
 };
 
-export function describeUnavailableReason(reason: UnavailableReason | null): string {
-  return reason === null ? "Not available" : REASON_COPY[reason];
+export function describeUnavailableReason(
+  reason: UnavailableReason | null,
+  t: Translator["t"],
+): string {
+  return t(reason === null ? "visit.slotGrid.reason.notAvailable" : REASON_KEY[reason]);
 }
 
 /**
@@ -113,16 +124,16 @@ export function supportsTimeZone(timeZone: string): boolean {
   }
 }
 
-function timeFormatter(timeZone: string | undefined): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat("en-IN", {
+function timeFormatter(timeZone: string | undefined, locale: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
     ...(timeZone ? { timeZone } : {}),
   });
 }
 
-function dayFormatter(timeZone: string | undefined): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat("en-IN", {
+function dayFormatter(timeZone: string | undefined, locale: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(locale, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -148,6 +159,7 @@ function dayFormatter(timeZone: string | undefined): Intl.DateTimeFormat {
 export function formatVisitInstant(
   instant: string,
   timeZone: string,
+  locale: string = "en-IN",
 ): { readonly label: string; readonly zoneUnsupported: boolean } {
   const unsupported = timeZone.trim() === "" || !supportsTimeZone(timeZone);
   const zone = unsupported ? undefined : timeZone;
@@ -156,7 +168,7 @@ export function formatVisitInstant(
     return { label: instant, zoneUnsupported: unsupported };
   }
   return {
-    label: `${dayFormatter(zone).format(when)}, ${timeFormatter(zone).format(when)}`,
+    label: `${dayFormatter(zone, locale).format(when)}, ${timeFormatter(zone, locale).format(when)}`,
     zoneUnsupported: unsupported,
   };
 }
@@ -169,11 +181,12 @@ export function formatVisitInstant(
  * ordering the availability engine owns, and a vendor who learns where tomorrow
  * morning sits should find it in the same place tomorrow.
  */
-export function readSlotGrid(grid: VisitSlotGrid): SlotGridView {
+export function readSlotGrid(grid: VisitSlotGrid, translator: VisitTranslator): SlotGridView {
+  const { t, locale } = translator;
   const unsupported = !supportsTimeZone(grid.timezone);
   const zone = unsupported ? undefined : grid.timezone;
-  const time = timeFormatter(zone);
-  const day = dayFormatter(zone);
+  const time = timeFormatter(zone, locale);
+  const day = dayFormatter(zone, locale);
 
   let openCount = 0;
   let slotCount = 0;
@@ -187,7 +200,7 @@ export function readSlotGrid(grid: VisitSlotGrid): SlotGridView {
         token: slot.id,
         label: `${time.format(new Date(slot.starts_at))} – ${time.format(new Date(slot.ends_at))}`,
         isAvailable: slot.is_available,
-        unavailableLabel: slot.is_available ? null : describeUnavailableReason(reason),
+        unavailableLabel: slot.is_available ? null : describeUnavailableReason(reason, t),
         unavailableReason: reason,
       };
     });
@@ -199,7 +212,7 @@ export function readSlotGrid(grid: VisitSlotGrid): SlotGridView {
       // some runtimes and local-midnight in others, which shifts the label by a
       // day either side of the international date line.
       label: row.is_today
-        ? "Today"
+        ? t("visit.slotGrid.today")
         : row.slots[0]
           ? day.format(new Date(row.slots[0].starts_at))
           : row.date,
@@ -256,27 +269,24 @@ export interface GridNotice {
   readonly message: string;
 }
 
-export function describeGrid(shape: GridShape): GridNotice | null {
+export function describeGrid(shape: GridShape, t: Translator["t"]): GridNotice | null {
   switch (shape) {
     case "open":
       return null;
     case "ineligible":
       return {
-        title: "No slot on this request is open to you",
-        message:
-          "Every time below is closed to you. That means your service, your area or your calendar does not cover this work — you may already be committed on these dates, the site may be outside the areas you cover, or this is not work your approved capability includes. Nothing is wrong with your account and nothing counts against you.",
+        title: t("visit.slotGrid.ineligible.title"),
+        message: t("visit.slotGrid.ineligible.message"),
       };
     case "closed":
       return {
-        title: "None of these times can be booked",
-        message:
-          "The times below are past, too soon to reach, or outside working hours for this area. Check back — the grid is redrawn every time you open this screen.",
+        title: t("visit.slotGrid.closed.title"),
+        message: t("visit.slotGrid.closed.message"),
       };
     case "empty":
       return {
-        title: "Vsolve has no times to offer for this request",
-        message:
-          "No visit times have been drawn for this request yet. This is not a decision about you. Try again shortly, and tell support if it stays empty.",
+        title: t("visit.slotGrid.empty.title"),
+        message: t("visit.slotGrid.empty.message"),
       };
   }
 }
@@ -288,10 +298,12 @@ export function describeGrid(shape: GridShape): GridNotice | null {
  * against the journey. Never rounded up into "about an hour" — a 45-minute slot
  * booked against an hour's expectation is a vendor late for their next job.
  */
-export function describeVisitDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} minutes`;
+export function describeVisitDuration(minutes: number, t: Translator["t"]): string {
+  if (minutes < 60) return t("visit.slotGrid.duration.minutes", { minutes });
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  const hourPart = `${hours} ${hours === 1 ? "hour" : "hours"}`;
-  return rest === 0 ? hourPart : `${hourPart} ${rest} minutes`;
+  const hourPart = t("visit.slotGrid.duration.hours", { count: hours });
+  return rest === 0
+    ? hourPart
+    : t("visit.slotGrid.duration.hoursAndMinutes", { hours: hourPart, minutes: rest });
 }

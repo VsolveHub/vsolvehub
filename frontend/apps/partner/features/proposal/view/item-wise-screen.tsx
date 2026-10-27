@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { Button, Input, QuantityStepper, SectionBand, Select, StepDock, cn } from "@vsolve/ui";
+import { Button, Input, QuantityStepper, SectionBand, Select, StepDock, cn, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 import type { EstimateLineView, EstimateView } from "@/features/proposal/model/estimate-view";
@@ -98,6 +98,7 @@ function lineFields(line: EstimateLineView): LineWorkings {
 }
 
 export function ItemWiseScreen({ estimate, openLineId }: ItemWiseScreenProps) {
+  const t = useT();
   return (
     <div className="flex h-full flex-col bg-canvas">
       <FocusedHeader
@@ -105,7 +106,7 @@ export function ItemWiseScreen({ estimate, openLineId }: ItemWiseScreenProps) {
         backSlot={
           <HeaderControl>
             <HeaderTile>
-              <BackGlyph label="Back to the estimate" />
+              <BackGlyph label={t("proposal.screens.shared.backToEstimate")} />
             </HeaderTile>
           </HeaderControl>
         }
@@ -113,7 +114,7 @@ export function ItemWiseScreen({ estimate, openLineId }: ItemWiseScreenProps) {
           <HeaderControl>
             <HeaderTile emphasis>
               <Pictogram name="more" size="md" className="[stroke-width:2.2]" />
-              <span className="sr-only">Add an item</span>
+              <span className="sr-only">{t("proposal.screens.items.addItem")}</span>
             </HeaderTile>
           </HeaderControl>
         }
@@ -133,9 +134,9 @@ export function ItemWiseScreen({ estimate, openLineId }: ItemWiseScreenProps) {
         ))}
       </main>
 
-      <StepDock label="Items total · labour only" amount={estimate.totals.linesTotal}>
+      <StepDock label={t("proposal.screens.items.dockLabel")} amount={estimate.totals.linesTotal}>
         <Button block size="lg">
-          Continue to charges
+          {t("proposal.screens.shared.continueToCharges")}
         </Button>
       </StepDock>
     </div>
@@ -184,6 +185,7 @@ function EstimateLine({ line, open }: { line: EstimateLineView; open: boolean })
 
 /** 44x44, per the touch-target rule, even though the glyph inside it is 16px. */
 function RemoveLineControl({ name }: { name: string }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -193,7 +195,7 @@ function RemoveLineControl({ name }: { name: string }) {
       )}
     >
       <Pictogram name="no" size="sm" />
-      <span className="sr-only">Remove {name}</span>
+      <span className="sr-only">{t("proposal.screens.shared.remove", { name })}</span>
     </button>
   );
 }
@@ -214,13 +216,14 @@ function OpenLineFields({ line }: { line: EstimateLineView }) {
   const units = UNIT_OPTIONS.includes(workings.unit as (typeof UNIT_OPTIONS)[number])
     ? [...UNIT_OPTIONS]
     : [workings.unit, ...UNIT_OPTIONS];
+  const t = useT();
 
   return (
     <div className="mt-2.5 flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
         <span className="w-24 shrink-0">
           <Select
-            aria-label={`Unit for ${line.name}`}
+            aria-label={t("proposal.screens.items.unitFor", { name: line.name })}
             defaultValue={workings.unit}
             className="font-semibold"
           >
@@ -240,7 +243,7 @@ function OpenLineFields({ line }: { line: EstimateLineView }) {
             ₹
           </span>
           <Input
-            aria-label={`Rate per ${workings.unit} for ${line.name}`}
+            aria-label={t("proposal.screens.items.rateFor", { unit: workings.unit, name: line.name })}
             inputMode="numeric"
             defaultValue={workings.rate}
             placeholder="0"
@@ -250,35 +253,35 @@ function OpenLineFields({ line }: { line: EstimateLineView }) {
       </div>
 
       <QuantityStepper
-        label="Quantity"
+        label={t("proposal.screens.items.quantity")}
         value={workings.quantity}
         onChange={NOT_WIRED}
         unit={workings.unit}
-        decrementLabel={`One less ${line.name}`}
-        incrementLabel={`One more ${line.name}`}
+        decrementLabel={t("proposal.screens.shared.oneLess", { name: line.name })}
+        incrementLabel={t("proposal.screens.shared.oneMore", { name: line.name })}
       />
 
       <div className="mt-0.5 border-t border-dashed border-warm-300 pt-3">
         <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.06em] text-signal-700">
           <Pictogram name="all-work" size="xs" />
-          Material the customer buys
+          {t("proposal.screens.items.customerBuys")}
         </span>
 
         <div className="flex gap-2">
           <span className="min-w-0 flex-1">
             <Input
-              aria-label={`Material the customer buys for ${line.name}`}
+              aria-label={t("proposal.screens.items.customerBuysFor", { name: line.name })}
               defaultValue={line.buy?.name ?? ""}
-              placeholder="What to buy"
+              placeholder={t("proposal.screens.items.whatToBuy")}
               className="text-sm font-semibold"
             />
           </span>
 
           <span className="w-21 shrink-0">
             <Input
-              aria-label={`How much material for ${line.name}`}
+              aria-label={t("proposal.screens.items.howMuchFor", { name: line.name })}
               defaultValue={line.buy?.quantity ?? ""}
-              placeholder="How many"
+              placeholder={t("proposal.screens.items.howMany")}
               className="text-sm font-bold tabular-nums"
             />
           </span>

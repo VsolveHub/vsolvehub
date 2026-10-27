@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError, hasWorkspaceAction, useServerCountdown, type Countdown } from "@vsolve/query";
-import { ConfirmAction, ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
+import { ConfirmAction, ErrorState, Spinner, cn, formatMoney, useT } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -12,15 +12,15 @@ import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 
 import {
-  ACCEPT_CONSEQUENCE,
-  HOW_DAY_HIRE_WORKS_HREF,
-  PAID_DAILY,
+  acceptConsequence,
   acceptQuestion,
   crewMathsLine,
   crewSizeLine,
+  HOW_DAY_HIRE_WORKS_HREF,
   inclusionsLine,
   isOfferLive,
   overtimeLine,
+  paidDailyLabel,
   startDayLabel,
   type CrewOffer,
   type CrewOfferAnswer,
@@ -66,6 +66,7 @@ const RING_CIRCUMFERENCE = 414.7;
 const OFFER_WINDOW_MS = 120_000;
 
 export function OfferDetailScreen({ invitationId }: { invitationId: string }) {
+  const t = useT();
   const router = useRouter();
   const offers = usePartnerCrewOffers();
 
@@ -90,7 +91,7 @@ export function OfferDetailScreen({ invitationId }: { invitationId: string }) {
       <Screen>
         <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
           <Spinner size="sm" />
-          Loading this offer…
+          {t("work.crewOfferDetail.loading")}
         </p>
       </Screen>
     );
@@ -101,9 +102,9 @@ export function OfferDetailScreen({ invitationId }: { invitationId: string }) {
       <Screen>
         <div className="px-4 py-6">
           <ErrorState
-            title="We could not load this offer"
-            message="Nothing has been answered. Check your connection and try again."
-            actionLabel="Try again"
+            title={t("work.crewOfferDetail.loadError.title")}
+            message={t("work.crewOfferDetail.loadError.message")}
+            actionLabel={t("common.tryAgain")}
             onAction={() => void offers.refetch()}
           />
         </div>
@@ -127,6 +128,7 @@ function OfferDecision({
   readonly offer: CrewOffer;
   readonly onAnswered: (answer: CrewOfferAnswer) => void;
 }) {
+  const t = useT();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -155,13 +157,15 @@ function OfferDecision({
 
   const start = startDayLabel(offer.requested_start);
   const area = offer.area_label.trim();
-  const overtime = overtimeLine(offer.overtime_hourly_paise, offer.standard_day_hours);
+  const overtime = overtimeLine(t, offer.overtime_hourly_paise, offer.standard_day_hours);
   const inclusions = inclusionsLine(offer.inclusions, 3);
   const busy = accept.isPending || decline.isPending;
 
   return (
     <Screen>
-      <h1 className="sr-only">Crew offer — {crewSizeLine(offer.headcount, offer.days)}</h1>
+      <h1 className="sr-only">
+        {t("work.crewOfferDetail.srHeading", { size: crewSizeLine(t, offer.headcount, offer.days) })}
+      </h1>
 
       <div className="flex flex-col items-center gap-3 rounded-b-[26px] bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-5 pt-6 pb-6 shadow-raised">
         {countdown ? <CountdownRing countdown={countdown} windowMs={windowMs} /> : null}
@@ -170,22 +174,34 @@ function OfferDecision({
           {formatMoney(offer.lead_total_receipt_paise)}
         </span>
         <span className="text-[0.8125rem] font-bold uppercase tracking-[0.06em] text-action-text">
-          to you
+          {t("work.crewOfferDetail.toYou")}
         </span>
         <span className="text-center text-[0.9375rem] font-semibold leading-snug text-text">
-          {crewMathsLine({
+          {crewMathsLine(t, {
             leadDayReceiptPaise: offer.lead_day_receipt_paise,
             headcount: offer.headcount,
             days: offer.days,
           })}{" "}
-          · {PAID_DAILY}
+          · {paidDailyLabel(t)}
         </span>
       </div>
 
       <div className="flex flex-1 flex-col gap-2.5 px-4 pt-4">
-        <FactRow icon="crew" label="Crew" value={crewSizeLine(offer.headcount, offer.days)} />
-        <FactRow icon="distance" label="Where" value={area === "" ? "Not stated" : area} />
-        <FactRow icon="date" label="From" value={start ?? "Not stated"} />
+        <FactRow
+          icon="crew"
+          label={t("work.crewOfferDetail.fact.crew")}
+          value={crewSizeLine(t, offer.headcount, offer.days)}
+        />
+        <FactRow
+          icon="distance"
+          label={t("work.crewOfferDetail.fact.where")}
+          value={area === "" ? t("work.crewOfferDetail.notStated") : area}
+        />
+        <FactRow
+          icon="date"
+          label={t("work.crewOfferDetail.fact.from")}
+          value={start ?? t("work.crewOfferDetail.notStated")}
+        />
         {inclusions === null && overtime === null ? null : (
           <div className="flex flex-col gap-1 rounded-card border border-line bg-surface px-3.5 py-3 text-sm leading-5 text-text">
             {inclusions === null ? null : <p className="font-semibold">{inclusions}</p>}
@@ -200,9 +216,11 @@ function OfferDecision({
           footnote={
             offer.crew_mix.length === 0
               ? undefined
-              : `Your verified crew list has ${offer.verified_roster_size} ${
-                  offer.verified_roster_size === 1 ? "person" : "people"
-                }. Vsolve checks the men and women on it when you accept, and again when you name the crew.`
+              : t("work.crewOfferDetail.footnote", {
+                  rosterCount: t("work.crewOfferDetail.rosterCount", {
+                    count: offer.verified_roster_size,
+                  }),
+                })
           }
         />
         <BriefList brief={offer.brief} />
@@ -214,7 +232,7 @@ function OfferDecision({
           <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full border border-current text-xs">
             i
           </span>
-          How day-hire works
+          {t("work.crewOfferDetail.howDayHireWorks")}
         </Link>
       </div>
 
@@ -235,7 +253,7 @@ function OfferDecision({
           className="flex h-20 items-center justify-center gap-3 rounded-[20px] bg-success-text shadow-[0_3px_0_var(--color-success-active)] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Pictogram name="yes" size="lg" className="text-surface" />
-          <span className="text-xl font-bold text-surface">Take it</span>
+          <span className="text-xl font-bold text-surface">{t("work.crewOfferDetail.takeIt")}</span>
         </button>
 
         <button
@@ -245,17 +263,17 @@ function OfferDecision({
           className="flex h-16 items-center justify-center gap-2.5 rounded-2xl border border-line bg-surface disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Pictogram name="no" size="md" className="text-text-muted" />
-          <span className="text-base font-bold text-text-secondary">Pass</span>
+          <span className="text-base font-bold text-text-secondary">{t("work.crewOfferDetail.pass")}</span>
         </button>
       </div>
 
       <ConfirmAction
         open={confirming}
         onOpenChange={setConfirming}
-        title={acceptQuestion(offer)}
-        consequence={ACCEPT_CONSEQUENCE}
-        confirmLabel="Yes, send them"
-        cancelLabel="Back"
+        title={acceptQuestion(t, offer)}
+        consequence={acceptConsequence(t)}
+        confirmLabel={t("work.crewOfferDetail.confirmSend")}
+        cancelLabel={t("common.back")}
         pending={accept.isPending}
         onConfirm={() => {
           // Success closes it through `onAccepted`. Failure closes it here so
@@ -380,11 +398,12 @@ function FactRow({
  * knows nothing about any one service.
  */
 function BriefList({ brief }: { readonly brief: CrewOffer["brief"] }) {
+  const t = useT();
   if (brief.length === 0) return null;
   return (
     <section className="rounded-card border border-line bg-surface px-3.5 py-3">
       <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-        What they asked for
+        {t("work.crewOfferDetail.whatTheyAskedFor")}
       </h2>
       <dl className="mt-2 flex flex-col divide-y divide-line">
         {brief.map((line) => (
@@ -404,6 +423,7 @@ function BriefList({ brief }: { readonly brief: CrewOffer["brief"] }) {
 
 /** What the lead just did, on the screen they did it from. */
 function AnsweredScreen({ answer }: { readonly answer: CrewOfferAnswer }) {
+  const t = useT();
   return (
     <Screen>
       <div className="flex flex-1 flex-col gap-4 px-4 py-5">
@@ -414,7 +434,9 @@ function AnsweredScreen({ answer }: { readonly answer: CrewOfferAnswer }) {
           className="flex h-16 items-center justify-center gap-2 rounded-2xl border border-line bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Pictogram name="back" size="md" className="text-action-secondary" />
-          <span className="text-base font-bold text-action-secondary">Work</span>
+          <span className="text-base font-bold text-action-secondary">
+            {t("work.crewOfferDetail.workLink")}
+          </span>
         </Link>
       </div>
     </Screen>
@@ -433,16 +455,17 @@ function AcceptRefusal({
   readonly error: unknown;
   readonly onGoToCrew: (() => void) | null;
 }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
 
   if (isRosterInsufficient(error)) {
     return (
       <ErrorState
         inline
-        title="Your verified crew is smaller than this job"
-        message="Verify more of your own people to take jobs this size."
+        title={t("work.crewOfferDetail.rosterInsufficient.title")}
+        message={t("work.crewOfferDetail.rosterInsufficient.message")}
         severity="warning"
-        actionLabel={onGoToCrew ? "Go to your crew" : undefined}
+        actionLabel={onGoToCrew ? t("work.crewOfferDetail.rosterInsufficient.action") : undefined}
         onAction={onGoToCrew ?? undefined}
       />
     );

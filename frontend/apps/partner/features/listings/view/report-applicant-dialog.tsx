@@ -1,4 +1,5 @@
 import { Flag, X } from "lucide-react";
+import { useT } from "@vsolve/ui";
 import { snapshotFields, type PartnerApplication } from "../queries";
 
 export interface ReportApplicantDialogProps {
@@ -24,10 +25,11 @@ export function ReportApplicantDialog({
   isPending,
   error,
 }: ReportApplicantDialogProps) {
+  const t = useT();
   if (!app) return null;
 
   const applicantName =
-    app.applicant_name || snapshotFields(app.applicant_snapshot).name || "Candidate";
+    app.applicant_name || snapshotFields(app.applicant_snapshot).name || t("listings.report.candidateFallback");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
@@ -35,7 +37,7 @@ export function ReportApplicantDialog({
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <Flag className="size-4 text-text-muted" />
-            <h3 className="font-bold text-text">Report Candidate</h3>
+            <h3 className="font-bold text-text">{t("listings.report.title")}</h3>
           </div>
           <button
             type="button"
@@ -54,31 +56,31 @@ export function ReportApplicantDialog({
           }}
         >
           <p className="text-xs text-text-secondary">
-            Reporting candidate <strong>{applicantName}</strong>. This logs an abuse case for the
-            trust & safety team to review.
+            {t("listings.report.descriptionPrefix")} <strong>{applicantName}</strong>
+            {t("listings.report.descriptionSuffix")}
           </p>
 
           <div>
-            <label className="block text-xs font-semibold text-text-secondary">Reason</label>
+            <label className="block text-xs font-semibold text-text-secondary">{t("listings.report.reasonLabel")}</label>
             <select
               value={reason}
               onChange={(e) => onReasonChange(e.target.value)}
               className="mt-1 h-9 w-full rounded-control border border-line bg-surface px-3 text-xs text-text outline-none focus:border-line-strong"
             >
-              <option value="SPAM">Spam / Bot submission</option>
-              <option value="FRAUD">Fraudulent information or fake resume</option>
-              <option value="HARASSMENT">Harassment or inappropriate message</option>
-              <option value="OTHER">Other violation</option>
+              <option value="SPAM">{t("listings.report.reason.spam")}</option>
+              <option value="FRAUD">{t("listings.report.reason.fraud")}</option>
+              <option value="HARASSMENT">{t("listings.report.reason.harassment")}</option>
+              <option value="OTHER">{t("listings.report.reason.other")}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-text-secondary">Additional Details</label>
+            <label className="block text-xs font-semibold text-text-secondary">{t("listings.report.detailsLabel")}</label>
             <textarea
               rows={3}
               value={detail}
               onChange={(e) => onDetailChange(e.target.value)}
-              placeholder="Explain why this candidate submission violates policy..."
+              placeholder={t("listings.report.detailsPlaceholder")}
               className="mt-1 w-full rounded-control border border-line bg-surface p-2.5 text-xs text-text outline-none focus:border-line-strong"
             />
           </div>
@@ -91,14 +93,14 @@ export function ReportApplicantDialog({
               onClick={onClose}
               className="rounded-control border border-line px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={isPending}
               className="rounded-control bg-navy-900 px-4 py-1.5 text-xs font-semibold text-warm-0 hover:bg-navy-800 disabled:opacity-50"
             >
-              {isPending ? "Submitting..." : "Submit Report"}
+              {isPending ? t("listings.report.submitting") : t("listings.report.submit")}
             </button>
           </div>
         </form>

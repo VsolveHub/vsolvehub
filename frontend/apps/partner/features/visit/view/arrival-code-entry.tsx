@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Field, Input } from "@vsolve/ui";
+import { Button, Field, Input, useT } from "@vsolve/ui";
 import { useState, type FormEvent } from "react";
 
 /**
@@ -55,6 +55,7 @@ export function ArrivalCodeEntry({
   codeLength = 6,
   description,
 }: ArrivalCodeEntryProps) {
+  const t = useT();
   const [code, setCode] = useState("");
   // Digits only, and trimmed to length as they type. A vendor reading a code
   // aloud from across a room pastes and fat-fingers in equal measure, and the
@@ -72,11 +73,11 @@ export function ArrivalCodeEntry({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Field
-        label="Arrival code"
+        label={t("visit.arrivalCode.label")}
         showOptional={false}
         description={
           description ??
-          `Ask the customer for the ${codeLength}-digit code on their screen. Entering it starts the visit.`
+          t("visit.arrivalCode.description", { codeLength })
         }
         error={error ?? undefined}
       >
@@ -101,9 +102,9 @@ export function ArrivalCodeEntry({
         type="submit"
         disabled={!canSubmit}
         loading={isSubmitting}
-        loadingLabel="Starting the visit"
+        loadingLabel={t("visit.arrivalCode.starting")}
       >
-        Start the visit
+        {t("visit.arrivalCode.start")}
       </Button>
     </form>
   );

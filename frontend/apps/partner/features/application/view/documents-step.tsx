@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Badge, buttonStyles, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, buttonStyles, ErrorState, Spinner, useT, type Translator } from "@vsolve/ui";
 import Link from "next/link";
 
 import { isListingTrack } from "../model/steps";
@@ -24,28 +24,34 @@ import { DocumentUpload } from "./document-upload";
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
-const REQUIRED: readonly { kind: DocumentKind; label: string; why: string }[] = [
+const REQUIRED: readonly { kind: DocumentKind; labelKey: string; whyKey: string }[] = [
   {
     kind: "GOVERNMENT_ID",
-    label: "Government photo ID",
-    why: "Confirms you are who you say you are before we send you to someone's home.",
+    labelKey: "apply.requirements.governmentId",
+    whyKey: "apply.documents.why.governmentId",
   },
   {
     kind: "ADDRESS_PROOF",
-    label: "Proof of address",
-    why: "Any recent bill or statement showing your name and address.",
+    labelKey: "apply.requirements.addressProof",
+    whyKey: "apply.documents.why.addressProof",
   },
 ];
 
-const STATUS_TONE: Record<
-  Schemas["PartnerDocumentStatusEnum"],
-  { tone: "neutral" | "info" | "success" | "warning" | "danger"; label: string }
-> = {
-  PENDING: { tone: "info", label: "Waiting for review" },
-  APPROVED: { tone: "success", label: "Approved" },
-  REJECTED: { tone: "danger", label: "Needs replacing" },
-  SUPERSEDED: { tone: "neutral", label: "Replaced" },
-};
+function statusTone(
+  status: Schemas["PartnerDocumentStatusEnum"],
+  t: Translator["t"],
+): { tone: "neutral" | "info" | "success" | "warning" | "danger"; label: string } {
+  switch (status) {
+    case "PENDING":
+      return { tone: "info", label: t("apply.documents.status.pending") };
+    case "APPROVED":
+      return { tone: "success", label: t("apply.documents.status.approved") };
+    case "REJECTED":
+      return { tone: "danger", label: t("apply.documents.status.rejected") };
+    case "SUPERSEDED":
+      return { tone: "neutral", label: t("apply.documents.status.superseded") };
+  }
+}
 
 /** The document that currently counts for a kind: the newest non-superseded one. */
 function currentDocument(
@@ -59,6 +65,7 @@ function currentDocument(
 }
 
 export function DocumentsStep() {
+  const t = useT();
   const query = usePartnerApplication();
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
@@ -66,7 +73,7 @@ export function DocumentsStep() {
     return (
       <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Loading documents…
+        {t("apply.documents.loading")}
       </p>
     );
   }
@@ -74,9 +81,9 @@ export function DocumentsStep() {
   if (query.isError && !isMissing) {
     return (
       <ErrorState
-        title="Could not load documents"
-        message="Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.documents.loadError.title")}
+        message={t("apply.common.checkConnectionAndRetry")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void query.refetch()}
       />
     );
@@ -90,31 +97,32 @@ export function DocumentsStep() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         {REQUIRED.map((required) => {
           const document = application ? currentDocument(application, required.kind) : null;
-          const status = document ? STATUS_TONE[document.status] : null;
+          const status = document ? statusTone(document.status, t) : null;
+          const label = t(required.labelKey);
 
           return (
             <div key={required.kind} className="rounded-control border border-line bg-surface p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-bold text-navy-900">
-                  {required.label} <span className="text-danger-text">*</span>
+                  {label} <span className="text-danger-text">*</span>
                 </p>
                 <Badge tone={status?.tone ?? "neutral"}>
-                  {status?.label ?? "Not uploaded"}
+                  {status?.label ?? t("apply.documents.notUploaded")}
                 </Badge>
               </div>
 
               {document?.status === "REJECTED" ? (
                 <p className="mt-2 text-xs font-semibold text-danger-text">
-                  {document.review_reason || "Document could not be verified. Please upload a clear photo or PDF."}
+                  {document.review_reason || t("apply.documents.rejectedGenericReason")}
                 </p>
               ) : null}
 
               {document ? (
                 <p className="mt-2 text-xs text-text-muted">
-                  Version {document.version} • Uploaded{" "}
+                  {t("apply.documents.versionUploadedPrefix", { version: document.version })}{" "}
                   <time dateTime={document.uploaded_at}>
                     {new Intl.DateTimeFormat("en-IN", {
                       dateStyle: "medium",
@@ -127,7 +135,7 @@ export function DocumentsStep() {
               {isEditable ? (
                 <DocumentUpload
                   kind={required.kind}
-                  label={required.label}
+                  label={label}
                   expectedVersion={application?.version ?? null}
                   replacing={
                     document?.status === "REJECTED" || document?.scan_status === "REJECTED"
@@ -143,8 +151,8 @@ export function DocumentsStep() {
                 */
                 <p className="mt-2 text-xs text-text-muted">
                   {document
-                    ? "Locked while your application is being reviewed."
-                    : "This was not required when your application was approved. Contact support if you need to add it."}
+                    ? t("apply.documents.lockedReviewing")
+                    : t("apply.documents.notRequiredAnymore")}
                 </p>
               )}
             </div>
@@ -155,10 +163,10 @@ export function DocumentsStep() {
       {/* Navigation actions */}
       <div className="flex items-center justify-between pt-4 border-t border-line gap-3">
         <Link href="/apply/consent" className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
-            Back
+            {t("common.back")}
           </Link>
         <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"} className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-5 shadow-md" })}>
-            {isListingTrack(query.data?.track) ? "Continue to review" : "Continue to Working Hours"}
+            {isListingTrack(query.data?.track) ? t("apply.documents.continueReview") : t("apply.documents.continueHours")}
           </Link>
       </div>
     </div>

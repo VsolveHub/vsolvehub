@@ -1,3 +1,5 @@
+import { useT } from "@vsolve/ui";
+
 import type { SectionNavItem } from "@/features/workspace/view/section-nav";
 
 /**
@@ -9,8 +11,16 @@ import type { SectionNavItem } from "@/features/workspace/view/section-nav";
  *
  * Declared once and rendered by both screens, so the phone sub-nav cannot
  * disagree with itself about which sections exist.
+ *
+ * `label` is a catalogue key — `useRentalSections()` resolves it.
  */
 export const RENTAL_SECTIONS: readonly SectionNavItem[] = [
-  { href: "/rentals", label: "Ads" },
-  { href: "/rentals/bookings", label: "Bookings" },
+  { href: "/rentals", label: "rentals.sections.ads" },
+  { href: "/rentals/bookings", label: "rentals.sections.bookings" },
 ];
+
+/** `RENTAL_SECTIONS` with each label translated for the current locale. */
+export function useRentalSections(): readonly SectionNavItem[] {
+  const t = useT();
+  return RENTAL_SECTIONS.map((item) => ({ ...item, label: t(item.label) }));
+}

@@ -2,7 +2,7 @@
 
 import { request } from "@vsolve/api-client";
 import { describeError, m2QueryKeys, queryKeys, useServerCountdown } from "@vsolve/query";
-import { Button, Dialog, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
+import { Button, Dialog, ErrorState, Spinner, formatMoney, useT } from "@vsolve/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -39,6 +39,7 @@ function BookingPopupTimer({
   onExpired?: () => void;
 }) {
   const countdown = useServerCountdown(deadlineIso, 1000);
+  const t = useT();
 
   useEffect(() => {
     if (countdown?.isExpired) onExpired?.();
@@ -53,7 +54,7 @@ function BookingPopupTimer({
       aria-live="polite"
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-warning-text">
-        Time to respond
+        {t("notifications.liveBooking.timer.label")}
       </p>
       <p
         className={`mt-1 font-mono text-4xl font-bold tabular-nums ${
@@ -65,8 +66,8 @@ function BookingPopupTimer({
       </p>
       <p className="mt-1 text-center text-xs leading-5 text-warning-text/90">
         {countdown.isExpired
-          ? "This window has closed. The job may have moved on."
-          : "Accept or decline before the timer runs out."}
+          ? t("notifications.liveBooking.timer.expired")
+          : t("notifications.liveBooking.timer.running")}
       </p>
     </div>
   );
@@ -157,6 +158,7 @@ function OfferBookingPopup({
   onClose: () => void;
   onUserAction: () => void;
 }) {
+  const t = useT();
   const offersQuery = usePartnerOffers(true);
   const command = useOfferCommand();
   const offer = findOffer(offersQuery.data?.pages, booking.offerId);
@@ -191,8 +193,8 @@ function OfferBookingPopup({
       onOpenChange={(next) => {
         if (!next) handleDismiss();
       }}
-      title="New booking request"
-      description="A customer just booked. Accept to take the job or decline to pass."
+      title={t("notifications.offerPopup.title")}
+      description={t("notifications.offerPopup.description")}
       dismissable={!isBusy}
       footer={
         <>
@@ -202,15 +204,15 @@ function OfferBookingPopup({
             disabled={isBusy}
             {...bookingActionProps(onUserAction)}
           >
-            Decline
+            {t("notifications.liveBooking.decline")}
           </Button>
           <Button
             onClick={() => handleCommand("accept")}
             loading={isBusy}
-            loadingLabel="Accepting"
+            loadingLabel={t("notifications.liveBooking.accepting")}
             {...bookingActionProps(onUserAction)}
           >
-            Accept
+            {t("notifications.liveBooking.accept")}
           </Button>
         </>
       }
@@ -218,7 +220,7 @@ function OfferBookingPopup({
       <div className="flex flex-col gap-4">
         {waitingCount > 0 ? (
           <p aria-live="polite" className="text-xs font-semibold text-text-secondary">
-            {waitingCount} more waiting — answering this opens the next.
+            {t("notifications.liveBooking.waitingCount", { count: waitingCount })}
           </p>
         ) : null}
 
@@ -229,9 +231,11 @@ function OfferBookingPopup({
         <div className="flex items-start gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
           <AlertTriangle className="mt-0.5 size-6 shrink-0 text-warning-text" aria-hidden />
           <div className="min-w-0">
-            <p className="font-semibold text-warning-text">Action needed now</p>
+            <p className="font-semibold text-warning-text">
+              {t("notifications.offerPopup.actionNeeded.title")}
+            </p>
             <p className="mt-1 text-sm leading-6 text-warning-text/90">
-              This offer expires soon. Another partner may take it if you wait.
+              {t("notifications.offerPopup.actionNeeded.message")}
             </p>
           </div>
         </div>
@@ -239,20 +243,19 @@ function OfferBookingPopup({
         {detailsLoading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-text-secondary">
             <Spinner size="sm" />
-            Loading service details…
+            {t("notifications.liveBooking.loadingServiceDetails")}
           </div>
         ) : offer === undefined ? (
           /* The list settled without this offer in it. Say so — a made-up
              service name here would be the mock request this popup replaced. */
           <p className="py-2 text-sm leading-6 text-text-secondary">
-            We could not load the service details. You can still accept or
-            decline, or open Work to see the full booking.
+            {t("notifications.offerPopup.detailsUnavailable")}
           </p>
         ) : (
           <>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Service
+                {t("notifications.liveBooking.service")}
               </p>
               <p className="mt-1 text-lg font-bold text-text">{serviceLabel}</p>
               {area ? <p className="mt-1 text-sm text-text-secondary">{area}</p> : null}
@@ -270,7 +273,7 @@ function OfferBookingPopup({
             {offer.estimated_net ? (
               <div className="rounded-card border border-line bg-surface-sunken p-3">
                 <div className="flex justify-between gap-3 text-sm font-semibold text-text">
-                  <span>You receive (est.)</span>
+                  <span>{t("notifications.offerPopup.youReceive")}</span>
                   <span>{formatMoney(offer.estimated_net.amount_paise)}</span>
                 </div>
               </div>
@@ -279,7 +282,7 @@ function OfferBookingPopup({
         )}
 
         {errorMessage ? (
-          <ErrorState inline title="Could not update this offer" message={errorMessage} />
+          <ErrorState inline title={t("notifications.offerPopup.updateError")} message={errorMessage} />
         ) : null}
       </div>
     </Dialog>
@@ -288,14 +291,19 @@ function OfferBookingPopup({
 
 /** The interrupt body for a fixed-visit offer: the designed offer card, compact. */
 function FixedVisitOfferSummary({ enquiry }: { readonly enquiry: EnquiryRecord }) {
+  const t = useT();
   const when = formatWhen(enquiry.fixedVisitStart);
   const duration =
-    enquiry.fixedVisitDurationMinutes !== null ? `${enquiry.fixedVisitDurationMinutes} min` : null;
+    enquiry.fixedVisitDurationMinutes !== null
+      ? t("notifications.fixedVisit.durationMinutes", { minutes: enquiry.fixedVisitDurationMinutes })
+      : null;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-card bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-4 py-4 text-center shadow-raised">
-        <p className="text-xs font-bold uppercase tracking-wide text-text/80">You receive</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-text/80">
+          {t("notifications.fixedVisit.youReceive")}
+        </p>
         <p className="text-4xl font-extrabold text-text">
           {enquiry.fixedVisitEarningPaise !== null
             ? formatMoney(enquiry.fixedVisitEarningPaise)
@@ -304,14 +312,14 @@ function FixedVisitOfferSummary({ enquiry }: { readonly enquiry: EnquiryRecord }
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <FixedVisitFact label="Service" value={enquiry.serviceName} />
-        <FixedVisitFact label="Area" value={enquiry.approximateArea} />
-        <FixedVisitFact label="When" value={when ?? "—"} />
-        <FixedVisitFact label="On site" value={duration ?? "—"} />
+        <FixedVisitFact label={t("notifications.fixedVisit.service")} value={enquiry.serviceName} />
+        <FixedVisitFact label={t("notifications.fixedVisit.area")} value={enquiry.approximateArea} />
+        <FixedVisitFact label={t("notifications.fixedVisit.when")} value={when ?? "—"} />
+        <FixedVisitFact label={t("notifications.fixedVisit.onSite")} value={duration ?? "—"} />
       </div>
 
       <p className="text-sm leading-6 text-text-secondary">
-        The customer picked this time. Take it or pass — there is nothing to schedule.
+        {t("notifications.fixedVisit.note")}
       </p>
     </div>
   );
@@ -339,6 +347,7 @@ function InvitationBookingPopup({
   onClose: () => void;
   onUserAction: () => void;
 }) {
+  const t = useT();
   const detailQuery = usePartnerEnquiry(booking.invitationId, true);
   const accept = useAcceptEnquiry(booking.invitationId);
   const decline = useDeclineEnquiry(booking.invitationId);
@@ -406,8 +415,8 @@ function InvitationBookingPopup({
         title={booking.title}
         description={
           isFixedVisit
-            ? "A customer booked a visit time near you."
-            : "A customer is waiting for your answer. Review the service and respond."
+            ? t("notifications.invitationPopup.description.fixedVisit")
+            : t("notifications.invitationPopup.description.open")
         }
         dismissable={!inFlight}
         footer={
@@ -421,7 +430,9 @@ function InvitationBookingPopup({
               disabled={inFlight || !canDecline}
               {...bookingActionProps(onUserAction)}
             >
-              {isFixedVisit ? "Pass on this one" : "Decline"}
+              {isFixedVisit
+                ? t("notifications.invitationPopup.decline.fixedVisit")
+                : t("notifications.liveBooking.decline")}
             </Button>
             <Button
               onClick={() => {
@@ -429,11 +440,17 @@ function InvitationBookingPopup({
                 accept.mutate(undefined, { onSuccess: handleDismiss });
               }}
               loading={accept.isPending}
-              loadingLabel={isFixedVisit ? "Taking it" : "Accepting"}
+              loadingLabel={
+                isFixedVisit
+                  ? t("notifications.invitationPopup.accepting.fixedVisit")
+                  : t("notifications.liveBooking.accepting")
+              }
               disabled={!canAccept}
               {...bookingActionProps(onUserAction)}
             >
-              {isFixedVisit ? "Take this visit" : "Accept"}
+              {isFixedVisit
+                ? t("notifications.invitationPopup.accept.fixedVisit")
+                : t("notifications.liveBooking.accept")}
             </Button>
           </>
         }
@@ -441,7 +458,7 @@ function InvitationBookingPopup({
         <div className="flex flex-col gap-4">
           {waitingCount > 0 ? (
             <p aria-live="polite" className="text-xs font-semibold text-text-secondary">
-              {waitingCount} more waiting — answering this opens the next.
+              {t("notifications.liveBooking.waitingCount", { count: waitingCount })}
             </p>
           ) : null}
 
@@ -453,12 +470,14 @@ function InvitationBookingPopup({
             <AlertTriangle className="mt-0.5 size-6 shrink-0 text-warning-text" aria-hidden />
             <div className="min-w-0">
               <p className="font-semibold text-warning-text">
-                {isFixedVisit ? "First to take it gets it" : "New customer enquiry"}
+                {isFixedVisit
+                  ? t("notifications.invitationPopup.alert.title.fixedVisit")
+                  : t("notifications.invitationPopup.alert.title.open")}
               </p>
               <p className="mt-1 text-sm leading-6 text-warning-text/90">
                 {isFixedVisit
-                  ? "This visit was offered to other professionals too. Answer before the timer runs out."
-                  : "Review the service below and accept to respond, or decline to release the slot."}
+                  ? t("notifications.invitationPopup.alert.message.fixedVisit")
+                  : t("notifications.invitationPopup.alert.message.open")}
               </p>
             </div>
           </div>
@@ -466,7 +485,7 @@ function InvitationBookingPopup({
           {detailQuery.isPending ? (
             <div className="flex items-center gap-2 py-4 text-sm text-text-secondary">
               <Spinner size="sm" />
-              Loading service details…
+              {t("notifications.liveBooking.loadingServiceDetails")}
             </div>
           ) : enquiry ? (
             isFixedVisit ? (
@@ -475,7 +494,7 @@ function InvitationBookingPopup({
               <>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                    Service
+                    {t("notifications.liveBooking.service")}
                   </p>
                   <p className="mt-1 text-lg font-bold text-text">{enquiry.serviceName}</p>
                 </div>
@@ -485,7 +504,7 @@ function InvitationBookingPopup({
           ) : (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                About the service
+                {t("notifications.invitationPopup.aboutService")}
               </p>
               <p className="mt-1 text-sm leading-6 text-text-secondary">{booking.body}</p>
             </div>
@@ -494,12 +513,16 @@ function InvitationBookingPopup({
           {detailQuery.isError ? (
             <ErrorState
               inline
-              title="Could not load full details"
-              message="You can still accept or decline below. Open Work for the full enquiry if needed."
+              title={t("notifications.invitationPopup.detailsError.title")}
+              message={t("notifications.invitationPopup.detailsError.message")}
             />
           ) : null}
           {errorMessage ? (
-            <ErrorState inline title="Could not update this enquiry" message={errorMessage} />
+            <ErrorState
+              inline
+              title={t("notifications.invitationPopup.updateError.enquiry")}
+              message={errorMessage}
+            />
           ) : null}
         </div>
       </Dialog>

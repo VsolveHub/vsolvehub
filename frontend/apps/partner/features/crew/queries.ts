@@ -10,6 +10,7 @@ import {
 } from "@vsolve/api-client";
 import { SESSION_STATE } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useT } from "@vsolve/ui";
 
 import { getApiClient } from "@/lib/api/browser";
 import { registrationKeys } from "@/features/capability/queries";
@@ -244,6 +245,7 @@ export interface CrewDocumentUploadInput {
  * expensive enough that a second attempt should be a deliberate press.
  */
 export function useUploadCrewDocument() {
+  const t = useT();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -269,12 +271,15 @@ export function useUploadCrewDocument() {
       // A deadline already past means the clock or the round trip is badly off;
       // sending bytes at it would waste the whole transfer.
       if (isUploadExpired(grant.expires_at)) {
-        throw new Error("That upload link expired before it was used.");
+        throw new Error(t("crew.upload.expired"));
       }
 
       report({ phase: "uploading", percent: 0 });
-      await putSignedBytes(grant.upload_url, input.file, (percent) =>
-        report({ phase: "uploading", percent }),
+      await putSignedBytes(
+        grant.upload_url,
+        input.file,
+        (percent) => report({ phase: "uploading", percent }),
+        t,
       );
 
       report({ phase: "finalizing", percent: 100 });
@@ -310,6 +315,7 @@ function putSignedBytes(
   url: string,
   file: File,
   onProgress: (percent: number) => void,
+  t: ReturnType<typeof useT>,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -326,10 +332,10 @@ function putSignedBytes(
         resolve();
         return;
       }
-      reject(new Error(`Storage refused the upload (${xhr.status}).`));
+      reject(new Error(t("crew.upload.storageRefused", { status: xhr.status })));
     };
-    xhr.onerror = () => reject(new Error("The upload could not reach storage."));
-    xhr.onabort = () => reject(new Error("The upload was cancelled."));
+    xhr.onerror = () => reject(new Error(t("crew.upload.unreachable")));
+    xhr.onabort = () => reject(new Error(t("crew.upload.cancelled")));
     xhr.send(file);
   });
 }

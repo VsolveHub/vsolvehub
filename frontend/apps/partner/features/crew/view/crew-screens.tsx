@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Card, useToast } from "@vsolve/ui";
+import { Card, useT, useToast } from "@vsolve/ui";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -61,6 +61,7 @@ export function CrewRosterScreen() {
 }
 
 function CrewRosterPanel() {
+  const t = useT();
   const roster = usePartnerCrew();
   const reference = useApplicationReference();
   const add = useAddCrewMember();
@@ -95,8 +96,8 @@ function CrewRosterPanel() {
     // duplicate and go looking for the first one.
     toast.notify(
       result.wasReinstated
-        ? `${result.member.display_name} is back on your roster.`
-        : `${result.member.display_name} added to your roster.`,
+        ? t("crew.toast.reinstated", { name: result.member.display_name })
+        : t("crew.toast.added", { name: result.member.display_name }),
     );
   };
 
@@ -108,13 +109,12 @@ function CrewRosterPanel() {
           className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
         >
           <ArrowLeft size={16} aria-hidden />
-          Back to Account
+          {t("me.language.backToAccount")}
         </Link>
       </div>
-      <h1 className="text-xl font-semibold text-text">Your crew</h1>
+      <h1 className="text-xl font-semibold text-text">{t("crew.screen.title")}</h1>
       <p className="text-sm leading-6 text-text-secondary">
-        The people you send to work. We check nobody is booked twice on the same day, including
-        through another agency.
+        {t("crew.screen.description")}
       </p>
 
       <CrewRoster
@@ -148,11 +148,9 @@ function CrewRosterPanel() {
         <Card aria-live="polite" className="border-warning-line bg-warning-surface p-4">
           <p className="text-sm leading-6 text-text-secondary">
             <strong className="font-semibold text-warning-text">
-              {view.unrecognised.length} {view.unrecognised.length === 1 ? "person" : "people"} we
-              cannot describe.
+              {t("crew.screen.unrecognisedCount", { count: view.unrecognised.length })}
             </strong>{" "}
-            Your app is older than this part of Vsolve, so we do not know whether they are on your
-            roster. Update it, or contact support before you rely on this list for a shift.
+            {t("crew.screen.unrecognisedBody")}
           </p>
         </Card>
       ) : null}
@@ -163,13 +161,16 @@ function CrewRosterPanel() {
           setIsAdding(open);
           if (!open) setPhone("");
         }}
-        problems={crewProblems({
-          display_name: "",
-          phone_e164: phone,
-          skill_codes: [],
-          is_supervisor: false,
-          gender: "",
-        }).filter((problem) => problem.field === "phone_e164" && phone.trim() !== "")}
+        problems={crewProblems(
+          {
+            display_name: "",
+            phone_e164: phone,
+            skill_codes: [],
+            is_supervisor: false,
+            gender: "",
+          },
+          t,
+        ).filter((problem) => problem.field === "phone_e164" && phone.trim() !== "")}
         probableDuplicate={duplicateRow}
         pending={add.isPending}
         submitError={add.isError ? describeError(add.error, "mutation").message : null}
@@ -215,7 +216,7 @@ function CrewRosterPanel() {
             { membershipId, patch },
             {
               onSuccess: (member) => {
-                toast.notify(`${member.display_name} updated.`);
+                toast.notify(t("crew.toast.updated", { name: member.display_name }));
                 setEditingId(null);
               },
             },

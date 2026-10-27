@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import {
   readCrewStatus,
   type CrewMemberInput,
@@ -98,20 +100,20 @@ const INDIAN_MOBILE = /^\+91[6-9]\d{9}$/;
  * server's traps people who have done nothing wrong. Everything not listed goes
  * to Django and returns as a field error.
  */
-export function crewProblems(input: CrewMemberInput): CrewProblem[] {
+export function crewProblems(input: CrewMemberInput, t: Translator["t"]): CrewProblem[] {
   const problems: CrewProblem[] = [];
 
   if (input.display_name.trim().length < 2) {
     problems.push({
       field: "display_name",
-      message: "Add the name your team knows this person by.",
+      message: t("crew.problem.nameTooShort"),
     });
   }
 
   if (!INDIAN_MOBILE.test(input.phone_e164.trim())) {
     problems.push({
       field: "phone_e164",
-      message: "Enter a 10-digit mobile number. We use it to make sure nobody is double-booked.",
+      message: t("crew.problem.invalidPhone"),
     });
   }
 

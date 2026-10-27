@@ -11,6 +11,7 @@ import {
 
 import { cn } from "./cn";
 import { controlChrome, useFieldContext } from "./field";
+import { useTOrDefault } from "./i18n";
 import { formatDate, parseDisplayDate } from "./readout";
 
 /**
@@ -58,10 +59,12 @@ export function IsoDateField({
   max,
   disabled,
   required,
-  placeholder = "DD/MM/YYYY",
+  placeholder,
   ...props
 }: IsoDateFieldProps) {
   const field = useFieldContext();
+  const tf = useTOrDefault();
+  const resolvedPlaceholder = placeholder ?? tf("ui.isoDateField.placeholder", "DD/MM/YYYY");
   const generatedId = useId();
   const controlId = id ?? field?.controlId ?? generatedId;
   const pickerRef = useRef<HTMLInputElement>(null);
@@ -122,7 +125,7 @@ export function IsoDateField({
         type="text"
         inputMode="numeric"
         autoComplete="off"
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         disabled={disabled}
         required={required ?? field?.required}
         value={text}
@@ -166,8 +169,8 @@ export function IsoDateField({
         type="button"
         tabIndex={-1}
         disabled={disabled}
-        aria-label="Open calendar"
-        title="Open calendar"
+        aria-label={tf("ui.isoDateField.openCalendar", "Open calendar")}
+        title={tf("ui.isoDateField.openCalendar", "Open calendar")}
         onClick={openPicker}
         onPointerDown={(event) => {
           // Prevent an outer wrapping <label> from stealing the gesture.

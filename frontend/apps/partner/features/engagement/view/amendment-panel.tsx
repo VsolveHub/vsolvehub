@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Field, Input, Select, Textarea, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Field, Input, Select, Textarea, formatMoney, useT } from "@vsolve/ui";
 import {
   MAXIMUM_AMENDMENT_LINES,
   MAXIMUM_EXTENSION_DAYS,
@@ -86,17 +86,16 @@ export interface AmendmentPanelProps {
 }
 
 export function AmendmentPanel({ engagement, wording }: AmendmentPanelProps) {
+  const t = useT();
   const shape = amendmentShapeFor(engagement);
   const query = usePartnerEngagementAmendments(engagement.id);
 
   if (shape === null) {
     return (
       <Card className="p-4">
-        <h2 className="mb-1 text-base font-semibold text-text">Change requests</h2>
+        <h2 className="mb-1 text-base font-semibold text-text">{t("work.amendmentPanel.title")}</h2>
         <p className="text-sm leading-6 text-text-secondary">
-          This {wording.parent} is on a payment arrangement this version of the app does not
-          recognise, so it cannot say which kind of change request applies. Updating the app
-          usually resolves it; contact support if it does not.
+          {t("work.amendmentPanel.unknownShape.message", { parent: wording.parent })}
         </p>
       </Card>
     );
@@ -108,12 +107,12 @@ export function AmendmentPanel({ engagement, wording }: AmendmentPanelProps) {
     const presentation = describeError(query.error, "read");
     return (
       <Card className="p-4">
-        <h2 className="mb-1 text-base font-semibold text-text">Change requests</h2>
+        <h2 className="mb-1 text-base font-semibold text-text">{t("work.amendmentPanel.title")}</h2>
         <ErrorState
-          title="Vsolve could not read your change requests"
-          message={`${presentation.message} The form stays closed until this read works — proposing one now could be a second request on top of one already open.`}
+          title={t("work.amendmentPanel.readError.title")}
+          message={`${presentation.message} ${t("work.amendmentPanel.readError.messageSuffix")}`}
           severity={presentation.severity}
-          actionLabel="Try again"
+          actionLabel={t("common.tryAgain")}
           onAction={() => void query.refetch()}
           reference={presentation.reference}
         />
@@ -128,12 +127,14 @@ export function AmendmentPanel({ engagement, wording }: AmendmentPanelProps) {
     <Card className="flex flex-col gap-4 p-4">
       <header className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-text">
-          {shape.kind === "TIME_EXTENSION" ? "Ask for more time" : "Ask to change the work"}
+          {shape.kind === "TIME_EXTENSION"
+            ? t("work.amendmentPanel.header.title.timeExtension")
+            : t("work.amendmentPanel.header.title.changeOrder")}
         </h2>
         <p className="text-sm leading-6 text-text-secondary">
           {shape.pricing === "server_from_frozen_rate"
-            ? "You name the extra days. Vsolve prices them at the daily rate you both agreed when this booking was confirmed — you do not set a new price, and nobody can change the agreed one."
-            : "You price each line yourself, because there is no catalogue rate for bespoke work. Vsolve adds them up; the total on your side is only a preview."}
+            ? t("work.amendmentPanel.header.description.serverPriced")
+            : t("work.amendmentPanel.header.description.vendorPriced")}
         </p>
       </header>
 
@@ -141,14 +142,13 @@ export function AmendmentPanel({ engagement, wording }: AmendmentPanelProps) {
 
       {open ? (
         <p className="text-sm leading-6 text-text-secondary">
-          One change request is already open on this {wording.parent}. Vsolve takes one at a time,
-          so the next one can be raised after the customer decides this one.
+          {t("work.amendmentPanel.alreadyOpen", { parent: wording.parent })}
         </p>
       ) : acceptsAmendments(engagement) ? (
         <AmendmentComposer engagement={engagement} shape={shape} wording={wording} />
       ) : (
         <p className="text-sm leading-6 text-text-secondary">
-          This {wording.parent} is not open to changes any more.
+          {t("work.amendmentPanel.notAcceptingChanges", { parent: wording.parent })}
         </p>
       )}
     </Card>
@@ -168,6 +168,7 @@ function AmendmentHistory({
   readonly amendments: readonly EngagementAmendment[];
   readonly wording: StageWording;
 }) {
+  const t = useT();
   if (amendments.length === 0) return null;
 
   return (
@@ -185,10 +186,15 @@ function AmendmentHistory({
           <span className="text-sm leading-6 text-text-secondary">{amendment.reason}</span>
           {isAmendmentLive(amendment) ? (
             <span className="text-xs leading-5 text-text-muted">
-              Not agreed scope. Nothing about this {wording.parent} changes until the customer
-              decides
-              {amendment.delta_paise > 0 ? " and the payment clears" : ""}. Their decision is due
-              by {shortDate(amendment.expires_at)}.
+              {amendment.delta_paise > 0
+                ? t("work.amendmentPanel.liveNote.withPayment", {
+                    parent: wording.parent,
+                    date: shortDate(amendment.expires_at),
+                  })
+                : t("work.amendmentPanel.liveNote.withoutPayment", {
+                    parent: wording.parent,
+                    date: shortDate(amendment.expires_at),
+                  })}
             </span>
           ) : null}
         </li>
@@ -198,21 +204,22 @@ function AmendmentHistory({
 }
 
 function AmendmentStatusBadge({ amendment }: { readonly amendment: EngagementAmendment }) {
+  const t = useT();
   switch (amendment.status) {
     case "PROPOSED":
-      return <Badge tone="info">With the customer</Badge>;
+      return <Badge tone="info">{t("work.amendmentPanel.status.proposed")}</Badge>;
     case "CUSTOMER_APPROVED":
-      return <Badge tone="info">Accepted, not applied</Badge>;
+      return <Badge tone="info">{t("work.amendmentPanel.status.customerApproved")}</Badge>;
     case "PAYMENT_PENDING":
-      return <Badge tone="info">Waiting on payment</Badge>;
+      return <Badge tone="info">{t("work.amendmentPanel.status.paymentPending")}</Badge>;
     case "AUTHORIZED":
-      return <Badge tone="success">Applied</Badge>;
+      return <Badge tone="success">{t("work.amendmentPanel.status.authorized")}</Badge>;
     case "CUSTOMER_DECLINED":
-      return <Badge tone="neutral">Declined</Badge>;
+      return <Badge tone="neutral">{t("work.amendmentPanel.status.declined")}</Badge>;
     case "EXPIRED":
-      return <Badge tone="neutral">Expired</Badge>;
+      return <Badge tone="neutral">{t("work.amendmentPanel.status.expired")}</Badge>;
     default:
-      return <Badge tone="neutral">State not recognised</Badge>;
+      return <Badge tone="neutral">{t("work.amendmentPanel.status.unknown")}</Badge>;
   }
 }
 
@@ -227,6 +234,7 @@ function AmendmentComposer({
   readonly shape: AmendmentShape;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [stageId, setStageId] = useState("");
@@ -251,7 +259,9 @@ function AmendmentComposer({
         onClick={() => setOpen(true)}
         icon={<FilePlus2 size={16} aria-hidden />}
       >
-        {shape.kind === "TIME_EXTENSION" ? "Ask for more days" : "Propose a change"}
+        {shape.kind === "TIME_EXTENSION"
+          ? t("work.amendmentPanel.openButton.timeExtension")
+          : t("work.amendmentPanel.openButton.changeOrder")}
       </Button>
     );
   }
@@ -276,8 +286,8 @@ function AmendmentComposer({
   return (
     <div className="flex flex-col gap-3">
       <Field
-        label="Why is this needed?"
-        description="The customer reads this and decides on it. Say what changed on site."
+        label={t("work.amendmentPanel.form.reason.label")}
+        description={t("work.amendmentPanel.form.reason.description")}
         required
         error={problemFor("reason")}
       >
@@ -289,22 +299,22 @@ function AmendmentComposer({
       </Field>
 
       <Field
-        label={`Which ${wording.one}?`}
+        label={t("work.amendmentPanel.form.stage.label", { one: wording.one })}
         description={
           vendorPriced
-            ? `Required when you are taking work out. Leave it unset when you are adding work — that creates a new ${wording.one}.`
-            : `Optional. Leave it unset unless the extra days belong to one ${wording.one}.`
+            ? t("work.amendmentPanel.form.stage.description.vendorPriced", { one: wording.one })
+            : t("work.amendmentPanel.form.stage.description.serverPriced", { one: wording.one })
         }
         error={problemFor("stage")}
       >
         <Select
           value={stageId}
           onChange={(event) => setStageId(event.target.value)}
-          placeholder={`No particular ${wording.one}`}
+          placeholder={t("work.amendmentPanel.form.stage.placeholder", { one: wording.one })}
         >
           {orderedStages(engagement).map((stage) => (
             <option key={stage.id} value={stage.id}>
-              {stageTitle(stage, wording)} · {formatMoney(stage.amount_paise)}
+              {stageTitle(stage, wording, t)} · {formatMoney(stage.amount_paise)}
             </option>
           ))}
         </Select>
@@ -312,12 +322,21 @@ function AmendmentComposer({
 
       <fieldset className="flex flex-col gap-3">
         <legend className="text-sm font-semibold text-text">
-          {vendorPriced ? "What is changing" : "Extra days"}
+          {vendorPriced
+            ? t("work.amendmentPanel.form.linesLegend.vendorPriced")
+            : t("work.amendmentPanel.form.linesLegend.serverPriced")}
         </legend>
 
         {lines.map((line, index) => (
           <div key={index} className="flex flex-col gap-2 rounded-control bg-surface-sunken p-3">
-            <Field label={vendorPriced ? "What this covers" : "What the extra days are for"} required>
+            <Field
+              label={
+                vendorPriced
+                  ? t("work.amendmentPanel.form.lineTitle.vendorPriced")
+                  : t("work.amendmentPanel.form.lineTitle.serverPriced")
+              }
+              required
+            >
               <Input
                 value={line.title}
                 onChange={(event) =>
@@ -332,7 +351,11 @@ function AmendmentComposer({
 
             <div className="flex gap-2">
               <Field
-                label={vendorPriced ? "How many" : "Days"}
+                label={
+                  vendorPriced
+                    ? t("work.amendmentPanel.form.lineQuantity.vendorPriced")
+                    : t("work.amendmentPanel.form.lineQuantity.serverPriced")
+                }
                 className="flex-1"
                 required
               >
@@ -353,9 +376,9 @@ function AmendmentComposer({
 
               {vendorPriced ? (
                 <Field
-                  label="Amount in rupees"
+                  label={t("work.amendmentPanel.form.lineAmount.label")}
                   className="flex-1"
-                  description="Use a minus sign to take work out."
+                  description={t("work.amendmentPanel.form.lineAmount.description")}
                   required
                 >
                   <Input
@@ -391,7 +414,7 @@ function AmendmentComposer({
                 icon={<Trash2 size={16} aria-hidden />}
                 onClick={() => setLines((rows) => rows.filter((_row, position) => position !== index))}
               >
-                Remove this line
+                {t("work.amendmentPanel.form.removeLine")}
               </Button>
             ) : null}
           </div>
@@ -421,26 +444,23 @@ function AmendmentComposer({
             icon={<Plus size={16} aria-hidden />}
             onClick={() => setLines((rows) => [...rows, EMPTY_LINE])}
           >
-            Add another line
+            {t("work.amendmentPanel.form.addLine")}
           </Button>
         )}
       </fieldset>
 
       {vendorPriced ? (
         <p className="text-sm leading-6 text-text-secondary">
-          Your lines come to{" "}
+          {t("work.amendmentPanel.preview.vendorPriced.prefix")}{" "}
           <span className="font-semibold tabular-nums">
             {delta > 0 ? "+" : delta < 0 ? "−" : ""}
             {formatMoney(Math.abs(delta))}
           </span>
-          . Vsolve adds them up itself and its figure is the one on the agreement — this is a
-          preview of your own arithmetic.
+          {t("work.amendmentPanel.preview.vendorPriced.suffix")}
         </p>
       ) : (
         <p className="text-sm leading-6 text-text-secondary">
-          Vsolve prices these days at the rate frozen when this booking was confirmed. You will see
-          the figure once the request is raised. At most {MAXIMUM_EXTENSION_DAYS} extra days can be
-          asked for in one request.
+          {t("work.amendmentPanel.preview.serverPriced", { max: MAXIMUM_EXTENSION_DAYS })}
         </p>
       )}
 
@@ -449,12 +469,12 @@ function AmendmentComposer({
           type="button"
           onClick={onPropose}
           loading={propose.isPending}
-          loadingLabel="Sending the change request"
+          loadingLabel={t("work.amendmentPanel.form.submitLoading")}
         >
-          Send to the customer
+          {t("work.amendmentPanel.form.submit")}
         </Button>
         <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
 
@@ -471,13 +491,14 @@ function ProposeFailure({
   readonly error: unknown;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
 
   if (isPolicyUnavailable(error)) {
     return (
       <ErrorState
-        title="Vsolve cannot take change requests yet"
-        message="A change request has to carry a deadline for the customer to answer by, and nobody has set how long that is. Vsolve refuses to invent one rather than leave an open claim on somebody's money. Support can raise this for you."
+        title={t("work.amendmentPanel.error.policyUnavailable.title")}
+        message={t("work.amendmentPanel.error.policyUnavailable.message")}
         severity="warning"
         reference={presentation.reference}
       />
@@ -487,8 +508,8 @@ function ProposeFailure({
   if (isAmendmentNotActionable(error)) {
     return (
       <ErrorState
-        title="A change request is already open"
-        message={`One is already waiting for the customer on this ${wording.parent} — it may have been raised on another device. Reload to see it. Sending this one would be a second request Vsolve does not allow.`}
+        title={t("work.amendmentPanel.error.notActionable.title")}
+        message={t("work.amendmentPanel.error.notActionable.message", { parent: wording.parent })}
         severity="warning"
         reference={presentation.reference}
       />
@@ -498,8 +519,8 @@ function ProposeFailure({
   if (isAmendmentRequired(error)) {
     return (
       <ErrorState
-        title="Vsolve has no agreed daily rate to price this from"
-        message={`Extra days are priced from the rate frozen when this ${wording.parent} was confirmed, and none is recorded against it. Nothing you change on this form will fix that — support can.`}
+        title={t("work.amendmentPanel.error.amendmentRequired.title")}
+        message={t("work.amendmentPanel.error.amendmentRequired.message", { parent: wording.parent })}
         severity="warning"
         reference={presentation.reference}
       />

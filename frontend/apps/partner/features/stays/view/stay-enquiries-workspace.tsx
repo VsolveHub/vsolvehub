@@ -2,7 +2,18 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
-import { Badge, Button, Card, Dialog, EmptyState, Field, LoadMore, Textarea, formatDate } from "@vsolve/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  Field,
+  LoadMore,
+  Textarea,
+  formatDate,
+  useT,
+} from "@vsolve/ui";
 import { Check, ChevronRight, Phone, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -15,9 +26,10 @@ import {
   type StayEnquiry,
   stayLengthLabel,
 } from "@/features/stays/queries";
-import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
+import { useStaySections } from "@/features/stays/view/stay-sections";
 import {
   StayEnquiryDetailSheet,
+  adultsAndChildren,
   stayEnquiryStatusLabel,
   stayEnquiryTone,
   RoomChoice,
@@ -28,11 +40,12 @@ import { SectionNav } from "@/features/workspace/view/section-nav";
 const ENQUIRY_FILTERS = ["OPEN", "CONFIRMED", "CLOSED", "ALL"] as const;
 type EnquiryFilter = (typeof ENQUIRY_FILTERS)[number];
 
+/** Catalogue keys, resolved with `t` at render time. */
 const FILTER_LABELS: Record<EnquiryFilter, string> = {
-  OPEN: "To call",
-  CONFIRMED: "Booked",
-  CLOSED: "Closed",
-  ALL: "All",
+  OPEN: "stays.enquiries.filter.open",
+  CONFIRMED: "stays.enquiries.filter.confirmed",
+  CLOSED: "stays.enquiries.filter.closed",
+  ALL: "stays.enquiries.filter.all",
 };
 
 /** Enquiries the host still has to call about. */
@@ -54,6 +67,8 @@ export const ENQUIRY_FILTER_STATUSES: Record<EnquiryFilter, string> = {
  * looks its record up in the unfiltered list, so changing the filter cannot blank it.
  */
 export function PartnerStayEnquiriesWorkspace() {
+  const t = useT();
+  const sections = useStaySections();
   const qc = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -137,18 +152,17 @@ export function PartnerStayEnquiriesWorkspace() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Stays</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Guest enquiries</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("stays.bookings.eyebrow")}</p>
+        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("stays.enquiries.heading")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Call the guest, agree the room and dates, then mark the enquiry Booked (pick the room) or
-          Not available. The guest is told either way.
+          {t("stays.enquiries.intro")}
         </p>
       </div>
 
-      <SectionNav label="Stay sections" items={STAY_SECTIONS} />
+      <SectionNav label={t("stays.sections.ariaLabel")} items={sections} />
 
       <Card>
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Enquiry status filter">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("stays.enquiries.filterAria")}>
           {ENQUIRY_FILTERS.map((option) => (
             <button
               key={option}
@@ -162,13 +176,13 @@ export function PartnerStayEnquiriesWorkspace() {
                   : "border border-line bg-surface text-text-secondary hover:text-navy-900"
               }`}
             >
-              {FILTER_LABELS[option]}
+              {t(FILTER_LABELS[option])}
               {option === "OPEN" && openCount && openCount !== "0" ? ` (${openCount})` : ""}
             </button>
           ))}
         </div>
 
-        {enquiries.isLoading ? <p className="mt-3 text-sm text-text-secondary">Loading…</p> : null}
+        {enquiries.isLoading ? <p className="mt-3 text-sm text-text-secondary">{t("common.loading")}</p> : null}
         {enquiries.error ? (
           <p className="mt-3 text-sm text-danger-text">{friendlyErrorMessage(enquiries.error)}</p>
         ) : null}
@@ -176,8 +190,10 @@ export function PartnerStayEnquiriesWorkspace() {
           <EmptyState
             compact
             className="mt-3"
-            title={filter === "OPEN" ? "Nobody to call right now" : "Nothing here"}
-            description="New enquiries appear here, with the guest's number."
+            title={
+              filter === "OPEN" ? t("stays.enquiries.emptyOpen") : t("stays.enquiries.emptyOther")
+            }
+            description={t("stays.enquiries.emptyDescription")}
           />
         ) : null}
 
@@ -192,24 +208,32 @@ export function PartnerStayEnquiriesWorkspace() {
                 >
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-navy-900">
-                      {enquiry.customer_name || "Guest"}
+                      {enquiry.customer_name || t("stays.sheet.guest")}
                     </span>
                     <Badge tone={stayEnquiryTone(enquiry.status)}>
-                      {stayEnquiryStatusLabel(enquiry.status)}
+                      {stayEnquiryStatusLabel(enquiry.status, t)}
                     </Badge>
                   </span>
                   <span className="block text-sm text-text-secondary">
-                    {enquiry.property_title} · {enquiry.unit_name ?? "Room"}
+                    {enquiry.property_title} · {enquiry.unit_name ?? t("stays.bookings.fallbackRoom")}
                   </span>
                   <span className="block text-sm text-text-secondary">
-                    From {formatDate(`${enquiry.check_in}T12:00:00`)}
+                    {t("stays.enquiries.from", { date: formatDate(`${enquiry.check_in}T12:00:00`) })}
                     {enquiry.stay_length
-                      ? ` · ${stayLengthLabel(enquiry.stay_length, enquiry.price_period)}`
+                      ? ` · ${stayLengthLabel(enquiry.stay_length, enquiry.price_period, t)}`
                       : ""}
-                    {` · ${(enquiry as { adult_count?: number }).adult_count !== undefined ? `${(enquiry as { adult_count?: number }).adult_count} adult${(enquiry as { adult_count?: number }).adult_count === 1 ? "" : "s"}${(enquiry as { child_count?: number }).child_count ? `, ${(enquiry as { child_count?: number }).child_count} child${(enquiry as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""}` : `${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`}`}
+                    {` · ${
+                      (enquiry as { adult_count?: number }).adult_count !== undefined
+                        ? adultsAndChildren(
+                            (enquiry as { adult_count?: number }).adult_count!,
+                            (enquiry as { child_count?: number }).child_count,
+                            t,
+                          )
+                        : t("stays.guests.count", { count: enquiry.guest_count ?? 1 })
+                    }`}
                   </span>
                   <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
-                    Details
+                    {t("common.details")}
                     <ChevronRight className="size-3.5" aria-hidden />
                   </span>
                 </button>
@@ -221,7 +245,7 @@ export function PartnerStayEnquiriesWorkspace() {
                         className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover sm:flex-none"
                       >
                         <Phone className="size-4" aria-hidden />
-                        Call
+                        {t("stays.enquiries.call")}
                       </a>
                     ) : null}
                     <Button
@@ -233,7 +257,7 @@ export function PartnerStayEnquiriesWorkspace() {
                       }}
                     >
                       <Check className="size-4" aria-hidden />
-                      Booked
+                      {t("stays.enquiryStatus.confirmed")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -244,7 +268,7 @@ export function PartnerStayEnquiriesWorkspace() {
                       }}
                     >
                       <X className="size-4" aria-hidden />
-                      Not available
+                      {t("stays.enquiryStatus.declined")}
                     </Button>
                   </div>
                 ) : null}
@@ -273,23 +297,26 @@ export function PartnerStayEnquiriesWorkspace() {
       <Dialog
         open={booking !== null}
         onOpenChange={(next) => !next && closeQuick()}
-        title="Booking confirmed?"
+        title={t("stays.enquiry.bookingConfirmed")}
         description={
           booking
-            ? `${booking.customer_name || "The guest"} is taking a room at ${booking.property_title}. It shows as Booked and stops appearing as available. The guest is told.`
+            ? t("stays.enquiries.bookDialogBody", {
+                name: booking.customer_name || t("stays.enquiries.theGuest"),
+                property: booking.property_title,
+              })
             : undefined
         }
         footer={
           <>
             <Button variant="ghost" disabled={act.isPending} onClick={closeQuick}>
-              Not yet
+              {t("stays.enquiry.notYet")}
             </Button>
             <Button
               loading={act.isPending}
-              loadingLabel="Saving…"
+              loadingLabel={t("stays.visitingHours.saving")}
               onClick={() => booking && act.mutate({ id: booking.id, action: "booked", roomId: roomId || null })}
             >
-              Yes – Mark Room Booked
+              {t("stays.enquiry.confirmBooked")}
             </Button>
           </>
         }
@@ -305,37 +332,39 @@ export function PartnerStayEnquiriesWorkspace() {
       <Dialog
         open={declining !== null}
         onOpenChange={(next) => !next && closeQuick()}
-        title="Room not available?"
+        title={t("stays.enquiries.declineTitle")}
         description={
           declining
-            ? `${declining.customer_name || "The guest"} is told the room is not available. A note is optional.`
+            ? t("stays.enquiries.declineBody", {
+                name: declining.customer_name || t("stays.enquiries.theGuest"),
+              })
             : undefined
         }
         footer={
           <>
             <Button variant="ghost" disabled={act.isPending} onClick={closeQuick}>
-              Back
+              {t("common.back")}
             </Button>
             <Button
               variant="danger"
               loading={act.isPending}
-              loadingLabel="Sending…"
+              loadingLabel={t("stays.enquiries.sending")}
               onClick={() =>
                 declining && act.mutate({ id: declining.id, action: "not_available", note: note.trim() })
               }
             >
-              Tell the guest
+              {t("stays.enquiry.tellGuest")}
             </Button>
           </>
         }
       >
-        <Field label="Note for the guest" showOptional>
+        <Field label={t("stays.enquiry.noteLabel")} showOptional>
           <Textarea
             value={note}
             rows={3}
             maxLength={480}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="e.g. Fully occupied till the 20th."
+            placeholder={t("stays.enquiries.notePlaceholder")}
           />
         </Field>
         {act.error ? (

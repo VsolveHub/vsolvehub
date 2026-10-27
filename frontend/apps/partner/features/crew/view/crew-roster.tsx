@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ConfirmAction, EmptyState, cn } from "@vsolve/ui";
+import { Badge, Button, Card, ConfirmAction, EmptyState, cn, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { AsyncSection, type AsyncState } from "@/components/async-section";
@@ -87,19 +87,20 @@ export function CrewRoster({
   onRetry,
   className,
 }: CrewRosterProps) {
+  const t = useT();
   return (
     <AsyncSection
       state={state}
-      label="Loading your crew"
+      label={t("crew.roster.loading")}
       onRetry={onRetry}
       className={className}
       isEmpty={(view) => view.isEmpty}
       empty={
         <EmptyState
           icon={<Pictogram name="crew" size="md" />}
-          title="No one on your roster yet"
-          description="Add the people you send to work. We check nobody is double-booked on a day, including through another agency."
-          action={<Button onClick={onAdd}>Add someone</Button>}
+          title={t("crew.roster.emptyTitle")}
+          description={t("crew.roster.emptyDescription")}
+          action={<Button onClick={onAdd}>{t("crew.roster.addSomeone")}</Button>}
         />
       }
     >
@@ -113,21 +114,19 @@ export function CrewRoster({
               <Pictogram name="later" size="sm" className="mt-0.5 shrink-0 text-warning-text" />
               <p>
                 <strong className="font-semibold text-warning-text">
-                  Nobody can report attendance.
+                  {t("crew.roster.noSupervisorBold")}
                 </strong>{" "}
-                Mark at least one person as a supervisor — they are who confirms how many of your
-                crew turned up each day.
+                {t("crew.roster.noSupervisorBody")}
               </p>
             </Card>
           )}
 
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-text">
-              Your crew{" "}
-              <span className="font-normal text-text-muted">({view.active.length})</span>
+              {t("crew.roster.heading", { count: view.active.length })}
             </h2>
             <Button onClick={onAdd}>
-              Add someone
+              {t("crew.roster.addSomeone")}
             </Button>
           </div>
 
@@ -152,11 +151,10 @@ export function CrewRoster({
           {view.archived.length > 0 ? (
             <details className="rounded-card border border-line bg-surface p-4">
               <summary className="cursor-pointer text-sm font-semibold text-text">
-                People you have archived ({view.archived.length})
+                {t("crew.roster.archivedSummary", { count: view.archived.length })}
               </summary>
               <p className="mt-2 text-sm leading-6 text-text-secondary">
-                Adding an archived person again puts them back on your roster — you do not need to
-                re-enter their details.
+                {t("crew.roster.archivedHint")}
               </p>
               <ul className="mt-3 flex list-none flex-col gap-2.5 p-0">
                 {view.archived.map((row) => (
@@ -283,6 +281,7 @@ function CrewCard({
   onArchive: () => void;
   onEdit: () => void;
 }) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -298,14 +297,14 @@ function CrewCard({
       </div>
 
       <div className="flex flex-wrap justify-center gap-1.5">
-        {row.isSupervisor ? <Badge tone="info">Supervisor</Badge> : null}
+        {row.isSupervisor ? <Badge tone="info">{t("crew.roster.supervisorBadge")}</Badge> : null}
         <Badge tone={row.documentsVerified ? "success" : "neutral"}>
-          {row.documentsVerified ? "Documents checked" : "Documents not checked"}
+          {row.documentsVerified ? t("crew.roster.documentsChecked") : t("crew.roster.documentsNotChecked")}
         </Badge>
         {/* Only the gap is called out. A recorded gender is not news and a badge for it on
             every card would bury the one row that needs attention. */}
         {row.gender === "" ? null : (
-          <Badge tone="neutral">{crewGenderLabel(row.gender)}</Badge>
+          <Badge tone="neutral">{crewGenderLabel(row.gender, t)}</Badge>
         )}
       </div>
 
@@ -320,8 +319,8 @@ function CrewCard({
       {!row.documentsVerified ? (
         <p className="text-xs leading-5 text-text-muted">
           {outstandingDocumentKinds(row).length > 0
-            ? "Send their ID so Operations can check it."
-            : "Their documents are with Operations."}
+            ? t("crew.roster.sendIdHint")
+            : t("crew.roster.withOperationsHint")}
         </p>
       ) : null}
 
@@ -333,24 +332,24 @@ function CrewCard({
 
       <div className="mt-auto flex flex-wrap justify-center gap-2 pt-1">
         <Button variant="outline" onClick={onEdit}>
-          {row.gender === "" ? "Edit details" : "Edit"}
+          {row.gender === "" ? t("crew.roster.editDetails") : t("common.edit")}
         </Button>
         <Button
           variant="ghost"
           loading={pending}
-          loadingLabel="Archiving"
+          loadingLabel={t("crew.roster.archiving")}
           onClick={() => setConfirming(true)}
         >
-          Archive
+          {t("crew.roster.archive")}
         </Button>
       </div>
 
       <ConfirmAction
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Archive ${row.name}?`}
-        consequence="They stop appearing when you assign crew. Nothing they have already worked is affected, and you can put them back at any time."
-        confirmLabel="Archive"
+        title={t("crew.roster.archiveConfirmTitle", { name: row.name })}
+        consequence={t("crew.roster.archiveConsequence")}
+        confirmLabel={t("crew.roster.archive")}
         pending={pending}
         onConfirm={() => {
           setConfirming(false);
@@ -376,17 +375,13 @@ function CrewCard({
  * missing out on rather than a fault to fix before they can continue.
  */
 function GenderGapNotice({ count }: { readonly count: number }) {
+  const t = useT();
   if (count === 0) return null;
 
   return (
     <p className="rounded-card border border-warning-line bg-warning-surface px-3.5 py-3 text-sm leading-6 text-warning-text">
-      <span className="font-bold">
-        {count === 1
-          ? "One person has no man/woman recorded."
-          : `${count} people have no man/woman recorded.`}
-      </span>{" "}
-      Customers booking event staff ask for a number of men and a number of women, and Vsolve can
-      only count someone toward that once it is set. Open anyone below to add it.
+      <span className="font-bold">{t("crew.roster.genderGap", { count })}</span>{" "}
+      {t("crew.roster.genderGapBody")}
     </p>
   );
 }

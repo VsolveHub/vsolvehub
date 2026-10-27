@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Disclosure, FactList } from "@vsolve/ui";
+import { Card, Disclosure, FactList, useT } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 import { shortDate } from "@/lib/format";
@@ -51,15 +51,16 @@ export interface RequirementSummaryProps {
 }
 
 export function RequirementSummary({ enquiry, collapsible = false }: RequirementSummaryProps) {
-  const budget = budgetLine(enquiry.budgetMinPaise, enquiry.budgetMaxPaise);
+  const t = useT();
+  const budget = budgetLine(enquiry.budgetMinPaise, enquiry.budgetMaxPaise, t);
   const brief = enquiry.brief.filter((line) => line.value.trim() !== "");
 
   const dates = [
     ...(enquiry.requestedStart
-      ? [{ label: "Wants work to start", value: shortDate(enquiry.requestedStart) }]
+      ? [{ label: t("enquiry.summary.wantsStart"), value: shortDate(enquiry.requestedStart) }]
       : []),
     ...(enquiry.serviceBy
-      ? [{ label: "Enquiry closes", value: shortDate(enquiry.serviceBy) }]
+      ? [{ label: t("enquiry.summary.closes"), value: shortDate(enquiry.serviceBy) }]
       : []),
   ];
 
@@ -71,18 +72,16 @@ export function RequirementSummary({ enquiry, collapsible = false }: Requirement
         <FactList items={brief.map((line) => ({ label: line.question, value: line.value }))} />
       ) : (
         <p className="text-sm leading-6 text-text-secondary">
-          The customer chose the service and a visit time — the details are yours to take on
-          site.
+          {t("enquiry.summary.noBrief")}
         </p>
       )}
 
-      {budget ? <FactList items={[{ label: "Customer's budget", value: budget }]} /> : null}
+      {budget ? <FactList items={[{ label: t("enquiry.summary.budget"), value: budget }]} /> : null}
 
       {/* Said once, here, rather than repeated under the address card: it is a
           rule about the whole enquiry, not about the map link. */}
       <p className="text-xs leading-5 text-text-muted">
-        Use this address only to complete this Vsolve visit. The customer&rsquo;s contact details
-        stay private.
+        {t("enquiry.summary.privacy")}
       </p>
     </>
   );
@@ -92,11 +91,11 @@ export function RequirementSummary({ enquiry, collapsible = false }: Requirement
       <Card className="p-0">
         <Disclosure
           className="px-4 py-3"
-          summary="What the customer asked for"
+          summary={t("enquiry.summary.title")}
           // Counts what is actually behind the chevron — the dates included.
           // "No details" was wrong on a visit-first enquiry: the brief is empty
           // by design there, but the two dates are still in the drawer.
-          hint={`${dates.length + brief.length} details`}
+          hint={t("enquiry.summary.detailsCount", { count: dates.length + brief.length })}
         >
           <Body>{body}</Body>
         </Disclosure>
@@ -106,7 +105,7 @@ export function RequirementSummary({ enquiry, collapsible = false }: Requirement
 
   return (
     <Card className="flex flex-col gap-4 p-4">
-      <h2 className="text-sm font-semibold text-text">What the customer asked for</h2>
+      <h2 className="text-sm font-semibold text-text">{t("enquiry.summary.title")}</h2>
       {body}
     </Card>
   );

@@ -44,24 +44,28 @@ export type FileRejection =
  * exists so someone on a phone connection is told immediately instead of after
  * a two-minute upload.
  */
-export function rejectFile(file: { size: number; type: string }): FileRejection | null {
+export function rejectFile(
+  file: { size: number; type: string },
+  t: (key: string, params?: Record<string, string | number>) => string,
+): FileRejection | null {
   if (file.size === 0) {
-    return { code: "empty", message: "That file is empty. Choose the photo or PDF again." };
+    return { code: "empty", message: t("apply.upload.rejection.empty") };
   }
 
   if (file.size > MAX_UPLOAD_BYTES) {
     return {
       code: "too_large",
-      message: `That file is ${formatBytes(file.size)}. The largest we can accept is ${formatBytes(
-        MAX_UPLOAD_BYTES,
-      )} — try a photo instead of a scan.`,
+      message: t("apply.upload.rejection.tooLarge", {
+        size: formatBytes(file.size),
+        max: formatBytes(MAX_UPLOAD_BYTES),
+      }),
     };
   }
 
   if (!ACCEPTED_CONTENT_TYPES.includes(file.type as AcceptedContentType)) {
     return {
       code: "unsupported_type",
-      message: "We can accept a JPEG, a PNG or a PDF. Other formats are not readable by a reviewer.",
+      message: t("apply.upload.rejection.unsupportedType"),
     };
   }
 

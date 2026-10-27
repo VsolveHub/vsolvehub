@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Field, Input, Sheet, cn } from "@vsolve/ui";
+import { Button, Field, Input, Sheet, cn, useT } from "@vsolve/ui";
 import { BedDouble, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -11,19 +11,27 @@ import { RoomPhotosDraft } from "./room-photos";
 
 const NEW = "__new__";
 
+type Translate = ReturnType<typeof useT>;
+
 /** "Same as 101, 102, 103". */
-export function sameAsLabel(numbers: string[]): string {
-  if (numbers.length === 0) return "No rooms yet";
+export function sameAsLabel(numbers: string[], t: Translate): string {
+  if (numbers.length === 0) return t("stays.addRoom.noRoomsYet");
   const shown = numbers.slice(0, 4).join(", ");
-  return `Same as ${shown}${numbers.length > 4 ? ` +${numbers.length - 4}` : ""}`;
+  const rooms = `${shown}${numbers.length > 4 ? ` +${numbers.length - 4}` : ""}`;
+  return t("stays.addRoom.sameAs", { rooms });
 }
 
 /** What adding this room does to the guest cards, in one line. */
-export function addRoomOutcome(choice: string, looks: StayLook[], unitName: string): string {
-  if (choice === NEW) return `A new ${unitName} card appears once you name this look and add a photo.`;
+export function addRoomOutcome(
+  choice: string,
+  looks: StayLook[],
+  unitName: string,
+  t: Translate,
+): string {
+  if (choice === NEW) return t("stays.addRoom.outcomeNew", { name: unitName });
   const look = looks.find((l) => l.id === choice);
   const title = look?.display_name || unitName;
-  return `The room joins the "${title}" card. No new card appears.`;
+  return t("stays.addRoom.outcomeJoins", { title });
 }
 
 /**
@@ -41,6 +49,7 @@ export function AddRoomSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const looks = [...(unit.looks ?? [])].sort((a, b) => a.display_order - b.display_order);
   const rooms = [...(unit.rooms ?? [])].sort(byRoomNumber);
@@ -76,9 +85,9 @@ export function AddRoomSheet({
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!number.trim()) return setError("Type the room number, for example 106.");
+    if (!number.trim()) return setError(t("stays.addRoom.numberMissing"));
     if (choice === NEW && !lookName.trim()) {
-      return setError("Name this look so guests can tell it apart, for example With balcony.");
+      return setError(t("stays.addRoom.lookNameMissing"));
     }
     setError(null);
     add.mutate();
@@ -87,11 +96,19 @@ export function AddRoomSheet({
   const options = [
     ...looks.map((look) => ({
       id: look.id,
-      title: look.name || `${unit.name} (main look)`,
-      caption: sameAsLabel(rooms.filter((r) => r.look === look.id).map((r) => r.number)),
+      title: look.name || t("stays.addRoom.mainLook", { name: unit.name }),
+      caption: sameAsLabel(
+        rooms.filter((r) => r.look === look.id).map((r) => r.number),
+        t,
+      ),
       cover: look.media[0]?.url,
     })),
-    { id: NEW, title: "New look", caption: "Different photos", cover: undefined },
+    {
+      id: NEW,
+      title: t("stays.addRoom.newLook"),
+      caption: t("stays.addRoom.differentPhotos"),
+      cover: undefined,
+    },
   ];
 
   return (
@@ -102,31 +119,33 @@ export function AddRoomSheet({
         if (!next) reset();
         onOpenChange(next);
       }}
-      title={`Add a room to ${unit.name}`}
-      description="Same price as the other rooms of this type. Only you see room numbers."
+      title={t("stays.addRoom.title", { name: unit.name })}
+      description={t("stays.addRoom.description")}
       footer={
         <>
           <Button variant="ghost" disabled={add.isPending} onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="submit" form={`add-room-${unit.id}`} loading={add.isPending}>
-            {number.trim() ? `Add room ${number.trim()}` : "Add room"}
+            {number.trim()
+              ? t("stays.addRoom.submitNumbered", { number: number.trim() })
+              : t("stays.addRoom.submit")}
           </Button>
         </>
       }
     >
       <form id={`add-room-${unit.id}`} className="flex flex-col gap-5 py-3" onSubmit={onSubmit} noValidate>
-        <Field label="Room number" required>
+        <Field label={t("stays.addRoom.numberLabel")} required>
           <Input
             value={number}
             maxLength={40}
-            placeholder="e.g. 106"
+            placeholder={t("stays.addRoom.numberPlaceholder")}
             onChange={(event) => setNumber(event.target.value)}
           />
         </Field>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-sm font-bold text-navy-900">How does this room look?</legend>
+          <legend className="mb-2 text-sm font-bold text-navy-900">{t("stays.addRoom.lookLegend")}</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {options.map((option) => {
               const on = choice === option.id;
@@ -168,14 +187,14 @@ export function AddRoomSheet({
         {choice === NEW ? (
           <div className="flex flex-col gap-3 rounded-card border border-line bg-surface-sunken p-3">
             <Field
-              label="Name this look"
+              label={t("stays.addRoom.lookNameLabel")}
               required
-              description='Guests see it after the room name, for example "1 BHK · With balcony".'
+              description={t("stays.addRoom.lookNameDescription")}
             >
               <Input
                 value={lookName}
                 maxLength={60}
-                placeholder="e.g. With balcony, Corner room"
+                placeholder={t("stays.addRoom.lookNamePlaceholder")}
                 onChange={(event) => setLookName(event.target.value)}
               />
             </Field>
@@ -184,8 +203,8 @@ export function AddRoomSheet({
         ) : null}
 
         <div className="rounded-card bg-navy-50 p-3" data-testid="add-room-outcome">
-          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-navy-700">How guests will see it</p>
-          <p className="mt-1 text-sm font-semibold text-navy-900">{addRoomOutcome(choice, looks, unit.name)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-navy-700">{t("stays.addRoom.outcomeHeading")}</p>
+          <p className="mt-1 text-sm font-semibold text-navy-900">{addRoomOutcome(choice, looks, unit.name, t)}</p>
         </div>
 
         {error ? (

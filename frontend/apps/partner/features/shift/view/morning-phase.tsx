@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ErrorState, buttonStyles } from "@vsolve/ui";
+import { Button, ErrorState, buttonStyles, useT } from "@vsolve/ui";
 import { describeError, isStageTransitionNotAllowed } from "@vsolve/query";
 
 import { Pictogram } from "@/components/pictogram";
@@ -44,27 +44,28 @@ export function mapsHref(address: Engagement["site_address"]): string {
 }
 
 export function SiteRow({ engagement }: { readonly engagement: Engagement | null }) {
+  const t = useT();
   const address = engagement?.site_address ?? null;
   const contact = engagement?.customer_contact ?? null;
   const line = addressLine(address);
 
   if (line === "" && contact === null) {
-    return <p className="text-sm text-text-secondary">Address and phone unlock once the booking fee clears.</p>;
+    return <p className="text-sm text-text-secondary">{t("work.morning.addressLocked")}</p>;
   }
 
   return (
     <div className="flex items-center gap-2">
       <Pictogram name="site" size="sm" className="shrink-0 text-text-muted" />
-      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{line === "" ? "Address pending" : line}</p>
+      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{line === "" ? t("work.morning.addressPending") : line}</p>
       {line === "" ? null : (
         <a href={mapsHref(address)} target="_blank" rel="noreferrer" className={buttonStyles({ variant: "outline", size: "sm" })}>
-          Map
+          {t("work.engagementJob.map")}
         </a>
       )}
       {contact === null || contact.phone.trim() === "" ? null : (
         <a href={`tel:${contact.phone}`} className={buttonStyles({ variant: "outline", size: "sm" })}>
           <Pictogram name="call" size="xs" />
-          Call
+          {t("work.engagementJob.call")}
         </a>
       )}
     </div>
@@ -72,19 +73,20 @@ export function SiteRow({ engagement }: { readonly engagement: Engagement | null
 }
 
 export function MorningPhase({ day, scope, canConfirm, engagement }: MorningPhaseProps) {
+  const t = useT();
   const confirm = useConfirmShiftArrival(scope);
   const names = day.crew.map((member) => member.display_name).join(", ");
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="morning-heading">
       <h2 id="morning-heading" className="sr-only">
-        Before arrival
+        {t("work.morning.srHeading")}
       </h2>
 
       <SiteRow engagement={engagement} />
 
       <p className="text-sm text-text-secondary">
-        <span className="font-semibold text-text">Crew:</span> {names}
+        <span className="font-semibold text-text">{t("work.morning.crewLabel")}</span> {names}
       </p>
 
       {canConfirm ? (
@@ -94,17 +96,17 @@ export function MorningPhase({ day, scope, canConfirm, engagement }: MorningPhas
           size="lg"
           onClick={() => confirm.mutate()}
           loading={confirm.isPending}
-          loadingLabel="Recording"
+          loadingLabel={t("work.settlement.recording")}
           disabled={confirm.isPending}
           icon={<Pictogram name="go" size="sm" />}
         >
-          We&rsquo;ve reached
+          {t("work.morning.reached")}
         </Button>
       ) : (
-        <p className="text-sm text-text-secondary">Your account cannot record arrivals right now.</p>
+        <p className="text-sm text-text-secondary">{t("work.morning.cannotConfirm")}</p>
       )}
 
-      {day.position === 1 ? <p className="text-xs text-text-muted">{DAY_ONE_EARNS_FEE}</p> : null}
+      {day.position === 1 ? <p className="text-xs text-text-muted">{t(DAY_ONE_EARNS_FEE)}</p> : null}
 
       {confirm.isError ? <ArrivalFailure error={confirm.error} /> : null}
     </section>
@@ -112,12 +114,13 @@ export function MorningPhase({ day, scope, canConfirm, engagement }: MorningPhas
 }
 
 function ArrivalFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
   if (isStageTransitionNotAllowed(error)) {
     return (
       <ErrorState
-        title="This day is not ready for an arrival"
-        message="Name the crew first, or reload — the booking may have moved."
+        title={t("work.morning.notReady.title")}
+        message={t("work.morning.notReady.message")}
         severity="warning"
         reference={presentation.reference}
       />

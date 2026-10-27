@@ -1,19 +1,31 @@
 "use client";
 
-import { Badge, Button, Card, ConfirmAction, Dialog, ErrorState, FactList, Textarea, formatMoney } from "@vsolve/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmAction,
+  Dialog,
+  ErrorState,
+  FactList,
+  Textarea,
+  formatMoney,
+  useT,
+} from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
 import { useState } from "react";
 
 import { timeAgo } from "@/lib/format";
 import type { EnquiryStatus } from "@/features/enquiry/model/enquiry-state";
 import {
-  UNREADABLE_PROPOSAL_NOTICE,
   describeProposalStatus,
   describeUsability,
+  documentNouns,
   permissionsFor,
   resolveProposalView,
   revalidationNoticeFor,
   traceForInvitation,
+  unreadableProposalNotice,
   type Proposal,
 } from "../model/proposal-state";
 import { commercialEstimateFromProposal } from "../model/commercial-estimate-draft";
@@ -78,6 +90,7 @@ export function ProposalStatus({
   onRevise,
   documentKind = "quote",
 }: ProposalStatusProps) {
+  const t = useT();
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const [viewingEstimate, setViewingEstimate] = useState(false);
   const withdraw = useWithdrawProposal();
@@ -98,38 +111,35 @@ export function ProposalStatus({
       : trace.current;
   const view = resolveProposalView({ enquiryStatus, proposal: record });
   const documentLabel = documentKind === "estimate" ? "estimate" : "quote";
-  const documentCopy = (copy: string) =>
-    documentKind === "estimate"
-      ? copy.replaceAll("quotes", "estimates").replaceAll("quote", "estimate")
-      : copy;
+  const { doc } = documentNouns(t, documentKind);
 
   if (view.kind === "none") return null;
 
   if (view.kind === "unreadable") {
     return (
       <Card className="flex flex-col gap-3 p-4">
-        <h2 className="text-sm font-semibold text-text">Your {documentLabel}</h2>
+        <h2 className="text-sm font-semibold text-text">{t("proposal.status.yourDoc", { doc })}</h2>
         {mine.isPending ? (
           <p className="text-sm leading-6 text-text-secondary">
-            Loading the {documentLabel} you sent…
+            {t("proposal.status.loadingSent", { doc })}
           </p>
         ) : (
           <>
             <p className="text-sm leading-6 text-text-secondary">
-              {documentCopy(UNREADABLE_PROPOSAL_NOTICE)}
+              {unreadableProposalNotice(t, documentKind)}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 onClick={() => void mine.refetch()}
                 loading={mine.isFetching}
-                loadingLabel="Loading"
+                loadingLabel={t("proposal.status.loading")}
               >
-                Try again
+                {t("common.tryAgain")}
               </Button>
               {documentKind === "quote" ? (
                 <Button variant="ghost" onClick={onRevise}>
-                  Send a new quote
+                  {t("proposal.status.sendNewQuote")}
                 </Button>
               ) : null}
             </div>
@@ -140,9 +150,9 @@ export function ProposalStatus({
   }
 
   const current = view.proposal;
-  const status = describeProposalStatus(current.status);
-  const usability = describeUsability(current.usability);
-  const revalidation = revalidationNoticeFor(current);
+  const status = describeProposalStatus(current.status, t, documentKind);
+  const usability = describeUsability(current.usability, t);
+  const revalidation = revalidationNoticeFor(current, t);
   const permissions = permissionsFor({ proposal: current, enquiryStatus, documentKind });
   const presentation = withdraw.error ? describeError(withdraw.error, "mutation") : null;
   const submittedDraft = commercialEstimateFromProposal(current);
@@ -151,10 +161,10 @@ export function ProposalStatus({
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-text">
-          Your {documentLabel}
+          {t("proposal.status.yourDoc", { doc })}
           {current.revision > 1 ? (
             <span className="ml-2 font-normal text-text-secondary">
-              revision {current.revision}
+              {t("proposal.status.revisionLower", { revision: current.revision })}
             </span>
           ) : null}
         </h2>
@@ -163,7 +173,7 @@ export function ProposalStatus({
         </Badge>
       </div>
 
-      <p className="text-sm leading-6 text-text-secondary">{documentCopy(status.meaning)}</p>
+      <p className="text-sm leading-6 text-text-secondary">{status.meaning}</p>
 
       {current.discount_paise > 0 ? <AppliedDiscountSummary proposal={current} /> : null}
 
@@ -171,53 +181,63 @@ export function ProposalStatus({
         items={[
           ...(current.discount_paise > 0
             ? []
-            : [{ label: "Total", value: formatMoney(current.total_paise) }]),
+            : [{ label: t("proposal.status.fact.total"), value: formatMoney(current.total_paise) }]),
           {
-            label: "Tax",
+            label: t("proposal.status.fact.tax"),
             value:
               current.tax_basis === "INCLUSIVE"
-                ? "Included in the total"
-                : `${formatMoney(current.tax_paise)} on top`,
+                ? t("proposal.status.fact.taxIncluded")
+                : t("proposal.status.fact.taxOnTop", { amount: formatMoney(current.tax_paise) }),
           },
           ...(current.rate_paise_per_worker_day !== null
             ? [
                 {
-                  label: "Rate",
-                  value: `${formatMoney(current.rate_paise_per_worker_day)} per worker per day`,
+                  label: t("proposal.status.fact.rate"),
+                  value: t("proposal.status.fact.ratePerWorkerDay", {
+                    amount: formatMoney(current.rate_paise_per_worker_day),
+                  }),
                 },
               ]
             : []),
           ...(current.minimum_days !== null
-            ? [{ label: "Minimum", value: `${current.minimum_days} days` }]
+            ? [
+                {
+                  label: t("proposal.status.fact.minimum"),
+                  value: t("proposal.status.fact.minimumDays", { days: current.minimum_days }),
+                },
+              ]
             : []),
           ...(current.worker_count !== null
-            ? [{ label: "Workers", value: String(current.worker_count) }]
+            ? [{ label: t("proposal.status.fact.workers"), value: String(current.worker_count) }]
             : []),
           ...(current.stages.length > 0
             ? [
                 {
-                  label: "Broken into",
-                  value: `${current.stages.length} ${current.stages.length === 1 ? "part" : "parts"}`,
+                  label: t("proposal.status.fact.brokenInto"),
+                  value: t("proposal.status.fact.parts", { count: current.stages.length }),
                 },
               ]
             : []),
           ...(current.material_lines.length > 0
             ? [
                 {
-                  label: "Materials",
-                  value: `${current.material_lines.length} ${
-                    current.material_lines.length === 1 ? "line" : "lines"
-                  }`,
+                  label: t("proposal.status.fact.materials"),
+                  value: t("proposal.status.fact.lines", { count: current.material_lines.length }),
                 },
               ]
             : []),
           ...(current.site_visit !== null
-            ? [{ label: "Written", value: "On site, after your visit" }]
+            ? [
+                {
+                  label: t("proposal.status.fact.written"),
+                  value: t("proposal.status.fact.writtenOnSite"),
+                },
+              ]
             : []),
           ...(current.valid_until !== null
-            ? [{ label: "Valid until", value: timeAgo(current.valid_until) }]
+            ? [{ label: t("proposal.status.fact.validUntil"), value: timeAgo(current.valid_until, t) }]
             : []),
-          { label: "Sent", value: timeAgo(current.submitted_at) },
+          { label: t("proposal.status.fact.sent"), value: timeAgo(current.submitted_at, t) },
         ]}
       />
 
@@ -248,8 +268,7 @@ export function ProposalStatus({
         // — so this states where it stands rather than offering a button that
         // cannot exist yet. `M2-FE-705` is where that path gets built.
         <p className="text-sm leading-6 text-warning-text">
-          Vsolve recorded this {documentLabel} on your behalf and it has not been confirmed by you,
-          so the customer cannot see it yet. Support will confirm it with you directly.
+          {t("proposal.status.recordedOnBehalf", { doc })}
         </p>
       ) : null}
 
@@ -266,12 +285,12 @@ export function ProposalStatus({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-2 min-[390px]:flex-row">
           <Button onClick={() => setViewingEstimate(true)} disabled={withdraw.isPending}>
-            View {documentLabel} details
+            {t("proposal.status.viewDetails", { doc })}
           </Button>
 
           {permissions.canSupersede ? (
             <Button variant="outline" onClick={onRevise} disabled={withdraw.isPending}>
-              Revise {documentLabel}
+              {t("proposal.status.revise", { doc })}
             </Button>
           ) : null}
         </div>
@@ -283,10 +302,10 @@ export function ProposalStatus({
               onClick={() => setConfirmingWithdraw(true)}
               disabled={withdraw.isPending}
               loading={withdraw.isPending}
-              loadingLabel="Withdrawing"
+              loadingLabel={t("proposal.status.withdrawing")}
               className="text-danger-text"
             >
-              Withdraw {documentLabel}
+              {t("proposal.status.withdrawDoc", { doc })}
             </Button>
           </div>
         ) : null}
@@ -299,9 +318,9 @@ export function ProposalStatus({
       <ConfirmAction
         open={confirmingWithdraw}
         onOpenChange={setConfirmingWithdraw}
-        title={`Withdraw this ${documentLabel}`}
-        consequence={`The customer can no longer choose this ${documentLabel}. Your enquiry stays open, so you can send a new one — but this price is off the table as soon as you confirm, and withdrawing cannot be undone.`}
-        confirmLabel="Withdraw"
+        title={t("proposal.status.withdrawTitle", { doc })}
+        consequence={t("proposal.status.withdrawConsequence", { doc })}
+        confirmLabel={t("proposal.status.withdraw")}
         destructive
         pending={withdraw.isPending}
         onConfirm={() =>
@@ -317,27 +336,37 @@ export function ProposalStatus({
         onClose={() => setViewingEstimate(false)}
         draft={submittedDraft}
         preview={current}
-        vendorName={`${documentKind === "estimate" ? "Estimate" : "Quote"} revision ${current.revision}`}
+        vendorName={t(
+          documentKind === "estimate"
+            ? "proposal.status.estimateRevision"
+            : "proposal.status.quoteRevision",
+          { revision: current.revision },
+        )}
         materialList={submittedDraft.materialAdded}
         partnerTurnkey={current.material_fulfilment_mode === "PARTNER_TURNKEY"}
-        title={`Your submitted ${documentLabel}`}
-        description={`Revision ${current.revision} · this is the detail currently with the customer.`}
-        closeLabel="Close"
+        title={t("proposal.status.yourSubmitted", { doc })}
+        description={t("proposal.status.submittedDescription", { revision: current.revision })}
+        closeLabel={t("common.close")}
       />
     </Card>
   );
 }
 
+/** Catalogue keys for the customer's revision reason codes. */
 const REVISION_REASON: Record<string, string> = {
-  LEAVE_OUT: "Leave something out",
-  CHANGE_MATERIALS: "Change materials or finish",
-  PHASE_WORK: "Split the work into phases",
-  PRICE: "Asked about the price",
-  OTHER: "Something else",
+  LEAVE_OUT: "proposal.status.reason.leaveOut",
+  CHANGE_MATERIALS: "proposal.status.reason.changeMaterials",
+  PHASE_WORK: "proposal.status.reason.phaseWork",
+  PRICE: "proposal.status.reason.price",
+  OTHER: "proposal.status.reason.other",
 };
 
 function AppliedDiscountSummary({ proposal }: { readonly proposal: Proposal }) {
-  const percentLabel = proposal.discount_bps === null ? null : `${proposal.discount_bps / 100}% off`;
+  const t = useT();
+  const percentLabel =
+    proposal.discount_bps === null
+      ? null
+      : t("proposal.status.percentOff", { percent: proposal.discount_bps / 100 });
   return (
     <section
       aria-labelledby="applied-discount-title"
@@ -351,26 +380,26 @@ function AppliedDiscountSummary({ proposal }: { readonly proposal: Proposal }) {
       </div>
       <dl className="mt-3 grid gap-1.5 text-sm">
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-text-secondary">Original estimate</dt>
+          <dt className="text-text-secondary">{t("proposal.status.originalEstimate")}</dt>
           <dd className="tabular-nums text-text-secondary line-through">
             {formatMoney(proposal.discount_base_paise)}
           </dd>
         </div>
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-text-secondary">Overall discount</dt>
+          <dt className="text-text-secondary">{t("proposal.status.overallDiscount")}</dt>
           <dd className="font-bold tabular-nums text-success-text">
             −{formatMoney(proposal.discount_paise)}
           </dd>
         </div>
         <div className="flex items-baseline justify-between gap-3 border-t border-success-line pt-2">
-          <dt className="font-extrabold text-text">Final customer total</dt>
+          <dt className="font-extrabold text-text">{t("proposal.status.finalCustomerTotal")}</dt>
           <dd className="font-extrabold tabular-nums text-text">
             {formatMoney(proposal.total_paise)}
           </dd>
         </div>
       </dl>
       <p className="mt-2 text-xs leading-5 text-success-text">
-        The overall discount is applied. Scope, warranty and line-item rates are unchanged.
+        {t("proposal.status.discountApplied")}
       </p>
     </section>
   );
@@ -395,6 +424,8 @@ function RevisionRequestPanel({
   readonly documentLabel: "quote" | "estimate";
   readonly onRevise: () => void;
 }) {
+  const t = useT();
+  const { doc } = documentNouns(t, documentLabel);
   const request = proposal.revision_request;
   const decline = useDeclineRevisionRequest();
   // `excluded_items` is a JSONField published as `unknown`; anything that is not a
@@ -425,37 +456,38 @@ function RevisionRequestPanel({
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p id="overall-discount-request" className="text-sm font-extrabold text-text">
-              Price
+              {t("proposal.status.price")}
             </p>
-            <Badge tone="neutral">Requested · not applied</Badge>
+            <Badge tone="neutral">{t("proposal.status.requestedNotApplied")}</Badge>
           </div>
           <dl className="mt-3 grid gap-1.5 text-sm">
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-text-secondary">Current estimate</dt>
+              <dt className="text-text-secondary">{t("proposal.status.currentEstimate")}</dt>
               <dd className="font-bold tabular-nums text-text">
                 {formatMoney(proposal.total_paise)}
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-text-secondary">Customer requested</dt>
-              <dd className="font-bold text-text">{askedBps / 100}% overall</dd>
+              <dt className="text-text-secondary">{t("proposal.status.customerRequested")}</dt>
+              <dd className="font-bold text-text">
+                {t("proposal.status.percentOverall", { percent: askedBps / 100 })}
+              </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-text-secondary">Overall discount</dt>
+              <dt className="text-text-secondary">{t("proposal.status.overallDiscount")}</dt>
               <dd className="font-bold tabular-nums text-success-text">
                 −{formatMoney(askedSavingPaise)}
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2">
-              <dt className="font-extrabold text-text">New total if applied</dt>
+              <dt className="font-extrabold text-text">{t("proposal.status.newTotalIfApplied")}</dt>
               <dd className="text-lg font-extrabold tabular-nums text-text">
                 {formatMoney(proposal.total_paise - askedSavingPaise)}
               </dd>
             </div>
           </dl>
           <p className="mt-2 text-xs text-text-muted">
-            Requested {timeAgo(request.created_at)} · the current price remains live until you
-            confirm.
+            {t("proposal.status.requestedAgo", { when: timeAgo(request.created_at, t) })}
           </p>
           {request.note.trim() !== "" ? (
             <p className="mt-2 text-sm leading-6 text-text-secondary">“{request.note.trim()}”</p>
@@ -477,7 +509,7 @@ function RevisionRequestPanel({
                 setDiscounting(true);
               }}
             >
-              Apply {askedBps / 100}% discount
+              {t("proposal.status.applyPercent", { percent: askedBps / 100 })}
             </Button>
             <Button
               size="sm"
@@ -487,31 +519,31 @@ function RevisionRequestPanel({
                 setDiscounting(true);
               }}
             >
-              Set another discount
+              {t("proposal.status.setAnotherDiscount")}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setDeclining(true)}>
-              Keep current price
+              {t("proposal.status.keepCurrentPrice")}
             </Button>
           </div>
           <p className="mt-2 text-xs leading-5 text-text-muted">
-            Scope, warranty and line-item rates remain unchanged.
+            {t("proposal.status.scopeUnchanged")}
           </p>
         </section>
 
         <Dialog
           open={declining}
           onOpenChange={setDeclining}
-          title="Keep the current price?"
-          description={`Your ${documentLabel} stays exactly as sent. The customer reads your note beside their request.`}
+          title={t("proposal.status.keepPriceTitle")}
+          description={t("proposal.status.keepPriceDescription", { doc })}
           footer={
             <>
               <Button variant="ghost" onClick={() => setDeclining(false)}>
-                Back
+                {t("common.back")}
               </Button>
               <Button
                 variant="danger"
                 loading={decline.isPending}
-                loadingLabel="Keeping current price"
+                loadingLabel={t("proposal.status.keepingCurrentPrice")}
                 onClick={() =>
                   decline.mutate(
                     {
@@ -524,7 +556,7 @@ function RevisionRequestPanel({
                   )
                 }
               >
-                Keep current price
+                {t("proposal.status.keepCurrentPrice")}
               </Button>
             </>
           }
@@ -534,7 +566,7 @@ function RevisionRequestPanel({
             maxLength={1000}
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="Material and labour costs are already at the lowest workable amount."
+            placeholder={t("proposal.status.keepPricePlaceholder")}
           />
         </Dialog>
 
@@ -562,11 +594,11 @@ function RevisionRequestPanel({
       <p className="text-sm font-semibold text-text">
         {isOpen
           ? askedBps === null
-            ? `The customer asked for a revised ${documentLabel}`
-            : "A customer asked about your price"
+            ? t("proposal.status.askedForRevised", { doc })
+            : t("proposal.status.askedAboutPrice")
           : request.status === "ANSWERED"
-            ? "You answered their revision request"
-            : "You declined their revision request"}
+            ? t("proposal.status.answeredRequest")
+            : t("proposal.status.declinedRequest")}
       </p>
       {askedBps !== null ? (
         // The ask in rupees, not percent. "5%" is a number to think about;
@@ -574,30 +606,39 @@ function RevisionRequestPanel({
         // vendor deserves it stated rather than left to work out.
         <dl className="mt-2 grid gap-1 rounded-control bg-surface px-3 py-2 text-sm tabular-nums">
           <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-text-secondary">You quoted</dt>
+            <dt className="text-text-secondary">{t("proposal.status.youQuoted")}</dt>
             <dd className="font-bold text-text">{formatMoney(proposal.total_paise)}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-text-secondary">They asked for</dt>
+            <dt className="text-text-secondary">{t("proposal.status.theyAskedFor")}</dt>
             <dd className="font-extrabold text-text">
               {formatMoney(proposal.total_paise - askedSavingPaise)}
-              <span className="ml-1.5 font-semibold text-text-muted">({askedBps / 100}% off)</span>
+              <span className="ml-1.5 font-semibold text-text-muted">
+                ({t("proposal.status.percentOff", { percent: askedBps / 100 })})
+              </span>
             </dd>
           </div>
           <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1">
-            <dt className="text-text-secondary">You would lose</dt>
+            <dt className="text-text-secondary">{t("proposal.status.youWouldLose")}</dt>
             <dd className="font-bold text-warning-text">{formatMoney(askedSavingPaise)}</dd>
           </div>
         </dl>
       ) : null}
       <p className="mt-1 text-sm leading-6 text-text-secondary">
-        {REVISION_REASON[request.reason_code] ?? request.reason_code}
+        {(() => {
+          const reasonKey = REVISION_REASON[request.reason_code];
+          return reasonKey === undefined ? request.reason_code : t(reasonKey);
+        })()}
         {excludedItems.length > 0 ? `: ${excludedItems.join(", ")}` : ""}
         {request.note.trim() !== "" ? ` — “${request.note.trim()}”` : ""}
       </p>
-      <p className="mt-0.5 text-xs text-text-muted">Asked {timeAgo(request.created_at)}</p>
+      <p className="mt-0.5 text-xs text-text-muted">
+        {t("proposal.status.askedAgo", { when: timeAgo(request.created_at, t) })}
+      </p>
       {request.decline_note.trim() !== "" ? (
-        <p className="mt-1 text-sm text-text">Your note: “{request.decline_note.trim()}”</p>
+        <p className="mt-1 text-sm text-text">
+          {t("proposal.status.yourNote", { note: request.decline_note.trim() })}
+        </p>
       ) : null}
       {presentation ? (
         <ErrorState inline className="mt-2" title={presentation.title} message={presentation.message} severity={presentation.severity} />
@@ -607,21 +648,24 @@ function RevisionRequestPanel({
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" onClick={onRevise}>
               {askedBps === null
-                ? `Send a revised ${documentLabel}`
-                : `Agree — re-issue at ${formatMoney(proposal.total_paise - askedSavingPaise)}`}
+                ? t("proposal.status.sendRevised", { doc })
+                : t("proposal.status.agreeReissue", {
+                    amount: formatMoney(proposal.total_paise - askedSavingPaise),
+                  })}
             </Button>
             {askedBps === null ? null : (
               <Button size="sm" variant="outline" onClick={onRevise}>
-                Offer a different figure
+                {t("proposal.status.offerDifferentFigure")}
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => setDeclining(true)}>
-              {askedBps === null ? "Decline with a note" : "Cannot move — say why"}
+              {askedBps === null
+                ? t("proposal.status.declineWithNote")
+                : t("proposal.status.cannotMove")}
             </Button>
           </div>
           <p className="mt-2 text-xs leading-5 text-text-muted">
-            Your {documentLabel} stays live either way. They can still accept it at{" "}
-            {formatMoney(proposal.total_paise)} while you decide.
+            {t("proposal.status.staysLive", { doc, amount: formatMoney(proposal.total_paise) })}
           </p>
         </>
       ) : null}
@@ -629,15 +673,17 @@ function RevisionRequestPanel({
       <Dialog
         open={declining}
         onOpenChange={setDeclining}
-        title="Decline the change?"
-        description={`Your ${documentLabel} stays exactly as sent. Tell the customer why — they read it beside their request.`}
+        title={t("proposal.status.declineTitle")}
+        description={t("proposal.status.declineDescription", { doc })}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDeclining(false)}>Keep thinking</Button>
+            <Button variant="ghost" onClick={() => setDeclining(false)}>
+              {t("proposal.status.keepThinking")}
+            </Button>
             <Button
               variant="danger"
               loading={decline.isPending}
-              loadingLabel="Declining"
+              loadingLabel={t("proposal.status.declining")}
               onClick={() =>
                 decline.mutate(
                   { proposalId: proposal.id, requestId: request.id, requirementId, note: note.trim() },
@@ -645,12 +691,12 @@ function RevisionRequestPanel({
                 )
               }
             >
-              Decline
+              {t("proposal.status.decline")}
             </Button>
           </>
         }
       >
-        <Textarea rows={3} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="The false ceiling carries the lights, so it cannot come out on its own." />
+        <Textarea rows={3} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t("proposal.status.declinePlaceholder")} />
       </Dialog>
     </div>
   );
@@ -666,6 +712,7 @@ function RevisionRequestPanel({
  * to a blank name rather than a crash.
  */
 function StageBreakdown({ stages }: { readonly stages: Proposal["stages"] }) {
+  const t = useT();
   return (
     <ul className="flex list-none flex-col gap-2 p-0">
       {stages.map((stage, index) => (
@@ -675,13 +722,17 @@ function StageBreakdown({ stages }: { readonly stages: Proposal["stages"] }) {
         >
           <div className="min-w-0">
             <p className="text-sm font-medium text-text">
-              {stage.title.trim() === "" ? `Part ${index + 1}` : stage.title}
+              {stage.title.trim() === ""
+                ? t("proposal.status.partN", { n: index + 1 })
+                : stage.title}
             </p>
             {stage.deliverable ? (
               <p className="mt-0.5 text-sm leading-6 text-text-secondary">{stage.deliverable}</p>
             ) : null}
             {stage.ends_on ? (
-              <p className="mt-0.5 text-xs text-text-muted">Done by {stage.ends_on}</p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                {t("proposal.status.doneBy", { date: stage.ends_on })}
+              </p>
             ) : null}
           </div>
           <span className="shrink-0 text-sm font-semibold text-text">
@@ -707,10 +758,11 @@ function StageBreakdown({ stages }: { readonly stages: Proposal["stages"] }) {
  * vendor wrote.
  */
 function MaterialBreakdown({ lines }: { readonly lines: Proposal["material_lines"] }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-        Materials (paid as an advance)
+        {t("proposal.status.materialsAdvance")}
       </h3>
       <ul className="flex list-none flex-col gap-2 p-0">
         {lines.map((line, index) => {
@@ -730,7 +782,9 @@ function MaterialBreakdown({ lines }: { readonly lines: Proposal["material_lines
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-text">
-                  {line.title.trim() === "" ? `Material ${index + 1}` : line.title}
+                  {line.title.trim() === ""
+                    ? t("proposal.status.materialN", { n: index + 1 })
+                    : line.title}
                 </p>
                 {measure === "" ? null : (
                   <p className="mt-0.5 text-xs text-text-muted">{measure}</p>
@@ -761,19 +815,23 @@ function SupersessionTrace({
   readonly rows: readonly Proposal[];
   readonly documentLabel: "quote" | "estimate";
 }) {
+  const t = useT();
   return (
     <details className="rounded-control border border-line p-3">
       <summary className="min-h-11 cursor-pointer text-sm font-semibold text-text">
-        Earlier versions ({rows.length})
+        {t("proposal.status.earlierVersions", { count: rows.length })}
       </summary>
       <ul className="mt-2 flex list-none flex-col gap-2 p-0">
         {rows.map((row) => {
-          const status = describeProposalStatus(row.status);
+          const status = describeProposalStatus(row.status, t);
           return (
             <li key={row.id} className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm text-text-secondary">
-                Revision {row.revision} · {formatMoney(row.total_paise)} · sent{" "}
-                {timeAgo(row.submitted_at)}
+                {t("proposal.status.traceRow", {
+                  revision: row.revision,
+                  amount: formatMoney(row.total_paise),
+                  when: timeAgo(row.submitted_at, t),
+                })}
               </span>
               <Badge tone={TONE[status.tone]}>{status.label}</Badge>
             </li>
@@ -781,8 +839,11 @@ function SupersessionTrace({
         })}
       </ul>
       <p className="mt-2 text-xs leading-5 text-text-muted">
-        Vsolve never overwrites {documentLabel === "estimate" ? "an" : "a"} {documentLabel}. The
-        customer can still see each version, and none can be chosen after it has been replaced.
+        {t(
+          documentLabel === "estimate"
+            ? "proposal.status.neverOverwrites.estimate"
+            : "proposal.status.neverOverwrites.quote",
+        )}
       </p>
     </details>
   );

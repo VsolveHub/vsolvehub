@@ -1,6 +1,8 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { CrewMemberInput, CrewMemberRecord } from "@/features/capability/adapters/wire";
+import { catalogs } from "@/i18n/catalogs";
 import {
   canReportAttendance,
   crewProblems,
@@ -8,6 +10,8 @@ import {
   probableDuplicate,
   sortForDisplay,
 } from "./roster";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 /**
  * The crew roster: identity, supervisors and archiving.
@@ -79,25 +83,25 @@ describe("archiving", () => {
 
 describe("validation", () => {
   it("accepts an Indian mobile in E.164", () => {
-    expect(crewProblems(input())).toEqual([]);
+    expect(crewProblems(input(), t)).toEqual([]);
   });
 
   it("rejects a number that is not a mobile", () => {
     // The number is the identity that makes cross-agency double-booking
     // detectable. A landline resolving to an office is worse than a rejection.
     for (const phone of ["+911234567890", "9876543210", "+9198765432", "+1234567890"]) {
-      expect(crewProblems(input({ phone_e164: phone })), phone).not.toEqual([]);
+      expect(crewProblems(input({ phone_e164: phone }), t), phone).not.toEqual([]);
     }
   });
 
   it("rejects a name too short to identify anyone", () => {
-    expect(crewProblems(input({ display_name: "R" }))[0]?.field).toBe("display_name");
+    expect(crewProblems(input({ display_name: "R" }), t)[0]?.field).toBe("display_name");
   });
 
   it("does not require skills", () => {
     // Three fields, filled in on a site with one hand free. A longer form is one
     // filled in with placeholder names.
-    expect(crewProblems(input({ skill_codes: [] }))).toEqual([]);
+    expect(crewProblems(input({ skill_codes: [] }), t)).toEqual([]);
   });
 });
 

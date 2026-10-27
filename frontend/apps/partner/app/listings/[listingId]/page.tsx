@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { ArrowLeft, Clock } from "lucide-react";
-import { EmptyState, LoadMore, StatusChip } from "@vsolve/ui";
+import { EmptyState, LoadMore, StatusChip, useT } from "@vsolve/ui";
 
 import {
   fetchListingApplicationsPage,
@@ -55,16 +55,18 @@ function patchApplication(
   };
 }
 
-const FILTER_TABS = [
-  { key: "ALL", label: "All Applicants" },
-  { key: "NEW", label: "New / In Review" },
-  { key: "SHORTLISTED", label: "Shortlisted" },
-  { key: "INTERVIEW", label: "Interview" },
-  { key: "CONNECTED", label: "Connected" },
-  { key: "CLOSED", label: "Closed / Withdrawn" },
-];
+const FILTER_TAB_KEYS: Record<string, string> = {
+  ALL: "listings.detail.filter.all",
+  NEW: "listings.detail.filter.new",
+  SHORTLISTED: "listings.detail.filter.shortlisted",
+  INTERVIEW: "listings.detail.filter.interview",
+  CONNECTED: "listings.detail.filter.connected",
+  CLOSED: "listings.detail.filter.closed",
+};
+const FILTER_TABS = ["ALL", "NEW", "SHORTLISTED", "INTERVIEW", "CONNECTED", "CLOSED"];
 
 export default function PartnerListingLeadsPage() {
+  const t = useT();
   const params = useParams<{ listingId: string }>();
   const queryClient = useQueryClient();
   const listingId = params.listingId;
@@ -147,7 +149,7 @@ export default function PartnerListingLeadsPage() {
 
   const reportMutation = useMutation({
     mutationFn: () => {
-      if (!reportingApp) throw new Error("No applicant selected for report");
+      if (!reportingApp) throw new Error(t("listings.detail.noApplicantSelected"));
       return reportApplicantApplication(reportingApp.id, reportReason, reportDetail);
     },
     onSuccess: () => {
@@ -162,7 +164,7 @@ export default function PartnerListingLeadsPage() {
       proposeInterview(interviewing!.id, body),
     onSuccess: () => {
       setInterviewing(null);
-      notify("Interview invitation sent.");
+      notify(t("listings.detail.interviewInvitationSent"));
       queryClient.invalidateQueries({ queryKey: baseKey });
     },
   });
@@ -177,15 +179,18 @@ export default function PartnerListingLeadsPage() {
           href="/listings"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text"
         >
-          <ArrowLeft className="size-4" /> Back to Listings Workspace
+          <ArrowLeft className="size-4" /> {t("listings.detail.backToWorkspace")}
         </Link>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-text">
-              {listing?.title || "Listing Applicant Leads"}
+              {listing?.title || t("listings.detail.titleFallback")}
             </h1>
             <p className="mt-0.5 text-xs text-text-muted">
-              {listing?.service_name || "Role"} • {totalApplicants} total applicant(s) received
+              {t("listings.detail.applicantsReceived", {
+                service: listing?.service_name || t("listings.detail.roleFallback"),
+                count: totalApplicants,
+              })}
             </p>
           </div>
           {listing?.status && (
@@ -197,8 +202,8 @@ export default function PartnerListingLeadsPage() {
       <div role="tablist" className="grid grid-cols-2 gap-1 rounded-control border border-line bg-surface-sunken p-1 sm:max-w-sm">
         {(
           [
-            ["applicants", `Applications (${totalApplicants})`],
-            ["matches", "Matching candidates"],
+            ["applicants", t("listings.detail.applicationsTab", { count: totalApplicants })],
+            ["matches", t("listings.detail.matchingCandidatesTab")],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -224,25 +229,25 @@ export default function PartnerListingLeadsPage() {
       <>
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
-        {FILTER_TABS.map((tab) => {
+        {FILTER_TABS.map((tabKey) => {
           const count =
-            tab.key === "ALL" ? totalApplicants : activeTab === tab.key ? loadedCount : null;
+            tabKey === "ALL" ? totalApplicants : activeTab === tabKey ? loadedCount : null;
           return (
             <button
               type="button"
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              key={tabKey}
+              onClick={() => setActiveTab(tabKey)}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                activeTab === tab.key
+                activeTab === tabKey
                   ? "bg-navy-900 text-warm-0 shadow-xs"
                   : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
               }`}
             >
-              <span>{tab.label}</span>
+              <span>{t(FILTER_TAB_KEYS[tabKey]!)}</span>
               {count === null ? null : (
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                    activeTab === tab.key
+                    activeTab === tabKey
                       ? "bg-warm-0/20 text-warm-0"
                       : "bg-surface-sunken text-text-muted"
                   }`}
@@ -266,17 +271,17 @@ export default function PartnerListingLeadsPage() {
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-text-muted">
           <Clock className="size-6 animate-spin text-text-muted" />
-          <span className="ml-2 text-sm">Loading applicants...</span>
+          <span className="ml-2 text-sm">{t("listings.detail.loadingApplicants")}</span>
         </div>
       ) : null}
 
       {!isLoading && filteredApplications.length === 0 ? (
         <EmptyState
-          title="No applicants in this view"
+          title={t("listings.detail.emptyTitle")}
           description={
             activeTab === "ALL"
-              ? "Candidates who apply will appear here directly."
-              : "No candidates match the selected filter."
+              ? t("listings.detail.emptyAll")
+              : t("listings.detail.emptyFiltered")
           }
         />
       ) : null}
@@ -307,7 +312,7 @@ export default function PartnerListingLeadsPage() {
         hasMore={applicationsList.hasMore}
         loading={applicationsList.loadingMore}
         onLoadMore={applicationsList.loadMore}
-        label="Show more applicants"
+        label={t("listings.detail.showMoreApplicants")}
       />
 
       </>
@@ -317,7 +322,7 @@ export default function PartnerListingLeadsPage() {
         open={interviewing !== null}
         candidateName={
           interviewing?.applicant_name ||
-          String((interviewing?.applicant_snapshot as Record<string, unknown> | undefined)?.name ?? "the candidate")
+          String((interviewing?.applicant_snapshot as Record<string, unknown> | undefined)?.name ?? t("listings.detail.candidateFallback"))
         }
         defaultLocation={listing?.location_text ?? ""}
         isPending={interviewMutation.isPending}

@@ -43,7 +43,7 @@ export default function BlogIndexPage() {
   };
 
   return (
-    <main className="px-5 py-16">
+    <main className="px-5 pt-24 sm:pt-28 lg:pt-32 pb-20">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

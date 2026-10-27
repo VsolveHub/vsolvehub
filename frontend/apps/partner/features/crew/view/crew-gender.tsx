@@ -1,6 +1,6 @@
 "use client";
 
-import { Field, Select } from "@vsolve/ui";
+import { Field, Select, useT, type Translator } from "@vsolve/ui";
 
 import type { CrewMemberRecord } from "@/features/capability/adapters/wire";
 
@@ -32,17 +32,19 @@ import type { CrewMemberRecord } from "@/features/capability/adapters/wire";
 
 export type CrewGender = CrewMemberRecord["gender"];
 
-const OPTIONS: readonly { readonly value: CrewGender; readonly label: string }[] = [
-  { value: "", label: "Not recorded" },
-  { value: "MAN", label: "Man" },
-  { value: "WOMAN", label: "Woman" },
-  { value: "OTHER", label: "Other" },
-  { value: "UNDISCLOSED", label: "Prefers not to say" },
-];
+function options(t: Translator["t"]): readonly { readonly value: CrewGender; readonly label: string }[] {
+  return [
+    { value: "", label: t("crew.gender.notRecorded") },
+    { value: "MAN", label: t("crew.gender.man") },
+    { value: "WOMAN", label: t("crew.gender.woman") },
+    { value: "OTHER", label: t("crew.gender.other") },
+    { value: "UNDISCLOSED", label: t("crew.gender.undisclosed") },
+  ];
+}
 
 /** What the roster badge and the assignment screen call it. */
-export function crewGenderLabel(gender: CrewGender): string {
-  return OPTIONS.find((option) => option.value === gender)?.label ?? "Not recorded";
+export function crewGenderLabel(gender: CrewGender, t: Translator["t"]): string {
+  return options(t).find((option) => option.value === gender)?.label ?? t("crew.gender.notRecorded");
 }
 
 /** True when this worker cannot fill a man-slot or a woman-slot. */
@@ -57,11 +59,12 @@ export interface CrewGenderFieldProps {
 }
 
 export function CrewGenderField({ value, onChange, disabled = false }: CrewGenderFieldProps) {
+  const t = useT();
   return (
     <Field
-      label="Man or woman"
+      label={t("crew.gender.fieldLabel")}
       showOptional={false}
-      description="Customers booking event staff ask for a number of men and a number of women. Vsolve can only count someone toward that once this is recorded."
+      description={t("crew.gender.fieldDescription")}
     >
       {/* The kit's `Select`, not a bare `<select>`. `Field` hands its control id down through
           context and only a kit control reads it, so a raw element leaves the visible label
@@ -72,7 +75,7 @@ export function CrewGenderField({ value, onChange, disabled = false }: CrewGende
         disabled={disabled}
         onChange={(event) => onChange(event.target.value as CrewGender)}
       >
-        {OPTIONS.map((option) => (
+        {options(t).map((option) => (
           <option key={option.value || "blank"} value={option.value}>
             {option.label}
           </option>

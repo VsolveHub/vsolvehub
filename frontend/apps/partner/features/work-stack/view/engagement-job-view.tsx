@@ -1,7 +1,7 @@
 "use client";
 
 import { isMaterialAdvance, orderedStages } from "@vsolve/query";
-import { Badge, buttonStyles, cn, formatMoney } from "@vsolve/ui";
+import { Badge, buttonStyles, cn, formatMoney, useT } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -10,9 +10,9 @@ import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { HOW_DAY_HIRE_WORKS_HREF, overtimeLine } from "@/features/crew-offer/model/offer-state";
 import { CompletionRating } from "@/features/ratings/view/completion-rating";
 import {
-  PROJECT_WORDING,
-  WORKFORCE_WORDING,
   describeEngagementStatus,
+  getProjectWording,
+  getWorkforceWording,
   describeStageStatus,
   stageTitle,
   type StageWording,
@@ -109,21 +109,22 @@ function shortAddress(address: NonNullable<Engagement["site_address"]>): string 
 }
 
 function CrewJobHub({ engagement }: { readonly engagement: Engagement }) {
+  const t = useT();
   const [problemOpen, setProblemOpen] = useState(false);
-  const status = describeEngagementStatus(engagement, WORKFORCE_WORDING);
+  const status = describeEngagementStatus(engagement, getWorkforceWording(t), t);
   const stages = orderedStages(engagement).filter((stage) => stage.shift_summary !== null);
   const terms = engagement.crew_terms;
   const address = engagement.site_address;
   const customer = engagement.customer_contact;
-  const next = nextCrewAction(stages);
-  const overtime = terms ? overtimeLine(terms.overtime_hourly_paise, terms.standard_day_hours) : null;
+  const next = nextCrewAction(stages, t);
+  const overtime = terms ? overtimeLine(t, terms.overtime_hourly_paise, terms.standard_day_hours) : null;
   const inclusions = terms?.inclusions.filter((line) => line.trim() !== "") ?? [];
   const dayHref = (stageId: string) => `/work/jobs/${engagement.id}/days/${stageId}`;
 
   return (
     <>
       <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
-        <HubHeader title={engagement.service_name || "Crew booking"}>
+        <HubHeader title={engagement.service_name || t("work.engagementJob.crewBooking")}>
           {status ? (
             <Badge tone={STATUS_BADGE_TONE[status.tone]} dot>
               {status.label}
@@ -144,19 +145,19 @@ function CrewJobHub({ engagement }: { readonly engagement: Engagement }) {
                 rel="noreferrer"
                 className={buttonStyles({ variant: "outline", size: "sm" })}
               >
-                Map
+                {t("work.engagementJob.map")}
               </a>
             </ContactRow>
           ) : (
             <p className="text-sm leading-5 text-text-secondary">
-              Address and phone unlock once the booking fee is confirmed.
+              {t("work.engagementJob.addressLocked")}
             </p>
           )}
 
           {customer && customer.phone.trim() !== "" ? (
             <ContactRow icon="call" text={customer.name}>
               <a href={`tel:${customer.phone}`} className={buttonStyles({ variant: "outline", size: "sm" })}>
-                Call
+                {t("work.engagementJob.call")}
               </a>
             </ContactRow>
           ) : null}
@@ -165,16 +166,18 @@ function CrewJobHub({ engagement }: { readonly engagement: Engagement }) {
             {terms ? (
               <>
                 <p className="text-lg font-extrabold leading-tight tabular-nums text-text">
-                  {formatMoney(terms.lead_receipt_paise)} to you ·{" "}
-                  {formatMoney(terms.per_worker_day_paise)}/head/day
+                  {t("work.engagementJob.toYouPerHead", {
+                    total: formatMoney(terms.lead_receipt_paise),
+                    perHead: formatMoney(terms.per_worker_day_paise),
+                  })}
                 </p>
                 <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-                  Customer pays you each evening
+                  {t("work.engagementJob.customerPaysEvening")}
                 </p>
               </>
             ) : (
               <p className="text-lg font-extrabold leading-tight tabular-nums text-text">
-                {formatMoney(engagement.staged_total_paise)} agreed
+                {t("work.engagementJob.agreed", { amount: formatMoney(engagement.staged_total_paise) })}
               </p>
             )}
           </div>
@@ -204,14 +207,14 @@ function CrewJobHub({ engagement }: { readonly engagement: Engagement }) {
               <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full border border-current text-xs">
                 i
               </span>
-              How day-hire works
+              {t("work.engagementJob.howDayHireWorks")}
             </Link>
             <button
               type="button"
               onClick={() => setProblemOpen(true)}
               className="flex min-h-11 items-center gap-1.5 rounded-control px-2 text-sm font-bold text-warning-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
-              <span aria-hidden>⚠</span> Problem
+              <span aria-hidden>⚠</span> {t("work.engagementJob.problem")}
             </button>
           </div>
         </div>
@@ -236,20 +239,25 @@ function DayChips({
   readonly stages: readonly EngagementStage[];
   readonly hrefFor: (stageId: string) => string;
 }) {
+  const t = useT();
   if (stages.length === 0) return null;
   return (
-    <section aria-label="Days">
-      <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">Days</h2>
+    <section aria-label={t("work.engagementJob.days")}>
+      <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+        {t("work.engagementJob.days")}
+      </h2>
       <div className="-mx-4 mt-1.5 flex gap-2 overflow-x-auto px-4 pb-1">
         {stages.map((stage) => {
-          const chip = describeShiftDay(stage.shift_summary!);
-          const date = dayChipDate(stage.scheduled_on) ?? `Day ${stage.position}`;
+          const chip = describeShiftDay(stage.shift_summary!, t);
+          const date =
+            dayChipDate(stage.scheduled_on) ??
+            t("work.engagementJob.dayPosition", { position: stage.position });
           const cancelled = stage.status === "CANCELLED";
           return (
             <Link
               key={stage.id}
               href={hrefFor(stage.id)}
-              aria-label={`${date}, ${cancelled ? "cancelled" : chip.label}`}
+              aria-label={`${date}, ${cancelled ? t("work.engagementJob.cancelledLower") : chip.label}`}
               className={cn(
                 "flex min-h-14 shrink-0 flex-col justify-center gap-0.5 rounded-2xl border px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
                 cancelled ? "border-line bg-surface-sunken opacity-60" : DAY_CHIP_TONE[chip.tone],
@@ -257,7 +265,7 @@ function DayChips({
             >
               <span className="text-sm font-bold text-text">{date}</span>
               <span className="max-w-[14ch] truncate text-xs font-semibold">
-                {cancelled ? "Cancelled" : chip.label}
+                {cancelled ? t("work.engagementJob.cancelled") : chip.label}
               </span>
             </Link>
           );
@@ -295,6 +303,7 @@ function ContactRow({
 }
 
 function HubHeader({ title, children }: { readonly title: string; readonly children?: ReactNode }) {
+  const t = useT();
   const router = useRouter();
   return (
     <div className="flex items-center gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-4">
@@ -304,7 +313,7 @@ function HubHeader({ title, children }: { readonly title: string; readonly child
         className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
       >
         <Pictogram name="back" size="md" className="text-surface" />
-        <span className="sr-only">Back</span>
+        <span className="sr-only">{t("common.back")}</span>
       </button>
       <h1 className="min-w-0 flex-1 truncate text-lg font-bold leading-tight text-surface">{title}</h1>
       {children}
@@ -324,10 +333,11 @@ function HubHeader({ title, children }: { readonly title: string; readonly child
  * settled amount only — the amount already includes any approved extra.
  */
 function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
+  const t = useT();
   const stages = orderedStages(engagement).filter((stage) => stage.shift_summary !== null);
   const collected = collectedDirectlyPaise(stages);
   const customer = engagement.customer_contact;
-  const title = [engagement.service_name || "Crew booking", customer?.name ?? null]
+  const title = [engagement.service_name || t("work.engagementJob.crewBooking"), customer?.name ?? null]
     .filter((part): part is string => part !== null)
     .join(" · ");
 
@@ -336,13 +346,13 @@ function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
       <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
         <HubHeader title={title}>
           <Badge tone="success" dot>
-            Job complete
+            {t("work.engagementJob.jobComplete")}
           </Badge>
         </HubHeader>
 
         <div className="flex flex-1 flex-col gap-2.5 px-4 pt-4 pb-5">
           {stages.length === 0 ? (
-            <p className="text-sm leading-5 text-text-secondary">No days on this booking.</p>
+            <p className="text-sm leading-5 text-text-secondary">{t("work.engagementJob.noDays")}</p>
           ) : (
             <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
               {stages.map((stage) => {
@@ -351,11 +361,15 @@ function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
                 const count =
                   summary.present_count === null
                     ? "—"
-                    : `${summary.present_count} of ${summary.expected_count}`;
+                    : t("work.engagementJob.presentOfExpected", {
+                        present: summary.present_count,
+                        expected: summary.expected_count,
+                      });
                 return (
                   <li key={stage.id} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
                     <span className="w-12 shrink-0 font-bold text-text">
-                      {dayChipDate(stage.scheduled_on) ?? `Day ${stage.position}`}
+                      {dayChipDate(stage.scheduled_on) ??
+                        t("work.engagementJob.dayPosition", { position: stage.position })}
                     </span>
                     <span className="min-w-0 flex-1 text-text-secondary">{count}</span>
                     <span className="shrink-0 font-bold tabular-nums text-text">
@@ -369,7 +383,11 @@ function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
                         settled ? "text-success-text" : "text-text-muted",
                       )}
                     >
-                      {settled ? "Paid ✓" : stage.status === "CANCELLED" ? "Cancelled" : "Open"}
+                      {settled
+                        ? t("work.engagementJob.paid")
+                        : stage.status === "CANCELLED"
+                          ? t("work.engagementJob.cancelled")
+                          : t("work.engagementJob.open")}
                     </span>
                   </li>
                 );
@@ -379,7 +397,7 @@ function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
 
           {collected === null ? null : (
             <p className="flex items-baseline justify-between rounded-card border border-line bg-surface px-3.5 py-3">
-              <span className="text-sm font-semibold text-text">Collected directly</span>
+              <span className="text-sm font-semibold text-text">{t("work.engagementJob.collectedDirectly")}</span>
               <span className="text-xl font-extrabold tabular-nums text-text">{formatMoney(collected)}</span>
             </p>
           )}
@@ -405,16 +423,17 @@ function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
  * `commission_paise` (Vsolve's cut) and not `total_paise` (never moves).
  */
 function ProjectJobView({ engagement }: { readonly engagement: Engagement }) {
+  const t = useT();
   const router = useRouter();
-  const wording: StageWording = PROJECT_WORDING;
-  const status = describeEngagementStatus(engagement, wording);
+  const wording: StageWording = getProjectWording(t);
+  const status = describeEngagementStatus(engagement, wording, t);
   const stages = orderedStages(engagement);
 
   return (
     <>
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
       <h1 className="sr-only">
-        Your {wording.parent}
+        {t("work.engagementJob.srTitle", { parent: wording.parent })}
         {status ? ` — ${status.label}` : ""}
       </h1>
 
@@ -425,12 +444,12 @@ function ProjectJobView({ engagement }: { readonly engagement: Engagement }) {
           className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
         >
           <Pictogram name="back" size="md" className="text-surface" />
-          <span className="sr-only">Back</span>
+          <span className="sr-only">{t("common.back")}</span>
         </button>
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-            This {wording.parent} is agreed at
+            {t("work.engagementJob.agreedAt", { parent: wording.parent })}
           </span>
           <span className="min-w-0 truncate text-[2.125rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
             {formatMoney(engagement.staged_total_paise)}
@@ -477,11 +496,12 @@ function StageRow({
   readonly wording: StageWording;
   readonly href: string | null;
 }) {
-  const status = describeStageStatus(stage, wording);
+  const t = useT();
+  const status = describeStageStatus(stage, wording, t);
   const scheduled = stage.scheduled_on;
 
   const label = [
-    stageTitle(stage, wording),
+    stageTitle(stage, wording, t),
     status?.label,
     scheduled ? shortDate(scheduled) : null,
     formatMoney(stage.amount_paise),
@@ -504,7 +524,7 @@ function StageRow({
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-[0.9375rem] font-semibold leading-snug text-text">
-          {stageTitle(stage, wording)}
+          {stageTitle(stage, wording, t)}
         </span>
         <span className="text-xl font-extrabold leading-none tracking-[-0.02em] tabular-nums text-text">
           {formatMoney(stage.amount_paise)}
@@ -553,13 +573,14 @@ function StageRow({
  * status and an A5 project is staged when its estimate is accepted.
  */
 function EmptyStages({ wording }: { readonly wording: StageWording }): ReactNode {
+  const t = useT();
   return (
     <div className="flex flex-1 flex-col items-center justify-center py-16">
       <div className="grid h-42 w-42 place-items-center rounded-full bg-surface-sunken">
         <Pictogram name="papers" className="h-21 w-21 text-[var(--color-warm-400)]" />
       </div>
       <p className="mt-5 text-base font-semibold text-text-secondary">
-        No {wording.many} on this {wording.parent} yet
+        {t("work.engagementJob.noStages", { many: wording.many, parent: wording.parent })}
       </p>
     </div>
   );

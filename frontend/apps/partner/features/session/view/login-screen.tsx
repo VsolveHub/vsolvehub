@@ -2,8 +2,8 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
-import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated } from "@vsolve/ui";
-import { HelpCircle } from "lucide-react";
+import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated, useT } from "@vsolve/ui";
+import { CheckCircle2, HelpCircle, ShieldCheck, Smartphone, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -15,6 +15,7 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { getApiClient } from "@/lib/api/browser";
 
+import { LocaleSwitcher } from "./locale-switcher";
 import { homeForApplication, safeNextPath } from "../model/redirect";
 
 /**
@@ -34,12 +35,14 @@ import { homeForApplication, safeNextPath } from "../model/redirect";
  * live in `../model/redirect` — the `?next=` half is a security boundary and is
  * tested as one.
  */
-const NAV = [
-  { href: "/how-it-works", label: "How It Works" },
-  { href: "/benefits", label: "Earnings & Benefits" },
-  { href: "/trades", label: "Trades & Services" },
-  { href: "/contact", label: "Support" },
-];
+function navItems(t: ReturnType<typeof useT>) {
+  return [
+    { href: "/how-it-works", label: t("auth.login.nav.howItWorks") },
+    { href: "/benefits", label: t("auth.login.nav.earningsAndBenefits") },
+    { href: "/trades", label: t("auth.login.nav.tradesAndServices") },
+    { href: "/contact", label: t("auth.login.nav.support") },
+  ];
+}
 
 /**
  * Field errors as sentences.
@@ -49,15 +52,14 @@ const NAV = [
  * `invalid_otp` under the field. Anything shaped like a machine code is
  * translated here; a real sentence from Django is left as it is.
  */
-const FIELD_ERROR_COPY: Record<string, string> = {
-  invalid_otp: "That code is not right, or it has expired. Check the code, or request a new one.",
-  invalid_phone_number: "Enter a valid 10-digit mobile number.",
-};
-
-function readableFieldError(message: string | null | undefined): string | null {
+function readableFieldError(t: ReturnType<typeof useT>, message: string | null | undefined): string | null {
   if (!message) return null;
   if (!/^[a-z][a-z0-9_]*$/.test(message)) return message;
-  return FIELD_ERROR_COPY[message] ?? "That did not work. Check what you entered and try again.";
+  const FIELD_ERROR_COPY: Record<string, string> = {
+    invalid_otp: t("auth.login.error.invalidOtp"),
+    invalid_phone_number: t("auth.login.error.invalidPhoneNumber"),
+  };
+  return FIELD_ERROR_COPY[message] ?? t("auth.login.error.generic");
 }
 
 function LoginShell({ children }: { children: ReactNode }) {
@@ -74,6 +76,7 @@ function LoginWait({ message }: { message: string }) {
 }
 
 export function LoginScreen() {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const hydrated = useHydrated();
@@ -86,8 +89,8 @@ export function LoginScreen() {
   const flow = usePhoneAuthFlow(getApiClient());
   const flowWithAudio = {
     ...flow,
-    phoneError: readableFieldError(flow.phoneError),
-    codeError: readableFieldError(flow.codeError),
+    phoneError: readableFieldError(t, flow.phoneError),
+    codeError: readableFieldError(t, flow.codeError),
     onRequestCode: () => {
       prepareBookingAlertsFromGesture();
       flow.onRequestCode();
@@ -114,13 +117,14 @@ export function LoginScreen() {
     }
 
     if (!knowsWhereToGo) return;
-    router.replace(homeForApplication(application.data?.status ?? null));
+    const hasRejectedDocs = (application.data?.documents ?? []).some((d) => d.status === "REJECTED");
+    router.replace(homeForApplication(application.data?.status ?? null, hasRejectedDocs));
   }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
 
   if (!hydrated || guard.status === "checking") {
     return (
       <LoginShell>
-        <LoginWait message="Checking your session…" />
+        <LoginWait message={t("common.checkingSession")} />
       </LoginShell>
     );
   }
@@ -130,9 +134,9 @@ export function LoginScreen() {
       <LoginShell>
         <main className="mx-auto w-full max-w-md px-4 py-32">
           <ErrorState
-            title="We could not check your session"
-            message="Nothing has changed. Check your connection and try again."
-            actionLabel="Try again"
+            title={t("common.couldNotCheckSession")}
+            message={t("common.nothingChanged")}
+            actionLabel={t("common.tryAgain")}
             onAction={() => window.location.reload()}
           />
         </main>
@@ -143,10 +147,12 @@ export function LoginScreen() {
   if (isAuthenticated) {
     return (
       <LoginShell>
-        <LoginWait message="Taking you to your account…" />
+        <LoginWait message={t("common.takingYouToYourAccount")} />
       </LoginShell>
     );
   }
+
+  const nav = navItems(t);
 
   return (
     <LoginShell>
@@ -166,14 +172,14 @@ export function LoginScreen() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
-                <span className="text-text-secondary font-medium">Now onboarding:</span>
-                <span className="text-navy-900 font-bold">Hyderabad</span>
+                <span className="text-text-secondary font-medium">{t("auth.login.nowOnboarding")}</span>
+                <span className="text-navy-900 font-bold">{t("auth.login.city")}</span>
               </div>
             </div>
 
             {/* Desktop Center Navigation Capsule */}
             <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
-              {NAV.map((n) => (
+              {nav.map((n) => (
                 <Link
                   key={n.label}
                   href={n.href}
@@ -186,82 +192,132 @@ export function LoginScreen() {
 
             {/* Right Action CTA & Mobile Drawer */}
             <div className="flex items-center gap-2">
+              <LocaleSwitcher />
               <MarketingNavCta />
-              <MarketingMobileNav items={NAV} />
+              <MarketingMobileNav items={nav} />
             </div>
           </div>
         </header>
       </div>
 
       {/* Page Content */}
-      <main className="mx-auto w-full max-w-md px-4 pt-24 sm:pt-28 pb-16">
-        {/* `padding="none"`, not `p-0`: Card's own `p-6` wins over a className
-            (see card.tsx), which framed the dark header in a white border. */}
-        <Card
-          padding="none"
-          className="overflow-hidden shadow-xl border border-line-strong rounded-3xl bg-surface"
-        >
-          {/* Header Card Accent */}
-          <div className="bg-[#00112e] px-6 py-7 text-white relative overflow-hidden">
-            <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 bg-signal-500/10 rounded-full blur-2xl" />
-            <div className="relative z-10">
-              <span className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300 border border-white/10 mb-3">
-                Partner Sign In
+      <main className="mx-auto w-full max-w-md lg:max-w-5xl xl:max-w-6xl px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-36 pb-16">
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
+          {/* Desktop Left Column: Registration Portal Value Prop */}
+          <div className="hidden lg:flex lg:col-span-7 flex-col gap-6 pr-6">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-sunken px-3.5 py-1 text-xs font-bold text-navy-900 shadow-xs">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Partner Onboarding Portal
               </span>
-              <h1 className="text-2xl font-extrabold tracking-tight text-white">
-                Welcome back
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                <Sparkles size={12} className="text-amber-600" />
+                Desktop Registration
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <h1 className="text-4xl xl:text-5xl font-black tracking-tight text-navy-900 leading-[1.15]">
+                Register & Verify as a Partner on Desktop
               </h1>
-              {/* Follows the step: on the code step this still asked for the
-                  number the person had already entered. */}
-              <p className="mt-1.5 text-sm text-slate-300 leading-relaxed">
-                {flow.phase === "code"
-                  ? "Almost there. Enter the code we sent to your phone to sign in."
-                  : "Sign in with the mobile number you registered with to see your account and job offers."}
+              <p className="text-base text-text-secondary leading-relaxed max-w-lg">
+                Enter your mobile number to register as a new partner or continue your document verification. Once approved, live dispatches operate exclusively on our Partner Mobile App.
               </p>
+            </div>
+
+            {/* 3 Pillars */}
+            <div className="grid gap-3.5 sm:grid-cols-2 pt-2">
+              <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+                <div className="flex items-center gap-2 text-xs font-bold text-navy-900">
+                  <ShieldCheck size={16} className="text-emerald-600" />
+                  <span>KYC & Document Review</span>
+                </div>
+                <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+                  Fast 24-hour verification for Government ID, Address Proof & bank accounts.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+                <div className="flex items-center gap-2 text-xs font-bold text-navy-900">
+                  <Smartphone size={16} className="text-blue-600" />
+                  <span>Mobile App Operations</span>
+                </div>
+                <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+                  Daily job requests, turn-by-turn navigation, and customer chat run on phone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 pt-2 text-xs font-semibold text-text-muted">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={14} className="text-emerald-600" /> 15,000+ Verified Partners
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={14} className="text-emerald-600" /> Direct Bank Deposits
+              </span>
             </div>
           </div>
 
-          {/* Form Body */}
-          <div className="p-6 sm:p-7">
-            <OtpForm
-              {...flowWithAudio}
-              heading={flow.phase === "code" ? "Enter your code" : "Your mobile number"}
-              headingLevel={2}
-              phoneDigits={10}
-              // No form-level `description`. `OtpForm` already prints "We will
-              // send a 6-digit code by SMS." against the field itself, and the
-              // hero above already explains what the number is for — so this
-              // slot was a third telling of the same sentence, stacked directly
-              // on top of the second. On a 375px screen that pushed the input
-              // itself down for no added meaning.
-              verifyLabel="Verify & Sign In"
-              footer={
-                <div className="mt-1 flex flex-col gap-1 rounded-2xl border border-line bg-surface-sunken p-4">
-                  <p className="text-sm font-bold text-navy-900">New to V Solve Hub?</p>
-                  <p className="text-xs leading-relaxed text-text-muted">
-                    Takes only 5 minutes. Free to join with weekly payouts.
+          {/* Right Column: OtpForm Card */}
+          <div className="w-full lg:col-span-5 mx-auto max-w-md">
+            <Card
+              padding="none"
+              className="overflow-hidden shadow-xl border border-line-strong rounded-3xl bg-surface"
+            >
+              {/* Header Card Accent */}
+              <div className="bg-[#00112e] px-6 py-7 text-white relative overflow-hidden">
+                <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 bg-signal-500/10 rounded-full blur-2xl" />
+                <div className="relative z-10">
+                  <span className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300 border border-white/10 mb-3">
+                    {t("auth.login.badge")}
+                  </span>
+                  <h2 className="text-2xl font-extrabold tracking-tight text-white">
+                    {t("auth.login.welcomeBack")}
+                  </h2>
+                  <p className="mt-1.5 text-sm text-slate-300 leading-relaxed">
+                    {flow.phase === "code"
+                      ? t("auth.login.hero.code")
+                      : t("auth.login.hero.phone")}
                   </p>
-                  <Link
-                    href="/apply"
-                    className="mt-1 inline-flex min-h-11 items-center self-start text-sm font-bold text-signal-700 underline underline-offset-4 hover:text-signal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-                  >
-                    Register as a new Partner
-                  </Link>
                 </div>
-              }
-            />
-          </div>
-        </Card>
+              </div>
 
-        {/* Helpdesk Contact */}
-        <div className="mt-6 text-center">
-          <Link
-            href="/contact"
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 text-xs font-semibold text-text-muted hover:text-navy-900 transition-colors"
-          >
-            <HelpCircle size={15} aria-hidden />
-            Need help with your phone number or OTP?
-          </Link>
+              {/* Form Body */}
+              <div className="p-6 sm:p-7">
+                <OtpForm
+                  {...flowWithAudio}
+                  heading={flow.phase === "code" ? t("auth.login.heading.code") : t("auth.login.heading.phone")}
+                  headingLevel={2}
+                  phoneDigits={10}
+                  verifyLabel={t("auth.login.verifyLabel")}
+                  footer={
+                    <div className="mt-1 flex flex-col gap-1 rounded-2xl border border-line bg-surface-sunken p-4">
+                      <p className="text-sm font-bold text-navy-900">{t("auth.login.newToVsh")}</p>
+                      <p className="text-xs leading-relaxed text-text-muted">{t("auth.login.newToVshDetail")}</p>
+                      <Link
+                        href="/apply"
+                        className="mt-1 inline-flex min-h-11 items-center self-start text-sm font-bold text-signal-700 underline underline-offset-4 hover:text-signal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                      >
+                        {t("auth.login.registerAsNewPartner")}
+                      </Link>
+                    </div>
+                  }
+                />
+              </div>
+            </Card>
+
+            {/* Helpdesk Contact */}
+            <div className="mt-6 text-center">
+              <Link
+                href="/contact"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 text-xs font-semibold text-text-muted hover:text-navy-900 transition-colors"
+              >
+                <HelpCircle size={15} aria-hidden />
+                {t("auth.login.needHelp")}
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     </LoginShell>

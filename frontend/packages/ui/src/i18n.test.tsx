@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createTranslator, type Catalog } from "./i18n";
+import { createTranslator, type Catalog } from "./i18n-core";
 
 const catalog: Catalog = {
   "booking.confirmed": "Booking confirmed",

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-import { cn } from "@vsolve/ui";
+import { cn, useT } from "@vsolve/ui";
 
 export interface InlineQuantityControlProps {
   readonly label: string;
@@ -36,6 +36,7 @@ export function InlineQuantityControl({
   decrementLabel,
   incrementLabel,
 }: InlineQuantityControlProps) {
+  const t = useT();
   const [draft, setDraft] = useState(() => String(value));
   const editing = useRef(false);
 
@@ -85,7 +86,7 @@ export function InlineQuantityControl({
       <input
         type="text"
         role="spinbutton"
-        aria-label={`${label} — type a number`}
+        aria-label={t("proposal.screens.quantity.typeNumber", { label })}
         aria-valuemin={0}
         aria-valuenow={effectiveValue}
         inputMode="numeric"
@@ -121,7 +122,7 @@ export function InlineQuantityControl({
       />
 
       <span className="sr-only" aria-live="polite">
-        Quantity {value}
+        {t("proposal.screens.quantity.live", { value })}
       </span>
 
       <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@vsolve/ui";
+import { cn, useT } from "@vsolve/ui";
 import { Bell } from "lucide-react";
 import { useState } from "react";
 
@@ -51,6 +51,7 @@ export interface NotificationBellProps {
 }
 
 export function NotificationBell({ workspaceKeys, className }: NotificationBellProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const count = useUnreadNotificationCount();
 
@@ -64,7 +65,7 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={unreadBadgeLabel(unread)}
+        aria-label={unreadBadgeLabel(unread, t)}
         className={cn(
           "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-control",
           "text-text-secondary hover:bg-surface-hover hover:text-text",
@@ -119,6 +120,7 @@ export function NotificationNavTab({
   isActive?: boolean;
   appearance?: NotificationNavTabAppearance;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const count = useUnreadNotificationCount();
 
@@ -134,7 +136,7 @@ export function NotificationNavTab({
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={unreadBadgeLabel(unread)}
+        aria-label={unreadBadgeLabel(unread, t)}
         className={cn(
           "relative flex items-center transition-all",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",

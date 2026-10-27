@@ -25,7 +25,7 @@ export function LegalPage({
   sections: LegalSection[];
 }) {
   return (
-    <main className="px-5 py-16">
+    <main className="px-5 pt-24 sm:pt-28 lg:pt-32 pb-20">
       <div className="mx-auto max-w-3xl">
         <Link
           href="/"

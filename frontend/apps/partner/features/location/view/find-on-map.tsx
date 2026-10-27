@@ -1,7 +1,7 @@
 "use client";
 
 import { request } from "@vsolve/api-client";
-import { Badge, Button, Dialog } from "@vsolve/ui";
+import { Badge, Button, Dialog, useT } from "@vsolve/ui";
 import { LocationPicker, type PickedLocation } from "@vsolve/ui/location-picker";
 import { MapPin } from "lucide-react";
 import { useState } from "react";
@@ -32,21 +32,22 @@ export interface FindOnMapProps {
   title?: string;
 }
 
-export function FindOnMap({ onPicked, pin = null, title = "Find the location" }: FindOnMapProps) {
+export function FindOnMap({ onPicked, pin = null, title }: FindOnMapProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   return (
     <div className="flex flex-col items-start gap-1">
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>
         <MapPin className="size-4" aria-hidden />
-        {pin ? "Move pin" : "Find on map"}
+        {pin ? t("workspaces.location.movePin") : t("workspaces.location.findOnMap")}
       </Button>
-      {pin ? <Badge tone="success">Pinned on map</Badge> : null}
+      {pin ? <Badge tone="success">{t("workspaces.location.pinned")}</Badge> : null}
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        title={title}
-        description="Search, use your location, or drag the map so the pin sits on the place. We fill in the address; you can still edit it."
+        title={title ?? t("workspaces.location.title")}
+        description={t("workspaces.location.description")}
       >
         {/* Mounted only while open, so each opening starts from the saved pin,
             not one dragged and then abandoned. */}
@@ -55,7 +56,7 @@ export function FindOnMap({ onPicked, pin = null, title = "Find the location" }:
             apiKey={MAPS_KEY}
             reverseGeocode={reverseGeocode}
             initial={pin}
-            confirmLabel="Use this location"
+            confirmLabel={t("workspaces.location.useThis")}
             onConfirm={(location) => {
               onPicked(location);
               setOpen(false);

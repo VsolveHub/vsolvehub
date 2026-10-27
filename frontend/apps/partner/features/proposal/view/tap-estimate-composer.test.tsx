@@ -2,6 +2,8 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { isProposalWindowClosed } from "../queries";
 import { EstimateClosedDialog } from "./tap-estimate-composer";
 
@@ -19,7 +21,7 @@ describe("a stale estimate after the customer chose another vendor", () => {
   });
 
   it("shows one clear outcome and a route back to work", () => {
-    render(<EstimateClosedDialog />);
+    render(withI18n(<EstimateClosedDialog />));
 
     expect(screen.getByRole("dialog", { name: "Estimate closed" })).toBeInTheDocument();
     expect(screen.getByText(/already continued with another professional/i)).toBeInTheDocument();

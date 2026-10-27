@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, Field, Input, Textarea, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, Field, Input, Textarea, formatMoney, useT } from "@vsolve/ui";
 import { Camera, MapPin, X } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 
@@ -57,25 +57,25 @@ function detailsFrom(property: StayProperty, variant: StayTaxonomyVariant | unde
 }
 
 /** What the host sees about where the property stands and what they can do next. */
-function statusNote(property: StayProperty): string | null {
+function statusNote(property: StayProperty, t: ReturnType<typeof useT>): string | null {
   const activeRooms = (property.units ?? []).filter((unit) => unit.is_active !== false).length;
   if (property.listing_status === "ARCHIVED") {
-    return "Archived. Guests can't see it. Restore it to bring it back.";
+    return t("stays.card.note.archived");
   }
   switch (property.moderation_status) {
     case "DRAFT":
       return activeRooms > 0
-        ? "Ready when you are — publish to show it to guests."
-        : "Add at least one room, then publish.";
+        ? t("stays.card.note.draftReady")
+        : t("stays.card.note.draftNoRooms");
     case "PENDING":
-      return "Guests pay upfront for this property, so our team checks your first paid-booking listing once. After that, your listings go live straight away.";
+      return t("stays.card.note.pending");
     case "REJECTED":
-      return "Fix what our team asked for, then publish again.";
+      return t("stays.card.note.rejected");
     case "REMOVED":
-      return "Removed by VSolve. Contact support if you think this is a mistake.";
+      return t("stays.card.note.removed");
     default:
       return property.listing_status === "PAUSED"
-        ? "Paused. Guests can't find it or book it; existing bookings go ahead as planned."
+        ? t("stays.card.note.paused")
         : null;
   }
 }
@@ -89,6 +89,7 @@ export function PropertyCard({
   variant: StayTaxonomyVariant | undefined;
   initialPanel?: Panel;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>(initialPanel);
@@ -99,7 +100,7 @@ export function PropertyCard({
   const [uploading, setUploading] = useState(false);
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
-  const status = stayListingStatus(property);
+  const status = stayListingStatus(property, t);
   const media = [...(property.media ?? [])].sort(
     (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
   );
@@ -111,12 +112,12 @@ export function PropertyCard({
     null,
   );
   const approved = property.moderation_status === "APPROVED";
-  const unitWord = property.price_period === "NIGHT" ? "night" : "month";
+  const perNight = property.price_period === "NIGHT";
   const archived = property.listing_status === "ARCHIVED";
   const canPublish =
     !archived &&
     (property.moderation_status === "DRAFT" || property.moderation_status === "REJECTED");
-  const note = statusNote(property);
+  const note = statusNote(property, t);
 
   const act = useMutation({
     mutationFn: (action: StayPropertyAction) => partnerStayPropertyAction(property.id, action),
@@ -148,7 +149,7 @@ export function PropertyCard({
 
   async function addPhotos(files: FileList | null) {
     if (!files?.length) return;
-    const { ok, tooLarge } = splitBySize(Array.from(files));
+    const { ok, tooLarge } = splitBySize(Array.from(files), t);
     setPhotoError(tooLarge);
     if (ok.length === 0) return;
     setUploading(true);
@@ -161,7 +162,7 @@ export function PropertyCard({
       }
       invalidate();
     } catch (err) {
-      setPhotoError(friendlyErrorMessage(err, "Could not add this photo."));
+      setPhotoError(friendlyErrorMessage(err, t("stays.card.addPhotoFailed")));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -170,12 +171,18 @@ export function PropertyCard({
 
   function onSaveDetails(event: FormEvent) {
     event.preventDefault();
-    if (!details.title.trim()) return setDetailsError("The property needs a name.");
-    if (!details.location.trim()) return setDetailsError("The property needs a location.");
+    if (!details.title.trim()) return setDetailsError(t("stays.card.nameMissing"));
+    if (!details.location.trim()) return setDetailsError(t("stays.card.locationMissing"));
     const minStay = wholeNumber(details.minStay);
-    if (minStay === null) return setDetailsError(`Minimum stay must be 1 ${unitWord} or more.`);
-    const collected = collectSchemaAnswers(variant?.property_schema, details.answers);
-    if ("missing" in collected) return setDetailsError(`Choose ${collected.missing}.`);
+    if (minStay === null) {
+      return setDetailsError(
+        perNight ? t("stays.card.minStayInvalidNight") : t("stays.card.minStayInvalidMonth"),
+      );
+    }
+    const collected = collectSchemaAnswers(variant?.property_schema, details.answers, t);
+    if ("missing" in collected) {
+      return setDetailsError(t("stays.property.chooseMissing", { field: collected.missing }));
+    }
     setDetailsError(null);
     saveDetails.mutate({
       title: details.title.trim(),
@@ -227,10 +234,15 @@ export function PropertyCard({
             ) : null}
             <p className="text-sm text-text-secondary">
               {cheapest !== null
-                ? `From ${formatMoney(cheapest)} ${ratePeriodSuffix(property.price_period)} · `
+                ? `${t("stays.card.fromPrice", {
+                    price: formatMoney(cheapest),
+                    period: ratePeriodSuffix(property.price_period, t),
+                  })} · `
                 : ""}
-              {rooms.reduce((n, unit) => n + (unit.available_count ?? 0), 0)} of{" "}
-              {rooms.reduce((n, unit) => n + (unit.quantity ?? 0), 0)} rooms available
+              {t("stays.card.roomsAvailable", {
+                available: rooms.reduce((n, unit) => n + (unit.available_count ?? 0), 0),
+                total: rooms.reduce((n, unit) => n + (unit.quantity ?? 0), 0),
+              })}
             </p>
             {note ? <p className="text-xs text-text-secondary">{note}</p> : null}
             {(property.moderation_status === "REJECTED" ||
@@ -247,7 +259,7 @@ export function PropertyCard({
                 disabled={act.isPending || activeRooms.length === 0}
                 onClick={() => act.mutate("publish")}
               >
-                {act.isPending ? "Publishing…" : "Publish"}
+                {act.isPending ? t("stays.card.publishing") : t("stays.card.publish")}
               </Button>
             ) : null}
             {approved && property.listing_status === "LIVE" ? (
@@ -257,12 +269,12 @@ export function PropertyCard({
                 disabled={act.isPending}
                 onClick={() => act.mutate("pause")}
               >
-                Pause
+                {t("stays.card.pause")}
               </Button>
             ) : null}
             {approved && property.listing_status === "PAUSED" ? (
               <Button size="sm" disabled={act.isPending} onClick={() => act.mutate("resume")}>
-                Resume
+                {t("stays.card.resume")}
               </Button>
             ) : null}
             {!archived ? (
@@ -272,28 +284,28 @@ export function PropertyCard({
                   variant={panel === "rooms" ? "secondary" : "outline"}
                   onClick={() => toggle("rooms")}
                 >
-                  Rooms
+                  {t("stays.card.rooms")}
                 </Button>
                 <Button
                   size="sm"
                   variant={panel === "details" ? "secondary" : "outline"}
                   onClick={() => toggle("details")}
                 >
-                  Edit details
+                  {t("stays.card.editDetails")}
                 </Button>
                 <Button
                   size="sm"
                   variant={panel === "photos" ? "secondary" : "outline"}
                   onClick={() => toggle("photos")}
                 >
-                  Building photos
+                  {t("stays.card.buildingPhotos")}
                 </Button>
                 <Button
                   size="sm"
                   variant={panel === "visits" ? "secondary" : "outline"}
                   onClick={() => toggle("visits")}
                 >
-                  Visiting hours
+                  {t("stays.visitingHours.heading")}
                 </Button>
                 <Button
                   size="sm"
@@ -301,7 +313,7 @@ export function PropertyCard({
                   disabled={act.isPending}
                   onClick={() => act.mutate("archive")}
                 >
-                  Archive
+                  {t("stays.card.archive")}
                 </Button>
               </>
             ) : (
@@ -311,7 +323,7 @@ export function PropertyCard({
                 disabled={act.isPending}
                 onClick={() => act.mutate("restore")}
               >
-                Restore
+                {t("stays.card.restore")}
               </Button>
             )}
           </div>
@@ -328,7 +340,7 @@ export function PropertyCard({
       {panel === "details" ? (
         <form className="flex flex-col gap-4 border-t border-line p-4" onSubmit={onSaveDetails}>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Property name" required>
+            <Field label={t("stays.property.nameLabel")} required>
               <Input
                 id={`title-${property.id}`}
                 value={details.title}
@@ -336,7 +348,7 @@ export function PropertyCard({
                 onChange={(e) => setDetails({ ...details, title: e.target.value })}
               />
             </Field>
-            <Field label="Location" required>
+            <Field label={t("stays.property.locationLabel")} required>
               <Input
                 id={`location-${property.id}`}
                 value={details.location}
@@ -357,23 +369,26 @@ export function PropertyCard({
             value={details.amenities}
             onChange={(amenities) => setDetails({ ...details, amenities })}
           />
-          <Field label="Description" showOptional>
+          <Field label={t("stays.property.descriptionLabel")} showOptional>
             <Textarea
               id={`description-${property.id}`}
               value={details.description}
               onChange={(e) => setDetails({ ...details, description: e.target.value })}
             />
           </Field>
-          <Field label="House rules" showOptional>
+          <Field label={t("stays.card.houseRules")} showOptional>
             <Textarea
               id={`rules-${property.id}`}
               value={details.houseRules}
-              placeholder="Gate time, visitors, smoking, quiet hours."
+              placeholder={t("stays.card.houseRulesPlaceholder")}
               onChange={(e) => setDetails({ ...details, houseRules: e.target.value })}
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label={`Minimum stay (${unitWord}s)`} required>
+            <Field
+              label={perNight ? t("stays.card.minStayNights") : t("stays.card.minStayMonths")}
+              required
+            >
               <Input
                 id={`min-stay-${property.id}`}
                 inputMode="numeric"
@@ -383,15 +398,15 @@ export function PropertyCard({
             </Field>
           </div>
           <p className="text-xs text-text-secondary">
-            Cancellations follow the VSolve policy, so guests see the same rules everywhere.
+            {t("stays.card.cancellationPolicy")}
           </p>
           {detailsError ? <p className="text-sm text-danger-text">{detailsError}</p> : null}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm" disabled={saveDetails.isPending}>
-              {saveDetails.isPending ? "Saving…" : "Save details"}
+              {saveDetails.isPending ? t("stays.visitingHours.saving") : t("stays.card.saveDetails")}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setPanel(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </form>
@@ -423,7 +438,7 @@ export function PropertyCard({
                 <img src={item.url} alt="" className="size-full object-cover" />
                 {index === 0 ? (
                   <span className="absolute left-1.5 top-1.5 rounded-control bg-navy-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Cover
+                    {t("stays.property.cover")}
                   </span>
                 ) : null}
                 <button
@@ -431,7 +446,7 @@ export function PropertyCard({
                   className="absolute right-1.5 top-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-navy-900 shadow-xs"
                   onClick={() => removePhoto.mutate(item.id)}
                   disabled={removePhoto.isPending}
-                  aria-label="Remove photo"
+                  aria-label={t("stays.photos.remove")}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -445,11 +460,11 @@ export function PropertyCard({
                 className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-line-strong bg-surface-sunken text-text-secondary transition hover:border-action hover:bg-surface hover:text-navy-900"
               >
                 <Camera className="size-7" />
-                <span className="text-xs font-semibold">{uploading ? "Uploading…" : "Add photo"}</span>
+                <span className="text-xs font-semibold">{uploading ? t("stays.photos.uploading") : t("stays.photos.add")}</span>
               </button>
             </li>
           </ul>
-          <p className="text-xs text-text-secondary">JPEG, PNG or WebP, up to 10 MB each.</p>
+          <p className="text-xs text-text-secondary">{t("stays.card.photoFormats")}</p>
           {photoError ? <p className="text-sm text-danger-text">{photoError}</p> : null}
         </div>
       ) : null}

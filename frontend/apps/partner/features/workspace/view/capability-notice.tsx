@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, buttonStyles, cn } from "@vsolve/ui";
+import { Card, buttonStyles, cn, useT } from "@vsolve/ui";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -45,6 +45,7 @@ export interface CapabilityNoticeProps {
 }
 
 export function CapabilityNotice({ recovery, onRetry, className }: CapabilityNoticeProps) {
+  const t = useT();
   if (recovery === null) return null;
 
   return (
@@ -55,13 +56,13 @@ export function CapabilityNotice({ recovery, onRetry, className }: CapabilityNot
       <div className="flex gap-3">
         <AlertTriangle size={18} aria-hidden className="mt-0.5 shrink-0 text-warning-text" />
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-warning-text">{recovery.headline}</h2>
-          <p className="mt-1 text-sm leading-6 text-text-secondary">{recovery.detail}</p>
+          <h2 className="text-sm font-semibold text-warning-text">{t(recovery.headline)}</h2>
+          <p className="mt-1 text-sm leading-6 text-text-secondary">{t(recovery.detail)}</p>
 
           <div className="mt-3 flex flex-wrap gap-2">
             {recovery.href && recovery.actionLabel ? (
               <Link href={recovery.href} className={buttonStyles({ size: "sm" })}>
-                {recovery.actionLabel}
+                {t(recovery.actionLabel)}
               </Link>
             ) : null}
 
@@ -71,7 +72,7 @@ export function CapabilityNotice({ recovery, onRetry, className }: CapabilityNot
                 onClick={onRetry}
                 className={buttonStyles({ variant: "secondary", size: "sm" })}
               >
-                Check again
+                {t("workspaces.notice.checkAgain")}
               </button>
             ) : null}
           </div>

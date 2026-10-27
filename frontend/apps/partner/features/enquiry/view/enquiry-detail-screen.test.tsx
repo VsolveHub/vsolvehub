@@ -4,6 +4,8 @@ import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { enquiryDetail, planVisit, proposal } from "../fixtures";
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
@@ -21,7 +23,7 @@ function ok<T>(data: T) {
 let queryClient: QueryClient;
 
 function wrapper({ children }: { readonly children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 }
 
 /** Far enough ahead that no test run drifts into the visit's own day. */

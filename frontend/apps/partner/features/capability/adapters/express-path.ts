@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { Translator } from "@vsolve/ui";
 
 import type { BusinessProfile } from "./wire";
 
@@ -42,9 +43,6 @@ export type ExpressStepKey = "PHONE" | "IDENTITY" | "SERVICE" | "AREA";
 export interface ExpressStep {
   readonly key: ExpressStepKey;
   readonly href: string;
-  readonly label: string;
-  /** What the Partner is told they are giving, in one short line. */
-  readonly ask: string;
 }
 
 /**
@@ -53,33 +51,30 @@ export interface ExpressStep {
  * `PHONE` is listed even though `/login` is not part of `/apply`: it is a step
  * the person experiences, and a budget that quietly excludes the step everyone
  * finds hardest is not measuring the thing it claims to.
+ *
+ * The Partner-facing label/ask text lives in the i18n catalog
+ * (`me.capability.express.step.*`), keyed by `ExpressStepKey`, rather than here —
+ * this module has no translator to call.
  */
 export const EXPRESS_PATH: readonly ExpressStep[] = [
-  {
-    key: "PHONE",
-    href: "/login",
-    label: "Your number",
-    ask: "We text you a code. No password to remember.",
-  },
-  {
-    key: "IDENTITY",
-    href: "/apply/about",
-    label: "Your name",
-    ask: "What customers will see, and whether you work alone or run a team.",
-  },
-  {
-    key: "SERVICE",
-    href: "/apply/work",
-    label: "One service",
-    ask: "Pick one thing you do. You can add more later.",
-  },
-  {
-    key: "AREA",
-    href: "/apply/areas",
-    label: "One city",
-    ask: "Where you want work. You can add more later.",
-  },
+  { key: "PHONE", href: "/login" },
+  { key: "IDENTITY", href: "/apply/about" },
+  { key: "SERVICE", href: "/apply/work" },
+  { key: "AREA", href: "/apply/areas" },
 ] as const;
+
+const STEP_TEXT_KEYS: Record<ExpressStepKey, { label: string; ask: string }> = {
+  PHONE: { label: "me.capability.express.step.phone.label", ask: "me.capability.express.step.phone.ask" },
+  IDENTITY: {
+    label: "me.capability.express.step.identity.label",
+    ask: "me.capability.express.step.identity.ask",
+  },
+  SERVICE: {
+    label: "me.capability.express.step.service.label",
+    ask: "me.capability.express.step.service.ask",
+  },
+  AREA: { label: "me.capability.express.step.area.label", ask: "me.capability.express.step.area.ask" },
+};
 
 /** The hard limit from the flow-weight table. Exceeding it is a design regression. */
 export const MAX_STEPS_TO_DEMAND = 4;
@@ -188,15 +183,15 @@ export interface ExpressPathView {
  * components deciding that independently is how a checklist highlights one step
  * and a button navigates to another.
  */
-export function describeExpressPath(progress: ExpressProgress): ExpressPathView {
+export function describeExpressPath(progress: ExpressProgress, t: Translator["t"]): ExpressPathView {
   const current = nextExpressStep(progress);
 
   return {
     steps: EXPRESS_PATH.map((step) => ({
       key: step.key,
       href: step.href,
-      label: step.label,
-      ask: step.ask,
+      label: t(STEP_TEXT_KEYS[step.key].label),
+      ask: t(STEP_TEXT_KEYS[step.key].ask),
       isComplete: isStepComplete(step.key, progress),
       isCurrent: current?.key === step.key,
     })),

@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Card, ErrorState, buttonStyles } from "@vsolve/ui";
+import { Card, ErrorState, buttonStyles, useT } from "@vsolve/ui";
 import Link from "next/link";
 
 import type { EnquiryRecord } from "@/features/enquiry/model/wire";
@@ -52,6 +52,7 @@ export function TapEstimateComposer({
   onSubmitted,
 }: TapEstimateComposerProps) {
   const submit = useSubmitProposal();
+  const t = useT();
 
   const visitIsOpen = visit !== null && visit.status !== "COMPLETED";
   const refusedForVisit = isVisitNotCompleted(submit.error);
@@ -81,13 +82,14 @@ export function TapEstimateComposer({
   if (visit === null) {
     return (
       <Card className="flex flex-col gap-3 p-4">
-        <h2 className="text-base font-semibold text-text">No visit on this job yet</h2>
+        <h2 className="text-base font-semibold text-text">
+          {t("proposal.tap.composer.noVisitTitle")}
+        </h2>
         <p className="text-sm leading-6 text-text-secondary">
-          A project estimate is written after you have been to see the work. Take a visit slot
-          from the enquiry first.
+          {t("proposal.tap.composer.noVisitMessage")}
         </p>
         <Link href={enquiryHref} className={buttonStyles({ variant: "primary" })}>
-          Back to the enquiry
+          {t("proposal.tap.composer.backToEnquiry")}
         </Link>
       </Card>
     );
@@ -105,10 +107,10 @@ export function TapEstimateComposer({
         visitIsOpen || refusedForVisit ? (
           <ErrorState
             inline
-            title="Close the visit first"
-            message="An estimate is sent after the visit is closed. Close it on the enquiry, then come back — nothing you have tapped is lost."
+            title={t("proposal.tap.composer.closeVisitTitle")}
+            message={t("proposal.tap.composer.closeVisitMessage")}
             severity="warning"
-            actionLabel="Go to the enquiry"
+            actionLabel={t("proposal.tap.composer.goToEnquiry")}
             onAction={() => {
               window.location.href = enquiryHref;
             }}
@@ -119,7 +121,7 @@ export function TapEstimateComposer({
             title={presentation.title}
             message={presentation.message}
             severity={presentation.severity}
-            actionLabel="Try again"
+            actionLabel={t("common.tryAgain")}
             onAction={() => submit.reset()}
             reference={presentation.reference}
           />
@@ -132,6 +134,7 @@ export function TapEstimateComposer({
 }
 
 export function EstimateClosedDialog() {
+  const t = useT();
   return (
     <div
       role="dialog"
@@ -141,14 +144,13 @@ export function EstimateClosedDialog() {
     >
       <div className="w-full max-w-sm rounded-card bg-surface p-5 shadow-overlay">
         <h2 id="estimate-closed-title" className="text-lg font-bold text-text">
-          Estimate closed
+          {t("proposal.tap.composer.closedTitle")}
         </h2>
         <p className="mt-2 text-sm leading-6 text-text-secondary">
-          The customer has already continued with another professional. Your estimate was not
-          sent.
+          {t("proposal.tap.composer.closedMessage")}
         </p>
         <Link href="/work/all" className={buttonStyles({ className: "mt-5 w-full" })}>
-          Back to your work
+          {t("proposal.tap.composer.backToWork")}
         </Link>
       </div>
     </div>

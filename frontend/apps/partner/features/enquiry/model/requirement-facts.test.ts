@@ -1,4 +1,7 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import {
   budgetLine,
@@ -10,6 +13,8 @@ import {
   requirementFacts,
   unreadableAnswerCount,
 } from "./requirement-facts";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 /**
  * Reading a snapshot the client has no schema for.
@@ -108,18 +113,18 @@ describe("the fact list", () => {
 
 describe("the budget line", () => {
   it("shows a band when both ends are given", () => {
-    expect(budgetLine(1_000_00, 4_000_00)).toBe("₹1,000 – ₹4,000");
+    expect(budgetLine(1_000_00, 4_000_00, t)).toBe("₹1,000 – ₹4,000");
   });
 
   it("shows a one-sided budget rather than nothing", () => {
     // A ceiling with no floor is the common case, and `classify_usability`
     // compares against the ceiling alone — a vendor who cannot see it is
     // quoting blind into an OUT_OF_BUDGET label.
-    expect(budgetLine(null, 4_000_00)).toBe("Up to ₹4,000");
-    expect(budgetLine(1_000_00, null)).toBe("From ₹1,000");
+    expect(budgetLine(null, 4_000_00, t)).toBe("Up to ₹4,000");
+    expect(budgetLine(1_000_00, null, t)).toBe("From ₹1,000");
   });
 
   it("shows nothing when the customer stated no budget", () => {
-    expect(budgetLine(null, null)).toBeNull();
+    expect(budgetLine(null, null, t)).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { Spinner } from "@vsolve/ui";
 import { Suspense } from "react";
 
 import { LoginScreen } from "@/features/session/view/login-screen";
+import { getServerTranslator } from "@/i18n/server";
 
 /**
  * The Partner login route.
@@ -18,7 +19,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const { t } = await getServerTranslator();
   return (
     /* `useSearchParams` suspends, and the boundary belongs above the screen so
        the fallback is a page rather than a hole inside one. */
@@ -29,7 +31,7 @@ export default function LoginPage() {
         <div className="min-h-screen bg-canvas text-text relative">
           <main className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-32 text-text-secondary">
             <Spinner size="sm" />
-            Checking your session…
+            {t("common.checkingSession")}
           </main>
         </div>
       }

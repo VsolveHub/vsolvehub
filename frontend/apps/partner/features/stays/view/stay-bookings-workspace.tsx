@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
-import { Badge, Card, EmptyState, LoadMore, formatDate, formatMoney } from "@vsolve/ui";
+import { Badge, Card, EmptyState, LoadMore, formatDate, formatMoney, useT } from "@vsolve/ui";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
@@ -12,7 +12,7 @@ import {
   type StayReservation,
   type StayReservationAction,
 } from "@/features/stays/queries";
-import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
+import { useStaySections } from "@/features/stays/view/stay-sections";
 import {
   StayReservationDetailSheet,
   stayReservationStatusLabel,
@@ -30,6 +30,8 @@ import { SectionNav } from "@/features/workspace/view/section-nav";
  * offering "Check in" against a name it does not show.
  */
 export function PartnerStayBookingsWorkspace() {
+  const t = useT();
+  const sections = useStaySections();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -61,26 +63,25 @@ export function PartnerStayBookingsWorkspace() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Stays</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Bookings</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("stays.bookings.eyebrow")}</p>
+        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("stays.bookings.heading")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Paid reservations across your properties. Open a booking for the guest, the amounts and
-          check-in.
+          {t("stays.bookings.intro")}
         </p>
       </div>
 
-      <SectionNav label="Stay sections" items={STAY_SECTIONS} />
+      <SectionNav label={t("stays.sections.ariaLabel")} items={sections} />
 
       <Card>
-        {reservations.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
+        {reservations.isLoading ? <p className="text-sm text-text-secondary">{t("common.loading")}</p> : null}
         {reservations.error ? (
           <p className="text-sm text-danger-text">{friendlyErrorMessage(reservations.error)}</p>
         ) : null}
         {!reservations.isLoading && reservations.items.length === 0 ? (
           <EmptyState
             compact
-            title="No paid reservations yet"
-            description="Hotel and short-stay bookings that guests pay for appear here."
+            title={t("stays.bookings.emptyTitle")}
+            description={t("stays.bookings.emptyDescription")}
           />
         ) : null}
 
@@ -94,10 +95,11 @@ export function PartnerStayBookingsWorkspace() {
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-navy-900">
-                    {reservation.property_title ?? "Stay"} · {reservation.unit_name ?? "Room"}
+                    {reservation.property_title ?? t("stays.bookings.fallbackStay")} ·{" "}
+                    {reservation.unit_name ?? t("stays.bookings.fallbackRoom")}
                   </span>
                   <Badge tone={stayReservationTone(reservation.status)}>
-                    {stayReservationStatusLabel(reservation.status)}
+                    {stayReservationStatusLabel(reservation.status, t)}
                   </Badge>
                 </span>
                 <span className="block text-sm text-text-secondary">
@@ -108,11 +110,11 @@ export function PartnerStayBookingsWorkspace() {
                     : ""}
                 </span>
                 <span className="mt-1 block text-sm text-text-secondary">
-                  Guest: {reservation.customer_name || "—"}
+                  {t("stays.bookings.guest", { name: reservation.customer_name || "—" })}
                   {reservation.customer_phone ? ` · ${reservation.customer_phone}` : ""}
                 </span>
                 <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
-                  View booking
+                  {t("stays.bookings.view")}
                   <ChevronRight className="size-3.5" aria-hidden />
                 </span>
               </button>

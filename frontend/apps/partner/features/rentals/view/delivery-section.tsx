@@ -2,9 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, ChoiceChips, Field, Input, formatDateTime, formatMoney } from "@vsolve/ui";
+import { Badge, Button, ChoiceChips, Field, Input, formatDateTime, formatMoney, useT } from "@vsolve/ui";
 import { Phone, Truck } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   fetchTransportFeePercent,
@@ -13,21 +13,35 @@ import {
   type TransportTrip,
 } from "@/features/rentals/queries";
 
+/** Catalogue keys — resolved with `t` at render time. */
 const TRIP_LABELS: Record<string, string> = {
-  ONE_WAY: "Drop only",
-  ROUND_TRIP: "Drop and collect",
+  ONE_WAY: "rentals.delivery.trip.oneWay",
+  ROUND_TRIP: "rentals.delivery.trip.roundTrip",
 };
 
+/** Catalogue keys — resolved with `t` at render time. */
 const STEP_LABELS: Record<string, string> = {
-  REQUESTED: "Waiting for your price",
-  QUOTED: "Price sent — waiting for the customer",
-  ACCEPTED: "Price accepted",
-  OUT_FOR_DELIVERY: "Out for delivery",
-  DELIVERED: "Delivered",
-  DECLINED: "Declined",
-  EXPIRED: "Expired",
-  CANCELLED: "Cancelled",
+  REQUESTED: "rentals.delivery.step.requested",
+  QUOTED: "rentals.delivery.step.quoted",
+  ACCEPTED: "rentals.delivery.step.accepted",
+  OUT_FOR_DELIVERY: "rentals.delivery.step.outForDelivery",
+  DELIVERED: "rentals.delivery.step.delivered",
+  DECLINED: "rentals.delivery.step.declined",
+  EXPIRED: "rentals.delivery.step.expired",
+  CANCELLED: "rentals.delivery.step.cancelled",
 };
+
+/** Puts `node` where `{slot}` sits in a translated sentence, so emphasis survives word order. */
+function withSlot(text: string, slot: string, node: ReactNode): ReactNode {
+  const [before, after = ""] = text.split(`{${slot}}`);
+  return (
+    <>
+      {before}
+      {node}
+      {after}
+    </>
+  );
+}
 
 function rupeesToPaise(input: string): number | null {
   const trimmed = input.trim().replace(/,/g, "").replace(/^₹\s*/u, "");
@@ -52,6 +66,7 @@ type Address = { line?: string; area?: string; city?: string; pincode?: string; 
  * wherever a transport amount appears.
  */
 export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) {
+  const t = useT();
   const qc = useQueryClient();
   const transport = booking.transport;
   const [amount, setAmount] = useState("");
@@ -90,21 +105,23 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
   const quotesLeft = transport.max_quotes - transport.quote_count;
   const typedPaise = rupeesToPaise(amount);
   const agreed = booking.transport_paise ?? 0;
+  const tripLabel = (value: string) => (TRIP_LABELS[value] ? t(TRIP_LABELS[value]!) : value);
+  const tripSuffix = transport.trip ? ` (${tripLabel(transport.trip)})` : "";
 
   return (
     <section className="flex flex-col gap-2" data-testid="delivery-section">
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-text-muted">
           <Truck className="size-3.5" aria-hidden />
-          Delivery request
+          {t("rentals.delivery.heading")}
         </h3>
         <Badge tone={status === "DECLINED" || status === "EXPIRED" ? "danger" : status === "DELIVERED" ? "success" : "warning"}>
-          {STEP_LABELS[status] ?? status}
+          {STEP_LABELS[status] ? t(STEP_LABELS[status]!) : status}
         </Badge>
       </div>
 
       <div className="rounded-card border border-line bg-surface-sunken p-3 text-sm">
-        <p className="font-semibold text-navy-900">Deliver to</p>
+        <p className="font-semibold text-navy-900">{t("rentals.delivery.deliverTo")}</p>
         <p className="mt-0.5 text-text-secondary">
           {[address.line, address.area, address.city].filter(Boolean).join(", ")}
           {address.pincode ? ` ${address.pincode}` : ""}
@@ -119,11 +136,11 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
           </a>
         ) : null}
         {transport.customer_note ? (
-          <p className="mt-1.5 text-xs text-text-secondary">Customer&rsquo;s note: {transport.customer_note}</p>
+          <p className="mt-1.5 text-xs text-text-secondary">{t("rentals.delivery.customerNote", { note: transport.customer_note })}</p>
         ) : null}
         {transport.reject_note && status === "REQUESTED" ? (
           <p className="mt-1.5 text-xs text-warning-text">
-            The customer turned down your last price: &ldquo;{transport.reject_note}&rdquo;
+            {t("rentals.delivery.rejectNote", { note: transport.reject_note })}
           </p>
         ) : null}
       </div>
@@ -131,11 +148,14 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
       {canQuote ? (
         <div className="flex flex-col gap-3 rounded-card border border-line p-3">
           <p className="text-xs text-text-secondary">
-            Check the requirement, arrange a vehicle and send your transport price by{" "}
-            <strong className="text-navy-900">{formatDateTime(transport.respond_by)}</strong>.{" "}
-            {quotesLeft < transport.max_quotes ? `${quotesLeft} price ${quotesLeft === 1 ? "try" : "tries"} left.` : ""}
+            {withSlot(
+              t("rentals.delivery.quoteIntro"),
+              "date",
+              <strong className="text-navy-900">{formatDateTime(transport.respond_by)}</strong>,
+            )}{" "}
+            {quotesLeft < transport.max_quotes ? t("rentals.delivery.triesLeft", { count: quotesLeft }) : ""}
           </p>
-          <Field label="Transport price" required>
+          <Field label={t("rentals.delivery.priceLabel")} required>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
                 ₹
@@ -146,42 +166,42 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 750"
+                placeholder={t("rentals.delivery.pricePlaceholder")}
               />
             </div>
           </Field>
           <p className="text-xs font-semibold text-success-text" data-testid="transport-commission">
-            Transport commission: {percent}% —{" "}
+            {t("rentals.delivery.commissionPrefix", { percent })}{" "}
             {typedPaise
               ? percent === 0
-                ? `you receive the full ${formatMoney(typedPaise)}.`
-                : `you receive ${formatMoney(transportPayout(typedPaise, percent))}.`
-              : "you receive the full transport price."}
+                ? t("rentals.delivery.receiveFull", { amount: formatMoney(typedPaise) })
+                : t("rentals.delivery.receiveAmount", { amount: formatMoney(transportPayout(typedPaise, percent)) })
+              : t("rentals.delivery.receiveFullPrice")}
           </p>
           <ChoiceChips
-            label="What does the price cover?"
+            label={t("rentals.delivery.tripQuestion")}
             name={`transport-trip-${booking.id}`}
             layout="bar"
             value={trip}
             onChange={(value) => setTrip(value === "ROUND_TRIP" ? "ROUND_TRIP" : "ONE_WAY")}
             options={[
-              { value: "ONE_WAY", label: "Drop only" },
-              { value: "ROUND_TRIP", label: "Drop and collect" },
+              { value: "ONE_WAY", label: t("rentals.delivery.trip.oneWay") },
+              { value: "ROUND_TRIP", label: t("rentals.delivery.trip.roundTrip") },
             ]}
           />
-          <Field label="Note for the customer" showOptional={false}>
+          <Field label={t("rentals.delivery.noteLabel")} showOptional={false}>
             <Input
               id={`transport-note-${booking.id}`}
               value={note}
               maxLength={480}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Tata Ace, delivered by 10 AM"
+              placeholder={t("rentals.delivery.notePlaceholder")}
             />
           </Field>
           {declining ? (
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => setDeclining(false)}>
-                Back
+                {t("common.back")}
               </Button>
               <Button
                 size="sm"
@@ -189,11 +209,10 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
                 disabled={act.isPending}
                 onClick={() => act.mutate({ action: "decline" })}
               >
-                Decline delivery
+                {t("rentals.delivery.decline")}
               </Button>
               <p className="w-full text-xs text-text-secondary">
-                The customer isn&rsquo;t charged and can collect it themselves instead. The note above
-                is sent as your reason.
+                {t("rentals.delivery.declineHint")}
               </p>
             </div>
           ) : (
@@ -202,14 +221,14 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
                 size="sm"
                 disabled={act.isPending}
                 onClick={() => {
-                  if (!typedPaise) return setError("Enter the transport price in rupees, for example 750.");
+                  if (!typedPaise) return setError(t("rentals.delivery.errorPrice"));
                   act.mutate({ action: "quote", amount_paise: typedPaise });
                 }}
               >
-                Send price
+                {t("rentals.delivery.sendPrice")}
               </Button>
               <Button size="sm" variant="secondary" disabled={act.isPending} onClick={() => setDeclining(true)}>
-                Can&rsquo;t deliver
+                {t("rentals.delivery.cantDeliver")}
               </Button>
             </div>
           )}
@@ -218,32 +237,40 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
 
       {status === "QUOTED" && transport.quote_paise ? (
         <p className="text-sm text-text-secondary">
-          You quoted <strong className="text-navy-900">{formatMoney(transport.quote_paise)}</strong>
-          {transport.trip ? ` (${TRIP_LABELS[transport.trip] ?? transport.trip})` : ""}. The customer
-          has until {formatDateTime(transport.respond_by)} to accept. 0% commission on transport.
+          {withSlot(
+            t("rentals.delivery.quoted", { trip: tripSuffix, date: formatDateTime(transport.respond_by) }),
+            "amount",
+            <strong className="text-navy-900">{formatMoney(transport.quote_paise)}</strong>,
+          )}
         </p>
       ) : null}
 
       {agreed > 0 ? (
         <p className="text-sm text-text-secondary" data-testid="transport-agreed">
-          Agreed transport: <strong className="text-navy-900">{formatMoney(agreed)}</strong>
-          {transport.trip ? ` (${TRIP_LABELS[transport.trip] ?? transport.trip})` : ""} · {booking.transport_fee_percent ?? 0}%
-          commission — you receive {formatMoney(agreed - (booking.transport_fee_paise ?? 0))}.
+          {withSlot(
+            t("rentals.delivery.agreed", {
+              trip: tripSuffix,
+              percent: booking.transport_fee_percent ?? 0,
+              payout: formatMoney(agreed - (booking.transport_fee_paise ?? 0)),
+            }),
+            "amount",
+            <strong className="text-navy-900">{formatMoney(agreed)}</strong>,
+          )}
         </p>
       ) : null}
 
       {booking.status === "CONFIRMED" && status === "ACCEPTED" ? (
         <Button size="sm" variant="secondary" disabled={act.isPending} onClick={() => act.mutate({ action: "out-for-delivery" })}>
-          Mark out for delivery
+          {t("rentals.delivery.markOut")}
         </Button>
       ) : null}
       {booking.status === "CONFIRMED" && (status === "ACCEPTED" || status === "OUT_FOR_DELIVERY") ? (
         <p className="text-xs text-text-secondary">
-          At the door, ask the customer for their handover PIN and use Handover. That starts the rental.
+          {t("rentals.delivery.atTheDoor")}
         </p>
       ) : null}
       {booking.status === "PENDING_PAYMENT" && status === "ACCEPTED" ? (
-        <p className="text-xs text-text-secondary">The customer accepted your price and is paying now.</p>
+        <p className="text-xs text-text-secondary">{t("rentals.delivery.paying")}</p>
       ) : null}
 
       {error ? (

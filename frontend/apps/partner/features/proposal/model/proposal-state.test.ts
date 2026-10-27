@@ -1,16 +1,21 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import { proposal } from "@/features/enquiry/fixtures";
 import type { EnquiryStatus } from "@/features/enquiry/model/enquiry-state";
 
 import {
-  UNREADABLE_PROPOSAL_NOTICE,
   describeProposalStatus,
   describeUsability,
   permissionsFor,
   resolveProposalView,
+  unreadableProposalNotice,
   type ProposalStatus,
 } from "./proposal-state";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 const ALL: ProposalStatus[] = [
   "SUBMITTED",
@@ -135,7 +140,7 @@ describe("revising", () => {
 
 describe("status copy", () => {
   it("gives every status its own sentence", () => {
-    expect(new Set(ALL.map((status) => describeProposalStatus(status).meaning)).size).toBe(
+    expect(new Set(ALL.map((status) => describeProposalStatus(status, t).meaning)).size).toBe(
       ALL.length,
     );
   });
@@ -143,18 +148,18 @@ describe("status copy", () => {
   it("says a superseded quote is kept rather than deleted", () => {
     // Proposals are append-only by construction: the customer can always see
     // what they were originally offered, and a dispute can be reconstructed.
-    expect(describeProposalStatus("SUPERSEDED").meaning).toMatch(/never overwritten/i);
+    expect(describeProposalStatus("SUPERSEDED", t).meaning).toMatch(/never overwritten/i);
   });
 });
 
 describe("usability", () => {
   it("says nothing when a quote is usable", () => {
-    expect(describeUsability("USABLE")).toBeNull();
+    expect(describeUsability("USABLE", t)).toBeNull();
   });
 
   it("labels an over-budget quote without calling it a failure", () => {
     // `classify_usability` labels rather than hides, so the customer decides.
-    const copy = describeUsability("OUT_OF_BUDGET");
+    const copy = describeUsability("OUT_OF_BUDGET", t);
     expect(copy).toMatch(/They can still choose it/i);
     expect(copy).not.toMatch(/rejected|refused/i);
   });
@@ -162,7 +167,7 @@ describe("usability", () => {
   it("handles a value the current classifier never produces", () => {
     // INCOMPLETE is published in the enum. A screen that crashes on a value the
     // server can legally send is worse than one that renders it plainly.
-    expect(describeUsability("INCOMPLETE")).not.toBeNull();
+    expect(describeUsability("INCOMPLETE", t)).not.toBeNull();
   });
 });
 
@@ -192,7 +197,7 @@ describe("finding the quote after a reload", () => {
   });
 
   it("tells the vendor plainly rather than showing an empty quote", () => {
-    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/could not load the quote itself/i);
-    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/replaces whatever is with them/i);
+    expect(unreadableProposalNotice(t)).toMatch(/could not load the quote itself/i);
+    expect(unreadableProposalNotice(t)).toMatch(/replaces whatever is with them/i);
   });
 });

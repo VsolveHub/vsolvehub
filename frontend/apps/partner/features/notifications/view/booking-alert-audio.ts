@@ -14,6 +14,20 @@ let loopWanted = false;
 let autoplayUnlocked = false;
 const listeners: Set<() => void> = new Set();
 
+/**
+ * The system-notification copy, set by whoever requests the alert loop.
+ *
+ * This module runs outside any component, so it cannot call `useT()` itself —
+ * the hook only resolves inside the React tree. `useBookingAlertSound` calls
+ * `useT()` and passes the resolved strings down through `requestBookingAlertLoop`;
+ * the English defaults below are what a caller that does not supply any (the
+ * deprecated `startBookingAlertLoop`) still gets.
+ */
+let notificationCopy = {
+  title: "New booking request",
+  body: "Accept or decline before the timer runs out.",
+};
+
 let webContext: AudioContext | null = null;
 let webLoopTimer: ReturnType<typeof setInterval> | null = null;
 let webLoopActive = false;
@@ -149,8 +163,8 @@ function showBookingAlertSystemNotification(): void {
   if (Notification.permission !== "granted") return;
 
   try {
-    new Notification("New booking request", {
-      body: "Accept or decline before the timer runs out.",
+    new Notification(notificationCopy.title, {
+      body: notificationCopy.body,
       tag: "vsolve-partner-booking-alert",
       silent: false,
     });
@@ -282,8 +296,9 @@ export function playBookingAlertFromGesture(): void {
 }
 
 /** Popup opened — plays when autoplay was unlocked by login, Go online, or any tap. */
-export function requestBookingAlertLoop(): void {
+export function requestBookingAlertLoop(copy?: { title: string; body: string }): void {
   if (typeof window === "undefined") return;
+  if (copy) notificationCopy = copy;
   loopWanted = true;
   startPlayRetry();
   void startAlertPlayback();

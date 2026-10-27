@@ -16,15 +16,20 @@ import type { Schemas } from "@vsolve/api-client";
 type Rule = Schemas["PartnerAvailabilityRule"];
 type RuleInput = Schemas["PartnerAvailabilityRuleInputRequest"];
 
-/** Monday is 0 and Sunday is 6, matching the contract. */
-export const WEEKDAYS = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
+/**
+ * Monday is 0 and Sunday is 6, matching the contract.
+ *
+ * Catalogue keys (`@vsolve/ui` `useT`), not the day names themselves — resolve
+ * with `t(key)` at render time.
+ */
+export const WEEKDAY_KEYS = [
+  "apply.schedule.weekday.monday",
+  "apply.schedule.weekday.tuesday",
+  "apply.schedule.weekday.wednesday",
+  "apply.schedule.weekday.thursday",
+  "apply.schedule.weekday.friday",
+  "apply.schedule.weekday.saturday",
+  "apply.schedule.weekday.sunday",
 ] as const;
 
 export interface DraftPeriod {

@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { Filter, X } from "lucide-react";
 import { Drawer } from "./drawer";
 import { Button } from "./button";
+import { useTOrDefault } from "./i18n";
 
 export interface ActiveFilter {
   id: string;
@@ -41,6 +42,7 @@ export function Toolbar({
   onRemoveFilter,
   onClearFilters,
 }: ToolbarProps) {
+  const tf = useTOrDefault();
   const hasActiveFilters = activeFilters.length > 0;
 
   return (
@@ -59,11 +61,11 @@ export function Toolbar({
               {/* Mobile filters drawer */}
               <div className="sm:hidden shrink-0">
                 <Drawer
-                  title="Filters"
+                  title={tf("ui.toolbar.filtersTitle", "Filters")}
                   trigger={
                     <Button variant="outline" size="md" className="flex items-center gap-2">
                       <Filter className="h-4 w-4" />
-                      Filters
+                      {tf("ui.toolbar.filters", "Filters")}
                       {hasActiveFilters && (
                         <span className="bg-signal-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1">
                           {activeFilters.length}
@@ -76,7 +78,7 @@ export function Toolbar({
                     {filters}
                     {hasActiveFilters && onClearFilters && (
                       <Button variant="outline" onClick={onClearFilters} className="mt-4">
-                        Clear all filters
+                        {tf("ui.toolbar.clearAllFilters", "Clear all filters")}
                       </Button>
                     )}
                   </div>
@@ -96,7 +98,9 @@ export function Toolbar({
       {/* Active Filter Chips */}
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-2 mt-1">
-          <span className="text-xs font-medium text-text-secondary mr-1">Active filters:</span>
+          <span className="text-xs font-medium text-text-secondary mr-1">
+            {tf("ui.toolbar.activeFilters", "Active filters:")}
+          </span>
           {activeFilters.map((filter) => (
             <div
               key={filter.id}
@@ -109,7 +113,9 @@ export function Toolbar({
                   type="button"
                   onClick={() => onRemoveFilter(filter.id)}
                   className="p-0.5 ml-1 text-text-muted hover:text-text rounded-full focus:outline-none"
-                  aria-label={`Remove filter ${filter.label}`}
+                  aria-label={tf("ui.toolbar.removeFilter", "Remove filter {label}", {
+                    label: filter.label,
+                  })}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -122,7 +128,7 @@ export function Toolbar({
               onClick={onClearFilters}
               className="text-xs font-semibold text-text-link hover:underline ml-1 focus:outline-none"
             >
-              Clear all
+              {tf("ui.toolbar.clearAll", "Clear all")}
             </button>
           )}
         </div>

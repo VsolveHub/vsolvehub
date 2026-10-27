@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import type { InsuranceDeclaration, InsuranceDeclarationInput } from "./wire";
 
 /**
@@ -92,35 +94,38 @@ export interface InsuranceProblem {
  * anything. Everything else is Django's to judge, including whether the insurer
  * is one Vsolve recognises, which no client can know.
  */
-export function insuranceProblems(input: InsuranceDeclarationInput): InsuranceProblem[] {
+export function insuranceProblems(
+  input: InsuranceDeclarationInput,
+  t: Translator["t"],
+): InsuranceProblem[] {
   const problems: InsuranceProblem[] = [];
 
   if (input.insurer_name.trim() === "") {
-    problems.push({ field: "insurer_name", message: "Add the name of your insurer." });
+    problems.push({ field: "insurer_name", message: t("me.capability.insurance.problem.insurerName") });
   }
 
   if (input.policy_reference.trim() === "") {
     problems.push({
       field: "policy_reference",
-      message: "Add the policy number, exactly as it appears on the document.",
+      message: t("me.capability.insurance.problem.policyReference"),
     });
   }
 
   if (!Number.isFinite(input.coverage_paise) || input.coverage_paise <= 0) {
     problems.push({
       field: "coverage_paise",
-      message: "Add how much the policy covers.",
+      message: t("me.capability.insurance.problem.coverage"),
     });
   }
 
   const from = Date.parse(input.valid_from);
   const to = Date.parse(input.valid_to);
   if (Number.isNaN(from) || Number.isNaN(to)) {
-    problems.push({ field: "valid_to", message: "Add the dates the policy runs between." });
+    problems.push({ field: "valid_to", message: t("me.capability.insurance.problem.datesMissing") });
   } else if (to <= from) {
     problems.push({
       field: "valid_to",
-      message: "The policy has to end after it starts. Check the two dates.",
+      message: t("me.capability.insurance.problem.datesInvalid"),
     });
   }
 

@@ -1,12 +1,12 @@
 "use client";
 
-import { Button, Dialog, Disclosure, Input, cn } from "@vsolve/ui";
+import { Button, Dialog, Disclosure, Input, cn, useT } from "@vsolve/ui";
 import { useId, useState } from "react";
 
 import {
-  CREW_OFFER_DECLINE_REASONS,
   asCrewOfferDeclineReasonCode,
   findCrewOfferDeclineReason,
+  getCrewOfferDeclineReasons,
   type CrewOfferDeclineReasonCode,
 } from "../model/decline-reasons";
 
@@ -49,13 +49,15 @@ export function CrewOfferDeclineDialog({
   pending,
   error,
 }: CrewOfferDeclineDialogProps) {
+  const t = useT();
   const [reasonCode, setReasonCode] = useState("");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState(false);
   const errorId = useId();
   const groupId = useId();
 
-  const chosen = findCrewOfferDeclineReason(reasonCode);
+  const reasons = getCrewOfferDeclineReasons(t);
+  const chosen = findCrewOfferDeclineReason(reasonCode, t);
   const missing = touched && reasonCode === "";
 
   const submit = () => {
@@ -72,24 +74,24 @@ export function CrewOfferDeclineDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Pass on this job?"
-      description="It goes to the next lead. No way back."
+      title={t("work.crewOfferDecline.title")}
+      description={t("work.crewOfferDecline.description")}
       // Dismissable: nothing has been sent yet, and trapping a lead in a dialog
       // they opened by accident is its own failure.
       dismissable
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
-            Keep it
+            {t("work.crewOfferDecline.keepIt")}
           </Button>
           <Button
             variant="danger"
             onClick={submit}
             loading={pending}
-            loadingLabel="Passing"
+            loadingLabel={t("work.crewOfferDecline.passing")}
             disabled={pending}
           >
-            Pass
+            {t("work.crewOfferDecline.pass")}
           </Button>
         </>
       }
@@ -97,10 +99,10 @@ export function CrewOfferDeclineDialog({
       <div className="flex flex-col gap-3">
         <div role="radiogroup" aria-labelledby={groupId} className="flex flex-col gap-2">
           <span id={groupId} className="text-sm font-semibold text-text">
-            Why?
+            {t("work.crewOfferDecline.why")}
           </span>
           <div className="grid grid-cols-2 gap-2">
-            {CREW_OFFER_DECLINE_REASONS.map((reason) => {
+            {reasons.map((reason) => {
               const selected = reason.code === reasonCode;
               return (
                 <button
@@ -128,7 +130,7 @@ export function CrewOfferDeclineDialog({
           </div>
           {missing ? (
             <p role="alert" className="text-sm leading-5 text-danger-text">
-              Pick one — it is how the rate gets looked at.
+              {t("work.crewOfferDecline.pickOne")}
             </p>
           ) : null}
         </div>
@@ -137,14 +139,14 @@ export function CrewOfferDeclineDialog({
           <p className="text-sm leading-5 text-text-secondary">{chosen.consequence}</p>
         ) : null}
 
-        <Disclosure summary="Add a note?" hint="Optional">
+        <Disclosure summary={t("work.crewOfferDecline.addNote")} hint={t("common.optional")}>
           <Input
-            aria-label="Note"
+            aria-label={t("work.crewOfferDecline.noteAriaLabel")}
             value={note}
             maxLength={NOTE_MAX}
             onChange={(event) => setNote(event.target.value)}
             disabled={pending}
-            placeholder="e.g. works in summer, not wedding season"
+            placeholder={t("work.crewOfferDecline.notePlaceholder")}
           />
         </Disclosure>
 

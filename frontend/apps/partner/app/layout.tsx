@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { cookies } from "next/headers";
 import { QueryProvider, SessionSync } from "@vsolve/query";
-import { ToastProvider } from "@vsolve/ui";
+import { DEFAULT_LOCALE, ToastProvider } from "@vsolve/ui";
 
 import { PartnerGlobalPopup } from "@/features/notifications/view/partner-global-popup";
 import { PartnerAudioUnlock } from "@/features/notifications/view/partner-audio-unlock";
 import { PartnerPresenceProvider } from "@/features/presence/view/partner-presence-provider";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { PartnerI18nProvider } from "@/i18n/provider";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/i18n/locale-cookie";
 
 import "./globals.css";
 
@@ -49,24 +52,31 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Read once, server-side, so the first paint already renders in the
+  // partner's chosen language — see `i18n/provider.tsx`.
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value) ?? DEFAULT_LOCALE;
+
   return (
-    <html lang="en-IN" className={appFont.variable}>
+    <html lang={locale} className={appFont.variable}>
       <body className="antialiased">
-        <QueryProvider>
-          <SessionSync />
-          {/* The offer inbox announces a live offer through `useToast`, which
-              throws without this. Mounted at the root so the live region exists
-              before any message arrives, per the WAI-ARIA pattern the provider
-              implements. */}
-          <ToastProvider>
-            <PartnerPresenceProvider>
-              <PartnerAudioUnlock />
-              {children}
-              <PartnerGlobalPopup />
-            </PartnerPresenceProvider>
-          </ToastProvider>
-        </QueryProvider>
+        <PartnerI18nProvider initialLocale={locale}>
+          <QueryProvider>
+            <SessionSync />
+            {/* The offer inbox announces a live offer through `useToast`, which
+                throws without this. Mounted at the root so the live region exists
+                before any message arrives, per the WAI-ARIA pattern the provider
+                implements. */}
+            <ToastProvider>
+              <PartnerPresenceProvider>
+                <PartnerAudioUnlock />
+                {children}
+                <PartnerGlobalPopup />
+              </PartnerPresenceProvider>
+            </ToastProvider>
+          </QueryProvider>
+        </PartnerI18nProvider>
       </body>
     </html>
   );

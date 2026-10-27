@@ -1,7 +1,9 @@
 import type { Schemas } from "@vsolve/api-client";
+import { createTranslator, type useT } from "@vsolve/ui";
 
 import type { AnswerMap } from "@/features/enquiry/model/requirement-facts";
 import { readDurationDays } from "@/features/enquiry/model/requirement-facts";
+import { catalogsByLocale as screensCatalogs } from "@/i18n/catalogs/proposal-screens";
 
 import { toStageRequests, type StageDraft, type TaxBasis } from "./proposal-draft";
 
@@ -261,16 +263,23 @@ const MAX_WARRANTY = 4000;
 /** `ProposalMaterialLineRequest.unit` is `CharField(max_length=32)`. */
 const MAX_UNIT = 32;
 
-export function validateOnsite(draft: OnsiteDraft): DraftErrors {
+/**
+ * `t` is optional so existing callers keep working; without it the messages
+ * resolve from the English catalogue, which matches the original copy.
+ */
+export function validateOnsite(
+  draft: OnsiteDraft,
+  t: ReturnType<typeof useT> = createTranslator("en-IN", screensCatalogs["en-IN"]).t,
+): DraftErrors {
   const errors: Record<string, string> = {};
 
   const named = draft.stages.filter((stage) => stage.title.trim() !== "");
   if (named.length === 0) {
-    errors.stages = "An estimate needs at least one piece of work with a name and a price.";
+    errors.stages = t("proposal.screens.onsiteDraft.noStages");
   } else if (draft.stages.some((stage) => stage.title.trim() === "")) {
-    errors.stages = "Name every piece of work, or remove the empty one.";
+    errors.stages = t("proposal.screens.onsiteDraft.stageName");
   } else if (draft.stages.some((stage) => stage.amountPaise === null || stage.amountPaise <= 0)) {
-    errors.stages = "Put a price on every piece of work. They add up to your total.";
+    errors.stages = t("proposal.screens.onsiteDraft.stagePrice");
   }
 
   if (
@@ -278,37 +287,36 @@ export function validateOnsite(draft: OnsiteDraft): DraftErrors {
       (material) => material.description.trim() === "" && material.amountPaise !== null,
     )
   ) {
-    errors.materials = "Say what each material is, or remove the row.";
+    errors.materials = t("proposal.screens.onsiteDraft.materialName");
   } else if (
     draft.materials.some(
       (material) => material.description.trim() !== "" && (material.amountPaise ?? 0) <= 0,
     )
   ) {
-    errors.materials = "Put a price on every material, or remove the row.";
+    errors.materials = t("proposal.screens.onsiteDraft.materialPrice");
   } else if (draft.materials.some((material) => material.unit.trim().length > MAX_UNIT)) {
     // The wire's own ceiling. Refusing it here costs a keystroke; letting it
     // through costs the vendor a 400 on a finished estimate.
-    errors.materials = `Keep the unit under ${MAX_UNIT} characters — "bags", "m", "coils".`;
+    errors.materials = t("proposal.screens.onsiteDraft.unitTooLong", { max: MAX_UNIT });
   }
 
   if (draft.taxBasis === null) {
-    errors.taxBasis =
-      "Say whether your price includes tax. Vsolve compares every estimate on the same basis.";
+    errors.taxBasis = t("proposal.screens.onsiteDraft.taxBasis");
   }
   if (draft.taxPaise < 0) {
-    errors.taxPaise = "Tax cannot be negative.";
+    errors.taxPaise = t("proposal.screens.onsiteDraft.taxNegative");
   } else {
     const total = onsiteTotal(draft);
     if (total !== null && draft.taxPaise > total) {
-      errors.taxPaise = "Tax cannot be more than the estimate itself.";
+      errors.taxPaise = t("proposal.screens.onsiteDraft.taxTooHigh");
     }
   }
 
   if (draft.warrantyTerms.length > MAX_WARRANTY) {
-    errors.warrantyTerms = `Keep the warranty under ${MAX_WARRANTY} characters.`;
+    errors.warrantyTerms = t("proposal.screens.onsiteDraft.warrantyTooLong", { max: MAX_WARRANTY });
   }
   if (draft.exclusions.some((line) => line.length > MAX_LINE)) {
-    errors.exclusions = `Keep each line under ${MAX_LINE} characters.`;
+    errors.exclusions = t("proposal.screens.onsiteDraft.lineTooLong", { max: MAX_LINE });
   }
 
   return errors;

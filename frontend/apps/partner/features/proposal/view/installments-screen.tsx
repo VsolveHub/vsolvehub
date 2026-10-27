@@ -1,4 +1,6 @@
-import { Button, EmptyState, Readout, SectionBand, StepDock, cn } from "@vsolve/ui";
+"use client";
+
+import { Button, EmptyState, Readout, SectionBand, StepDock, cn, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 
@@ -42,21 +44,22 @@ const QUICK_ADD = ["+100", "+500", "+1,000"] as const;
 
 export function InstallmentsScreen({ estimate, openInstallmentId }: InstallmentsScreenProps) {
   const { installments, totals } = estimate;
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col bg-canvas">
       <FocusedHeader
-        title="Payment installments"
+        title={t("proposal.screens.installments.title")}
         backSlot={
           <HeaderTile>
-            <BackGlyph label="Back" />
+            <BackGlyph label={t("common.back")} />
           </HeaderTile>
         }
       />
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4">
         <div className="flex gap-2.5">
-          <Readout label="Allocated" value={totals.taxableValue} size="sm" className="flex-1" />
+          <Readout label={t("proposal.screens.installments.allocated")} value={totals.taxableValue} size="sm" className="flex-1" />
 
           {/*
             OWNER NOTE — the remainder is not yet expressible.
@@ -68,19 +71,19 @@ export function InstallmentsScreen({ estimate, openInstallmentId }: Installments
             must become that field — a schedule that silently reads "₹0" while
             money is unallocated is exactly the bug this plate exists to catch.
           */}
-          <RemainderPlate label="Still to allocate" value="₹0" />
+          <RemainderPlate label={t("proposal.screens.installments.stillToAllocate")} value="₹0" />
         </div>
 
         <section>
           <SectionBand trailing={String(installments.length)} trailingTone="muted">
-            Installments
+            {t("proposal.screens.installments.heading")}
           </SectionBand>
 
           <div className="flex flex-col gap-2">
             {installments.length === 0 ? (
               <EmptyState
                 compact
-                title="No installments yet"
+                title={t("proposal.screens.installments.empty")}
                 description={estimate.blockedReason ?? undefined}
               />
             ) : (
@@ -98,23 +101,20 @@ export function InstallmentsScreen({ estimate, openInstallmentId }: Installments
               className="flex min-h-13 items-center justify-center gap-2 rounded-card border-[1.5px] border-dashed border-line-strong text-[15px] font-bold text-text-secondary"
             >
               <Pictogram name="more" size="sm" />
-              Add an installment
+              {t("proposal.screens.installments.add")}
             </button>
           </div>
         </section>
 
         <p className="flex gap-2 text-xs leading-[17px] text-text-muted">
           <Pictogram name="later" size="sm" className="mt-px shrink-0 text-text-link" />
-          <span>
-            Allocate your own price, not the tax. GST is added on top of each installment at
-            checkout.
-          </span>
+          <span>{t("proposal.screens.installments.taxNote")}</span>
         </p>
       </main>
 
-      <StepDock label="Customer pays" amount={totals.customerTotal}>
+      <StepDock label={t("proposal.screens.shared.customerPays")} amount={totals.customerTotal}>
         <Button variant="secondary" size="lg" block>
-          Preview and send
+          {t("proposal.screens.installments.previewAndSend")}
         </Button>
       </StepDock>
     </div>
@@ -166,6 +166,7 @@ function InstallmentCard({
   readonly open: boolean;
 }) {
   const { position, title, deliverable, amount, sharePercent, expectedCompletion } = installment;
+  const t = useT();
 
   // Open, the finish date has a row of its own below, so repeating it in the
   // subtitle would print the same date twice within 60px.
@@ -214,7 +215,7 @@ function InstallmentCard({
         <>
           <div>
             <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.06em] text-text-muted">
-              Amount for this stage
+              {t("proposal.screens.installments.stageAmount")}
             </span>
 
             <div className="flex gap-2">
@@ -234,7 +235,7 @@ function InstallmentCard({
                 className="grid min-h-11 w-13 shrink-0 place-items-center rounded-full bg-action-secondary text-surface"
               >
                 <Pictogram name="price" size="sm" />
-                <span className="sr-only">Enter an exact amount</span>
+                <span className="sr-only">{t("proposal.screens.installments.exactAmount")}</span>
               </button>
             </div>
           </div>
@@ -243,15 +244,20 @@ function InstallmentCard({
             <Pictogram name="date" size="sm" className="shrink-0 text-text-muted" />
             <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-text">
               {expectedCompletion === undefined
-                ? "No finish date yet"
-                : `Expect to finish ${expectedCompletion}`}
+                ? t("proposal.screens.installments.noFinishDate")
+                : t("proposal.screens.installments.expectFinish", { date: expectedCompletion })}
             </span>
             <button
               type="button"
               className="flex min-h-11 shrink-0 items-center px-3 text-[13px] font-semibold text-text-link"
             >
-              {expectedCompletion === undefined ? "Set" : "Change"}
-              <span className="sr-only"> the expected finish date for {title}</span>
+              {expectedCompletion === undefined
+                ? t("proposal.screens.installments.set")
+                : t("proposal.screens.installments.change")}
+              <span className="sr-only">
+                {" "}
+                {t("proposal.screens.installments.finishDateFor", { title })}
+              </span>
             </button>
           </div>
         </>

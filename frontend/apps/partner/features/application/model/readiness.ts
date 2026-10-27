@@ -29,7 +29,8 @@ export type RequirementCode =
 
 export interface Requirement {
   code: RequirementCode;
-  label: string;
+  /** A catalogue key (`@vsolve/ui` `useT`), not the label itself — resolve with `t(labelKey)`. */
+  labelKey: string;
   /** Route to the step that satisfies it, so the summary is actionable. */
   href: string;
   isMet: boolean;
@@ -43,10 +44,10 @@ export interface Requirement {
  * account to apply turns a five-minute form into an errand and loses people who
  * would have been approved.
  */
-const REQUIRED_DOCUMENTS: readonly { kind: DocumentKind; code: RequirementCode; label: string }[] =
+const REQUIRED_DOCUMENTS: readonly { kind: DocumentKind; code: RequirementCode; labelKey: string }[] =
   [
-    { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID", label: "Government photo ID" },
-    { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF", label: "Proof of address" },
+    { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID", labelKey: "apply.requirements.governmentId" },
+    { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF", labelKey: "apply.requirements.addressProof" },
   ];
 
 /**
@@ -86,43 +87,43 @@ export function requirements(application: Application | null): Requirement[] {
   const list: Requirement[] = [
     {
       code: "DISPLAY_NAME",
-      label: "Your name",
+      labelKey: "apply.requirements.displayName",
       href: "/apply/about",
       isMet: (application?.display_name ?? "").trim().length > 0,
     },
     {
       code: "EXPERIENCE_YEARS",
-      label: "Years of experience",
+      labelKey: "apply.requirements.experienceYears",
       href: "/apply/about",
       isMet: (application?.experience_years ?? 0) > 0,
     },
     {
       code: "SKILLS",
-      label: "What you do",
+      labelKey: "apply.requirements.skills",
       href: "/apply/work",
       isMet: (application?.skill_codes.length ?? 0) > 0,
     },
     {
       code: "SERVICES",
-      label: "Services you accept",
+      labelKey: "apply.requirements.services",
       href: "/apply/work",
       isMet: (application?.service_variant_ids.length ?? 0) > 0,
     },
     {
       code: "SERVICE_AREAS",
-      label: "Where you work",
+      labelKey: "apply.requirements.serviceAreas",
       href: "/apply/areas",
       isMet: (application?.service_area_ids.length ?? 0) > 0,
     },
     ...REQUIRED_DOCUMENTS.map((required) => ({
       code: required.code,
-      label: required.label,
+      labelKey: required.labelKey,
       href: "/apply/documents",
       isMet: hasUsableDocument(application, required.kind),
     })),
     {
       code: "CONSENTS",
-      label: "Agreements",
+      labelKey: "apply.requirements.consents",
       href: "/apply/consent",
       isMet: (application?.consents.length ?? 0) > 0,
     },

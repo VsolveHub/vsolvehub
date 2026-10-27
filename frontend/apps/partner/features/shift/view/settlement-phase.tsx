@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, ErrorState, Readout, formatMoney, useToast } from "@vsolve/ui";
+import { Badge, Button, ErrorState, Readout, formatMoney, useT, useToast } from "@vsolve/ui";
 import {
   attendanceIsDisputed,
   describeError,
@@ -50,13 +50,14 @@ export interface SettlementPhaseProps {
 }
 
 export function SettlementPhase({ day, scope, canConfirm, canPropose, customerFirstName, engagementId }: SettlementPhaseProps) {
+  const t = useT();
   const confirm = useConfirmDaySettled(scope);
   const toast = useToast();
 
   const attendance = day.attendance;
   const settlement = day.settlement;
   const claim = shiftSettlementClaim(day);
-  const wording = settlementLabel(claim, customerFirstName);
+  const wording = settlementLabel(claim, customerFirstName, t);
   const amountPaise = settlementAmountPaise(day);
   const link = settlementPaymentLink(day);
   const disputed = attendanceIsDisputed(day);
@@ -66,21 +67,25 @@ export function SettlementPhase({ day, scope, canConfirm, canPropose, customerFi
   const count =
     attendance === null || attendance.present_count === null
       ? ""
-      : `${attendance.present_count} of ${attendance.expected_count}`;
-  const extras = settlement !== null && settlement.extras_paise > 0 ? ` + ${formatMoney(settlement.extras_paise)} extras` : "";
+      : t("work.settlement.presentOfExpected", {
+          present: attendance.present_count,
+          expected: attendance.expected_count,
+        });
+  const extras = settlement !== null && settlement.extras_paise > 0 ? ` + ${t("work.settlement.extras", { amount: formatMoney(settlement.extras_paise) })}`
+      : "";
 
   const share = async () => {
     if (link === null) return;
-    const text = `Pay ${formatMoney(amountPaise ?? 0)} for today's crew: ${link}`;
+    const text = t("work.settlement.shareText", { amount: formatMoney(amountPaise ?? 0), link });
     try {
       if (typeof navigator.share === "function") {
         await navigator.share({ text });
         return;
       }
       await navigator.clipboard.writeText(link);
-      toast.notify("Link copied — send it to " + customerFirstName + ".");
+      toast.notify(t("work.settlement.linkCopied", { name: customerFirstName }));
     } catch {
-      toast.notify("Could not share the link; copy it by hand below.");
+      toast.notify(t("work.settlement.shareFailed"));
     }
   };
 
@@ -94,10 +99,10 @@ export function SettlementPhase({ day, scope, canConfirm, canPropose, customerFi
             <Pictogram name="yes" size="sm" className="text-success-text" />
           ) : null}
           {disputed
-            ? `${customerFirstName} disputed the count`
+            ? t("work.settlement.heading.disputed", { name: customerFirstName })
             : confirmed
-              ? `${customerFirstName} confirmed ${count}${extras}`
-              : `Sent to ${customerFirstName} · ${count}`}
+              ? t("work.settlement.heading.confirmed", { name: customerFirstName, count, extras })
+              : t("work.settlement.heading.sent", { name: customerFirstName, count })}
         </h2>
         <Badge tone={TONE[wording.tone]} dot>
           {wording.label}
@@ -108,17 +113,17 @@ export function SettlementPhase({ day, scope, canConfirm, canPropose, customerFi
         <>
           {attendance !== null && attendance.dispute_note.trim() !== "" ? (
             <p className="whitespace-pre-wrap text-sm text-warning-text">
-              {customerFirstName} said: {attendance.dispute_note}
+              {t("work.settlement.customerSaid", { name: customerFirstName })} {attendance.dispute_note}
             </p>
           ) : null}
-          <p className="text-sm text-text-secondary">Vsolve is looking at it; the day stays open.</p>
+          <p className="text-sm text-text-secondary">{t("work.settlement.vsolveLooking")}</p>
           <BookingSupport reference={engagementId} />
         </>
       ) : null}
 
       {amountPaise === null ? null : (
         <Readout
-          label={claim === "settled" ? "Paid" : "Collect"}
+          label={claim === "settled" ? t("work.settlement.readout.paid") : t("work.settlement.readout.collect")}
           value={formatMoney(amountPaise)}
           tone={claim === "settled" ? "success" : "active"}
         />
@@ -130,11 +135,11 @@ export function SettlementPhase({ day, scope, canConfirm, canPropose, customerFi
         <div className="flex flex-col gap-2">
           {link === null ? null : (
             <Button type="button" variant="secondary" block onClick={() => void share()}>
-              Share UPI link
+              {t("work.settlement.shareUpi")}
             </Button>
           )}
           {alreadyTapped ? (
-            <p className="text-sm text-text-secondary">You tapped; waiting for {customerFirstName}.</p>
+            <p className="text-sm text-text-secondary">{t("work.settlement.youTapped", { name: customerFirstName })}</p>
           ) : canConfirm ? (
             <Button
               type="button"
@@ -142,16 +147,16 @@ export function SettlementPhase({ day, scope, canConfirm, canPropose, customerFi
               size="lg"
               onClick={() => confirm.mutate()}
               loading={confirm.isPending}
-              loadingLabel="Recording"
+              loadingLabel={t("work.settlement.recording")}
               disabled={confirm.isPending}
               icon={<Pictogram name="money" size="sm" />}
             >
-              Got paid {formatMoney(amountPaise)}
+              {t("work.settlement.gotPaid", { amount: formatMoney(amountPaise) })}
             </Button>
           ) : (
-            <p className="text-sm text-text-secondary">Your account cannot confirm a settlement right now.</p>
+            <p className="text-sm text-text-secondary">{t("work.settlement.cannotConfirm")}</p>
           )}
-          <p className="text-xs text-text-muted">{SETTLEMENT_STAYS_OPEN}</p>
+          <p className="text-xs text-text-muted">{t(SETTLEMENT_STAYS_OPEN)}</p>
         </div>
       )}
 
@@ -198,28 +203,30 @@ function PendingExtras({
 }
 
 function ExtraBadge({ status, customerFirstName }: { readonly status: string; readonly customerFirstName: string }) {
+  const t = useT();
   switch (status) {
     case "ACCEPTED":
     case "APPLIED":
-      return <Badge tone="success">OK&rsquo;d</Badge>;
+      return <Badge tone="success">{t("work.settlement.extra.accepted")}</Badge>;
     case "REJECTED":
-      return <Badge tone="warning">Turned down</Badge>;
+      return <Badge tone="warning">{t("work.settlement.extra.rejected")}</Badge>;
     case "EXPIRED":
-      return <Badge tone="warning">Expired</Badge>;
+      return <Badge tone="warning">{t("work.settlement.extra.expired")}</Badge>;
     case "PROPOSED":
-      return <Badge tone="info">Waiting for {customerFirstName}</Badge>;
+      return <Badge tone="info">{t("work.settlement.extra.waitingFor", { name: customerFirstName })}</Badge>;
     default:
       return <Badge tone="neutral">{status.replace(/[_-]+/g, " ").toLowerCase()}</Badge>;
   }
 }
 
 function SettlementFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
   if (isStageTransitionNotAllowed(error)) {
     return (
       <ErrorState
-        title="Nothing to settle yet"
-        message="Send today's count first."
+        title={t("work.settlement.nothingToSettle.title")}
+        message={t("work.settlement.nothingToSettle.message")}
         severity="warning"
         reference={presentation.reference}
       />

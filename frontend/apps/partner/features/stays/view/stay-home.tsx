@@ -3,7 +3,7 @@
 import { fetchAllPages } from "@vsolve/query";
 import { useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Card, Spinner, buttonStyles } from "@vsolve/ui";
+import { Card, Spinner, buttonStyles, useT } from "@vsolve/ui";
 import { ArrowRight, BedDouble, CalendarClock, LogIn, LogOut, MessageSquare, Phone, Star } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -45,6 +45,7 @@ function dayOf(value: string | null | undefined): string {
  * no, who arrives or leaves today, and how many rooms are free.
  */
 export function StayHome() {
+  const t = useT();
   const [now] = useState(() => new Date());
   const today = isoToday(now);
 
@@ -71,7 +72,7 @@ export function StayHome() {
     return (
       <p className="flex items-center justify-center gap-2 py-16 text-text-secondary">
         <Spinner size="sm" />
-        Loading your stays…
+        {t("stays.home.loading")}
       </p>
     );
   }
@@ -89,8 +90,10 @@ export function StayHome() {
     .map((e) => ({
       key: `enq-${e.id}`,
       title: e.property_title + (e.unit_name ? ` · ${e.unit_name}` : ""),
-      who: e.customer_name || "Guest",
-      when: `Wants ${dayLabel(dayOf(e.check_in))}${e.guest_count ? ` · ${e.guest_count} guest${e.guest_count === 1 ? "" : "s"}` : ""}`,
+      who: e.customer_name || t("stays.sheet.guest"),
+      when: `${t("stays.home.wants", { day: dayLabel(dayOf(e.check_in)) })}${
+        e.guest_count ? ` · ${t("stays.guests.count", { count: e.guest_count })}` : ""
+      }`,
       phone: e.customer_phone,
       href: "/stays/enquiries",
     }));
@@ -101,7 +104,7 @@ export function StayHome() {
     .map((v) => ({
       key: `vreq-${v.id}`,
       title: v.property_title,
-      who: v.customer_name || "Visitor",
+      who: v.customer_name || t("stays.home.visitor"),
       when: `${dayLabel(v.visit_date)}, ${clockWindow(v.start_time, v.end_time)}`,
       phone: v.customer_phone,
       href: "/stays/visits",
@@ -113,7 +116,7 @@ export function StayHome() {
     .map((v) => ({
       key: `vtoday-${v.id}`,
       title: v.property_title,
-      who: v.customer_name || "Visitor",
+      who: v.customer_name || t("stays.home.visitor"),
       when: clockWindow(v.start_time, v.end_time),
       phone: v.customer_phone,
       href: "/stays/visits",
@@ -125,8 +128,8 @@ export function StayHome() {
       .map((e) => ({
         key: `arr-e-${e.id}`,
         title: e.property_title + (e.unit_name ? ` · ${e.unit_name}` : ""),
-        who: e.customer_name || "Guest",
-        when: "Moving in today",
+        who: e.customer_name || t("stays.sheet.guest"),
+        when: t("stays.home.movingIn"),
         phone: e.customer_phone,
         href: "/stays/enquiries",
       })),
@@ -134,9 +137,9 @@ export function StayHome() {
       .filter((r) => r.status === "CONFIRMED" && dayOf(r.check_in) === today)
       .map((r) => ({
         key: `arr-r-${r.id}`,
-        title: (r.property_title ?? "Stay") + (r.unit_name ? ` · ${r.unit_name}` : ""),
-        who: r.customer_name || "Guest",
-        when: "Checking in today",
+        title: (r.property_title ?? t("stays.bookings.fallbackStay")) + (r.unit_name ? ` · ${r.unit_name}` : ""),
+        who: r.customer_name || t("stays.sheet.guest"),
+        when: t("stays.home.checkingIn"),
         phone: r.customer_phone,
         href: "/stays/bookings",
       })),
@@ -148,8 +151,8 @@ export function StayHome() {
       .map((e) => ({
         key: `dep-e-${e.id}`,
         title: e.property_title + (e.unit_name ? ` · ${e.unit_name}` : ""),
-        who: e.customer_name || "Guest",
-        when: "Leaving today",
+        who: e.customer_name || t("stays.sheet.guest"),
+        when: t("stays.home.leaving"),
         phone: e.customer_phone,
         href: "/stays/enquiries",
       })),
@@ -157,9 +160,10 @@ export function StayHome() {
       .filter((r) => r.status === "CHECKED_IN" && dayOf(r.check_out) <= today)
       .map((r) => ({
         key: `dep-r-${r.id}`,
-        title: (r.property_title ?? "Stay") + (r.unit_name ? ` · ${r.unit_name}` : ""),
-        who: r.customer_name || "Guest",
-        when: dayOf(r.check_out) < today ? "Check-out overdue" : "Checking out today",
+        title: (r.property_title ?? t("stays.bookings.fallbackStay")) + (r.unit_name ? ` · ${r.unit_name}` : ""),
+        who: r.customer_name || t("stays.sheet.guest"),
+        when:
+          dayOf(r.check_out) < today ? t("stays.home.checkOutOverdue") : t("stays.home.checkingOut"),
         phone: r.customer_phone,
         href: "/stays/bookings",
       })),
@@ -171,13 +175,21 @@ export function StayHome() {
     <div className="flex flex-col gap-5">
       {s ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tally label="Rooms free" value={s.available_rooms} tone="text-success-text" />
-          <Tally label="Rooms booked" value={s.booked_rooms} tone="text-warning-text" />
-          <Tally label="Total rooms" value={s.total_rooms} hint={`${s.live_properties} of ${s.total_properties} properties live`} />
+          <Tally label={t("stays.home.roomsFree")} value={s.available_rooms} tone="text-success-text" />
+          <Tally label={t("stays.home.roomsBooked")} value={s.booked_rooms} tone="text-warning-text" />
           <Tally
-            label="Reviews"
+            label={t("stays.summary.totalRooms")}
+            value={s.total_rooms}
+            hint={t("stays.home.propertiesLive", { live: s.live_properties, total: s.total_properties })}
+          />
+          <Tally
+            label={t("stays.summary.reviews")}
             value={s.review_count}
-            hint={s.average_rating != null ? `★ ${s.average_rating} average` : "No ratings yet"}
+            hint={
+              s.average_rating != null
+                ? t("stays.home.averageRating", { rating: s.average_rating })
+                : t("stays.home.noRatings")
+            }
             icon={<Star className="size-3.5" />}
           />
         </div>
@@ -185,38 +197,53 @@ export function StayHome() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Group
-          title="Call back"
+          title={t("stays.home.callBack")}
           icon={<MessageSquare className="size-4" />}
-          empty="No new enquiries waiting for a call."
+          empty={t("stays.home.callBackEmpty")}
           rows={toCall}
-          more={{ href: "/stays/enquiries", label: "All enquiries" }}
+          more={{ href: "/stays/enquiries", label: t("stays.home.allEnquiries") }}
         />
         <Group
-          title="Visit requests to answer"
+          title={t("stays.home.visitRequests")}
           icon={<CalendarClock className="size-4" />}
-          empty="No visit requests waiting."
+          empty={t("stays.home.visitRequestsEmpty")}
           rows={visitRequests}
-          more={{ href: "/stays/visits", label: "All visits" }}
+          more={{ href: "/stays/visits", label: t("stays.home.allVisits") }}
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Group title="Visits today" icon={<CalendarClock className="size-4" />} empty="No visits today." rows={visitsToday} />
-        <Group title="Arriving today" icon={<LogIn className="size-4" />} empty="No one moves in today." rows={arriving} />
-        <Group title="Leaving today" icon={<LogOut className="size-4" />} empty="No one leaves today." rows={leaving} />
+        <Group
+          title={t("stays.home.visitsToday")}
+          icon={<CalendarClock className="size-4" />}
+          empty={t("stays.home.visitsTodayEmpty")}
+          rows={visitsToday}
+        />
+        <Group
+          title={t("stays.home.arrivingToday")}
+          icon={<LogIn className="size-4" />}
+          empty={t("stays.home.arrivingTodayEmpty")}
+          rows={arriving}
+        />
+        <Group
+          title={t("stays.home.leavingToday")}
+          icon={<LogOut className="size-4" />}
+          empty={t("stays.home.leavingTodayEmpty")}
+          rows={leaving}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Link href="/stays" className={buttonStyles({})}>
           <BedDouble className="size-4" />
-          Manage rooms
+          {t("stays.home.manageRooms")}
         </Link>
         <Link href="/stays/enquiries" className={buttonStyles({ variant: "outline" })}>
-          Enquiries
+          {t("stays.sections.enquiries")}
           <ArrowRight className="size-4" />
         </Link>
         <Link href="/stays/visits" className={buttonStyles({ variant: "outline" })}>
-          Visits
+          {t("stays.sections.visits")}
           <ArrowRight className="size-4" />
         </Link>
       </div>
@@ -262,6 +289,7 @@ function Group({
   rows: Row[];
   more?: { href: string; label: string };
 }) {
+  const t = useT();
   const shown = rows.slice(0, 5);
   return (
     <section className="flex flex-col gap-2">
@@ -294,11 +322,11 @@ function Group({
                 {row.phone ? (
                   <a
                     href={`tel:${row.phone}`}
-                    aria-label={`Call ${row.who}`}
+                    aria-label={t("stays.enquiry.call", { name: row.who })}
                     className={buttonStyles({ size: "sm", variant: "outline" })}
                   >
                     <Phone className="size-4" />
-                    Call
+                    {t("stays.enquiries.call")}
                   </a>
                 ) : null}
               </Card>

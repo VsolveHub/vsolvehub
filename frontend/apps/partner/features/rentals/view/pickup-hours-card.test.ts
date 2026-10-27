@@ -1,4 +1,9 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it, vi } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 // `@` resolves to the Customer app under Vitest; give the card the partner queries it imports.
 vi.mock("@/features/rentals/queries", () => ({
@@ -36,18 +41,18 @@ describe("pickup hours form", () => {
 
   it("refuses no open days and a close before the open", () => {
     const closed = rowsFrom(undefined).map((r) => ({ ...r, open: false }));
-    expect(rowsProblem(closed)).toBe("Open at least one day.");
+    expect(rowsProblem(closed, t)).toBe("Open at least one day.");
     const backwards = rowsFrom(undefined).map((r) =>
       r.weekday === 6 ? { ...r, opensAt: "18:00", closesAt: "09:00" } : r,
     );
-    expect(rowsProblem(backwards)).toBe("On Sunday, closing time must be after opening time.");
-    expect(rowsProblem(rowsFrom(undefined))).toBeNull();
+    expect(rowsProblem(backwards, t)).toBe("On Sunday, closing time must be after opening time.");
+    expect(rowsProblem(rowsFrom(undefined), t)).toBeNull();
   });
 
   it("says how long a day is open", () => {
-    expect(hoursOpenText("09:00", "21:00")).toBe("12 hr");
-    expect(hoursOpenText("09:00", "18:30")).toBe("9 hr 30 min");
-    expect(hoursOpenText("18:00", "09:00")).toBe("");
+    expect(hoursOpenText("09:00", "21:00", t)).toBe("12 hr");
+    expect(hoursOpenText("09:00", "18:30", t)).toBe("9 hr 30 min");
+    expect(hoursOpenText("18:00", "09:00", t)).toBe("");
   });
 });
 

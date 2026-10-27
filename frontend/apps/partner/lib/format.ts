@@ -1,3 +1,5 @@
+import type { useT } from "@vsolve/ui";
+
 export function inr(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -14,7 +16,8 @@ export function shortDate(d: Date | string): string {
   }).format(new Date(d));
 }
 
-export function timeAgo(d: Date | string): string {
+/** `t` is optional so callers that have not threaded it yet keep the English wording. */
+export function timeAgo(d: Date | string, t?: ReturnType<typeof useT>): string {
   const date = new Date(d);
   const today = new Date();
   const sameDay = date.toDateString() === today.toDateString();
@@ -22,5 +25,6 @@ export function timeAgo(d: Date | string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
-  return sameDay ? `Today, ${time}` : `${shortDate(date)}, ${time}`;
+  if (sameDay) return t ? t("common.format.todayAt", { time }) : `Today, ${time}`;
+  return `${shortDate(date)}, ${time}`;
 }

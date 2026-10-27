@@ -15,18 +15,19 @@ import type { VisitStatus } from "../queries";
 
 export type StatusTone = "go" | "wait" | "done" | "stop";
 
-export const STATUS_COPY: Record<VisitStatus, { label: string; tone: StatusTone }> = {
-  CONFIRMED: { label: "Booked", tone: "wait" },
-  EN_ROUTE: { label: "On the way", tone: "go" },
-  ARRIVED: { label: "Arrived", tone: "go" },
-  IN_PROGRESS: { label: "Working", tone: "go" },
-  COMPLETION_SUBMITTED: { label: "Waiting for customer", tone: "wait" },
-  COMPLETED: { label: "Done", tone: "done" },
-  PARTIALLY_COMPLETED: { label: "Part done", tone: "done" },
-  DISPUTED: { label: "Customer raised a problem", tone: "stop" },
-  RECOVERY_REQUIRED: { label: "Needs help", tone: "stop" },
-  ABORTED: { label: "Stopped", tone: "stop" },
-  CANCELLED: { label: "Cancelled", tone: "stop" },
+/** `labelKey` is a catalogue key; resolve with `t` at render time. */
+export const STATUS_COPY: Record<VisitStatus, { labelKey: string; tone: StatusTone }> = {
+  CONFIRMED: { labelKey: "work.visitStatus.confirmed", tone: "wait" },
+  EN_ROUTE: { labelKey: "work.visitStatus.enRoute", tone: "go" },
+  ARRIVED: { labelKey: "work.visitStatus.arrived", tone: "go" },
+  IN_PROGRESS: { labelKey: "work.visitStatus.inProgress", tone: "go" },
+  COMPLETION_SUBMITTED: { labelKey: "work.visitStatus.completionSubmitted", tone: "wait" },
+  COMPLETED: { labelKey: "work.visitStatus.completed", tone: "done" },
+  PARTIALLY_COMPLETED: { labelKey: "work.visitStatus.partiallyCompleted", tone: "done" },
+  DISPUTED: { labelKey: "work.visitStatus.disputed", tone: "stop" },
+  RECOVERY_REQUIRED: { labelKey: "work.visitStatus.recoveryRequired", tone: "stop" },
+  ABORTED: { labelKey: "work.visitStatus.aborted", tone: "stop" },
+  CANCELLED: { labelKey: "work.visitStatus.cancelled", tone: "stop" },
 };
 
 export const TONE_STYLES: Record<StatusTone, string> = {

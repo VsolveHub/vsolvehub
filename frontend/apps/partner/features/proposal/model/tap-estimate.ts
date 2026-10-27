@@ -22,6 +22,8 @@
  * amount somebody typed once is losing it for good.
  */
 
+import type { useT } from "@vsolve/ui";
+
 import {
   EXCLUSION_CHOICES,
   WARRANTY_CHOICES,
@@ -189,14 +191,17 @@ export function tapTotal(estimate: TapEstimate): number | null {
  * button with no explanation is how a form dead-ends somebody who cannot read
  * the form — which on this screen is the whole point.
  */
-export function tapBlockedReason(estimate: TapEstimate): string | null {
-  if (estimate.work.length === 0) return "Tap at least one piece of work.";
+export function tapBlockedReason(
+  estimate: TapEstimate,
+  t: ReturnType<typeof useT>,
+): string | null {
+  if (estimate.work.length === 0) return t("proposal.tap.blocked.noWork");
   const unpriced = [
     ...estimate.work.filter((code) => estimate.workEntries[code]?.amountPaise == null),
     ...estimate.materials.filter((code) => estimate.materialEntries[code]?.amountPaise == null),
   ];
-  if (unpriced.length > 0) return "Put a price on everything you tapped.";
-  if (estimate.taxBasis === null) return "Choose how tax works.";
+  if (unpriced.length > 0) return t("proposal.tap.blocked.unpriced");
+  if (estimate.taxBasis === null) return t("proposal.tap.blocked.noTax");
   return null;
 }
 

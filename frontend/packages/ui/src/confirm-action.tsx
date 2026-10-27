@@ -4,6 +4,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { Button } from "./button";
 import { Dialog } from "./dialog";
+import { useTOrDefault } from "./i18n";
 
 /**
  * The one confirmation step before an irreversible or financial action.
@@ -79,7 +80,7 @@ export function ConfirmAction({
   consequence,
   confirmLabel,
   onConfirm,
-  cancelLabel = "Go back",
+  cancelLabel,
   pending = false,
   destructive = false,
   confirmPhrase,
@@ -87,6 +88,8 @@ export function ConfirmAction({
 }: ConfirmActionProps) {
   const [typed, setTyped] = useState("");
   const inputId = useId();
+  const tf = useTOrDefault();
+  const resolvedCancelLabel = cancelLabel ?? tf("ui.confirmAction.goBack", "Go back");
 
   const unlocked = confirmPhrase === undefined || typed.trim() === confirmPhrase;
 
@@ -108,14 +111,14 @@ export function ConfirmAction({
       footer={
         <>
           <Button variant="ghost" onClick={close} disabled={pending}>
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
           <Button
             variant={destructive ? "danger" : "primary"}
             onClick={onConfirm}
             disabled={!unlocked}
             loading={pending}
-            loadingLabel="Working"
+            loadingLabel={tf("ui.confirmAction.working", "Working")}
           >
             {confirmLabel}
           </Button>
@@ -129,7 +132,9 @@ export function ConfirmAction({
       {confirmPhrase !== undefined ? (
         <div className="mt-4">
           <label htmlFor={inputId} className="block text-sm font-medium text-text">
-            Type <span className="font-bold">{confirmPhrase}</span> to confirm
+            {tf("ui.confirmAction.typeToConfirm.prefix", "Type")}{" "}
+            <span className="font-bold">{confirmPhrase}</span>{" "}
+            {tf("ui.confirmAction.typeToConfirm.suffix", "to confirm")}
           </label>
           <input
             id={inputId}

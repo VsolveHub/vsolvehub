@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
 
 import type { PartnerVisit } from "@/features/work/queries";
 import { VisitJobView } from "./visit-job-view";
+import { withI18n } from "@/i18n/test-utils";
 
 /**
  * C3 — a Partner who cannot get to a job has a way to hand it back.
@@ -62,9 +63,11 @@ function renderVisit(visit: PartnerVisit) {
   vi.mocked(useRouter).mockReturnValue({ back: vi.fn() } as never);
   const client = new QueryClient();
   return render(
-    <QueryClientProvider client={client}>
-      <VisitJobView visit={visit} />
-    </QueryClientProvider>,
+    withI18n(
+      <QueryClientProvider client={client}>
+        <VisitJobView visit={visit} />
+      </QueryClientProvider>,
+    ),
   );
 }
 

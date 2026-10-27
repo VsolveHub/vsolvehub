@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom";
 
 import { cn } from "./cn";
+import { useTOrDefault } from "./i18n";
 import { useHydrated } from "./use-hydrated";
 
 /**
@@ -170,6 +171,7 @@ function usePageLayerModality(
 }
 
 function CloseButton({ onClick }: { onClick: () => void }) {
+  const tf = useTOrDefault();
   return (
     <button
       type="button"
@@ -181,7 +183,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
         "hover:bg-surface-hover hover:text-text",
       )}
     >
-      <span className="sr-only">Close</span>
+      <span className="sr-only">{tf("ui.dialog.close", "Close")}</span>
       <svg
         aria-hidden
         viewBox="0 0 20 20"

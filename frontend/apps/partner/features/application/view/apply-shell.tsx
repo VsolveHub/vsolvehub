@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { Logo, Sheet, cn } from "@vsolve/ui";
+import { Logo, Sheet, cn, useT, type Translator } from "@vsolve/ui";
 import { Check, ChevronLeft, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -9,15 +9,8 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { usePartnerApplication } from "../queries";
-import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { HomeHeroLink } from "@/components/home-hero-link";
-
-const NAV = [
-  { href: "/how-it-works", label: "How It Works" },
-  { href: "/benefits", label: "Earnings & Benefits" },
-  { href: "/trades", label: "Trades & Services" },
-  { href: "/contact", label: "Support" },
-];
+import { LocaleSwitcher } from "@/features/session/view/locale-switcher";
 
 /**
  * The chrome for `/apply/*`.
@@ -118,9 +111,10 @@ export function ApplyShell({ children }: { children: ReactNode }) {
           summary={summary}
           pathname={pathname}
           isLoading={query.isPending}
+          status={application?.status ?? null}
         />
 
-        <main className="mx-auto w-full max-w-2xl px-4 pt-24 pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] sm:pt-28">
+        <main className="mx-auto w-full max-w-2xl lg:max-w-5xl xl:max-w-6xl px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-32 pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))]">
           {children}
         </main>
 
@@ -136,16 +130,21 @@ function ApplyHeader({
   summary: _summary,
   pathname,
   isLoading: _isLoading,
+  status,
 }: {
   steps: readonly StepProgress[];
   summary: ReturnType<typeof progressSummary>;
   pathname: string;
   isLoading: boolean;
+  status: string | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const back = previousStep(pathname);
+  const isSubmitted = status === "SUBMITTED" || status === "UNDER_REVIEW";
+  const back = isSubmitted ? null : previousStep(pathname);
+  const currentStepIdx = steps.findIndex((s) => s.href === pathname);
 
   return (
     <>
@@ -159,19 +158,16 @@ function ApplyHeader({
                 <button
                   type="button"
                   onClick={() => router.push(back.href)}
-                  aria-label={`Back to ${back.label}`}
-                  // 44px on a phone, the 32px pill from `sm:` up. This is the
-                  // only back affordance in onboarding — the shell draws no
-                  // browser chrome — and 32x32 is well under a thumb.
+                  aria-label={t("apply.shell.backTo", { label: t(back.labelKey) })}
                   className="grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full bg-surface-sunken text-navy-900 border border-line-strong hover:bg-surface transition-colors shrink-0"
                 >
                   <ChevronLeft size={18} aria-hidden />
                 </button>
               )}
 
-              <HomeHeroLink className="flex min-h-11 items-center gap-2 group shrink-0">
+              <Link href="/apply" className="flex min-h-11 items-center gap-2 group shrink-0">
                 <Logo className="h-6 sm:h-7 w-auto shrink-0" />
-              </HomeHeroLink>
+              </Link>
 
               {/* Live Demand Status Badge */}
               <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px] shrink-0">
@@ -179,43 +175,47 @@ function ApplyHeader({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
-                <span className="text-text-secondary font-medium">Now onboarding:</span>
-                <span className="text-navy-900 font-bold">Hyderabad</span>
+                <span className="text-text-secondary font-medium">{t("auth.login.nowOnboarding")}</span>
+                <span className="text-navy-900 font-bold">{t("auth.login.city")}</span>
               </div>
             </div>
 
-            {/* Desktop Center Navigation Capsule */}
-            <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
-              {NAV.map((n) => (
-                <Link
-                  key={n.label}
-                  href={n.href}
-                  className="whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-text-secondary transition-colors duration-150 hover:bg-surface hover:text-navy-900"
-                >
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
+            {/* Desktop Center Step Status Capsule */}
+            <div className="hidden lg:flex items-center gap-2 rounded-full bg-surface-sunken/80 border border-line-strong px-4 py-1.5 text-xs">
+              <span className="font-extrabold text-navy-900">
+                {isSubmitted
+                  ? "Application Submitted • Under Verification"
+                  : pathname === "/apply"
+                  ? "Registration Hub"
+                  : currentStepIdx >= 0
+                  ? `Step ${currentStepIdx + 1} of ${steps.length}`
+                  : "Partner Application"}
+              </span>
+              <span className="text-text-muted">•</span>
+              <span className="font-medium text-text-secondary">Desktop Verification Mode</span>
+            </div>
 
-            {/* Right Action: Step indicator pill / Overview CTA (desktop) & Mobile Drawer */}
+            {/* Right Action: Step indicator pill / Overview CTA & Locale */}
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="inline-flex min-h-11 sm:min-h-8 sm:h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
-              >
-                <ListChecks size={14} aria-hidden />
-                <span>Steps</span>
-              </button>
+              <LocaleSwitcher />
+
+              {!isSubmitted && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="inline-flex min-h-11 sm:min-h-8 sm:h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
+                >
+                  <ListChecks size={14} aria-hidden />
+                  <span>{t("apply.shell.stepsButton")}</span>
+                </button>
+              )}
 
               <Link
                 href="/apply"
                 className="hidden sm:inline-flex text-xs font-bold text-navy-900 hover:text-navy-950 bg-surface-sunken hover:bg-surface px-3.5 py-1.5 rounded-full border border-line-strong transition-colors"
               >
-                Overview
+                {t("apply.steps.overview")}
               </Link>
-
-              <MarketingMobileNav items={NAV} />
             </div>
           </div>
         </header>
@@ -246,14 +246,15 @@ function StepSheet({
   steps: readonly StepProgress[];
   pathname: string;
 }) {
+  const t = useT();
   const here = normalise(pathname);
 
   return (
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Your application"
-      description="Fill these in any order. Everything saves as you go."
+      title={t("apply.shell.sheet.title")}
+      description={t("apply.shell.sheet.description")}
     >
       <ul className="flex list-none flex-col gap-1 p-0">
         {steps.map((step) => {
@@ -281,10 +282,10 @@ function StepSheet({
                       isCurrent ? "font-bold text-text" : "font-semibold text-text",
                     )}
                   >
-                    {step.label}
+                    {t(step.labelKey)}
                   </span>
                   <span className="truncate text-[0.8125rem] text-text-secondary">
-                    {describe(step, isCurrent)}
+                    {describe(step, isCurrent, t)}
                   </span>
                 </span>
               </Link>
@@ -331,14 +332,14 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
   );
 }
 
-function describe(step: StepProgress, isCurrent: boolean): string {
+function describe(step: StepProgress, isCurrent: boolean, t: Translator["t"]): string {
   if (step.state === "waypoint") {
-    return step.href === "/apply" ? "Where everything stands" : "Check it, then send it";
+    return step.href === "/apply" ? t("apply.shell.describe.overview") : t("apply.shell.describe.review");
   }
-  if (step.state === "optional") return "Optional — you can set this later";
-  if (step.state === "done") return "Done";
-  if (isCurrent) return "You are here";
-  return step.outstanding === 1 ? "1 thing needed" : `${step.outstanding} things needed`;
+  if (step.state === "optional") return t("apply.shell.describe.optional");
+  if (step.state === "done") return t("common.done");
+  if (isCurrent) return t("apply.shell.describe.current");
+  return t("apply.shell.describe.outstanding", { count: step.outstanding });
 }
 
 function normalise(pathname: string): string {

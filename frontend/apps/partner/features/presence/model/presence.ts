@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 /**
  * What a Partner is told about their own availability.
  *
@@ -124,3 +126,34 @@ export const PRESENCE_COPY: Record<PresenceStatus, PresenceCopy> = {
     tone: "warning",
   },
 };
+
+/**
+ * Translated copy for each state, for callers inside the React tree.
+ *
+ * `PRESENCE_COPY` above stays as the literal-English source of truth — it is
+ * also the fixture `presence.test.ts` asserts against directly — and this
+ * reads the same tone off it while resolving `label`/`detail` through the
+ * catalogue.
+ */
+const PRESENCE_COPY_KEYS: Record<PresenceStatus, { label: string; detail: string }> = {
+  checking: { label: "presence.status.checking.label", detail: "presence.status.checking.detail" },
+  offline: { label: "presence.status.offline.label", detail: "presence.status.offline.detail" },
+  connecting: {
+    label: "presence.status.connecting.label",
+    detail: "presence.status.connecting.detail",
+  },
+  online: { label: "presence.status.online.label", detail: "presence.status.online.detail" },
+  stale: { label: "presence.status.stale.label", detail: "presence.status.stale.detail" },
+  location_denied: {
+    label: "presence.status.locationDenied.label",
+    detail: "presence.status.locationDenied.detail",
+  },
+  unknown: { label: "presence.status.unknown.label", detail: "presence.status.unknown.detail" },
+};
+
+export function presenceCopy(status: PresenceStatus, t?: Translator["t"]): PresenceCopy {
+  const base = PRESENCE_COPY[status];
+  if (!t) return base;
+  const keys = PRESENCE_COPY_KEYS[status];
+  return { label: t(keys.label), detail: t(keys.detail), tone: base.tone };
+}

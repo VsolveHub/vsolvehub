@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { PartnerShell } from "@/features/session/partner-shell";
+import { SITE_NAME } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Job listings workspace",
+  // An object, not a string: a plain string here switches off the root
+  // template for every page below, so their tabs lose the brand.
+  title: { default: "Job listings workspace", template: `%s | ${SITE_NAME}` },
   description: "Employer and job listing management portal for V Solve Hub hiring partners",
   robots: { index: false, follow: false },
 };

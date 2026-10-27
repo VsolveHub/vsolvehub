@@ -2,7 +2,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { Button, Card, ErrorState, cn, formatMoney } from "@vsolve/ui";
+import { Button, Card, ErrorState, cn, formatMoney, useT } from "@vsolve/ui";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -32,6 +32,7 @@ import { usePriceBook, useSetPriceBookRate } from "../queries";
  * area, sees an honest empty state rather than a blank screen.
  */
 export function PriceBookScreen() {
+  const t = useT();
   const priceBook = usePriceBook();
   const state = asyncStateFrom(priceBook, (data) => data.items);
 
@@ -43,27 +44,26 @@ export function PriceBookScreen() {
           className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
         >
           <ArrowLeft size={16} aria-hidden />
-          Back to Account
+          {t("money.priceBook.backToAccount")}
         </Link>
       </div>
-      <h1 className="text-headline text-text">Your rate card</h1>
+      <h1 className="text-headline text-text">{t("money.priceBook.heading")}</h1>
       <p className="mt-1 text-body text-text-secondary">
-        Set once. Every estimate fills in from here.
+        {t("money.priceBook.subheading")}
       </p>
 
       <div className="mt-5">
         <AsyncSection
           state={state}
-          label="Loading your rate card"
+          label={t("money.priceBook.loading")}
           onRetry={() => void priceBook.refetch()}
           isEmpty={(items) => items.length === 0}
           empty={
             <Card className="mt-2 flex flex-col items-center gap-2 py-10 text-center">
               <Pictogram name="price" size="lg" className="text-text-muted" />
-              <p className="text-base font-semibold text-text">No items to price yet</p>
+              <p className="text-base font-semibold text-text">{t("money.priceBook.empty.title")}</p>
               <p className="max-w-[32ch] text-sm text-text-secondary">
-                We have not published a work-item catalog for your trade in your
-                area yet. Nothing you quote is affected.
+                {t("money.priceBook.empty.body")}
               </p>
             </Card>
           }
@@ -81,6 +81,7 @@ const LABOUR_GROUP = "Labour";
 const UNGROUPED = "Other";
 
 function PriceBookList({ items }: { items: PriceBookItem[] }) {
+  const t = useT();
   // One section per trade the Partner prices from (Electrician, Plumber, ...),
   // each with its composer tabs beneath. A single-trade Partner sees no trade
   // heading at all - the page title already names the job.
@@ -88,33 +89,44 @@ function PriceBookList({ items }: { items: PriceBookItem[] }) {
 
   return (
     <div className="flex flex-col gap-8">
-      {trades.map((trade) => (
-        <section key={trade.code} aria-label={trade.name} className="flex flex-col gap-6">
-          {trades.length > 1 ? (
-            <h2 className="text-base font-extrabold leading-tight text-text">{trade.name}</h2>
-          ) : null}
-          {groupByComposerTab(trade.items).map((group) => (
-            <section
-              key={`${trade.code}-${group.name}`}
-              aria-labelledby={`price-book-${trade.code}-${group.name}`}
-            >
-              <h3
-                id={`price-book-${trade.code}-${group.name}`}
-                className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-text-muted"
-              >
-                {group.name}
-              </h3>
-              <ul className="flex flex-col gap-2.5">
-                {group.items.map((item) => (
-                  <li key={item.work_item.id}>
-                    <PriceBookRow item={item} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </section>
-      ))}
+      {trades.map((trade) => {
+        const tradeName = trade.name === UNGROUPED ? t("money.priceBook.otherTrade") : trade.name;
+        return (
+          <section key={trade.code} aria-label={tradeName} className="flex flex-col gap-6">
+            {trades.length > 1 ? (
+              <h2 className="text-base font-extrabold leading-tight text-text">{tradeName}</h2>
+            ) : null}
+            {groupByComposerTab(trade.items).map((group) => {
+              const groupName =
+                group.name === LABOUR_GROUP
+                  ? t("money.priceBook.labourGroup")
+                  : group.name === UNGROUPED
+                    ? t("money.priceBook.otherGroup")
+                    : group.name;
+              return (
+                <section
+                  key={`${trade.code}-${group.name}`}
+                  aria-labelledby={`price-book-${trade.code}-${group.name}`}
+                >
+                  <h3
+                    id={`price-book-${trade.code}-${group.name}`}
+                    className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-text-muted"
+                  >
+                    {groupName}
+                  </h3>
+                  <ul className="flex flex-col gap-2.5">
+                    {group.items.map((item) => (
+                      <li key={item.work_item.id}>
+                        <PriceBookRow item={item} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -126,7 +138,7 @@ export function groupByTrade(
   const byTrade = new Map<string, { code: string; name: string; items: PriceBookItem[] }>();
   for (const item of items) {
     const code = item.trade_code || "other";
-    const bucket = byTrade.get(code) ?? { code, name: item.trade_name || "Other", items: [] };
+    const bucket = byTrade.get(code) ?? { code, name: item.trade_name || UNGROUPED, items: [] };
     bucket.items.push(item);
     byTrade.set(code, bucket);
   }
@@ -154,6 +166,7 @@ export function groupByComposerTab(
 }
 
 function PriceBookRow({ item }: { item: PriceBookItem }) {
+  const t = useT();
   const setRate = useSetPriceBookRate();
   const [rupees, setRupees] = useState<string>(
     item.partner_rate_paise === null
@@ -200,7 +213,7 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-text">{item.work_item.name}</p>
           <p className="text-xs text-text-secondary">
-            Per {unitLabel(item.work_item.unit)}
+            {t("money.priceBook.perUnit", { unit: unitLabel(t, item.work_item.unit) })}
             {hasBand
               ? ` · ${formatMoney(item.floor_paise as number)} – ${formatMoney(item.ceiling_paise as number)}`
               : null}
@@ -211,7 +224,7 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
           type="button"
           role="switch"
           aria-checked={isActive}
-          aria-label={isActive ? "Active — tap to deactivate" : "Inactive — tap to activate"}
+          aria-label={isActive ? t("money.priceBook.switch.active") : t("money.priceBook.switch.inactive")}
           onClick={() => setIsActive((current) => !current)}
           className={cn(
             "relative h-7 w-12 shrink-0 rounded-full transition-colors duration-fast",
@@ -230,7 +243,7 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
 
       {hasBand ? null : (
         <p className="text-xs text-warning-text">
-          Not priced in your area yet — you cannot set a rate for this item here.
+          {t("money.priceBook.noBand")}
         </p>
       )}
 
@@ -246,7 +259,7 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
           disabled={!hasBand}
           value={rupees}
           onChange={(event) => setRupees(event.target.value)}
-          aria-label={`Your rate for ${item.work_item.name}`}
+          aria-label={t("money.priceBook.rateInputAriaLabel", { item: item.work_item.name })}
           className={cn(
             "h-11 flex-1 rounded-control border border-line bg-surface px-3 text-base font-semibold text-text",
             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
@@ -257,37 +270,38 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
           size="sm"
           disabled={!isDirty}
           loading={setRate.isPending}
-          loadingLabel="Saving"
+          loadingLabel={t("common.saving")}
           onClick={save}
         >
-          Save
+          {t("common.save")}
         </Button>
       </div>
 
       {item.is_default_rate && hasBand ? (
-        <p className="text-xs text-text-muted">City rate — tap to set yours</p>
+        <p className="text-xs text-text-muted">{t("money.priceBook.cityRate")}</p>
       ) : null}
 
       {errorMessage ? (
-        <ErrorState inline severity="error" title="Could not save this rate" message={errorMessage} />
+        <ErrorState inline severity="error" title={t("money.priceBook.saveError.title")} message={errorMessage} />
       ) : null}
     </Card>
   );
 }
 
-const UNIT_LABELS: Record<string, string> = {
-  each: "item",
-  job: "job",
-  hour: "hour",
-  day: "day",
-  sq_ft: "sq.ft",
-  running_ft: "running ft",
-  metre: "metre",
-  kg: "kg",
-  litre: "litre",
-  set: "set",
+const UNIT_LABEL_KEYS: Record<string, string> = {
+  each: "money.unit.each",
+  job: "money.unit.job",
+  hour: "money.unit.hour",
+  day: "money.unit.day",
+  sq_ft: "money.unit.sqFt",
+  running_ft: "money.unit.runningFt",
+  metre: "money.unit.metre",
+  kg: "money.unit.kg",
+  litre: "money.unit.litre",
+  set: "money.unit.set",
 };
 
-function unitLabel(unit: string): string {
-  return UNIT_LABELS[unit] ?? unit;
+function unitLabel(t: ReturnType<typeof useT>, unit: string): string {
+  const key = UNIT_LABEL_KEYS[unit];
+  return key ? t(key) : unit;
 }

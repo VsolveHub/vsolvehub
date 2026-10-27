@@ -1,5 +1,5 @@
 import { Briefcase, Building, Coins, MapPin } from "lucide-react";
-import { formatMoney } from "@vsolve/ui";
+import { formatMoney, useT } from "@vsolve/ui";
 
 import { payPaise, type PayMode } from "../model";
 
@@ -36,13 +36,14 @@ function payLabel(props: Pick<
 }
 
 export function ListingPreview(props: ListingPreviewProps) {
+  const t = useT();
   const pay = payLabel(props);
   const facts = [props.roleType, props.experience, props.shift].filter(Boolean);
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-text-muted">
-        Applicants will see this after the job is published.
+        {t("listings.preview.note")}
       </p>
       <article className="rounded-card border border-line bg-surface p-5 shadow-card">
         <div className="flex items-start gap-3">
@@ -51,17 +52,17 @@ export function ListingPreview(props: ListingPreviewProps) {
           </span>
           <div className="min-w-0">
             <h3 className="text-xl font-bold tracking-tight text-navy-900">
-              {props.title.trim() || "Job title"}
+              {props.title.trim() || t("listings.preview.jobTitlePlaceholder")}
             </h3>
             <p className="text-xs text-text-secondary">
-              {props.serviceName?.trim() || "Verified employer"}
+              {props.serviceName?.trim() || t("listings.preview.verifiedEmployer")}
             </p>
           </div>
         </div>
 
         <p className="mt-3 flex items-center gap-1.5 text-sm text-text-secondary">
           <MapPin className="size-4 text-text-muted" />
-          {props.location.trim() || "Location"}
+          {props.location.trim() || t("listings.preview.locationPlaceholder")}
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -83,7 +84,7 @@ export function ListingPreview(props: ListingPreviewProps) {
         </div>
 
         <h4 className="mt-5 text-xs font-bold uppercase tracking-wider text-text-muted">
-          Job description
+          {t("listings.preview.jobDescription")}
         </h4>
         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
           {props.description.trim()}
@@ -91,7 +92,7 @@ export function ListingPreview(props: ListingPreviewProps) {
 
         <div className="mt-5 flex justify-end">
           <span className="rounded-control bg-action px-4 py-2 text-xs font-bold text-action-text">
-            Apply
+            {t("listings.preview.apply")}
           </span>
         </div>
       </article>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
-import { Badge, Button, Card, Dialog, EmptyState, Field, Input, LoadMore, Textarea, formatDate, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, Dialog, EmptyState, Field, Input, LoadMore, Textarea, formatDate, formatMoney, useT } from "@vsolve/ui";
 import { ChevronRight } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -14,7 +14,7 @@ import {
   uploadPartnerDisputePhoto,
 } from "@/features/rentals/queries";
 import { RentalBookingDetailSheet, rentalBookingStatusLabel, rentalBookingTone } from "@/features/rentals/view/rental-booking-sheet";
-import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
+import { useRentalSections } from "@/features/rentals/view/rental-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const BOOKING_STATUS_FILTERS = [
@@ -83,6 +83,8 @@ function rupeesToPaise(input: string): number | null {
  * first makes each step one decision.
  */
 export function PartnerRentalBookingsWorkspace() {
+  const t = useT();
+  const rentalSections = useRentalSections();
   const qc = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -190,7 +192,7 @@ export function PartnerRentalBookingsWorkspace() {
     if (!/^\d{4}$/.test(pin)) {
       setHandoverModal({
         ...handoverModal,
-        error: "Enter the 4-digit handover PIN from the customer.",
+        error: t("rentals.bookings.errorPin"),
       });
       return;
     }
@@ -205,7 +207,7 @@ export function PartnerRentalBookingsWorkspace() {
     if (!disputeModal) return;
     const reason = disputeModal.reason.trim();
     if (!reason) {
-      setDisputeModal({ ...disputeModal, error: "Add a reason for the deposit dispute." });
+      setDisputeModal({ ...disputeModal, error: t("rentals.bookings.errorDisputeReason") });
       return;
     }
     // Blank consume = 0 (none). Always send consume_paise so the server never
@@ -216,14 +218,14 @@ export function PartnerRentalBookingsWorkspace() {
       if (parsed == null || parsed < 0) {
         setDisputeModal({
           ...disputeModal,
-          error: "Enter a valid consume amount in rupees, or leave blank for none.",
+          error: t("rentals.bookings.errorConsumeAmount"),
         });
         return;
       }
       consumePaise = parsed;
     }
     if (disputeModal.photos.length > MAX_DISPUTE_PHOTOS) {
-      setDisputeModal({ ...disputeModal, error: "Attach at most 5 photos." });
+      setDisputeModal({ ...disputeModal, error: t("rentals.bookings.errorMaxPhotos") });
       return;
     }
     act.mutate({
@@ -263,18 +265,17 @@ export function PartnerRentalBookingsWorkspace() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Rentals</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Bookings</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("rentals.bookings.eyebrow")}</p>
+        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("rentals.bookings.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Customer reservations across your rental ads. Open one for the amounts, the deposit and
-          handover.
+          {t("rentals.bookings.intro")}
         </p>
       </div>
 
-      <SectionNav label="Rental sections" items={RENTAL_SECTIONS} />
+      <SectionNav label={t("rentals.sections.ariaLabel")} items={rentalSections} />
 
       <Card>
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Booking status filter">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("rentals.bookings.filterAriaLabel")}>
           {BOOKING_STATUS_FILTERS.map((status) => (
             <button
               key={status}
@@ -288,12 +289,12 @@ export function PartnerRentalBookingsWorkspace() {
                   : "border border-line bg-surface text-text-secondary hover:text-navy-900"
               }`}
             >
-              {rentalBookingStatusLabel(status)}
+              {rentalBookingStatusLabel(status, t)}
             </button>
           ))}
         </div>
 
-        {bookings.isLoading ? <p className="mt-3 text-sm text-text-secondary">Loading…</p> : null}
+        {bookings.isLoading ? <p className="mt-3 text-sm text-text-secondary">{t("common.loading")}</p> : null}
         {bookings.error ? (
           <p className="mt-3 text-sm text-danger-text">{friendlyErrorMessage(bookings.error)}</p>
         ) : null}
@@ -306,13 +307,15 @@ export function PartnerRentalBookingsWorkspace() {
             className="mt-3"
             title={
               bookingStatusFilter === "ALL"
-                ? "No bookings yet"
-                : `No ${rentalBookingStatusLabel(bookingStatusFilter).toLowerCase()} bookings`
+                ? t("rentals.bookings.emptyAllTitle")
+                : t("rentals.bookings.emptyStatusTitle", {
+                    status: rentalBookingStatusLabel(bookingStatusFilter, t).toLowerCase(),
+                  })
             }
             description={
               bookingStatusFilter === "ALL"
-                ? "Bookings appear here after a customer reserves an asset."
-                : "Try another status filter to see more."
+                ? t("rentals.bookings.emptyAllDescription")
+                : t("rentals.bookings.emptyStatusDescription")
             }
           />
         ) : null}
@@ -328,7 +331,7 @@ export function PartnerRentalBookingsWorkspace() {
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-navy-900">{booking.asset.title}</span>
                   <Badge tone={rentalBookingTone(booking.status)}>
-                    {rentalBookingStatusLabel(booking.status)}
+                    {rentalBookingStatusLabel(booking.status, t)}
                   </Badge>
                 </span>
                 <span className="block text-sm text-text-secondary">
@@ -336,7 +339,7 @@ export function PartnerRentalBookingsWorkspace() {
                   {formatDate(booking.end_date)}
                 </span>
                 <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
-                  View booking
+                  {t("rentals.bookings.viewBooking")}
                   <ChevronRight className="size-3.5" aria-hidden />
                 </span>
               </button>
@@ -365,8 +368,8 @@ export function PartnerRentalBookingsWorkspace() {
         onOpenChange={(open) => {
           if (!open && !act.isPending) setHandoverModal(null);
         }}
-        title="Confirm handover"
-        description="Ask the customer for their 4-digit handover PIN, then enter it here."
+        title={t("rentals.handover.title")}
+        description={t("rentals.handover.description")}
         footer={
           <>
             <Button
@@ -374,15 +377,15 @@ export function PartnerRentalBookingsWorkspace() {
               disabled={act.isPending}
               onClick={() => setHandoverModal(null)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
-            <Button loading={act.isPending} loadingLabel="Confirming…" onClick={confirmHandover}>
-              Confirm handover
+            <Button loading={act.isPending} loadingLabel={t("rentals.handover.confirming")} onClick={confirmHandover}>
+              {t("rentals.handover.title")}
             </Button>
           </>
         }
       >
-        <Field label="Handover PIN" required error={handoverModal?.error ?? undefined}>
+        <Field label={t("rentals.handover.pinLabel")} required error={handoverModal?.error ?? undefined}>
           <Input
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -395,7 +398,7 @@ export function PartnerRentalBookingsWorkspace() {
                   : current,
               )
             }
-            placeholder="4-digit PIN"
+            placeholder={t("rentals.handover.pinPlaceholder")}
           />
         </Field>
       </Dialog>
@@ -405,8 +408,8 @@ export function PartnerRentalBookingsWorkspace() {
         onOpenChange={(open) => {
           if (!open && !act.isPending) setDepositChoice(null);
         }}
-        title="Item is back"
-        description="Return the deposit to the customer, or raise a dispute if something is damaged or missing."
+        title={t("rentals.depositChoice.title")}
+        description={t("rentals.depositChoice.description")}
         footer={
           <>
             <Button
@@ -414,20 +417,20 @@ export function PartnerRentalBookingsWorkspace() {
               disabled={act.isPending}
               onClick={chooseDispute}
             >
-              Raise dispute
+              {t("rentals.action.disputeDeposit")}
             </Button>
             <Button
               loading={act.isPending}
-              loadingLabel="Returning deposit…"
+              loadingLabel={t("rentals.depositChoice.returning")}
               onClick={chooseReturnDeposit}
             >
-              Return deposit
+              {t("rentals.action.releaseDeposit")}
             </Button>
           </>
         }
       >
         <p className="text-sm text-text-secondary">
-          Returning the deposit sends the full amount back. A dispute is for damage or something missing.
+          {t("rentals.depositChoice.body")}
         </p>
       </Dialog>
 
@@ -436,26 +439,26 @@ export function PartnerRentalBookingsWorkspace() {
         onOpenChange={(open) => {
           if (!open && !act.isPending) setDisputeModal(null);
         }}
-        title="Raise deposit dispute"
-        description="Say what is wrong and add up to 5 photos. Operations reviews this before any money moves. Leave the amount blank if you are not asking to keep any of the deposit."
+        title={t("rentals.dispute.title")}
+        description={t("rentals.dispute.description")}
         footer={
           <>
             <Button variant="ghost" disabled={act.isPending} onClick={() => setDisputeModal(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="danger"
               loading={act.isPending}
-              loadingLabel="Submitting…"
+              loadingLabel={t("rentals.dispute.submitting")}
               onClick={confirmDispute}
             >
-              Raise dispute
+              {t("rentals.action.disputeDeposit")}
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-3">
-          <Field label="Reason" required error={disputeModal?.error ?? undefined}>
+          <Field label={t("rentals.dispute.reason")} required error={disputeModal?.error ?? undefined}>
             <Textarea
               value={disputeModal?.reason ?? ""}
               onChange={(e) =>
@@ -463,13 +466,13 @@ export function PartnerRentalBookingsWorkspace() {
                   current ? { ...current, reason: e.target.value, error: null } : current,
                 )
               }
-              placeholder="e.g. Scratched housing, missing bit set"
+              placeholder={t("rentals.dispute.reasonPlaceholder")}
               rows={3}
             />
           </Field>
           <Field
-            label="Amount to keep"
-            description="Optional. The rest of the deposit goes back to the customer."
+            label={t("rentals.dispute.amountToKeep")}
+            description={t("rentals.dispute.amountToKeepHint")}
             showOptional={false}
           >
             <div className="relative">
@@ -490,8 +493,8 @@ export function PartnerRentalBookingsWorkspace() {
             </div>
           </Field>
           <Field
-            label="Photos"
-            description="JPEG, PNG or WebP. Up to 5. These stay private."
+            label={t("rentals.dispute.photos")}
+            description={t("rentals.dispute.photosHint")}
             showOptional
           >
             <input
@@ -506,7 +509,7 @@ export function PartnerRentalBookingsWorkspace() {
                   const photos = [...current.photos, ...picked].slice(0, MAX_DISPUTE_PHOTOS);
                   const error =
                     current.photos.length + picked.length > MAX_DISPUTE_PHOTOS
-                      ? "Attach at most 5 photos."
+                      ? t("rentals.bookings.errorMaxPhotos")
                       : null;
                   return { ...current, photos, error };
                 });
@@ -533,7 +536,7 @@ export function PartnerRentalBookingsWorkspace() {
                         )
                       }
                     >
-                      Remove
+                      {t("common.remove")}
                     </button>
                   </li>
                 ))}
@@ -548,25 +551,25 @@ export function PartnerRentalBookingsWorkspace() {
         onOpenChange={(open) => {
           if (!open && !act.isPending) setCancelModal(null);
         }}
-        title="Cancel booking"
-        description="Cancels before handover. The customer gets a full refund and the asset dates are freed."
+        title={t("rentals.action.cancel")}
+        description={t("rentals.cancel.description")}
         footer={
           <>
             <Button variant="ghost" disabled={act.isPending} onClick={() => setCancelModal(null)}>
-              Keep booking
+              {t("rentals.cancel.keepBooking")}
             </Button>
             <Button
               variant="danger"
               loading={act.isPending}
-              loadingLabel="Cancelling…"
+              loadingLabel={t("rentals.cancel.cancelling")}
               onClick={confirmCancel}
             >
-              Cancel booking
+              {t("rentals.action.cancel")}
             </Button>
           </>
         }
       >
-        <Field label="Reason" showOptional error={cancelModal?.error ?? undefined}>
+        <Field label={t("rentals.dispute.reason")} showOptional error={cancelModal?.error ?? undefined}>
           <Textarea
             value={cancelModal?.reason ?? ""}
             onChange={(e) =>
@@ -574,7 +577,7 @@ export function PartnerRentalBookingsWorkspace() {
                 current ? { ...current, reason: e.target.value, error: null } : current,
               )
             }
-            placeholder="e.g. Equipment unavailable"
+            placeholder={t("rentals.cancel.reasonPlaceholder")}
             rows={3}
           />
         </Field>
