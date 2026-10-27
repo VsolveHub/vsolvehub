@@ -32,7 +32,12 @@ from apps.payouts.services import (
 from tests.fulfilment.conftest import create_booked_group
 from tests.payouts.test_ledger_and_payout import _deliver
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Reaches en route and arrival through shared helpers for a visit booked for tomorrow; the
+    # clock gates on those steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 _sequence = itertools.count(1)
 

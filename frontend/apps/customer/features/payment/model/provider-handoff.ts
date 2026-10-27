@@ -1,3 +1,5 @@
+import { serverClock } from "@vsolve/api-client";
+
 import type { PaymentAttempt } from "./outcome";
 
 /**
@@ -51,6 +53,8 @@ export interface HandoffTarget {
   providerOrderId: string;
   amountPaise: number;
   currency: string;
+  /** The attempt's server deadline; Checkout is closed before it (`checkoutTimeoutSeconds`). */
+  expiresAt: string | null;
 }
 
 export function handoffTarget(attempt: PaymentAttempt): HandoffTarget | null {
@@ -71,7 +75,35 @@ export function handoffTarget(attempt: PaymentAttempt): HandoffTarget | null {
     // says, so pass the net gateway amount (gross minus wallet & coins).
     amountPaise: attempt.razorpay_amount_paise ?? attempt.amount.amount_paise,
     currency: attempt.amount.currency,
+    expiresAt: attempt.expires_at,
   };
+}
+
+/**
+ * How long Checkout may stay open: the seconds left on the attempt, minus a
+ * safety margin, by the server's clock.
+ *
+ * A booking's Partner holds expire with the attempt. A Customer who sat on an
+ * open Checkout past that deadline could still pay — and the money would land
+ * on a group that had already released its Partners. Django refunds that case
+ * (`capture_after_terminal`), but the better outcome is that Checkout closes
+ * itself first, so the margin leaves room for the payment to reach Django
+ * while the holds are still live.
+ *
+ * `null` when the attempt carries no deadline (some standalone charges), and
+ * Checkout opens without a timeout. Zero or less means the window has already
+ * closed and Checkout must not open at all.
+ */
+export const CHECKOUT_TIMEOUT_MARGIN_SECONDS = 30;
+
+export function checkoutTimeoutSeconds(
+  expiresAt: string | null,
+  serverNowMs: number,
+): number | null {
+  if (expiresAt === null) return null;
+  const deadlineMs = Date.parse(expiresAt);
+  if (!Number.isFinite(deadlineMs)) return null;
+  return Math.floor((deadlineMs - serverNowMs) / 1000) - CHECKOUT_TIMEOUT_MARGIN_SECONDS;
 }
 
 /** Resolves once, when the widget is no longer on screen. Never a result. */
@@ -83,6 +115,8 @@ interface RazorpayOptions {
   amount: number;
   currency: string;
   name: string;
+  /** Seconds before Checkout closes itself; Razorpay's own option. */
+  timeout?: number;
   handler: () => void;
   modal: { ondismiss: () => void };
 }
@@ -145,6 +179,11 @@ export async function openProviderCheckout(
     throw new Error("Payment order ID or public key is missing.");
   }
 
+  const timeout = checkoutTimeoutSeconds(target.expiresAt, serverClock.now());
+  if (timeout !== null && timeout <= 0) {
+    throw new Error("This payment window has closed. Refresh to see where your booking stands.");
+  }
+
   await loadRazorpayScript();
 
   const Razorpay = window.Razorpay;
@@ -168,6 +207,7 @@ export async function openProviderCheckout(
       amount: target.amountPaise,
       currency: target.currency,
       name: options.businessName,
+      ...(timeout === null ? {} : { timeout }),
       handler: end,
       modal: { ondismiss: end },
     }).open();

@@ -24,6 +24,12 @@ from rest_framework import serializers
 from apps.assignments.models import PartnerOffer
 from apps.carts.models import QuoteLine
 from apps.commerce.models import Booking
+from apps.fulfilment.gates import (
+    BookingGates,
+    GatedAction,
+    booking_gates,
+    discloses_site_details,
+)
 from apps.fulfilment.models import (
     BookingStatusHistory,
     CompletionResponse,
@@ -34,6 +40,9 @@ from apps.fulfilment.models import (
     WorkOutcome,
     WorkTask,
 )
+from apps.locations.models import Address
+from apps.locations.pins import directions_url
+from apps.locations.serializers import PartnerSiteAddressSerializer, site_address_payload
 from apps.payouts.models import PartnerLedgerEntry
 from apps.payouts.services import estimated_booking_earning
 
@@ -253,14 +262,17 @@ class ReschedulePreviewSerializer(serializers.Serializer[Any]):
 class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
     """One visit, as the Customer who paid for it sees it.
 
-    Carries the Partner's display name and nothing else about them — not their phone number,
-    not their earnings, not their other jobs. `G7` in the frontend task file is the same rule
-    from the other side: Customer projections contain no Partner identity beyond what is needed
-    to recognise the person at the door.
+    Carries the Partner's display name and nothing else about them — not their earnings, not their
+    other jobs. `G7` in the frontend task file is the same rule from the other side: Customer
+    projections contain no Partner identity beyond what is needed to recognise the person at the
+    door. The one addition is `partner_phone`, and only inside the same window the Partner gets the
+    Customer's number (`gates.discloses_site_details`): the two sides can reach each other while
+    the visit is happening, and neither holds the other's number before or after it.
     """
 
     fulfilment_unit_id = serializers.UUIDField(read_only=True, allow_null=True)
     partner_display_name = serializers.SerializerMethodField()
+    partner_phone = serializers.SerializerMethodField()
     work_tasks = serializers.SerializerMethodField()
     active_amendment = serializers.SerializerMethodField()
     completion = serializers.SerializerMethodField()
@@ -278,6 +290,7 @@ class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
             "scheduled_start",
             "estimated_duration_minutes",
             "partner_display_name",
+            "partner_phone",
             "en_route_at",
             "arrived_at",
             "late_declared_at",
@@ -291,6 +304,19 @@ class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
             "server_now",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_partner_phone(self, instance: Booking) -> str | None:
+        """The assigned Partner's number, only while the Partner can see the Customer's.
+
+        `RECOVERY_REQUIRED` is outside the disclosure statuses, so the Partner who released is never
+        offered as someone to call.
+        """
+
+        gates = booking_gates(instance, instance.fulfilment_unit, timezone.now())
+        if not discloses_site_details(instance, gates):
+            return None
+        return instance.partner.user.phone_number
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_partner_display_name(self, instance: Booking) -> str | None:
@@ -373,17 +399,19 @@ class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
 
 
 class StartOtpSerializer(serializers.Serializer[dict[str, Any]]):
-    """What the Customer is told about the code they must read out.
+    """The code the Customer reads out to let work begin.
 
-    `code_length` rather than the code: the Customer reads the code off their own SMS, and
-    publishing it here would hand it to anyone who could reach this endpoint — which is the
-    whole point of the OTP. `development_code` is populated only by the development sender,
-    exactly as OTP login already works.
+    `code` is published, and only here: this endpoint is the Booking's own Customer's, behind
+    `_customer_booking` and the service's customer check, so nobody else can reach it — not the
+    Partner, whose half is typing the code in. Showing it on screen means a job never waits on an
+    SMS arriving; the SMS is a courtesy copy. `development_code` is the legacy field, still the
+    same digits but only where `OTP_DEVELOPMENT_CODE_ENABLED`.
     """
 
     booking_id = serializers.UUIDField()
     expires_at = serializers.DateTimeField()
     code_length = serializers.IntegerField()
+    code = serializers.CharField()
     development_code = serializers.CharField(allow_null=True, required=False)
     server_now = serializers.DateTimeField()
 
@@ -437,14 +465,81 @@ class PartnerBookingListQuerySerializer(serializers.Serializer[dict[str, object]
     )
 
 
+class PartnerBookingGatesSerializer(serializers.Serializer[dict[str, object]]):
+    """The visit's server-clock windows (`apps.fulfilment.gates`), so the app can count down to
+    them instead of guessing. `allowed_actions` is the authority on what is open right now."""
+
+    address_unlocks_at = serializers.DateTimeField()
+    en_route_opens_at = serializers.DateTimeField()
+    en_route_closes_at = serializers.DateTimeField()
+    arrival_opens_at = serializers.DateTimeField()
+    arrival_closes_at = serializers.DateTimeField()
+
+
+#: Every Partner command on a booked visit, named as the `BookingCommand` it records.
+PARTNER_BOOKING_ACTIONS = (
+    "MARK_EN_ROUTE",
+    "MARK_ARRIVED",
+    "CUSTOMER_UNAVAILABLE_WAIT_STARTED",
+    "START_WORK",
+    "ABORT_WORK",
+    "SUBMIT_COMPLETION",
+    "PARTNER_RELEASE",
+)
+
+
+def _partner_allowed_actions(booking: Booking, gates: BookingGates) -> list[str]:
+    """What this Partner's commands would accept right now — status, then clock.
+
+    Mirrors the command guards rather than replacing them: every command still checks its own
+    status and gate, so a stale list costs the Partner a 409, never a wrong transition. Imported
+    inside the function for the same cycle reason as `get_cancellation_preview`.
+    """
+
+    from apps.fulfilment.completion import COMPLETION_SUBMITTABLE_STATUSES  # noqa: PLC0415
+    from apps.fulfilment.recovery_services import RELEASABLE_BOOKING_STATUSES  # noqa: PLC0415
+
+    status = booking.status
+    actions: list[str] = []
+    if status == Booking.Status.CONFIRMED and gates.is_open(GatedAction.MARK_EN_ROUTE):
+        actions.append("MARK_EN_ROUTE")
+    if status == Booking.Status.EN_ROUTE and gates.is_open(GatedAction.MARK_ARRIVED):
+        actions.append("MARK_ARRIVED")
+    if status == Booking.Status.ARRIVED:
+        if booking.customer_unavailable_wait_started_at is None:
+            actions.append("CUSTOMER_UNAVAILABLE_WAIT_STARTED")
+        actions.append("START_WORK")
+    if status == Booking.Status.IN_PROGRESS:
+        actions.append("ABORT_WORK")
+    if status in COMPLETION_SUBMITTABLE_STATUSES:
+        actions.append("SUBMIT_COMPLETION")
+    if status in RELEASABLE_BOOKING_STATUSES:
+        actions.append("PARTNER_RELEASE")
+    return actions
+
+
+def _visit_address(booking: Booking) -> Address | None:
+    unit = booking.fulfilment_unit
+    return None if unit is None else unit.booking_group.address
+
+
 class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
     """The same visit, as the Partner assigned to it sees it.
 
-    Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
-    exact address. Its estimate and settled earning are this Partner's own money for this one
-    unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
-    cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
-    never publish the identifier that would let them try.
+    Deliberately does not carry `order_id`, any sibling unit or the Customer's invoice. Its
+    estimate and settled earning are this Partner's own money for this one unit. The Booking Group
+    is not addressable from here at all: `G7` requires that a Partner cannot reach a sibling unit's
+    scope or earnings, and the cheapest way to guarantee that is to never publish the identifier
+    that would let them try.
+
+    ## The door and the number, on a clock
+
+    `site_address`, `directions_url`, `customer_first_name` and `customer_phone` are `null` until
+    `M1_ADDRESS_UNLOCK_MINUTES` before the start, and `null` again once the visit stops being live
+    (`gates.discloses_site_details`). Before that the Partner sees `approximate_area` — the
+    locality, never the line. This projection is only ever served to the Booking's own Partner
+    (`views.base._partner_booking`), so the gate here is *when*, not *who*. The pin is never
+    published as coordinates; it travels only inside the directions link.
     """
 
     fulfilment_unit_id = serializers.UUIDField(read_only=True, allow_null=True)
@@ -457,6 +552,12 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
     active_amendment = serializers.SerializerMethodField()
     estimated_earning = serializers.SerializerMethodField()
     earning = serializers.SerializerMethodField()
+    gates = serializers.SerializerMethodField()
+    allowed_actions = serializers.SerializerMethodField()
+    site_address = serializers.SerializerMethodField()
+    directions_url = serializers.SerializerMethodField()
+    customer_first_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -481,9 +582,81 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
             "active_amendment",
             "estimated_earning",
             "earning",
+            "gates",
+            "allowed_actions",
+            "site_address",
+            "directions_url",
+            "customer_first_name",
+            "customer_phone",
             "server_now",
         )
         read_only_fields = fields
+
+    def _gates(self, booking: Booking) -> BookingGates:
+        """One gate evaluation per Booking per response, so every field agrees on the instant."""
+
+        cache: dict[object, BookingGates] = self.context.setdefault("_booking_gates", {})
+        if booking.id not in cache:
+            cache[booking.id] = booking_gates(booking, booking.fulfilment_unit, timezone.now())
+        return cache[booking.id]
+
+    def _discloses(self, booking: Booking) -> bool:
+        return discloses_site_details(booking, self._gates(booking))
+
+    @extend_schema_field(PartnerBookingGatesSerializer)
+    def get_gates(self, booking: Booking) -> dict[str, object]:
+        gates = self._gates(booking)
+        return {
+            "address_unlocks_at": gates.address_unlocks_at.isoformat(),
+            "en_route_opens_at": gates.en_route_opens_at.isoformat(),
+            "en_route_closes_at": gates.en_route_closes_at.isoformat(),
+            "arrival_opens_at": gates.arrival_opens_at.isoformat(),
+            "arrival_closes_at": gates.arrival_closes_at.isoformat(),
+        }
+
+    @extend_schema_field(
+        serializers.ListField(child=serializers.ChoiceField(choices=PARTNER_BOOKING_ACTIONS))
+    )
+    def get_allowed_actions(self, booking: Booking) -> list[str]:
+        return _partner_allowed_actions(booking, self._gates(booking))
+
+    @extend_schema_field(PartnerSiteAddressSerializer(allow_null=True))
+    def get_site_address(self, booking: Booking) -> dict[str, str] | None:
+        address = _visit_address(booking)
+        if address is None or not self._discloses(booking):
+            return None
+        return site_address_payload(address)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_directions_url(self, booking: Booking) -> str | None:
+        """The Google Maps route to the Customer's pin, under the address gate; `null` while
+        locked. The same link as `site_address.directions_url`, published flat for a nav button."""
+
+        address = _visit_address(booking)
+        if address is None or not self._discloses(booking):
+            return None
+        return directions_url(address.latitude, address.longitude)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_customer_first_name(self, booking: Booking) -> str | None:
+        """First name only — what a greeting or a gate register needs — under the address gate.
+
+        The generic fallback is deliberate, as on the M2 visit: a Customer whose profile has no
+        name still needs a word to use at the door.
+        """
+
+        if not self._discloses(booking):
+            return None
+        full_name = (booking.customer.full_name or "").strip()
+        return full_name.split()[0] if full_name else "Customer"
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_customer_phone(self, booking: Booking) -> str | None:
+        """The Customer's number while the visit is live and inside the unlock window."""
+
+        if not self._discloses(booking):
+            return None
+        return booking.customer.phone_number
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_display_title(self, booking: Booking) -> str | None:
@@ -499,10 +672,14 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_approximate_area(self, booking: Booking) -> str | None:
-        """Area already disclosed with the accepted offer; never the Customer's exact address."""
+        """The Customer's locality — where to plan the day around — never the street line.
 
-        unit = booking.fulfilment_unit
-        return None if unit is None else unit.service_area.name
+        It used to be the service area's name, which can span a whole city and told a Partner
+        nothing about whether a 9:00 job and an 11:00 job were ten minutes or ninety apart.
+        """
+
+        address = _visit_address(booking)
+        return None if address is None else address.locality
 
     @extend_schema_field(PartnerBookingServiceLineSerializer(many=True))
     def get_service_lines(self, booking: Booking) -> list[dict[str, object]]:
@@ -643,12 +820,20 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     Operations is the one actor that legitimately sees both sides, so this is the one
     projection that names the Partner and the Booking Group. Every read of it is audited by
     `IsOperationsUser`.
+
+    The visit address and both phone numbers are not on the Partner's clock here: an operator
+    working a case the day before — a Customer asking where their professional is, a Partner who
+    cannot find the building — needs them whenever the case is open.
     """
 
     fulfilment_unit_id = serializers.UUIDField(read_only=True, allow_null=True)
     booking_group_id = serializers.SerializerMethodField()
     partner_id = serializers.UUIDField(read_only=True)
     partner_display_name = serializers.SerializerMethodField()
+    partner_phone = serializers.SerializerMethodField()
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    site_address = serializers.SerializerMethodField()
     work_tasks = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     status_history = serializers.SerializerMethodField()
@@ -668,6 +853,10 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
             "estimated_duration_minutes",
             "partner_id",
             "partner_display_name",
+            "partner_phone",
+            "customer_name",
+            "customer_phone",
+            "site_address",
             "en_route_at",
             "arrived_at",
             "customer_unavailable_wait_started_at",
@@ -682,6 +871,23 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
             "server_now",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_partner_phone(self, instance: Booking) -> str:
+        return instance.partner.user.phone_number
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_name(self, instance: Booking) -> str:
+        return instance.customer.full_name
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_phone(self, instance: Booking) -> str:
+        return instance.customer.phone_number
+
+    @extend_schema_field(PartnerSiteAddressSerializer(allow_null=True))
+    def get_site_address(self, instance: Booking) -> dict[str, str] | None:
+        address = _visit_address(instance)
+        return None if address is None else site_address_payload(address)
 
     @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_replacement_offer_id(self, instance: Booking) -> Any:

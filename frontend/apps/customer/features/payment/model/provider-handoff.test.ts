@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { handoffTarget, isInteractiveProvider } from "./provider-handoff";
+import {
+  CHECKOUT_TIMEOUT_MARGIN_SECONDS,
+  checkoutTimeoutSeconds,
+  handoffTarget,
+  isInteractiveProvider,
+} from "./provider-handoff";
 import type { PaymentAttempt } from "./outcome";
 
 function attempt(overrides: Partial<PaymentAttempt> = {}): PaymentAttempt {
@@ -54,7 +59,13 @@ describe("handoffTarget", () => {
       providerOrderId: "order_abc123",
       amountPaise: 250000,
       currency: "INR",
+      expiresAt: null,
     });
+  });
+
+  it("carries the attempt's server deadline for the Checkout timeout", () => {
+    const target = handoffTarget(attempt({ expires_at: "2026-08-04T12:00:00.000Z" }));
+    expect(target?.expiresAt).toBe("2026-08-04T12:00:00.000Z");
   });
 
   it("prefers razorpay_amount_paise (gateway net) over gross amount", () => {
@@ -77,5 +88,31 @@ describe("handoffTarget", () => {
 
   it("refuses a non-interactive provider even when fully described", () => {
     expect(handoffTarget(attempt({ provider: "fake" }))).toBeNull();
+  });
+});
+
+describe("checkoutTimeoutSeconds", () => {
+  const deadline = "2026-08-04T12:00:00.000Z";
+  const deadlineMs = Date.parse(deadline);
+
+  it("closes Checkout the safety margin before the attempt expires", () => {
+    // Five minutes left on the hold: Checkout may stay open for 270 seconds.
+    expect(checkoutTimeoutSeconds(deadline, deadlineMs - 300_000)).toBe(
+      300 - CHECKOUT_TIMEOUT_MARGIN_SECONDS,
+    );
+  });
+
+  it("rounds a partial second down, never giving Checkout time it does not have", () => {
+    expect(checkoutTimeoutSeconds(deadline, deadlineMs - 60_500)).toBe(60 - 30);
+  });
+
+  it("reports a closed window as zero or less so Checkout is not opened", () => {
+    expect(checkoutTimeoutSeconds(deadline, deadlineMs - 30_000)).toBe(0);
+    expect(checkoutTimeoutSeconds(deadline, deadlineMs + 1_000)).toBeLessThan(0);
+  });
+
+  it("opens without a timeout when the attempt has no deadline", () => {
+    expect(checkoutTimeoutSeconds(null, deadlineMs)).toBeNull();
+    expect(checkoutTimeoutSeconds("not a date", deadlineMs)).toBeNull();
   });
 });

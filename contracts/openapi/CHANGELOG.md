@@ -1,5 +1,55 @@
 # API Contract Changelog
 
+## 1.82.0 - Booked-visit time gates, address disclosure, start code, late-capture refunds
+
+**Partners — booked visits (`/partner/bookings/…`)**
+
+- `POST …/en-route/` and `…/arrived/` are now gated by the server clock, measured from
+  `scheduled_start`. On the way opens 60 minutes before the start; arrived opens 30 minutes
+  before. Both close at the scheduled end (the later of the job's duration and the promised arrival
+  window) plus 30 minutes. Outside the window the command returns `409` with
+  `booking_action_not_yet_allowed` (retryable — the same `Idempotency-Key` runs fresh once it
+  opens) or `booking_action_window_closed` (not retryable). `details` carries `action`,
+  `opens_at`, `closes_at` and `server_now`.
+- `PartnerBooking` adds `gates` (`PartnerBookingGates`: `address_unlocks_at`,
+  `en_route_opens_at`, `en_route_closes_at`, `arrival_opens_at`, `arrival_closes_at`) and
+  `allowed_actions` (`AllowedActionsEnum`) — what the commands would accept right now.
+- `PartnerBooking` adds `site_address` (`PartnerSiteAddress`, the M2 visit's shape),
+  `directions_url` (Google Maps route), `customer_first_name` and `customer_phone`. All four are
+  `null` until 120 minutes before the start, and `null` again once the visit is no longer live
+  (submitted, settled, cancelled, released).
+- `approximate_area` is now the Customer's locality, not the service area's name.
+
+**Customers**
+
+- `CustomerBooking.partner_phone`: the assigned Partner's number, inside the same window.
+- `POST /bookings/{booking_id}/start-otp/` returns the start code in the new `code` field to the
+  Booking's own Customer. Job start no longer depends on an SMS arriving; the SMS is a courtesy
+  copy. Inside the resend cooldown the still-live code is returned again instead of `429`.
+  `development_code` keeps its old meaning (populated only where development codes are enabled).
+- The after-arrival cancellation band (₹149) now applies only after an arrival inside the arrival
+  window **and** the Customer-unavailable wait **and** one contact attempt at each configured offset
+  (0 and 5 minutes). Otherwise the ordinary time band applies.
+- `POST /booking-groups/{group_id}/cancel/` expires any payment attempt still open on the group and
+  releases its wallet and coin funding.
+
+**Operations**
+
+- `OperationsBooking` adds `site_address`, `customer_name`, `customer_phone` and
+  `partner_phone`, without the Partner's time gate.
+
+**Payments (no shape change)**
+
+- A capture on a booking group that is no longer `PAYMENT_PENDING` (cancelled, expired) is refunded
+  in full (`reason_code: capture_after_terminal`) with an open `FinancialException`, instead of
+  re-booking released Partners.
+- `payment.authorized` on a booking payment is now captured through the Razorpay API while the group
+  is payable; otherwise the authorization is left uncaptured for the gateway to release, the attempt
+  is `EXPIRED` (`authorized_after_terminal`) and a `FinancialException`
+  (`authorized_not_captured`) is opened.
+
+- Removed: none. Renamed: none.
+
 ## 1.81.0 - Partner review: decline, release, notices; active partners only
 
 **Operations**

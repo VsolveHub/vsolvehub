@@ -28,7 +28,12 @@ from tests.carts.test_fulfilment_planning import _partner
 from tests.fulfilment.conftest import BookedGroup, create_booked_group
 from tests.helpers import force_role_client
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 _key_sequence = itertools.count(1)
 TWO_UNITS = 2
@@ -95,9 +100,11 @@ def test_a_visit_runs_from_en_route_to_confirmed_completion_over_http() -> None:
         format="json",
     )
     assert otp_response.status_code == HTTPStatus.OK, otp_response.json()
-    assert otp_response.json()["development_code"], "the development sender published no code"
-    code = otp_response.json()["development_code"]
-    assert "code" not in otp_response.json(), "the raw code must not be published under 'code'"
+    # P0-6 (contract 1.82.0): the code is published to the Booking's own Customer under `code`,
+    # so a job never waits on an SMS. `development_code` stays the development-only alias.
+    code = otp_response.json()["code"]
+    assert code, "the start code was not returned to the Customer"
+    assert otp_response.json()["development_code"] == code
 
     started = _post(
         partner,

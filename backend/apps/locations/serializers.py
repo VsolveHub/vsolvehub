@@ -1,11 +1,12 @@
 """Location request and response contracts."""
 
 import uuid
-from typing import cast
+from typing import Any, cast
 
 from rest_framework import serializers
 
 from apps.locations.models import Address, ServiceArea
+from apps.locations.pins import directions_url
 from apps.locations.services import normalize_postal_code
 
 
@@ -94,6 +95,43 @@ class PartnerServiceAreaOptionSerializer(serializers.ModelSerializer[ServiceArea
         model = ServiceArea
         fields = ("id", "slug", "name", "timezone", "is_accepting_partners")
         read_only_fields = fields
+
+
+class PartnerSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):
+    """The visit destination, disclosed to the Partner only once the visit is genuinely theirs.
+
+    One shape for every Partner surface that discloses a Customer's door — the M2 site visit and
+    the A1 booked visit — so the Partner app renders both through one component. Customer identity
+    and contact are not part of it. The Customer's pin travels only inside ``directions_url`` — a
+    route to the door, under the same disclosure gate as the address text — and never as separate
+    coordinates, which would read as a location feed rather than a destination.
+    """
+
+    line1 = serializers.CharField()
+    line2 = serializers.CharField(allow_blank=True)
+    landmark = serializers.CharField(allow_blank=True)
+    locality = serializers.CharField()
+    city = serializers.CharField()
+    state = serializers.CharField()
+    postal_code = serializers.CharField()
+    directions_url = serializers.CharField(
+        help_text="Google Maps route to the Customer's pin. Empty if the address has none."
+    )
+
+
+def site_address_payload(address: Address) -> dict[str, str]:
+    """`PartnerSiteAddressSerializer`'s fields for one address. The caller owns the gate."""
+
+    return {
+        "line1": address.line1,
+        "line2": address.line2,
+        "landmark": address.landmark,
+        "locality": address.locality,
+        "city": address.city,
+        "state": address.state,
+        "postal_code": address.postal_code,
+        "directions_url": directions_url(address.latitude, address.longitude),
+    }
 
 
 class ServiceabilityResponseSerializer(serializers.Serializer[dict[str, object]]):

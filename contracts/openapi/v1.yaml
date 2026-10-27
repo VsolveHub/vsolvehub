@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.81.0
+  version: 1.82.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -11961,6 +11961,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/application/documents/{document_id}/access/:
     get:
       operationId: partner_application_documents_access_retrieve
@@ -21128,6 +21129,24 @@ components:
       - longitude
       - postal_code
       - state
+    AllowedActionsEnum:
+      enum:
+      - MARK_EN_ROUTE
+      - MARK_ARRIVED
+      - CUSTOMER_UNAVAILABLE_WAIT_STARTED
+      - START_WORK
+      - ABORT_WORK
+      - SUBMIT_COMPLETION
+      - PARTNER_RELEASE
+      type: string
+      description: |-
+        * `MARK_EN_ROUTE` - MARK_EN_ROUTE
+        * `MARK_ARRIVED` - MARK_ARRIVED
+        * `CUSTOMER_UNAVAILABLE_WAIT_STARTED` - CUSTOMER_UNAVAILABLE_WAIT_STARTED
+        * `START_WORK` - START_WORK
+        * `ABORT_WORK` - ABORT_WORK
+        * `SUBMIT_COMPLETION` - SUBMIT_COMPLETION
+        * `PARTNER_RELEASE` - PARTNER_RELEASE
     AmendmentApprovalResult:
       type: object
       properties:
@@ -25318,10 +25337,12 @@ components:
       description: |-
         One visit, as the Customer who paid for it sees it.
 
-        Carries the Partner's display name and nothing else about them — not their phone number,
-        not their earnings, not their other jobs. `G7` in the frontend task file is the same rule
-        from the other side: Customer projections contain no Partner identity beyond what is needed
-        to recognise the person at the door.
+        Carries the Partner's display name and nothing else about them — not their earnings, not their
+        other jobs. `G7` in the frontend task file is the same rule from the other side: Customer
+        projections contain no Partner identity beyond what is needed to recognise the person at the
+        door. The one addition is `partner_phone`, and only inside the same window the Partner gets the
+        Customer's number (`gates.discloses_site_details`): the two sides can reach each other while
+        the visit is happening, and neither holds the other's number before or after it.
       properties:
         id:
           type: string
@@ -25347,6 +25368,10 @@ components:
           type: integer
           readOnly: true
         partner_display_name:
+          type: string
+          nullable: true
+          readOnly: true
+        partner_phone:
           type: string
           nullable: true
           readOnly: true
@@ -25415,6 +25440,7 @@ components:
       - id
       - late_declared_at
       - partner_display_name
+      - partner_phone
       - reschedule_preview
       - scheduled_start
       - server_now
@@ -29871,6 +29897,10 @@ components:
         Operations is the one actor that legitimately sees both sides, so this is the one
         projection that names the Partner and the Booking Group. Every read of it is audited by
         `IsOperationsUser`.
+
+        The visit address and both phone numbers are not on the Partner's clock here: an operator
+        working a case the day before — a Customer asking where their professional is, a Partner who
+        cannot find the building — needs them whenever the case is open.
       properties:
         id:
           type: string
@@ -29910,6 +29940,20 @@ components:
           readOnly: true
         partner_display_name:
           type: string
+          readOnly: true
+        partner_phone:
+          type: string
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        site_address:
+          allOf:
+          - $ref: '#/components/schemas/PartnerSiteAddress'
+          nullable: true
           readOnly: true
         en_route_at:
           type: string
@@ -29971,6 +30015,8 @@ components:
       - booking_group_id
       - cancellation_reason
       - cancelled_at
+      - customer_name
+      - customer_phone
       - customer_unavailable_wait_started_at
       - en_route_at
       - estimated_duration_minutes
@@ -29981,10 +30027,12 @@ components:
       - order_id
       - partner_display_name
       - partner_id
+      - partner_phone
       - payout_hold
       - replacement_offer_id
       - scheduled_start
       - server_now
+      - site_address
       - status
       - status_history
       - version
@@ -30524,6 +30572,7 @@ components:
           $ref: '#/components/schemas/OperationsDocumentReviewDecisionEnum'
         reason:
           type: string
+          default: ''
           maxLength: 2000
       required:
       - decision
@@ -32262,11 +32311,20 @@ components:
       description: |-
         The same visit, as the Partner assigned to it sees it.
 
-        Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
-        exact address. Its estimate and settled earning are this Partner's own money for this one
-        unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
-        cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
-        never publish the identifier that would let them try.
+        Deliberately does not carry `order_id`, any sibling unit or the Customer's invoice. Its
+        estimate and settled earning are this Partner's own money for this one unit. The Booking Group
+        is not addressable from here at all: `G7` requires that a Partner cannot reach a sibling unit's
+        scope or earnings, and the cheapest way to guarantee that is to never publish the identifier
+        that would let them try.
+
+        ## The door and the number, on a clock
+
+        `site_address`, `directions_url`, `customer_first_name` and `customer_phone` are `null` until
+        `M1_ADDRESS_UNLOCK_MINUTES` before the start, and `null` again once the visit stops being live
+        (`gates.discloses_site_details`). Before that the Partner sees `approximate_area` — the
+        locality, never the line. This projection is only ever served to the Booking's own Partner
+        (`views.base._partner_booking`), so the gate here is *when*, not *who*. The pin is never
+        published as coordinates; it travels only inside the directions link.
       properties:
         id:
           type: string
@@ -32354,15 +32412,45 @@ components:
           - $ref: '#/components/schemas/PartnerBookingEarning'
           nullable: true
           readOnly: true
+        gates:
+          allOf:
+          - $ref: '#/components/schemas/PartnerBookingGates'
+          readOnly: true
+        allowed_actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllowedActionsEnum'
+          readOnly: true
+        site_address:
+          allOf:
+          - $ref: '#/components/schemas/PartnerSiteAddress'
+          nullable: true
+          readOnly: true
+        directions_url:
+          type: string
+          nullable: true
+          readOnly: true
+        customer_first_name:
+          type: string
+          nullable: true
+          readOnly: true
+        customer_phone:
+          type: string
+          nullable: true
+          readOnly: true
         server_now:
           type: string
           format: date-time
           readOnly: true
       required:
       - active_amendment
+      - allowed_actions
       - approximate_area
       - arrived_at
+      - customer_first_name
+      - customer_phone
       - customer_unavailable_wait_started_at
+      - directions_url
       - display_title
       - earning
       - en_route_at
@@ -32370,12 +32458,14 @@ components:
       - estimated_earning
       - evidence
       - fulfilment_unit_id
+      - gates
       - id
       - late_declared_at
       - requirements
       - scheduled_start
       - server_now
       - service_lines
+      - site_address
       - status
       - version
       - work_tasks
@@ -32442,6 +32532,33 @@ components:
       - currency
       - gross_paise
       - net_paise
+    PartnerBookingGates:
+      type: object
+      description: |-
+        The visit's server-clock windows (`apps.fulfilment.gates`), so the app can count down to
+        them instead of guessing. `allowed_actions` is the authority on what is open right now.
+      properties:
+        address_unlocks_at:
+          type: string
+          format: date-time
+        en_route_opens_at:
+          type: string
+          format: date-time
+        en_route_closes_at:
+          type: string
+          format: date-time
+        arrival_opens_at:
+          type: string
+          format: date-time
+        arrival_closes_at:
+          type: string
+          format: date-time
+      required:
+      - address_unlocks_at
+      - arrival_closes_at
+      - arrival_opens_at
+      - en_route_closes_at
+      - en_route_opens_at
     PartnerBookingPage:
       type: object
       properties:
@@ -32859,6 +32976,74 @@ components:
       - status
       - uploaded_at
       - version
+    PartnerDocumentApplicantAccess:
+      type: object
+      properties:
+        document:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentDetailMetadata'
+          readOnly: true
+        access_url:
+          type: string
+          format: uri
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - access_url
+      - document
+      - expires_at
+    PartnerDocumentDetailMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        file_name:
+          type: string
+          readOnly: true
+        mime_type:
+          type: string
+          readOnly: true
+        file_size:
+          type: integer
+          readOnly: true
+        uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - file_name
+      - file_size
+      - id
+      - kind
+      - label
+      - mime_type
+      - rejection_reason
+      - status
+      - uploaded_at
+      - version
     PartnerDocumentFinalizeRequest:
       type: object
       properties:
@@ -32887,56 +33072,6 @@ components:
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
         * `OTHER` - Other
-    PartnerDocumentApplicantAccess:
-      type: object
-      properties:
-        document:
-          $ref: '#/components/schemas/PartnerDocumentDetailMetadata'
-        access_url:
-          type: string
-          format: uri
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - access_url
-      - document
-    PartnerDocumentDetailMetadata:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        kind:
-          type: string
-        label:
-          type: string
-        status:
-          type: string
-        version:
-          type: integer
-        file_name:
-          type: string
-        mime_type:
-          type: string
-        file_size:
-          type: integer
-        uploaded_at:
-          type: string
-          format: date-time
-        rejection_reason:
-          type: string
-          nullable: true
-      required:
-      - file_name
-      - file_size
-      - id
-      - kind
-      - label
-      - mime_type
-      - status
-      - uploaded_at
-      - version
     PartnerDocumentReviewAccess:
       type: object
       properties:
@@ -34158,12 +34293,13 @@ components:
     PartnerSiteAddress:
       type: object
       description: |-
-        The visit destination, disclosed only once the paid visit is genuinely scheduled.
+        The visit destination, disclosed to the Partner only once the visit is genuinely theirs.
 
-        Customer identity and contact remain absent. The Customer's pin travels only inside
-        ``directions_url`` — a route to the door, under the same disclosure gate as the address text —
-        and never as separate coordinates, which would read as a location feed rather than a
-        destination.
+        One shape for every Partner surface that discloses a Customer's door — the M2 site visit and
+        the A1 booked visit — so the Partner app renders both through one component. Customer identity
+        and contact are not part of it. The Customer's pin travels only inside ``directions_url`` — a
+        route to the door, under the same disclosure gate as the address text — and never as separate
+        coordinates, which would read as a location feed rather than a destination.
       properties:
         line1:
           type: string
@@ -43698,12 +43834,13 @@ components:
     StartOtp:
       type: object
       description: |-
-        What the Customer is told about the code they must read out.
+        The code the Customer reads out to let work begin.
 
-        `code_length` rather than the code: the Customer reads the code off their own SMS, and
-        publishing it here would hand it to anyone who could reach this endpoint — which is the
-        whole point of the OTP. `development_code` is populated only by the development sender,
-        exactly as OTP login already works.
+        `code` is published, and only here: this endpoint is the Booking's own Customer's, behind
+        `_customer_booking` and the service's customer check, so nobody else can reach it — not the
+        Partner, whose half is typing the code in. Showing it on screen means a job never waits on an
+        SMS arriving; the SMS is a courtesy copy. `development_code` is the legacy field, still the
+        same digits but only where `OTP_DEVELOPMENT_CODE_ENABLED`.
       properties:
         booking_id:
           type: string
@@ -43713,6 +43850,8 @@ components:
           format: date-time
         code_length:
           type: integer
+        code:
+          type: string
         development_code:
           type: string
           nullable: true
@@ -43721,6 +43860,7 @@ components:
           format: date-time
       required:
       - booking_id
+      - code
       - code_length
       - expires_at
       - server_now

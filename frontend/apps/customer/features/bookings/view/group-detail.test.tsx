@@ -354,6 +354,7 @@ describe("paid booking presentation", () => {
         earliest_start: "2026-08-09T10:00:00+05:30",
       },
       server_now: "2026-08-31T15:00:00.000Z",
+      partner_phone: null,
     } satisfies import("@vsolve/api-client").Schemas["CustomerBooking"];
 
     client.GET.mockImplementation((path: string) => {

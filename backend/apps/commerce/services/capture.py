@@ -7,6 +7,8 @@ being handed to the domain that sold it. The compensating automatic refund lives
 because it is what a capture without capacity turns into.
 """
 
+from uuid import UUID
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -22,28 +24,43 @@ from apps.commerce.models import (
     RefundAllocation,
     TaxDocument,
 )
-from apps.commerce.providers import ProviderPayment
+from apps.commerce.providers import (
+    PaymentProviderRejectedError,
+    ProviderPayment,
+    get_payment_provider,
+)
 from apps.foundation.services import enqueue_outbox_event
 
 from .base import PAYMENT_FINAL_STATES, _issue_document, _open_exception
 
 
 def _try_confirm_group_capacity(*, group: BookingGroup) -> bool:
+    """Harden every unit's live hold, or report that the capacity is gone.
+
+    Live holds only, one per unit. A `RELEASED` row is history — an undone acceptance, an expired
+    payment window, a compensated group — and is never revived: reviving one re-books a Partner
+    who has already been told the job is gone.
+    """
+
     units = list(group.units.select_for_update().order_by("position"))
     reservations = list(
         Reservation.objects.select_for_update()
-        .filter(fulfilment_unit__booking_group=group)
+        .filter(
+            fulfilment_unit__booking_group=group,
+            status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+        )
         .select_related("partner")
         .order_by("fulfilment_unit__position")
     )
-    if len(units) != len(reservations):
+    if len(units) != len(reservations) or len(
+        {reservation.fulfilment_unit_id for reservation in reservations}
+    ) != len(units):
         return False
     try:
         with transaction.atomic():
             for reservation in reservations:
                 reservation.status = Reservation.Status.CONFIRMED
-                reservation.released_at = None
-                reservation.save(update_fields=("status", "released_at"))
+                reservation.save(update_fields=("status",))
     except IntegrityError:
         return False
     return True
@@ -105,6 +122,29 @@ def _request_automatic_refund(
     return refund
 
 
+def _refund_capture_after_terminal(*, attempt: PaymentAttempt, group: BookingGroup) -> None:
+    """Return a capture that arrived for a cancelled or expired group, and record why.
+
+    Idempotent through `_request_automatic_refund`'s key and the exception's attempt: a duplicate
+    capture event replays into the same refund rather than refunding twice.
+    """
+
+    attempt.reconciliation_state = PaymentAttempt.ReconciliationState.NEEDS_ATTENTION
+    attempt.failure_code = "capture_after_terminal"
+    attempt.save(update_fields=("reconciliation_state", "failure_code", "updated_at"))
+    refund = _request_automatic_refund(attempt=attempt, reason_code="capture_after_terminal")
+    if not FinancialException.objects.filter(
+        payment_attempt=attempt, code="capture_after_terminal"
+    ).exists():
+        _open_exception(
+            kind=FinancialException.Kind.CAPTURE_WITHOUT_CAPACITY,
+            code="capture_after_terminal",
+            attempt=attempt,
+            refund=refund,
+            context={"booking_group_id": str(group.id), "group_status": group.status},
+        )
+
+
 def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
     if attempt.checkout_id is None:
         raise ValueError("Only a Booking Group payment attempt has a Checkout to materialize.")
@@ -120,6 +160,13 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
     existing = Order.objects.filter(booking_group=group).first()
     if existing is not None:
         return existing
+    if group.status != BookingGroup.Status.PAYMENT_PENDING:
+        # The money landed after the group stopped being payable: the Customer cancelled while
+        # the gateway was open, or the payment window ran out and compensation released every
+        # hold and told each Partner the job was gone. Booking it now would resurrect a visit
+        # nobody is coming to. Refund in full and put it in the exceptions queue instead.
+        _refund_capture_after_terminal(attempt=attempt, group=group)
+        return None
     if not _try_confirm_group_capacity(group=group):
         attempt.reconciliation_state = PaymentAttempt.ReconciliationState.NEEDS_ATTENTION
         attempt.failure_code = "capture_without_capacity"
@@ -367,6 +414,16 @@ def apply_provider_payment(  # noqa: PLR0911, PLR0912
     ):
         attempt.status = PaymentAttempt.Status.AUTHORIZED
         attempt.version += 1
+        if attempt.purpose == PaymentAttempt.Purpose.BOOKING_GROUP:
+            # Settled explicitly rather than trusting the dashboard's automatic capture, which
+            # nothing here can see. After commit, outside these locks: capture is a network call.
+            enqueue_outbox_event(
+                aggregate_type="payment_attempt",
+                aggregate_id=attempt.id,
+                event_type="payment_attempt.capture_requested",
+                idempotency_key=f"payment-capture:{attempt.id}",
+                payload={"payment_attempt_id": str(attempt.id)},
+            )
     elif payment.status == "failed" and attempt.status not in PAYMENT_FINAL_STATES:
         from .loyalty_funding import release_checkout_funding  # noqa: PLC0415
 
@@ -385,3 +442,88 @@ def apply_provider_payment(  # noqa: PLR0911, PLR0912
         )
     )
     return None
+
+
+def _group_attempt_still_payable(attempt: PaymentAttempt) -> bool:
+    """An authorized group payment the platform may still settle: live attempt, payable group."""
+
+    if attempt.status != PaymentAttempt.Status.AUTHORIZED or attempt.booking_group_id is None:
+        return False
+    if attempt.expires_at is not None and attempt.expires_at <= timezone.now():
+        return False
+    return (
+        BookingGroup.objects.filter(id=attempt.booking_group_id)
+        .values_list("status", flat=True)
+        .get()
+        == BookingGroup.Status.PAYMENT_PENDING
+    )
+
+
+@transaction.atomic
+def _decline_capture(*, attempt_id: UUID) -> PaymentAttempt:
+    """Leave an authorization uncaptured because the group can no longer be booked.
+
+    There is no void call for an authorized Razorpay payment; an authorization that is never
+    captured is released back to the Customer by the gateway on its own. Capturing it only to
+    refund it would cost the Customer days of a debit and the platform a gateway fee. So the
+    attempt is closed locally — funding released, `EXPIRED`, so the reconciliation sweep stops
+    polling it — and Finance gets an exception naming the blocked amount. If the gateway captures
+    anyway (dashboard automatic capture), that capture lands on a terminal group and is refunded
+    by `_refund_capture_after_terminal`.
+    """
+
+    from .loyalty_funding import release_checkout_funding  # noqa: PLC0415
+
+    attempt = PaymentAttempt.objects.select_for_update().get(id=attempt_id)
+    if attempt.status != PaymentAttempt.Status.AUTHORIZED:
+        return attempt
+    release_checkout_funding(attempt=attempt)
+    attempt.status = PaymentAttempt.Status.EXPIRED
+    attempt.reconciliation_state = PaymentAttempt.ReconciliationState.NEEDS_ATTENTION
+    attempt.failure_code = "authorized_after_terminal"
+    attempt.version += 1
+    attempt.save(
+        update_fields=("status", "reconciliation_state", "failure_code", "version", "updated_at")
+    )
+    _open_exception(
+        kind=FinancialException.Kind.CAPTURE_WITHOUT_CAPACITY,
+        code="authorized_not_captured",
+        attempt=attempt,
+        context={
+            "booking_group_id": str(attempt.booking_group_id),
+            "provider_payment_id": attempt.provider_payment_id,
+            "amount_paise": attempt.gateway_amount_paise,
+        },
+    )
+    return attempt
+
+
+def capture_authorized_payment(*, attempt_id: UUID) -> PaymentAttempt:
+    """Settle an authorized group payment, or decline to when the group is no longer payable.
+
+    The `payment_attempt.capture_requested` outbox consumer. It reads without locks and calls the
+    gateway outside them; the result goes back through `apply_provider_payment`, whose own locks
+    and group check decide what the capture becomes — so a group that turns terminal between this
+    check and the capture is refunded, never booked.
+
+    An ambiguous gateway error propagates, and the outbox retries with backoff. A refusal is
+    usually Razorpay saying the payment is already captured — automatic capture won the race — so
+    the payment is read back and applied as the gateway now reports it.
+    """
+
+    attempt = PaymentAttempt.objects.get(id=attempt_id)
+    if attempt.status != PaymentAttempt.Status.AUTHORIZED:
+        return attempt
+    if not _group_attempt_still_payable(attempt):
+        return _decline_capture(attempt_id=attempt.id)
+    provider = get_payment_provider(provider_code=attempt.provider)
+    try:
+        payment = provider.capture_payment(
+            provider_payment_id=attempt.provider_payment_id,
+            amount_paise=attempt.gateway_amount_paise,
+            currency=attempt.currency,
+        )
+    except PaymentProviderRejectedError:
+        payment = provider.fetch_payment(provider_payment_id=attempt.provider_payment_id)
+    apply_provider_payment(payment=payment, provider_code=attempt.provider)
+    return PaymentAttempt.objects.get(id=attempt.id)

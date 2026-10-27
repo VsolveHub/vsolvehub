@@ -66,6 +66,10 @@ class PaymentProvider(Protocol):
 
     def fetch_order_payments(self, *, provider_order_id: str) -> tuple[ProviderPayment, ...]: ...
 
+    def capture_payment(
+        self, *, provider_payment_id: str, amount_paise: int, currency: str
+    ) -> ProviderPayment: ...
+
     def create_refund(
         self,
         *,
@@ -117,6 +121,26 @@ class FakePaymentProvider:
             payment
             for payment in self._payments.values()
             if payment.provider_order_id == provider_order_id
+        )
+
+    def capture_payment(
+        self, *, provider_payment_id: str, amount_paise: int, currency: str
+    ) -> ProviderPayment:
+        """Razorpay's rules, faked: only an authorized payment of the exact amount captures."""
+
+        payment = self.fetch_payment(provider_payment_id=provider_payment_id)
+        if (
+            payment.status != "authorized"
+            or payment.amount_paise != amount_paise
+            or payment.currency != currency
+        ):
+            raise PaymentProviderRejectedError("The fake payment cannot be captured.")
+        return self.record_payment(
+            provider_payment_id=provider_payment_id,
+            provider_order_id=payment.provider_order_id,
+            amount_paise=amount_paise,
+            currency=currency,
+            status="captured",
         )
 
     def create_refund(
@@ -300,6 +324,30 @@ class RazorpayPaymentProvider:
                 )
             )
         return tuple(payments)
+
+    def capture_payment(
+        self, *, provider_payment_id: str, amount_paise: int, currency: str
+    ) -> ProviderPayment:
+        """`POST /payments/{id}/capture` — settle an authorized payment.
+
+        Explicit rather than relying on the dashboard's automatic-capture setting, which nothing in
+        this codebase can see: with it off, an authorized payment never settles and the booking it
+        paid for is never created. Razorpay refuses a second capture of the same payment with a
+        4xx, which the caller resolves by reading the payment back.
+        """
+
+        data = self._request(
+            "POST",
+            f"/payments/{provider_payment_id}/capture",
+            payload={"amount": amount_paise, "currency": currency},
+        )
+        return ProviderPayment(
+            provider_payment_id=str(data["id"]),
+            provider_order_id=str(data["order_id"]),
+            amount_paise=self._integer(data, "amount"),
+            currency=str(data["currency"]),
+            status=str(data["status"]),
+        )
 
     def create_refund(
         self,

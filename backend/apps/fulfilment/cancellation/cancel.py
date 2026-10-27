@@ -12,6 +12,7 @@ Rescheduling and the group address change are the other half of the package and 
 """
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -24,12 +25,14 @@ from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.commerce.models import Booking, Refund
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError
-from apps.fulfilment.models import BookingStatusHistory, WorkSession
+from apps.fulfilment.gates import arrival_was_time_checked, booking_gates
+from apps.fulfilment.models import BookingStatusHistory, CustomerContactAttempt, WorkSession
 from apps.fulfilment.refunds import create_partial_refunds, refundable_unit_allocations
 from apps.fulfilment.services import (
     TERMINAL_BOOKING_STATUSES,
     BookingCommand,
     apply_transition,
+    customer_unavailable_wait_elapsed,
     guard_booking_version,
     is_partner_late,
     locked_booking_context,
@@ -63,12 +66,50 @@ FEE_WAIVER_PARTNER_RELEASED = "partner_released"
 FEE_WAIVER_PARTNER_LATE = "partner_late"
 
 
+def _contact_proof_complete(booking: Booking) -> bool:
+    """One recorded attempt at or after each configured offset into the Customer-unavailable wait.
+
+    `M1_CUSTOMER_CONTACT_ATTEMPT_MINUTES` is `(0, 5)`: try at the start of the wait and again five
+    minutes in. Matched greedily in time order, so two taps in the first second prove one attempt,
+    not two.
+    """
+
+    started = booking.customer_unavailable_wait_started_at
+    if started is None:
+        return False
+    attempts = iter(
+        CustomerContactAttempt.objects.filter(booking=booking, attempted_at__gte=started)
+        .order_by("attempted_at")
+        .values_list("attempted_at", flat=True)
+    )
+    for offset in sorted(settings.M1_CUSTOMER_CONTACT_ATTEMPT_MINUTES):
+        due = started + timedelta(minutes=offset)
+        if next((at for at in attempts if at >= due), None) is None:
+            return False
+    return True
+
+
+def after_arrival_band_applies(*, unit: FulfilmentUnit, booking: Booking) -> bool:
+    """The after-arrival band's own condition: "After verified arrival and the required wait and
+    contact evidence" — all three, not merely a non-null `arrived_at`.
+
+    *Verified* means the arrival fell inside the server-clock arrival window
+    (`gates.arrival_was_time_checked`). Before the gates existed a Partner could tap "Arrived" a day
+    early and move a Customer who then cancelled into the highest band. A Customer who cancels at
+    the door without the Partner having waited and tried to reach them pays the ordinary time band.
+    """
+
+    if not arrival_was_time_checked(booking, booking_gates(booking, unit, timezone.now())):
+        return False
+    return customer_unavailable_wait_elapsed(booking) and _contact_proof_complete(booking)
+
+
 def select_cancellation_band(*, unit: FulfilmentUnit, booking: Booking) -> dict[str, Any]:
     """The one fee band that applies right now, read from the frozen quote-time snapshot."""
 
     snapshot = unit.quote_unit.cancellation_policy_snapshot
     bands = {band["code"]: band for band in snapshot.get("bands", [])}
-    if booking.arrived_at is not None:
+    if after_arrival_band_applies(unit=unit, booking=booking):
         code = settings.M1_CANCELLATION_BAND_VERIFIED_ARRIVAL
     else:
         hours_until_start = (unit.requested_start - timezone.now()).total_seconds() / 3600

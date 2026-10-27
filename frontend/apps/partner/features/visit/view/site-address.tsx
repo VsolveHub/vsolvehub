@@ -5,7 +5,15 @@ import { LockKeyhole, MapPin, Navigation } from "lucide-react";
 export interface SiteAddressProps {
   readonly address: Schemas["PartnerSiteAddress"] | null;
   readonly approximateArea: string;
+  /**
+   * What the locked card says about when the address arrives. Defaults to the
+   * M2 project-visit rule; a booked service visit unlocks on a clock instead.
+   */
+  readonly lockedNote?: string;
 }
+
+const PROJECT_VISIT_LOCKED_NOTE =
+  "Exact address appears after customer payment confirms the visit. Do not travel while this visit is on hold.";
 
 /**
  * Progressive location disclosure for a Partner's booked project visit.
@@ -19,7 +27,11 @@ export interface SiteAddressProps {
  * in `RequirementSummary`, where it governs the whole enquiry rather than
  * appearing to be a footnote on the map link.
  */
-export function SiteAddress({ address, approximateArea }: SiteAddressProps) {
+export function SiteAddress({
+  address,
+  approximateArea,
+  lockedNote = PROJECT_VISIT_LOCKED_NOTE,
+}: SiteAddressProps) {
   if (address === null) {
     return (
       <Card className="flex items-start gap-3 p-4">
@@ -34,10 +46,7 @@ export function SiteAddress({ address, approximateArea }: SiteAddressProps) {
               <span className="truncate">Near {approximateArea}</span>
             </p>
           )}
-          <p className="mt-1 text-xs leading-5 text-text-muted">
-            Exact address appears after customer payment confirms the visit. Do not travel while
-            this visit is on hold.
-          </p>
+          <p className="mt-1 text-xs leading-5 text-text-muted">{lockedNote}</p>
         </div>
       </Card>
     );

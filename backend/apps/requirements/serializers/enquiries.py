@@ -16,7 +16,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.locations.pins import directions_url
+from apps.locations.serializers import PartnerSiteAddressSerializer, site_address_payload
 from apps.partners.photos import partner_photo_url
 from apps.requirements import crew_brief, crew_mix, financials, proposals
 from apps.requirements.models import (
@@ -522,27 +522,6 @@ class VendorAttachmentListSerializer(serializers.Serializer[dict[str, Any]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
-class PartnerSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):
-    """The visit destination, disclosed only once the paid visit is genuinely scheduled.
-
-    Customer identity and contact remain absent. The Customer's pin travels only inside
-    ``directions_url`` — a route to the door, under the same disclosure gate as the address text —
-    and never as separate coordinates, which would read as a location feed rather than a
-    destination.
-    """
-
-    line1 = serializers.CharField()
-    line2 = serializers.CharField(allow_blank=True)
-    landmark = serializers.CharField(allow_blank=True)
-    locality = serializers.CharField()
-    city = serializers.CharField()
-    state = serializers.CharField()
-    postal_code = serializers.CharField()
-    directions_url = serializers.CharField(
-        help_text="Google Maps route to the Customer's pin. Empty if the address has none."
-    )
-
-
 _SITE_ADDRESS_DISCLOSED_STATUSES = (
     SiteVisit.Status.SCHEDULED,
     SiteVisit.Status.IN_PROGRESS,
@@ -657,16 +636,7 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         address = obj.requirement.address
         if not may_travel or address is None:
             return None
-        return {
-            "line1": address.line1,
-            "line2": address.line2,
-            "landmark": address.landmark,
-            "locality": address.locality,
-            "city": address.city,
-            "state": address.state,
-            "postal_code": address.postal_code,
-            "directions_url": directions_url(address.latitude, address.longitude),
-        }
+        return site_address_payload(address)
 
     @staticmethod
     def _has_disclosed_visit(obj: VendorInvitation) -> bool:

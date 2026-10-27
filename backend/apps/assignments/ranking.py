@@ -23,8 +23,9 @@ from uuid import UUID
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from psycopg.types.range import Range
 
-from apps.assignments.models import AssignmentAttempt
+from apps.assignments.models import AssignmentAttempt, Reservation
 from apps.carts.availability import schedule_available_partner_ids
 from apps.carts.models import FulfilmentUnit
 from apps.partners.models import PartnerApplication, PartnerOnlineSession, PartnerProfile
@@ -39,6 +40,7 @@ class ExclusionReason(models.TextChoices):
     ALREADY_ATTEMPTED = "already_attempted", "Already attempted for this unit"
     UNAVAILABLE_AT_START = "unavailable_at_start", "Unavailable at the requested start"
     OFFLINE_FOR_SAME_DAY = "OFFLINE_FOR_SAME_DAY", "Offline for a same-day visit"
+    ALREADY_BOOKED = "already_booked", "Already booked at the requested time"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +123,7 @@ def _exclusions_for(
     online_partner_ids: frozenset[UUID],
     require_online: bool,
     schedule_available_ids: frozenset[UUID],
+    booked_ids: frozenset[UUID],
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     application = getattr(candidate, "application", None)
@@ -139,7 +142,41 @@ def _exclusions_for(
     # two queries each and turns one dispatch into hundreds of round trips.
     if not reasons and candidate.id not in schedule_available_ids:
         reasons.append(ExclusionReason.UNAVAILABLE_AT_START)
+    # A published rota says nothing about work already taken. Without this, the lowest UUID in
+    # the area was offered every slot first — including slots it already held — and the
+    # reservation exclusion constraint was the first thing to notice.
+    if not reasons and candidate.id in booked_ids:
+        reasons.append(ExclusionReason.ALREADY_BOOKED)
     return tuple(reasons)
+
+
+def _booked_partner_ids(*, unit: FulfilmentUnit, partner_ids: list[UUID]) -> frozenset[UUID]:
+    """Partners in the pool holding a live reservation that overlaps this unit's occupied range.
+
+    Widened by `M1_TURNAROUND_MINUTES`, the same range `directly_assign` and `accept_unit_offer`
+    write and the planner's `_eligible_partner_ids` probes, so a Partner ranking treats as free is
+    one the exclusion constraint will accept. The unit's own holds are left out: a held unit's
+    Partner is not busy with somebody else, and Operations reads this ranking for held units.
+    """
+
+    if not partner_ids:
+        return frozenset()
+    occupied = Range(
+        unit.requested_start,
+        unit.requested_start
+        + timedelta(minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
+        "[)",
+    )
+    return frozenset(
+        Reservation.objects.filter(
+            partner_id__in=partner_ids,
+            status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+            occupied_range__overlap=occupied,
+        )
+        .exclude(fulfilment_unit=unit)
+        .values_list("partner_id", flat=True)
+        .distinct()
+    )
 
 
 def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
@@ -178,6 +215,7 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
         starts_at=unit.requested_start,
         duration_minutes=unit.estimated_duration_minutes,
     )
+    booked_ids = _booked_partner_ids(unit=unit, partner_ids=pool_ids)
     return UnitRanking(
         evaluations=tuple(
             CandidateEvaluation(
@@ -189,6 +227,7 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
                     online_partner_ids=online_partner_ids,
                     require_online=require_online,
                     schedule_available_ids=schedule_available_ids,
+                    booked_ids=booked_ids,
                 ),
             )
             for candidate in pool
