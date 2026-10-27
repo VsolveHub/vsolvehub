@@ -14,7 +14,7 @@ describe("booking support", () => {
     );
     expect(screen.getByRole("link", { name: /Call/i })).toHaveAttribute(
       "href",
-      "tel:+917330764634",
+      "tel:+918790564634",
     );
     expect(screen.getByRole("link", { name: /Email/i })).toHaveAttribute(
       "href",

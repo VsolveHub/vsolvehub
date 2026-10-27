@@ -148,7 +148,7 @@ export function MarketingMobileNav({
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
             >
               <Phone className="h-3.5 w-3.5 text-signal-500" />
-              <span>Partner Helpline: +91 800 123 4567</span>
+              <span>Partner Helpline: +91 879 056 4634</span>
             </Link>
           </div>
         </div>

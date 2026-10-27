@@ -513,7 +513,7 @@ export default function LandingPage() {
           <div className="mt-10 rounded-2xl border border-line bg-surface-sunken p-5 text-center">
             <p className="text-sm font-bold text-navy-900">Have a specific question not covered here?</p>
             <p className="mt-1 text-xs text-text-secondary">
-              Our partner helpdesk is available 9am–9pm every day (+91 733 076 4634) to guide you through registration and verification.
+              Our partner helpdesk is available 9am–9pm every day (+91 879 056 4634) to guide you through registration and verification.
             </p>
             <Link
               href="/contact"
