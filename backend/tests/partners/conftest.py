@@ -124,6 +124,22 @@ def partner_setup() -> PartnerSetup:
 
 
 @pytest.fixture
+def another_partner_setup(partner_setup: PartnerSetup) -> PartnerSetup:
+    """A second, unrelated Partner on the same catalogue and service area as `partner_setup`."""
+
+    user = User.objects.create_user(phone_number="+919876543211", full_name="Meena Rao")
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return PartnerSetup(
+        user=user,
+        client=client,
+        skill=partner_setup.skill,
+        variant=partner_setup.variant,
+        service_area=partner_setup.service_area,
+    )
+
+
+@pytest.fixture
 def operations_user() -> User:
     user = User.objects.create_user(phone_number="+919900000001", full_name="Operations Reviewer")
     role = Role.objects.create(code="operations", name="Operations", is_system=True)

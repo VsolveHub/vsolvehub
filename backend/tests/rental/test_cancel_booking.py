@@ -32,6 +32,14 @@ from tests.helpers import force_role_client
 
 User = get_user_model()
 
+#: What an ad needs before `submit_asset` will publish it: a photo and a full pickup address.
+LISTABLE_ASSET: dict[str, object] = {
+    "image_urls": ["https://cdn.example.com/drill.jpg"],
+    "pickup_address_line": "Shop 1, Main Road",
+    "pickup_city": "Hyderabad",
+    "pickup_pincode": "500032",
+}
+
 
 def _customer_client(user):
     role, _ = Role.objects.get_or_create(code="customer", defaults={"name": "Customer"})
@@ -86,6 +94,7 @@ def _booked(rental_world, *, hold_deposit_for_demo: bool = False) -> RentalBooki
         title="Cancel Drill",
         daily_rate_paise=50000,
         deposit_paise=100000,
+        **LISTABLE_ASSET,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
     moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok")
@@ -260,6 +269,7 @@ def test_per_booking_handover_pins_are_unique(rental_world):
         title="PIN Drill",
         daily_rate_paise=50000,
         deposit_paise=100000,
+        **LISTABLE_ASSET,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
     moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok")

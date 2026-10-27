@@ -9,7 +9,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.identity.models import Role, UserRole
-from apps.rental.models import RentalAsset
+from apps.rental.models import RentalBooking
 from apps.rental.services import create_asset, moderate_asset, submit_asset
 from apps.stay.services import public_properties
 from apps.wallet.models import WalletTransaction
@@ -23,6 +23,7 @@ from common.pagination import (
 )
 from tests.helpers import force_role_client
 from tests.rental.test_cancel_booking import (  # noqa: F401
+    LISTABLE_ASSET,
     _booked,
     _customer_client,
     rental_world,
@@ -50,12 +51,15 @@ def test_browse_window_defaults_and_clamps() -> None:
 
 @pytest.mark.django_db
 def test_filter_statuses_accepts_several_and_refuses_unknown() -> None:
-    qs = RentalAsset.objects.all()
-    assert filter_statuses(qs, _request(), RentalAsset.Status.values) is qs
-    narrowed = filter_statuses(qs, _request("?status=active,retired"), RentalAsset.Status.values)
+    # RentalBooking, as the rental views use it: RentalAsset's state field is `current_status`.
+    qs = RentalBooking.objects.all()
+    assert filter_statuses(qs, _request(), RentalBooking.Status.values) is qs
+    narrowed = filter_statuses(
+        qs, _request("?status=pending_payment,confirmed"), RentalBooking.Status.values
+    )
     assert "IN" in str(narrowed.query)
     with pytest.raises(serializers.ValidationError):
-        filter_statuses(qs, _request("?status=NOPE"), RentalAsset.Status.values)
+        filter_statuses(qs, _request("?status=NOPE"), RentalBooking.Status.values)
 
 
 # --- a customer list ----------------------------------------------------------------------------
@@ -142,6 +146,7 @@ def test_rental_browse_is_never_unbounded(rental_world):  # noqa: F811
             title=f"Drill {index}",
             daily_rate_paise=50000,
             deposit_paise=100000,
+            **LISTABLE_ASSET,
         )
         submit_asset(asset=asset, partner=rental_world["partner"])
         moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok")
@@ -211,6 +216,8 @@ def test_my_rentals_page_and_filter_on_the_server(rental_world):  # noqa: F811
 @pytest.mark.django_db
 def test_partner_rental_bookings_page_and_take_several_statuses(rental_world):  # noqa: F811
     booking = _booked(rental_world)
+    role, _ = Role.objects.get_or_create(code="partner", defaults={"name": "Partner"})
+    UserRole.objects.get_or_create(user=rental_world["owner"], role=role, revoked_at=None)
     client = force_role_client(user=rental_world["owner"], role_code="partner")
 
     page = _paged(

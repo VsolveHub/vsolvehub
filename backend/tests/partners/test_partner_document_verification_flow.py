@@ -1,6 +1,7 @@
 from http import HTTPStatus
 
 import pytest
+from pytest_django.fixtures import SettingsWrapper
 
 from apps.identity.models import User
 from apps.partners.models import PartnerApplication, PartnerDocument
@@ -8,6 +9,7 @@ from tests.helpers import force_role_client
 from tests.partners.conftest import (
     PartnerSetup,
     application_payload,
+    set_partner_schedule,
     upload_partner_document,
 )
 
@@ -20,6 +22,8 @@ def _setup_application(setup: PartnerSetup) -> PartnerApplication:
         application_payload(setup),
         format="json",
     )
+    # Submission requires weekly working hours in every service area.
+    assert set_partner_schedule(setup).status_code == HTTPStatus.OK
     return PartnerApplication.objects.get(partner__user=setup.user)
 
 
@@ -54,7 +58,8 @@ def test_partner_can_access_own_document_preview(partner_setup: PartnerSetup) ->
     assert body["document"]["label"] == "Government identity"
     assert body["document"]["status"] == "PENDING"
     assert body["document"]["version"] == 1
-    assert "pdf" in body["document"]["file_name"]
+    # The upload is a JPEG (`upload_partner_document`'s default content type).
+    assert body["document"]["file_name"].endswith(".jpg")
     assert body["document"]["file_size"] == 2048
 
 
@@ -205,7 +210,10 @@ def test_cannot_approve_already_approved_document(
 def test_application_approval_blocked_until_all_required_documents_approved(
     partner_setup: PartnerSetup,
     operations_user: User,
+    settings: SettingsWrapper,
 ) -> None:
+    # Only GOVERNMENT_ID is required by default; require both kinds so the second one can block.
+    settings.PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID", "ADDRESS_PROOF")
     app = _setup_application(partner_setup)
     doc1 = _upload_doc(partner_setup, kind=PartnerDocument.Kind.GOVERNMENT_ID)
     doc2 = _upload_doc(partner_setup, kind=PartnerDocument.Kind.ADDRESS_PROOF)

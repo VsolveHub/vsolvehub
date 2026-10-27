@@ -330,7 +330,9 @@ def test_unknown_archetype_yields_no_grant_rather_than_a_fallback() -> None:
     partner = _partner()
     variant = _variant(ServiceVariant.BookingArchetype.A3_TIME_BLOCK)
     capability = _approved_capability(partner, variant)
-    capability.archetype = "A9_STAY"
+    # A9_STAY was the stand-in here until stays became a real archetype with grants (M3). A value
+    # no release has ever defined is the case this test is about.
+    capability.archetype = "A0_UNDEFINED"
     capability.save(update_fields=("archetype",))
 
     assert capabilities.workspace_grants(partner) == []

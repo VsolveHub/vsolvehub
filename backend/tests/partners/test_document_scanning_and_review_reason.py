@@ -19,7 +19,12 @@ from apps.partners.services import (
     scan_partner_document,
 )
 from tests.helpers import force_role_client
-from tests.partners.conftest import PartnerSetup, application_payload, upload_partner_document
+from tests.partners.conftest import (
+    PartnerSetup,
+    application_payload,
+    set_partner_schedule,
+    upload_partner_document,
+)
 from tests.test_server_clock_calibration import production_settings  # noqa: F401
 
 pytestmark = pytest.mark.django_db
@@ -31,6 +36,8 @@ def _uploaded_document(setup: PartnerSetup) -> PartnerDocument:
         application_payload(setup),
         format="json",
     ).json()
+    # Submission requires weekly working hours in every service area.
+    assert set_partner_schedule(setup).status_code == HTTPStatus.OK
     response = upload_partner_document(
         setup.client,
         expected_version=created["version"],
