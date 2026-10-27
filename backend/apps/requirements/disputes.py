@@ -38,7 +38,8 @@ from django.utils import timezone
 from apps.cases import services as case_services
 from apps.cases.models import TERMINAL_CASE_STATUSES, OperationsCase, OperationsCaseEvidence
 from apps.identity.models import User
-from apps.payouts.models import PartnerLedgerEntry
+from apps.payouts.models import PartnerEarningHold, PartnerLedgerEntry
+from apps.payouts.services import hold_ledger_entries
 from apps.requirements import pricing
 from apps.requirements.exceptions import (
     PolicyUnavailableError,
@@ -139,6 +140,16 @@ def hold_engagement_payouts(*, case: OperationsCase) -> list[uuid.UUID]:
     entry_ids = engagement_ledger_entry_ids(requirement=requirement, engagement=engagement)
     if not entry_ids:
         return []
+    # An explicit hold on every entry whose money has not left, reserved ones included. The
+    # status flip below cannot touch a reserved entry; this hold is what stops a transfer already
+    # carrying it (a withdrawal waiting for Operations, a run not yet paid) at the moment of
+    # sending. Lifted by this case alone, in `resolve_case`.
+    hold_ledger_entries(
+        reason=PartnerEarningHold.Reason.OPERATIONS_CASE,
+        source_id=str(case.id),
+        entry_ids=entry_ids,
+        actor=case.opened_by,
+    )
     held: list[uuid.UUID] = []
     for entry in PartnerLedgerEntry.objects.select_for_update().filter(
         id__in=entry_ids, status__in=FREEZABLE_LEDGER_STATUSES

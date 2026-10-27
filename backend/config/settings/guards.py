@@ -57,6 +57,36 @@ def guard_payout_minimum(paise: int) -> None:
         )
 
 
+#: `PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE` when nobody has set a price for an extra withdrawal.
+WITHDRAWAL_FEE_UNSET = -1
+
+
+def guard_withdrawal_limits(*, minimum_paise: int, maximum_paise: int, fee_paise: int) -> None:
+    """The Partner withdrawal limits must make sense together before anyone can withdraw.
+
+    The minimum can be no lower than RazorpayX's ₹1, the maximum no lower than the minimum, and a
+    fee — when one is set — must leave money to send: a withdrawal of the minimum, less the fee,
+    still has to be at least ₹1. An unset fee (`WITHDRAWAL_FEE_UNSET`) is allowed: extra
+    withdrawals are then refused rather than charged a price nobody chose.
+    """
+
+    if minimum_paise < RAZORPAYX_MINIMUM_PAYOUT_PAISE:
+        raise ImproperlyConfigured(
+            "PAYOUT_WITHDRAWAL_MIN_PAISE must be at least 100 (₹1), RazorpayX's smallest payout."
+        )
+    if maximum_paise < minimum_paise:
+        raise ImproperlyConfigured(
+            "PAYOUT_WITHDRAWAL_MAX_PAISE must be at least PAYOUT_WITHDRAWAL_MIN_PAISE."
+        )
+    if fee_paise != WITHDRAWAL_FEE_UNSET and not (
+        0 <= fee_paise <= minimum_paise - RAZORPAYX_MINIMUM_PAYOUT_PAISE
+    ):
+        raise ImproperlyConfigured(
+            "PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE must be unset, or between 0 and the withdrawal "
+            "minimum less ₹1, so a minimum withdrawal still sends something."
+        )
+
+
 def guard_razorpayx_test_keys(key_id: str) -> None:
     """Outside production, RazorpayX keys must be test-mode keys.
 

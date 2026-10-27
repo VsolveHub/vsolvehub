@@ -29,7 +29,7 @@ from apps.payouts.models import PartnerEarningHold, PartnerLedgerEntry
 UNPAID_STATUSES = (PartnerLedgerEntry.Status.AVAILABLE, PartnerLedgerEntry.Status.RELEASED)
 
 #: True on an entry annotated by `with_hold_flags` when an active hold freezes it.
-ON_HOLD = Q(booking_on_hold=True) | Q(rental_on_hold=True)
+ON_HOLD = Q(booking_on_hold=True) | Q(rental_on_hold=True) | Q(entry_on_hold=True)
 
 
 def _active_holds() -> QuerySet[PartnerEarningHold]:
@@ -37,13 +37,15 @@ def _active_holds() -> QuerySet[PartnerEarningHold]:
 
 
 def with_hold_flags(entries: QuerySet[PartnerLedgerEntry]) -> QuerySet[PartnerLedgerEntry]:
-    """Annotate each entry with whether an active hold on its booking freezes it."""
+    """Annotate each entry with whether an active hold freezes it: one on its booking or rental
+    booking, or one on the entry itself (an M2 earning a case on its engagement is holding)."""
 
     return entries.annotate(
         booking_on_hold=Exists(_active_holds().filter(booking_id=OuterRef("booking_id"))),
         rental_on_hold=Exists(
             _active_holds().filter(rental_booking_id=OuterRef("rental_booking_id"))
         ),
+        entry_on_hold=Exists(_active_holds().filter(ledger_entry_id=OuterRef("pk"))),
     )
 
 

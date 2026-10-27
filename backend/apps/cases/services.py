@@ -305,16 +305,18 @@ def resolve_case(
         body=case.resolution_note,
         context={"resolution": resolution},
     )
+    # Every hold this case placed — on its booking, or on each M2 entry it froze — and only those.
+    # Another open case on the same subject placed its own holds under its own id, so lifting
+    # these never frees money that case is still looking at.
+    release_hold_for_source(
+        reason=PartnerEarningHold.Reason.OPERATIONS_CASE,
+        source_id=str(case.id),
+        actor=actor,
+        note=resolution,
+    )
     booking_id = case.booking_id
-    if booking_id is not None:
-        release_hold_for_source(
-            reason=PartnerEarningHold.Reason.OPERATIONS_CASE,
-            source_id=str(case.id),
-            actor=actor,
-            note=resolution,
-        )
-        if not _subject_has_other_holds(case, booking_id=booking_id):
-            release_payout_hold(booking_id=booking_id, actor=actor, note=resolution)
+    if booking_id is not None and not _subject_has_other_holds(case, booking_id=booking_id):
+        release_payout_hold(booking_id=booking_id, actor=actor, note=resolution)
     _release_m2_payouts(case)
     return case
 

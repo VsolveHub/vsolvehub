@@ -7,11 +7,12 @@ detecting one.
 """
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db import transaction
@@ -35,6 +36,7 @@ from apps.payouts.exceptions import (
     PayoutBatchConflictApiError,
     PayoutBatchInvalidApiError,
     SelfApprovalDeniedApiError,
+    WithdrawalRefusedApiError,
 )
 from apps.payouts.models import (
     PartnerEarningHold,
@@ -341,9 +343,15 @@ def place_earning_hold(
     Returns None for a booking with no Partner, which has no earning to freeze.
     """
 
-    existing = PartnerEarningHold.objects.filter(
+    # Scoped to this booking: a case on an engagement holds entries under the same case id.
+    same_cause = PartnerEarningHold.objects.filter(
         reason=reason, source_id=source_id, status=PartnerEarningHold.Status.ACTIVE
-    ).first()
+    )
+    if booking_id is not None:
+        same_cause = same_cause.filter(booking_id=booking_id)
+    elif rental_booking_id is not None:
+        same_cause = same_cause.filter(rental_booking_id=rental_booking_id)
+    existing = same_cause.first()
     if existing is not None:
         return existing
     if booking_id is not None:
@@ -366,6 +374,38 @@ def place_earning_hold(
     )
     _freeze_unpaid_earning(booking_id=booking_id, rental_booking_id=rental_booking_id)
     return hold
+
+
+@transaction.atomic
+def hold_ledger_entries(
+    *, reason: str, source_id: str, entry_ids: Iterable[UUID], actor: User | None = None
+) -> list[UUID]:
+    """Freeze individual ledger entries — the M2 earnings no booking reaches — under one cause.
+
+    A hold, not a status: it also stops an entry that is already reserved in a transfer waiting
+    to be sent (a withdrawal in the Operations queue, a run not yet paid), which a move to
+    `PENDING` cannot touch. `_pre_send_refusal` reads it and releases that transfer unsent. Money
+    that has already left is not held here; it is paid. Lifted by `release_hold_for_source`.
+
+    Idempotent per entry and cause (`payouts_one_active_hold_per_cause`). Returns the entries
+    newly held.
+    """
+
+    held: list[UUID] = []
+    entries = PartnerLedgerEntry.objects.filter(id__in=list(entry_ids)).exclude(
+        status=PartnerLedgerEntry.Status.PAID
+    )
+    for entry in entries.order_by("created_at", "id"):
+        _, created = PartnerEarningHold.objects.get_or_create(
+            reason=reason,
+            source_id=source_id,
+            ledger_entry=entry,
+            status=PartnerEarningHold.Status.ACTIVE,
+            defaults={"partner_id": entry.partner_id, "placed_by": actor},
+        )
+        if created:
+            held.append(entry.id)
+    return held
 
 
 def _freeze_unpaid_earning(*, booking_id: UUID | None, rental_booking_id: UUID | None) -> None:
@@ -657,6 +697,7 @@ def approve_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) 
     batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
     if batch.version != expected_version:
         raise PayoutBatchConflictApiError(current_version=batch.version)
+    _refuse_withdrawal_in_run_command(batch)
     if batch.status != PayoutBatch.Status.PENDING_APPROVAL:
         raise PayoutBatchInvalidApiError(reason=f"A batch in {batch.status} cannot be approved.")
     if batch.proposed_by_id == actor.id:
@@ -665,11 +706,34 @@ def approve_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) 
         raise PayoutBatchInvalidApiError(reason="An empty batch has nothing to approve.")
 
     batch.status = PayoutBatch.Status.APPROVED
+    batch.approval_basis = PayoutBatch.ApprovalBasis.OPERATIONS
     batch.approved_by = actor
     batch.approved_at = timezone.now()
     batch.version += 1
-    batch.save(update_fields=("status", "approved_by", "approved_at", "version", "updated_at"))
+    batch.save(
+        update_fields=(
+            "status",
+            "approval_basis",
+            "approved_by",
+            "approved_at",
+            "version",
+            "updated_at",
+        )
+    )
     return batch
+
+
+def _refuse_withdrawal_in_run_command(batch: PayoutBatch) -> None:
+    """A withdrawal is approved and sent in one step from the withdrawal queue, never as a run.
+
+    Two paths to the same money would be two sets of rules to keep in step; refusing here keeps
+    the run console from approving a withdrawal without the withdrawal checks.
+    """
+
+    if batch.kind == PayoutBatch.Kind.WITHDRAWAL:
+        raise PayoutBatchInvalidApiError(
+            reason="This is a Partner withdrawal. Approve or decline it from the withdrawal queue."
+        )
 
 
 @transaction.atomic
@@ -683,6 +747,7 @@ def cancel_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) -
     batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
     if batch.version != expected_version:
         raise PayoutBatchConflictApiError(current_version=batch.version)
+    _refuse_withdrawal_in_run_command(batch)
     if batch.status not in (
         PayoutBatch.Status.DRAFT,
         PayoutBatch.Status.PENDING_APPROVAL,
@@ -896,6 +961,7 @@ _RELEASING_STATUSES = (
 #: Item statuses whose provider outcome is still open.
 _OPEN_STATUSES = (
     PayoutBatchItem.Status.RESERVED,
+    PayoutBatchItem.Status.SUBMITTING,
     PayoutBatchItem.Status.SUBMITTED,
     PayoutBatchItem.Status.UNDER_REVIEW,
 )
@@ -926,6 +992,28 @@ def _close_item(item: PayoutBatchItem, *, status: str, failure_code: str) -> Non
     ):
         entry.status = PartnerLedgerEntry.Status.RELEASED
         entry.save(update_fields=("status", "updated_at"))
+        if entry.kind == PartnerLedgerEntry.Kind.FEE:
+            _refund_withdrawal_fee(item, entry)
+
+
+def _refund_withdrawal_fee(item: PayoutBatchItem, fee: PartnerLedgerEntry) -> None:
+    """Give back the fee of a withdrawal whose money did not stay out.
+
+    The fee went back to the pool with every other line, where on its own it would come off the
+    Partner's next payout. A correcting entry of the same size cancels it, so a failed, declined
+    or reversed withdrawal costs the Partner nothing — and the ledger still shows both lines
+    rather than an edited one. Once per fee and transfer, however often the provider repeats
+    itself.
+    """
+
+    record_adjustment(
+        partner_id=fee.partner_id,
+        corrects_id=fee.id,
+        net_paise=-fee.net_paise,
+        reason=f"withdrawal_fee_refund:{item.failure_code or item.status.lower()}",
+        actor=None,
+        idempotency_key=f"withdrawal-fee-refund:{fee.id}:{item.id}",
+    )
 
 
 def _pre_send_refusal(item: PayoutBatchItem) -> str:
@@ -939,10 +1027,10 @@ def _pre_send_refusal(item: PayoutBatchItem) -> str:
 
     if is_engaged(KillSwitch.Scope.PAYOUTS):
         return "payouts_paused"
-    if PartnerApplication.objects.filter(
-        partner_id=item.partner_id,
-        status__in=(PartnerApplication.Status.SUSPENDED, PartnerApplication.Status.OFFBOARDED),
-    ).exists():
+    if item.is_withdrawal and not settings.PAYOUT_WITHDRAW_ENABLED:
+        # Switching withdrawals off stops the ones not yet sent, not only new taps.
+        return "withdrawals_disabled"
+    if _partner_is_suspended(item.partner_id):
         return "partner_suspended"
     account = item.payout_account
     if (
@@ -956,21 +1044,26 @@ def _pre_send_refusal(item: PayoutBatchItem) -> str:
     return ""
 
 
+@dataclass(frozen=True, slots=True)
+class _ClaimedPayout:
+    """Everything the provider call needs, read while the item was locked and then let go."""
+
+    item_id: UUID
+    fund_account_id: str
+    amount_paise: int
+    currency: str
+    idempotency_key: str
+    batch_reference: str
+
+
 @transaction.atomic
-def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
-    """Send one reserved transfer to the provider, exactly once.
+def _claim_for_sending(item_id: UUID) -> _ClaimedPayout | None:
+    """Step one: re-check a reserved transfer and claim it, committing before the call is made.
 
-    Re-checked first (`_pre_send_refusal`): a transfer that may no longer be sent is released
-    unsent, its money back in the pool. Then the three provider outcomes, which are not
-    symmetrical, and the asymmetry is the whole point:
-
-    * **Accepted** — the item is `SUBMITTED` and its entries stay reserved.
-    * **Rejected** — the provider explicitly refused, so no money moved. The item fails and its
-      entries go back to the pool, where a later batch can pick them up.
-    * **Ambiguous** — a timeout, a reset, a 5xx. The payout *may* have gone out. The item parks
-      at `UNDER_REVIEW` and its entries stay reserved, because releasing them here is precisely
-      how a Partner gets paid twice. `reconcile_payouts` settles it by asking the provider what
-      it has under the item's reference — never by sending it again.
+    Returns None when there is nothing to send — it was already claimed, or it may no longer be
+    sent and has just been released unsent (`_pre_send_refusal`), its money back in the pool.
+    `SUBMITTING` is committed before the provider is called, so a second worker, a re-queued job
+    or `resume_payout_submissions` finds it taken and does nothing.
     """
 
     item = (
@@ -979,45 +1072,123 @@ def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
         .get(id=item_id)
     )
     if item.status != PayoutBatchItem.Status.RESERVED:
-        return item
+        return None
     refusal = _pre_send_refusal(item)
     if refusal:
         _close_item(item, status=PayoutBatchItem.Status.RELEASED, failure_code=refusal)
         _settle_batch_if_complete(item.batch_id)
-        return item
+        return None
+    item.status = PayoutBatchItem.Status.SUBMITTING
+    item.submitted_at = timezone.now()
+    item.save(update_fields=("status", "submitted_at", "updated_at"))
+    return _ClaimedPayout(
+        item_id=item.id,
+        fund_account_id=item.payout_account.provider_fund_account_id,
+        amount_paise=item.amount_paise,
+        currency=item.currency,
+        idempotency_key=item.idempotency_key,
+        batch_reference=item.batch.reference,
+    )
 
-    provider = get_payout_provider()
-    try:
-        result = provider.create_payout(
-            fund_account_id=item.payout_account.provider_fund_account_id,
-            amount_paise=item.amount_paise,
-            currency=item.currency,
-            # The item id alone, as 32 hex characters: RazorpayX caps `reference_id` at 40, and
-            # the old "<batch reference>:<item id>" was 37 at the very least. Still unique per
-            # payout, which is what reconciliation needs; the run travels in the notes instead.
-            reference=item.id.hex,
-            idempotency_key=item.idempotency_key,
-            batch_reference=item.batch.reference,
-        )
-    except PayoutProviderAmbiguousError:
-        item.status = PayoutBatchItem.Status.UNDER_REVIEW
-        item.failure_code = "provider_ambiguous"
-        item.submitted_at = timezone.now()
-        item.save(update_fields=("status", "failure_code", "submitted_at", "updated_at"))
-        return item
-    except PayoutProviderRejectedError as exc:
-        _close_item(item, status=PayoutBatchItem.Status.FAILED, failure_code=_rejection_code(exc))
-        _settle_batch_if_complete(item.batch_id)
-        return item
 
+def _claimed(item_id: UUID) -> PayoutBatchItem | None:
+    """The item, locked, if it is still waiting for this send's answer; else None.
+
+    A webhook can settle a payout while the call that created it is still returning — RazorpayX
+    sometimes delivers `payout.processed` first. Then the webhook's outcome stands and the answer
+    only adds what the webhook could not know, such as the provider id.
+    """
+
+    item = PayoutBatchItem.objects.select_for_update().get(id=item_id)
+    return item if item.status == PayoutBatchItem.Status.SUBMITTING else None
+
+
+@transaction.atomic
+def _record_accepted(item_id: UUID, result: ProviderPayout) -> PayoutBatchItem:
+    item = _claimed(item_id)
+    if item is None:
+        item = PayoutBatchItem.objects.select_for_update().get(id=item_id)
+        changed = _record_tracking(item, result)
+        if result.provider_payout_id and not item.provider_payout_id:
+            item.provider_payout_id = result.provider_payout_id
+            changed.append("provider_payout_id")
+        if changed:
+            item.save(update_fields=(*changed, "updated_at"))
+        return item
     tracked = _record_tracking(item, result)
     item.status = PayoutBatchItem.Status.SUBMITTED
     item.provider_payout_id = result.provider_payout_id
-    item.submitted_at = timezone.now()
-    item.save(
-        update_fields=("status", "provider_payout_id", "submitted_at", *tracked, "updated_at")
-    )
+    item.save(update_fields=("status", "provider_payout_id", *tracked, "updated_at"))
     return item
+
+
+@transaction.atomic
+def _record_rejected(item_id: UUID, exc: PayoutProviderRejectedError) -> PayoutBatchItem:
+    item = _claimed(item_id)
+    if item is None:
+        return PayoutBatchItem.objects.get(id=item_id)
+    _close_item(item, status=PayoutBatchItem.Status.FAILED, failure_code=_rejection_code(exc))
+    _settle_batch_if_complete(item.batch_id)
+    return item
+
+
+@transaction.atomic
+def _record_ambiguous(item_id: UUID) -> PayoutBatchItem:
+    item = _claimed(item_id)
+    if item is None:
+        return PayoutBatchItem.objects.get(id=item_id)
+    item.status = PayoutBatchItem.Status.UNDER_REVIEW
+    item.failure_code = "provider_ambiguous"
+    item.save(update_fields=("status", "failure_code", "updated_at"))
+    return item
+
+
+def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
+    """Send one reserved transfer to the provider, exactly once, holding no lock while it goes.
+
+    Three steps, each its own commit: claim (`_claim_for_sending`), call the provider outside
+    any transaction, record the answer. A slow RazorpayX therefore holds no row locks, and a
+    process that dies between the claim and the answer leaves the item `SUBMITTING`, which
+    `reconcile_payouts` later looks up by reference — it is never sent a second time.
+
+    The provider is resolved before anything is claimed, so a misconfigured one leaves the item
+    reserved for a later attempt instead of claimed and unsendable. Then the three outcomes,
+    which are not symmetrical, and the asymmetry is the whole point:
+
+    * **Accepted** — the item is `SUBMITTED` and its entries stay reserved.
+    * **Rejected** — the provider explicitly refused, so no money moved. The item fails and its
+      entries go back to the pool, where a later batch can pick them up.
+    * **Ambiguous** — a timeout, a reset, a 5xx. The payout *may* have gone out. The item parks
+      at `UNDER_REVIEW` and its entries stay reserved, because releasing them here is precisely
+      how a Partner gets paid twice. `reconcile_payouts` settles it by asking the provider what
+      it has under the item's reference — never by sending it again.
+
+    Call it outside a transaction. Inside one, the claim is not committed before the call, and
+    the lock-free send is lost (though it still pays exactly once).
+    """
+
+    provider = get_payout_provider()
+    claimed = _claim_for_sending(item_id)
+    if claimed is None:
+        return PayoutBatchItem.objects.get(id=item_id)
+    try:
+        result = provider.create_payout(
+            fund_account_id=claimed.fund_account_id,
+            amount_paise=claimed.amount_paise,
+            currency=claimed.currency,
+            # The item id alone, as 32 hex characters: RazorpayX caps `reference_id` at 40, and
+            # the old "<batch reference>:<item id>" was 37 at the very least. Still unique per
+            # payout, which is what reconciliation needs; the run travels in the notes instead.
+            reference=claimed.item_id.hex,
+            idempotency_key=claimed.idempotency_key,
+            batch_reference=claimed.batch_reference,
+        )
+    except PayoutProviderRejectedError as exc:
+        return _record_rejected(claimed.item_id, exc)
+    except PayoutProviderError:
+        # Ambiguous, or any other provider failure after the request may have left: unknown.
+        return _record_ambiguous(claimed.item_id)
+    return _record_accepted(claimed.item_id, result)
 
 
 #: Provider outcomes reduced to ours. Reduction lives here rather than in the adapter so there is
@@ -1157,6 +1328,15 @@ def apply_payout_result(
     return item
 
 
+#: Sent, or possibly sent, with no settled outcome: what reconciliation asks the provider about.
+#: `SUBMITTING` is here for a send whose process died before recording the answer.
+_UNCONFIRMED_STATUSES = (
+    PayoutBatchItem.Status.SUBMITTING,
+    PayoutBatchItem.Status.SUBMITTED,
+    PayoutBatchItem.Status.UNDER_REVIEW,
+)
+
+
 @transaction.atomic
 def settle_unconfirmed_payout(*, item_id: UUID, found: ProviderPayout | None) -> PayoutBatchItem:
     """Resolve a transfer whose submission got no clear answer, from what the provider holds.
@@ -1169,7 +1349,7 @@ def settle_unconfirmed_payout(*, item_id: UUID, found: ProviderPayout | None) ->
     """
 
     item = PayoutBatchItem.objects.select_for_update().get(id=item_id)
-    if item.status not in (PayoutBatchItem.Status.SUBMITTED, PayoutBatchItem.Status.UNDER_REVIEW):
+    if item.status not in _UNCONFIRMED_STATUSES:
         return item
     if found is not None:
         if not item.provider_payout_id:
@@ -1340,6 +1520,7 @@ def start_paying_batch(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
     batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
     if batch.version != expected_version:
         raise PayoutBatchConflictApiError(current_version=batch.version)
+    _refuse_withdrawal_in_run_command(batch)
     if batch.status != PayoutBatch.Status.APPROVED:
         raise PayoutBatchInvalidApiError(
             reason=f"A batch in {batch.status} has not been approved for payment."
@@ -1347,6 +1528,17 @@ def start_paying_batch(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
     batch.status = PayoutBatch.Status.PAYING
     batch.version += 1
     batch.save(update_fields=("status", "version", "updated_at"))
+    _request_submissions(batch)
+    return batch
+
+
+def _request_submissions(batch: PayoutBatch) -> None:
+    """Queue every reserved transfer in a batch now paying, through the outbox.
+
+    The outbox only hands the item to `send_payout_item` after commit; the provider call itself
+    runs outside every transaction (`submit_payout_item`).
+    """
+
     for item in batch.items.filter(status=PayoutBatchItem.Status.RESERVED):
         enqueue_outbox_event(
             aggregate_type="payout_item",
@@ -1355,7 +1547,6 @@ def start_paying_batch(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
             idempotency_key=f"payout-submit:{item.id}",
             payload={"payout_item_id": str(item.id)},
         )
-    return batch
 
 
 def reverse_booking_earning_for_refund(
@@ -1380,4 +1571,436 @@ def reverse_booking_earning_for_refund(
         reason=f"refund_reversal:{refund_id}",
         actor=actor,
         idempotency_key=f"refund-reversal:{refund_id}:{earning.id}",
+    )
+
+
+# --------------------------------------------------------------------------------------------
+# Partner withdrawals
+#
+# A withdrawal is a one-Partner `PayoutBatch` of kind `WITHDRAWAL`. It reserves the same entries
+# a run would (`payable_entries`, no period), is sent by the same `submit_payout_item` and settled
+# by the same webhook and reconciliation, so the double-pay index, the last-moment checks and the
+# forward-only state machine all hold for it without a second copy. What is new is only the
+# rules about *when* a Partner may take their money, and those live here.
+# --------------------------------------------------------------------------------------------
+
+#: The day and week the withdrawal limits count in, whatever `TIME_ZONE` is set to.
+_INDIA = ZoneInfo("Asia/Kolkata")
+
+#: Why a withdrawal waits for Operations instead of being sent by policy.
+REVIEW_FIRST_PAYOUT_TO_ACCOUNT = "first_payout_to_account"
+REVIEW_OVER_MAXIMUM = "over_maximum"
+WITHDRAWAL_REVIEW_REASONS = (REVIEW_FIRST_PAYOUT_TO_ACCOUNT, REVIEW_OVER_MAXIMUM)
+
+#: Every reason a Withdraw tap is refused, in the order they are checked.
+WITHDRAWAL_REFUSAL_REASONS = (
+    "withdrawals_disabled",
+    "payouts_paused",
+    "partner_suspended",
+    "no_payout_account",
+    "account_under_review",
+    "account_rejected",
+    "account_cooling",
+    "withdrawal_in_progress",
+    "daily_limit_reached",
+    "below_minimum",
+    "extra_withdrawals_unavailable",
+)
+
+
+def _rupees(paise: int) -> str:
+    return f"₹{paise // 100:,}" if paise % 100 == 0 else f"₹{paise / 100:,.2f}"
+
+
+def withdrawal_refusal_message(reason: str) -> str:
+    """What the Partner is told when a Withdraw tap is refused: what happened and what to do."""
+
+    messages = {
+        "withdrawals_disabled": (
+            "Withdrawals are not open yet. Your balance is paid in the regular payout."
+        ),
+        "payouts_paused": (
+            "Payouts are paused for a short while. Your balance is safe. Please try again later."
+        ),
+        "partner_suspended": (
+            "Your account is on hold, so money cannot be withdrawn right now. "
+            "Please contact support."
+        ),
+        "no_payout_account": "Add your bank account to withdraw.",
+        "account_under_review": (
+            "Your bank account is being checked. You can withdraw once it is verified."
+        ),
+        "account_rejected": "Your bank details were not accepted. Enter them again to withdraw.",
+        "account_cooling": (
+            "For your safety, a new bank account waits "
+            f"{settings.PAYOUT_ACCOUNT_COOLING_HOURS} hours before money can be sent to it."
+        ),
+        "withdrawal_in_progress": (
+            "A withdrawal is already on its way. You can withdraw again once it is paid."
+        ),
+        "daily_limit_reached": (
+            f"You can withdraw {settings.PAYOUT_WITHDRAWALS_PER_DAY} times a day. "
+            "Please try again tomorrow."
+        ),
+        "below_minimum": (
+            "You can withdraw once your available balance reaches "
+            f"{_rupees(settings.PAYOUT_WITHDRAWAL_MIN_PAISE)}."
+        ),
+        "extra_withdrawals_unavailable": (
+            "You have used this week's withdrawal. You can withdraw again from Monday."
+        ),
+    }
+    return messages[reason]
+
+
+@dataclass(frozen=True, slots=True)
+class WithdrawalQuote:
+    """What one Withdraw tap would do right now, by the same rules the request applies."""
+
+    #: Empty when the withdrawal may go ahead; otherwise one of `WITHDRAWAL_REFUSAL_REASONS`.
+    refusal: str
+    #: The whole available balance a withdrawal takes. Full balance only, never a part of it.
+    amount_paise: int
+    #: What this withdrawal costs the Partner: 0 for the week's free ones.
+    fee_paise: int
+    #: Non-empty when it would wait for Operations instead of being sent at once.
+    review_reasons: tuple[str, ...]
+    account: PartnerPayoutAccount | None
+    withdrawals_left_today: int
+    free_withdrawals_left_this_week: int
+
+    @property
+    def send_paise(self) -> int:
+        """What reaches the bank account: the balance less the fee."""
+
+        return self.amount_paise - self.fee_paise
+
+
+def _withdrawal_windows(now: datetime) -> tuple[datetime, datetime]:
+    """Midnight today and midnight last Monday, India time: where the two limits start counting."""
+
+    local = timezone.localtime(now, _INDIA)
+    day = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return day, day - timedelta(days=local.weekday())
+
+
+def _counted_withdrawals(partner_id: UUID, *, since: datetime) -> int:
+    """Withdrawals since `since` whose money left or still may. One that failed, was declined or
+    came back from the bank cost the Partner nothing, so it does not count against a limit."""
+
+    return (
+        PayoutBatchItem.objects.filter(
+            partner_id=partner_id, is_withdrawal=True, created_at__gte=since
+        )
+        .exclude(status__in=_RELEASING_STATUSES)
+        .count()
+    )
+
+
+def _current_payout_account(partner_id: UUID) -> PartnerPayoutAccount | None:
+    return (
+        PartnerPayoutAccount.objects.filter(partner_id=partner_id)
+        .exclude(status=PartnerPayoutAccount.Status.REPLACED)
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def _partner_is_suspended(partner_id: UUID) -> bool:
+    return PartnerApplication.objects.filter(
+        partner_id=partner_id,
+        status__in=(PartnerApplication.Status.SUSPENDED, PartnerApplication.Status.OFFBOARDED),
+    ).exists()
+
+
+def _account_refusal(account: PartnerPayoutAccount | None, now: datetime) -> str:
+    if account is None:
+        return "no_payout_account"
+    if account.status == PartnerPayoutAccount.Status.PENDING:
+        return "account_under_review"
+    if account.status != PartnerPayoutAccount.Status.VERIFIED:
+        return "account_rejected"
+    if account.effective_from > now:
+        # The cooling period: the time a Partner has to notice a bank-account change they did
+        # not make, before any money can follow it.
+        return "account_cooling"
+    return ""
+
+
+def _withdrawal_refusal(  # noqa: PLR0911 - one return per rule, in the order they are checked
+    *,
+    partner_id: UUID,
+    account: PartnerPayoutAccount | None,
+    now: datetime,
+    amount_paise: int,
+    left_today: int,
+    fee_paise: int,
+) -> str:
+    if not settings.PAYOUT_WITHDRAW_ENABLED:
+        return "withdrawals_disabled"
+    if is_engaged(KillSwitch.Scope.PAYOUTS):
+        return "payouts_paused"
+    if _partner_is_suspended(partner_id):
+        return "partner_suspended"
+    if refusal := _account_refusal(account, now):
+        return refusal
+    if PayoutBatchItem.objects.filter(
+        partner_id=partner_id, is_withdrawal=True, status__in=_OPEN_STATUSES
+    ).exists():
+        return "withdrawal_in_progress"
+    if left_today <= 0:
+        return "daily_limit_reached"
+    if amount_paise < settings.PAYOUT_WITHDRAWAL_MIN_PAISE:
+        return "below_minimum"
+    if fee_paise < 0:
+        # `WITHDRAWAL_FEE_UNSET`: nobody has chosen a price for an extra withdrawal, so there is
+        # none rather than one made up here.
+        return "extra_withdrawals_unavailable"
+    return ""
+
+
+def _review_reasons(account: PartnerPayoutAccount, amount_paise: int) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if not PayoutBatchItem.objects.filter(
+        payout_account=account, status=PayoutBatchItem.Status.PAID
+    ).exists():
+        # A takeover's first payout goes to a new account. Cooling buys time to notice; a person
+        # looking at the first one is what catches it if nobody did.
+        reasons.append(REVIEW_FIRST_PAYOUT_TO_ACCOUNT)
+    if amount_paise > settings.PAYOUT_WITHDRAWAL_MAX_PAISE:
+        # Full balance only, so a balance over the cap cannot be split; it goes to a person.
+        reasons.append(REVIEW_OVER_MAXIMUM)
+    return tuple(reasons)
+
+
+def quote_withdrawal(
+    *, partner: PartnerProfile, now: datetime | None = None, amount_paise: int | None = None
+) -> WithdrawalQuote:
+    """Decide what a Withdraw tap would do, without doing it.
+
+    The preview the Partner sees and the request that acts both come through here, so the button
+    can never promise something the request then refuses for a reason it did not show. The
+    request passes the sum of the entries it has locked; the preview reads the balance, which
+    `apps.payouts.selectors` defines from the same rules.
+    """
+
+    now = now or timezone.now()
+    if amount_paise is None:
+        amount_paise = partner_balance(partner_id=partner.id, now=now).available_paise
+    day_start, week_start = _withdrawal_windows(now)
+    left_today = max(
+        settings.PAYOUT_WITHDRAWALS_PER_DAY - _counted_withdrawals(partner.id, since=day_start), 0
+    )
+    free_left = max(
+        settings.PAYOUT_FREE_WITHDRAWALS_PER_WEEK
+        - _counted_withdrawals(partner.id, since=week_start),
+        0,
+    )
+    fee = 0 if free_left > 0 else int(settings.PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE)
+    account = _current_payout_account(partner.id)
+    refusal = _withdrawal_refusal(
+        partner_id=partner.id,
+        account=account,
+        now=now,
+        amount_paise=amount_paise,
+        left_today=left_today,
+        fee_paise=fee,
+    )
+    return WithdrawalQuote(
+        refusal=refusal,
+        amount_paise=max(amount_paise, 0),
+        fee_paise=max(fee, 0),
+        review_reasons=(
+            _review_reasons(account, amount_paise) if not refusal and account is not None else ()
+        ),
+        account=account,
+        withdrawals_left_today=left_today,
+        free_withdrawals_left_this_week=free_left,
+    )
+
+
+@transaction.atomic
+def request_withdrawal(*, partner: PartnerProfile, actor: User) -> PayoutBatchItem:
+    """A Partner takes their whole available balance now.
+
+    The Partner row is locked first, so two taps cannot both pass the one-in-flight and daily
+    checks; `payouts_one_withdrawal_in_flight_per_partner` holds even if that is ever bypassed.
+    Then the payable entries are locked and the rules decided on exactly those (`quote_withdrawal`).
+
+    Passing every rule, the withdrawal is approved by policy and queued for sending in the same
+    commit. The first payout to a bank account, or a balance above the maximum, waits in the
+    Operations queue instead, its entries already reserved so nothing else can take them. An
+    extra withdrawal's fee is a negative ledger line of the same transfer, so the amount sent is
+    still the sum of its lines, and it is given back if the money does not stay out.
+    """
+
+    PartnerProfile.objects.select_for_update().get(id=partner.id)
+    now = timezone.now()
+    entries = list(
+        payable_entries(partner_id=partner.id, now=now)
+        .select_for_update(of=("self",))
+        .order_by("created_at", "id")
+    )
+    quote = quote_withdrawal(
+        partner=partner, now=now, amount_paise=sum(entry.net_paise for entry in entries)
+    )
+    if quote.refusal:
+        raise WithdrawalRefusedApiError(
+            reason=quote.refusal, message=withdrawal_refusal_message(quote.refusal)
+        )
+    account = quote.account
+    if account is None:  # pragma: no cover - `_account_refusal` refused this already
+        raise WithdrawalRefusedApiError(
+            reason="no_payout_account", message=withdrawal_refusal_message("no_payout_account")
+        )
+    needs_review = bool(quote.review_reasons)
+    currency = entries[0].currency
+    batch = PayoutBatch.objects.create(
+        reference=f"withdrawal-{uuid4().hex}",
+        kind=PayoutBatch.Kind.WITHDRAWAL,
+        status=(PayoutBatch.Status.PENDING_APPROVAL if needs_review else PayoutBatch.Status.PAYING),
+        approval_basis="" if needs_review else PayoutBatch.ApprovalBasis.POLICY,
+        approved_at=None if needs_review else now,
+        review_reasons=list(quote.review_reasons),
+        period_start=min(entries[0].created_at, now - timedelta(seconds=1)),
+        period_end=now,
+        proposed_by=actor,
+        total_paise=quote.send_paise,
+        currency=currency,
+    )
+    lines = list(entries)
+    if quote.fee_paise:
+        lines.append(
+            PartnerLedgerEntry.objects.create(
+                partner=partner,
+                kind=PartnerLedgerEntry.Kind.FEE,
+                status=PartnerLedgerEntry.Status.AVAILABLE,
+                gross_paise=-quote.fee_paise,
+                commission_paise=0,
+                net_paise=-quote.fee_paise,
+                currency=currency,
+                calculation_snapshot={
+                    "fee_paise": quote.fee_paise,
+                    "free_withdrawals_per_week": settings.PAYOUT_FREE_WITHDRAWALS_PER_WEEK,
+                    "withdrawal_reference": batch.reference,
+                },
+                reason="withdrawal_fee",
+                created_by=actor,
+                idempotency_key=f"withdrawal-fee:{batch.id}",
+            )
+        )
+    item = PayoutBatchItem.objects.create(
+        batch=batch,
+        partner=partner,
+        payout_account=account,
+        is_withdrawal=True,
+        amount_paise=quote.send_paise,
+        currency=currency,
+        idempotency_key=payout_idempotency_key(batch_id=batch.id, partner_id=partner.id),
+    )
+    _attach_entries(item, lines)
+    if not needs_review:
+        _request_submissions(batch)
+    return item
+
+
+def _withdrawal_awaiting_review(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
+    batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
+    if batch.kind != PayoutBatch.Kind.WITHDRAWAL:
+        raise PayoutBatchInvalidApiError(reason="This is a payout run, not a Partner withdrawal.")
+    if batch.version != expected_version:
+        raise PayoutBatchConflictApiError(current_version=batch.version)
+    if batch.status != PayoutBatch.Status.PENDING_APPROVAL:
+        raise PayoutBatchInvalidApiError(
+            reason=f"This withdrawal is {batch.get_status_display().lower()}, not waiting for "
+            "review."
+        )
+    return batch
+
+
+@transaction.atomic
+def approve_withdrawal(*, batch_id: UUID, expected_version: int, actor: User) -> PayoutBatch:
+    """Operations lets through a withdrawal the rules sent to them, and it is queued to send.
+
+    One step rather than a run's approve-then-pay: it is one Partner's own balance, already
+    reserved, and the decision is "is this person and this account right", which is answered
+    once. Maker-checker still holds — the proposer is the Partner — and the transfer is still
+    re-checked at the moment of sending, so a dispute opened while it waited stops it.
+    """
+
+    batch = _withdrawal_awaiting_review(batch_id=batch_id, expected_version=expected_version)
+    if batch.proposed_by_id == actor.id:
+        raise SelfApprovalDeniedApiError
+    batch.status = PayoutBatch.Status.PAYING
+    batch.approval_basis = PayoutBatch.ApprovalBasis.OPERATIONS
+    batch.approved_by = actor
+    batch.approved_at = timezone.now()
+    batch.version += 1
+    batch.save(
+        update_fields=(
+            "status",
+            "approval_basis",
+            "approved_by",
+            "approved_at",
+            "version",
+            "updated_at",
+        )
+    )
+    _request_submissions(batch)
+    return batch
+
+
+#: The shortest decline reason accepted. The Partner reads it, so "no" is not one.
+DECLINE_REASON_MIN_LENGTH = 3
+
+
+@transaction.atomic
+def decline_withdrawal(
+    *, batch_id: UUID, expected_version: int, actor: User, reason: str
+) -> PayoutBatch:
+    """Operations refuses a withdrawal. Every line goes back to the balance, any fee is given back,
+    and the Partner reads `reason` — so it says what to do, not what was suspected."""
+
+    note = reason.strip()
+    if len(note) < DECLINE_REASON_MIN_LENGTH:
+        raise PayoutBatchInvalidApiError(reason="Tell the Partner why, in a few words.")
+    batch = _withdrawal_awaiting_review(batch_id=batch_id, expected_version=expected_version)
+    for item in batch.items.select_for_update().filter(status=PayoutBatchItem.Status.RESERVED):
+        _close_item(
+            item, status=PayoutBatchItem.Status.RELEASED, failure_code="declined_by_operations"
+        )
+    batch.status = PayoutBatch.Status.CANCELLED
+    batch.cancelled_by = actor
+    batch.cancelled_at = timezone.now()
+    batch.review_note = note[:240]
+    batch.version += 1
+    batch.save(
+        update_fields=(
+            "status",
+            "cancelled_by",
+            "cancelled_at",
+            "review_note",
+            "version",
+            "updated_at",
+        )
+    )
+    return batch
+
+
+def unsent_payout_item_ids(*, older_than: timedelta) -> list[UUID]:
+    """Reserved transfers in a paying batch that nobody has started sending.
+
+    The outbox delivers the send request at least once, but the send job it starts is an
+    ordinary Celery message queued after commit, and a broker restart can lose it. Never an item
+    already claimed: `SUBMITTING` and later belong to the provider's answer or to reconciliation.
+    """
+
+    return list(
+        PayoutBatchItem.objects.filter(
+            status=PayoutBatchItem.Status.RESERVED,
+            batch__status=PayoutBatch.Status.PAYING,
+            updated_at__lt=timezone.now() - older_than,
+        )
+        .order_by("created_at", "id")
+        .values_list("id", flat=True)
     )
