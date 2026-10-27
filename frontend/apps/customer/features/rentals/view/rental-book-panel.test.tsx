@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
+import { queryKeys } from "@vsolve/query";
 import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -319,5 +320,66 @@ describe("RentalBookPanel", () => {
 
     expect(await screen.findByText("Add the delivery address.")).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it("automatically pre-fills saved address and profile phone for delivery with zero manual typing", async () => {
+    const savedAddress: Schemas["Address"] = {
+      id: "addr-home-1",
+      label: "Home",
+      line1: "Flat 402, Sunshine Apts",
+      line2: "Main Road",
+      locality: "Madhapur",
+      city: "Hyderabad",
+      state: "Telangana",
+      postal_code: "500081",
+      country_code: "IN",
+      is_default: true,
+      latitude: "17.448500",
+      longitude: "78.375000",
+      confirmed_at: "2026-08-01T10:00:00Z",
+      created_at: "2026-08-01T10:00:00Z",
+      updated_at: "2026-08-01T10:00:00Z",
+    };
+
+    queryClient.setQueryData(queryKeys.addresses.list(), [savedAddress]);
+    queryClient.setQueryData(queryKeys.session.profile(), {
+      id: "usr-1",
+      phone_number: "+919876543210",
+      full_name: "Test Customer",
+    });
+
+    client.POST.mockResolvedValue(
+      ok(mockBooking({ status: "AWAITING_TRANSPORT_QUOTE", pickup_or_delivery_mode: "DELIVERY" }), 201),
+    );
+
+    render(<RentalBookPanel asset={mockAsset({ delivery_available: true })} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Request Delivery" }));
+
+    // User should see their saved address card with label and verified details
+    const addressCard = screen.getByTestId("selected-delivery-address");
+    expect(within(addressCard).getByText("Home")).toBeInTheDocument();
+    expect(within(addressCard).getByText("Default")).toBeInTheDocument();
+    expect(within(addressCard).getByText("Verified Pin")).toBeInTheDocument();
+    expect(within(addressCard).getByText(/Flat 402, Sunshine Apts, Main Road, Madhapur, Hyderabad, 500081/)).toBeInTheDocument();
+    expect(within(addressCard).getByRole("button", { name: "Change" })).toBeInTheDocument();
+
+    // Phone should be auto-filled from profile
+    const phoneInput = document.getElementById("delivery-phone") as HTMLInputElement;
+    expect(phoneInput.value).toBe("9876543210");
+
+    // The user doesn't have to type anything! Just click "Send delivery request"
+    fireEvent.click(screen.getByRole("button", { name: "Send delivery request" }));
+
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/rentals/mine"));
+    const body = client.POST.mock.calls[0]![1].body;
+    expect(body.pickup_or_delivery_mode).toBe("DELIVERY");
+    expect(body.delivery_address).toEqual({
+      line: "Flat 402, Sunshine Apts, Main Road",
+      area: "Madhapur",
+      city: "Hyderabad",
+      pincode: "500081",
+      contact_phone: "9876543210",
+    });
   });
 });
