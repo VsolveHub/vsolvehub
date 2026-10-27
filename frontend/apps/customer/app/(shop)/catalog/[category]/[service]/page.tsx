@@ -10,6 +10,7 @@ import {
   getService,
 } from "@/features/catalog/queries";
 import { bookCrewHref, isCareerJobsCategory, listingsBrowseHref } from "@/lib/routes";
+import { RemoteImage } from "@/components/remote-image";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
 import { FitOutServicePicker } from "@/features/catalog/components/fit-out-service-picker";
 import { ServiceJsonLd } from "@/features/catalog/components/service-json-ld";
@@ -126,6 +127,11 @@ export default async function ServiceDetailPage({ params }: PageProps) {
     warranty,
   ].filter((item): item is string => item !== null && item !== undefined);
 
+  const featuredImageUrl =
+    service.cover?.url ||
+    service.variants.find((v) => Boolean(v.image_url))?.image_url ||
+    null;
+
   return (
     <main className="bg-[#FAF9F7] min-h-screen pt-4 pb-16">
       <div className="mx-auto max-w-[1216px] px-4 sm:px-6 lg:px-8">
@@ -162,13 +168,21 @@ export default async function ServiceDetailPage({ params }: PageProps) {
           {/* Left: Featured Image */}
           <div className="w-full lg:w-7/12">
             <div className="aspect-[4/3] w-full rounded-[1.25rem] bg-surface-sunken overflow-hidden relative shadow-sm">
-              <div 
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105" 
-                // No stock-photo fallback: a service without a cover shows the plain surface.
-                style={service.cover ? { backgroundImage: `url('${service.cover.url}')` } : undefined}
-                role={service.cover ? "img" : undefined}
-                aria-label={service.cover ? service.cover.alt_text || service.name : undefined}
-              />
+              {featuredImageUrl ? (
+                <RemoteImage
+                  src={featuredImageUrl}
+                  alt={service.cover?.alt_text || service.name}
+                  fill
+                  sizes="(min-width: 1024px) 58vw, 100vw"
+                  priority
+                  className="object-cover object-center transition-transform duration-700 hover:scale-105"
+                />
+              ) : (
+                <div 
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105" 
+                  role="presentation"
+                />
+              )}
             </div>
           </div>
 
@@ -192,7 +206,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
               </ul>
             ) : null}
             
-            <div className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-card border border-transparent">
+            <div className="mt-8 rounded-[1rem] bg-white p-5 sm:p-7 md:p-8 shadow-card border border-transparent">
               {service.starting_price !== null ? (
                 <>
                   <span className="block text-[0.7rem] uppercase tracking-wider font-bold text-text-muted">
@@ -274,7 +288,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         <ServiceOfferBanner imageUrl={category.image_url} />
 
         {service.variants.length > 0 ? (
-          <section className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+          <section className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
             <h2 className="text-[1.15rem] font-bold text-navy-900">What you can book</h2>
             <VariantList
               variants={service.variants}
@@ -289,7 +303,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         <ServiceOptionDifferences service={service} />
 
         {showDescription ? (
-          <section className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+          <section className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
             <h2 className="text-[1.15rem] font-bold text-navy-900">About this service</h2>
             <p className="mt-3 whitespace-pre-line text-[0.95rem] leading-relaxed text-text-secondary">{service.description}</p>
           </section>
@@ -298,7 +312,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         <ServiceAssurance service={service} />
 
         {processSteps.length > 0 ? (
-          <section aria-labelledby="how-it-works-heading" className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+          <section aria-labelledby="how-it-works-heading" className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
             <h2 id="how-it-works-heading" className="text-[1.15rem] font-bold text-navy-900">
               How it works
             </h2>
@@ -307,7 +321,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         ) : null}
 
         {service.policies.some((p) => p.kind !== "PROCESS") ? (
-          <section className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+          <section className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
             <PolicyList policies={service.policies.filter((p) => p.kind !== "PROCESS")} />
           </section>
         ) : null}
@@ -319,20 +333,29 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         {/* Related Services Section */}
         {relatedServices.length > 0 && (
           <section className="mt-16">
-            <div className="flex items-center gap-3 mb-8">
-              <h2 className="text-[1.5rem] font-bold tracking-tight text-navy-900">
-                Related Services
-              </h2>
-              <div className="h-px flex-1 bg-line/60" />
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <h2 className="text-[1.35rem] sm:text-[1.5rem] font-bold tracking-tight text-navy-900 truncate">
+                  Related Services
+                </h2>
+                <div className="h-px flex-1 bg-line/60" />
+              </div>
+              {relatedServices.length > 1 && (
+                <span className="text-xs font-semibold text-text-muted sm:hidden shrink-0">
+                  Swipe &rarr;
+                </span>
+              )}
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex overflow-x-auto pb-4 gap-4 no-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:overflow-visible">
               {relatedServices.map((relatedService, index) => (
-                <ServiceCard 
-                  key={relatedService.id} 
-                  service={relatedService} 
-                  categorySlug={category.slug} 
-                  index={index + 1} 
-                />
+                <div key={relatedService.id} className="w-[280px] sm:w-auto shrink-0 snap-start flex flex-col">
+                  <ServiceCard 
+                    service={relatedService} 
+                    categorySlug={category.slug} 
+                    index={index + 1} 
+                    className="h-full"
+                  />
+                </div>
               ))}
             </div>
           </section>

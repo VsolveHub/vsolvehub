@@ -67,32 +67,39 @@ export function Disclosure({
     <details open={defaultOpen} className={cn("group", className)}>
       <summary
         className={cn(
-          "flex cursor-pointer list-none items-center gap-1.5 rounded-control py-1",
+          "flex cursor-pointer list-none rounded-control py-1",
           "text-sm font-medium text-text-link",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+          hint
+            ? "flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3"
+            : "items-center gap-1.5",
         )}
       >
-        {/* `list-none` above plus this removes the default marker on every engine;
-            the chevron is ours so it can rotate with the open state. */}
-        <svg
-          viewBox="0 0 12 12"
-          className="size-3 shrink-0 transition-transform duration-fast group-open:rotate-90"
-          aria-hidden
-        >
-          <path
-            d="M4 2.5 8 6l-4 3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span className="flex-1">{summary}</span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {/* `list-none` above plus this removes the default marker on every engine;
+              the chevron is ours so it can rotate with the open state. */}
+          <svg
+            viewBox="0 0 12 12"
+            className="size-3 shrink-0 transition-transform duration-fast group-open:rotate-90"
+            aria-hidden
+          >
+            <path
+              d="M4 2.5 8 6l-4 3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="font-semibold text-action hover:underline">{summary}</span>
+        </div>
         {hint ? (
           // Inside the `<summary>`, so it is part of the control's own name
           // rather than a floating label a screen reader meets separately.
-          <span className="shrink-0 text-xs font-medium text-text-muted">{hint}</span>
+          <span className="pl-[18px] sm:pl-0 text-xs font-normal text-text-muted truncate max-w-full">
+            {hint}
+          </span>
         ) : null}
       </summary>
       <div className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">{children}</div>

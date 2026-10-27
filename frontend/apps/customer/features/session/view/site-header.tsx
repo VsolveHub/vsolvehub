@@ -73,7 +73,9 @@ export function SiteHeader() {
       "sticky top-0 z-20 transition-colors",
       pathname === "/"
         ? "bg-[#FAF9F7] md:bg-surface md:border-b md:border-line"
-        : "hidden md:block bg-surface border-b border-line"
+        : pathname.match(/^\/catalog\/[^/]+$/)
+          ? "hidden md:block bg-surface border-b border-line"
+          : "bg-surface border-b border-line"
     )}>
       {/* Desktop Header Layout */}
       <div className="hidden md:flex mx-auto min-h-16 w-full max-w-[1216px] items-center gap-x-7 px-4 py-3 sm:px-6 lg:px-0">
@@ -358,13 +360,14 @@ interface MobileNavTarget {
   href: string;
   label: string;
   shortLabel: string;
-  icon: "home" | "search" | "activity" | "profile";
+  icon: "home" | "search" | "cart" | "activity" | "profile";
   private: boolean;
 }
 
 const MOBILE_TARGETS: readonly MobileNavTarget[] = [
   { href: "/", label: "Home", shortLabel: "Home", icon: "home", private: false },
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "search", private: false },
+  { href: "/cart", label: "Cart", shortLabel: "Cart", icon: "cart", private: false },
   { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: false },
   { href: "/account", label: "Profile", shortLabel: "Profile", icon: "profile", private: true },
 ];
@@ -380,6 +383,12 @@ const MOBILE_PATHS: Record<string, React.ReactNode> = {
     <>
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
+    </>
+  ),
+  cart: (
+    <>
+      <path d="M4 8h16l-1.4 11.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8z" />
+      <path d="M9 8V6a3 3 0 0 1 6 0v2" />
     </>
   ),
   activity: (
@@ -418,6 +427,11 @@ function NavIconMobile({ name, className }: { name: string; className?: string }
 export function BottomNav() {
   const session = useCustomerSession();
   const pathname = usePathname();
+  const hydrated = useHydrated();
+  const cartQuery = useCart();
+  const cartCount = hydrated
+    ? (cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
+    : 0;
 
   const targets = MOBILE_TARGETS.filter(
     (target) => !target.private || session.isAuthenticated,
@@ -457,13 +471,23 @@ export function BottomNav() {
             >
               <span
                 className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
+                  "relative flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
                   current
                     ? "bg-action text-white shadow-sm"
                     : "text-text-secondary group-hover:text-navy-900",
                 )}
               >
                 <NavIconMobile name={target.icon} className="size-[1.125rem]" />
+                {target.icon === "cart" && cartCount > 0 ? (
+                  <span
+                    className={cn(
+                      "absolute -top-1 -right-1 grid min-w-4 h-4 place-items-center rounded-full px-1 text-[9px] font-black leading-none shadow-xs",
+                      current ? "bg-navy-900 text-white" : "bg-action text-white",
+                    )}
+                  >
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </span>
+                ) : null}
               </span>
               <span
                 className={cn(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Play, ShieldCheck } from "lucide-react";
 
 import type { SafetyStoryItem } from "../queries";
@@ -54,7 +54,11 @@ export function SafetyStoriesTray({ initialStories = [] }: SafetyStoriesTrayProp
     setViewerOpen(true);
   };
 
-  const handleStoryViewed = (storyId: string) => {
+  const handleCloseViewer = useCallback(() => {
+    setViewerOpen(false);
+  }, []);
+
+  const handleStoryViewed = useCallback((storyId: string) => {
     setViewedIds((prev) => {
       if (prev.has(storyId)) return prev;
       const next = new Set(prev).add(storyId);
@@ -65,7 +69,7 @@ export function SafetyStoriesTray({ initialStories = [] }: SafetyStoriesTrayProp
       }
       return next;
     });
-  };
+  }, []);
 
   if (!stories || stories.length === 0) {
     return null;
@@ -175,7 +179,7 @@ export function SafetyStoriesTray({ initialStories = [] }: SafetyStoriesTrayProp
         isOpen={viewerOpen}
         stories={stories}
         initialIndex={selectedIndex}
-        onClose={() => setViewerOpen(false)}
+        onClose={handleCloseViewer}
         onStoryViewed={handleStoryViewed}
       />
     </>

@@ -280,11 +280,12 @@ export function DocumentUpload({
                   : t("apply.upload.failure.unknownTitle")
           }
           message={
-            failure.reason === "rejected"
+            failure.message ||
+            (failure.reason === "rejected"
               ? t("apply.upload.failure.rejectedMessage")
               : failure.reason === "conflict"
                 ? t("apply.upload.failure.conflictMessage")
-                : t("apply.upload.failure.unknownMessage")
+                : t("apply.upload.failure.unknownMessage"))
           }
           actionLabel={
             isRetryableUploadFailure(failure.reason) && pendingFile ? t("common.tryAgain") : undefined

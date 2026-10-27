@@ -3,7 +3,7 @@
 import { describeError } from "@vsolve/query";
 import { EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useCustomerSession } from "@/features/session/queries";
 import {
@@ -102,6 +102,28 @@ export function CartWorkspace() {
     removalItemId === null
       ? null
       : (cart?.items.find((item) => item.id === removalItemId) ?? null);
+
+  const inlineButtonRef = useRef<HTMLDivElement | null>(null);
+  const [isInlineButtonVisible, setIsInlineButtonVisible] = useState(false);
+
+  useEffect(() => {
+    const el = inlineButtonRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry) {
+          setIsInlineButtonVisible(entry.isIntersecting);
+        }
+      },
+      {
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [cart]);
 
   const isEmpty = cart !== undefined && cart.items.length === 0;
 
@@ -213,8 +235,16 @@ export function CartWorkspace() {
           ) : null}
             </div>
 
-            <CartSummary cart={cart} isAuthenticated={session.isAuthenticated} />
-            <CartStickyBar cart={cart} isAuthenticated={session.isAuthenticated} />
+            <CartSummary
+              cart={cart}
+              isAuthenticated={session.isAuthenticated}
+              inlineButtonRef={inlineButtonRef}
+            />
+            <CartStickyBar
+              cart={cart}
+              isAuthenticated={session.isAuthenticated}
+              visible={!isInlineButtonVisible}
+            />
           </div>
         </>
       ) : null}

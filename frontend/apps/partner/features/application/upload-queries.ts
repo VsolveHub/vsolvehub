@@ -101,12 +101,15 @@ function putBytes(
 
 function finalizeFailure(error: unknown, t: ReturnType<typeof useT>): UploadFailure {
   if (error instanceof ApiRequestError) {
-    if (error.status === 409) {
+    if (error.code === "partner_application_version_conflict") {
       return new UploadFailure("conflict", t("apply.upload.error.conflict"));
+    }
+    if (error.status === 409) {
+      return new UploadFailure("rejected", error.message || t("apply.upload.error.conflict"));
     }
     // Django verified the stored object and did not accept it: wrong checksum,
     // wrong size, wrong type. Resending the same bytes cannot fix that.
-    return new UploadFailure("rejected", t("apply.upload.error.rejected"));
+    return new UploadFailure("rejected", error.message || t("apply.upload.error.rejected"));
   }
   return new UploadFailure("unknown", t("apply.upload.error.unknown"));
 }

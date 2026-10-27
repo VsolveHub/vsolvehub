@@ -1,6 +1,7 @@
 export interface AppChromeLayout {
   contentMinHeightClass: string;
   hideMobileFooter: boolean;
+  showFooter?: boolean;
   /** Hide the site header and bottom tab bar on mobile; use a fixed back control instead. */
   hideMobileChrome?: boolean;
   mobileBackHref?: string;
@@ -16,12 +17,14 @@ export const CUSTOMER_VIEWPORT_WIDTH_CLASS = "w-dvw max-w-none overflow-x-clip";
 const DEFAULT_CHROME_LAYOUT: AppChromeLayout = {
   contentMinHeightClass: "min-h-screen",
   hideMobileFooter: false,
+  showFooter: false,
 };
 
 const CART_CHROME_LAYOUT: AppChromeLayout = {
   contentMinHeightClass:
     "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
   hideMobileFooter: true,
+  showFooter: false,
   hideMobileChrome: true,
   mobileBackHref: "/catalog",
   mobileBackLabel: "Back to services",
@@ -31,6 +34,7 @@ const CHECKOUT_CHROME_LAYOUT: AppChromeLayout = {
   contentMinHeightClass:
     "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
   hideMobileFooter: true,
+  showFooter: false,
   hideMobileChrome: true,
   mobileBackHref: "/cart",
   mobileBackLabel: "Back to cart",
@@ -39,7 +43,10 @@ const CHECKOUT_CHROME_LAYOUT: AppChromeLayout = {
 export function appChromeLayout(pathname: string): AppChromeLayout {
   if (pathname === "/cart") return CART_CHROME_LAYOUT;
   if (pathname === "/checkout") return CHECKOUT_CHROME_LAYOUT;
-  return DEFAULT_CHROME_LAYOUT;
+  return {
+    ...DEFAULT_CHROME_LAYOUT,
+    showFooter: pathname === "/",
+  };
 }
 
 /**

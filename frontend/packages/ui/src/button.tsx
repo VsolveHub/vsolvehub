@@ -83,9 +83,9 @@ const variants: Record<Variant, string> = {
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-9 px-3.5 text-xs font-semibold tracking-wide",
-  md: "h-11 px-5 text-sm font-semibold tracking-tight",
-  lg: "h-12 px-7 text-base font-bold tracking-tight",
+  sm: "min-h-9 px-3.5 py-1.5 text-xs font-semibold tracking-wide",
+  md: "min-h-11 px-5 py-2 text-sm font-semibold tracking-tight",
+  lg: "min-h-12 px-7 py-2.5 text-base font-bold tracking-tight",
 };
 
 export function buttonStyles({
@@ -152,7 +152,7 @@ export function Button({
         </span>
       ) : null}
 
-      <span className={cn("inline-flex items-center gap-2", loading && "invisible")}>
+      <span className={cn("inline-flex items-center justify-center gap-2 text-center leading-snug", loading && "invisible")}>
         {icon ? (
           <span aria-hidden className="inline-flex shrink-0">
             {icon}

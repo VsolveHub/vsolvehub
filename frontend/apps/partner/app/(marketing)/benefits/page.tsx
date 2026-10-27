@@ -151,7 +151,7 @@ export default function BenefitsPage() {
           </p>
         </div>
 
-        <div className="mt-8 -mx-4 sm:mx-0 overflow-x-auto">
+        <div className="mt-8 -mx-4 sm:mx-0 overflow-x-auto rounded-none sm:rounded-2xl border-y sm:border border-line bg-surface">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-[500px]">
             <thead className="border-b border-line bg-surface-sunken/50 text-xs font-black uppercase tracking-wider text-text-muted">
               <tr>

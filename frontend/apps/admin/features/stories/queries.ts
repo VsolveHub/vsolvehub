@@ -27,19 +27,68 @@ export async function fetchOpsStories(status = "all"): Promise<OpsSafetyStory[]>
   return Array.isArray(data) ? data : [];
 }
 
+let cachedCsrfToken: string | null = null;
+
+async function getCsrfToken(forceRefresh = false): Promise<string | null> {
+  if (cachedCsrfToken && !forceRefresh) {
+    return cachedCsrfToken;
+  }
+  try {
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/csrf/`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { csrf_token?: string };
+      if (data.csrf_token) {
+        cachedCsrfToken = data.csrf_token;
+        return data.csrf_token;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return cachedCsrfToken;
+}
+
 export async function createOpsStory(formData: FormData): Promise<OpsSafetyStory> {
   const url = `${PUBLIC_API_BASE_URL}/api/v1/ops/stories/`;
-  const res = await fetch(url, {
+  let token = await getCsrfToken();
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (token) {
+    headers["X-CSRFToken"] = token;
+  }
+
+  let res = await fetch(url, {
     method: "POST",
     credentials: "include",
+    headers,
     body: formData,
   });
 
+  // If CSRF token is expired or rotated, retry once with a fresh token
+  if (res.status === 403) {
+    token = await getCsrfToken(true);
+    if (token) {
+      headers["X-CSRFToken"] = token;
+      res = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: formData,
+      });
+    }
+  }
+
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
+    const errorData = (await res.json().catch(() => ({}))) as Record<string, any>;
     const message =
-      (errorData as Record<string, unknown>).detail ||
-      (errorData as Record<string, unknown>).file ||
+      errorData?.error?.message ||
+      errorData?.details?.message ||
+      errorData?.detail ||
+      errorData?.file ||
       res.statusText ||
       "Failed to upload safety story";
     throw new Error(String(message));
@@ -53,19 +102,43 @@ export async function updateOpsStory(
   payload: { title?: string; caption?: string; display_order?: number; is_published?: boolean },
 ): Promise<OpsSafetyStory> {
   const url = `${PUBLIC_API_BASE_URL}/api/v1/ops/stories/${encodeURIComponent(id)}/`;
-  const res = await fetch(url, {
+  let token = await getCsrfToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (token) {
+    headers["X-CSRFToken"] = token;
+  }
+
+  let res = await fetch(url, {
     method: "PATCH",
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
+  if (res.status === 403) {
+    token = await getCsrfToken(true);
+    if (token) {
+      headers["X-CSRFToken"] = token;
+      res = await fetch(url, {
+        method: "PATCH",
+        credentials: "include",
+        headers,
+        body: JSON.stringify(payload),
+      });
+    }
+  }
+
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error((errorData as Record<string, unknown>).detail?.toString() || "Failed to update story");
+    const errorData = (await res.json().catch(() => ({}))) as Record<string, any>;
+    const message =
+      errorData?.error?.message ||
+      errorData?.details?.message ||
+      errorData?.detail ||
+      "Failed to update story";
+    throw new Error(String(message));
   }
 
   return res.json();
@@ -73,10 +146,29 @@ export async function updateOpsStory(
 
 export async function deleteOpsStory(id: string): Promise<void> {
   const url = `${PUBLIC_API_BASE_URL}/api/v1/ops/stories/${encodeURIComponent(id)}/`;
-  const res = await fetch(url, {
+  let token = await getCsrfToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["X-CSRFToken"] = token;
+  }
+
+  let res = await fetch(url, {
     method: "DELETE",
     credentials: "include",
+    headers,
   });
+
+  if (res.status === 403) {
+    token = await getCsrfToken(true);
+    if (token) {
+      headers["X-CSRFToken"] = token;
+      res = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+        headers,
+      });
+    }
+  }
 
   if (!res.ok && res.status !== 204) {
     throw new Error(`Failed to delete story: ${res.statusText}`);

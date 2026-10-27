@@ -111,8 +111,8 @@ const TONE_CONFIG = {
 
 function Page({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
-      <div className="flex flex-col gap-5 sm:gap-6">{children}</div>
+    <main className="mx-auto w-full max-w-3xl lg:max-w-5xl xl:max-w-6xl px-4 py-4 sm:px-6 lg:px-8 sm:py-8">
+      <div className="flex flex-col gap-4 sm:gap-6">{children}</div>
     </main>
   );
 }
@@ -174,19 +174,19 @@ export function ProfilePanel() {
   return (
     <Page>
       {/* Top Breadcrumb / Back Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <Link
           href="/me"
-          className="group inline-flex min-h-11 items-center gap-2 rounded-xl px-2 -ml-2 text-sm font-semibold text-text-secondary hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
+          className="group inline-flex min-h-10 items-center gap-2 rounded-xl text-sm font-semibold text-text-secondary hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
         >
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface border border-line group-hover:border-navy-300 transition-colors shadow-2xs">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface border border-line group-hover:border-navy-300 transition-colors shadow-2xs shrink-0">
             <ArrowLeft className="h-4 w-4 text-text-secondary group-hover:text-navy-900" aria-hidden />
           </div>
           <span>{t("me.language.backToAccount")}</span>
         </Link>
 
         {approval === "APPROVED" && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 shadow-2xs shrink-0">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
             Verified Partner
           </span>
@@ -194,96 +194,103 @@ export function ProfilePanel() {
       </div>
 
       {/* Hero Partner Identity Card */}
-      <Card className="relative overflow-hidden rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-xs">
+      <Card className="relative overflow-hidden rounded-2xl border border-line bg-surface p-4 sm:p-6 shadow-xs">
         {/* Soft background glow */}
         <div
           aria-hidden
           className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-navy-100/40 blur-2xl"
         />
 
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4 min-w-0">
-            {/* Avatar with Status Indicator */}
-            <div className="relative shrink-0">
-              <span
-                aria-hidden
-                className="flex size-16 sm:size-18 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-navy-800 to-navy-950 text-2xl sm:text-3xl font-extrabold text-white shadow-xs"
-              >
-                {initialOf(profile)}
-              </span>
-              <span
-                title={approval === "APPROVED" ? "Active & Verified" : "Review Pending"}
-                className={`absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-surface ${
-                  approval === "APPROVED" ? "bg-emerald-500 ring-2 ring-emerald-200/60" : "bg-amber-500"
-                }`}
-              />
-            </div>
-
-            {/* Partner Details */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="truncate text-xl sm:text-2xl font-bold text-navy-900 tracking-tight">
-                  {profile.display_name}
-                </h1>
-                {approval === "APPROVED" && (
-                  <ShieldCheck
-                    className="h-5 w-5 shrink-0 text-emerald-600"
-                    aria-label="Verified Partner"
-                  />
-                )}
+        <div className="relative">
+          {/* Top Row: Avatar + Details + Edit Action */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
+              {/* Avatar with Status Indicator */}
+              <div className="relative shrink-0">
+                <span
+                  aria-hidden
+                  className="flex size-14 sm:size-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-navy-800 to-navy-950 text-xl sm:text-2xl font-extrabold text-white shadow-xs"
+                >
+                  {initialOf(profile)}
+                </span>
+                <span
+                  title={approval === "APPROVED" ? "Active & Verified" : "Review Pending"}
+                  className={`absolute -bottom-0.5 -right-0.5 size-3.5 sm:size-4 rounded-full border-2 border-surface ${
+                    approval === "APPROVED" ? "bg-emerald-500 ring-2 ring-emerald-200/60" : "bg-amber-500"
+                  }`}
+                />
               </div>
 
-              <p className="mt-1 flex items-center gap-2 text-sm text-text-secondary font-medium">
-                <Phone className="h-3.5 w-3.5 shrink-0 text-text-muted" aria-hidden />
-                <span>{profile.phone_number}</span>
-                <span className="inline-block rounded-md bg-surface-sunken border border-line px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                  Primary ID
-                </span>
-              </p>
-
-              {primaryCraft && (
-                <div className="mt-2 flex items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50/70 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
-                    <Briefcase className="h-3 w-3 text-blue-600" aria-hidden />
-                    {primaryCraft}
-                  </span>
-                  {profile.experience_years > 0 && (
-                    <span className="text-xs text-text-muted">
-                      • {profile.experience_years}y exp
-                    </span>
+              {/* Partner Details */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h1 className="truncate text-lg sm:text-xl font-bold text-navy-900 tracking-tight">
+                    {profile.display_name}
+                  </h1>
+                  {approval === "APPROVED" && (
+                    <ShieldCheck
+                      className="size-4 shrink-0 text-emerald-600"
+                      aria-label="Verified Partner"
+                    />
                   )}
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Edit Action Button */}
-          <div className="shrink-0 self-start sm:self-center">
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap text-xs sm:text-sm text-text-secondary font-medium">
+                  <span className="flex items-center gap-1">
+                    <Phone className="size-3.5 shrink-0 text-text-muted" aria-hidden />
+                    <span>{profile.phone_number}</span>
+                  </span>
+                  <span className="inline-block rounded-md bg-surface-sunken border border-line px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-text-muted">
+                    Primary ID
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Edit Action Button */}
             <Button
               variant="outline"
-              size="md"
+              size="sm"
               onClick={() => setIsEditingName(true)}
-              className="w-full sm:w-auto rounded-xl border-line-strong/30 hover:border-navy-400 font-semibold gap-2 shadow-2xs"
+              className="rounded-xl border-line-strong/30 hover:border-navy-400 font-semibold gap-1.5 shadow-2xs shrink-0 min-h-9 px-3"
             >
-              <Edit3 className="h-4 w-4 text-navy-700" aria-hidden />
-              {t("common.edit")} Name
+              <Edit3 className="size-3.5 text-navy-700" aria-hidden />
+              <span className="text-xs">{t("common.edit")}</span>
             </Button>
           </div>
-        </div>
 
-        {/* Credential Security Notice */}
-        <div className="mt-4 pt-3.5 border-t border-line/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-text-secondary">
-          <p className="flex items-center gap-1.5 leading-relaxed">
-            <Lock className="h-3.5 w-3.5 shrink-0 text-text-muted" aria-hidden />
-            <span>{t("me.profile.phoneChangeNote")}</span>
-          </p>
-          <a
-            href={`tel:${PARTNER_SUPPORT_PHONE}`}
-            className="shrink-0 inline-flex items-center gap-1 font-semibold text-navy-700 hover:text-navy-900 hover:underline"
-          >
-            Call Support
-            <ExternalLink className="h-3 w-3" aria-hidden />
-          </a>
+          {/* Trade & Experience Row (spanning full width cleanly) */}
+          {(primaryCraft || profile.experience_years > 0) && (
+            <div className="mt-3.5 pt-3 border-t border-line/60 flex flex-wrap items-center gap-2">
+              {primaryCraft && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 text-xs font-semibold text-blue-800">
+                  <Briefcase className="size-3 text-blue-600 shrink-0" aria-hidden />
+                  <span className="truncate max-w-[240px] sm:max-w-none">{primaryCraft}</span>
+                </span>
+              )}
+              {profile.experience_years > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-sunken px-2.5 py-1 text-xs font-medium text-text-secondary">
+                  <Award className="size-3 text-text-muted shrink-0" aria-hidden />
+                  <span>{profile.experience_years}y experience</span>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Credential Security Notice */}
+          <div className="mt-3 pt-3 border-t border-line/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-text-secondary">
+            <p className="flex items-start gap-1.5 leading-relaxed text-text-secondary">
+              <Lock className="size-3.5 shrink-0 text-text-muted mt-0.5" aria-hidden />
+              <span>{t("me.profile.phoneChangeNote")}</span>
+            </p>
+            <a
+              href={`tel:${PARTNER_SUPPORT_PHONE}`}
+              className="shrink-0 inline-flex items-center gap-1 font-semibold text-navy-700 hover:text-navy-900 hover:underline pt-0.5 sm:pt-0"
+            >
+              Call Support
+              <ExternalLink className="size-3" aria-hidden />
+            </a>
+          </div>
         </div>
       </Card>
 
@@ -824,7 +831,7 @@ function SkillsCard({
 
               {/* Category Filter Pills (if multiple categories exist) */}
               {categories.length > 1 && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => {

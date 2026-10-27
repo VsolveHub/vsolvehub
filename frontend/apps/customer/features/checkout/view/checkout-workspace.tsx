@@ -5,7 +5,7 @@ import { describeError } from "@vsolve/query";
 import { Button, ErrorState, Skeleton, buttonStyles, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   useAddresses,
@@ -125,6 +125,32 @@ export function CheckoutWorkspace() {
   const [planFailures, setPlanFailures] = useState<PlanItemFailure[] | null>(
     null,
   );
+
+  const mobileConfirmCardRef = useRef<HTMLDivElement | null>(null);
+  const [showStickyConfirm, setShowStickyConfirm] = useState(false);
+
+  useEffect(() => {
+    const el = mobileConfirmCardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry) {
+          // When the inline button scrolls off the top of the viewport,
+          // entry.isIntersecting is false and boundingClientRect.top < 0.
+          // In that state, show the sticky bottom confirm button.
+          const isScrolledPast = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+          setShowStickyConfirm(isScrolledPast);
+        }
+      },
+      {
+        threshold: 0,
+      },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const cartQuery = useCart();
   const cart = cartQuery.data;
@@ -538,18 +564,20 @@ export function CheckoutWorkspace() {
             ) : null}
 
             {/* Confirm on mobile only — desktop lives in the summary rail. */}
-            <CheckoutCard className="flex items-start gap-4 p-5 lg:hidden">
-              <ConfirmBookingActions
-                quote={quote}
-                isPlanSetUsable={isPlanSetUsable}
-                planSet={planSet}
-                isPricing={isPricing}
-                createCheckout={createCheckout}
-                onConfirm={() => profileGate.run(handleConfirm)}
-                onReschedule={rescheduleFromScratch}
-              />
-              <ConfirmBookingIllustration />
-            </CheckoutCard>
+            <div ref={mobileConfirmCardRef} className="lg:hidden">
+              <CheckoutCard className="flex items-start gap-4 p-5">
+                <ConfirmBookingActions
+                  quote={quote}
+                  isPlanSetUsable={isPlanSetUsable}
+                  planSet={planSet}
+                  isPricing={isPricing}
+                  createCheckout={createCheckout}
+                  onConfirm={() => profileGate.run(handleConfirm)}
+                  onReschedule={rescheduleFromScratch}
+                />
+                <ConfirmBookingIllustration />
+              </CheckoutCard>
+            </div>
 
             <CheckoutCancellationPanel
               quoteUnitCount={quote?.units.length ?? 0}
@@ -624,7 +652,14 @@ export function CheckoutWorkspace() {
           onDismiss={() => setSlotsOverride(false)}
         />
         {profileGate.dialog}
-        <CheckoutMobileBottomBar quote={quote} />
+        <CheckoutMobileBottomBar
+          quote={quote}
+          showConfirmButton={showStickyConfirm && isPlanSetUsable}
+          onConfirm={() => profileGate.run(handleConfirm)}
+          isConfirmDisabled={quote === null || quote.status !== "ACTIVE"}
+          isConfirmLoading={createCheckout.isPending || isPricing}
+          confirmLoadingLabel={isPricing ? "Working out your price" : "Confirming"}
+        />
       </div>
     </div>
   );

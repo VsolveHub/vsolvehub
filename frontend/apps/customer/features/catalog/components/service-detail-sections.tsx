@@ -24,7 +24,7 @@ export function ServiceOptionDifferences({ service }: { service: ServiceDetail }
   if (explained.length < 2) return null;
 
   return (
-    <section aria-labelledby="difference-heading" className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+    <section aria-labelledby="difference-heading" className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
       <h2 id="difference-heading" className="text-[1.15rem] font-bold text-navy-900">
         Know the difference
       </h2>
@@ -90,20 +90,18 @@ export function ServiceAssurance({ service }: { service: ServiceDetail }) {
   // flat grey tiles with large outline art and regular-weight text, then a full-width row.
   // The row goes to this page's FAQs — there is no separate claims page to send people to.
   return (
-    <section aria-labelledby="assurance-heading" className="mt-8 rounded-[1rem] bg-white p-5 sm:p-8 shadow-sm">
+    <section aria-labelledby="assurance-heading" className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
       <h2
         id="assurance-heading"
-        className="flex items-center gap-2 text-[1.6rem] font-extrabold leading-none tracking-tight text-[#0E7C86]"
+        className="flex items-center gap-2 text-[1.4rem] sm:text-[1.6rem] font-extrabold leading-none tracking-tight text-[#0E7C86]"
       >
         <AssuranceMark />
         vsolve assurance
       </h2>
-      {/* Three separate tiles side by side. Below 360px each would be ~70px wide and cut
-          words in half, so there they stack — still one tile each. */}
-      <ul className="mt-6 grid grid-cols-1 gap-3 min-[360px]:grid-cols-3">
+      <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {tiles.map((tile) => (
-          <li key={tile.title} className="flex min-h-[9.5rem] flex-col gap-5 rounded-xl bg-[#F5F5F5] p-4 sm:p-5">
-            <span aria-hidden className="text-[#0F0F0F]">
+          <li key={tile.title} className="flex min-h-[7rem] sm:min-h-[9.5rem] flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-5 rounded-xl bg-[#F5F5F5] p-4 sm:p-5">
+            <span aria-hidden className="text-[#0F0F0F] shrink-0">
               {tile.icon}
             </span>
             <span className="min-w-0 text-[0.95rem] font-medium leading-[1.35] text-[#0F0F0F] sm:text-[1.05rem]">
@@ -114,7 +112,7 @@ export function ServiceAssurance({ service }: { service: ServiceDetail }) {
       </ul>
       <a
         href="#service-faq-heading"
-        className="mt-4 flex min-h-14 items-center justify-between gap-3 rounded-xl bg-[#F5F5F5] px-5 text-[1rem] font-medium text-[#0F0F0F] transition-colors hover:bg-[#EDEDED] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+        className="mt-4 flex min-h-14 items-center justify-between gap-3 rounded-xl bg-[#F5F5F5] px-4 sm:px-5 text-[0.95rem] sm:text-[1rem] font-medium text-[#0F0F0F] transition-colors hover:bg-[#EDEDED] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
         How we protect your booking
         <svg viewBox="0 0 20 20" fill="currentColor" className="size-5 shrink-0" aria-hidden>
@@ -151,12 +149,16 @@ export function ServiceProfessionals({ service }: { service: ServiceDetail }) {
     "Rated by customers after their visits",
   ];
 
+  const coverUrl =
+    service.cover?.url ||
+    service.variants.find((v) => Boolean(v.image_url))?.image_url;
+
   return (
     <section
       aria-labelledby="professionals-heading"
       className="mt-8 flex overflow-hidden rounded-[1rem] bg-white shadow-sm"
     >
-      <div className="min-w-0 flex-1 p-7 sm:p-8">
+      <div className="min-w-0 flex-1 p-4 sm:p-6 md:p-8">
         <h2 id="professionals-heading" className="text-[1.15rem] font-bold text-navy-900">
           Verified professionals
         </h2>
@@ -171,12 +173,19 @@ export function ServiceProfessionals({ service }: { service: ServiceDetail }) {
           ))}
         </ul>
       </div>
-      {service.cover ? (
+      {coverUrl ? (
         <div
           aria-hidden
-          className="hidden w-2/5 shrink-0 bg-cover bg-center min-[420px]:block"
-          style={{ backgroundImage: `url('${service.cover.url}')` }}
-        />
+          className="relative hidden w-2/5 shrink-0 overflow-hidden sm:block"
+        >
+          <RemoteImage
+            src={coverUrl}
+            alt=""
+            fill
+            sizes="40vw"
+            className="object-cover object-center"
+          />
+        </div>
       ) : null}
     </section>
   );

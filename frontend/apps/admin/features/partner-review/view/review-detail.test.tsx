@@ -83,11 +83,11 @@ describe("review detail", () => {
     api.setApplication(application({ review_assigned_to_id: COLLEAGUE }));
     renderDetail();
 
-    expect(await screen.findByText(/another reviewer holds this application/i)).toBeInTheDocument();
+    expect(await screen.findByText(/another reviewer currently holds this application/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.queryByRole("button", { name: /claim/i })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Release to the queue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Release to queue" }));
 
     await waitFor(() =>
       expect(api.posts).toContainEqual({
@@ -102,7 +102,7 @@ describe("review detail", () => {
     renderDetail();
 
     expect(await screen.findByRole("button", { name: "Claim this application" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Release to the queue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Release to queue" })).toBeNull();
   });
 
   it("lets any reviewer suspend an approved partner, whoever reviewed them", async () => {
@@ -111,6 +111,6 @@ describe("review detail", () => {
     renderDetail();
 
     expect(await screen.findByRole("button", { name: "Suspend" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Release to the queue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Release to queue" })).toBeNull();
   });
 });

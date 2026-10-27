@@ -72,3 +72,17 @@ describe("locale-specific plural rules", () => {
     expect(english.select(0)).toBe("other");
   });
 });
+
+describe("useTOrDefault", () => {
+  it("fills the fallback's placeholders when the catalogue has no entry", async () => {
+    // Operations mounts no catalogue, so the shared OTP form rendered
+    // "We will send a {codeLength}-digit code by SMS." on its sign-in screen.
+    const { renderHook } = await import("@testing-library/react");
+    const { useTOrDefault } = await import("./i18n");
+    const { result } = renderHook(() => useTOrDefault());
+
+    expect(result.current("ui.otpForm.willSendCode", "We will send a {codeLength}-digit code.", { codeLength: 6 })).toBe(
+      "We will send a 6-digit code.",
+    );
+  });
+});

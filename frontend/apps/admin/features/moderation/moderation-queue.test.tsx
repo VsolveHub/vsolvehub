@@ -120,12 +120,12 @@ describe("operations moderation queue", () => {
 
   it("does not mount a second operations shell on rentals or stays", async () => {
     const { unmount } = render(<OpsRentalsPage />, { wrapper });
-    expect(await screen.findByRole("heading", { name: "Rental assets" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Rentals Management" })).toBeInTheDocument();
     expect(screen.queryByText("Checking your access")).not.toBeInTheDocument();
     unmount();
 
     render(<OpsStaysPage />, { wrapper });
-    expect(await screen.findByRole("heading", { name: "Stay properties" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Stays & Hospitality Management" })).toBeInTheDocument();
     expect(screen.queryByText("Checking your access")).not.toBeInTheDocument();
   });
 });

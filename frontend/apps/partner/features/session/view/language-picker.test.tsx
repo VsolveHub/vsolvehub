@@ -28,7 +28,7 @@ describe("LanguagePicker", () => {
       </PartnerI18nProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "हिन्दी" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: /हिन्दी/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("falls back to the default when nothing is saved", () => {
@@ -38,7 +38,7 @@ describe("LanguagePicker", () => {
       </PartnerI18nProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: /English/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("names the confirm button", () => {

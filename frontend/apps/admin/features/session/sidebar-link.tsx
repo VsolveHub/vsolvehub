@@ -39,7 +39,7 @@ export function SidebarLink({
       aria-current={active ? "page" : undefined}
       onClick={onClick}
       className={[
-        "relative flex items-center gap-3 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors",
+        "relative flex items-center gap-3 px-2.5 min-h-11 md:min-h-0 py-2.5 md:py-1.5 rounded-lg text-sm font-medium transition-colors",
         active
           ? "bg-selected-surface text-text-link font-semibold"
           : "text-text-secondary hover:bg-surface-hover hover:text-text",

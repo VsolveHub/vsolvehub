@@ -61,11 +61,11 @@ export function EditStoryDialog({ isOpen, story, onClose, onSuccess }: EditStory
       role="dialog"
       aria-modal="true"
       aria-label="Edit Safety Story"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto"
     >
-      <div className="relative w-full max-w-lg bg-surface border border-line rounded-card shadow-2xl p-6 overflow-hidden">
+      <div className="relative w-full max-w-lg max-h-[90vh] bg-surface border border-line rounded-2xl shadow-2xl flex flex-col overflow-hidden my-auto">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-line">
+        <div className="flex items-center justify-between p-5 pb-3.5 border-b border-line shrink-0">
           <div>
             <h2 className="text-lg font-bold text-navy-900">Edit Safety Story</h2>
             <p className="text-xs text-text-secondary mt-0.5">
@@ -82,91 +82,94 @@ export function EditStoryDialog({ isOpen, story, onClose, onSuccess }: EditStory
           </button>
         </div>
 
-        {/* 24-hour Expiration Notice */}
-        <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
-          <Clock className="size-4 shrink-0 text-amber-600 mt-0.5" />
-          <div className="flex flex-col gap-0.5">
-            <span className="font-bold">24-Hour Expiration Preservation</span>
-            <span className="text-amber-800/90 leading-relaxed">
-              Editing title or caption maintains the original expiration deadline (
-              {new Date(story.expires_at).toLocaleString()}) and does not reset the clock.
-            </span>
-          </div>
-        </div>
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {/* 24-hour Expiration Notice */}
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <Clock className="size-4 shrink-0 text-amber-600 mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-bold">24-Hour Expiration Preservation</span>
+                <span className="text-amber-800/90 leading-relaxed">
+                  Editing title or caption maintains the original expiration deadline (
+                  {new Date(story.expires_at).toLocaleString()}) and does not reset the clock.
+                </span>
+              </div>
+            </div>
 
-        {errorMsg && (
-          <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-            <AlertCircle className="size-4 shrink-0 text-rose-600" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
+            {errorMsg && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0 text-rose-600" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
-          {/* Title */}
-          <div>
-            <label htmlFor="edit-story-title" className="block text-xs font-bold text-navy-900 mb-1">
-              Title (max 120 chars)
-            </label>
-            <input
-              id="edit-story-title"
-              type="text"
-              maxLength={120}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-action/20 focus:border-action text-navy-900"
-            />
-          </div>
-
-          {/* Caption */}
-          <div>
-            <label htmlFor="edit-story-caption" className="block text-xs font-bold text-navy-900 mb-1">
-              Caption (max 280 chars)
-            </label>
-            <textarea
-              id="edit-story-caption"
-              rows={3}
-              maxLength={280}
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-action/20 focus:border-action text-navy-900 resize-none"
-            />
-            <span className="text-[10px] text-text-secondary float-right mt-0.5">
-              {caption.length}/280
-            </span>
-          </div>
-
-          {/* Display Order & Publish status */}
-          <div className="grid grid-cols-2 gap-4 items-center pt-1">
+            {/* Title */}
             <div>
-              <label htmlFor="edit-story-order" className="block text-xs font-bold text-navy-900 mb-1">
-                Display Order
+              <label htmlFor="edit-story-title" className="block text-xs font-bold text-navy-900 mb-1">
+                Title (max 120 chars)
               </label>
               <input
-                id="edit-story-order"
-                type="number"
-                min={0}
-                value={displayOrder}
-                onChange={(e) => setDisplayOrder(e.target.value)}
+                id="edit-story-title"
+                type="text"
+                maxLength={120}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-action/20 focus:border-action text-navy-900"
               />
             </div>
 
-            <div className="flex items-center gap-2 pt-5">
-              <input
-                id="edit-story-published"
-                type="checkbox"
-                checked={isPublished}
-                onChange={(e) => setIsPublished(e.target.checked)}
-                className="size-4 text-action rounded-sm border-line focus:ring-action"
-              />
-              <label htmlFor="edit-story-published" className="text-xs font-bold text-navy-900 cursor-pointer">
-                Is Published
+            {/* Caption */}
+            <div>
+              <label htmlFor="edit-story-caption" className="block text-xs font-bold text-navy-900 mb-1">
+                Caption (max 280 chars)
               </label>
+              <textarea
+                id="edit-story-caption"
+                rows={3}
+                maxLength={280}
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-action/20 focus:border-action text-navy-900 resize-none"
+              />
+              <span className="text-[10px] text-text-secondary float-right mt-0.5">
+                {caption.length}/280
+              </span>
+            </div>
+
+            {/* Display Order & Publish status */}
+            <div className="grid grid-cols-2 gap-4 items-center pt-1">
+              <div>
+                <label htmlFor="edit-story-order" className="block text-xs font-bold text-navy-900 mb-1">
+                  Display Order
+                </label>
+                <input
+                  id="edit-story-order"
+                  type="number"
+                  min={0}
+                  value={displayOrder}
+                  onChange={(e) => setDisplayOrder(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-xl focus:outline-none focus:ring-2 focus:ring-action/20 focus:border-action text-navy-900"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-5">
+                <input
+                  id="edit-story-published"
+                  type="checkbox"
+                  checked={isPublished}
+                  onChange={(e) => setIsPublished(e.target.checked)}
+                  className="size-4 text-action rounded-sm border-line focus:ring-action cursor-pointer"
+                />
+                <label htmlFor="edit-story-published" className="text-xs font-bold text-navy-900 cursor-pointer">
+                  Is Published
+                </label>
+              </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-line mt-2">
+          {/* Action Buttons (pinned) */}
+          <div className="flex items-center justify-end gap-3 p-4 sm:p-5 pt-3 border-t border-line shrink-0 bg-surface">
             <button
               type="button"
               onClick={onClose}

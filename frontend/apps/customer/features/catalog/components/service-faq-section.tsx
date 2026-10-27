@@ -21,7 +21,7 @@ export function ServiceFaqSection({ faqs }: { faqs: ServiceFaq[] }) {
   };
 
   return (
-    <section aria-labelledby="service-faq-heading" className="mt-8 rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+    <section aria-labelledby="service-faq-heading" className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
       <script
         type="application/ld+json"
         // Escaped so a "</script>" inside an answer cannot close the tag.

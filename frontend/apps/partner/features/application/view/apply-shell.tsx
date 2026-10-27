@@ -9,7 +9,9 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { usePartnerApplication, usePartnerAvailability } from "../queries";
-import { LocaleSwitcher } from "@/features/session/view/locale-switcher";
+import { useCurrentSession, useLogout } from "@vsolve/query";
+import { getApiClient } from "@/lib/api/browser";
+import { LogOut } from "lucide-react";
 
 /**
  * The chrome for `/apply/*`.
@@ -142,6 +144,10 @@ function ApplyHeader({
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
+  const session = useCurrentSession(getApiClient());
+  const logout = useLogout(getApiClient());
+  const isAuthenticated = Boolean(session.data?.user);
+
   const isSubmitted = status === "SUBMITTED" || status === "UNDER_REVIEW";
   const back = isSubmitted ? null : previousStep(pathname);
   const currentStepIdx = steps.findIndex((s) => s.href === pathname);
@@ -149,8 +155,8 @@ function ApplyHeader({
   return (
     <>
       {/* Floating Dynamic-Island Navigation Matching Homepage */}
-      <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
-        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
+      <div className="fixed top-2.5 sm:top-3 inset-x-0 z-50 px-2 sm:px-6 pointer-events-none">
+        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-2.5 sm:px-5 py-2 sm:py-2.5 transition-all duration-300">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Brand & Live Demand Tag */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -159,9 +165,9 @@ function ApplyHeader({
                   type="button"
                   onClick={() => router.push(back.href)}
                   aria-label={t("apply.shell.backTo", { label: t(back.labelKey) })}
-                  className="grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full bg-surface-sunken text-navy-900 border border-line-strong hover:bg-surface transition-colors shrink-0"
+                  className="grid h-8 w-8 place-items-center rounded-full bg-surface-sunken text-navy-900 border border-line-strong hover:bg-surface transition-colors shrink-0"
                 >
-                  <ChevronLeft size={18} aria-hidden />
+                  <ChevronLeft size={16} aria-hidden />
                 </button>
               )}
 
@@ -195,18 +201,17 @@ function ApplyHeader({
               <span className="font-medium text-text-secondary">{t("apply.shell.desktop.mode")}</span>
             </div>
 
-            {/* Right Action: Step indicator pill / Overview CTA & Locale */}
-            <div className="flex items-center gap-2 shrink-0">
-              <LocaleSwitcher />
-
+            {/* Right Action: Step indicator pill, Overview CTA & Sign Out */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {!isSubmitted && (
                 <button
                   type="button"
                   onClick={() => setOpen(true)}
-                  className="inline-flex min-h-11 sm:min-h-8 sm:h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
+                  aria-label={t("apply.shell.stepsButton")}
+                  className="inline-flex min-h-8 h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs shrink-0"
                 >
                   <ListChecks size={14} aria-hidden />
-                  <span>{t("apply.shell.stepsButton")}</span>
+                  <span className="hidden sm:inline">{t("apply.shell.stepsButton")}</span>
                 </button>
               )}
 
@@ -216,12 +221,38 @@ function ApplyHeader({
               >
                 {t("apply.steps.overview")}
               </Link>
+
+              {isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={() => logout.mutate()}
+                  disabled={logout.isPending}
+                  aria-label={t("common.signOut")}
+                  className="inline-flex min-h-8 h-8 items-center gap-1.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200/90 px-2.5 sm:px-3 text-xs font-bold text-rose-700 transition-colors shadow-xs shrink-0"
+                >
+                  <LogOut size={13} className="shrink-0" aria-hidden />
+                  <span className="text-[11px] sm:text-xs">
+                    {logout.isPending ? t("common.signingOut") : t("common.signOut")}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         </header>
       </div>
 
-      <StepSheet open={open} onOpenChange={setOpen} steps={steps} pathname={pathname} />
+      <StepSheet
+        open={open}
+        onOpenChange={setOpen}
+        steps={steps}
+        pathname={pathname}
+        isAuthenticated={isAuthenticated}
+        onSignOut={() => {
+          setOpen(false);
+          logout.mutate();
+        }}
+        isSigningOut={logout.isPending}
+      />
     </>
   );
 }
@@ -240,11 +271,17 @@ function StepSheet({
   onOpenChange,
   steps,
   pathname,
+  isAuthenticated,
+  onSignOut,
+  isSigningOut,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   steps: readonly StepProgress[];
   pathname: string;
+  isAuthenticated: boolean;
+  onSignOut: () => void;
+  isSigningOut: boolean;
 }) {
   const t = useT();
   const here = normalise(pathname);
@@ -293,6 +330,20 @@ function StepSheet({
           );
         })}
       </ul>
+
+      {isAuthenticated && (
+        <div className="mt-6 border-t border-line pt-4">
+          <button
+            type="button"
+            onClick={onSignOut}
+            disabled={isSigningOut}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200/90 px-4 py-3 text-sm font-bold text-rose-700 transition-colors"
+          >
+            <LogOut size={16} aria-hidden />
+            <span>{isSigningOut ? t("common.signingOut") : t("common.signOut")}</span>
+          </button>
+        </div>
+      )}
     </Sheet>
   );
 }

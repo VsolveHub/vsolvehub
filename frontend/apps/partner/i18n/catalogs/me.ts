@@ -5,6 +5,9 @@ import type { Catalog, Locale } from "@vsolve/ui";
 const en: Catalog = {
   "me.language.backToAccount": "Back to Account",
   "me.language.confirm": "Confirm language",
+  "me.language.title": "App Language",
+  "me.language.subtitle": "Select your preferred language. All screens, job details, and notifications will display in this language.",
+  "me.language.activeBadge": "Active",
 
   /* -- me-home.tsx ---------------------------------------------------------- */
   "me.home.srTitle": "Partner Account & Settings",
@@ -354,6 +357,9 @@ const en: Catalog = {
 const te: Catalog = {
   "me.language.backToAccount": "ఖాతాకు తిరిగి వెళ్ళండి",
   "me.language.confirm": "భాషను నిర్ధారించండి",
+  "me.language.title": "యాప్ భాష",
+  "me.language.subtitle": "మీకు నచ్చిన భాషను ఎంచుకోండి. అన్ని స్క్రీన్లు, పనుల వివరాలు మరియు నోటిఫికేషన్‌లు ఈ భాషలో కనిపిస్తాయి.",
+  "me.language.activeBadge": "ప్రస్తుతం",
 
   "me.home.srTitle": "పార్ట్‌నర్ ఖాతా & సెట్టింగ్‌లు",
   "me.home.sectionAccountProfile": "ఖాతా & ప్రొఫైల్",
@@ -702,6 +708,9 @@ const te: Catalog = {
 const hi: Catalog = {
   "me.language.backToAccount": "खाते पर वापस जाएं",
   "me.language.confirm": "भाषा की पुष्टि करें",
+  "me.language.title": "ऐप की भाषा",
+  "me.language.subtitle": "अपनी पसंदीदा भाषा चुनें। सभी स्क्रीन, कार्य विवरण और सूचनाएं इसी भाषा में प्रदर्शित होंगी।",
+  "me.language.activeBadge": "सक्रिय",
 
   "me.home.srTitle": "पार्टनर खाता और सेटिंग्स",
   "me.home.sectionAccountProfile": "खाता और प्रोफ़ाइल",

@@ -95,7 +95,7 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
   return (
     <>
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
-      <header className="bg-[linear-gradient(150deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-6">
+      <header className="bg-[linear-gradient(150deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-6">
         <div className="flex items-center justify-between gap-3">
         <button
           type="button"
@@ -326,6 +326,20 @@ function GateNotice({ gate }: { readonly gate: WaitingGate }) {
 }
 
 /**
+ * Parses titles with quantities like "Cupboard / Hinge Repair x 1" or "Tap Replacement × 2"
+ * to cleanly separate the service name from its quantity, preventing awkward orphaned line-wrapping.
+ */
+function parseServiceTitle(raw: string | null | undefined): { title: string; quantity: number | null } {
+  if (!raw) return { title: "", quantity: null };
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(.*?)(?:\s+[x×]\s*(\d+))$/i);
+  if (match && match[1] !== undefined && match[2] !== undefined) {
+    return { title: match[1].trim(), quantity: parseInt(match[2], 10) };
+  }
+  return { title: trimmed, quantity: null };
+}
+
+/**
  * What this job is, from the durable booked scope.
  *
  * `display_title` is derived from immutable fulfilment-unit lines, so it exists
@@ -337,10 +351,17 @@ function JobTitle({ visit }: { readonly visit: PartnerVisit }) {
   const t = useT();
   const durableTitle = visit.display_title?.trim() || null;
   const [first, ...rest] = visit.work_tasks;
+  const rawTitle = durableTitle ?? (first === undefined ? t("work.visitJob.yourJob") : first.label);
+  const parsed = parseServiceTitle(rawTitle);
 
   return (
-    <h1 className="mt-1 max-w-[28ch] text-[1.75rem] font-extrabold leading-tight tracking-[-0.025em] text-surface">
-      {durableTitle ?? (first === undefined ? t("work.visitJob.yourJob") : first.label)}
+    <h1 className="mt-1 flex flex-wrap items-baseline gap-2 text-2xl font-extrabold leading-tight tracking-[-0.025em] text-surface sm:text-[1.75rem]">
+      <span>{parsed.title}</span>
+      {parsed.quantity ? (
+        <span className="inline-flex shrink-0 items-center rounded-full border border-surface/25 bg-surface/15 px-2.5 py-0.5 text-xs font-bold tracking-wide text-surface">
+          ×{parsed.quantity}
+        </span>
+      ) : null}
       {durableTitle === null && rest.length > 0 ? (
         <span className="font-semibold text-navy-200">
           {" "}
@@ -361,7 +382,7 @@ function HeroFact({
   readonly value: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-card border border-surface/15 bg-surface/10 px-3 py-2.5">
+    <div className="flex h-full min-w-0 items-center gap-2.5 rounded-card border border-surface/15 bg-surface/10 px-3 py-2.5">
       <Pictogram name={icon} size="md" className="shrink-0 text-action-hover" />
       <span className="min-w-0">
         <span className="block text-[0.625rem] font-bold uppercase tracking-[0.06em] text-navy-200">
@@ -378,6 +399,8 @@ function HeroFact({
 /** The immutable booked scope, available before start-OTP creates work tasks. */
 function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
   const t = useT();
+  const parsedFallback = parseServiceTitle(visit.display_title);
+
   return (
     <section
       aria-labelledby="service-details-heading"
@@ -399,25 +422,34 @@ function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
 
       <ul className="mt-4 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface-sunken">
         {visit.service_lines.length > 0 ? (
-          visit.service_lines.map((line) => (
-            <li key={line.line_id} className="flex items-center gap-3 px-3.5 py-3">
-              <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
-              <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
-                {line.service_label}
-              </span>
-              {line.quantity > 1 ? (
-                <span className="shrink-0 rounded-full border border-line bg-surface px-2 py-1 text-xs font-bold text-text-secondary">
-                  {t("work.visitJob.qty", { quantity: line.quantity })}
+          visit.service_lines.map((line) => {
+            const parsedLine = parseServiceTitle(line.service_label);
+            const qty = line.quantity > 1 ? line.quantity : parsedLine.quantity;
+            return (
+              <li key={line.line_id} className="flex items-center gap-3 px-3.5 py-3">
+                <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
+                <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
+                  {parsedLine.title || line.service_label}
                 </span>
-              ) : null}
-            </li>
-          ))
+                {qty ? (
+                  <span className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-bold text-text-secondary">
+                    {t("work.visitJob.qty", { quantity: qty })}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })
         ) : (
           <li className="flex items-center gap-3 px-3.5 py-3">
             <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
-            <span className="text-sm font-semibold leading-5 text-text">
-              {visit.display_title?.trim() || t("work.visitJob.yourBookedService")}
+            <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
+              {parsedFallback.title || t("work.visitJob.yourBookedService")}
             </span>
+            {parsedFallback.quantity ? (
+              <span className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-bold text-text-secondary">
+                {t("work.visitJob.qty", { quantity: parsedFallback.quantity })}
+              </span>
+            ) : null}
           </li>
         )}
       </ul>

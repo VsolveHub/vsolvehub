@@ -37,7 +37,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
             aria-label={option.fullLabel}
             onClick={() => setLocale(option.code)}
             className={cn(
-              "min-h-8 min-w-8 rounded-full px-2 text-xs font-bold transition-colors",
+              "min-h-7 min-w-7 sm:min-h-8 sm:min-w-8 rounded-full px-1.5 sm:px-2 text-[11px] sm:text-xs font-bold transition-colors",
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
               isActive
                 ? "bg-action text-action-text"

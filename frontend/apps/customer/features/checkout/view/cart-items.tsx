@@ -1,10 +1,11 @@
 "use client";
 
-import { Button, EmptyState, formatMoney, ProgressiveImage } from "@vsolve/ui";
+import { Button, EmptyState, formatMoney, ProgressiveImage, cn } from "@vsolve/ui";
 import { useId } from "react";
 import { Trash2 } from "lucide-react";
+import Link from "next/link";
 
-import { useServiceDetail } from "@/features/catalog/client-queries";
+import { useServiceDetail, type ServiceDetail } from "@/features/catalog/client-queries";
 import { ServicePhoto } from "@/features/catalog/components/category-artwork";
 import type { Cart, CartItem } from "../queries";
 
@@ -30,9 +31,15 @@ export interface CartItemsProps {
   onRemove: (item: CartItem) => void;
 }
 
-function CartItemThumbnail({ serviceSlug }: { serviceSlug: string }) {
-  const detailQuery = useServiceDetail(serviceSlug);
-  const detail = detailQuery.data;
+function CartItemThumbnail({
+  serviceSlug,
+  detail: providedDetail,
+}: {
+  serviceSlug: string;
+  detail?: ServiceDetail;
+}) {
+  const detailQuery = useServiceDetail(serviceSlug, !providedDetail);
+  const detail = providedDetail ?? detailQuery.data;
   const imageUrl = detail?.cover?.url || detail?.variants?.[0]?.image_url || "";
   const iconKey = detail?.icon_key ?? "service";
 
@@ -140,34 +147,92 @@ function CartItemRow({
   onUpdateQuantity: (quantity: number) => void;
   onRemove: () => void;
 }) {
+  const detailQuery = useServiceDetail(item.service_slug);
+  const detail = detailQuery.data;
+  const categorySlug = (item as { category_slug?: string }).category_slug || detail?.category_slug;
+  const serviceUrl = categorySlug ? `/catalog/${categorySlug}/${item.service_slug}` : undefined;
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // If the click originated from a button, stepper, or interactive control, do not navigate
+    if ((e.target as HTMLElement).closest("button, [role='button'], input, a")) {
+      return;
+    }
+    if (serviceUrl && typeof window !== "undefined") {
+      window.location.assign(serviceUrl);
+    }
+  };
+
   return (
-    <li className="rounded-2xl border border-line bg-surface p-4 sm:p-5 shadow-xs">
+    <li
+      onClick={handleCardClick}
+      className={cn(
+        "group/card rounded-2xl border border-line bg-surface p-4 sm:p-5 shadow-xs transition-all duration-200",
+        serviceUrl && "hover:border-navy-300 hover:shadow-sm cursor-pointer"
+      )}
+    >
       <div className="flex items-start gap-4">
         {/* Service Image / Thumbnail */}
-        <CartItemThumbnail serviceSlug={item.service_slug} />
+        {serviceUrl ? (
+          <Link
+            href={serviceUrl}
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0 transition-transform duration-200 hover:scale-105"
+            aria-label={`View ${item.service_name} details`}
+          >
+            <CartItemThumbnail serviceSlug={item.service_slug} detail={detail} />
+          </Link>
+        ) : (
+          <CartItemThumbnail serviceSlug={item.service_slug} detail={detail} />
+        )}
 
         {/* Item Info & Actions */}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-navy-900 leading-snug">{item.service_name}</h3>
-              <p className="text-sm font-medium text-text-secondary mt-0.5">{item.variant_name}</p>
-              <ScopeSummary scope={item.scope} quantity={item.quantity} />
-            </div>
+            {serviceUrl ? (
+              <Link
+                href={serviceUrl}
+                onClick={(e) => e.stopPropagation()}
+                className="min-w-0 flex-1 group/link"
+              >
+                <h3 className="text-base font-bold text-navy-900 leading-snug group-hover/link:text-action transition-colors">
+                  {item.service_name}
+                </h3>
+                <p className="text-sm font-medium text-text-secondary mt-0.5">
+                  {item.variant_name}
+                </p>
+                <ScopeSummary scope={item.scope} quantity={item.quantity} />
+              </Link>
+            ) : (
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-bold text-navy-900 leading-snug">
+                  {item.service_name}
+                </h3>
+                <p className="text-sm font-medium text-text-secondary mt-0.5">
+                  {item.variant_name}
+                </p>
+                <ScopeSummary scope={item.scope} quantity={item.quantity} />
+              </div>
+            )}
 
             <Button
               variant="ghost"
               size="sm"
               disabled={isPending}
               aria-label={`Remove ${item.service_name}`}
-              onClick={onRemove}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
               className="size-10 p-0 grid place-items-center text-text-muted hover:text-critical hover:bg-critical-surface/20 transition-colors"
             >
               <Trash2 className="size-4" />
             </Button>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line/60">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line/60"
+          >
             <QuantityStepper item={item} disabled={isPending} onChange={onUpdateQuantity} />
             {item.amount ? (
               <span

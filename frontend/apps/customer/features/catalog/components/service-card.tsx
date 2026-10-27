@@ -1,7 +1,7 @@
 "use client";
 
 import { IntentLink } from "@/components/intent-link";
-import { formatMoney, useHydrated } from "@vsolve/ui";
+import { cn, formatMoney, useHydrated } from "@vsolve/ui";
 import { RemoteImage } from "@/components/remote-image";
 import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@/features/checkout/queries";
 import type { ServiceCard as ServiceCardData } from "../queries";
@@ -13,10 +13,12 @@ export function ServiceCard({
   service,
   categorySlug,
   index = 1,
+  className,
 }: {
   service: ServiceCardData;
   categorySlug: string;
   index?: number;
+  className?: string;
 }) {
   const isLarge = index === 0;
   const isPopular = index === 1;
@@ -181,7 +183,7 @@ export function ServiceCard({
 
   if (isLarge) {
     return (
-      <div className="group md:col-span-2 flex flex-col md:flex-row overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
+      <div className={cn("group md:col-span-2 flex flex-col md:flex-row overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300", className)}>
         <IntentLink
           href={serviceHref(service, categorySlug)}
           className="relative md:w-5/12 aspect-[16/10] md:aspect-auto overflow-hidden bg-[#F4F1EC] shrink-0 block cursor-pointer"
@@ -245,7 +247,7 @@ export function ServiceCard({
   }
 
   return (
-    <div className="group md:col-span-1 flex flex-col overflow-hidden rounded-card border border-transparent bg-white shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised">
+    <div className={cn("group md:col-span-1 flex flex-col overflow-hidden rounded-card border border-transparent bg-white shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised", className)}>
       <IntentLink
         href={serviceHref(service, categorySlug)}
         className="flex flex-col cursor-pointer"

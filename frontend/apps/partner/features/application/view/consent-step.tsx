@@ -133,17 +133,17 @@ export function ConsentStep() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-[var(--color-action)]"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-text">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-text flex-1 min-w-[12rem]">
                       {t("apply.consent.iAgreeTo", { title: document.title })}
                     </span>
                     {document.is_required_for_submission ? (
-                      <span className="text-xs font-semibold text-danger-text">* {t("common.required")}</span>
+                      <span className="text-xs font-semibold text-danger-text shrink-0">* {t("common.required")}</span>
                     ) : (
-                      <span className="text-xs text-text-muted">{t("common.optional")}</span>
+                      <span className="text-xs text-text-muted shrink-0">{t("common.optional")}</span>
                     )}
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-xs text-text-secondary">
+                  <div className="mt-2 flex items-center justify-between gap-2 flex-wrap text-xs text-text-secondary">
                     <span>{t("apply.consent.version", { version: document.document_version })}</span>
                     <a
                       href={document.document_url}

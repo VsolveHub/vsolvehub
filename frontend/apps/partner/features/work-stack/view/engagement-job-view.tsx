@@ -306,7 +306,7 @@ function HubHeader({ title, children }: { readonly title: string; readonly child
   const t = useT();
   const router = useRouter();
   return (
-    <div className="flex items-center gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-4">
+    <div className="flex items-center gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
       <button
         type="button"
         onClick={() => router.back()}
@@ -437,7 +437,7 @@ function ProjectJobView({ engagement }: { readonly engagement: Engagement }) {
         {status ? ` — ${status.label}` : ""}
       </h1>
 
-      <div className="flex items-center gap-3.5 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-5">
+      <div className="flex items-center gap-3.5 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-5">
         <button
           type="button"
           onClick={() => router.back()}

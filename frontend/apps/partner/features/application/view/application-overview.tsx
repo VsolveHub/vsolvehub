@@ -229,9 +229,9 @@ function Standing({ application }: { application: Application }) {
       <h1 className="sr-only">{t("apply.overview.heading")}</h1>
 
       {/* Responsive 2-column layout on Desktop */}
-      <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-start w-full min-w-0">
         {/* Left Column (7 cols): Status Banner, Rejected docs, Hero Action, Specialist options, History */}
-        <div className="flex flex-col gap-6 lg:col-span-7 xl:col-span-8">
+        <div className="flex flex-col gap-6 w-full min-w-0 lg:col-span-7 xl:col-span-8">
           <ApplicationStatusBanner application={application} />
 
           {/* Reviewer Rejections Alarm with In-Card Re-Upload */}
@@ -305,11 +305,11 @@ function Standing({ application }: { application: Application }) {
 
           {/* Specialist & Contractor Option — not for someone listing their own property. */}
           {application.track === "STAY_HOST" || application.track === "RENTAL_OWNER" ? null : (
-            <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+            <section className="rounded-3xl border border-line bg-white p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h2 className="text-base font-bold text-navy-900">{t("apply.overview.crew.title")}</h2>
-                  <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line">
+                  <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line shrink-0">
                     {t("common.optional")}
                   </span>
                 </div>
@@ -319,7 +319,7 @@ function Standing({ application }: { application: Application }) {
               </div>
               <Link
                 href="/apply/capabilities"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs shrink-0"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs w-full sm:w-auto shrink-0"
               >
                 <span>{t("apply.overview.crew.cta")}</span>
               </Link>
@@ -334,8 +334,8 @@ function Standing({ application }: { application: Application }) {
         </div>
 
         {/* Right Column (5 cols): Step Checklist & Desktop Helper */}
-        <div className="flex flex-col gap-6 lg:col-span-5 xl:col-span-4 lg:sticky lg:top-28">
-          <StepList steps={steps} />
+        <div className="flex flex-col gap-6 w-full min-w-0 lg:col-span-5 xl:col-span-4 lg:sticky lg:top-28">
+          <StepList steps={steps} application={application} />
 
           {/* Desktop Registration Guide Box */}
           <div className="rounded-3xl border border-line bg-surface p-6 shadow-xs flex flex-col gap-3">
@@ -377,26 +377,30 @@ function NextAction({
   const t = useT();
   const percent = Math.round(summary.fraction * 100);
   const remaining = summary.total - summary.done;
+  const rawStepName = summary.nextIncomplete
+    ? t(summary.nextIncomplete.labelKey).toLowerCase()
+    : t("apply.steps.documents").toLowerCase();
+  const cleanStepName = rawStepName.replace(/^your\s+/i, "");
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-6 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-6">
+    <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-5 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-5 sm:gap-6 min-w-0">
       {/* Background ambient lighting */}
-      <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-signal-500/15 blur-3xl" />
-      <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-0 h-44 w-44 translate-x-1/4 -translate-y-1/4 rounded-full bg-signal-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute left-0 bottom-0 h-44 w-44 -translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-500/10 blur-3xl" />
 
       {/* Top Status & Count Row */}
-      <div className="relative z-10 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
+      <div className="relative z-10 flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-signal-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-signal-500" />
           </span>
-          <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+          <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-300 truncate">
             {t("apply.overview.hero.progressLabel")}
           </span>
         </div>
 
-        <span className="rounded-full bg-white/10 px-3.5 py-1 text-xs font-extrabold text-white border border-white/20 shadow-xs tabular-nums">
+        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] sm:text-xs font-extrabold text-white border border-white/20 shadow-xs tabular-nums shrink-0 whitespace-nowrap">
           {ready
             ? t("apply.overview.hero.statusAllDone")
             : t("apply.overview.hero.statusCount", { done: summary.done, total: summary.total })}
@@ -404,25 +408,23 @@ function NextAction({
       </div>
 
       {/* Headline & Description */}
-      <div className="relative z-10">
-        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+      <div className="relative z-10 min-w-0">
+        <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight">
           {ready
             ? t("apply.overview.hero.completeHeadline")
             : t("apply.overview.hero.remainingHeadline", { count: remaining })}
         </h2>
-        <p className="text-xs sm:text-sm text-navy-200 mt-2 leading-relaxed max-w-lg">
+        <p className="text-xs sm:text-sm text-navy-200 mt-1.5 sm:mt-2 leading-relaxed max-w-lg">
           {ready
             ? t("apply.overview.hero.completeBody")
             : t("apply.overview.hero.remainingBody", {
-                step: summary.nextIncomplete
-                  ? t(summary.nextIncomplete.labelKey).toLowerCase()
-                  : t("apply.steps.documents").toLowerCase(),
+                step: cleanStepName,
               })}
         </p>
       </div>
 
       {/* Progress Track */}
-      <div className="relative z-10 flex flex-col gap-2 pt-1">
+      <div className="relative z-10 flex flex-col gap-2 pt-1 min-w-0">
         <div className="flex items-center justify-between text-xs font-bold text-navy-200">
           <span>{t("apply.overview.hero.overallCompletion")}</span>
           <span className="text-amber-400 font-black text-sm">{percent}%</span>
@@ -445,9 +447,9 @@ function NextAction({
       <div className="relative z-10 pt-1">
         <Link
           href={ready ? "/apply/review" : (summary.nextIncomplete?.href ?? "/apply/review")}
-          className="flex h-13 w-full items-center justify-center rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-6 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 hover:scale-[1.01] transition-all active:scale-[0.99]"
+          className="flex h-12 sm:h-13 w-full items-center justify-center rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-5 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 hover:scale-[1.01] transition-all active:scale-[0.99] text-center"
         >
-          <span>
+          <span className="truncate">
             {ready
               ? t("apply.overview.hero.ctaReview")
               : t("apply.overview.hero.ctaContinue", {
@@ -465,10 +467,10 @@ function NextAction({
  */
 function SubmittedHero({ application }: { application: Application }) {
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-6 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-5">
+    <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-5 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-5 min-w-0">
       {/* Background ambient lighting */}
-      <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl" />
-      <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-cyan-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-0 h-44 w-44 translate-x-1/4 -translate-y-1/4 rounded-full bg-emerald-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute left-0 bottom-0 h-44 w-44 -translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/15 blur-3xl" />
 
       {/* Top Status & Count Row */}
       <div className="relative z-10 flex items-center justify-between gap-3">
@@ -521,9 +523,29 @@ function SubmittedHero({ application }: { application: Application }) {
 /**
  * Clean & Modern Steps Checklist
  */
-function StepList({ steps }: { steps: readonly StepProgress[] }) {
+function StepList({
+  steps,
+  application,
+}: {
+  steps: readonly StepProgress[];
+  application?: Application;
+}) {
   const t = useT();
   const rows = steps.filter((step) => step.state !== "waypoint");
+
+  const activeDocs = (application?.documents ?? []).filter((d) => d.status !== "SUPERSEDED");
+  const hasRejectedDocs = activeDocs.some(
+    (d) => d.status === "REJECTED" || d.scan_status === "REJECTED",
+  );
+  const hasPendingDocs = activeDocs.some((d) => d.status === "PENDING");
+  const approvedDocsCount = activeDocs.filter((d) => d.status === "APPROVED").length;
+  const allDocsApproved = activeDocs.length >= 2 && activeDocs.every((d) => d.status === "APPROVED");
+
+  // Only the single first incomplete step gets "Next Up"
+  const firstIncompleteStep = rows.find(
+    (step) => step.state !== "done" && step.state !== "optional",
+  );
+  const nextStepHref = firstIncompleteStep?.href;
 
   return (
     <section className="flex flex-col gap-3 mt-2">
@@ -543,73 +565,174 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
 
       <div className="rounded-3xl border border-line bg-white shadow-xs overflow-hidden divide-y divide-line">
         {rows.map((step, idx) => {
+          const isDocumentStep = step.href === "/apply/documents";
           const isDone = step.state === "done";
           const isOptional = step.state === "optional";
-          const isNext = !isDone && !isOptional;
+
+          // Compute realistic document verification state
+          let docStatus: "rejected" | "pending" | "approved" | "incomplete" = "incomplete";
+          if (isDocumentStep) {
+            if (hasRejectedDocs) {
+              docStatus = "rejected";
+            } else if (hasPendingDocs) {
+              docStatus = "pending";
+            } else if (allDocsApproved) {
+              docStatus = "approved";
+            } else if (isDone) {
+              docStatus = "pending";
+            }
+          }
+
+          // Next Up applies strictly to the single first incomplete step (never to rejected docs)
+          const isNext = step.href === nextStepHref && docStatus !== "rejected";
+
+          // Indicator icon
+          let indicator;
+          if (isDocumentStep) {
+            if (docStatus === "rejected") {
+              indicator = (
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-rose-50 text-rose-700 border border-rose-200 shadow-xs">
+                  <AlertCircle size={18} aria-hidden />
+                </div>
+              );
+            } else if (docStatus === "pending") {
+              indicator = (
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-sky-50 text-sky-700 border border-sky-200 shadow-xs">
+                  <Clock size={17} aria-hidden />
+                </div>
+              );
+            } else if (docStatus === "approved") {
+              indicator = (
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                  <Check size={18} strokeWidth={3} aria-hidden />
+                </div>
+              );
+            } else {
+              indicator = (
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-surface-sunken text-text-muted border border-line text-xs font-black">
+                  <span>{idx + 1}</span>
+                </div>
+              );
+            }
+          } else if (isDone) {
+            indicator = (
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                <Check size={18} strokeWidth={3} aria-hidden />
+              </div>
+            );
+          } else if (isNext) {
+            indicator = (
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-signal-500 text-white shadow-md shadow-signal-500/25 text-xs font-black">
+                <span>{idx + 1}</span>
+              </div>
+            );
+          } else {
+            indicator = (
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-surface-sunken text-text-muted border border-line text-xs font-black">
+                <span>{idx + 1}</span>
+              </div>
+            );
+          }
+
+          // Subtitle (crisp, single line, no awkward wraps)
+          let subtitle: string;
+          if (isDocumentStep) {
+            if (docStatus === "rejected") {
+              subtitle = "Action required • Needs re-upload";
+            } else if (docStatus === "pending") {
+              subtitle =
+                approvedDocsCount > 0
+                  ? `${approvedDocsCount} of 2 verified • Under review`
+                  : "Waiting for Operations review";
+            } else if (docStatus === "approved") {
+              subtitle = "All documents verified & approved";
+            } else {
+              subtitle = t("apply.overview.checklist.outstanding", { count: step.outstanding });
+            }
+          } else if (isDone) {
+            subtitle = "Completed";
+          } else if (isOptional) {
+            subtitle = t("apply.overview.checklist.optionalSchedule");
+          } else {
+            subtitle = t("apply.overview.checklist.outstanding", { count: step.outstanding });
+          }
+
+          // Perfectly aligned right badge (uniform min-w-[6.5rem], centered, single badge per row)
+          let badge;
+          if (isDocumentStep) {
+            if (docStatus === "rejected") {
+              badge = (
+                <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-extrabold text-rose-800 shadow-2xs whitespace-nowrap">
+                  Action Required
+                </span>
+              );
+            } else if (docStatus === "pending") {
+              badge = (
+                <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 shadow-2xs whitespace-nowrap">
+                  Waiting for review
+                </span>
+              );
+            } else if (docStatus === "approved") {
+              badge = (
+                <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 shadow-2xs whitespace-nowrap">
+                  Verified
+                </span>
+              );
+            } else {
+              badge = (
+                <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-line bg-surface-sunken px-3 py-1 text-xs font-bold text-text-muted whitespace-nowrap">
+                  {t("apply.overview.checklist.incomplete")}
+                </span>
+              );
+            }
+          } else if (isDone) {
+            badge = (
+              <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 shadow-2xs whitespace-nowrap">
+                {t("common.done")}
+              </span>
+            );
+          } else if (isNext) {
+            badge = (
+              <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-signal-200 bg-signal-50 px-3 py-1 text-xs font-extrabold text-signal-800 shadow-2xs whitespace-nowrap">
+                {t("apply.overview.checklist.nextUp")}
+              </span>
+            );
+          } else if (isOptional) {
+            badge = (
+              <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-line bg-surface-sunken px-3 py-1 text-xs font-bold text-text-muted whitespace-nowrap">
+                {t("common.optional")}
+              </span>
+            );
+          } else {
+            badge = (
+              <span className="inline-flex min-w-[6.5rem] items-center justify-center rounded-full border border-line bg-surface-sunken px-3 py-1 text-xs font-bold text-text-muted whitespace-nowrap">
+                {t("apply.overview.checklist.incomplete")}
+              </span>
+            );
+          }
 
           return (
             <Link
               key={step.href}
               href={step.href}
               className={cn(
-                "flex items-center justify-between gap-4 p-4 sm:p-5 transition-all duration-200 group",
-                isNext ? "bg-amber-50/30 hover:bg-amber-50/60" : "hover:bg-surface-sunken/60",
+                "flex items-center justify-between gap-3 p-4 sm:p-4.5 transition-all duration-200 group",
+                isNext ? "bg-signal-50/25 hover:bg-signal-50/50" : "hover:bg-surface-sunken/60",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring",
               )}
             >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div
-                  className={cn(
-                    "grid h-9 w-9 shrink-0 place-items-center rounded-2xl text-xs font-black transition-transform duration-200 group-hover:scale-105",
-                    isDone
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs"
-                      : isNext
-                        ? "bg-signal-500 text-white shadow-md shadow-signal-500/25"
-                        : "bg-surface-sunken text-text-muted border border-line",
-                  )}
-                >
-                  {isDone ? (
-                    <Check size={18} strokeWidth={3} aria-hidden />
-                  ) : (
-                    <span>{idx + 1}</span>
-                  )}
-                </div>
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                {indicator}
 
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm sm:text-base font-bold text-navy-900 group-hover:text-signal-700 transition-colors">
-                      {t(step.labelKey)}
-                    </span>
-                    {isNext && (
-                      <span className="hidden sm:inline-block rounded-full bg-signal-100 text-signal-800 text-[10px] font-extrabold px-2 py-0.5 border border-signal-200">
-                        {t("apply.overview.checklist.nextUp")}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-text-secondary mt-0.5">
-                    {isDone
-                      ? t("apply.overview.checklist.completed")
-                      : isOptional
-                        ? t("apply.overview.checklist.optionalSchedule")
-                        : t("apply.overview.checklist.outstanding", { count: step.outstanding })}
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-sm font-bold text-navy-900 group-hover:text-signal-700 transition-colors truncate">
+                    {t(step.labelKey)}
                   </span>
+                  <span className="text-xs text-text-secondary mt-0.5 truncate">{subtitle}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5 shrink-0">
-                <span
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold border transition-colors",
-                    isDone
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : isNext
-                        ? "bg-signal-50 text-signal-800 border-signal-200 font-extrabold"
-                        : "bg-surface-sunken text-text-muted border-line",
-                  )}
-                >
-                  {isDone ? t("common.done") : isOptional ? t("common.optional") : t("apply.overview.checklist.incomplete")}
-                </span>
-              </div>
+              <div className="flex items-center justify-end shrink-0 pl-2">{badge}</div>
             </Link>
           );
         })}

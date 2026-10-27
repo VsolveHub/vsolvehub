@@ -46,6 +46,11 @@ class CartItemSerializer(serializers.ModelSerializer[CartItem]):
 
 
 class CartItemDetailSerializer(serializers.ModelSerializer[CartItem]):
+    category_slug = serializers.CharField(
+        source="variant.service.subcategory.category.slug",
+        read_only=True,
+        default="",
+    )
     service_slug = serializers.CharField(source="variant.service.slug", read_only=True)
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
     variant_name = serializers.CharField(source="variant.name", read_only=True)
@@ -58,6 +63,7 @@ class CartItemDetailSerializer(serializers.ModelSerializer[CartItem]):
             "id",
             "version",
             "variant_id",
+            "category_slug",
             "service_slug",
             "service_name",
             "variant_name",

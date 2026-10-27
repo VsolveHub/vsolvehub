@@ -39,9 +39,8 @@ export function ProfileView() {
   const grantedRoles = user.roles ?? ["operations"];
   const otherRoles = grantedRoles.filter((r) => r !== activeRole);
 
-  const displayName = user.phone_number === "9999999999" || !user.phone_number
-    ? "Priya Nair"
-    : `Staff ${user.phone_number}`;
+  // The account's own name, else its number — never a placeholder person.
+  const displayName = user.display_name || user.full_name || user.phone_number || "Your account";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

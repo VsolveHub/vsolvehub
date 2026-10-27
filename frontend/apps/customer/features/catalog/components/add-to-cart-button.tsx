@@ -8,6 +8,7 @@ type AddToCartButtonProps = {
   variantId: string;
   className?: string;
   size?: "default" | "compact";
+  showViewCart?: boolean;
 };
 
 const DEFAULT_CLASS =
@@ -20,6 +21,7 @@ export function AddToCartButton({
   variantId,
   className,
   size = "default",
+  showViewCart = true,
 }: AddToCartButtonProps) {
   const cartQuery = useCart();
   const addItem = useAddCartItem();
@@ -87,6 +89,39 @@ export function AddToCartButton({
   };
 
   if (cartItem) {
+    if (!showViewCart) {
+      return (
+        <div
+          className={cn(
+            "inline-flex h-9 items-center justify-between rounded-xl border border-line-strong bg-white px-1 font-bold text-navy-900 shadow-2xs shrink-0",
+            className
+          )}
+        >
+          <button
+            type="button"
+            onClick={handleDecrement}
+            disabled={isUpdating || isRemoving}
+            aria-label="Remove one"
+            className="inline-flex size-7 items-center justify-center rounded-lg text-action font-extrabold text-base hover:bg-[#FFF0E5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer transition-colors"
+          >
+            -
+          </button>
+          <span className="font-black text-navy-900 min-w-[20px] text-center text-xs tabular-nums px-1">
+            {cartItem.quantity}
+          </span>
+          <button
+            type="button"
+            onClick={handleIncrement}
+            disabled={isUpdating}
+            aria-label="Add one"
+            className="inline-flex size-7 items-center justify-center rounded-lg text-action font-extrabold text-base hover:bg-[#FFF0E5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer transition-colors"
+          >
+            +
+          </button>
+        </div>
+      );
+    }
+
     const quantityShellClass =
       size === "compact"
         ? "inline-flex min-h-10 w-full items-center justify-between gap-2 rounded-xl border border-line bg-white pl-3 pr-1 text-xs sm:text-sm font-bold text-navy-900 sm:w-auto shadow-2xs"

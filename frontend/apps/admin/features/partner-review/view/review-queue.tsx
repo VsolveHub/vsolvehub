@@ -106,7 +106,7 @@ export function ReviewQueue({
               aria-selected={isSelected}
               onClick={() => setTab(index)}
               className={[
-                "h-8 rounded-control px-2.5 text-xs font-semibold transition-colors",
+                "min-h-11 rounded-control px-3 text-xs font-semibold transition-colors md:min-h-8 md:px-2.5",
                 isSelected
                   ? "bg-action-secondary text-action-secondary-text shadow-xs"
                   : "bg-surface text-text-secondary hover:bg-surface-hover hover:text-text border border-line",

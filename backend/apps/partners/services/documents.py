@@ -45,14 +45,36 @@ from .base import (
 )
 
 
-def _assert_application_editable(application: PartnerApplication) -> None:
-    if application.status not in {
+def _assert_application_editable(
+    application: PartnerApplication,
+    kind: str | None = None,
+) -> None:
+    if application.status in {
         PartnerApplication.Status.DRAFT,
         PartnerApplication.Status.CHANGES_REQUIRED,
     }:
-        raise PartnerTransitionError(
-            "Documents cannot be changed in the current application state."
+        return
+
+    # In SUBMITTED or UNDER_REVIEW states, an applicant can replace a document
+    # that was rejected by an Operations reviewer or failed scanning.
+    if application.status in {
+        PartnerApplication.Status.SUBMITTED,
+        PartnerApplication.Status.UNDER_REVIEW,
+    } and kind is not None:
+        latest_doc = (
+            PartnerDocument.objects.filter(application=application, kind=kind)
+            .order_by("-version")
+            .first()
         )
+        if latest_doc is not None and (
+            latest_doc.status == PartnerDocument.Status.REJECTED
+            or latest_doc.scan_status == PartnerDocument.ScanStatus.REJECTED
+        ):
+            return
+
+    raise PartnerTransitionError(
+        "Documents cannot be changed in the current application state."
+    )
 
 
 @transaction.atomic
@@ -67,7 +89,7 @@ def _create_document_upload_intent(
 ) -> PartnerDocumentUpload:
     application = _application_for_update(user)
     _assert_version(application, expected_version)
-    _assert_application_editable(application)
+    _assert_application_editable(application, kind=kind)
     normalized_content_type = content_type.lower()
     suffix = DOCUMENT_CONTENT_TYPE_SUFFIXES.get(normalized_content_type)
     if suffix is None:
@@ -185,7 +207,7 @@ def finalize_partner_document_upload(
             id=locked_upload.application_id,
         )
         _assert_version(application, expected_version)
-        _assert_application_editable(application)
+        _assert_application_editable(application, kind=locked_upload.kind)
         if locked_upload.status != PartnerDocumentUpload.Status.ISSUED:
             raise PartnerDocumentUploadError("This upload cannot be finalized again.")
         if locked_upload.expires_at <= timezone.now():

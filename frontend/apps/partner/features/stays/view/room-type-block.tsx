@@ -184,7 +184,7 @@ export function RoomTypeBlock({
                       run.mutate(() => renamePartnerStayLook(look.id, renamingLook.value.trim()));
                     }}
                   >
-                    <Field label={t("stays.roomBlock.lookName")} className="min-w-[12rem] flex-1">
+                    <Field label={t("stays.roomBlock.lookName")} className="min-w-0 flex-1 sm:min-w-[12rem]">
                       <Input
                         value={renamingLook.value}
                         maxLength={60}

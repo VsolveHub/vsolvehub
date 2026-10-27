@@ -99,13 +99,15 @@ export function AppChrome({ children }: { children: ReactNode }) {
         <div className={chromeLayout.contentMinHeightClass}>
           {children}
         </div>
-        {chromeLayout.hideMobileFooter ? (
-          <div className="hidden md:block">
+        {chromeLayout.showFooter ? (
+          chromeLayout.hideMobileFooter ? (
+            <div className="hidden md:block">
+              <SiteFooter />
+            </div>
+          ) : (
             <SiteFooter />
-          </div>
-        ) : (
-          <SiteFooter />
-        )}
+          )
+        ) : null}
       </div>
       <div className={hideMobileChrome ? "hidden md:block" : undefined}>
         <BottomNav />

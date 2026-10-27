@@ -47,7 +47,7 @@ export function WorkItemsBoard() {
             aria-selected={section === entry.key}
             onClick={() => setSection(entry.key)}
             className={cn(
-              "rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+              "min-h-11 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
               section === entry.key
                 ? "bg-action text-action-text"
                 : "bg-surface-sunken text-text-secondary hover:text-text",

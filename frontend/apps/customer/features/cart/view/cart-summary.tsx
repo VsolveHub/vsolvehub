@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { buttonStyles, formatMoney } from "@vsolve/ui";
+import { buttonStyles, cn, formatMoney } from "@vsolve/ui";
 
 import type { Cart } from "@/features/checkout/queries";
 
@@ -38,9 +38,11 @@ import type { Cart } from "@/features/checkout/queries";
 export function CartSummary({
   cart,
   isAuthenticated,
+  inlineButtonRef,
 }: {
   cart: Cart;
   isAuthenticated: boolean;
+  inlineButtonRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const estimate = cart.estimate;
 
@@ -120,7 +122,7 @@ export function CartSummary({
         </dl>
       )}
 
-      <div className="mt-6">
+      <div ref={inlineButtonRef} className="mt-6">
         <CartContinueLink isAuthenticated={isAuthenticated} className="w-full" />
       </div>
 
@@ -161,11 +163,27 @@ function CartContinueLink({
  * the one button that moves the booking forward was a long scroll away. The cart has no tab
  * bar on phones, so the bottom edge is free; the full itemised summary stays where it was.
  */
-export function CartStickyBar({ cart, isAuthenticated }: { cart: Cart; isAuthenticated: boolean }) {
+export function CartStickyBar({
+  cart,
+  isAuthenticated,
+  visible = true,
+}: {
+  cart: Cart;
+  isAuthenticated: boolean;
+  visible?: boolean;
+}) {
   const total = cart.estimate?.total ?? null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:hidden">
+    <div
+      aria-hidden={!visible}
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:hidden transition-all duration-200",
+        visible
+          ? "translate-y-0 opacity-100 pointer-events-auto"
+          : "translate-y-full opacity-0 pointer-events-none",
+      )}
+    >
       <div className="mx-auto flex max-w-[1216px] items-center justify-between gap-4">
         <div className="min-w-0">
           {total !== null ? (

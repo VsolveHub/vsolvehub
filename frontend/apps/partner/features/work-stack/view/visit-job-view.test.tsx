@@ -105,6 +105,19 @@ describe("handing a job back", () => {
     expect(details.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("separates title and quantity when display_title contains a count (e.g. Cupboard / Hinge Repair x 1)", () => {
+    renderVisit(
+      confirmedVisit({
+        display_title: "Cupboard / Hinge Repair x 1",
+        service_lines: [],
+      }),
+    );
+
+    expect(screen.getAllByText("Cupboard / Hinge Repair")).toHaveLength(2);
+    expect(screen.getByText("×1")).toBeInTheDocument();
+    expect(screen.getByText("Qty 1")).toBeInTheDocument();
+  });
+
   it("offers the control while the job is still confirmed", () => {
     renderVisit(confirmedVisit());
 
