@@ -567,7 +567,7 @@ def register_payout_account(
         holder_name=holder_name,
         provider_contact_id=provider_contact_id,
         provider_fund_account_id=provider_fund_account_id,
-        effective_from=timezone.now() + timedelta(hours=ACCOUNT_COOLING_HOURS),
+        effective_from=timezone.now() + timedelta(hours=settings.PAYOUT_ACCOUNT_COOLING_HOURS),
         created_by=actor,
     )
 
@@ -692,11 +692,12 @@ def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
             fund_account_id=item.payout_account.provider_fund_account_id,
             amount_paise=item.amount_paise,
             currency=item.currency,
-            # Batch reference first, then the item. A bank statement line reading
-            # "weekly-2026-w32:<uuid>" tells Finance which run it belongs to; a bare UUID makes
-            # them look it up. Still unique per payout, which is what reconciliation needs.
-            reference=f"{item.batch.reference}:{item.id}",
+            # The item id alone, as 32 hex characters: RazorpayX caps `reference_id` at 40, and
+            # the old "<batch reference>:<item id>" was 37 at the very least. Still unique per
+            # payout, which is what reconciliation needs; the run travels in the notes instead.
+            reference=item.id.hex,
             idempotency_key=item.idempotency_key,
+            batch_reference=item.batch.reference,
         )
     except PayoutProviderAmbiguousError:
         item.status = PayoutBatchItem.Status.UNDER_REVIEW
@@ -777,6 +778,21 @@ def _failure_code(text: str) -> str:
     return slugify(text)[:80] or "provider_failed"
 
 
+def _rejection_code(exc: PayoutProviderRejectedError) -> str:
+    """Why the provider refused, as a slug: its reason (or description), then the field it named.
+
+    `input_validation_failed-reference_id` tells Operations what to fix; `provider_rejected`, the
+    only value this used to record, told them nothing. Falls back to it when the provider gave no
+    reason at all.
+    """
+
+    detail = exc.detail
+    text = " ".join(
+        part for part in (detail.reason or detail.description or detail.code, detail.field) if part
+    )
+    return _failure_code(text) if text else "provider_rejected"
+
+
 def _mapping(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
 
@@ -786,9 +802,10 @@ def _item_for_provider_payout(*, provider_payout_id: str, reference: str) -> Pay
         item = PayoutBatchItem.objects.filter(provider_payout_id=provider_payout_id).first()
         if item is not None:
             return item
-    # `submit_payout_item` sends "<batch reference>:<item id>". A webhook can arrive before that
-    # submission has committed the provider id, or after an ambiguous submission never learned
-    # it, and the reference still names the item.
+    # `submit_payout_item` sends the item id as 32 hex characters. A webhook can arrive before
+    # that submission has committed the provider id, or after an ambiguous submission never
+    # learned it, and the reference still names the item. The split keeps the older
+    # "<batch reference>:<item id>" form readable too.
     try:
         item_id = UUID(reference.rsplit(":", 1)[-1])
     except ValueError:

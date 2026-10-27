@@ -113,13 +113,33 @@ class PartnerPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayoutAc
 _IFSC = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
 #: Indian bank account numbers run from 9 to 18 digits.
 _ACCOUNT_NUMBER = re.compile(r"^\d{9,18}$")
+#: The holder name becomes the RazorpayX contact name, the stricter of the two places it goes (a
+#: fund account allows 120 characters): 3 to 50 characters of letters, digits, space, the right
+#: single quote (U+2019) and - _ / ( ) . -- ending in a letter, digit or full stop. Anything else
+#: is a 400 from RazorpayX, which the Partner would only see as "details not accepted".
+HOLDER_NAME_MIN_LENGTH = 3
+HOLDER_NAME_MAX_LENGTH = 50
+_HOLDER_NAME = re.compile(r"^[A-Za-z0-9 \u2019\-_/().]*[A-Za-z0-9.]$")
+#: Phone keyboards type a straight quote or a left quote (U+2018); RazorpayX accepts only the
+#: right one, so both are stored as U+2019.
+_APOSTROPHES = str.maketrans({"'": "\u2019", "\u2018": "\u2019"})
+_ALLOWED_NAME_MARKS = "\u2019 - _ / ( ) ."
 
 
 class PartnerPayoutAccountCreateSerializer(serializers.Serializer[dict[str, str]]):
     """Bank details as the Partner types them. The full number is write-only: it is passed to the
     payout provider and never echoed, stored or logged."""
 
-    holder_name = serializers.CharField(min_length=2, max_length=140, trim_whitespace=True)
+    holder_name = serializers.CharField(
+        min_length=HOLDER_NAME_MIN_LENGTH,
+        max_length=HOLDER_NAME_MAX_LENGTH,
+        trim_whitespace=True,
+        help_text=(
+            "As on the bank account. 3 to 50 characters: letters, numbers, spaces and "
+            f"{_ALLOWED_NAME_MARKS}, ending in a letter, number or full stop. A straight "
+            "apostrophe is stored as \u2019."
+        ),
+    )
     account_number = serializers.CharField(write_only=True, max_length=40)
     confirm_account_number = serializers.CharField(write_only=True, max_length=40)
     ifsc = serializers.CharField(max_length=16)
@@ -127,6 +147,17 @@ class PartnerPayoutAccountCreateSerializer(serializers.Serializer[dict[str, str]
     @staticmethod
     def _digits(value: str) -> str:
         return re.sub(r"[\s-]", "", value)
+
+    def validate_holder_name(self, value: str) -> str:
+        name = " ".join(value.translate(_APOSTROPHES).split())
+        if len(name) < HOLDER_NAME_MIN_LENGTH:
+            raise serializers.ValidationError("Enter the name as it appears on the bank account.")
+        if not _HOLDER_NAME.match(name):
+            raise serializers.ValidationError(
+                f"Use only letters, numbers, spaces and {_ALLOWED_NAME_MARKS} in the name, and "
+                "end it with a letter, number or full stop."
+            )
+        return name
 
     def validate_account_number(self, value: str) -> str:
         digits = self._digits(value)
