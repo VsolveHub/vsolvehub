@@ -8,9 +8,11 @@ import { ArrowLeft, FileCheck2, MapPin, Search, Wrench } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { fetchRentals } from "@/features/rentals/queries";
+import { useCustomerSession } from "@/features/session/queries";
 import { type ActiveRentalFilters, RentalCard, RentalFilters } from "@/features/rentals/view";
 
 function RentalsBrowseContent() {
+  const session = useCustomerSession();
   const searchParams = useSearchParams();
   const initCategory = searchParams.get("category") ?? undefined;
 
@@ -100,6 +102,9 @@ function RentalsBrowseContent() {
             </p>
           </div>
 
+          {/* Only once signed in: before that there is nothing of theirs to show, and the
+              page would only send them to log in. */}
+          {session.isAuthenticated ? (
           <div className="flex shrink-0 items-center gap-3">
             <Link
               href="/rentals/mine"
@@ -109,6 +114,7 @@ function RentalsBrowseContent() {
               My Rentals
             </Link>
           </div>
+          ) : null}
         </div>
 
         {/* Search Bar */}

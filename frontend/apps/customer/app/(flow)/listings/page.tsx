@@ -115,13 +115,16 @@ function ListingsBrowseContent() {
         subtitle="Jobs from trusted employers. Build your career with V Solve Hub."
         image="/part-a/careers.svg"
         aside={
-          <Link
-            href="/listings/my-applications"
-            className="inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-navy-900"
-          >
-            <FileCheck2 className="size-4" />
-            My Applications
-          </Link>
+          // Only once signed in: before that there is nothing of theirs to show.
+          session.isAuthenticated ? (
+            <Link
+              href="/listings/my-applications"
+              className="inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-navy-900"
+            >
+              <FileCheck2 className="size-4" />
+              My Applications
+            </Link>
+          ) : undefined
         }
       >
         <div className="grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]">

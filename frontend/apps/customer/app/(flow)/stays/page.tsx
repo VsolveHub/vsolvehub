@@ -13,10 +13,12 @@ import {
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
+import { useCustomerSession } from "@/features/session/queries";
 import { fetchStays } from "@/features/stays/queries";
 import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
 
 function StaysBrowseContent() {
+  const session = useCustomerSession();
   const searchParams = useSearchParams();
   const initCategory = searchParams.get("category") ?? undefined;
 
@@ -116,6 +118,9 @@ function StaysBrowseContent() {
             </p>
           </div>
 
+          {/* Only once signed in: before that there is nothing of theirs to show, and the
+              page would only send them to log in. */}
+          {session.isAuthenticated ? (
           <div className="flex shrink-0 items-center gap-3">
             <Link
               href="/stays/mine"
@@ -125,6 +130,7 @@ function StaysBrowseContent() {
               My Enquiries
             </Link>
           </div>
+          ) : null}
         </div>
 
         {/* Search Bar */}

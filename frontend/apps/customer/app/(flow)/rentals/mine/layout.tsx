@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { CustomerShell } from "@/features/session/view/customer-shell";
+
 /**
  * A signed-in customer's own rental bookings: not a search result.
  *
@@ -12,6 +14,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Signed-in only. A visitor without a session is sent to login and back here
+ * afterwards, rather than shown a list the API refuses to fill ("Authentication
+ * credentials were not provided").
+ */
 export default function Layout({ children }: { children: ReactNode }) {
-  return children;
+  return <CustomerShell>{children}</CustomerShell>;
 }
