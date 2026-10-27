@@ -20,7 +20,14 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
  * error copy flows through here without further work.
  */
 
-import { createTranslator, DEFAULT_LOCALE, type Catalog, type Locale, type Translator } from "./i18n-core";
+import {
+  createTranslator,
+  DEFAULT_LOCALE,
+  interpolate,
+  type Catalog,
+  type Locale,
+  type Translator,
+} from "./i18n-core";
 
 export type { Catalog, Locale, Message, Translator } from "./i18n-core";
 
@@ -76,6 +83,8 @@ export function useTOrDefault(): (
   const { t } = useTranslator();
   return (key, fallback, params) => {
     const resolved = t(key, params);
-    return resolved === key ? fallback : resolved;
+    // The fallback carries the same `{placeholders}` as a catalogue entry would, so it is
+    // interpolated the same way — otherwise an app with no entry shows "{codeLength}-digit code".
+    return resolved === key ? interpolate(fallback, params) : resolved;
   };
 }

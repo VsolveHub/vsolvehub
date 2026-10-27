@@ -31,7 +31,8 @@ export interface Translator {
   n: (value: number, options?: Intl.NumberFormatOptions) => string;
 }
 
-function interpolate(template: string, params?: Record<string, string | number>): string {
+/** Fill `{name}` placeholders from `params`; an unknown placeholder is left as written. */
+export function interpolate(template: string, params?: Record<string, string | number>): string {
   if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
     name in params ? String(params[name]) : match,

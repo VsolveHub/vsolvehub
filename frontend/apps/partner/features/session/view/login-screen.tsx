@@ -3,7 +3,7 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated, useT } from "@vsolve/ui";
-import { CheckCircle2, HelpCircle, ShieldCheck, Smartphone, Sparkles, Zap } from "lucide-react";
+import { CheckCircle2, HelpCircle, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -107,6 +107,7 @@ export function LoginScreen() {
   const isMissing =
     application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || isMissing;
+  const hasRejectedDocs = (application.data?.documents ?? []).some((d) => d.status === "REJECTED");
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -117,9 +118,8 @@ export function LoginScreen() {
     }
 
     if (!knowsWhereToGo) return;
-    const hasRejectedDocs = (application.data?.documents ?? []).some((d) => d.status === "REJECTED");
     router.replace(homeForApplication(application.data?.status ?? null, hasRejectedDocs));
-  }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
+  }, [application.data?.status, hasRejectedDocs, isAuthenticated, knowsWhereToGo, next, router]);
 
   if (!hydrated || guard.status === "checking") {
     return (

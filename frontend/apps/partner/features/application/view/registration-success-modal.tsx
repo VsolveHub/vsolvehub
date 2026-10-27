@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Check, CheckCircle2, Clock, ShieldCheck, Sparkles, Smartphone, ArrowRight } from "lucide-react";
+import { Check, CheckCircle2, Clock, Sparkles, Smartphone, ArrowRight } from "lucide-react";
 import { Button } from "@vsolve/ui";
 import type { Schemas } from "@vsolve/api-client";
 

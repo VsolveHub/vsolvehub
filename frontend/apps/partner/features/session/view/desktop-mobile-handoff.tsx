@@ -1,22 +1,16 @@
 "use client";
 
 import { useLogout } from "@vsolve/query";
-import { Button, Logo } from "@vsolve/ui";
+import { Logo } from "@vsolve/ui";
 import {
-  ArrowRight,
-  Building,
   CheckCircle2,
   Download,
-  ExternalLink,
   FileCheck2,
   FileText,
   LogOut,
-  MapPin,
   QrCode,
   ShieldCheck,
   Smartphone,
-  Sparkles,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import type { Schemas } from "@vsolve/api-client";

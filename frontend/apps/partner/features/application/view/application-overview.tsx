@@ -9,12 +9,10 @@ import {
   BedDouble,
   Check,
   ChevronRight,
-  Clock,
   FileText,
   Package,
   ShieldCheck,
   Sparkles,
-  UploadCloud,
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
@@ -300,7 +298,7 @@ function Standing({ application }: { application: Application }) {
           {editable ? (
             <NextAction summary={summary} ready={ready} />
           ) : application.status === "SUBMITTED" || application.status === "UNDER_REVIEW" ? (
-            <SubmittedHero application={application} />
+            <SubmittedHero />
           ) : null}
 
           {/* Specialist & Contractor Option — not for someone listing their own property. */}
@@ -463,7 +461,7 @@ function NextAction({
 /**
  * Modern Hero Card for Submitted / Under Review applications
  */
-function SubmittedHero({ application }: { application: Application }) {
+function SubmittedHero() {
   return (
     <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-6 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-5">
       {/* Background ambient lighting */}

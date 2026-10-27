@@ -1,5 +1,7 @@
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { I18nProvider, useTOrDefault } from "./i18n";
 import { createTranslator, type Catalog } from "./i18n-core";
 
 const catalog: Catalog = {
@@ -70,5 +72,29 @@ describe("locale-specific plural rules", () => {
 
     const english = new Intl.PluralRules("en-IN");
     expect(english.select(0)).toBe("other");
+  });
+});
+
+describe("useTOrDefault", () => {
+  function CodeLabel() {
+    const tf = useTOrDefault();
+    return <span>{tf("ui.otpForm.digitCode", "{codeLength}-digit code", { codeLength: 6 })}</span>;
+  }
+
+  it("fills the placeholders of its fallback when the app has no entry", () => {
+    // The customer app mounts no catalogue: the shared OTP form must still read "6-digit code".
+    render(<CodeLabel />);
+
+    expect(screen.getByText("6-digit code")).toBeInTheDocument();
+  });
+
+  it("uses the app's own entry when it has one", () => {
+    render(
+      <I18nProvider locale="en-IN" catalog={{ "ui.otpForm.digitCode": "{codeLength} అంకెల కోడ్" }}>
+        <CodeLabel />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("6 అంకెల కోడ్")).toBeInTheDocument();
   });
 });

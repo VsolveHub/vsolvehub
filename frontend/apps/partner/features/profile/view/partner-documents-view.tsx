@@ -1,7 +1,7 @@
 "use client";
 
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Card, ErrorState, formatDate, Skeleton, useT } from "@vsolve/ui";
+import { Card, ErrorState, formatDate, Skeleton, useT } from "@vsolve/ui";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
-  ExternalLink,
   FileCheck2,
   FileSpreadsheet,
   FileText,

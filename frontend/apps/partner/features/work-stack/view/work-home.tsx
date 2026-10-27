@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
-import { ApplicationOverview } from "@/features/application/view/application-overview";
 import { usePartnerApplication } from "@/features/application/queries";
 
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";

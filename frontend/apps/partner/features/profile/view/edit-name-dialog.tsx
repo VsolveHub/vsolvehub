@@ -2,7 +2,7 @@
 
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Button, Dialog, Field, Input, useT } from "@vsolve/ui";
-import { User, AlertCircle } from "lucide-react";
+import { User } from "lucide-react";
 import { useState } from "react";
 
 import { useUpdatePartnerProfile } from "../queries";
