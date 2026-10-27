@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -27,7 +27,16 @@ FALLBACK_JPEG = (
     b"\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
 )
 
-DEMO_STORIES = [
+
+class DemoStory(TypedDict):
+    title: str
+    caption: str
+    display_order: int
+    hours_ago: int
+    rel_path: str
+
+
+DEMO_STORIES: list[DemoStory] = [
     {
         "title": "ID-Verified Experts",
         "caption": "Every professional undergoes 4-step ID and background verification before their first booking.",

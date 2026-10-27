@@ -3,7 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import {
-  Badge,
   Button,
   Card,
   Disclosure,
@@ -11,25 +10,27 @@ import {
   Field,
   Input,
   Select,
+  StatCard,
   Textarea,
-  formatMoney,
+  cn,
   useT,
 } from "@vsolve/ui";
-import { Camera, MapPin, X } from "lucide-react";
+import { Camera, CheckCircle2, Clock, MapPin, PackageOpen, Plus, Power, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
-import { canSubmitAsset } from "@/features/rentals/booking-actions";
 import {
   createPartnerRentalAsset,
   fetchPartnerDefaultLocation,
   fetchPartnerRentalAssets,
   fetchRentalTaxonomy,
-  submitPartnerRentalAsset,
   uploadPartnerRentalPhoto,
+  type RentalAsset,
   type RentalTaxonomySubcategory,
 } from "@/features/rentals/queries";
 import { FindOnMap } from "@/features/location/view/find-on-map";
 import { PickupHoursCard } from "@/features/rentals/view/pickup-hours-card";
+import { RentalAdEditor } from "@/features/rentals/view/rental-ad-editor";
+import { RentalAssetCard } from "@/features/rentals/view/rental-asset-card";
 import { RentalFieldInput, fieldLabel, type SchemaProperty } from "@/features/rentals/view/rental-field-input";
 import { useRentalSections } from "@/features/rentals/view/rental-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
@@ -109,6 +110,10 @@ export function PartnerRentalsWorkspace() {
   const rentalSections = useRentalSections();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [creating, setCreating] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<RentalAsset | null>(null);
+  const [tab, setTab] = useState<"ALL" | "PUBLISHED" | "PAUSED" | "DRAFT">("ALL");
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [subcategorySlug, setSubcategorySlug] = useState("");
@@ -208,14 +213,10 @@ export function PartnerRentalsWorkspace() {
       setPhotos([]);
       setStructuredFields({});
       setFormError(null);
+      setCreating(false);
       invalidate();
     },
     onError: (err: unknown) => setFormError(friendlyErrorMessage(err)),
-  });
-
-  const act = useMutation({
-    mutationFn: (id: string) => submitPartnerRentalAsset(id),
-    onSuccess: invalidate,
   });
 
   function patchPhoto(localId: string, patch: Partial<PhotoDraft>) {
@@ -348,23 +349,65 @@ export function PartnerRentalsWorkspace() {
   }
 
   const uploadingCount = photos.filter((photo) => photo.uploading).length;
+  const allAssets = assets.data ?? [];
+  const liveCount = allAssets.filter((a) => a.public_state === "PUBLISHED").length;
+  const pausedCount = allAssets.filter((a) => a.public_state === "PAUSED").length;
+  const draftCount = allAssets.filter(
+    (a) => a.public_state !== "PUBLISHED" && a.public_state !== "PAUSED",
+  ).length;
+
+  const filteredAssets = allAssets.filter((asset) => {
+    if (tab === "PUBLISHED") return asset.public_state === "PUBLISHED";
+    if (tab === "PAUSED") return asset.public_state === "PAUSED";
+    if (tab === "DRAFT") return asset.public_state !== "PUBLISHED" && asset.public_state !== "PAUSED";
+    return true;
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("rentals.ads.eyebrow")}</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("rentals.ads.title")}</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          {t("rentals.ads.intro")}
-        </p>
+      {/* Top Header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("rentals.inventory.eyebrow")}</p>
+          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("rentals.inventory.title")}</h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            {t("rentals.inventory.intro")}
+          </p>
+        </div>
+        {!creating ? (
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="mr-1.5 size-4" aria-hidden />
+            {t("rentals.inventory.postItem")}
+          </Button>
+        ) : null}
       </div>
 
       <SectionNav label={t("rentals.sections.ariaLabel")} items={rentalSections} />
 
-      <PickupHoursCard />
+      {/* Inventory Overview Stats Bar */}
+      {allAssets.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label={t("rentals.inventory.statTotal")} value={allAssets.length} icon={<PackageOpen className="size-4" />} />
+          <StatCard label={t("rentals.inventory.statLive")} value={liveCount} icon={<CheckCircle2 className="size-4 text-positive-text" />} />
+          <StatCard label={t("rentals.inventory.statPaused")} value={pausedCount} icon={<Power className="size-4 text-warning-text" />} />
+          <StatCard label={t("rentals.inventory.statDrafts")} value={draftCount} icon={<Clock className="size-4 text-text-secondary" />} />
+        </div>
+      ) : null}
 
-      <Card padding="lg">
-        <form className="flex flex-col gap-6" onSubmit={onCreate}>
+      {/* Creation Form (Only displayed when partner clicks 'Post an item') */}
+      {creating ? (
+        <Card padding="lg" className="border-action/40 shadow-sm">
+          <div className="mb-6 flex items-center justify-between border-b border-line pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{t("rentals.inventory.createTitle")}</h2>
+              <p className="text-xs text-text-secondary">{t("rentals.inventory.createHint")}</p>
+            </div>
+            <Button variant="outline" size="sm" type="button" onClick={() => setCreating(false)}>
+              {t("common.cancel")}
+            </Button>
+          </div>
+
+          <form className="flex flex-col gap-6" onSubmit={onCreate}>
           <section className="flex flex-col gap-3">
             <Field
               label={t("rentals.ads.photos")}
@@ -708,77 +751,130 @@ export function PartnerRentalsWorkspace() {
           </label>
 
           {formError ? <p className="text-sm text-danger-text">{formError}</p> : null}
-          <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={create.isPending || uploadingCount > 0}>
-            {create.isPending ? t("rentals.ads.posting") : t("rentals.ads.post")}
-          </Button>
+
+          <div className="flex items-center justify-end gap-3 border-t border-line pt-4">
+            <Button variant="outline" type="button" onClick={() => setCreating(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" size="lg" disabled={create.isPending || uploadingCount > 0}>
+              {create.isPending ? t("rentals.ads.posting") : t("rentals.ads.post")}
+            </Button>
+          </div>
         </form>
       </Card>
+      ) : null}
 
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-navy-900">{t("rentals.ads.yourAds")}</h2>
-          <p className="text-sm text-text-secondary">{t("rentals.ads.yourAdsHint")}</p>
-        </div>
-        {assets.isLoading ? <p className="text-sm text-text-secondary">{t("common.loading")}</p> : null}
+      {/* Main Ads List Section */}
+      <section className="flex flex-col gap-4">
+        {allAssets.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setTab("ALL")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "ALL"
+                    ? "bg-navy-900 text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabAll", { count: allAssets.length })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("PUBLISHED")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "PUBLISHED"
+                    ? "bg-positive-text text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabLive", { count: liveCount })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("PAUSED")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "PAUSED"
+                    ? "bg-warning-text text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabPaused", { count: pausedCount })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("DRAFT")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "DRAFT"
+                    ? "bg-navy-700 text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabDrafts", { count: draftCount })}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {assets.isLoading ? <p className="text-sm text-text-secondary">{t("rentals.inventory.loading")}</p> : null}
         {assets.error ? (
           <p className="text-sm text-danger-text">{friendlyErrorMessage(assets.error)}</p>
         ) : null}
-        {assets.data && assets.data.length === 0 ? (
-          <EmptyState compact title={t("rentals.ads.emptyTitle")} description={t("rentals.ads.emptyDescription")} />
+
+        {allAssets.length === 0 && !creating ? (
+          <EmptyState
+            compact
+            title={t("rentals.inventory.emptyTitle")}
+            description={t("rentals.inventory.emptyDescription")}
+            action={
+              <Button onClick={() => setCreating(true)}>
+                <Plus className="mr-1.5 size-4" aria-hidden />
+                {t("rentals.inventory.postItem")}
+              </Button>
+            }
+          />
         ) : null}
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.data?.map((asset) => {
-            const thumb = asset.media?.[0]?.url;
-            const qty = asset.quantity_available;
-            return (
+
+        {filteredAssets.length > 0 ? (
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredAssets.map((asset) => (
               <li key={asset.id}>
-                <Card padding="none" className="overflow-hidden">
-                  <div className="relative aspect-[4/3] bg-surface-sunken">
-                    {thumb ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumb} alt="" className="size-full object-cover" />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-sm text-text-muted">
-                        {t("rentals.ads.noPhoto")}
-                      </div>
-                    )}
-                    <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
-                      <Badge>{asset.public_state}</Badge>
-                      {typeof qty === "number" ? <Badge tone="neutral">{t("rentals.ads.qty", { qty })}</Badge> : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 p-3">
-                    <p className="text-lg font-extrabold text-navy-900">{t("rentals.ads.perDay", { amount: formatMoney(asset.daily_rate_paise) })}</p>
-                    <p className="font-semibold text-navy-900">{asset.title}</p>
-                    {asset.location_text ? (
-                      <p className="inline-flex items-center gap-1 text-sm text-text-secondary">
-                        <MapPin className="size-3.5 shrink-0" />
-                        {asset.location_text}
-                      </p>
-                    ) : null}
-                    {asset.delivery_available ? <Badge tone="neutral">{t("rentals.ads.deliveryOnRequest")}</Badge> : null}
-                    {asset.public_state === "DRAFT" ? (
-                      <p className="text-xs text-text-secondary">
-                        {t("rentals.ads.draftHint")}
-                      </p>
-                    ) : null}
-                    {canSubmitAsset(asset.moderation_status) ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={act.isPending}
-                        onClick={() => act.mutate(asset.id)}
-                      >
-                        {t("rentals.ads.submitForReview")}
-                      </Button>
-                    ) : null}
-                  </div>
-                </Card>
+                <RentalAssetCard asset={asset} onEdit={(selected) => setEditingAsset(selected)} />
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        ) : allAssets.length > 0 && !creating ? (
+          <EmptyState
+            compact
+            title={t("rentals.inventory.emptyTabTitle")}
+            description={t("rentals.inventory.emptyTabDescription")}
+          />
+        ) : null}
       </section>
+
+      {/* Pickup Schedule Configuration */}
+      <div className="pt-2">
+        <PickupHoursCard />
+      </div>
+
+      {/* Slide-Over Editor for Editing Existing Rental Ads */}
+      {editingAsset ? (
+        <RentalAdEditor
+          asset={editingAsset}
+          taxonomy={subcategories}
+          defaultLocation={defaultAddress.line}
+          onClose={() => setEditingAsset(null)}
+          onSaved={() => {
+            setEditingAsset(null);
+            invalidate();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

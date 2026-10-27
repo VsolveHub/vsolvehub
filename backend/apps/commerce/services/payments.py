@@ -58,9 +58,15 @@ def _locked_payment_context(
     units = list(group.units.select_for_update().prefetch_related("lines").order_by("position"))
     if not units:
         raise ValueError("The Booking Group has no Fulfilment Units.")
+    # Live holds only. A unit whose first Partner undid an acceptance keeps that released
+    # reservation as history beside the second Partner's live one; counting both read as
+    # "two holds for one unit" and refused payment for a group that was fully committed.
     reservations = list(
         Reservation.objects.select_for_update()
-        .filter(fulfilment_unit__booking_group=group)
+        .filter(
+            fulfilment_unit__booking_group=group,
+            status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+        )
         .order_by("fulfilment_unit__position")
     )
     if (

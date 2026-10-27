@@ -1,7 +1,7 @@
 """Tests for Safety Stories APIs (Customer and Operations/Admin)."""
 
 from datetime import timedelta
-import io
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -189,7 +189,9 @@ def test_ops_upload_validation_failures():
     assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     # Disallowed mime type
-    pdf_file = SimpleUploadedFile("manual.pdf", b"%PDF-1.4 file content", content_type="application/pdf")
+    pdf_file = SimpleUploadedFile(
+        "manual.pdf", b"%PDF-1.4 file content", content_type="application/pdf"
+    )
     resp = ops.post("/api/v1/ops/stories/", {"file": pdf_file}, format="multipart")
     assert resp.status_code == status.HTTP_400_BAD_REQUEST
 

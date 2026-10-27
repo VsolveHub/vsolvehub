@@ -35,7 +35,12 @@ from tests.fulfilment.test_refund_attempt_integrity import (
     _pay_for_an_amendment,
 )
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 TWO_UNITS = 2
 TWO_REFUNDS = 2

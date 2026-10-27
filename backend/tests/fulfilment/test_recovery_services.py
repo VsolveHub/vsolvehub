@@ -29,7 +29,12 @@ from apps.partners.models import PartnerProfile
 from tests.carts.test_fulfilment_planning import _partner
 from tests.fulfilment.conftest import create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 _operator_counter = iter(range(1, 10_000))
 _partner_counter = iter(range(1, 10_000))

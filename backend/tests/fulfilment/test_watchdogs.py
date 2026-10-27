@@ -18,7 +18,12 @@ from apps.fulfilment.tasks import sweep_late_bookings
 from apps.identity.models import User
 from tests.fulfilment.conftest import create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 
 def _make_overdue(booked: object) -> None:

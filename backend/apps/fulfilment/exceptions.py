@@ -1,5 +1,7 @@
 """Stable API failures for booking fulfilment commands."""
 
+from datetime import datetime
+
 from rest_framework import status
 from rest_framework.exceptions import APIException
 
@@ -31,6 +33,44 @@ class BookingVersionConflictApiError(APIException):
     def __init__(self, *, current_version: int) -> None:
         super().__init__(detail=self.safe_message, code=self.default_code)
         self.api_details: dict[str, object] = {"current_version": current_version}
+
+
+class _BookingActionWindowApiError(APIException):
+    """A Partner command arrived outside the server-clock window it is allowed in.
+
+    Both directions publish the whole window and the server's own instant, so the app can
+    say "opens at 9:00" or "closed at 13:30" without trusting the device clock. Retrying
+    the identical request later is legitimate for the not-yet case — the refusal rolls the
+    idempotency record back, so the same key runs fresh once the gate opens.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    safe_message: str
+
+    def __init__(
+        self, *, action: str, opens_at: datetime, closes_at: datetime, server_now: datetime
+    ) -> None:
+        super().__init__(detail=self.safe_message, code=self.default_code)
+        self.api_details: dict[str, object] = {
+            "action": action,
+            "opens_at": opens_at.isoformat(),
+            "closes_at": closes_at.isoformat(),
+            "server_now": server_now.isoformat(),
+        }
+
+
+class BookingActionNotYetAllowedApiError(_BookingActionWindowApiError):
+    default_code = "booking_action_not_yet_allowed"
+    error_code = "booking_action_not_yet_allowed"
+    safe_message = "It is too early for this step. It opens closer to the visit."
+    retryable = True
+
+
+class BookingActionWindowClosedApiError(_BookingActionWindowApiError):
+    default_code = "booking_action_window_closed"
+    error_code = "booking_action_window_closed"
+    safe_message = "The window for this step has closed. Contact support to continue."
+    retryable = False
 
 
 class OutsideServiceableAreaApiError(APIException):

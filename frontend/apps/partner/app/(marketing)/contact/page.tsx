@@ -6,7 +6,7 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "Contact us",
   description:
-    "Get in touch with V Solve Hub partner support — call +91 733 076 4634, WhatsApp us, or email support@vsolvehub.com. We're here 9am–9pm.",
+    "Get in touch with V Solve Hub partner support — call +91 879 056 4634, WhatsApp us, or email support@vsolvehub.com. We're here 9am–9pm.",
   alternates: { canonical: "/contact" },
 };
 
@@ -16,8 +16,8 @@ const CHANNELS = [
     tone: "bg-emerald-50 text-emerald-600 border-emerald-200/80",
     title: "WhatsApp",
     detail: "Chat with support instantly",
-    value: "+91 733 076 4634",
-    href: "https://wa.me/917330764634",
+    value: "+91 879 056 4634",
+    href: "https://wa.me/918790564634",
     external: true,
   },
   {
@@ -25,8 +25,8 @@ const CHANNELS = [
     tone: "bg-blue-50 text-blue-600 border-blue-200/80",
     title: "Call us",
     detail: "9am–9pm, all days",
-    value: "+91 733 076 4634",
-    href: "tel:+917330764634",
+    value: "+91 879 056 4634",
+    href: "tel:+918790564634",
   },
   {
     icon: Mail,

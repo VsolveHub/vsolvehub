@@ -168,7 +168,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
 
             <Link href="/contact" className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold transition-colors">
               <PhoneCall className="h-3.5 w-3.5" />
-              <span>Partner Helpline: +91 (800) 876-5832</span>
+              <span>Partner Helpline: +91 879 056 4634</span>
             </Link>
           </div>
 

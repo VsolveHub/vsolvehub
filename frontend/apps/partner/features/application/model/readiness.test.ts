@@ -71,6 +71,21 @@ function completeApplication(overrides: Partial<Application> = {}): Application 
   });
 }
 
+const completeSchedule: Schemas["PartnerSchedule"] = {
+  rules: [
+    {
+      id: "rule-1",
+      service_area_id: "area-1",
+      weekday: 0,
+      starts_at: "09:00:00",
+      ends_at: "18:00:00",
+      ends_next_day: false,
+      is_active: true,
+    },
+  ],
+  exceptions: [],
+};
+
 describe("requirements", () => {
   it("lists everything as outstanding for an empty draft", () => {
     const outstanding = outstandingRequirements(application());
@@ -80,6 +95,7 @@ describe("requirements", () => {
       "SKILLS",
       "SERVICES",
       "SERVICE_AREAS",
+      "WORKING_HOURS",
       "GOVERNMENT_ID",
       "ADDRESS_PROOF",
       "CONSENTS",
@@ -87,7 +103,13 @@ describe("requirements", () => {
   });
 
   it("reports nothing outstanding once complete", () => {
-    expect(outstandingRequirements(completeApplication())).toHaveLength(0);
+    expect(outstandingRequirements(completeApplication(), completeSchedule)).toHaveLength(0);
+  });
+
+  it("requires working hours for each active service area", () => {
+    expect(outstandingRequirements(completeApplication(), null).map((item) => item.code)).toEqual([
+      "WORKING_HOURS",
+    ]);
   });
 
   it("does not require bank or tax documents to apply", () => {
@@ -107,7 +129,7 @@ describe("requirements", () => {
         document({ id: "d2", kind: "ADDRESS_PROOF", status: "APPROVED" }),
       ],
     });
-    expect(outstandingRequirements(withPending)).toHaveLength(0);
+    expect(outstandingRequirements(withPending, completeSchedule)).toHaveLength(0);
   });
 
   it("counts a rejected document as missing", () => {
@@ -117,7 +139,7 @@ describe("requirements", () => {
         document({ id: "d2", kind: "ADDRESS_PROOF", status: "APPROVED" }),
       ],
     });
-    expect(outstandingRequirements(withRejected).map((item) => item.code)).toEqual([
+    expect(outstandingRequirements(withRejected, completeSchedule).map((item) => item.code)).toEqual([
       "GOVERNMENT_ID",
     ]);
   });
@@ -129,7 +151,7 @@ describe("requirements", () => {
         document({ id: "d2", kind: "ADDRESS_PROOF", status: "APPROVED" }),
       ],
     });
-    expect(outstandingRequirements(superseded).map((item) => item.code)).toEqual([
+    expect(outstandingRequirements(superseded, completeSchedule).map((item) => item.code)).toEqual([
       "GOVERNMENT_ID",
     ]);
   });
@@ -176,7 +198,11 @@ describe("editability", () => {
 
 describe("submission", () => {
   it("permits submitting a complete draft", () => {
-    expect(canSubmit(completeApplication())).toBe(true);
+    expect(canSubmit(completeApplication(), completeSchedule)).toBe(true);
+  });
+
+  it("refuses a draft without working hours", () => {
+    expect(canSubmit(completeApplication())).toBe(false);
   });
 
   it("refuses an incomplete draft", () => {
@@ -184,11 +210,11 @@ describe("submission", () => {
   });
 
   it("refuses to resubmit something already under review", () => {
-    expect(canSubmit(completeApplication({ status: "UNDER_REVIEW" }))).toBe(false);
+    expect(canSubmit(completeApplication({ status: "UNDER_REVIEW" }), completeSchedule)).toBe(false);
   });
 
   it("permits resubmitting after changes were requested", () => {
-    expect(canSubmit(completeApplication({ status: "CHANGES_REQUIRED" }))).toBe(true);
+    expect(canSubmit(completeApplication({ status: "CHANGES_REQUIRED" }), completeSchedule)).toBe(true);
   });
 });
 
@@ -199,6 +225,7 @@ describe("a stay host", () => {
     expect(codes).not.toContain("SKILLS");
     expect(codes).not.toContain("SERVICES");
     expect(codes).not.toContain("SERVICE_AREAS");
+    expect(codes).not.toContain("WORKING_HOURS");
     expect(codes).not.toContain("EXPERIENCE_YEARS");
     expect(codes).toContain("DISPLAY_NAME");
     expect(codes).toContain("CONSENTS");

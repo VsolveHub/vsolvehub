@@ -4,9 +4,12 @@ import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Badge, buttonStyles, ErrorState, Spinner, useT, type Translator } from "@vsolve/ui";
 import Link from "next/link";
 
+import { useState } from "react";
+
 import { isListingTrack } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
+import { UploadedDocumentCard } from "./uploaded-document-card";
 
 /**
  * The documents a reviewer will look at.
@@ -67,6 +70,7 @@ function currentDocument(
 export function DocumentsStep() {
   const t = useT();
   const query = usePartnerApplication();
+  const [replacingKinds, setReplacingKinds] = useState<Set<DocumentKind>>(new Set());
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
@@ -102,6 +106,10 @@ export function DocumentsStep() {
           const document = application ? currentDocument(application, required.kind) : null;
           const status = document ? statusTone(document.status, t) : null;
           const label = t(required.labelKey);
+          const isReplacing = replacingKinds.has(required.kind);
+          const canReplace =
+            isEditable &&
+            (document?.status !== "APPROVED" || application?.status === "CHANGES_REQUIRED");
 
           return (
             <div key={required.kind} className="rounded-control border border-line bg-surface p-4">
@@ -114,41 +122,40 @@ export function DocumentsStep() {
                 </Badge>
               </div>
 
-              {document?.status === "REJECTED" ? (
-                <p className="mt-2 text-xs font-semibold text-danger-text">
-                  {document.review_reason || t("apply.documents.rejectedGenericReason")}
-                </p>
-              ) : null}
-
-              {document ? (
-                <p className="mt-2 text-xs text-text-muted">
-                  {t("apply.documents.versionUploadedPrefix", { version: document.version })}{" "}
-                  <time dateTime={document.uploaded_at}>
-                    {new Intl.DateTimeFormat("en-IN", {
-                      dateStyle: "medium",
-                      timeZone: "Asia/Kolkata",
-                    }).format(new Date(document.uploaded_at))}
-                  </time>
-                </p>
-              ) : null}
-
-              {isEditable ? (
+              {document && !isReplacing ? (
+                <UploadedDocumentCard
+                  document={document}
+                  label={label}
+                  canReplace={canReplace}
+                  onReplace={() =>
+                    setReplacingKinds((prev) => new Set(prev).add(required.kind))
+                  }
+                />
+              ) : isEditable ? (
                 <DocumentUpload
                   kind={required.kind}
                   label={label}
                   expectedVersion={application?.version ?? null}
-                  replacing={
-                    document?.status === "REJECTED" || document?.scan_status === "REJECTED"
+                  replacing={Boolean(document)}
+                  onSuccess={() =>
+                    setReplacingKinds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(required.kind);
+                      return next;
+                    })
+                  }
+                  onCancel={
+                    document
+                      ? () =>
+                          setReplacingKinds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(required.kind);
+                            return next;
+                          })
+                      : undefined
                   }
                 />
               ) : (
-                /*
-                  A locked application still draws the required marker and, when
-                  a kind was never supplied, the words "Not uploaded" — with no
-                  picker underneath and, until now, nothing saying why. On a
-                  phone that reads as a broken screen: a starred requirement, an
-                  unmet status and no control. Say which of the two it is.
-                */
                 <p className="mt-2 text-xs text-text-muted">
                   {document
                     ? t("apply.documents.lockedReviewing")

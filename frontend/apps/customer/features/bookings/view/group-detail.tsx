@@ -28,6 +28,7 @@ import { VisitProgress } from "./visit-progress";
 import { VisitStartCode } from "./visit-start-code";
 
 import {
+  hasLiveVisit,
   isCancellationRefused,
   isGroupVersionConflict,
   isPartnerOnTheWayOrBeyond,
@@ -398,7 +399,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
   const isPartnerOnTheWay = isPartnerOnTheWayOrBeyond(group);
   const canCancel = !isTerminal(group) && !isPartnerOnTheWay;
-  const canRefresh = !isTerminal(group) && !isPartnerOnTheWay;
+  // A paid group reads as terminal, but its visits are still moving — the page polls them, and
+  // the customer standing at the door may not want to wait for the next tick.
+  const canRefresh = hasLiveVisit(group) || (!isTerminal(group) && !isPartnerOnTheWay);
   const isSinglePaidVisit = isPaid && group.units.length === 1;
   /*
     The id of the one visit to ask about, or null.
@@ -552,6 +555,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
               <SingleVisitDetailCard
                 unit={group.units[0]}
                 isPaid={isPaid}
+                groupReadAt={groupQuery.dataUpdatedAt}
               />
             ) : isMultiPaidVisit ? (
               <ul className="flex flex-col gap-3">
@@ -563,6 +567,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
                     total={group.units.length}
                     groupId={group.id}
                     isPaid={isPaid}
+                    groupReadAt={groupQuery.dataUpdatedAt}
                   />
                 ))}
               </ul>

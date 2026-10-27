@@ -37,9 +37,8 @@ class PublicSafetyStoryListView(APIView):
     )
     def get(self, request: Request) -> Response:
         now = timezone.now()
-        stories = (
-            SafetyStory.objects.filter(is_published=True, expires_at__gt=now)
-            .order_by("display_order", "-published_at")
+        stories = SafetyStory.objects.filter(is_published=True, expires_at__gt=now).order_by(
+            "display_order", "-published_at"
         )
         serializer = PublicSafetyStorySerializer(stories, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)

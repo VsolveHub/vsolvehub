@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { cn, formatMoney } from "@vsolve/ui";
 import { Clock, ShieldCheck, Ban, X } from "lucide-react";
+
+import { RemoteImage } from "@/components/remote-image";
 
 import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../client-queries";
 import { durationLabel, policyTexts, warrantyText } from "../service-facts";
@@ -222,10 +224,11 @@ export function TileServiceDetailPanel({
         {showVariantPicker ? null : (
           <div className="mt-2 overflow-hidden rounded-[1rem] bg-[#F4F1EC]">
             {imageUrl !== "" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <RemoteImage
                 src={imageUrl}
                 alt=""
+                width={480}
+                height={360}
                 className="aspect-[4/3] w-full object-cover object-center"
               />
             ) : (
@@ -320,13 +323,13 @@ export function TileServiceDetailPanel({
             size="panel"
           />
         </div>
-        <Link
+        <IntentLink
           href={`/catalog/${categorySlug}/${service.slug}`}
           className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-navy-800 hover:text-action"
         >
           See price details
           <span aria-hidden>→</span>
-        </Link>
+        </IntentLink>
       </div>
     </aside>
   );

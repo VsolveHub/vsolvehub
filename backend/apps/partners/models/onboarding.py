@@ -427,7 +427,7 @@ class PartnerDocument(models.Model):
     scan_status = models.CharField(
         max_length=16,
         choices=ScanStatus.choices,
-        default=ScanStatus.PENDING,
+        default=ScanStatus.CLEAN,
     )
     scanned_at = models.DateTimeField(null=True, blank=True)
     scan_failure_code = models.CharField(max_length=64, blank=True)
@@ -476,6 +476,26 @@ class PartnerDocument(models.Model):
 
     def __str__(self) -> str:
         return f"{self.application_id}:{self.kind}:v{self.version}"
+
+    @property
+    def label(self) -> str:
+        return self.get_kind_display()
+
+    @property
+    def file_name(self) -> str:
+        base = self.object_key.split("/")[-1] if "/" in self.object_key else self.object_key
+        if "." in base:
+            return base
+        ext = (
+            "pdf"
+            if "pdf" in self.content_type
+            else "jpg"
+            if "jpeg" in self.content_type or "jpg" in self.content_type
+            else "png"
+            if "png" in self.content_type
+            else "bin"
+        )
+        return f"{self.kind.lower()}_v{self.version}.{ext}"
 
     def is_expired_on(self, day: date) -> bool:
         """A document with no recorded expiry never expires. Absence is not staleness."""

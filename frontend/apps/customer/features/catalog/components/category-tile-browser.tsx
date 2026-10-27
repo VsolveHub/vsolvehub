@@ -1,14 +1,12 @@
-/* eslint-disable @next/next/no-img-element -- Catalog thumbnails are fixed-size
- * (size-16/size-20) and come from arbitrary remote hosts. `next/image` would need
- * every one of those hosts in `images.remotePatterns`, which this app does not
- * configure; `category-artwork.tsx` opts out the same way for the same reason. */
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useRouter } from "next/navigation";
 import { formatMoney, cn } from "@vsolve/ui";
 import { ChevronRight, ClipboardList, X } from "lucide-react";
+
+import { RemoteImage } from "@/components/remote-image";
 
 import { ServicePhoto } from "./category-artwork";
 import { AddToCartButton } from "./add-to-cart-button";
@@ -141,10 +139,11 @@ function WhatYouCanBookModal({
                     {/* Left Thumbnail Image */}
                     <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
                       {variantImg ? (
-                        <img
+                        <RemoteImage
                           src={variantImg}
                           alt=""
-                          loading="lazy"
+                          width={80}
+                          height={80}
                           className={
                             variantImg.includes("/Service%20Cover/") ||
                             variantImg.includes("/Service Cover/")
@@ -198,10 +197,11 @@ function WhatYouCanBookModal({
               <div className="flex items-start gap-3 sm:gap-4">
                 <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
                   {fallbackUrls[0] ? (
-                    <img
+                    <RemoteImage
                       src={fallbackUrls[0]}
                       alt=""
-                      loading="lazy"
+                      width={80}
+                      height={80}
                       className="size-full object-cover"
                     />
                   ) : (
@@ -284,7 +284,7 @@ export function CategoryTileBrowser({
               const isActive = tile.slug === activeTile.slug;
               return (
                 <li key={tile.slug}>
-                  <Link
+                  <IntentLink
                     href={`/catalog/${category.slug}?tile=${tile.slug}`}
                     scroll={false}
                     aria-current={isActive ? "page" : undefined}
@@ -296,10 +296,11 @@ export function CategoryTileBrowser({
                     )}
                   >
                     {tile.imageUrl ? (
-                      <img
+                      <RemoteImage
                         src={tile.imageUrl}
                         alt=""
-                        loading="lazy"
+                        width={56}
+                        height={56}
                         className="size-12 sm:size-14 object-contain shrink-0 transition-transform group-hover:scale-105"
                       />
                     ) : (
@@ -317,7 +318,7 @@ export function CategoryTileBrowser({
                     >
                       {tile.name}
                     </span>
-                  </Link>
+                  </IntentLink>
                 </li>
               );
             })}
@@ -350,17 +351,18 @@ export function CategoryTileBrowser({
               const imgUrl = service.cover?.url ?? activeTile.imageUrl;
               return (
                 <li key={service.id}>
-                  <Link
+                  <IntentLink
                     href={serviceHref(service, category.slug)}
                     className="group flex items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-line/80 bg-white p-3 sm:p-4 shadow-xs transition-all duration-150 hover:shadow-md hover:border-line-strong active:scale-[0.99]"
                   >
                     {/* Image on Left */}
                     <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
                       {imgUrl ? (
-                        <img
+                        <RemoteImage
                           src={imgUrl}
                           alt=""
-                          loading="lazy"
+                          width={80}
+                          height={80}
                           className={
                             imgUrl.includes("/Service%20Cover/") || imgUrl.includes("/Service Cover/")
                               ? "size-[80%] object-contain"
@@ -406,7 +408,7 @@ export function CategoryTileBrowser({
 
                     {/* Arrow on Right */}
                     <ChevronRight className="size-5 shrink-0 text-text-muted group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all self-center hidden min-[400px]:block" />
-                  </Link>
+                  </IntentLink>
                 </li>
               );
             })}

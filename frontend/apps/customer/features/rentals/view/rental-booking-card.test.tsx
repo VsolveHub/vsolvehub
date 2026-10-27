@@ -51,7 +51,9 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
     asset: {
       id: "asset-1",
       slug: "commercial-concrete-mixer",
+      partner_id: "partner-1",
       partner_name: "Pro Equipment Hub",
+      partner_phone: "+919876500002",
       variant: "variant-1",
       title: "Commercial Concrete Mixer",
       description: "Standard portable electric concrete mixer.",

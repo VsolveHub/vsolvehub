@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { formatMoney, cn } from "@vsolve/ui";
 import { BadgeCheck, Headphones, ShieldCheck, Tag } from "lucide-react";
+
+import { RemoteImage } from "@/components/remote-image";
 
 import { type Category, type ServiceCard } from "../client-queries";
 import { ServicePhoto } from "./category-artwork";
@@ -86,12 +89,12 @@ function DesktopTileServiceCard({
           <span className="text-[12px] font-bold text-navy-900">Price on request</span>
         )}
         <div className="flex items-center gap-2">
-          <Link
+          <IntentLink
             href={`/catalog/${categorySlug}/${service.slug}`}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-navy-900 bg-white px-3.5 text-[13px] font-bold text-navy-900 transition-colors hover:bg-[#FAF9F7]"
           >
             View details
-          </Link>
+          </IntentLink>
           <TileCatalogAddButton
             service={service}
             categorySlug={categorySlug}
@@ -176,7 +179,7 @@ export function TileDesktopSplitPane({
                 const active = tile.slug === activeTile.slug;
                 return (
                   <li key={tile.slug} className="min-w-0">
-                    <Link
+                    <IntentLink
                       href={`/catalog/${category.slug}?tile=${tile.slug}`}
                       scroll={false}
                       aria-current={active ? "page" : undefined}
@@ -198,7 +201,7 @@ export function TileDesktopSplitPane({
                       >
                         {tile.name}
                       </span>
-                    </Link>
+                    </IntentLink>
                   </li>
                 );
               })}
@@ -282,10 +285,11 @@ export function TileDesktopSplitPane({
             </div>
             {activeTile.imageUrl !== "" ? (
               <span className="flex h-28 w-40 shrink-0 items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <RemoteImage
                   src={activeTile.imageUrl}
                   alt=""
+                  width={160}
+                  height={112}
                   className="max-h-full max-w-full object-contain"
                 />
               </span>

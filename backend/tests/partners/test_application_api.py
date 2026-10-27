@@ -17,7 +17,12 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
-from tests.partners.conftest import PartnerSetup, application_payload, upload_partner_document
+from tests.partners.conftest import (
+    PartnerSetup,
+    application_payload,
+    set_partner_schedule,
+    upload_partner_document,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -115,7 +120,12 @@ def test_applicant_reference_data_is_bounded_and_publishes_canonical_values(
     ]
     assert skills.status_code == HTTPStatus.OK
     assert skills.json() == [
-        {"code": "electrician", "name": "Electrician", "description": ""},
+        {
+            "id": str(partner_setup.skill.id),
+            "code": "electrician",
+            "name": "Electrician",
+            "description": "",
+        },
     ]
     assert consents.status_code == HTTPStatus.OK
     assert [item["purpose"] for item in consents.json()] == [
@@ -187,6 +197,7 @@ def test_application_patch_saves_independent_steps_and_preserves_omitted_fields(
     assert no_op.status_code == HTTPStatus.BAD_REQUEST
 
     _add_identity_document(partner_setup, consents.json()["version"])
+    set_partner_schedule(partner_setup)
     application = PartnerApplication.objects.get(partner__user=partner_setup.user)
     submitted = partner_setup.client.post(
         "/api/v1/partner/application/submit/",
@@ -212,6 +223,7 @@ def test_submission_requires_the_current_published_consent_version(
         document_url="https://legal.vsolvehub.test/partner-terms/2026-08",
     )
     _add_identity_document(partner_setup, created["version"])
+    set_partner_schedule(partner_setup)
     application = PartnerApplication.objects.get(partner__user=partner_setup.user)
 
     submitted = partner_setup.client.post(
@@ -311,6 +323,20 @@ def test_application_submission_requires_document_and_complete_profile(
 
     _add_identity_document(partner_setup, created["version"])
     application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+
+    # Missing working hours blocks submission
+    blocked = partner_setup.client.post(
+        "/api/v1/partner/application/submit/",
+        {"expected_version": application.version},
+        format="json",
+    )
+    assert blocked.status_code == HTTPStatus.CONFLICT
+    assert blocked.json()["error"]["code"] == "partner_application_incomplete"
+    assert "Set your weekly working hours" in blocked.json()["error"]["message"]
+
+    # Setting working hours allows submission to succeed
+    set_partner_schedule(partner_setup)
+    application.refresh_from_db()
     submitted = partner_setup.client.post(
         "/api/v1/partner/application/submit/",
         {"expected_version": application.version},

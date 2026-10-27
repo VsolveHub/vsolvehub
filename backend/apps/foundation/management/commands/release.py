@@ -21,3 +21,4 @@ class Command(BaseCommand):
         del args, options
         call_command("migrate", interactive=False)
         call_command("seed_partner_reference_data")
+        call_command("scan_pending_partner_documents")

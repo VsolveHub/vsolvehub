@@ -1,5 +1,7 @@
 import { Badge, formatMoney } from "@vsolve/ui";
 
+import { RemoteImage } from "@/components/remote-image";
+
 import { AddToCartButton } from "./add-to-cart-button";
 import type { ServiceDetail } from "../queries";
 import { addsToServiceCopy, durationLabel } from "../service-facts";
@@ -64,11 +66,11 @@ export function VariantList({
             <div className="flex items-start gap-3.5 sm:gap-4 min-w-0 flex-1">
               <span className="size-16 sm:size-20 shrink-0 rounded-xl overflow-hidden bg-white grid place-items-center border border-line/50 shadow-2xs">
                 {variantImg ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
+                  <RemoteImage
                     src={variantImg}
                     alt={variant.name}
-                    loading="lazy"
+                    width={80}
+                    height={80}
                     className={
                       variantImg.includes("/Service%20Cover/") || variantImg.includes("/Service Cover/")
                         ? "size-[80%] object-contain"

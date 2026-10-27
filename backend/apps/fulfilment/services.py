@@ -6,7 +6,7 @@ same order `apps.assignments.group_services` and `recovery_services` already use
 -> `FulfilmentUnit` — extended one level deeper here because `Booking` is downstream of both.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -18,6 +18,7 @@ from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.commerce.models import Booking, FinancialException
 from apps.commerce.services.base import _open_exception
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError, BookingVersionConflictApiError
+from apps.fulfilment.gates import GatedAction, assert_gate_open, booking_gates
 from apps.fulfilment.models import BookingStatusHistory, CustomerContactAttempt, WorkTask
 from apps.identity.models import User
 
@@ -274,6 +275,23 @@ def apply_transition(
     return booking
 
 
+def _guard_partner_gate(
+    *, booking: Booking, unit: FulfilmentUnit, to_status: str, action: str
+) -> datetime:
+    """Refuse a Partner's clocked command outside its window; return the instant it was judged at.
+
+    Only once the transition itself is legal. A command the state machine would refuse anyway —
+    "on the way" for a cancelled visit — gets that refusal, not a misleading "too early".
+    The returned instant is the one the gate was checked against, so the timestamp the command
+    writes cannot fall a few microseconds outside the window it was allowed in.
+    """
+
+    now = timezone.now()
+    if to_status in ALLOWED_TRANSITIONS.get(booking.status, frozenset()):
+        assert_gate_open(gates=booking_gates(booking, unit, now), action=action)
+    return now
+
+
 @transaction.atomic
 def mark_en_route(
     *,
@@ -286,6 +304,12 @@ def mark_en_route(
     if booking.partner_id != partner_id:
         raise PermissionError("This Booking belongs to another Partner.")
     guard_booking_version(booking, expected_version)
+    now = _guard_partner_gate(
+        booking=booking,
+        unit=unit,
+        to_status=Booking.Status.EN_ROUTE,
+        action=GatedAction.MARK_EN_ROUTE,
+    )
     return apply_transition(
         group=group,
         unit=unit,
@@ -294,7 +318,7 @@ def mark_en_route(
         command=BookingCommand.MARK_EN_ROUTE,
         actor=booking.partner.user,
         idempotency_key=idempotency_key,
-        extra_booking_fields={"en_route_at": timezone.now()},
+        extra_booking_fields={"en_route_at": now},
     )
 
 
@@ -310,6 +334,12 @@ def mark_arrived(
     if booking.partner_id != partner_id:
         raise PermissionError("This Booking belongs to another Partner.")
     guard_booking_version(booking, expected_version)
+    now = _guard_partner_gate(
+        booking=booking,
+        unit=unit,
+        to_status=Booking.Status.ARRIVED,
+        action=GatedAction.MARK_ARRIVED,
+    )
     return apply_transition(
         group=group,
         unit=unit,
@@ -318,7 +348,7 @@ def mark_arrived(
         command=BookingCommand.MARK_ARRIVED,
         actor=booking.partner.user,
         idempotency_key=idempotency_key,
-        extra_booking_fields={"arrived_at": timezone.now()},
+        extra_booking_fields={"arrived_at": now},
     )
 
 
@@ -449,6 +479,10 @@ def operations_assisted_outage_start(
     Restricted to the one step a Partner could not report themselves, always requires a
     non-empty audited reason, and is never a substitute for the Partner's own commands once
     their channel recovers — it does not touch IN_PROGRESS or anything past it.
+
+    This is also the audited override of the Partner time gates (`apps.fulfilment.gates`): it does
+    not call `assert_gate_open`, and it writes whether the gate was open into the history context
+    so a review can tell an outage workaround inside the window from an override outside it.
     """
 
     group, unit, booking = locked_booking_context(booking_id)
@@ -465,16 +499,16 @@ def operations_assisted_outage_start(
                 f"{booking.status}."
             )
         )
+    now = timezone.now()
     extra_fields = (
-        {"en_route_at": timezone.now()}
-        if to_status == Booking.Status.EN_ROUTE
-        else {"arrived_at": timezone.now()}
+        {"en_route_at": now} if to_status == Booking.Status.EN_ROUTE else {"arrived_at": now}
     )
     command = (
         BookingCommand.MARK_EN_ROUTE
         if to_status == Booking.Status.EN_ROUTE
         else BookingCommand.MARK_ARRIVED
     )
+    gate_open = booking_gates(booking, unit, now).is_open(command)
     return apply_transition(
         group=group,
         unit=unit,
@@ -484,7 +518,11 @@ def operations_assisted_outage_start(
         actor=operator,
         reason=outage_reason,
         idempotency_key=idempotency_key,
-        context={"assisted": True, "outage_reason": outage_reason},
+        context={
+            "assisted": True,
+            "outage_reason": outage_reason,
+            "partner_gate_open": gate_open,
+        },
         extra_booking_fields=extra_fields,
     )
 

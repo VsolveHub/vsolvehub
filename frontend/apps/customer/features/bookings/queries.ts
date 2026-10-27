@@ -43,6 +43,7 @@ export type BookingGroupPage = Schemas["BookingGroupPage"];
 export type FulfilmentUnit = Schemas["FulfilmentUnit"];
 export type GroupStatus = Schemas["BookingGroupStatusEnum"];
 export type RecoveryAction = Schemas["RecoveryActionEnum"];
+type BookingStatus = Schemas["BookingStatusEnum"];
 
 /**
  * Statuses the server cannot move a group out of on its own.
@@ -54,9 +55,13 @@ export type RecoveryAction = Schemas["RecoveryActionEnum"];
  * `PAYMENT_PENDING` and `REPLAN_REQUIRED` are settled *for polling purposes*
  * without being finished: both are waiting on a person, so re-reading them on a
  * timer is asking the server to answer a question only the customer can.
+ *
+ * `BOOKED` is not here. Payment settles the group, not the visits under it: the
+ * group stays `BOOKED` while each Booking goes on the way, arrives and starts, and
+ * those are exactly the moves this screen exists to show. See `isSettled`.
  */
 const SETTLED_STATUSES: readonly GroupStatus[] = [
-  "BOOKED",
+  "COMPLETED",
   "CANCELLED",
   "EXPIRED",
   "FAILED",
@@ -64,8 +69,49 @@ const SETTLED_STATUSES: readonly GroupStatus[] = [
   "PAYMENT_PENDING",
 ];
 
+/**
+ * Booking statuses that someone other than the customer is about to move.
+ *
+ * The Partner sets off, arrives and starts work; Celery reassigns a visit whose
+ * Partner stepped back. An allowlist rather than "anything unfinished", so a
+ * status this build has never heard of stops the poll instead of running it
+ * forever. `COMPLETION_SUBMITTED` waits on the customer's own button and
+ * `ABORTED` on Operations, so neither is watched on a timer.
+ */
+const LIVE_VISIT_STATUSES: readonly BookingStatus[] = [
+  "CONFIRMED",
+  "EN_ROUTE",
+  "ARRIVED",
+  "IN_PROGRESS",
+  "RECOVERY_REQUIRED",
+];
+
+/** Whether any visit in this group is still being moved along by somebody else. */
+export function hasLiveVisit(group: BookingGroup): boolean {
+  return group.units.some((unit) =>
+    unit.booking_status ? LIVE_VISIT_STATUSES.includes(unit.booking_status) : false,
+  );
+}
+
 export function isSettled(group: BookingGroup): boolean {
+  if (group.status === "BOOKED") return !hasLiveVisit(group);
   return SETTLED_STATUSES.includes(group.status);
+}
+
+/**
+ * The most recent answer this page holds for one visit's status.
+ *
+ * The group read and the visit read both carry it, and both poll, out of step
+ * with each other. Whichever was read last is the truth. Preferring one read by
+ * rule lets the older one hold the screen back — the group still saying
+ * `ARRIVED` while the visit read already knows the work has started.
+ */
+export function newestBookingStatus(
+  fromGroup: { status: BookingStatus | null; readAt: number },
+  fromVisit: { status: BookingStatus; readAt: number } | null,
+): BookingStatus | null {
+  if (fromVisit === null) return fromGroup.status;
+  return fromVisit.readAt > fromGroup.readAt ? fromVisit.status : fromGroup.status;
 }
 
 /** Terminal in the ordinary sense: nothing further will happen at all. */
@@ -148,7 +194,8 @@ export function useBookingGroups(enabled = true) {
  * `EXPIRING_STATE` plus bounded polling. The group carries its own `expires_at`,
  * `server_now` and `next_transition_at`, so a cached copy is exactly the thing
  * that stops being true while nobody is looking — and the poll stops the moment
- * the server's answer can no longer change on its own.
+ * the server's answer can no longer change on its own. For a paid group that is
+ * when its last visit leaves `LIVE_VISIT_STATUSES`, not when payment lands.
  */
 export function useBookingGroup(groupId: string | null) {
   return useQuery({

@@ -1,12 +1,15 @@
 "use client";
 
+import { serverClock } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { ErrorState, cn, formatMoney, useT } from "@vsolve/ui";
+import { Card, ErrorState, buttonStyles, cn, formatMoney, useT } from "@vsolve/ui";
+import { Phone, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { CompletionRating } from "@/features/ratings/view/completion-rating";
+import { SiteAddress } from "@/features/visit/view/site-address";
 import { STATUS_COPY, type StatusTone } from "@/features/work/model/status";
 import {
   canAbort,
@@ -21,10 +24,14 @@ import {
   useMarkEnRoute,
   useReleaseBooking,
   useSubmitCompletion,
+  useRefreshVisitAtGates,
   useVerifyStartOtp,
+  visitContact,
+  waitingGate,
   type OutcomeInput,
   type PartnerVisit,
   type VisitStatus,
+  type WaitingGate,
 } from "@/features/work/queries";
 
 /**
@@ -45,19 +52,13 @@ import {
  *
  * ## What the canvas draws that is not here
  *
- * 1. **The call-customer button.** `Today.dc.html` ends in a large green call
- *    button and the approved spec lists it as a feature. No phone number is
- *    published to reach it: `Schemas["PartnerBooking"]`
- *    (`schema.d.ts:7926-7948`) carries no contact object at all, and the only
- *    `phone_number` fields in the whole generated schema belong to
- *    `PartnerProfile` and `User` — this Partner's own number, not the
- *    customer's. `VisitVendor`'s docblock (`schema.d.ts:11111`) states the rule
- *    outright: "No phone number and no address. Contact is released by the
- *    engagement, not by a visit." `POST /partner/bookings/{id}/contact-attempts/`
- *    exists but only *records* an attempt; it hands back no number. A `tel:`
- *    link against a field that does not exist would be a dead button, so there
- *    is none. **"Customer is not here"** below is the real, published control
- *    for the situation that button was for.
+ * 1. **The call-customer button is on a clock.** Contract 1.82.0 publishes the
+ *    address, the Maps route, the customer's first name and their number on
+ *    the visit — `null` until two hours before the start and again once the
+ *    visit is no longer live. `VisitLocation` draws the locked card until then
+ *    and the address, route and Call button after; it never invents a number.
+ *    "On the way" and "Arrived" are clocked too (`allowed_actions`), and the
+ *    screen says when each opens rather than hiding the step without a word.
  * 2. **The camera-first evidence capture.** `POST
  *    /partner/bookings/{id}/evidence/uploads/` is published, but no hook in
  *    `features/work/queries.ts` mounts it and wiring the presign/PUT/finalize
@@ -82,6 +83,8 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
   const enRoute = useMarkEnRoute();
   const arrived = useMarkArrived();
   const unavailable = useMarkCustomerUnavailable();
+  useRefreshVisitAtGates(visit);
+  const gate = waitingGate(visit, serverClock.now());
 
   const status = STATUS_COPY[visit.status];
   const versioned = { bookingId: visit.id, expectedVersion: visit.version };
@@ -137,6 +140,7 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
       <div className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-5">
         <ServiceDetails visit={visit} />
         <VisitDetails visit={visit} />
+        <VisitLocation visit={visit} />
 
         <section
           aria-labelledby="next-step-heading"
@@ -157,6 +161,8 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
           </div>
 
           <div className="flex flex-col gap-3">
+        {gate !== null ? <GateNotice gate={gate} /> : null}
+
         {canGoEnRoute(visit) ? (
           <BigAction
             tone="secondary"
@@ -218,6 +224,104 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
       />
     </div>
     </>
+  );
+}
+
+/**
+ * Where the job is and who to ask for, on the server's clock.
+ *
+ * Before the unlock the locality is all there is, and the card says when the
+ * rest arrives — a Partner planning tomorrow knows the area, not the door.
+ * From two hours out the server sends the address, the Maps route and the
+ * customer's first name and number; once the visit ends it withdraws them, and
+ * this card goes with them rather than showing a "do not travel" note under a
+ * finished job.
+ */
+function VisitLocation({ visit }: { readonly visit: PartnerVisit }) {
+  const live = visit.status === "CONFIRMED" || visit.status === "EN_ROUTE" ||
+    visit.status === "ARRIVED" || visit.status === "IN_PROGRESS";
+  const t = useT();
+  if (!live) return null;
+  const contact = visitContact(visit);
+  const unlocksAt = clockTime(visit.gates.address_unlocks_at);
+
+  return (
+    <section aria-label={t("work.visitJob.location.aria")} className="flex flex-col gap-3">
+      <SiteAddress
+        address={visit.site_address}
+        approximateArea={visit.approximate_area ?? ""}
+        lockedNote={
+          unlocksAt === null
+            ? t("work.visitJob.location.lockedNoteSoon")
+            : t("work.visitJob.location.lockedNoteAt", {
+                time: unlocksAt,
+                date: calendarDate(visit.gates.address_unlocks_at) ?? "",
+              })
+        }
+      />
+      {contact === null ? null : (
+        <Card className="flex items-center gap-3 p-4">
+          <span
+            aria-hidden
+            className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-sunken text-action-secondary"
+          >
+            <User size={19} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              {t("work.visitJob.location.visiting")}
+            </h2>
+            <p className="truncate text-base font-bold text-text">{contact.firstName}</p>
+          </div>
+          <a
+            href={`tel:${contact.phone}`}
+            className={buttonStyles({ variant: "outline", className: "gap-2" })}
+          >
+            <Phone size={16} aria-hidden />
+            {t("work.visitJob.location.call")}
+          </a>
+        </Card>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Why the next step is not on the screen yet, and when it will be.
+ *
+ * Drawn from the server's published window. `opening` is the gap between the
+ * clock reaching the window and the refetch landing — a second or two.
+ */
+function GateNotice({ gate }: { readonly gate: WaitingGate }) {
+  const t = useT();
+  const step = gate.action === "MARK_EN_ROUTE"
+    ? t("work.visitJob.gate.stepOnMyWay")
+    : t("work.visitJob.gate.stepArrived");
+  const closesAt = clockTime(gate.closesAt);
+  const opensAt = clockTime(gate.opensAt);
+  const copy =
+    gate.state === "closed"
+      ? closesAt === null
+        ? t("work.visitJob.gate.closedAtEnd", { step })
+        : t("work.visitJob.gate.closedAt", { step, time: closesAt })
+      : gate.state === "opening"
+        ? t("work.visitJob.gate.opening", { step })
+        : opensAt === null
+          ? t("work.visitJob.gate.opensAtVisitTime", { step, date: calendarDate(gate.opensAt) ?? "" })
+          : t("work.visitJob.gate.opensAt", { step, time: opensAt, date: calendarDate(gate.opensAt) ?? "" });
+
+  return (
+    <p
+      role="status"
+      className={cn(
+        "rounded-card border px-3.5 py-3 text-sm font-semibold leading-5",
+        gate.state === "closed"
+          ? "border-danger-line bg-danger-surface text-danger-text"
+          : "border-line bg-surface-sunken text-text-secondary",
+      )}
+    >
+      {copy}
+    </p>
   );
 }
 

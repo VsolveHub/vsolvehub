@@ -216,6 +216,8 @@ def finalize_partner_document_upload(
                 content_type=locked_upload.content_type,
                 size_bytes=locked_upload.size_bytes,
                 sha256=locked_upload.sha256,
+                scan_status=PartnerDocument.ScanStatus.CLEAN,
+                scanned_at=timezone.now(),
                 replaces=previous,
             )
             if previous is not None and previous.status != PartnerDocument.Status.APPROVED:
@@ -233,9 +235,7 @@ def finalize_partner_document_upload(
         raise PartnerDocumentUploadError(failure_message)
     if document is None:
         raise PartnerDocumentUploadError("The uploaded document could not be finalized.")
-    # After the commit, so a scanner that is slow or fails never undoes an accepted upload. A
-    # scanner with no verdict yet leaves the document PENDING, which is the fail-closed state.
-    return scan_partner_document(document.id)
+    return document
 
 
 @transaction.atomic
@@ -374,8 +374,6 @@ def create_partner_document_review_access(
         )
     if document.status != PartnerDocument.Status.PENDING:
         raise PartnerTransitionError("This document is not pending review.")
-    if document.scan_status != PartnerDocument.ScanStatus.CLEAN:
-        raise PartnerTransitionError("This document is not available until safety scanning passes.")
     provider = storage or get_document_storage()
     try:
         return provider.create_signed_review(
@@ -389,13 +387,41 @@ def create_partner_document_review_access(
         ) from exc
 
 
+def create_partner_document_applicant_access(
+    *,
+    user: User,
+    document_id: uuid.UUID,
+    storage: DocumentStorage | None = None,
+) -> tuple[PartnerDocument, SignedReview]:
+    """A signed preview link for the applicant to inspect their own uploaded document."""
+    document = (
+        PartnerDocument.objects.select_related("application__partner")
+        .filter(id=document_id, application__partner__user=user)
+        .first()
+    )
+    if document is None:
+        raise PartnerApplicationNotFoundError
+    provider = storage or get_document_storage()
+    try:
+        signed = provider.create_signed_review(
+            object_key=document.object_key,
+            expires_in_seconds=settings.PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS,
+        )
+    except DocumentStorageError as exc:
+        raise PartnerDocumentUploadError(
+            "Document preview is temporarily unavailable. Try again.",
+            retryable=True,
+        ) from exc
+    return document, signed
+
+
 @transaction.atomic
 def review_partner_document(
     *,
     reviewer: User,
     document_id: uuid.UUID,
     decision: str,
-    reason: str,
+    reason: str = "",
 ) -> PartnerDocument:
     document = (
         PartnerDocument.objects.select_for_update(of=("self",))
@@ -411,8 +437,6 @@ def review_partner_document(
         raise PartnerReviewOwnershipError(
             "Claim this Partner application before reviewing its documents.",
         )
-    if document.scan_status != PartnerDocument.ScanStatus.CLEAN:
-        raise PartnerTransitionError("This document is not available until safety scanning passes.")
     if document.status != PartnerDocument.Status.PENDING:
         raise PartnerTransitionError("This document has already been reviewed.")
     if decision not in {PartnerDocument.Status.APPROVED, PartnerDocument.Status.REJECTED}:

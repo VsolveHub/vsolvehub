@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useSyncExternalStore } from "react";
 
 import {
@@ -63,7 +63,7 @@ export function RecentlyViewedRail() {
       <ul className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {viewed.map((service) => (
           <li key={service.slug} className="shrink-0">
-            <Link
+            <IntentLink
               href={service.href}
               className="inline-flex max-w-[15rem] items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-navy-900 transition-colors duration-fast hover:border-navy-300 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
@@ -72,7 +72,7 @@ export function RecentlyViewedRail() {
                 className="size-1.5 shrink-0 rounded-full bg-action"
               />
               <span className="truncate">{service.name}</span>
-            </Link>
+            </IntentLink>
           </li>
         ))}
       </ul>

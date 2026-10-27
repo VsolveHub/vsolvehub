@@ -126,8 +126,8 @@ class TestPublishedCancellationPolicy:
             "verified-arrival",
         ]
         assert body["bands"][1]["fee"] == {"amount_paise": 4_900, "currency": "INR"}
-        assert body["reschedule_free_notice_hours"] == 4  # noqa: PLR2004
-        assert body["quality_dispute_window_hours"] == 72  # noqa: PLR2004
+        assert body["reschedule_free_notice_hours"] == 4
+        assert body["quality_dispute_window_hours"] == 72
 
     def test_an_unpublished_policy_is_a_404_not_an_empty_ladder(self) -> None:
         response = APIClient().get("/api/v1/legal/cancellation-policy/")

@@ -346,6 +346,20 @@ M1_CUSTOMER_WAIT_MINUTES = 10
 M1_CUSTOMER_CONTACT_ATTEMPT_MINUTES = (0, 5)
 M1_START_OTP_TTL_SECONDS = 5 * 60
 M1_START_OTP_MAX_ATTEMPTS = 5
+# Server-clock gates on a booked visit (`apps.fulfilment.gates`), all measured from
+# `Booking.scheduled_start`. 120: the exact address, pin and Customer contact reach the
+# assigned Partner two hours out — the M2 visit contact rung uses the same horizon — so a
+# Partner with days of lead time holds neither a door to knock on nor a number to call.
+M1_ADDRESS_UNLOCK_MINUTES = env.int("M1_ADDRESS_UNLOCK_MINUTES", default=120)
+# 60: "On the way" opens an hour out; earlier than that a Partner is not travelling to
+# this job, and an early en-route tells the Customer something untrue.
+M1_EN_ROUTE_OPENS_MINUTES = env.int("M1_EN_ROUTE_OPENS_MINUTES", default=60)
+# 30: "Arrived" opens half an hour before the start. Arrival drives the start code and
+# the after-arrival cancellation band, so it must not be claimable from across town.
+M1_ARRIVAL_OPENS_MINUTES = env.int("M1_ARRIVAL_OPENS_MINUTES", default=30)
+# 30: arrival (and en route) stay open until the scheduled end plus this grace, so a
+# late Partner can still arrive and finish rather than strand a paid visit.
+M1_ARRIVAL_CLOSE_GRACE_MINUTES = env.int("M1_ARRIVAL_CLOSE_GRACE_MINUTES", default=30)
 # 60: what "nearing deadline" means on the Operations home screen. An hour is the point a case
 # stops being something to schedule and starts being something to pick up now.
 M1_CASE_DUE_SOON_MINUTES = 60
@@ -391,7 +405,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.81.0",
+    "VERSION": "1.82.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,

@@ -9,12 +9,12 @@
  */
 
 /** The team's support line today (owner, 2026-10-26). */
-const DEFAULT_SUPPORT_PHONE = "+917330764634";
+const DEFAULT_SUPPORT_PHONE = "+918790564634";
 
 export interface SupportPhone {
   /** E.164, e.g. `+919876543210`. */
   e164: string;
-  /** `+91 733 076 4634` for an Indian number, the grouping the partner site uses; else as given. */
+  /** `+91 879 056 4634` for an Indian number, the grouping the partner site uses; else as given. */
   display: string;
   telHref: string;
   whatsappHref: string;

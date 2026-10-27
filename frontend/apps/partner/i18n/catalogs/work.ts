@@ -678,6 +678,18 @@ const en: Catalog = {
   "work.engagementList.moreBehind": "Vsolve is holding older {parentMany} that this screen cannot ask for yet. Nothing is missing from the groups above; there is simply more behind them.",
   "work.engagementList.groupUnavailable": "This group is not available in this version of the app.",
   "work.notBuiltYet.title": "{what} is not built yet",
+  "work.visitJob.location.aria": "Visit location",
+  "work.visitJob.location.lockedNoteAt": "The exact address, map route and customer's number unlock at {time}, {date}.",
+  "work.visitJob.location.lockedNoteSoon": "The exact address, map route and customer's number unlock at two hours before the visit.",
+  "work.visitJob.location.visiting": "Visiting",
+  "work.visitJob.location.call": "Call",
+  "work.visitJob.gate.stepOnMyWay": "“I am on my way”",
+  "work.visitJob.gate.stepArrived": "“I have arrived”",
+  "work.visitJob.gate.closedAt": "The time for {step} closed at {time}. Contact support to continue this job.",
+  "work.visitJob.gate.closedAtEnd": "The time for {step} closed at the end of the visit. Contact support to continue this job.",
+  "work.visitJob.gate.opening": "{step} is opening now…",
+  "work.visitJob.gate.opensAt": "{step} opens at {time}, {date}.",
+  "work.visitJob.gate.opensAtVisitTime": "{step} opens at the visit time, {date}.",
 };
 
 const te: Catalog = {
@@ -1358,6 +1370,18 @@ const te: Catalog = {
   "work.engagementList.moreBehind": "ఈ స్క్రీన్ ఇంకా అడగలేని పాత {parentMany} Vsolve దగ్గర ఉన్నాయి. పైన ఉన్న గుంపుల్లో ఏదీ తప్పిపోలేదు; వాటి వెనుక ఇంకా ఉన్నాయి అంతే.",
   "work.engagementList.groupUnavailable": "ఈ app వెర్షన్‌లో ఈ గుంపు అందుబాటులో లేదు.",
   "work.notBuiltYet.title": "{what} ఇంకా తయారు కాలేదు",
+  "work.visitJob.location.aria": "విజిట్ లొకేషన్",
+  "work.visitJob.location.lockedNoteAt": "సరైన అడ్రస్, మ్యాప్ రూట్, కస్టమర్ నంబర్ {date}, {time}కి అన్‌లాక్ అవుతాయి.",
+  "work.visitJob.location.lockedNoteSoon": "సరైన అడ్రస్, మ్యాప్ రూట్, కస్టమర్ నంబర్ విజిట్‌కి రెండు గంటల ముందు అన్‌లాక్ అవుతాయి.",
+  "work.visitJob.location.visiting": "వెళ్ళేది",
+  "work.visitJob.location.call": "కాల్ చేయండి",
+  "work.visitJob.gate.stepOnMyWay": "“నేను దారిలో ఉన్నాను”",
+  "work.visitJob.gate.stepArrived": "“నేను వచ్చేశాను”",
+  "work.visitJob.gate.closedAt": "{step} సమయం {time}కి ముగిసింది. ఈ పని కొనసాగించడానికి సపోర్ట్‌ని సంప్రదించండి.",
+  "work.visitJob.gate.closedAtEnd": "{step} సమయం విజిట్ ముగిసినప్పుడే ముగిసింది. ఈ పని కొనసాగించడానికి సపోర్ట్‌ని సంప్రదించండి.",
+  "work.visitJob.gate.opening": "{step} ఇప్పుడే ఓపెన్ అవుతోంది…",
+  "work.visitJob.gate.opensAt": "{step} {date}, {time}కి ఓపెన్ అవుతుంది.",
+  "work.visitJob.gate.opensAtVisitTime": "{step} విజిట్ సమయానికి, {date} ఓపెన్ అవుతుంది.",
 };
 
 const hi: Catalog = {
@@ -2038,6 +2062,18 @@ const hi: Catalog = {
   "work.engagementList.moreBehind": "Vsolve के पास पुरानी {parentMany} हैं जिन्हें यह स्क्रीन अभी नहीं मांग सकती। ऊपर के समूहों में कुछ कम नहीं है; बस उनके पीछे और भी हैं।",
   "work.engagementList.groupUnavailable": "app के इस वर्ज़न में यह समूह उपलब्ध नहीं है।",
   "work.notBuiltYet.title": "{what} अभी बना नहीं है",
+  "work.visitJob.location.aria": "विज़िट की लोकेशन",
+  "work.visitJob.location.lockedNoteAt": "पूरा पता, मैप रूट और ग्राहक का नंबर {date}, {time} पर खुलेंगे।",
+  "work.visitJob.location.lockedNoteSoon": "पूरा पता, मैप रूट और ग्राहक का नंबर विज़िट से दो घंटे पहले खुलेंगे।",
+  "work.visitJob.location.visiting": "किसके यहाँ जाना है",
+  "work.visitJob.location.call": "कॉल करें",
+  "work.visitJob.gate.stepOnMyWay": "“मैं रास्ते में हूँ”",
+  "work.visitJob.gate.stepArrived": "“मैं पहुँच गया हूँ”",
+  "work.visitJob.gate.closedAt": "{step} का समय {time} पर खत्म हो गया। यह काम जारी रखने के लिए सपोर्ट से संपर्क करें।",
+  "work.visitJob.gate.closedAtEnd": "{step} का समय विज़िट खत्म होने पर खत्म हो गया। यह काम जारी रखने के लिए सपोर्ट से संपर्क करें।",
+  "work.visitJob.gate.opening": "{step} अभी खुल रहा है…",
+  "work.visitJob.gate.opensAt": "{step} {date}, {time} पर खुलेगा।",
+  "work.visitJob.gate.opensAtVisitTime": "{step} विज़िट के समय, {date} को खुलेगा।",
 };
 
 export const catalogsByLocale: Record<Locale, Catalog> = {

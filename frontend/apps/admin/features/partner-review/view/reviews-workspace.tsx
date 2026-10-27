@@ -23,16 +23,18 @@ export function ReviewsWorkspace() {
   };
 
   return (
-    <>
-      <SplitView
-        listPane={<ReviewQueue selectedId={selectedId} onSelect={handleSelect} />}
-        detailPane={<ReviewDetail applicationId={selectedId} />}
-        showDetailOnMobile={!!selectedId}
-        onBack={() => {
-          window.history.back();
-          setSelectedId(null);
-        }}
-      />
-    </>
+    <SplitView
+      className="min-h-0 flex-1"
+      listPaneWidth="sm:w-84 lg:w-[26rem]"
+      listPane={<ReviewQueue selectedId={selectedId} onSelect={handleSelect} />}
+      detailPane={<ReviewDetail applicationId={selectedId} />}
+      showDetailOnMobile={!!selectedId}
+      onBack={() => {
+        window.history.back();
+        setSelectedId(null);
+      }}
+      mobileDetailTitle="Partner application"
+    />
   );
 }
+

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { EmptyState, buttonStyles } from "@vsolve/ui";
 
 import type { CatalogSearchResults } from "../search";
@@ -84,7 +85,7 @@ export function SearchResults({
           <ul className="mt-4 flex flex-wrap gap-2">
             {categories.map((category) => (
               <li key={category.id}>
-                <Link
+                <IntentLink
                   href={catalogCategoryHref(category.slug)}
                   className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-bold text-navy-900 transition-colors duration-fast hover:border-navy-300 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 >
@@ -98,7 +99,7 @@ export function SearchResults({
                       strokeLinejoin="round"
                     />
                   </svg>
-                </Link>
+                </IntentLink>
               </li>
             ))}
           </ul>

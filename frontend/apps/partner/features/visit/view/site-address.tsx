@@ -5,6 +5,11 @@ import { LockKeyhole, MapPin, Navigation } from "lucide-react";
 export interface SiteAddressProps {
   readonly address: Schemas["PartnerSiteAddress"] | null;
   readonly approximateArea: string;
+  /**
+   * What the locked card says about when the address arrives. Defaults to the
+   * M2 project-visit rule; a booked service visit unlocks on a clock instead.
+   */
+  readonly lockedNote?: string;
 }
 
 /**
@@ -19,7 +24,7 @@ export interface SiteAddressProps {
  * in `RequirementSummary`, where it governs the whole enquiry rather than
  * appearing to be a footnote on the map link.
  */
-export function SiteAddress({ address, approximateArea }: SiteAddressProps) {
+export function SiteAddress({ address, approximateArea, lockedNote }: SiteAddressProps) {
   const t = useT();
   if (address === null) {
     return (
@@ -38,7 +43,7 @@ export function SiteAddress({ address, approximateArea }: SiteAddressProps) {
             </p>
           )}
           <p className="mt-1 text-xs leading-5 text-text-muted">
-            {t("visit.siteAddress.lockedNote")}
+            {lockedNote ?? t("visit.siteAddress.lockedNote")}
           </p>
         </div>
       </Card>

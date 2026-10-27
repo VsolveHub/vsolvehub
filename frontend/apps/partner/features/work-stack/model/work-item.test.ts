@@ -245,6 +245,18 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
       status: "SETTLED",
       calculation_snapshot: null,
     },
+    gates: {
+      address_unlocks_at: "2026-08-19T07:00:00Z",
+      en_route_opens_at: "2026-08-19T08:00:00Z",
+      en_route_closes_at: "2026-08-19T11:30:00Z",
+      arrival_opens_at: "2026-08-19T08:30:00Z",
+      arrival_closes_at: "2026-08-19T11:30:00Z",
+    },
+    allowed_actions: [],
+    site_address: null,
+    directions_url: null,
+    customer_first_name: null,
+    customer_phone: null,
     server_now: NOW,
     ...overrides,
   };

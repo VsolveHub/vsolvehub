@@ -63,6 +63,8 @@ export interface DocumentUploadProps {
   /** Set when a reviewer rejected the previous version of this document. */
   replacing?: boolean;
   disabled?: boolean;
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 export function DocumentUpload({
@@ -71,6 +73,8 @@ export function DocumentUpload({
   expectedVersion,
   replacing = false,
   disabled = false,
+  onSuccess,
+  onCancel,
 }: DocumentUploadProps) {
   const t = useT();
   const upload = useUploadDocument();
@@ -97,6 +101,7 @@ export function DocumentUpload({
       // The file is no longer needed the moment Django has it.
       setPendingFile(null);
       if (inputRef.current) inputRef.current.value = "";
+      onSuccess?.();
     } catch (error) {
       setProgress({ phase: "failed", percent: 0 });
       setFailure(
@@ -152,14 +157,25 @@ export function DocumentUpload({
 
   return (
     <div className="mt-3">
-      <label
-        htmlFor={inputId}
-        className="block text-sm font-bold text-text mb-1"
-      >
-        {replacing
-          ? t("apply.upload.replaceLabel", { label: label.toLowerCase() })
-          : t("apply.upload.uploadLabel", { label: label.toLowerCase() })}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-bold text-text"
+        >
+          {replacing
+            ? t("apply.upload.replaceLabel", { label: label.toLowerCase() })
+            : t("apply.upload.uploadLabel", { label: label.toLowerCase() })}
+        </label>
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs font-semibold text-text-secondary hover:text-text underline cursor-pointer"
+          >
+            {t("common.cancel")}
+          </button>
+        ) : null}
+      </div>
 
       {/* Modern Drag and Drop Zone */}
       <div
@@ -202,10 +218,10 @@ export function DocumentUpload({
           <div className="flex flex-col items-center gap-1.5 my-1">
             <span className="inline-flex items-center gap-2 rounded-xl bg-signal-500 hover:bg-signal-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors">
               <UploadCloud size={16} />
-              Re-upload Document
+              {t("apply.upload.reupload")}
             </span>
             <span className="text-[11px] text-text-secondary">
-              Tap to browse file <span className="hidden sm:inline">• or drag and drop</span>
+              {t("apply.upload.tapToBrowse")} <span className="hidden sm:inline">{t("apply.upload.orDragDrop")}</span>
             </span>
           </div>
         ) : (

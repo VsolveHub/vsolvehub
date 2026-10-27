@@ -110,6 +110,8 @@ class RentalAssetMediaSerializer(serializers.ModelSerializer[RentalAssetMedia]):
 class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
     public_state = serializers.CharField(read_only=True)
     partner_name = serializers.CharField(source="partner.display_name", read_only=True)
+    partner_id = serializers.UUIDField(source="partner.id", read_only=True)
+    partner_phone = serializers.CharField(source="partner.user.phone_number", read_only=True)
     media = RentalAssetMediaSerializer(many=True, read_only=True)
     pickup_address = serializers.SerializerMethodField()
 
@@ -132,7 +134,9 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
             "current_status",
             "moderation_status",
             "public_state",
+            "partner_id",
             "partner_name",
+            "partner_phone",
             "variant",
             "structured_fields",
             "media",

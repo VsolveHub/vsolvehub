@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.81.0)
- * Checksum: c7e421250e4aa232
+ * Source:   contracts/openapi/v1.yaml (version 1.82.0)
+ * Checksum: e1169bf67e619670
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4968,6 +4968,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/application/documents/{document_id}/access/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_application_documents_access_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/application/documents/uploads/": {
         parameters: {
             query?: never;
@@ -8629,6 +8645,17 @@ export interface components {
             source?: components["schemas"]["SourceEnum"];
             is_default?: boolean;
         };
+        /**
+         * @description * `MARK_EN_ROUTE` - MARK_EN_ROUTE
+         *     * `MARK_ARRIVED` - MARK_ARRIVED
+         *     * `CUSTOMER_UNAVAILABLE_WAIT_STARTED` - CUSTOMER_UNAVAILABLE_WAIT_STARTED
+         *     * `START_WORK` - START_WORK
+         *     * `ABORT_WORK` - ABORT_WORK
+         *     * `SUBMIT_COMPLETION` - SUBMIT_COMPLETION
+         *     * `PARTNER_RELEASE` - PARTNER_RELEASE
+         * @enum {string}
+         */
+        AllowedActionsEnum: "MARK_EN_ROUTE" | "MARK_ARRIVED" | "CUSTOMER_UNAVAILABLE_WAIT_STARTED" | "START_WORK" | "ABORT_WORK" | "SUBMIT_COMPLETION" | "PARTNER_RELEASE";
         AmendmentApprovalResult: {
             amendment: components["schemas"]["ScopeAmendment"];
             /** Format: uuid */
@@ -10353,10 +10380,12 @@ export interface components {
         /**
          * @description One visit, as the Customer who paid for it sees it.
          *
-         *     Carries the Partner's display name and nothing else about them — not their phone number,
-         *     not their earnings, not their other jobs. `G7` in the frontend task file is the same rule
-         *     from the other side: Customer projections contain no Partner identity beyond what is needed
-         *     to recognise the person at the door.
+         *     Carries the Partner's display name and nothing else about them — not their earnings, not their
+         *     other jobs. `G7` in the frontend task file is the same rule from the other side: Customer
+         *     projections contain no Partner identity beyond what is needed to recognise the person at the
+         *     door. The one addition is `partner_phone`, and only inside the same window the Partner gets the
+         *     Customer's number (`gates.discloses_site_details`): the two sides can reach each other while
+         *     the visit is happening, and neither holds the other's number before or after it.
          */
         CustomerBooking: {
             /** Format: uuid */
@@ -10369,6 +10398,7 @@ export interface components {
             readonly scheduled_start: string;
             readonly estimated_duration_minutes: number;
             readonly partner_display_name: string | null;
+            readonly partner_phone: string | null;
             /** Format: date-time */
             readonly en_route_at: string | null;
             /** Format: date-time */
@@ -12138,6 +12168,10 @@ export interface components {
          *     Operations is the one actor that legitimately sees both sides, so this is the one
          *     projection that names the Partner and the Booking Group. Every read of it is audited by
          *     `IsOperationsUser`.
+         *
+         *     The visit address and both phone numbers are not on the Partner's clock here: an operator
+         *     working a case the day before — a Customer asking where their professional is, a Partner who
+         *     cannot find the building — needs them whenever the case is open.
          */
         OperationsBooking: {
             /** Format: uuid */
@@ -12156,6 +12190,10 @@ export interface components {
             /** Format: uuid */
             readonly partner_id: string;
             readonly partner_display_name: string;
+            readonly partner_phone: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
+            readonly site_address: components["schemas"]["PartnerSiteAddress"] | null;
             /** Format: date-time */
             readonly en_route_at: string | null;
             /** Format: date-time */
@@ -12401,7 +12439,8 @@ export interface components {
         OperationsDocumentReviewDecisionEnum: "APPROVED" | "REJECTED";
         OperationsDocumentReviewRequest: {
             decision: components["schemas"]["OperationsDocumentReviewDecisionEnum"];
-            reason?: string;
+            /** @default  */
+            reason: string;
         };
         /** @description One Partner, for the management screen. */
         OperationsPartnerDetail: {
@@ -13042,11 +13081,20 @@ export interface components {
         /**
          * @description The same visit, as the Partner assigned to it sees it.
          *
-         *     Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
-         *     exact address. Its estimate and settled earning are this Partner's own money for this one
-         *     unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
-         *     cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
-         *     never publish the identifier that would let them try.
+         *     Deliberately does not carry `order_id`, any sibling unit or the Customer's invoice. Its
+         *     estimate and settled earning are this Partner's own money for this one unit. The Booking Group
+         *     is not addressable from here at all: `G7` requires that a Partner cannot reach a sibling unit's
+         *     scope or earnings, and the cheapest way to guarantee that is to never publish the identifier
+         *     that would let them try.
+         *
+         *     ## The door and the number, on a clock
+         *
+         *     `site_address`, `directions_url`, `customer_first_name` and `customer_phone` are `null` until
+         *     `M1_ADDRESS_UNLOCK_MINUTES` before the start, and `null` again once the visit stops being live
+         *     (`gates.discloses_site_details`). Before that the Partner sees `approximate_area` — the
+         *     locality, never the line. This projection is only ever served to the Booking's own Partner
+         *     (`views.base._partner_booking`), so the gate here is *when*, not *who*. The pin is never
+         *     published as coordinates; it travels only inside the directions link.
          */
         PartnerBooking: {
             /** Format: uuid */
@@ -13075,6 +13123,12 @@ export interface components {
             readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
             readonly estimated_earning: components["schemas"]["PartnerBookingEstimatedEarning"] | null;
             readonly earning: components["schemas"]["PartnerBookingEarning"] | null;
+            readonly gates: components["schemas"]["PartnerBookingGates"];
+            readonly allowed_actions: components["schemas"]["AllowedActionsEnum"][];
+            readonly site_address: components["schemas"]["PartnerSiteAddress"] | null;
+            readonly directions_url: string | null;
+            readonly customer_first_name: string | null;
+            readonly customer_phone: string | null;
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -13102,6 +13156,22 @@ export interface components {
             commission_paise: number;
             net_paise: number;
             currency: string;
+        };
+        /**
+         * @description The visit's server-clock windows (`apps.fulfilment.gates`), so the app can count down to
+         *     them instead of guessing. `allowed_actions` is the authority on what is open right now.
+         */
+        PartnerBookingGates: {
+            /** Format: date-time */
+            address_unlocks_at: string;
+            /** Format: date-time */
+            en_route_opens_at: string;
+            /** Format: date-time */
+            en_route_closes_at: string;
+            /** Format: date-time */
+            arrival_opens_at: string;
+            /** Format: date-time */
+            arrival_closes_at: string;
         };
         PartnerBookingPage: {
             /** Format: uri */
@@ -13254,6 +13324,27 @@ export interface components {
             readonly uploaded_at: string;
             /** Format: date-time */
             readonly reviewed_at: string | null;
+        };
+        PartnerDocumentApplicantAccess: {
+            readonly document: components["schemas"]["PartnerDocumentDetailMetadata"];
+            /** Format: uri */
+            readonly access_url: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        PartnerDocumentDetailMetadata: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["PartnerDocumentKindEnum"];
+            readonly label: string;
+            readonly status: components["schemas"]["PartnerDocumentStatusEnum"];
+            readonly version: number;
+            readonly file_name: string;
+            readonly mime_type: string;
+            readonly file_size: number;
+            /** Format: date-time */
+            readonly uploaded_at: string;
+            readonly rejection_reason: string | null;
         };
         PartnerDocumentFinalizeRequest: {
             expected_version: number;
@@ -13602,7 +13693,12 @@ export interface components {
             location_text?: string;
             moderation_status?: components["schemas"]["ModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly host_id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly host_name: string;
+            readonly host_phone: string;
             /** Format: uuid */
             variant: string;
             structured_fields?: unknown;
@@ -13709,12 +13805,13 @@ export interface components {
             readonly is_accepting_partners: boolean;
         };
         /**
-         * @description The visit destination, disclosed only once the paid visit is genuinely scheduled.
+         * @description The visit destination, disclosed to the Partner only once the visit is genuinely theirs.
          *
-         *     Customer identity and contact remain absent. The Customer's pin travels only inside
-         *     ``directions_url`` — a route to the door, under the same disclosure gate as the address text —
-         *     and never as separate coordinates, which would read as a location feed rather than a
-         *     destination.
+         *     One shape for every Partner surface that discloses a Customer's door — the M2 site visit and
+         *     the A1 booked visit — so the Partner app renders both through one component. Customer identity
+         *     and contact are not part of it. The Customer's pin travels only inside ``directions_url`` — a
+         *     route to the door, under the same disclosure gate as the address text — and never as separate
+         *     coordinates, which would read as a location feed rather than a destination.
          */
         PartnerSiteAddress: {
             line1: string;
@@ -14841,7 +14938,12 @@ export interface components {
             location_text?: string;
             moderation_status?: components["schemas"]["ModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly host_id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly host_name: string;
+            readonly host_phone: string;
             /** Format: uuid */
             variant: string;
             structured_fields?: unknown;
@@ -16121,7 +16223,10 @@ export interface components {
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
             readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly partner_name: string;
+            readonly partner_phone: string;
             /** Format: uuid */
             readonly variant: string;
             readonly structured_fields: unknown;
@@ -16154,7 +16259,10 @@ export interface components {
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
             readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly partner_name: string;
+            readonly partner_phone: string;
             /** Format: uuid */
             readonly variant: string;
             readonly structured_fields: unknown;
@@ -17528,12 +17636,13 @@ export interface components {
             sha256: string;
         };
         /**
-         * @description What the Customer is told about the code they must read out.
+         * @description The code the Customer reads out to let work begin.
          *
-         *     `code_length` rather than the code: the Customer reads the code off their own SMS, and
-         *     publishing it here would hand it to anyone who could reach this endpoint — which is the
-         *     whole point of the OTP. `development_code` is populated only by the development sender,
-         *     exactly as OTP login already works.
+         *     `code` is published, and only here: this endpoint is the Booking's own Customer's, behind
+         *     `_customer_booking` and the service's customer check, so nobody else can reach it — not the
+         *     Partner, whose half is typing the code in. Showing it on screen means a job never waits on an
+         *     SMS arriving; the SMS is a courtesy copy. `development_code` is the legacy field, still the
+         *     same digits but only where `OTP_DEVELOPMENT_CODE_ENABLED`.
          */
         StartOtp: {
             /** Format: uuid */
@@ -17541,6 +17650,7 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             code_length: number;
+            code: string;
             development_code?: string | null;
             /** Format: date-time */
             server_now: string;
@@ -30047,6 +30157,51 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_documents_access_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerDocumentApplicantAccess"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

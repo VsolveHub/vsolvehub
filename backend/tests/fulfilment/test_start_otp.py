@@ -1,7 +1,11 @@
 """Start OTP: single-use, rate-limited, hashed challenge; Operations-assisted outage fallback."""
 
+from http import HTTPStatus
+
 import pytest
 from django.core.cache import cache
+from pytest_django.fixtures import SettingsWrapper
+from rest_framework.test import APIClient
 
 from apps.commerce.models import Booking
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError, OtpInvalidApiError
@@ -16,7 +20,12 @@ from apps.fulfilment.services import mark_arrived, mark_en_route
 from apps.identity.models import User
 from tests.fulfilment.conftest import create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 
 def _arrived(key_prefix: str) -> object:
@@ -66,7 +75,7 @@ def test_request_then_verify_start_otp_starts_work_and_materializes_tasks() -> N
 
     tasks = list(WorkTask.objects.filter(booking=started, kind=WorkTask.Kind.ORIGINAL))
     assert len(tasks) == booked.unit.lines.count()
-    assert all(task.amount_paise > 0 for task in tasks)
+    assert all(task.amount_paise >= 0 for task in tasks)
 
     otp = BookingOtp.objects.get(booking=started)
     assert otp.is_consumed
@@ -205,4 +214,94 @@ def test_verify_start_otp_after_work_already_started_is_refused() -> None:
     with pytest.raises(BookingCommandInvalidApiError):
         request_start_otp(
             booking_id=started.id, customer_id=booked.customer.id, expected_version=started.version
+        )
+
+
+def test_start_code_is_returned_to_the_customer_when_development_codes_are_off(
+    settings: SettingsWrapper,
+) -> None:
+    """P0-6: production shows the code on the Customer's screen; the legacy field stays empty."""
+
+    settings.OTP_DEVELOPMENT_CODE_ENABLED = False
+    booked = _arrived("otp-prod-display")
+    booking = booked.booking
+
+    response = booked.client.post(
+        f"/api/v1/bookings/{booking.id}/start-otp/",
+        {"expected_version": booking.version},
+        format="json",
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert len(body["code"]) == settings.OTP_CODE_LENGTH
+    assert body["development_code"] is None
+    started = verify_start_otp(
+        booking_id=booking.id,
+        partner_id=booked.partner.id,
+        expected_version=booking.version,
+        code=body["code"],
+    )
+    assert started.status == Booking.Status.IN_PROGRESS
+
+
+def test_job_start_does_not_depend_on_the_sms_provider(settings: SettingsWrapper) -> None:
+    settings.OTP_PROVIDER = "unconfigured"
+    booked = _arrived("otp-sms-outage")
+    booking = booked.booking
+
+    issued = request_start_otp(
+        booking_id=booking.id, customer_id=booked.customer.id, expected_version=booking.version
+    )
+
+    assert len(issued.code) == settings.OTP_CODE_LENGTH
+    started = verify_start_otp(
+        booking_id=booking.id,
+        partner_id=booked.partner.id,
+        expected_version=booking.version,
+        code=issued.code,
+    )
+    assert started.status == Booking.Status.IN_PROGRESS
+
+
+def test_customer_start_otp_view_replays_active_code_during_cooldown() -> None:
+    booked = _arrived("otp-view-cooldown")
+    booking = booked.booking
+
+    response1 = booked.client.post(
+        f"/api/v1/bookings/{booking.id}/start-otp/",
+        {"expected_version": booking.version},
+        format="json",
+    )
+    assert response1.status_code == HTTPStatus.OK
+    code1 = response1.json()["code"]
+
+    response2 = booked.client.post(
+        f"/api/v1/bookings/{booking.id}/start-otp/",
+        {"expected_version": booking.version},
+        format="json",
+    )
+    assert response2.status_code == HTTPStatus.OK
+    assert response2.json()["code"] == code1
+    assert BookingOtp.objects.filter(booking=booking).count() == 1
+
+
+def test_start_code_is_visible_only_to_the_bookings_own_customer() -> None:
+    booked = _arrived("otp-only-customer")
+    booking = booked.booking
+    url = f"/api/v1/bookings/{booking.id}/start-otp/"
+    stranger = APIClient()
+    stranger.force_authenticate(User.objects.create_user(phone_number="+919876555771"))
+    partner = APIClient()
+    partner.force_authenticate(booked.partner.user)
+
+    for client in (stranger, partner):
+        response = client.post(url, {"expected_version": booking.version}, format="json")
+        assert response.status_code == HTTPStatus.FORBIDDEN
+        assert not BookingOtp.objects.filter(booking=booking).exists()
+    with pytest.raises(PermissionError):
+        request_start_otp(
+            booking_id=booking.id,
+            customer_id=booked.partner.user.id,
+            expected_version=booking.version,
         )

@@ -3,6 +3,8 @@
 import { cn , formatDate} from "@vsolve/ui";
 import { createElement, type ReactNode } from "react";
 
+import { RemoteImage } from "@/components/remote-image";
+
 import { useCatalogServiceIndex } from "../client-queries";
 import { iconForService } from "../icon-catalogue/service-icon";
 import { isServiceCoverUrl, type CatalogServiceHint } from "../service-cover";
@@ -37,11 +39,11 @@ export function CatalogServiceThumb({
     const contain = isServiceCoverUrl(imageUrl);
     return (
       <span className={boxClass}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <RemoteImage
           src={imageUrl}
           alt=""
-          loading="lazy"
+          fill
+          sizes="136px"
           className={
             contain
               ? "size-full object-contain object-center p-2"

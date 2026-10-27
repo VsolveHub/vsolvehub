@@ -1,3 +1,5 @@
+import { RemoteImage } from "@/components/remote-image";
+
 import type { PromoBanner } from "../queries";
 
 /**
@@ -52,10 +54,11 @@ export function PromoBanners({
                   ) : null}
                 </div>
                 {imageUrl !== "" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <RemoteImage
                     src={imageUrl}
                     alt=""
+                    width={160}
+                    height={160}
                     className="size-28 shrink-0 rounded-xl object-contain sm:size-40"
                   />
                 ) : null}

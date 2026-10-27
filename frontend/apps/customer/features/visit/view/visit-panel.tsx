@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Spinner, buttonStyles, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
 import { useBookingGroup, type FulfilmentUnit } from "@/features/bookings/queries";
@@ -311,9 +311,11 @@ export function VisitPanel({
               <VisitProgress status={data.status} />
             </div>
 
-            {unit?.booking_id && unit.booking_status ? (
+            {/* The visit read, like the track above it: the group read can lag behind it, and a
+                code left up after work has started invites someone to read it out again. */}
+            {unit?.booking_id ? (
               <div className="mt-4">
-                <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
+                <VisitStartCode bookingId={unit.booking_id} status={data.status} />
               </div>
             ) : null}
 
@@ -337,6 +339,17 @@ export function VisitPanel({
                       partnerDisplayName={data.partner_display_name}
                     />
                   )}
+                  {/* The server sends the number only from two hours before the
+                      visit until it ends — the same window the professional gets
+                      yours — so its presence is the whole rule. */}
+                  {data.partner_phone ? (
+                    <a
+                      href={`tel:${data.partner_phone}`}
+                      className={buttonStyles({ variant: "outline", className: "mt-3 w-full sm:w-auto" })}
+                    >
+                      Call your professional
+                    </a>
+                  ) : null}
                 </div>
               </section>
             )}

@@ -40,7 +40,12 @@ from apps.payouts.services import (
 from tests.helpers import force_role_client
 from tests.payouts.test_payout_api import _batch, _earning, _verified_account
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Reaches en route and arrival through shared helpers for a visit booked for tomorrow; the
+    # clock gates on those steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 FAKE_PROVIDER = override_settings(PAYOUT_PROVIDER="fake", PAYOUTS_ALLOW_FAKE_PROVIDER=True)
 ACCOUNT_NUMBER = "123456789012"

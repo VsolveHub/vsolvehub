@@ -1,9 +1,9 @@
 "use client";
 
-import { Badge, Button, buttonStyles, useT } from "@vsolve/ui";
+import { Badge, Button, useT } from "@vsolve/ui";
 import { Plus, Trash2, X, Clock, Edit2 } from "lucide-react";
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { WEEKDAY_KEYS, scheduleProblems, weeklyHours, type DraftPeriod, type PeriodProblem } from "../model/schedule";
 
@@ -24,7 +24,7 @@ export interface ServiceAreaOption {
 export interface AvailabilityEditorProps {
   areas: readonly ServiceAreaOption[];
   initialPeriods: readonly DraftPeriod[];
-  onSave: (periods: readonly DraftPeriod[]) => void;
+  onSave: (periods: readonly DraftPeriod[]) => Promise<void> | void;
   isSaving?: boolean;
   saveError?: string | null;
 }
@@ -47,14 +47,45 @@ export function AvailabilityEditor({
   isSaving = false,
   saveError = null,
 }: AvailabilityEditorProps) {
+  const router = useRouter();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
   const [modalShift, setModalShift] = useState<ModalShiftState>(null);
   const t = useT();
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
 
   const problems = useMemo(() => scheduleProblems(periods), [periods]);
   const hours = weeklyHours(periods);
   const hasProblems = problems.size > 0;
   const hasChanges = JSON.stringify(periods) !== JSON.stringify(initialPeriods);
+
+  // Keep ref for auto-saving on unmount
+  const stateRef = useRef({ periods, hasChanges, hasProblems, onSave });
+  useEffect(() => {
+    stateRef.current = { periods, hasChanges, hasProblems, onSave };
+  });
+
+  useEffect(() => {
+    return () => {
+      const current = stateRef.current;
+      if (current.hasChanges && !current.hasProblems) {
+        void current.onSave(current.periods);
+      }
+    };
+  }, []);
+
+  async function handleNavigate(href: string) {
+    if (hasChanges && !hasProblems) {
+      setNavigatingTo(href);
+      try {
+        await onSave(periods);
+      } catch {
+        setNavigatingTo(null);
+        return;
+      }
+      setNavigatingTo(null);
+    }
+    router.push(href);
+  }
 
   function remove(key: string) {
     setPeriods((current) => current.filter((period) => period.key !== key));
@@ -393,24 +424,38 @@ export function AvailabilityEditor({
       {/* Save & Navigation Action Dock */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur px-4 py-3 shadow-lg">
         <div className="mx-auto max-w-[560px] flex items-center justify-between gap-3">
-          <Link href="/apply/documents" className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
-              {t("common.back")}
-            </Link>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => void handleNavigate("/apply/documents")}
+            disabled={isSaving || navigatingTo !== null}
+            loading={navigatingTo === "/apply/documents"}
+            className="shrink-0 font-bold text-sm h-12 px-5"
+          >
+            {t("common.back")}
+          </Button>
 
           <div className="flex items-center gap-2.5">
             <Button
               size="lg"
-              onClick={() => onSave(periods)}
-              disabled={hasProblems || isSaving || !hasChanges}
-              loading={isSaving}
+              onClick={() => void onSave(periods)}
+              disabled={hasProblems || isSaving || navigatingTo !== null || !hasChanges}
+              loading={isSaving && navigatingTo === null}
               loadingLabel={t("common.saving")}
               className="font-bold text-sm h-12 px-4"
             >
               {hasChanges ? t("apply.schedule.saveHours") : t("apply.schedule.savedLabel")}
             </Button>
-            <Link href="/apply/review" className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-5 shadow-md" })}>
-                {t("apply.schedule.reviewApplication")}
-              </Link>
+            <Button
+              size="lg"
+              onClick={() => void handleNavigate("/apply/review")}
+              disabled={hasProblems || isSaving || navigatingTo !== null}
+              loading={navigatingTo === "/apply/review"}
+              loadingLabel={hasChanges ? t("apply.schedule.savingAndReviewing") : undefined}
+              className="font-bold text-sm h-12 px-5 shadow-md"
+            >
+              {t("apply.schedule.reviewApplication")}
+            </Button>
           </div>
         </div>
       </div>

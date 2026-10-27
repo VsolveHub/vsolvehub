@@ -10,13 +10,13 @@ from django.conf import settings
 from django.db import models
 
 from apps.foundation.slugs import slug_base, unique_slug
-from apps.locations.pins import pin_constraints
 from apps.foundation.storage_paths import (
     stay_ad_upload_to as _unified_stay_ad_upload_to,
 )
 from apps.foundation.storage_paths import (
     stay_review_upload_to as _unified_stay_review_upload_to,
 )
+from apps.locations.pins import pin_constraints
 
 
 def stay_ad_upload_to(instance: models.Model, filename: str) -> str:

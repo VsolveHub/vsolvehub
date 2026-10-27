@@ -25,6 +25,7 @@ from apps.partners.views import (
     PartnerCrewCollectionView,
     PartnerCrewDetailView,
     PartnerCrewDocumentView,
+    PartnerDocumentAccessView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
     PartnerGateListView,
@@ -59,6 +60,11 @@ urlpatterns = [
         "partner/application/documents/",
         PartnerDocumentCreateView.as_view(),
         name="partner-application-document",
+    ),
+    path(
+        "partner/application/documents/<uuid:document_id>/access/",
+        PartnerDocumentAccessView.as_view(),
+        name="partner-application-document-access",
     ),
     path(
         "partner/application/submit/",

@@ -8,8 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
-import { usePartnerApplication } from "../queries";
-import { HomeHeroLink } from "@/components/home-hero-link";
+import { usePartnerApplication, usePartnerAvailability } from "../queries";
 import { LocaleSwitcher } from "@/features/session/view/locale-switcher";
 
 /**
@@ -96,12 +95,13 @@ export function ApplyShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const query = usePartnerApplication();
+  const availability = usePartnerAvailability();
   // A 404 is "you have not started yet", which is a state and not a failure.
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = isMissing ? null : (query.data ?? null);
 
-  const steps = stepProgress(application);
-  const summary = progressSummary(application);
+  const steps = stepProgress(application, availability.data);
+  const summary = progressSummary(application, availability.data);
 
   return (
     <DockContext.Provider value={dockTarget}>
@@ -184,15 +184,15 @@ function ApplyHeader({
             <div className="hidden lg:flex items-center gap-2 rounded-full bg-surface-sunken/80 border border-line-strong px-4 py-1.5 text-xs">
               <span className="font-extrabold text-navy-900">
                 {isSubmitted
-                  ? "Application Submitted • Under Verification"
+                  ? t("apply.shell.desktop.submitted")
                   : pathname === "/apply"
-                  ? "Registration Hub"
+                  ? t("apply.shell.desktop.hub")
                   : currentStepIdx >= 0
-                  ? `Step ${currentStepIdx + 1} of ${steps.length}`
-                  : "Partner Application"}
+                  ? t("apply.shell.desktop.stepOf", { n: currentStepIdx + 1, total: steps.length })
+                  : t("apply.shell.desktop.application")}
               </span>
               <span className="text-text-muted">•</span>
-              <span className="font-medium text-text-secondary">Desktop Verification Mode</span>
+              <span className="font-medium text-text-secondary">{t("apply.shell.desktop.mode")}</span>
             </div>
 
             {/* Right Action: Step indicator pill / Overview CTA & Locale */}

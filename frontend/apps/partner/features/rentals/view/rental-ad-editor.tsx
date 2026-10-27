@@ -139,7 +139,13 @@ export function RentalAdEditor({
     asset ? paiseToRupees(asset.deposit_paise) : null,
   );
   const [quantity, setQuantity] = useState(String(asset?.quantity_available ?? 1));
-  const [location, setLocation] = useState(asset?.location_text ?? defaultLocation);
+  const [addressLine, setAddressLine] = useState(
+    asset?.pickup_address_line || asset?.location_text || defaultLocation,
+  );
+  const [area, setArea] = useState(asset?.pickup_area ?? "");
+  const [city, setCity] = useState(asset?.pickup_city ?? "");
+  const [pincode, setPincode] = useState(asset?.pickup_pincode ?? "");
+  const [deliveryAvailable, setDeliveryAvailable] = useState(asset?.delivery_available ?? false);
   const [fields, setFields] = useState<Record<string, string>>(() =>
     fieldsToStrings(asset?.structured_fields),
   );
@@ -169,7 +175,9 @@ export function RentalAdEditor({
 
   useEffect(() => {
     // A new item opened before the profile address loaded still gets it.
-    if (!isEdit && defaultLocation) setLocation((current) => (current.trim() ? current : defaultLocation));
+    if (!isEdit && defaultLocation) {
+      setAddressLine((current) => (current.trim() ? current : defaultLocation));
+    }
   }, [defaultLocation, isEdit]);
 
   const photosRef = useRef(photos);
@@ -232,7 +240,11 @@ export function RentalAdEditor({
   type Payload = {
     title: string;
     description: string;
-    location_text: string;
+    addressLine: string;
+    area: string;
+    city: string;
+    pincode: string;
+    deliveryAvailable: boolean;
     daily_rate_paise: number;
     deposit_paise: number;
     quantity_available: number;
@@ -242,23 +254,32 @@ export function RentalAdEditor({
 
   const save = useMutation({
     mutationFn: async (payload: Payload): Promise<"created" | "draft" | "updated"> => {
-      const { newUrls, ...rest } = payload;
+      const { newUrls, addressLine, area, city, pincode, deliveryAvailable, ...rest } = payload;
+      const locationText = [area, city].filter(Boolean).join(", ") || addressLine;
+
       if (asset) {
         for (const mediaId of removedMediaIds) {
           await deletePartnerRentalAssetMedia(asset.id, mediaId);
         }
-        await updatePartnerRentalAsset(asset.id, rest);
+        await updatePartnerRentalAsset(asset.id, {
+          ...rest,
+          location_text: locationText,
+          pickup_address_line: addressLine,
+          pickup_area: area,
+          pickup_city: city,
+          pickup_pincode: pincode,
+          delivery_available: deliveryAvailable,
+        });
         return "updated";
       }
       const created = await createPartnerRentalAsset({
         ...rest,
-        // This editor still takes one free-text location; the routed form
-        // (rentals-workspace) collects the structured pickup address.
-        pickup_address_line: rest.location_text,
-        pickup_area: "",
-        pickup_city: "",
-        pickup_pincode: "",
-        delivery_available: false,
+        location_text: locationText,
+        pickup_address_line: addressLine,
+        pickup_area: area,
+        pickup_city: city,
+        pickup_pincode: pincode,
+        delivery_available: deliveryAvailable,
         variant_id: variantId,
         asset_identifier: "",
         image_urls: newUrls,
@@ -292,7 +313,11 @@ export function RentalAdEditor({
     const qty = Number.parseInt(quantity.trim(), 10);
     if (!variant) return setFormError(t("rentals.editor.errorChoose"));
     if (!title.trim()) return setFormError(t("rentals.editor.errorName"));
-    if (!location.trim()) return setFormError(t("rentals.editor.errorLocation"));
+    if (!addressLine.trim()) return setFormError(t("rentals.editor.errorAddressLine"));
+    if (!city.trim()) return setFormError(t("rentals.editor.errorCity"));
+    if (pincode.trim() && !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+      return setFormError(t("rentals.editor.errorPincode"));
+    }
     if (dailyPaise == null || dailyPaise < 1) return setFormError(t("rentals.editor.errorDailyRate"));
     if (depositPaise == null) return setFormError(t("rentals.editor.errorDeposit"));
     if (!Number.isFinite(qty) || qty < 1) return setFormError(t("rentals.ads.errorQuantity"));
@@ -317,7 +342,11 @@ export function RentalAdEditor({
     save.mutate({
       title: title.trim(),
       description: description.trim(),
-      location_text: location.trim(),
+      addressLine: addressLine.trim(),
+      area: area.trim(),
+      city: city.trim(),
+      pincode: pincode.trim(),
+      deliveryAvailable,
       daily_rate_paise: dailyPaise,
       deposit_paise: depositPaise,
       quantity_available: qty,
@@ -545,17 +574,62 @@ export function RentalAdEditor({
         </Section>
 
         <Section
-          title={t("rentals.editor.pickupLocation")}
-          hint={t("rentals.editor.pickupLocationHint")}
+          title={t("rentals.editor.pickupDeliveryTitle")}
+          hint={t("rentals.editor.pickupDeliveryHint")}
         >
-          <Field label={t("rentals.editor.address")} required>
+          <Field label={t("rentals.editor.addressLine")} required>
             <Input
-              id="rental-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder={t("rentals.editor.addressPlaceholder")}
+              id="rental-address-line"
+              value={addressLine}
+              onChange={(e) => setAddressLine(e.target.value)}
+              placeholder={t("rentals.editor.addressLinePlaceholder")}
             />
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("rentals.editor.areaLocality")}>
+              <Input
+                id="rental-area"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder={t("rentals.editor.areaPlaceholder")}
+              />
+            </Field>
+            <Field label={t("rentals.ads.city")} required>
+              <Input
+                id="rental-city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder={t("rentals.editor.cityPlaceholder")}
+              />
+            </Field>
+          </div>
+          <Field label={t("rentals.ads.pincode")} required>
+            <Input
+              id="rental-pincode"
+              inputMode="numeric"
+              maxLength={6}
+              value={pincode}
+              onChange={(e) => setPincode(e.target.value)}
+              placeholder="560038"
+            />
+          </Field>
+          <div className="pt-1">
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm text-navy-900">
+              <input
+                type="checkbox"
+                id="rental-delivery-available"
+                checked={deliveryAvailable}
+                onChange={(e) => setDeliveryAvailable(e.target.checked)}
+                className="mt-0.5 rounded-xs border-line text-action focus:ring-action"
+              />
+              <div>
+                <span className="font-semibold">{t("rentals.editor.offerDelivery")}</span>
+                <p className="text-xs text-text-secondary">
+                  {t("rentals.editor.offerDeliveryHint")}
+                </p>
+              </div>
+            </label>
+          </div>
         </Section>
 
         {formError ? (

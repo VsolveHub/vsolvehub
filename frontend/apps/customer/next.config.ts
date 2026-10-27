@@ -2,6 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
+import { OPTIMIZED_IMAGE_HOSTS } from "./lib/remote-images";
+
 // pnpm workspace root (frontend/). Turbopack otherwise infers a root from the
 // nearest lockfile and can pick the wrong one in a monorepo.
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -124,6 +126,20 @@ const nextConfig: NextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
+    remotePatterns: OPTIMIZED_IMAGE_HOSTS.map((hostname) => ({
+      protocol: "https" as const,
+      hostname,
+      pathname: "/**",
+    })),
+    /**
+     * 31 days.
+     *
+     * The R2 bucket sends no `Cache-Control`, so without this every resized
+     * image expires after Next's 4-hour default and is optimized again — each
+     * time a billed transformation. Catalogue uploads carry a timestamp in the
+     * filename, so a changed picture is a new URL and is never served stale.
+     */
+    minimumCacheTTL: 2_678_400,
   },
 };
 

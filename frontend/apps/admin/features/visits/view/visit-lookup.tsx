@@ -90,6 +90,74 @@ export function VisitLookup() {
   );
 }
 
+/**
+ * Where the visit is and how to reach both people.
+ *
+ * Not on the Partner's two-hour clock: an operator working a case the day
+ * before — a customer asking who is coming, a partner who cannot find the
+ * building — needs these whenever the case is open (contract 1.82.0).
+ */
+function VisitContacts({ booking }: { booking: OperationsBooking }) {
+  const address = booking.site_address;
+  return (
+    <Card className="p-5">
+      <h2 className="text-sm font-bold text-navy-900">Location and contacts</h2>
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <dt className="text-text-muted">Visit address</dt>
+          <dd>
+            {address === null ? (
+              "—"
+            ) : (
+              <>
+                <span className="block">
+                  {[address.line1, address.line2].filter((part) => part.trim() !== "").join(", ")}
+                </span>
+                {address.landmark.trim() === "" ? null : (
+                  <span className="block text-text-secondary">Near {address.landmark}</span>
+                )}
+                <span className="block">
+                  {[address.locality, address.city, address.state, address.postal_code]
+                    .filter((part) => part.trim() !== "")
+                    .join(", ")}
+                </span>
+                {address.directions_url ? (
+                  <a
+                    className="mt-1 inline-block underline"
+                    href={address.directions_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in Google Maps
+                  </a>
+                ) : null}
+              </>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-text-muted">Customer</dt>
+          <dd>
+            {booking.customer_name.trim() || "Name not given"} ·{" "}
+            <a className="underline" href={`tel:${booking.customer_phone}`}>
+              {booking.customer_phone}
+            </a>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-text-muted">Partner</dt>
+          <dd>
+            {booking.partner_display_name} ·{" "}
+            <a className="underline" href={`tel:${booking.partner_phone}`}>
+              {booking.partner_phone}
+            </a>
+          </dd>
+        </div>
+      </dl>
+    </Card>
+  );
+}
+
 function VisitRecord({ booking }: { booking: OperationsBooking }) {
   const actions = visitActions(booking);
   return (
@@ -131,6 +199,8 @@ function VisitRecord({ booking }: { booking: OperationsBooking }) {
           </div>
         </dl>
       </Card>
+
+      <VisitContacts booking={booking} />
 
       {actions.findReplacement ? (
         <Card className="border-warning-line bg-warning-surface p-5 text-sm text-warning-text">

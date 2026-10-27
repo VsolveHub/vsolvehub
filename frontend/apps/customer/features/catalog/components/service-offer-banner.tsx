@@ -2,6 +2,7 @@
 
 import { formatMoney, useHydrated } from "@vsolve/ui";
 
+import { RemoteImage } from "@/components/remote-image";
 import { useCustomerCoins } from "@/features/coins/queries";
 import { useCustomerSession } from "@/features/session/queries";
 
@@ -58,8 +59,13 @@ export function ServiceOfferBanner({ imageUrl }: { imageUrl: string }) {
         </p>
       </div>
       {imageUrl !== "" ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt="" className="size-20 shrink-0 object-contain sm:size-24" />
+        <RemoteImage
+          src={imageUrl}
+          alt=""
+          width={96}
+          height={96}
+          className="size-20 shrink-0 object-contain sm:size-24"
+        />
       ) : null}
     </section>
   );
