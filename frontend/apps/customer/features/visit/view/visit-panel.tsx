@@ -311,9 +311,11 @@ export function VisitPanel({
               <VisitProgress status={data.status} />
             </div>
 
-            {unit?.booking_id && unit.booking_status ? (
+            {/* The visit read, like the track above it: the group read can lag behind it, and a
+                code left up after work has started invites someone to read it out again. */}
+            {unit?.booking_id ? (
               <div className="mt-4">
-                <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
+                <VisitStartCode bookingId={unit.booking_id} status={data.status} />
               </div>
             ) : null}
 

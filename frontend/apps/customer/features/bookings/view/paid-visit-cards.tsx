@@ -4,11 +4,11 @@ import { buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import { Money } from "@/features/checkout/view/money";
-import { useVisit } from "@/features/visit/queries";
+import { useVisit, type VisitStatus } from "@/features/visit/queries";
 import { VisitActions } from "@/features/visit/view/visit-actions";
 import { bookingVisitHref } from "@/lib/routes";
 
-import type { BookingGroup, FulfilmentUnit } from "../queries";
+import { newestBookingStatus, type BookingGroup, type FulfilmentUnit } from "../queries";
 import {
   formatBookingDate,
   formatBookingTime,
@@ -21,6 +21,21 @@ import { MockProfessionalCard } from "./mock-professional-card";
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
 import { VisitStartCode } from "./visit-start-code";
+
+/**
+ * Where this visit has got to, from whichever read the page holds is newer.
+ *
+ * `useVisit` is the same cached query the start-code card and the visit actions
+ * already read, so this adds no request — it only stops the track and the code
+ * waiting on the group read when the visit read has already moved on.
+ */
+function useLiveBookingStatus(unit: FulfilmentUnit, groupReadAt: number): VisitStatus | null {
+  const visit = useVisit(unit.booking_id);
+  return newestBookingStatus(
+    { status: unit.booking_status, readAt: groupReadAt },
+    visit.data === undefined ? null : { status: visit.data.status, readAt: visit.dataUpdatedAt },
+  );
+}
 
 function ProfessionalBlock({ unit, isPaid }: { unit: FulfilmentUnit; isPaid: boolean }) {
   if (unit.professional && isPaid) {
@@ -87,11 +102,15 @@ function ScheduleBlock({ unit }: { unit: FulfilmentUnit }) {
 export function SingleVisitDetailCard({
   unit,
   isPaid,
+  groupReadAt,
 }: {
   unit: FulfilmentUnit;
   isPaid: boolean;
+  /** When the group read this unit came from was fetched (`dataUpdatedAt`). */
+  groupReadAt: number;
 }) {
   const services = serviceLinesOf(unit);
+  const bookingStatus = useLiveBookingStatus(unit, groupReadAt);
 
   return (
     <article className="rounded-card border border-line bg-surface p-5 shadow-xs">
@@ -100,15 +119,15 @@ export function SingleVisitDetailCard({
         <UnitStatusBadge unit={unit} />
       </div>
 
-      {unit.booking_status ? (
+      {bookingStatus ? (
         <div className="mt-4">
-          <VisitProgress status={unit.booking_status} />
+          <VisitProgress status={bookingStatus} />
         </div>
       ) : null}
 
-      {unit.booking_id && unit.booking_status ? (
+      {unit.booking_id && bookingStatus ? (
         <div className="mt-4">
-          <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
+          <VisitStartCode bookingId={unit.booking_id} status={bookingStatus} />
         </div>
       ) : null}
 
@@ -168,14 +187,18 @@ export function MultiVisitOverviewCard({
   total,
   groupId,
   isPaid,
+  groupReadAt,
 }: {
   unit: FulfilmentUnit;
   index: number;
   total: number;
   groupId: string;
   isPaid: boolean;
+  /** When the group read this unit came from was fetched (`dataUpdatedAt`). */
+  groupReadAt: number;
 }) {
   const services = serviceLinesOf(unit);
+  const bookingStatus = useLiveBookingStatus(unit, groupReadAt);
 
   return (
     <li className="rounded-card border border-line bg-surface p-4 shadow-xs">
@@ -192,9 +215,9 @@ export function MultiVisitOverviewCard({
         {unit.arrival_window_minutes} min · about {unit.estimated_duration_minutes} min of work
       </p>
 
-      {unit.booking_id && unit.booking_status ? (
+      {unit.booking_id && bookingStatus ? (
         <div className="mt-3">
-          <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
+          <VisitStartCode bookingId={unit.booking_id} status={bookingStatus} />
         </div>
       ) : null}
 

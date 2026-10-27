@@ -291,7 +291,7 @@ describe("cancelling", () => {
     expect(screen.queryByRole("button", { name: /refresh now/i })).not.toBeInTheDocument();
   });
 
-  it("removes refresh and cancellation controls entirely after the partner is on the way", async () => {
+  it("removes cancellation but keeps refresh once the partner is on the way", async () => {
     client.GET.mockResolvedValue(
       ok(
         group({
@@ -307,7 +307,135 @@ describe("cancelling", () => {
     await screen.findByText(/your professional is on the way or work is in progress/i);
 
     expect(screen.queryByRole("button", { name: /cancel this booking/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /refresh now/i })).not.toBeInTheDocument();
+    // The visit is still moving, so the customer may want it now rather than at the next poll.
+    expect(screen.getByRole("button", { name: /refresh now/i })).toBeInTheDocument();
+  });
+});
+
+/** The customer's own read of one visit, at the given status. */
+function customerVisit(status: import("@vsolve/api-client").Schemas["BookingStatusEnum"]) {
+  return {
+    id: "booking-1",
+    fulfilment_unit_id: "fu-1",
+    status,
+    version: 3,
+    scheduled_start: "2026-09-01T03:00:00.000Z",
+    estimated_duration_minutes: 45,
+    partner_display_name: "Blockage Pro",
+    en_route_at: null,
+    arrived_at: null,
+    late_declared_at: null,
+    cancelled_at: null,
+    cancellation_reason: "",
+    work_tasks: [],
+    active_amendment: null,
+    completion: null,
+    cancellation_preview: {
+      band_code: "FREE",
+      fee_paise: 0,
+      fee_waiver: "",
+      refund_paise: 22800,
+      currency: "INR",
+    },
+    reschedule_preview: {
+      is_available: false,
+      unavailable_reason: "",
+      earliest_start: "2026-08-09T10:00:00+05:30",
+    },
+    server_now: "2026-08-31T15:00:00.000Z",
+    partner_phone: null,
+  } satisfies import("@vsolve/api-client").Schemas["CustomerBooking"];
+}
+
+/** A paid one-visit group whose Booking is at the given status. */
+function paidGroupAt(bookingStatus: import("@vsolve/api-client").Schemas["BookingStatusEnum"]) {
+  return group({
+    status: "BOOKED",
+    recovery_action: "NONE",
+    order_id: "order-1",
+    units: [unit({ status: "BOOKED", booking_id: "booking-1", booking_status: bookingStatus })],
+  });
+}
+
+/** The three-step track, so its labels are not confused with the same words elsewhere. */
+function visitTrack() {
+  return within(screen.getByText("Visit status").closest("div")!);
+}
+
+describe("a visit that moves while the page is open", () => {
+  it("moves the track on and takes the start code down when the visit read is newer", async () => {
+    // The regression: the Partner verified the code, the group read still said
+    // ARRIVED, and the customer was left looking at a spent code.
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/booking-groups/{group_id}/") {
+        return Promise.resolve(ok(paidGroupAt("ARRIVED")));
+      }
+      if (path === "/api/v1/bookings/{booking_id}/") {
+        // Answers after the group read, so it is the newer of the two.
+        return new Promise((resolve) => {
+          setTimeout(() => resolve(ok(customerVisit("IN_PROGRESS"))), 20);
+        });
+      }
+      return Promise.resolve(refusal("not_found", 404));
+    });
+
+    renderDetail();
+
+    expect(await screen.findByText(/read this out to start the work/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText(/read this out to start the work/i)).not.toBeInTheDocument(),
+    );
+    expect(visitTrack().getByText("In progress")).not.toHaveClass("text-text-muted");
+  });
+
+  it("re-reads the group on Refresh now, and the newer group read wins", async () => {
+    let groupReads = 0;
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/booking-groups/{group_id}/") {
+        groupReads += 1;
+        return Promise.resolve(ok(paidGroupAt(groupReads === 1 ? "ARRIVED" : "IN_PROGRESS")));
+      }
+      if (path === "/api/v1/bookings/{booking_id}/") {
+        return Promise.resolve(ok(customerVisit("ARRIVED")));
+      }
+      return Promise.resolve(refusal("not_found", 404));
+    });
+
+    renderDetail();
+    expect(await screen.findByText(/read this out to start the work/i)).toBeInTheDocument();
+    expect(visitTrack().getByText("In progress")).toHaveClass("text-text-muted");
+
+    fireEvent.click(screen.getByRole("button", { name: /refresh now/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/read this out to start the work/i)).not.toBeInTheDocument(),
+    );
+    expect(groupReads).toBe(2);
+    expect(visitTrack().getByText("In progress")).not.toHaveClass("text-text-muted");
+  });
+
+  it("re-reads the visit and the group when the start code is refused", async () => {
+    let groupReads = 0;
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/booking-groups/{group_id}/") {
+        groupReads += 1;
+        return Promise.resolve(ok(paidGroupAt("ARRIVED")));
+      }
+      if (path === "/api/v1/bookings/{booking_id}/") {
+        return Promise.resolve(ok(customerVisit("ARRIVED")));
+      }
+      return Promise.resolve(refusal("not_found", 404));
+    });
+    client.POST.mockResolvedValue(refusal("booking_version_conflict", 409));
+
+    renderDetail();
+    const showCode = await screen.findByRole("button", { name: "Show code" });
+    await waitFor(() => expect(showCode).toBeEnabled());
+
+    fireEvent.click(showCode);
+
+    await waitFor(() => expect(groupReads).toBe(2));
+    expect(client.POST.mock.calls[0]![1].body).toEqual({ expected_version: 3 });
   });
 });
 
