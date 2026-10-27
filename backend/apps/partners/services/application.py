@@ -24,6 +24,7 @@ from apps.partners.exceptions import (
 )
 from apps.partners.models import (
     PartnerApplication,
+    PartnerAvailabilityRule,
     PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
@@ -406,6 +407,15 @@ def submit_partner_application(
             service_areas=service_areas,
             require_complete=True,
         )
+        for area in service_areas:
+            if not PartnerAvailabilityRule.objects.filter(
+                partner=partner,
+                service_area=area,
+                is_active=True,
+            ).exists():
+                raise PartnerApplicationIncompleteError(
+                    "Set your weekly working hours for each service area before submitting.",
+                )
     if not _base_application_is_complete(application):
         raise PartnerApplicationIncompleteError(
             "Complete your profile, services, areas, skills, and required consents "

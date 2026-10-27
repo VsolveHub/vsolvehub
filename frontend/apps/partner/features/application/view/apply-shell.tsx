@@ -8,7 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
-import { usePartnerApplication } from "../queries";
+import { usePartnerApplication, usePartnerAvailability } from "../queries";
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { HomeHeroLink } from "@/components/home-hero-link";
 
@@ -103,12 +103,13 @@ export function ApplyShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const query = usePartnerApplication();
+  const availability = usePartnerAvailability();
   // A 404 is "you have not started yet", which is a state and not a failure.
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = isMissing ? null : (query.data ?? null);
 
-  const steps = stepProgress(application);
-  const summary = progressSummary(application);
+  const steps = stepProgress(application, availability.data);
+  const summary = progressSummary(application, availability.data);
 
   return (
     <DockContext.Provider value={dockTarget}>

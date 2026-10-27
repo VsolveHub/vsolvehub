@@ -65,6 +65,8 @@ class FakeDocumentStorage:
 def document_storage(monkeypatch: pytest.MonkeyPatch) -> FakeDocumentStorage:
     storage = FakeDocumentStorage()
     monkeypatch.setattr("apps.partners.services.get_document_storage", lambda: storage)
+    monkeypatch.setattr("apps.partners.services.documents.get_document_storage", lambda: storage)
+    monkeypatch.setattr("apps.partners.storage.get_document_storage", lambda: storage)
     return storage
 
 
@@ -174,3 +176,29 @@ def upload_partner_document(
         {"expected_version": expected_version, "upload_id": issued.json()["id"]},
         format="json",
     )
+
+
+def set_partner_schedule(
+    setup: PartnerSetup,
+    *,
+    weekday: int = 0,
+    starts_at: str = "09:00:00",
+    ends_at: str = "18:00:00",
+) -> Any:
+    return setup.client.put(
+        "/api/v1/partner/availability/",
+        {
+            "rules": [
+                {
+                    "service_area_id": str(setup.service_area.id),
+                    "weekday": weekday,
+                    "starts_at": starts_at,
+                    "ends_at": ends_at,
+                    "ends_next_day": False,
+                }
+            ],
+            "exceptions": [],
+        },
+        format="json",
+    )
+

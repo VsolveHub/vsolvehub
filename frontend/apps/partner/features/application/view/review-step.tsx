@@ -5,6 +5,7 @@ import { Badge, Button, buttonStyles, ErrorState, Spinner } from "@vsolve/ui";
 import {
   CheckCircle2,
   AlertCircle,
+  Clock,
   Edit2,
   User,
   Wrench,
@@ -17,8 +18,14 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { canSubmit, isEditable, outstandingRequirements } from "../model/readiness";
+import { toDraft, weeklyHours, WEEKDAYS } from "../model/schedule";
 import { isListingTrack } from "../model/steps";
-import { isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
+import {
+  isVersionConflict,
+  usePartnerApplication,
+  usePartnerAvailability,
+  useSubmitApplication,
+} from "../queries";
 import { useApplicationReference } from "../reference-queries";
 import { ApplicationStatusBanner } from "./status-banner";
 
@@ -36,13 +43,14 @@ function SectionEditLink({ href, label }: { href: string; label: string }) {
 
 export function ReviewStep() {
   const query = usePartnerApplication();
+  const availability = usePartnerAvailability();
   const reference = useApplicationReference();
   const submit = useSubmitApplication();
   const [confirmed, setConfirmed] = useState(false);
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
-  if (query.isPending || reference.isPending) {
+  if (query.isPending || reference.isPending || availability.isPending) {
     return (
       <p className="flex items-center gap-2 py-8 text-text-secondary">
         <Spinner size="sm" />
@@ -82,8 +90,8 @@ export function ReviewStep() {
   }
 
   const listing = isListingTrack(application.track);
-  const outstanding = outstandingRequirements(application);
-  const ready = canSubmit(application);
+  const outstanding = outstandingRequirements(application, availability.data);
+  const ready = canSubmit(application, availability.data);
   const activeConsents = application.consents.filter(
     (consent) => consent.withdrawn_at === null,
   );
@@ -241,15 +249,102 @@ export function ReviewStep() {
           )}
         </div>
       </div>
+
+      {/* Section 4: Working Hours */}
+      <div className="rounded-card border border-line bg-surface p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-signal-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">4. Working Hours & Availability</h2>
+          </div>
+          {isEditable(application) ? (
+            <SectionEditLink href="/apply/schedule" label="Edit working hours" />
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3">
+          {application.service_area_ids.length === 0 ? (
+            <p className="text-xs text-text-muted">Select a service area first to configure working hours.</p>
+          ) : (
+            application.service_area_ids.map((areaId) => {
+              const areaName = areaNameMap.get(areaId) ?? `Service area ${areaId.slice(0, 8)}`;
+              const areaRules = (availability.data?.rules ?? []).filter(
+                (r) => r.service_area_id === areaId && r.is_active,
+              );
+              const areaDrafts = toDraft(areaRules);
+              const totalHours = weeklyHours(areaDrafts);
+
+              if (areaRules.length === 0) {
+                return (
+                  <div
+                    key={areaId}
+                    className="flex flex-col gap-2 rounded-control border border-danger-line bg-danger-surface/20 p-3 text-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-navy-900">{areaName}</span>
+                      <Badge tone="danger">No hours set</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-danger-text font-semibold">
+                      <span>⚠️ No working hours set for this area. Customers cannot book slots until you set hours.</span>
+                      <Link
+                        href="/apply/schedule"
+                        className="underline underline-offset-2 font-bold shrink-0 hover:text-navy-900"
+                      >
+                        Edit working hours →
+                      </Link>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={areaId}
+                  className="flex flex-col gap-2 rounded-control border border-line bg-surface-sunken p-3 text-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-navy-900">{areaName}</span>
+                    <Badge tone="success" className="tabular-nums font-bold">
+                      {totalHours} hrs / week ({areaRules.length} {areaRules.length === 1 ? "shift" : "shifts"})
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-text-secondary">
+                    {WEEKDAYS.map((dayName, dayIdx) => {
+                      const dayRules = areaRules.filter((r) => r.weekday === dayIdx);
+                      if (dayRules.length === 0) return null;
+                      return (
+                        <span
+                          key={dayName}
+                          className="rounded bg-surface px-2 py-0.5 border border-line text-[11px] font-medium"
+                        >
+                          <strong className="text-navy-900">{dayName.slice(0, 3)}:</strong>{" "}
+                          {dayRules
+                            .map(
+                              (r) =>
+                                `${r.starts_at.slice(0, 5)}–${r.ends_at.slice(0, 5)}${
+                                  r.ends_next_day ? " (+1)" : ""
+                                }`,
+                            )
+                            .join(", ")}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
       </>
       )}
 
-      {/* Section 4: Documents */}
+      {/* Section 5: Documents */}
       <div className="rounded-card border border-line bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">4. Verification Documents</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">5. Verification Documents</h2>
           </div>
           {isEditable(application) ? (
             <SectionEditLink href="/apply/documents" label="Edit verification documents" />
@@ -278,12 +373,12 @@ export function ReviewStep() {
         </div>
       </div>
 
-      {/* Section 5: Agreements */}
+      {/* Section 6: Agreements */}
       <div className="rounded-card border border-line bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <FileCheck className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">5. Platform Agreements</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">6. Platform Agreements</h2>
           </div>
           {isEditable(application) ? (
             <SectionEditLink href="/apply/consent" label="Edit platform agreements" />

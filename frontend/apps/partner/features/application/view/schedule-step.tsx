@@ -82,8 +82,8 @@ export function ScheduleStep() {
             : "Your hours were not saved. Check your connection and try again."
           : null
       }
-      onSave={(periods) =>
-        save.mutate({
+      onSave={async (periods) => {
+        await save.mutateAsync({
           rules: toRuleInputs(periods),
           // Dated exceptions are edited elsewhere; sending the ones already on
           // file keeps a whole-schedule PUT from deleting them.
@@ -96,8 +96,8 @@ export function ScheduleStep() {
             ends_next_day: exception.ends_next_day,
             reason: exception.reason,
           })),
-        })
-      }
+        });
+      }}
     />
   );
 }

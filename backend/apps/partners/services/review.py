@@ -7,6 +7,7 @@ work release a suspension or offboarding must drag behind it. Reviewer decisions
 attached to the application live in `documents`.
 """
 
+import datetime
 import logging
 import uuid
 
@@ -25,7 +26,12 @@ from apps.partners.exceptions import (
     PartnerSelfReviewError,
     PartnerTransitionError,
 )
-from apps.partners.models import PartnerApplication, PartnerOnlineSession
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerAvailabilityRule,
+    PartnerOnlineSession,
+    PartnerProfile,
+)
 from apps.partners.selectors import presence_cache_key
 
 from .base import (
@@ -203,6 +209,47 @@ def claim_partner_application(
     return application
 
 
+DEFAULT_AVAILABILITY_START = datetime.time(9, 0)
+DEFAULT_AVAILABILITY_END = datetime.time(19, 0)
+
+
+def _seed_default_availability_if_missing(
+    *, partner: PartnerProfile
+) -> list[PartnerAvailabilityRule]:
+    """Ensure every active service area has at least one active availability rule.
+
+    If an active service area has zero active rules, seed default Mon-Sun 09:00-19:00
+    using get_or_create to guarantee safety-net availability without overwriting
+    any existing custom rules.
+    """
+    seeded: list[PartnerAvailabilityRule] = []
+    active_areas = [
+        link.service_area
+        for link in partner.service_area_links.filter(is_active=True).select_related("service_area")
+    ]
+    for area in active_areas:
+        has_active_rules = PartnerAvailabilityRule.objects.filter(
+            partner=partner,
+            service_area=area,
+            is_active=True,
+        ).exists()
+        if not has_active_rules:
+            for weekday in range(7):
+                rule, _ = PartnerAvailabilityRule.objects.get_or_create(
+                    partner=partner,
+                    service_area=area,
+                    weekday=weekday,
+                    starts_at=DEFAULT_AVAILABILITY_START,
+                    defaults={
+                        "ends_at": DEFAULT_AVAILABILITY_END,
+                        "ends_next_day": False,
+                        "is_active": True,
+                    },
+                )
+                seeded.append(rule)
+    return seeded
+
+
 @transaction.atomic
 def transition_partner_application(
     *,
@@ -246,6 +293,7 @@ def transition_partner_application(
         raise PartnerTransitionError(
             f"Cannot move an application from {application.status} to {target_status}.",
         )
+    previous_status = application.status
     if application.status == PartnerApplication.Status.SUBMITTED:
         if application.review_assigned_to_id not in {None, reviewer.id}:
             raise PartnerReviewOwnershipError(
@@ -279,8 +327,9 @@ def transition_partner_application(
             raise PartnerApplicationIncompleteError(
                 "Approve the latest required documents before approving this application.",
             )
+        if previous_status != PartnerApplication.Status.APPROVED:
+            _seed_default_availability_if_missing(partner=application.partner)
 
-    previous_status = application.status
     application.status = target_status
     application.reviewed_by = reviewer
     application.reviewed_at = timezone.now()

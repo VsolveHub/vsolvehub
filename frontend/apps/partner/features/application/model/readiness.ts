@@ -16,6 +16,7 @@ import type { Schemas } from "@vsolve/api-client";
 
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
+type Schedule = Schemas["PartnerSchedule"];
 
 export type RequirementCode =
   | "DISPLAY_NAME"
@@ -23,6 +24,7 @@ export type RequirementCode =
   | "SKILLS"
   | "SERVICE_AREAS"
   | "SERVICES"
+  | "WORKING_HOURS"
   | "GOVERNMENT_ID"
   | "ADDRESS_PROOF"
   | "CONSENTS";
@@ -82,7 +84,10 @@ function hasUsableDocument(application: Application | null, kind: DocumentKind):
  * step looked like it collected nothing, so a brand-new applicant's progress bar
  * reported "everything is filled in".
  */
-export function requirements(application: Application | null): Requirement[] {
+export function requirements(
+  application: Application | null,
+  availability?: Schedule | null,
+): Requirement[] {
   const list: Requirement[] = [
     {
       code: "DISPLAY_NAME",
@@ -114,6 +119,19 @@ export function requirements(application: Application | null): Requirement[] {
       href: "/apply/areas",
       isMet: (application?.service_area_ids.length ?? 0) > 0,
     },
+    {
+      code: "WORKING_HOURS",
+      label: "Working hours",
+      href: "/apply/schedule",
+      isMet:
+        (application?.service_area_ids.length ?? 0) > 0 &&
+        Boolean(availability) &&
+        (application?.service_area_ids ?? []).every((areaId) =>
+          (availability?.rules ?? []).some(
+            (rule) => rule.service_area_id === areaId && rule.is_active,
+          ),
+        ),
+    },
     ...REQUIRED_DOCUMENTS.map((required) => ({
       code: required.code,
       label: required.label,
@@ -142,10 +160,14 @@ const SERVICE_ONLY_REQUIREMENTS: ReadonlySet<RequirementCode> = new Set([
   "SKILLS",
   "SERVICES",
   "SERVICE_AREAS",
+  "WORKING_HOURS",
 ]);
 
-export function outstandingRequirements(application: Application | null): Requirement[] {
-  return requirements(application).filter((requirement) => !requirement.isMet);
+export function outstandingRequirements(
+  application: Application | null,
+  availability?: Schedule | null,
+): Requirement[] {
+  return requirements(application, availability).filter((requirement) => !requirement.isMet);
 }
 
 /** Documents Operations rejected, which the Partner must replace. */
@@ -165,6 +187,9 @@ export function isEditable(application: Application): boolean {
 }
 
 /** Whether the Partner may act on the submit button at all. */
-export function canSubmit(application: Application): boolean {
-  return isEditable(application) && outstandingRequirements(application).length === 0;
+export function canSubmit(
+  application: Application,
+  availability?: Schedule | null,
+): boolean {
+  return isEditable(application) && outstandingRequirements(application, availability).length === 0;
 }
