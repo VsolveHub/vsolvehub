@@ -1,18 +1,20 @@
-"""Ledger settlement and the payout batch lifecycle.
+"""Ledger settlement, earnings holds and the payout batch lifecycle.
 
 Every command here is `@transaction.atomic` and takes its locks in one order: `PayoutBatch`,
-then `PartnerLedgerEntry`. The reverse order between two concurrent batch operations is the only
-way to deadlock this module, and picking an order is cheaper than detecting one.
+then `PayoutBatchItem`, then `PartnerLedgerEntry`. The reverse order between two concurrent batch
+operations is the only way to deadlock this module, and picking an order is cheaper than
+detecting one.
 """
 
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
+from django.conf import settings
 from django.db import transaction
-from django.db.models import QuerySet, Sum
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -33,27 +35,58 @@ from apps.payouts.exceptions import (
     SelfApprovalDeniedApiError,
 )
 from apps.payouts.models import (
+    PartnerEarningHold,
     PartnerLedgerEntry,
     PartnerPayoutAccount,
     PayoutBatch,
     PayoutBatchItem,
+    PayoutItemEntry,
+    PayoutWebhookEvent,
 )
 from apps.payouts.providers import (
     PayoutProviderAmbiguousError,
     PayoutProviderError,
     PayoutProviderRejectedError,
+    ProviderPayout,
+    RazorpayXPayoutProvider,
     get_payout_account_provider,
     get_payout_provider,
 )
+from apps.payouts.selectors import (
+    ON_HOLD,
+    partner_balance,
+    partners_with_payable_earnings,
+    payable_entries,
+    with_hold_flags,
+)
 from apps.rental.models import RentalBooking
 
-#: How long a new or changed payout account must sit before money can leave through it.
+logger = logging.getLogger(__name__)
+
+#: How long a new or changed payout account sits before money can leave through it is
+#: `settings.PAYOUT_ACCOUNT_COOLING_HOURS`.
 #:
 #: Account takeover is the highest-value attack on a payouts system, and the only cheap defence
 #: is time: a delay between "the account changed" and "money moved" is what lets a Partner notice
 #: and Operations act. The settlement document names cooling as a precondition for on-demand
-#: payout; applying it to the batch flow costs nothing and closes the same hole.
-ACCOUNT_COOLING_HOURS = 24
+#: payout; applying it to the batch flow costs nothing and closes the same hole. Production
+#: refuses to start with less than 24 hours; a RazorpayX test-mode run may set 0.
+
+#: Fixed for good. Every payout idempotency key is derived from it, and changing it would make a
+#: resubmitted payout look new to RazorpayX instead of the one it already received.
+_PAYOUT_KEY_NAMESPACE = UUID("048ade3a-7dde-4f6c-a537-55fdd1988283")
+
+
+def payout_idempotency_key(*, batch_id: UUID, partner_id: UUID) -> str:
+    """The `X-Payout-Idempotency` key for one Partner's transfer in one batch.
+
+    Stable, so a resubmission is recognised as the same payout, and 36 characters, inside
+    RazorpayX's limit of 4 to 36. A batch holds one transfer per Partner, so (batch, Partner) is
+    exactly one payout.
+    """
+
+    return str(uuid5(_PAYOUT_KEY_NAMESPACE, f"{batch_id}:{partner_id}"))
+
 
 #: Ledger statuses a batch may take. `PENDING` is excluded on purpose — it is what a
 #: payout-holding case leaves behind.
@@ -207,6 +240,7 @@ def settle_booking_earning(
         },
         created_by=actor,
         idempotency_key=f"earning:{booking.id}",
+        clears_at=clearing_deadline(),
     )
 
 
@@ -359,20 +393,72 @@ def payable_account(partner: PartnerProfile) -> PartnerPayoutAccount | None:
     )
 
 
-def eligible_entries(*, period_start: Any, period_end: Any) -> QuerySet[PartnerLedgerEntry]:
-    return PartnerLedgerEntry.objects.filter(
-        status__in=RESERVABLE_STATUSES,
-        created_at__gte=period_start,
-        created_at__lt=period_end,
-        net_paise__gt=0,
-    ).select_related("partner")
+def _reserve_partner_payout(
+    *,
+    batch: PayoutBatch,
+    partner: PartnerProfile,
+    now: datetime,
+    created_from: datetime,
+    created_before: datetime,
+) -> PayoutBatchItem | None:
+    """Reserve one transfer covering everything this Partner can be paid right now.
+
+    Cleared, unheld earnings in the period plus every unpaid refund, summed. Nothing is reserved
+    when the sum is under `PAYOUT_MINIMUM_PAISE` — including when refunds exceed earnings — or
+    when the Partner has no payable account: the entries stay where they are for a later run, and
+    `unpayable_partner_ids` reports the account problem.
+    """
+
+    account = payable_account(partner)
+    if account is None:
+        return None
+    entries = list(
+        payable_entries(
+            partner_id=partner.id,
+            now=now,
+            created_from=created_from,
+            created_before=created_before,
+        )
+        .select_for_update(of=("self",))
+        .order_by("created_at", "id")
+    )
+    total = sum(entry.net_paise for entry in entries)
+    if total < settings.PAYOUT_MINIMUM_PAISE:
+        return None
+    item = PayoutBatchItem.objects.create(
+        batch=batch,
+        partner=partner,
+        payout_account=account,
+        amount_paise=total,
+        currency=entries[0].currency,
+        idempotency_key=payout_idempotency_key(batch_id=batch.id, partner_id=partner.id),
+    )
+    _attach_entries(item, entries)
+    return item
+
+
+def _attach_entries(item: PayoutBatchItem, entries: list[PartnerLedgerEntry]) -> None:
+    """Record each entry as a line of the transfer and mark it reserved.
+
+    `payouts_one_live_line_per_ledger_entry` makes a second live reservation of any of them an
+    IntegrityError, which is the real double-pay guarantee; the callers' status checks only turn
+    the losing side of a race into a typed refusal.
+    """
+
+    PayoutItemEntry.objects.bulk_create(
+        PayoutItemEntry(item=item, ledger_entry=entry, amount_paise=entry.net_paise)
+        for entry in entries
+    )
+    for entry in entries:
+        entry.status = PartnerLedgerEntry.Status.RESERVED
+        entry.save(update_fields=("status", "updated_at"))
 
 
 @transaction.atomic
 def propose_payout_batch(
     *, reference: str, period_start: Any, period_end: Any, actor: User
 ) -> PayoutBatch:
-    """Reserve every eligible entry into a draft batch, atomically.
+    """Reserve one transfer per Partner into a draft batch, atomically.
 
     Reservation happens at proposal rather than at approval, on purpose: an approver must be
     looking at a fixed set. A batch whose contents could still change between review and payment
@@ -393,27 +479,21 @@ def propose_payout_batch(
         proposed_by=actor,
     )
 
+    now = timezone.now()
     total = 0
-    entries = eligible_entries(period_start=period_start, period_end=period_end).select_for_update()
-    for entry in entries:
-        account = payable_account(entry.partner)
-        if account is None:
-            # Silently skipping would leave a Partner wondering where their money is. The entry
-            # stays `AVAILABLE` and is picked up by the next batch once the account clears — and
-            # `unpayable_partner_ids` reports it so Operations can chase the verification.
-            continue
-        PayoutBatchItem.objects.create(
+    partner_ids = partners_with_payable_earnings(
+        now=now, created_from=period_start, created_before=period_end
+    )
+    for partner in PartnerProfile.objects.filter(id__in=partner_ids).order_by("id"):
+        item = _reserve_partner_payout(
             batch=batch,
-            ledger_entry=entry,
-            partner=entry.partner,
-            payout_account=account,
-            amount_paise=entry.net_paise,
-            currency=entry.currency,
-            idempotency_key=f"payout:{batch.id}:{entry.id}",
+            partner=partner,
+            now=now,
+            created_from=period_start,
+            created_before=period_end,
         )
-        entry.status = PartnerLedgerEntry.Status.RESERVED
-        entry.save(update_fields=("status", "updated_at"))
-        total += entry.net_paise
+        if item is not None:
+            total += item.amount_paise
 
     batch.total_paise = total
     batch.save(update_fields=("total_paise", "updated_at"))
@@ -423,8 +503,14 @@ def propose_payout_batch(
 def unpayable_partner_ids(*, period_start: Any, period_end: Any) -> list[UUID]:
     """Partners with money owed and no payable account. Reported, never silently dropped."""
 
-    owed = eligible_entries(period_start=period_start, period_end=period_end)
-    return [entry.partner_id for entry in owed if payable_account(entry.partner) is None]
+    owed = partners_with_payable_earnings(
+        now=timezone.now(), created_from=period_start, created_before=period_end
+    )
+    return [
+        partner.id
+        for partner in PartnerProfile.objects.filter(id__in=owed).order_by("id")
+        if payable_account(partner) is None
+    ]
 
 
 @transaction.atomic
@@ -474,11 +560,7 @@ def cancel_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) -
         )
 
     for item in batch.items.select_for_update().filter(status=PayoutBatchItem.Status.RESERVED):
-        entry = PartnerLedgerEntry.objects.select_for_update().get(id=item.ledger_entry_id)
-        item.status = PayoutBatchItem.Status.RELEASED
-        item.save(update_fields=("status", "updated_at"))
-        entry.status = PartnerLedgerEntry.Status.RELEASED
-        entry.save(update_fields=("status", "updated_at"))
+        _close_item(item, status=PayoutBatchItem.Status.RELEASED, failure_code="batch_cancelled")
 
     batch.status = PayoutBatch.Status.CANCELLED
     batch.cancelled_by = actor
@@ -490,51 +572,60 @@ def cancel_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) -
 
 @transaction.atomic
 def reserve_entry_for_batch(*, batch: PayoutBatch, entry: PartnerLedgerEntry) -> PayoutBatchItem:
-    """Reserve one entry, refusing anything already held.
+    """Reserve one positive entry into its Partner's transfer in this batch.
 
-    The `IntegrityError` from `payouts_one_live_reservation_per_ledger_entry` is the real
-    guarantee; this check turns the second-place caller's crash into a typed refusal instead.
+    The same rules as a run: the entry must be unpaid, cleared and not on hold. Joins the
+    Partner's existing reserved transfer in the batch when there is one, so a batch still holds
+    one transfer per Partner. The `IntegrityError` from `payouts_one_live_line_per_ledger_entry`
+    is the real guarantee; the status check turns the second-place caller's crash into a typed
+    refusal instead.
     """
 
     locked = PartnerLedgerEntry.objects.select_for_update().get(id=entry.id)
     if locked.status not in RESERVABLE_STATUSES:
         raise LedgerEntryNotPayableApiError(current_status=locked.status)
+    if locked.net_paise <= 0:
+        raise LedgerEntryNotPayableApiError(current_status="not_a_payment")
+    now = timezone.now()
+    if not payable_entries(partner_id=locked.partner_id, now=now).filter(id=locked.id).exists():
+        raise LedgerEntryNotPayableApiError(current_status="held_or_clearing")
     account = payable_account(locked.partner)
     if account is None:
         raise LedgerEntryNotPayableApiError(current_status="no_payable_account")
 
-    item = PayoutBatchItem.objects.create(
-        batch=batch,
-        ledger_entry=locked,
-        partner=locked.partner,
-        payout_account=account,
-        amount_paise=locked.net_paise,
-        currency=locked.currency,
-        idempotency_key=f"payout:{batch.id}:{locked.id}",
+    item = (
+        PayoutBatchItem.objects.select_for_update()
+        .filter(batch=batch, partner_id=locked.partner_id, status=PayoutBatchItem.Status.RESERVED)
+        .first()
     )
-    locked.status = PartnerLedgerEntry.Status.RESERVED
-    locked.save(update_fields=("status", "updated_at"))
+    if item is None:
+        item = PayoutBatchItem.objects.create(
+            batch=batch,
+            partner_id=locked.partner_id,
+            payout_account=account,
+            amount_paise=locked.net_paise,
+            currency=locked.currency,
+            idempotency_key=payout_idempotency_key(batch_id=batch.id, partner_id=locked.partner_id),
+        )
+    else:
+        item.amount_paise += locked.net_paise
+        item.save(update_fields=("amount_paise", "updated_at"))
+    _attach_entries(item, [locked])
     return item
 
 
 def partner_balance_paise(partner: PartnerProfile) -> dict[str, int]:
-    """What a Partner is owed, by state. A plain SUM, because reversals are stored signed."""
+    """What a Partner is owed, by state — see `apps.payouts.selectors` for the rules."""
 
-    def total(*statuses: str) -> int:
-        return int(
-            PartnerLedgerEntry.objects.filter(partner=partner, status__in=statuses).aggregate(
-                total=Sum("net_paise")
-            )["total"]
-            or 0
-        )
-
+    balance = partner_balance(partner_id=partner.id, now=timezone.now())
     return {
-        "pending_paise": total(PartnerLedgerEntry.Status.PENDING),
-        "available_paise": total(
-            PartnerLedgerEntry.Status.AVAILABLE, PartnerLedgerEntry.Status.RELEASED
-        ),
-        "reserved_paise": total(PartnerLedgerEntry.Status.RESERVED),
-        "paid_paise": total(PartnerLedgerEntry.Status.PAID),
+        "pending_paise": balance.pending_paise,
+        "available_paise": balance.available_paise,
+        "clearing_paise": balance.clearing_paise,
+        "held_paise": balance.held_paise,
+        "withdrawable_paise": balance.withdrawable_paise,
+        "reserved_paise": balance.reserved_paise,
+        "paid_paise": balance.paid_paise,
     }
 
 

@@ -14,7 +14,7 @@ reconciled against the payments that produced it. Only `status` moves, and only 
 reservation lifecycle.
 
 **One entry can be reserved by at most one live batch.** A partial unique index on
-`PayoutBatchItem` makes a second reservation an `IntegrityError`, not a race that occasionally
+`PayoutItemEntry` makes a second reservation an `IntegrityError`, not a race that occasionally
 pays a Partner twice. Cancelling a batch frees its entries by releasing the index.
 
 **A batch is approved by someone other than its proposer.** Maker-checker is a check constraint,
@@ -152,6 +152,11 @@ class PartnerLedgerEntry(models.Model):
     #: Everything that decided the numbers: the pricing policy version, the commission basis
     #: points, the outcomes settled. An entry has to be explainable years later.
     calculation_snapshot = models.JSONField(default=dict)
+    #: Not payable before this instant, whatever its status says. A visit's earning clears once
+    #: the Customer's 72-hour quality-dispute window has closed, so a dispute can always freeze
+    #: it before any of it leaves. Empty means cleared from the start: corrections, refunds and
+    #: M2 entries, which carry their own release windows.
+    clears_at = models.DateTimeField(null=True, blank=True)
     #: Present on `ADJUSTMENT`/`REVERSAL`: the entry being corrected.
     corrects = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.PROTECT, related_name="corrections"
@@ -299,7 +304,13 @@ class PayoutBatch(models.Model):
 
 
 class PayoutBatchItem(models.Model):
-    """One ledger entry's reservation inside one batch, and the provider result for it."""
+    """One transfer to one Partner inside one batch, and what the provider said about it.
+
+    A transfer covers every cleared ledger entry the Partner had when the batch was proposed —
+    earnings and the refunds that reduce them — listed in `PayoutItemEntry`. One transfer per
+    Partner rather than one per visit is what lets a refund come off the amount paid, and what
+    stops a busy week costing a provider fee per job.
+    """
 
     class Status(models.TextChoices):
         RESERVED = "RESERVED", "Reserved"
@@ -309,12 +320,12 @@ class PayoutBatchItem(models.Model):
         #: Ambiguous provider result. Never guessed either way — Finance reconciles it.
         UNDER_REVIEW = "UNDER_REVIEW", "Under review"
         RELEASED = "RELEASED", "Released"
+        #: Paid, then returned by the beneficiary's bank (RazorpayX allows up to T+3 working
+        #: days). The money is back in the Partner's balance, exactly once.
+        REVERSED = "REVERSED", "Reversed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch = models.ForeignKey(PayoutBatch, on_delete=models.PROTECT, related_name="items")
-    ledger_entry = models.ForeignKey(
-        PartnerLedgerEntry, on_delete=models.PROTECT, related_name="payout_items"
-    )
     partner = models.ForeignKey(
         PartnerProfile, on_delete=models.PROTECT, related_name="payout_items"
     )
@@ -335,17 +346,11 @@ class PayoutBatchItem(models.Model):
 
     class Meta:
         ordering = ("created_at", "id")
-        indexes = [models.Index(fields=("batch", "status"))]
+        indexes = [
+            models.Index(fields=("batch", "status")),
+            models.Index(fields=("provider_payout_id",), name="payouts_item_provider_id_idx"),
+        ]
         constraints = [
-            models.UniqueConstraint(
-                # **The double-pay guarantee.** A ledger entry may be held by at most one item
-                # that is not finished with it. A released or failed item frees the entry for a
-                # later batch; a live one makes a second reservation an IntegrityError rather
-                # than a race that occasionally pays a Partner twice for one visit.
-                fields=("ledger_entry",),
-                condition=models.Q(status__in=("RESERVED", "SUBMITTED", "PAID", "UNDER_REVIEW")),
-                name="payouts_one_live_reservation_per_ledger_entry",
-            ),
             models.UniqueConstraint(
                 fields=("idempotency_key",),
                 name="payouts_unique_item_key",
@@ -357,4 +362,76 @@ class PayoutBatchItem(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.batch_id}:{self.ledger_entry_id}:{self.status}"
+        return f"{self.batch_id}:{self.partner_id}:{self.status}"
+
+
+class PayoutItemEntry(models.Model):
+    """One ledger entry inside one transfer, at the amount it contributed.
+
+    `amount_paise` is signed, like the ledger: a refund's reversal contributes a negative line, and
+    the transfer is the sum of its lines.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    item = models.ForeignKey(PayoutBatchItem, on_delete=models.PROTECT, related_name="entries")
+    ledger_entry = models.ForeignKey(
+        PartnerLedgerEntry, on_delete=models.PROTECT, related_name="payout_lines"
+    )
+    amount_paise = models.BigIntegerField()
+    #: True while the transfer still holds this entry — reserved, sent, paid or uncertain. Kept
+    #: on the line rather than read from the item because the double-pay index below can only
+    #: look at its own table.
+    is_live = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                # **The double-pay guarantee.** A ledger entry may be held by at most one live
+                # transfer. A released, failed or reversed transfer frees its entries for a later
+                # batch; a live one makes a second reservation an IntegrityError rather than a
+                # race that occasionally pays a Partner twice for one visit.
+                fields=("ledger_entry",),
+                condition=models.Q(is_live=True),
+                name="payouts_one_live_line_per_ledger_entry",
+            ),
+            models.UniqueConstraint(
+                fields=("item", "ledger_entry"), name="payouts_entry_once_per_item"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.item_id}:{self.ledger_entry_id}:{self.amount_paise}"
+
+
+class PayoutWebhookEvent(models.Model):
+    """Every verified RazorpayX payout webhook, recorded once.
+
+    The provider's event id is unique, so a redelivery is recognised and changes nothing. Only a
+    summary of the payout is kept — never the fund account, which can carry bank details.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provider_event_id = models.CharField(max_length=128, unique=True)
+    event_type = models.CharField(max_length=64)
+    provider_payout_id = models.CharField(max_length=128, blank=True)
+    provider_status = models.CharField(max_length=24, blank=True)
+    payout_item = models.ForeignKey(
+        PayoutBatchItem,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="webhook_events",
+    )
+    #: Whether this delivery changed the item's decided status (not just its tracking fields).
+    changed_status = models.BooleanField(default=False)
+    summary = models.JSONField(default=dict)
+    payload_sha256 = models.CharField(max_length=64)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-received_at", "id")
+
+    def __str__(self) -> str:
+        return f"{self.event_type}:{self.provider_event_id}"

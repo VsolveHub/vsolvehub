@@ -40,6 +40,20 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
 
     booking_id = serializers.UUIDField(read_only=True, allow_null=True)
     corrects_id = serializers.UUIDField(read_only=True, allow_null=True)
+    clears_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "Not payable before this instant: the end of the Customer's dispute window. Null "
+            "when the line counts at once (corrections, refunds)."
+        ),
+    )
+    is_on_hold = serializers.SerializerMethodField(
+        help_text=(
+            "A dispute or case on this line's booking is freezing it. Held money is not paid "
+            "until the hold is lifted."
+        )
+    )
 
     class Meta:
         model = PartnerLedgerEntry
@@ -55,9 +69,19 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
             "calculation_snapshot",
             "corrects_id",
             "reason",
+            "clears_at",
+            "is_on_hold",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_is_on_hold(self, instance: PartnerLedgerEntry) -> bool:
+        # Annotated by the views that list lines (`selectors.with_hold_flags`); a line created a
+        # moment ago and serialised directly has had no chance to be held.
+        return bool(
+            getattr(instance, "booking_on_hold", False)
+            or getattr(instance, "rental_on_hold", False)
+        )
 
 
 class PartnerBalanceSerializer(serializers.Serializer[dict[str, Any]]):
@@ -68,9 +92,27 @@ class PartnerBalanceSerializer(serializers.Serializer[dict[str, Any]]):
     which part of it is actually coming.
     """
 
-    pending_paise = serializers.IntegerField()
-    available_paise = serializers.IntegerField()
-    reserved_paise = serializers.IntegerField()
+    pending_paise = serializers.IntegerField(
+        help_text="Earned but not yet payable: `held_paise` plus `clearing_paise`."
+    )
+    available_paise = serializers.IntegerField(
+        help_text=(
+            "Payable now: cleared, not on hold, refunds already subtracted. Negative when refunds "
+            "exceed what has cleared; that much comes off the next earnings."
+        )
+    )
+    clearing_paise = serializers.IntegerField(
+        help_text="Earned, waiting out the Customer's dispute window before it can be paid."
+    )
+    held_paise = serializers.IntegerField(
+        help_text="Frozen by a dispute or an Operations case until it is decided."
+    )
+    withdrawable_paise = serializers.IntegerField(
+        help_text="What one payout could send right now: `available_paise`, never below zero."
+    )
+    reserved_paise = serializers.IntegerField(
+        help_text="In a payout that has been reserved or sent and has not yet settled."
+    )
     paid_paise = serializers.IntegerField()
     currency = serializers.CharField()
     server_now = serializers.DateTimeField()
@@ -232,24 +274,38 @@ class PayoutWebhookAcceptedSerializer(serializers.Serializer[dict[str, object]])
 
 
 class PayoutBatchItemSerializer(serializers.ModelSerializer[PayoutBatchItem]):
+    """One transfer to one Partner: the sum of its ledger lines, refunds included."""
+
     partner_id = serializers.UUIDField(read_only=True)
-    ledger_entry_id = serializers.UUIDField(read_only=True)
+    entry_count = serializers.SerializerMethodField(
+        help_text="How many ledger lines this transfer covers, refunds included."
+    )
 
     class Meta:
         model = PayoutBatchItem
         fields = (
             "id",
             "partner_id",
-            "ledger_entry_id",
             "status",
             "amount_paise",
             "currency",
+            "entry_count",
             "provider_payout_id",
+            "provider_status",
+            "utr",
+            "mode",
+            "fees_paise",
+            "tax_paise",
+            "status_reason",
             "failure_code",
             "submitted_at",
             "completed_at",
         )
         read_only_fields = fields
+
+    def get_entry_count(self, instance: PayoutBatchItem) -> int:
+        # `len(...all())` rather than `.count()`, so a prefetched batch costs no query per item.
+        return len(instance.entries.all())
 
 
 class PayoutBatchSerializer(serializers.ModelSerializer[PayoutBatch]):

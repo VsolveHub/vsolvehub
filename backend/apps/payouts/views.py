@@ -129,7 +129,7 @@ def _partner_profile(user: User) -> PartnerProfile:
 
 
 def _batch_projection(batch_id: UUID) -> ResponseBody:
-    batch = PayoutBatch.objects.prefetch_related("items").get(id=batch_id)
+    batch = PayoutBatch.objects.prefetch_related("items__entries").get(id=batch_id)
     return cast(ResponseBody, PayoutBatchSerializer(batch).data)
 
 

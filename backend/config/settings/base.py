@@ -5,6 +5,12 @@ from pathlib import Path
 import environ
 from corsheaders.defaults import default_headers
 
+from config.settings.guards import (
+    guard_payout_account_cooling,
+    guard_payout_clearing,
+    guard_payout_minimum,
+)
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 env = environ.Env(
@@ -715,9 +721,27 @@ RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
 RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
 RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
-# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded.
+# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded. The name is
+# older than test mode: RazorpayX test keys need it on too, and move only dummy money.
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
+# How long a new or changed payout account waits before money can leave through it: the
+# account-takeover control. Production refuses less than 24 hours; a test-mode run may set 0.
+PAYOUT_ACCOUNT_COOLING_HOURS = env.int("PAYOUT_ACCOUNT_COOLING_HOURS", default=24)
+guard_payout_account_cooling(PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=0)
+# How long a visit's earning waits after settlement before it can be paid: the Customer's quality
+# dispute window, so a dispute always freezes money before any of it leaves. Production refuses
+# less than that window; a test-mode run may set 0.
+PAYOUT_CLEARING_HOURS = env.int("PAYOUT_CLEARING_HOURS", default=M1_QUALITY_DISPUTE_WINDOW_HOURS)
+guard_payout_clearing(PAYOUT_CLEARING_HOURS, minimum_hours=0)
+# The smallest transfer a payout run sends. A Partner owed less carries it to the next run rather
+# than being sent a payout that costs more in fees than it pays. RazorpayX's own floor is ₹1.
+PAYOUT_MINIMUM_PAISE = env.int("PAYOUT_MINIMUM_PAISE", default=100)
+guard_payout_minimum(PAYOUT_MINIMUM_PAISE)
+# A payout whose submission got no clear answer, and that RazorpayX still has no record of this
+# long afterwards, was never received: its money goes back to the Partner's balance. Before then
+# it is only looked up, never re-sent.
+PAYOUT_AMBIGUOUS_RELEASE_HOURS = 24
 
 # Outbound message transport for SMS, WhatsApp and voice. MSG91 sends only when MSG91_AUTH_KEY
 # is set. An empty key refuses rather than reporting a send that never left.
