@@ -7,13 +7,16 @@ import {
   Card,
   ConfirmAction,
   Spinner,
+  buttonStyles,
   formatDateTime,
   formatMoney,
+  useT,
 } from "@vsolve/ui";
 import { useState } from "react";
 
 import { Pictogram } from "@/components/pictogram";
 
+import { ADD_BANK_ACCOUNT_ID } from "../model/bank-account-link";
 import {
   isWithdrawalRefused,
   usePartnerWithdrawals,
@@ -121,9 +124,15 @@ function WithdrawalRow({ withdrawal }: { withdrawal: Withdrawal }) {
   );
 }
 
+/** Refusals the Partner clears by adding (or re-entering) a bank account. */
+const NEEDS_BANK_ACCOUNT = new Set(["no_payout_account", "account_rejected"]);
+
 function WhyNot({ preview }: { preview: WithdrawalPreview }) {
+  const t = useT();
   if (!preview.refusal_message) return null;
+  const needsAccount = NEEDS_BANK_ACCOUNT.has(preview.refusal_reason ?? "");
   return (
+    <>
     <p className="mt-3 rounded-plate bg-surface-sunken px-3 py-2 text-xs leading-5 text-text-secondary">
       {preview.refusal_message}
       {preview.refusal_reason === "account_cooling" && preview.account_payable_from ? (
@@ -137,6 +146,18 @@ function WhyNot({ preview }: { preview: WithdrawalPreview }) {
         </>
       ) : null}
     </p>
+    {needsAccount ? (
+      // A plain anchor, not `<Link>`: the payout card is on this page and opens on `hashchange`.
+      <a
+        href={`#${ADD_BANK_ACCOUNT_ID}`}
+        className={buttonStyles({ variant: "outline", size: "sm", className: "mt-3" })}
+      >
+        {preview.refusal_reason === "account_rejected"
+          ? t("money.payout.enterAgain")
+          : t("money.payout.addAccount")}
+      </a>
+    ) : null}
+    </>
   );
 }
 

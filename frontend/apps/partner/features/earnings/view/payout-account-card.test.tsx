@@ -1,6 +1,6 @@
 import { I18nProvider } from "@vsolve/ui";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { catalogs } from "@/i18n/catalogs";
 
@@ -15,12 +15,18 @@ function renderCard() {
 }
 
 vi.mock("../queries", () => ({
+  usePartnerBalance: vi.fn(),
   usePartnerPayoutAccount: vi.fn(),
   useSubmitPayoutAccount: vi.fn(),
   isNoPayoutAccount: vi.fn(),
 }));
 
-import { isNoPayoutAccount, usePartnerPayoutAccount, useSubmitPayoutAccount } from "../queries";
+import {
+  isNoPayoutAccount,
+  usePartnerBalance,
+  usePartnerPayoutAccount,
+  useSubmitPayoutAccount,
+} from "../queries";
 import { PayoutAccountCard } from "./payout-account-card";
 
 const ACCOUNT = {
@@ -44,8 +50,17 @@ function withAccount(account: Record<string, unknown> | null) {
   vi.mocked(isNoPayoutAccount).mockReturnValue(account === null);
 }
 
+function withWaiting(paise: number) {
+  vi.mocked(usePartnerBalance).mockReturnValue({ data: { withdrawable_paise: paise } } as never);
+}
+
 describe("PayoutAccountCard", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/money");
+  });
+
   beforeEach(() => {
+    withWaiting(0);
     mutate.mockReset();
     vi.mocked(useSubmitPayoutAccount).mockReturnValue({
       mutate,
@@ -55,11 +70,36 @@ describe("PayoutAccountCard", () => {
     } as never);
   });
 
-  it("asks for bank details when none are registered, and sends the IFSC in capitals", () => {
+  it("offers one Add bank account action when none is registered, not a form", () => {
     withAccount(null);
     renderCard();
 
+    expect(screen.getByText("Not added")).toBeInTheDocument();
     expect(screen.getByText(/Add the bank account Vsolve should pay/)).toBeInTheDocument();
+    expect(screen.getByText(/We keep the last 4 digits/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/IFSC/)).not.toBeInTheDocument();
+    // Never the load-failure copy: "none yet" is an answer.
+    expect(screen.queryByText(/could not load/)).not.toBeInTheDocument();
+  });
+
+  it("says how much is waiting when a Partner with money has no account", () => {
+    withAccount(null);
+    withWaiting(26_896);
+    renderCard();
+
+    expect(screen.getByText(/₹268.96 is ready for you/)).toBeInTheDocument();
+  });
+
+  it("opens the form from the button, sends the IFSC in capitals, and can be cancelled", () => {
+    withAccount(null);
+    renderCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add bank account" }));
+    expect(screen.getByLabelText(/Account holder name/)).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText(/IFSC/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add bank account" }));
     fireEvent.change(screen.getByLabelText(/Account holder name/), { target: { value: " Ravi Kumar " } });
     fireEvent.change(screen.getByLabelText(/^Account number/), { target: { value: "123456789012" } });
     fireEvent.change(screen.getByLabelText(/Confirm account number/), {
@@ -97,6 +137,15 @@ describe("PayoutAccountCard", () => {
 
     expect(screen.getByText("Verified")).toBeInTheDocument();
     expect(screen.getByText(/Payouts to/)).toHaveTextContent("start on");
+  });
+
+  it("opens straight to the form when the Partner arrives by an add-bank-account link", () => {
+    window.history.replaceState(null, "", "/money#add-bank-account");
+    withAccount(null);
+    renderCard();
+
+    expect(screen.getByLabelText(/Account holder name/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add bank account" })).not.toBeInTheDocument();
   });
 
   it("shows why an account was rejected and lets the partner enter it again", () => {

@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { ADD_BANK_ACCOUNT_HREF } from "@/features/earnings/model/bank-account-link";
 import {
   PARTNER_SUPPORT_HOURS_KEY,
   PARTNER_SUPPORT_PHONE,
@@ -512,10 +513,10 @@ export function ProfilePanel() {
                   <p className="text-xs font-bold">Action Needed: Bank Account Missing</p>
                   <p className="text-xs text-rose-800/90 mt-0.5">{t("me.profile.bankNotReady")}</p>
                   <Link
-                    href="/money"
+                    href={ADD_BANK_ACCOUNT_HREF}
                     className="inline-flex items-center gap-1 mt-2 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-700 transition-colors shadow-2xs"
                   >
-                    Add Bank Details
+                    {t("money.payout.addAccount")}
                     <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                   </Link>
                 </div>

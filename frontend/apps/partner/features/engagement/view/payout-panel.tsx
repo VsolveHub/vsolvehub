@@ -12,7 +12,8 @@ import { Banknote } from "lucide-react";
 import Link from "next/link";
 
 import { shortDate } from "@/lib/format";
-import { usePartnerPayoutAccount } from "@/features/earnings/queries";
+import { ADD_BANK_ACCOUNT_HREF } from "@/features/earnings/model/bank-account-link";
+import { isNoPayoutAccount, usePartnerPayoutAccount } from "@/features/earnings/queries";
 
 import { stageTitle, type StageWording } from "../model/engagement-copy";
 
@@ -194,11 +195,14 @@ function PayoutAccountNotice() {
   if (account.isPending) return null;
 
   if (account.isError) {
+    // Only the "none yet" answer says the Partner has no bank details. Any other failure says
+    // nothing rather than something untrue; the Money screen shows the real state.
+    if (!isNoPayoutAccount(account.error)) return null;
     return (
       <Card className="border-dashed p-3 text-sm leading-6 text-text-secondary">
         {t("work.payoutPanel.accountNotice.missing")}{" "}
         <Link
-          href="/me/profile"
+          href={ADD_BANK_ACCOUNT_HREF}
           className="font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
           {t("work.payoutPanel.accountNotice.addBankDetails")}

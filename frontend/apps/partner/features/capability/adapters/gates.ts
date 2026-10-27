@@ -1,5 +1,7 @@
 import type { Translator } from "@vsolve/ui";
 
+import { ADD_BANK_ACCOUNT_HREF } from "@/features/earnings/model/bank-account-link";
+
 import type { GateList, GateName, GateNextAction, GateStatus } from "./wire";
 
 /**
@@ -56,7 +58,10 @@ import type { GateList, GateName, GateNextAction, GateStatus } from "./wire";
 function actionRoutes(t: Translator["t"]): Record<GateNextAction, { href: string; label: string }> {
   return {
     SUBMIT_APPLICATION: { href: "/apply/review", label: t("me.capability.gate.action.finishApplication") },
-    ADD_PAYOUT_ACCOUNT: { href: "/money", label: t("me.capability.gate.action.addBankDetails") },
+    ADD_PAYOUT_ACCOUNT: {
+      href: ADD_BANK_ACCOUNT_HREF,
+      label: t("me.capability.gate.action.addBankDetails"),
+    },
     // Points at the roster, which the Partner reaches from the assignment they
     // were trying to make. Not at registration — `FLOW-07` is explicit that a crew
     // list is asked for at first assignment and never before.

@@ -1,3 +1,4 @@
+import { I18nProvider } from "@vsolve/ui";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +10,8 @@ vi.mock("../queries", () => ({
   useRequestWithdrawal: vi.fn(),
   isWithdrawalRefused: vi.fn(() => false),
 }));
+
+import { catalogs } from "@/i18n/catalogs";
 
 import { usePartnerWithdrawals, useRequestWithdrawal, useWithdrawalPreview } from "../queries";
 import { WithdrawCard } from "./withdraw-card";
@@ -151,5 +154,26 @@ describe("WithdrawCard", () => {
     expect(screen.getAllByText("Sent to bank").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText(/The money is back in your balance/)).toBeInTheDocument();
+  });
+
+  it("offers the way to add a bank account when that is what stands in the way", () => {
+    withPreview({
+      ...PREVIEW,
+      can_withdraw: false,
+      refusal_reason: "no_payout_account",
+      refusal_message: "Add your bank account to withdraw.",
+      account_last4: null,
+    });
+    render(
+      <I18nProvider locale="en-IN" catalog={catalogs["en-IN"]}>
+        <WithdrawCard />
+      </I18nProvider>,
+    );
+
+    // A plain anchor to the card on this page: a same-page <Link> would fire no hashchange.
+    expect(screen.getByRole("link", { name: "Add bank account" })).toHaveAttribute(
+      "href",
+      "#add-bank-account",
+    );
   });
 });

@@ -57,16 +57,24 @@ export function usePartnerPayoutAccount() {
   return useQuery({
     queryKey: queryKeys.partnerMoney.payoutAccount(),
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/payout-account/", {})),
-    // A Partner with no registered account gets a 404. That is an answer, not a fault, so it is
-    // never retried — the panel renders the "no account yet" state instead.
-    retry: false,
+    // No retry override. The shared policy retries only transport failures, so the "no account
+    // yet" 404 (`isNoPayoutAccount`) is answered at once, while a dropped connection still is.
   });
 }
 
-/** A 404 from the account read means "none registered yet", which is a state, not a failure. */
+/** The error code the account read answers with when the Partner has added none (1.85.1). */
+const NO_PAYOUT_ACCOUNT = "payout_account_not_found";
+
+/**
+ * "None registered yet" — a state to offer "Add bank account" for, not a failure to retry.
+ *
+ * Matched by its error code, not by status alone: any other 404 (a wrong route, a proxy page) is
+ * a real fault and must still read as one.
+ */
 export function isNoPayoutAccount(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status === 404;
+  return error instanceof ApiRequestError && error.code === NO_PAYOUT_ACCOUNT;
 }
+
 
 export type PayoutAccountInput = Schemas["PartnerPayoutAccountCreateRequest"];
 
