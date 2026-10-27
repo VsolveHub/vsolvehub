@@ -1,5 +1,46 @@
 # API Contract Changelog
 
+## 1.85.0 - Partner withdrawals, the lock-free send, entry-level holds
+
+**Partners**
+
+- `GET /partner/withdrawals/preview/` says what tapping Withdraw would do right now:
+  `is_enabled` (false while `PAYOUT_WITHDRAW_ENABLED` is off — draw no button), `can_withdraw`,
+  `refusal_reason` + `refusal_message`, `amount_paise` (the whole available balance), `fee_paise`,
+  `send_paise`, `needs_review` + `review_reasons`, the limits, and `account_payable_from` while a
+  new bank account is cooling. Built by the same rules as the request.
+- `POST /partner/withdrawals/` (no body, `Idempotency-Key` required, rate-limited) withdraws the
+  whole available balance. `409 withdrawal_refused` carries `details.reason`, one of
+  `withdrawals_disabled`, `payouts_paused`, `partner_suspended`, `no_payout_account`,
+  `account_under_review`, `account_rejected`, `account_cooling`, `withdrawal_in_progress`,
+  `daily_limit_reached`, `below_minimum`, `extra_withdrawals_unavailable`, and a message written
+  for the Partner.
+- `GET /partner/withdrawals/` lists them, newest first. `status` is `REQUESTED`, `SENT`, `PAID` or
+  `FAILED` (money back in the balance, with `failure_message`); `is_awaiting_review`,
+  `balance_paise`, `fee_paise`, `amount_paise`, `utr`.
+- `LedgerEntryKindEnum` adds `FEE`: the cost of an extra withdrawal, a negative line of that
+  withdrawal. A failed, declined or reversed withdrawal gives it back as an `ADJUSTMENT`.
+
+**Operations**
+
+- `GET /operations/withdrawals/?status=` — `PENDING_APPROVAL` (default, oldest first) is the
+  queue: the first payout to a bank account (`first_payout_to_account`) and balances above the
+  maximum (`over_maximum`). `POST …/{batch_id}/approve/` (step-up) sends it;
+  `POST …/{batch_id}/decline/` (with a `reason` the Partner reads) returns the money.
+- `PayoutBatch` and its list row add `kind` (`RUN` or `WITHDRAWAL`) and `approval_basis`
+  (`OPERATIONS` or `POLICY`). `GET /operations/payout-batches/` takes `kind`. The run commands
+  (approve, pay, cancel) refuse a withdrawal.
+- `PayoutBatchItem.status` adds `SUBMITTING`: claimed for sending, the provider call in progress
+  with no database lock held. One left there over 10 minutes is looked up by reference, never
+  re-sent. A transfer is also released unsent with `withdrawals_disabled` when withdrawals were
+  switched off before it left.
+
+**Behind the contract**
+
+- An Operations case on an M2 engagement now also holds each of its unpaid entries explicitly,
+  reserved ones included, so a transfer already carrying one is stopped at the moment of sending.
+  Every case lifts only its own holds when it resolves.
+
 ## 1.84.0 - Payout money correctness: one transfer per Partner, clearing, explicit holds
 
 **Partners**
