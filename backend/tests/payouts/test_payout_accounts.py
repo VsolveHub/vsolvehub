@@ -142,6 +142,45 @@ def test_invalid_bank_details_are_refused_before_the_provider_is_called(
 
 
 @FAKE_PROVIDER
+@pytest.mark.parametrize(
+    "holder_name",
+    [
+        "Ra",  # under RazorpayX's 3-character minimum
+        "R" * 51,  # over its 50-character contact-name limit
+        "Ravi@Kumar",  # a character RazorpayX refuses
+        "Ravi, Kumar",  # so is a comma
+        "Ravi Kumar-",  # only a full stop may end a name
+    ],
+)
+def test_a_holder_name_razorpayx_would_refuse_is_refused_before_it_is_sent(
+    holder_name: str,
+) -> None:
+    """RazorpayX answers a bad contact name with a 400 the Partner can only read as "details not
+    accepted". Refusing it here names the field and says what to change."""
+
+    client, profile = _partner()
+
+    response = _submit(client, holder_name=holder_name)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "holder_name" in json.dumps(response.json())
+    assert not PartnerPayoutAccount.objects.filter(partner=profile).exists()
+
+
+@FAKE_PROVIDER
+def test_a_holder_name_is_tidied_into_the_form_razorpayx_accepts() -> None:
+    """Phones type a straight apostrophe; RazorpayX accepts only the typographic one."""
+
+    client, profile = _partner()
+
+    response = _submit(client, holder_name="  D'Souza   Ravi K. ")
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json()["holder_name"] == "D\u2019Souza Ravi K."
+    assert PartnerPayoutAccount.objects.get(partner=profile).holder_name == "D\u2019Souza Ravi K."
+
+
+@FAKE_PROVIDER
 def test_a_new_submission_replaces_the_old_account_and_restarts_cooling() -> None:
     client, profile = _partner()
     first = _submit(client).json()
@@ -345,7 +384,7 @@ def test_a_processed_payout_settles_once_however_often_it_is_delivered() -> None
     assert second.status_code == HTTPStatus.OK
     item.refresh_from_db()
     assert item.status == PayoutBatchItem.Status.PAID
-    assert PartnerLedgerEntry.objects.get(id=item.ledger_entry_id).status == (
+    assert PartnerLedgerEntry.objects.get(payout_lines__item=item).status == (
         PartnerLedgerEntry.Status.PAID
     )
 
@@ -357,7 +396,8 @@ def test_the_reference_finds_an_item_whose_payout_id_was_never_recorded() -> Non
     body = _payout_event(
         payout_id="pout_late",
         status="reversed",
-        reference=f"{item.batch.reference}:{item.id}",
+        # Exactly what `submit_payout_item` sends as `reference_id`.
+        reference=item.id.hex,
         failure_reason=reason,
     )
 
@@ -366,10 +406,10 @@ def test_the_reference_finds_an_item_whose_payout_id_was_never_recorded() -> Non
     assert response.json()["applied"] is True
     item.refresh_from_db()
     assert item.provider_payout_id == "pout_late"
-    assert item.status == PayoutBatchItem.Status.FAILED
+    assert item.status == PayoutBatchItem.Status.REVERSED
     assert len(item.failure_code) <= FAILURE_CODE_MAX
     assert item.failure_code.startswith("beneficiary-bank-is-offline")
-    assert PartnerLedgerEntry.objects.get(id=item.ledger_entry_id).status == (
+    assert PartnerLedgerEntry.objects.get(payout_lines__item=item).status == (
         PartnerLedgerEntry.Status.RELEASED
     )
 

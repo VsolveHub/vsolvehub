@@ -55,8 +55,9 @@ def _operator() -> User:
 
 def _reserved_item(key: str, *, reference: str | None = None) -> PayoutBatchItem:
     """Reserve one item, optionally naming the batch so the fake provider's outcome can be
-    selected. `submit_payout_item` sends `"{batch.reference}:{item.id}"`, so a batch called
-    `ambiguous-…` drives the ambiguous branch through the real service rather than around it."""
+    selected. `submit_payout_item` hands the provider the batch reference alongside the payout,
+    so a batch called `ambiguous-…` drives the ambiguous branch through the real service rather
+    than around it."""
 
     booked = create_booked_group(key_prefix=key)
     _deliver(booked, key=key)
@@ -82,6 +83,12 @@ def _reserved_item(key: str, *, reference: str | None = None) -> PayoutBatchItem
         approved_at=timezone.now(),
     )
     return reserve_entry_for_batch(batch=batch, entry=entry)
+
+
+def _entry(item: PayoutBatchItem) -> PartnerLedgerEntry:
+    """The one ledger entry `_reserved_item` puts in its transfer."""
+
+    return PartnerLedgerEntry.objects.get(payout_lines__item=item)
 
 
 # --------------------------------------------------------------------------------------------
@@ -137,7 +144,7 @@ def test_an_accepted_payout_is_submitted_and_keeps_its_reservation() -> None:
 
     assert submitted.status == PayoutBatchItem.Status.SUBMITTED
     assert submitted.provider_payout_id
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
+    entry = _entry(item)
     assert entry.status == PartnerLedgerEntry.Status.RESERVED
 
 
@@ -152,7 +159,7 @@ def test_a_rejected_payout_releases_the_money_back_to_the_pool() -> None:
 
     assert failed.status == PayoutBatchItem.Status.FAILED
     assert failed.failure_code == "provider_rejected"
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
+    entry = _entry(item)
     assert entry.status == PartnerLedgerEntry.Status.RELEASED
 
 
@@ -171,7 +178,7 @@ def test_an_ambiguous_payout_parks_under_review_and_keeps_the_reservation() -> N
 
     assert parked.status == PayoutBatchItem.Status.UNDER_REVIEW
     assert parked.failure_code == "provider_ambiguous"
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
+    entry = _entry(item)
     assert entry.status == PartnerLedgerEntry.Status.RESERVED, (
         "an ambiguous payout released money it may already have sent"
     )
@@ -201,7 +208,7 @@ def test_a_processed_result_pays_the_entry_and_settles_the_batch() -> None:
     settled = apply_payout_result(item_id=item.id, status="processed")
 
     assert settled.status == PayoutBatchItem.Status.PAID
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
+    entry = _entry(item)
     assert entry.status == PartnerLedgerEntry.Status.PAID
     batch = PayoutBatch.objects.get(id=item.batch_id)
     assert batch.status == PayoutBatch.Status.PAID
@@ -214,30 +221,76 @@ def test_a_reversed_result_releases_the_entry_for_a_later_batch() -> None:
 
     settled = apply_payout_result(item_id=item.id, status="reversed", failure_reason="bad_account")
 
-    assert settled.status == PayoutBatchItem.Status.FAILED
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
+    assert settled.status == PayoutBatchItem.Status.REVERSED
+    assert settled.failure_code == "bad_account"
+    entry = _entry(item)
     assert entry.status == PartnerLedgerEntry.Status.RELEASED
 
 
 @override_settings(PAYOUT_PROVIDER="fake", PAYOUTS_ALLOW_FAKE_PROVIDER=True)
-def test_a_paid_item_can_never_be_un_paid() -> None:
-    """Monotonic against duplicate and out-of-order webhooks.
-
-    Providers resend, and they resend out of order. A `processed` followed by a stale `queued`
-    must not un-pay somebody.
-    """
+def test_duplicates_and_stale_statuses_never_un_pay_anybody() -> None:
+    """Providers resend, and they resend out of order. A second `processed`, or a `queued`
+    delivered after `processed`, must not move a paid transfer anywhere."""
 
     item = _reserved_item("settle-monotonic")
     submit_payout_item(item_id=item.id)
     apply_payout_result(item_id=item.id, status="processed")
 
-    apply_payout_result(item_id=item.id, status="reversed")
+    apply_payout_result(item_id=item.id, status="processed")
     apply_payout_result(item_id=item.id, status="queued")
+    apply_payout_result(item_id=item.id, status="processing")
 
     item.refresh_from_db()
     assert item.status == PayoutBatchItem.Status.PAID
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
-    assert entry.status == PartnerLedgerEntry.Status.PAID
+    assert item.provider_status == "processed", "tracking moved backwards"
+    assert _entry(item).status == PartnerLedgerEntry.Status.PAID
+
+
+@override_settings(PAYOUT_PROVIDER="fake", PAYOUTS_ALLOW_FAKE_PROVIDER=True)
+def test_a_payout_reversed_after_it_was_paid_returns_the_money_exactly_once() -> None:
+    """RazorpayX lets a bank return a processed payout up to T+3 working days later. The money is
+    back in the Partner's balance, once, however often the reversal is reported, and a
+    `processed` arriving after it is a late copy of an earlier state that changes nothing."""
+
+    item = _reserved_item("settle-reversal")
+    submit_payout_item(item_id=item.id)
+    apply_payout_result(item_id=item.id, status="processed")
+
+    apply_payout_result(item_id=item.id, status="reversed", failure_reason="account_closed")
+    apply_payout_result(item_id=item.id, status="reversed")
+    apply_payout_result(item_id=item.id, status="processed")
+
+    item.refresh_from_db()
+    assert item.status == PayoutBatchItem.Status.REVERSED
+    assert item.failure_code == "account_closed"
+    entry = _entry(item)
+    assert entry.status == PartnerLedgerEntry.Status.RELEASED
+    assert not item.entries.filter(is_live=True).exists()
+    # Back in the pool exactly once: a later batch can reserve it again, for the same amount.
+    later = PayoutBatch.objects.create(
+        reference="settle-reversal-later",
+        status=PayoutBatch.Status.APPROVED,
+        period_start=timezone.now() - timedelta(days=7),
+        period_end=timezone.now() + timedelta(days=1),
+        proposed_by=_operator(),
+        approved_by=_operator(),
+        approved_at=timezone.now(),
+    )
+    again = reserve_entry_for_batch(batch=later, entry=entry)
+    assert again.amount_paise == entry.net_paise
+
+
+@override_settings(PAYOUT_PROVIDER="fake", PAYOUTS_ALLOW_FAKE_PROVIDER=True)
+def test_a_failed_payout_stays_failed_whatever_arrives_later() -> None:
+    item = _reserved_item("settle-failed-final")
+    submit_payout_item(item_id=item.id)
+    apply_payout_result(item_id=item.id, status="failed", failure_reason="invalid_ifsc")
+
+    apply_payout_result(item_id=item.id, status="processed")
+
+    item.refresh_from_db()
+    assert item.status == PayoutBatchItem.Status.FAILED
+    assert _entry(item).status == PartnerLedgerEntry.Status.RELEASED
 
 
 @override_settings(PAYOUT_PROVIDER="fake", PAYOUTS_ALLOW_FAKE_PROVIDER=True)
@@ -248,7 +301,7 @@ def test_an_in_flight_status_settles_nothing() -> None:
     unchanged = apply_payout_result(item_id=item.id, status="queued")
 
     assert unchanged.status == PayoutBatchItem.Status.SUBMITTED
-    entry = PartnerLedgerEntry.objects.get(id=item.ledger_entry_id)
+    entry = _entry(item)
     assert entry.status == PartnerLedgerEntry.Status.RESERVED
 
 

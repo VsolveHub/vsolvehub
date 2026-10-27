@@ -248,7 +248,8 @@ def test_a_batch_detail_lists_its_items() -> None:
     body = client.get(f"/api/v1/operations/payout-batches/{batch.id}/").json()
 
     assert body["item_count"] == 1
-    assert body["items"][0]["ledger_entry_id"] == str(entry.id)
+    assert body["items"][0]["entry_count"] == 1
+    assert body["items"][0]["amount_paise"] == entry.net_paise
     assert body["items"][0]["status"] == PayoutBatchItem.Status.RESERVED
     assert body["server_now"]
 
