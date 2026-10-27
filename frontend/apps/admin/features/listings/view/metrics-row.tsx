@@ -17,7 +17,7 @@ export function MetricsRow({
   onSelectFilter,
 }: MetricsRowProps) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div className="flex items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-sm">
         <div className="rounded-lg bg-blue-50 p-3 text-blue-600">
           <BriefcaseBusiness className="size-6" />

@@ -44,3 +44,19 @@ test("calls onBack when mobile back button is clicked", () => {
   fireEvent.click(backButton);
   expect(onBack).toHaveBeenCalled();
 });
+
+test("stacks the panes until lg, where the Operations sidebar still leaves room for both", () => {
+  // At sm the split clipped the detail pane beside the 15rem sidebar on a 768px tablet.
+  const { container } = render(
+    <SplitView
+      listPane={<div>Master List</div>}
+      detailPane={<div>Detail Content</div>}
+      showDetailOnMobile={true}
+      onBack={() => {}}
+    />
+  );
+  const list = screen.getByText("Master List").closest("div.shrink-0");
+  expect(list).toHaveClass("hidden", "lg:flex");
+  expect(screen.getByRole("button").parentElement).toHaveClass("lg:hidden");
+  expect(container.innerHTML).not.toMatch(/\bsm:/);
+});

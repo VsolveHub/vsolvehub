@@ -16,7 +16,7 @@ export interface SplitViewProps {
   onBack: () => void;
   /** Optional title for the mobile back button header */
   mobileDetailTitle?: string;
-  /** Tailwind width classes for the list pane on sm+ breakpoints */
+  /** Tailwind width classes for the list pane once both panes show (lg+) */
   listPaneWidth?: string;
   className?: string;
 }
@@ -27,7 +27,10 @@ export interface SplitViewProps {
  * Desktop: Shows both panes side-by-side. The list pane width is configurable,
  * while the detail pane fills the remaining space. Both scroll independently.
  *
- * Mobile: Acts as a push-navigation stack. If `showDetailOnMobile` is false,
+ * Side by side from `lg` only. In Operations a tablet still carries the 15rem sidebar, which leaves
+ * ~30rem: a 20rem list plus a detail pane clipped the detail to an unreadable sliver.
+ *
+ * Below lg: Acts as a push-navigation stack. If `showDetailOnMobile` is false,
  * it shows the list. If true, it shows the detail pane with a back button.
  *
  * Height is delegated to the parent flex column (`h-full min-h-0`) rather than
@@ -40,22 +43,22 @@ export function SplitView({
   showDetailOnMobile,
   onBack,
   mobileDetailTitle = "Back to list",
-  listPaneWidth = "sm:w-80 lg:w-96",
+  listPaneWidth = "lg:w-80 xl:w-96",
   className,
 }: SplitViewProps) {
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 -mx-4 overflow-hidden bg-canvas sm:mx-0 sm:bg-transparent",
+        "flex h-full min-h-0 -mx-4 overflow-hidden bg-canvas lg:mx-0 lg:bg-transparent",
         className,
       )}
     >
       {/* List Pane */}
       <div
         className={cn(
-          "h-full w-full shrink-0 flex-col border-line bg-surface sm:border-r",
+          "h-full w-full shrink-0 flex-col border-line bg-surface lg:border-r",
           listPaneWidth,
-          showDetailOnMobile ? "hidden sm:flex" : "flex",
+          showDetailOnMobile ? "hidden lg:flex" : "flex",
         )}
       >
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{listPane}</div>
@@ -64,12 +67,12 @@ export function SplitView({
       {/* Detail Pane */}
       <div
         className={cn(
-          "h-full flex-1 flex-col bg-surface sm:bg-transparent",
-          showDetailOnMobile ? "flex" : "hidden sm:flex",
+          "h-full flex-1 flex-col bg-surface lg:bg-transparent",
+          showDetailOnMobile ? "flex" : "hidden lg:flex",
         )}
       >
         {/* Mobile push-nav header */}
-        <div className="sticky top-0 z-10 flex shrink-0 items-center border-b border-line bg-surface p-3 sm:hidden">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center border-b border-line bg-surface p-3 lg:hidden">
           <Button
             variant="ghost"
             size="sm"
@@ -81,7 +84,7 @@ export function SplitView({
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface sm:ml-6 sm:rounded-card sm:border sm:border-line sm:p-6 sm:shadow-card">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface lg:ml-6 lg:rounded-card lg:border lg:border-line lg:p-6 lg:shadow-card">
           {detailPane}
         </div>
       </div>
