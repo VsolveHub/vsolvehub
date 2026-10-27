@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 import { OPTIMIZED_IMAGE_HOSTS } from "./lib/remote-images";
 
@@ -143,4 +144,30 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * A production build without the Google Maps browser key is refused.
+ *
+ * `NEXT_PUBLIC_*` values are inlined into the bundle **at build time**, so a key
+ * added to the server afterwards changes nothing: the build that shipped without
+ * one serves a picker with no map until it is rebuilt. That is exactly how it
+ * reached production once, unnoticed — the picker's no-map fallback works, so
+ * nothing looked broken except the missing map.
+ *
+ * Only `next build` is checked; `next dev` and tests run without a key on
+ * purpose. A throwaway build that genuinely needs no map (an automated test
+ * build) can say so with `ALLOW_BUILD_WITHOUT_MAPS_KEY=true` — never set it for
+ * a deploy.
+ */
+function assertMapsKeyForBuild(): void {
+  if (process.env.ALLOW_BUILD_WITHOUT_MAPS_KEY === "true") return;
+  if ((process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "").trim() !== "") return;
+  throw new Error(
+    "NEXT_PUBLIC_GOOGLE_MAPS_KEY is not set. It is baked into the build, so set it in the " +
+      "build environment and build again. (Test builds only: ALLOW_BUILD_WITHOUT_MAPS_KEY=true.)",
+  );
+}
+
+export default function config(phase: string): NextConfig {
+  if (phase === PHASE_PRODUCTION_BUILD) assertMapsKeyForBuild();
+  return nextConfig;
+}
