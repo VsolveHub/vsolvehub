@@ -1,5 +1,19 @@
 # API Contract Changelog
 
+## 1.87.0 - Browse stays and rentals near a place
+
+Additive.
+
+- `GET /stays` and `GET /rentals` take optional `lat` and `lng`: the place the customer searched
+  (or their phone's location). With them, results are only listings within 25 km, nearest first;
+  the default "newest" order is replaced by distance (a stay's price or rating sort still
+  applies). `location` is then the place's name, used only to keep a listing that has no pin
+  yet; those sort last. One without the other, or an out-of-range value, is refused with `400`.
+- `PropertySummary` and `RentalAsset` add `distance_km` (number, one decimal, nullable): km from
+  the searched point. Null when no point was sent and for a listing with no pin. A stay's
+  distance is measured from its area pin, never the host's exact pin.
+- Removed: none. Renamed: none.
+
 ## 1.86.0 - The owner can route to a rental delivery
 
 Additive.

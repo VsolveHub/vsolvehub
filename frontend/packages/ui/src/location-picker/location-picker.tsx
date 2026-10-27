@@ -124,16 +124,16 @@ function coordsOnly(point: LatLng): PickedLocation {
  * retrying a refused permission does nothing until a browser setting changes,
  * while a timeout is worth another press.
  */
-type DeviceFailure = "denied" | "unavailable" | "timeout" | "unsupported";
+export type DeviceFailure = "denied" | "unavailable" | "timeout" | "unsupported";
 
-const DEVICE_FAILURE_KEY: Record<DeviceFailure, string> = {
+export const DEVICE_FAILURE_KEY: Record<DeviceFailure, string> = {
   denied: "ui.locationPicker.error.denied",
   unavailable: "ui.locationPicker.error.unavailable",
   timeout: "ui.locationPicker.error.timeout",
   unsupported: "ui.locationPicker.error.unsupported",
 };
 
-const DEVICE_FAILURE_DEFAULT: Record<DeviceFailure, string> = {
+export const DEVICE_FAILURE_DEFAULT: Record<DeviceFailure, string> = {
   denied:
     "Location permission is off for this site. Turn it on in your browser settings, or search for the place instead.",
   unavailable:
@@ -142,7 +142,7 @@ const DEVICE_FAILURE_DEFAULT: Record<DeviceFailure, string> = {
   unsupported: "This browser cannot share a location. Search for the place instead.",
 };
 
-function devicePosition(): Promise<GeolocationPosition> {
+export function devicePosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       reject(new Error("unsupported"));
@@ -156,7 +156,7 @@ function devicePosition(): Promise<GeolocationPosition> {
   });
 }
 
-function classifyDeviceError(error: unknown): DeviceFailure {
+export function classifyDeviceError(error: unknown): DeviceFailure {
   if (error instanceof Error && error.message === "unsupported") return "unsupported";
   // `GeolocationPositionError` is not a constructor that can be relied on across
   // browsers, so the numeric codes are read structurally.

@@ -24,6 +24,7 @@ from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.locations.nearby import Point, nearest_first
 from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
@@ -1412,7 +1413,9 @@ def public_assets(
     category_slug: str = "",
     start_date: date | None = None,
     end_date: date | None = None,
+    near: Point | None = None,
 ) -> models.QuerySet[RentalAsset]:
+    """Items a customer can see. With ``near``, only those near that point, nearest first."""
     qs = (
         RentalAsset.objects.filter(
             moderation_status="APPROVED",
@@ -1432,7 +1435,16 @@ def public_assets(
             | models.Q(location_text__icontains=q)
             | models.Q(partner__display_name__icontains=q)
         )
-    if location:
+    if near is not None:
+        # `location` is then the searched place's name, used only to keep an item with no pin.
+        qs = nearest_first(
+            qs,
+            near,
+            latitude="pickup_latitude",
+            longitude="pickup_longitude",
+            place_name=location,
+        )
+    elif location:
         qs = qs.filter(location_text__icontains=location.strip())
     if category_slug:
         qs = qs.filter(variant__service__subcategory__category__slug__iexact=category_slug.strip())

@@ -84,6 +84,7 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
         maps_url: "https://www.google.com/maps/search/?api=1&query=Shop%204%2C%20Main%20Road",
       },
       delivery_available: false,
+      distance_km: null,
       created_at: "2026-08-01T10:00:00Z",
     },
     deposit: {

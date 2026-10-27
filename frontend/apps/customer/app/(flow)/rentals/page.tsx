@@ -4,8 +4,12 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useBrowseList } from "@vsolve/query";
-import { ArrowLeft, FileCheck2, MapPin, Search, Wrench } from "lucide-react";
+import { ArrowLeft, FileCheck2, Search, Wrench } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
+import { EMPTY_PLACE, PlaceFilter, type PlaceFilterValue } from "@vsolve/ui/location-picker";
+
+import { NearbyNotice, placeKey, placeQuery } from "@/features/browse/nearby";
+import { GOOGLE_MAPS_KEY } from "@/lib/google-maps";
 
 import { fetchRentals } from "@/features/rentals/queries";
 import { useCustomerSession } from "@/features/session/queries";
@@ -17,9 +21,9 @@ function RentalsBrowseContent() {
   const initCategory = searchParams.get("category") ?? undefined;
 
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
+  const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [filters, setFilters] = useState<ActiveRentalFilters>(
     initCategory ? { categorySlug: initCategory } : {},
   );
@@ -27,14 +31,23 @@ function RentalsBrowseContent() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
+    setAppliedPlace(draftPlace);
+  };
+
+  /** A picked suggestion or Near me searches at once; typing waits for the Search button. */
+  const changePlace = (next: PlaceFilterValue, applyNow: boolean) => {
+    setDraftPlace(next);
+    if (applyNow) {
+      setAppliedQuery(draftQuery);
+      setAppliedPlace(next);
+    }
   };
 
   const clearFilters = () => {
     setDraftQuery("");
-    setDraftLocation("");
+    setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
-    setAppliedLocation("");
+    setAppliedPlace(EMPTY_PLACE);
     setFilters({});
   };
 
@@ -54,7 +67,7 @@ function RentalsBrowseContent() {
     [
       "rentals",
       appliedQuery,
-      appliedLocation,
+      placeKey(appliedPlace),
       filters.categorySlug,
       filters.serviceSlug,
       filters.minPrice,
@@ -63,7 +76,7 @@ function RentalsBrowseContent() {
     (offset, limit) =>
       fetchRentals({
         q: appliedQuery,
-        location: appliedLocation,
+        ...placeQuery(appliedPlace),
         service: filters.serviceSlug,
         category: filters.categorySlug,
         min_price: filters.minPrice,
@@ -86,7 +99,7 @@ function RentalsBrowseContent() {
       </div>
 
       {/* Hero / Header Section */}
-      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
+      <section className="relative z-20 rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-navy-400/30 bg-navy-800/60 px-3 py-1 text-xs font-semibold text-navy-200">
@@ -120,7 +133,7 @@ function RentalsBrowseContent() {
         {/* Search Bar */}
         <form
           onSubmit={handleSearchSubmit}
-          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]"
+          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_320px_auto]"
         >
           <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
             <Search className="size-4 shrink-0 text-text-secondary" />
@@ -133,16 +146,12 @@ function RentalsBrowseContent() {
             />
           </label>
 
-          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
-            <MapPin className="size-4 shrink-0 text-text-secondary" />
-            <input
-              type="text"
-              value={draftLocation}
-              onChange={(e) => setDraftLocation(e.target.value)}
-              placeholder="Location (e.g. Hyderabad)"
-              className="w-full bg-transparent py-2.5 text-base sm:text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
-            />
-          </label>
+          <PlaceFilter
+            apiKey={GOOGLE_MAPS_KEY}
+            value={draftPlace}
+            onChange={changePlace}
+            placeholder="Location (e.g. Hyderabad)"
+          />
 
           <Button type="submit" className="min-h-11 px-6 font-bold sm:h-full">
             Search Gear
@@ -155,6 +164,15 @@ function RentalsBrowseContent() {
         onChangeFilter={setFilters}
         count={isLoading ? null : rentals.length}
       />
+
+      {!isLoading && !error ? (
+        <NearbyNotice
+          place={appliedPlace}
+          noun="rentals"
+          count={rentals.length}
+          nearestKm={rentals[0]?.distance_km}
+        />
+      ) : null}
 
       {/* State Rendering */}
       {isLoading ? (

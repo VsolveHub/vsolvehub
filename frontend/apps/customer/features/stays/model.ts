@@ -17,6 +17,9 @@ export interface StayFilterParams {
   tenant_preference?: string;
   service?: string;
   sort?: string;
+  /** A searched point: results within 25 km, nearest first. Both or neither. */
+  lat?: number;
+  lng?: number;
   limit?: number;
   offset?: number;
 }

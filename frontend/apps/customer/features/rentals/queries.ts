@@ -31,6 +31,8 @@ export function fetchRentals(params?: RentalFilterParams & { limit?: number; off
           max_deposit: params?.max_deposit,
           start_date: params?.start_date,
           end_date: params?.end_date,
+          lat: params?.lat,
+          lng: params?.lng,
         },
       },
     }),

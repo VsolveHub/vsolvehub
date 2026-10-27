@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import A9VariantConfiguration
+from apps.locations.nearby import DISTANCE_KM, distance_of
 from apps.locations.pins import area_of, combine_pin, latitude_field, longitude_field
 from apps.stay.models import (
     Property,
@@ -219,6 +220,7 @@ class PropertySummarySerializer(serializers.ModelSerializer[Property]):
     amenities = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -242,11 +244,16 @@ class PropertySummarySerializer(serializers.ModelSerializer[Property]):
             "amenities",
             "review_count",
             "average_rating",
+            "distance_km",
             "created_at",
         )
 
     def get_booking_mode(self, obj: Property) -> str:
         return _extract_booking_mode(obj)
+
+    @extend_schema_field(DISTANCE_KM)
+    def get_distance_km(self, obj: Property) -> float | None:
+        return distance_of(obj)
 
     def get_price_period(self, obj: Property) -> str:
         return _extract_price_period(obj)

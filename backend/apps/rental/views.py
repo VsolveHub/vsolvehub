@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.foundation.slugs import lookup_by_slug_or_id
+from apps.locations.nearby import NEARBY_PARAMETERS, point_from
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rental import transport as transport_service
@@ -162,6 +163,7 @@ class RentalBrowseView(APIView):
             OpenApiParameter("max_deposit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("start_date", OpenApiTypes.DATE, OpenApiParameter.QUERY),
             OpenApiParameter("end_date", OpenApiTypes.DATE, OpenApiParameter.QUERY),
+            *NEARBY_PARAMETERS,
             *BROWSE_PARAMETERS,
         ],
         responses=RentalAssetSerializer(many=True),
@@ -179,6 +181,7 @@ class RentalBrowseView(APIView):
             except ValueError:
                 return None
 
+        near = point_from(request)
         assets = public_assets(
             query=request.query_params.get("q", ""),
             location=request.query_params.get("location", ""),
@@ -189,10 +192,14 @@ class RentalBrowseView(APIView):
             category_slug=request.query_params.get("category", ""),
             start_date=_parse_date(request.query_params.get("start_date")),
             end_date=_parse_date(request.query_params.get("end_date")),
+            near=near,
         )
-        # Never unbounded: one browse page, newest first, like `/stays` and `/listings`.
+        # Never unbounded: one browse page, like `/stays` and `/listings`. Newest first, unless a
+        # place was searched: then `public_assets` already put the nearest first.
         limit, offset = browse_window(request)
-        window = assets.order_by("-created_at", "-id")[offset : offset + limit]
+        if near is None:
+            assets = assets.order_by("-created_at", "-id")
+        window = assets[offset : offset + limit]
         return Response(RentalAssetSerializer(window, many=True).data)
 
 

@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.foundation.slugs import lookup_by_slug_or_id
+from apps.locations.nearby import NEARBY_PARAMETERS, point_from
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.stay.exceptions import StayStateApiError
@@ -189,6 +190,7 @@ class StayBrowseView(APIView):
             OpenApiParameter("sort", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("limit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("offset", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            *NEARBY_PARAMETERS,
         ],
         responses=PropertySummarySerializer(many=True),
     )
@@ -217,6 +219,7 @@ class StayBrowseView(APIView):
             max_price_paise=int(max_price) if max_price and max_price.isdigit() else None,
             variant_code=request.query_params.get("service", ""),
             sort=sort_param,
+            near=point_from(request),
             limit=limit,
             offset=offset,
         )

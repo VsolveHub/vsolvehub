@@ -26,6 +26,8 @@ export function fetchStays(params?: StayFilterParams) {
           max_price: params?.max_price,
           tenant_preference: params?.tenant_preference,
           sort: params?.sort,
+          lat: params?.lat,
+          lng: params?.lng,
           limit: params?.limit,
           offset: params?.offset,
         } as Record<string, unknown>,

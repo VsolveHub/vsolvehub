@@ -5,6 +5,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.locations.nearby import DISTANCE_KM, distance_of
 from apps.locations.pins import combine_pin, directions_url, latitude_field, longitude_field
 from apps.rental.models import (
     RentalAsset,
@@ -115,6 +116,11 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
     partner_phone = serializers.CharField(source="partner.user.phone_number", read_only=True)
     media = RentalAssetMediaSerializer(many=True, read_only=True)
     pickup_address = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
+
+    @extend_schema_field(DISTANCE_KM)
+    def get_distance_km(self, asset: RentalAsset) -> float | None:
+        return distance_of(asset)
 
     @extend_schema_field(PickupAddressSerializer)
     def get_pickup_address(self, asset: RentalAsset) -> dict[str, Any]:
@@ -149,6 +155,7 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
             "pickup_longitude",
             "pickup_address",
             "delivery_available",
+            "distance_km",
             "created_at",
         )
         read_only_fields: tuple[str, ...] = fields

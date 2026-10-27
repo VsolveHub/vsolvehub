@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.86.0
+  version: 1.87.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -17992,10 +17992,22 @@ paths:
           type: string
           format: date
       - in: query
+        name: lat
+        schema:
+          type: number
+          format: double
+        description: 'Searched point. Send with `lng`: results are listings within
+          25 km, nearest first, with `distance_km` set.'
+      - in: query
         name: limit
         schema:
           type: integer
         description: Rows to return. Default 24, at most 60.
+      - in: query
+        name: lng
+        schema:
+          type: number
+          format: double
       - in: query
         name: location
         schema:
@@ -20717,9 +20729,21 @@ paths:
         schema:
           type: boolean
       - in: query
+        name: lat
+        schema:
+          type: number
+          format: double
+        description: 'Searched point. Send with `lng`: results are listings within
+          25 km, nearest first, with `distance_km` set.'
+      - in: query
         name: limit
         schema:
           type: integer
+      - in: query
+        name: lng
+        schema:
+          type: number
+          format: double
       - in: query
         name: location
         schema:
@@ -38064,6 +38088,11 @@ components:
           format: double
           nullable: true
           readOnly: true
+        distance_km:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -38073,6 +38102,7 @@ components:
       - average_rating
       - booking_mode
       - created_at
+      - distance_km
       - host_name
       - id
       - media
@@ -41192,6 +41222,11 @@ components:
         delivery_available:
           type: boolean
           readOnly: true
+        distance_km:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -41204,6 +41239,7 @@ components:
       - delivery_available
       - deposit_paise
       - description
+      - distance_km
       - id
       - location_text
       - media
@@ -41321,6 +41357,11 @@ components:
         delivery_available:
           type: boolean
           readOnly: true
+        distance_km:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -41337,6 +41378,7 @@ components:
       - delivery_available
       - deposit_paise
       - description
+      - distance_km
       - id
       - location_text
       - media

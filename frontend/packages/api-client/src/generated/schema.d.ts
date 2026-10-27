@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.86.0)
- * Checksum: 6319ab0fd137cbd6
+ * Source:   contracts/openapi/v1.yaml (version 1.87.0)
+ * Checksum: 7bfeb00b41e2a072
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -15301,6 +15301,8 @@ export interface components {
             readonly review_count: number;
             /** Format: double */
             readonly average_rating: number | null;
+            /** Format: double */
+            readonly distance_km: number | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -16535,6 +16537,8 @@ export interface components {
             readonly pickup_longitude: string | null;
             readonly pickup_address: components["schemas"]["PickupAddress"];
             readonly delivery_available: boolean;
+            /** Format: double */
+            readonly distance_km: number | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -16571,6 +16575,8 @@ export interface components {
             readonly pickup_longitude: string | null;
             readonly pickup_address: components["schemas"]["PickupAddress"];
             readonly delivery_available: boolean;
+            /** Format: double */
+            readonly distance_km: number | null;
             /** Format: date-time */
             readonly created_at: string;
             readonly pickup_hours: components["schemas"]["PickupHours"];
@@ -36143,8 +36149,11 @@ export interface operations {
             query?: {
                 category?: string;
                 end_date?: string;
+                /** @description Searched point. Send with `lng`: results are listings within 25 km, nearest first, with `distance_km` set. */
+                lat?: number;
                 /** @description Rows to return. Default 24, at most 60. */
                 limit?: number;
+                lng?: number;
                 location?: string;
                 max_deposit?: number;
                 max_price?: number;
@@ -38570,7 +38579,10 @@ export interface operations {
             query?: {
                 ac?: boolean;
                 food?: boolean;
+                /** @description Searched point. Send with `lng`: results are listings within 25 km, nearest first, with `distance_km` set. */
+                lat?: number;
                 limit?: number;
+                lng?: number;
                 location?: string;
                 max_price?: number;
                 min_price?: number;

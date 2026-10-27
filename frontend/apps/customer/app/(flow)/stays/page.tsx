@@ -8,10 +8,13 @@ import {
   ArrowLeft,
   Building2,
   FileCheck2,
-  MapPin,
   Search,
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
+import { EMPTY_PLACE, PlaceFilter, type PlaceFilterValue } from "@vsolve/ui/location-picker";
+
+import { NearbyNotice, hasPoint, placeKey, placeQuery } from "@/features/browse/nearby";
+import { GOOGLE_MAPS_KEY } from "@/lib/google-maps";
 
 import { useCustomerSession } from "@/features/session/queries";
 import { fetchStays } from "@/features/stays/queries";
@@ -23,9 +26,9 @@ function StaysBrowseContent() {
   const initCategory = searchParams.get("category") ?? undefined;
 
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
+  const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [sort, setSort] = useState("newest");
   const [filters, setFilters] = useState<ActiveFilters>(
     initCategory ? { categorySlug: initCategory } : {}
@@ -34,14 +37,23 @@ function StaysBrowseContent() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
+    setAppliedPlace(draftPlace);
+  };
+
+  /** A picked suggestion or Near me searches at once; typing waits for the Search button. */
+  const changePlace = (next: PlaceFilterValue, applyNow: boolean) => {
+    setDraftPlace(next);
+    if (applyNow) {
+      setAppliedQuery(draftQuery);
+      setAppliedPlace(next);
+    }
   };
 
   const clearFilters = () => {
     setDraftQuery("");
-    setDraftLocation("");
+    setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
-    setAppliedLocation("");
+    setAppliedPlace(EMPTY_PLACE);
     setFilters({});
     setSort("newest");
   };
@@ -62,7 +74,7 @@ function StaysBrowseContent() {
     [
       "stays",
       appliedQuery,
-      appliedLocation,
+      placeKey(appliedPlace),
       filters.ac,
       filters.food,
       filters.minPrice,
@@ -75,7 +87,7 @@ function StaysBrowseContent() {
     (offset, limit) =>
       fetchStays({
         q: appliedQuery,
-        location: appliedLocation,
+        ...placeQuery(appliedPlace),
         ac: filters.ac,
         food: filters.food,
         min_price: filters.minPrice,
@@ -102,7 +114,7 @@ function StaysBrowseContent() {
       </div>
 
       {/* Hero / Header Section */}
-      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
+      <section className="relative z-20 rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-navy-400/30 bg-navy-800/60 px-3 py-1 text-xs font-semibold text-navy-200">
@@ -136,7 +148,7 @@ function StaysBrowseContent() {
         {/* Search Bar */}
         <form
           onSubmit={handleSearchSubmit}
-          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]"
+          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_320px_auto]"
         >
           <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
             <Search className="size-4 shrink-0 text-text-secondary" />
@@ -149,16 +161,12 @@ function StaysBrowseContent() {
             />
           </label>
 
-          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
-            <MapPin className="size-4 shrink-0 text-text-secondary" />
-            <input
-              type="text"
-              value={draftLocation}
-              onChange={(e) => setDraftLocation(e.target.value)}
-              placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
-              className="w-full bg-transparent py-2.5 text-base sm:text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
-            />
-          </label>
+          <PlaceFilter
+            apiKey={GOOGLE_MAPS_KEY}
+            value={draftPlace}
+            onChange={changePlace}
+            placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
+          />
 
           <Button type="submit" className="min-h-11 px-6 font-bold sm:h-full">
             Search Stays
@@ -179,7 +187,13 @@ function StaysBrowseContent() {
           <p className="text-sm font-semibold text-text">
             Showing <span className="font-bold text-action">{stays.length}</span>{" "}
             {stays.length === 1 ? "stay" : "stays"}
-            {appliedLocation ? ` in "${appliedLocation}"` : ""}
+            {hasPoint(appliedPlace)
+              ? appliedPlace.source === "device"
+                ? " near you"
+                : ` near ${appliedPlace.name}`
+              : appliedPlace.name.trim()
+                ? ` in "${appliedPlace.name.trim()}"`
+                : ""}
           </p>
           <div className="flex items-center gap-2 self-end sm:self-auto">
             <label htmlFor="stays-sort" className="text-xs font-medium text-text-secondary">
@@ -193,13 +207,24 @@ function StaysBrowseContent() {
               }}
               className="rounded-control border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-text shadow-xs transition hover:border-line-strong focus:border-line-strong focus:outline-none"
             >
-              <option value="newest">Newest First</option>
+              {/* With a searched place the server's default order is nearest first. */}
+              <option value="newest">{hasPoint(appliedPlace) ? "Nearest First" : "Newest First"}</option>
               <option value="price_asc">Price: Low to High</option>
               <option value="price_desc">Price: High to Low</option>
               <option value="rating_desc">Top Rated</option>
             </select>
           </div>
         </div>
+      ) : null}
+
+      {/* Only for the default order: with a price sort the first card is not the nearest. */}
+      {!isLoading && !error && sort === "newest" ? (
+        <NearbyNotice
+          place={appliedPlace}
+          noun="stays"
+          count={stays.length}
+          nearestKm={stays[0]?.distance_km}
+        />
       ) : null}
 
       {/* State Rendering */}

@@ -41,6 +41,7 @@ export function StayCard({ property }: StayCardProps) {
   const detailHref = stayHref(property.slug);
   const averageRating = (property as StayPropertySummary).average_rating;
   const reviewCount = (property as StayPropertySummary).review_count;
+  const distanceKm = (property as StayPropertySummary).distance_km;
 
   const rawPref =
     (property as { tenant_preference?: string }).tenant_preference ||
@@ -112,6 +113,10 @@ export function StayCard({ property }: StayCardProps) {
           <div className="flex items-center gap-1.5 text-xs text-text-secondary">
             <MapPin className="size-3.5 shrink-0 text-text-secondary" />
             <span className="truncate">{property.location_text}</span>
+            {/* Only when the guest searched a place; measured from the area, not the door. */}
+            {distanceKm != null ? (
+              <span className="shrink-0 font-semibold text-text">· {distanceKm} km away</span>
+            ) : null}
           </div>
         )}
 

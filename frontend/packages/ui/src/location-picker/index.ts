@@ -4,3 +4,5 @@
 // an iframe should not pull in the loader either.
 export { LocationPicker } from "./location-picker";
 export type { LocationPickerProps, PickedLocation } from "./location-picker";
+export { EMPTY_PLACE, PlaceFilter } from "./place-filter";
+export type { PlaceFilterProps, PlaceFilterValue } from "./place-filter";

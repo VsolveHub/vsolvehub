@@ -13,6 +13,9 @@ export interface RentalFilterParams {
   max_deposit?: number;
   start_date?: string;
   end_date?: string;
+  /** A searched point: results within 25 km, nearest first. Both or neither. */
+  lat?: number;
+  lng?: number;
 }
 
 export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED" | "INACTIVE";

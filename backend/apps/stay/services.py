@@ -18,6 +18,7 @@ from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.locations.nearby import Point, nearest_first
 from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
@@ -1516,6 +1517,7 @@ def public_properties(  # noqa: PLR0912
     max_price_paise: int | None = None,
     variant_code: str = "",
     sort: str = "newest",
+    near: Point | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> models.QuerySet[Property]:
@@ -1582,7 +1584,19 @@ def public_properties(  # noqa: PLR0912
             | models.Q(location_text__icontains=q)
             | models.Q(host__display_name__icontains=q)
         )
-    if location:
+    if near is not None:
+        # A searched place: nearest first. `location` is then the place's name, used only to keep
+        # a listing that has no pin yet. The host's exact pin is private, so distance is measured
+        # from the area pin a guest already sees.
+        qs = nearest_first(
+            qs,
+            near,
+            latitude="latitude",
+            longitude="longitude",
+            place_name=location,
+            area_only=True,
+        )
+    elif location:
         qs = qs.filter(location_text__icontains=location.strip())
     if variant_code:
         qs = qs.filter(
@@ -1626,8 +1640,9 @@ def public_properties(  # noqa: PLR0912
         qs = qs.annotate(sort_rating=models.Subquery(average)).order_by(
             models.F("sort_rating").desc(nulls_last=True), "-created_at", "-id"
         )
-    else:
+    elif near is None:
         qs = qs.order_by("-created_at", "-id")
+    # With a searched place and no price or rating sort, `nearest_first` already ordered it.
     # Every sort ends in `id`: browse pages by offset, and rows created in the same instant (a
     # bulk import) would otherwise swap places between requests and repeat or vanish.
 

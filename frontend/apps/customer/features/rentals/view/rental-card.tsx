@@ -68,6 +68,10 @@ export function RentalCard({ asset }: RentalCardProps) {
           <div className="flex items-center gap-1.5 text-xs text-text-secondary">
             <MapPin className="size-3.5 shrink-0 text-text-secondary" />
             <span className="truncate">{asset.location_text}</span>
+            {/* Only when the customer searched a place. */}
+            {asset.distance_km != null ? (
+              <span className="shrink-0 font-semibold text-text">· {asset.distance_km} km away</span>
+            ) : null}
           </div>
         )}
       </div>
