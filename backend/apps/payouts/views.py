@@ -19,6 +19,7 @@ train people to leave batches sitting approved.
 off the Partner booking projection: the safest filter is the one that cannot be supplied.
 """
 
+import hashlib
 import json
 from typing import Any, cast
 from uuid import UUID
@@ -374,6 +375,16 @@ class RazorpayXPayoutWebhookView(APIView):
                 required=True,
                 description="HMAC-SHA256 of the raw body with the RazorpayX webhook secret.",
             ),
+            OpenApiParameter(
+                "X-Razorpay-Event-Id",
+                str,
+                location=OpenApiParameter.HEADER,
+                required=False,
+                description=(
+                    "RazorpayX's id for this event. A redelivery with an id already recorded "
+                    "changes nothing."
+                ),
+            ),
         ],
         responses={200: PayoutWebhookAcceptedSerializer, 400: ApiErrorSerializer},
         auth=[],
@@ -389,7 +400,13 @@ class RazorpayXPayoutWebhookView(APIView):
             raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid") from exc
         if not isinstance(decoded, dict):
             raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid")
-        item = apply_razorpayx_payout_event(decoded)
+        payload_sha256 = hashlib.sha256(raw_body).hexdigest()
+        # RazorpayX names every delivery in `X-Razorpay-Event-Id`, and a redelivery carries the
+        # same id. Without it, the body's own hash stands in: an identical body is the same event.
+        event_id = request.headers.get("X-Razorpay-Event-Id", "").strip()[:128] or payload_sha256
+        item = apply_razorpayx_payout_event(
+            decoded, event_id=event_id, payload_sha256=payload_sha256
+        )
         return Response({"accepted": True, "applied": item is not None})
 
 

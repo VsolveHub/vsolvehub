@@ -22,7 +22,9 @@ from apps.commerce.models import Booking
 from apps.foundation.services import enqueue_outbox_event
 from apps.fulfilment.models import WorkOutcome, WorkTask
 from apps.identity.models import User
-from apps.partners.models import PartnerProfile
+from apps.notifications.models import KillSwitch
+from apps.notifications.services import is_engaged
+from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.payouts.exceptions import (
     LedgerEntryNotPayableApiError,
     PayoutAccountProviderApiError,
@@ -978,6 +980,11 @@ def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
     )
     if item.status != PayoutBatchItem.Status.RESERVED:
         return item
+    refusal = _pre_send_refusal(item)
+    if refusal:
+        _close_item(item, status=PayoutBatchItem.Status.RELEASED, failure_code=refusal)
+        _settle_batch_if_complete(item.batch_id)
+        return item
 
     provider = get_payout_provider()
     try:
@@ -1227,13 +1234,33 @@ def _item_for_provider_payout(*, provider_payout_id: str, reference: str) -> Pay
     return PayoutBatchItem.objects.filter(id=item_id).first()
 
 
-@transaction.atomic
-def apply_razorpayx_payout_event(event: Mapping[str, object]) -> PayoutBatchItem | None:
-    """Settle an item from a verified RazorpayX `payout.*` webhook.
+def _tracking_from_entity(entity: Mapping[str, object], status: str) -> ProviderPayout:
+    try:
+        return RazorpayXPayoutProvider.parse_payout(dict(entity))
+    except PayoutProviderError:
+        # A webhook missing the id or amount still says what happened, and why; it just tracks
+        # less.
+        details = _mapping(entity.get("status_details"))
+        return ProviderPayout(
+            provider_payout_id=str(entity.get("id") or ""),
+            amount_paise=0,
+            currency="INR",
+            status=status,
+            failure_reason=str(entity.get("failure_reason") or details.get("reason") or ""),
+        )
 
-    Everything else is acknowledged and ignored. Settlement goes through `apply_payout_result`,
-    which is monotonic, so a duplicate or out-of-order delivery cannot un-pay anybody;
-    `reconcile_payouts` remains the backstop for a webhook that never arrives.
+
+@transaction.atomic
+def apply_razorpayx_payout_event(
+    event: Mapping[str, object], *, event_id: str, payload_sha256: str
+) -> PayoutBatchItem | None:
+    """Settle a transfer from a verified RazorpayX `payout.*` webhook, once per delivery.
+
+    Every payout event is recorded in `PayoutWebhookEvent` under the provider's event id, so a
+    redelivery is recognised and changes nothing. Final outcomes go through
+    `apply_payout_result`, which only moves forward; `payout.updated` and in-flight statuses only
+    refresh tracking data such as the UTR. Everything that is not a payout event is acknowledged
+    and ignored, and `reconcile_payouts` remains the backstop for a webhook that never arrives.
     """
 
     name = event.get("event")
@@ -1242,7 +1269,26 @@ def apply_razorpayx_payout_event(event: Mapping[str, object]) -> PayoutBatchItem
     entity = _mapping(_mapping(_mapping(event.get("payload")).get("payout")).get("entity"))
     provider_payout_id = str(entity.get("id") or "")
     status = str(entity.get("status") or "")
-    if not status:
+    tracking = _tracking_from_entity(entity, status)
+    record, created = PayoutWebhookEvent.objects.get_or_create(
+        provider_event_id=event_id,
+        defaults={
+            "event_type": name[:64],
+            "provider_payout_id": provider_payout_id[:128],
+            "provider_status": status[:24],
+            "payload_sha256": payload_sha256,
+            # A summary, not the payload: a payout entity can embed the fund account.
+            "summary": {
+                "status": status,
+                "amount": entity.get("amount"),
+                "reference_id": entity.get("reference_id"),
+                "utr": tracking.utr,
+                "mode": tracking.mode,
+                "status_reason": tracking.status_reason,
+            },
+        },
+    )
+    if not created or not status:
         return None
 
     candidate = _item_for_provider_payout(
@@ -1254,29 +1300,30 @@ def apply_razorpayx_payout_event(event: Mapping[str, object]) -> PayoutBatchItem
     if provider_payout_id and not item.provider_payout_id:
         item.provider_payout_id = provider_payout_id
         item.save(update_fields=("provider_payout_id", "updated_at"))
-
-    details = _mapping(entity.get("status_details"))
-    failure_reason = str(entity.get("failure_reason") or details.get("reason") or "")
-    return apply_payout_result(item_id=item.id, status=status, failure_reason=failure_reason)
+    before = item.status
+    result = apply_payout_result(
+        item_id=item.id, status=status, failure_reason=tracking.failure_reason, tracking=tracking
+    )
+    record.payout_item = result
+    record.changed_status = result.status != before
+    record.save(update_fields=("payout_item", "changed_status"))
+    return result
 
 
 def _settle_batch_if_complete(batch_id: UUID) -> None:
-    """A batch is finished when no item is still moving.
+    """A batch is finished when no transfer in it is still moving.
 
     `FAILED` does not make the batch failed — one rejected account among two hundred successful
-    payouts is an exception to chase, not a batch to redo. `PAID` means every item reached a
-    terminal state and at least one was paid.
+    payouts is an exception to chase, not a batch to redo. `PAID` means every transfer reached a
+    final state and at least one was paid. A transfer reversed after the batch finished leaves
+    the batch as it was; the reversal is on the transfer, and its money is back in the pool.
     """
 
     batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
     if batch.status in (PayoutBatch.Status.PAID, PayoutBatch.Status.CANCELLED):
         return
     in_flight = batch.items.exclude(
-        status__in=(
-            PayoutBatchItem.Status.PAID,
-            PayoutBatchItem.Status.FAILED,
-            PayoutBatchItem.Status.RELEASED,
-        )
+        status__in=(PayoutBatchItem.Status.PAID, *_RELEASING_STATUSES)
     ).exists()
     if in_flight:
         return
