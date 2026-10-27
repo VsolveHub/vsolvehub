@@ -14,7 +14,7 @@ reconciled against the payments that produced it. Only `status` moves, and only 
 reservation lifecycle.
 
 **One entry can be reserved by at most one live batch.** A partial unique index on
-`PayoutBatchItem` makes a second reservation an `IntegrityError`, not a race that occasionally
+`PayoutItemEntry` makes a second reservation an `IntegrityError`, not a race that occasionally
 pays a Partner twice. Cancelling a batch frees its entries by releasing the index.
 
 **A batch is approved by someone other than its proposer.** Maker-checker is a check constraint,
@@ -114,6 +114,9 @@ class PartnerLedgerEntry(models.Model):
         EARNING = "EARNING", "Earning"
         ADJUSTMENT = "ADJUSTMENT", "Adjustment"
         REVERSAL = "REVERSAL", "Reversal"
+        #: What an extra instant withdrawal costs the Partner. Negative, and carried as a line of
+        #: the withdrawal it paid for, so the transfer is still the sum of its lines.
+        FEE = "FEE", "Fee"
 
     class Status(models.TextChoices):
         #: Earned, but not yet releasable — an open payout-holding case, or a dispute.
@@ -152,6 +155,11 @@ class PartnerLedgerEntry(models.Model):
     #: Everything that decided the numbers: the pricing policy version, the commission basis
     #: points, the outcomes settled. An entry has to be explainable years later.
     calculation_snapshot = models.JSONField(default=dict)
+    #: Not payable before this instant, whatever its status says. A visit's earning clears once
+    #: the Customer's 72-hour quality-dispute window has closed, so a dispute can always freeze
+    #: it before any of it leaves. Empty means cleared from the start: corrections, refunds and
+    #: M2 entries, which carry their own release windows.
+    clears_at = models.DateTimeField(null=True, blank=True)
     #: Present on `ADJUSTMENT`/`REVERSAL`: the entry being corrected.
     corrects = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.PROTECT, related_name="corrections"
@@ -197,10 +205,15 @@ class PartnerLedgerEntry(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    models.Q(kind="EARNING", corrects__isnull=True)
+                    models.Q(kind__in=("EARNING", "FEE"), corrects__isnull=True)
                     | models.Q(kind__in=("ADJUSTMENT", "REVERSAL"))
                 ),
                 name="payouts_only_corrections_reference_an_entry",
+            ),
+            models.CheckConstraint(
+                # A fee only ever takes money off a transfer.
+                condition=~models.Q(kind="FEE") | models.Q(net_paise__lt=0),
+                name="payouts_fee_is_negative",
             ),
         ]
 
@@ -226,13 +239,127 @@ class PartnerLedgerEntry(models.Model):
         super().save(*args, **kwargs)
 
 
+class PartnerEarningHold(models.Model):
+    """Money that must not leave until somebody decides: a dispute or a case on one booking.
+
+    Explicit rather than read off a booking flag, so the rule can be inspected: a hold names the
+    booking it freezes, why, who placed it and when it was lifted. While any hold on a booking is
+    `ACTIVE`, that booking's earning is left out of every payout and counted as held in the
+    Partner's balance, whether the earning was written before the hold or after it. That is what
+    stops a dispute opened after the money became available from being paid straight past.
+    """
+
+    class Reason(models.TextChoices):
+        COMPLETION_DISPUTE = "COMPLETION_DISPUTE", "Customer disputed the completion"
+        QUALITY_DISPUTE = "QUALITY_DISPUTE", "Customer opened a quality dispute"
+        OPERATIONS_CASE = "OPERATIONS_CASE", "Operations case holding payouts"
+        RENTAL_DEPOSIT_DISPUTE = "RENTAL_DEPOSIT_DISPUTE", "Rental deposit dispute"
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        RELEASED = "RELEASED", "Released"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile, on_delete=models.PROTECT, related_name="earning_holds"
+    )
+    booking = models.ForeignKey(
+        Booking, null=True, blank=True, on_delete=models.PROTECT, related_name="earning_holds"
+    )
+    rental_booking = models.ForeignKey(
+        RentalBooking,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="earning_holds",
+    )
+    #: One ledger entry, for earnings no booking reaches: M2 stage, visit and retention entries,
+    #: which a case on an engagement freezes one by one.
+    ledger_entry = models.ForeignKey(
+        PartnerLedgerEntry,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="holds",
+    )
+    reason = models.CharField(max_length=32, choices=Reason.choices)
+    #: What placed it: the case id for a case, the booking id for a dispute. Two causes on one
+    #: booking are two holds, and the money stays frozen until both are lifted.
+    source_id = models.CharField(max_length=64)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    placed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    release_note = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        indexes = [
+            models.Index(fields=("booking", "status")),
+            models.Index(fields=("rental_booking", "status")),
+            models.Index(fields=("ledger_entry", "status")),
+            models.Index(fields=("partner", "status")),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        booking__isnull=False,
+                        rental_booking__isnull=True,
+                        ledger_entry__isnull=True,
+                    )
+                    | models.Q(
+                        booking__isnull=True,
+                        rental_booking__isnull=False,
+                        ledger_entry__isnull=True,
+                    )
+                    | models.Q(
+                        booking__isnull=True,
+                        rental_booking__isnull=True,
+                        ledger_entry__isnull=False,
+                    )
+                ),
+                name="payouts_hold_names_one_subject",
+            ),
+            models.UniqueConstraint(
+                # One active hold per cause and subject. A case on an engagement holds each of its
+                # entries separately, under the one case id.
+                fields=("reason", "source_id", "booking", "rental_booking", "ledger_entry"),
+                condition=models.Q(status="ACTIVE"),
+                nulls_distinct=False,
+                name="payouts_one_active_hold_per_cause",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reason}:{self.source_id}:{self.status}"
+
+
 class PayoutBatch(models.Model):
     """A reviewed set of reservations, paid once.
 
-    Weekly and Operations-reviewed for M1 — the settlement document prefers it to on-demand
-    withdrawal until account-change cooling, fraud monitoring and reconciliation are proven, and
-    two of those three are still open.
+    Two kinds share every rule below. A `RUN` is proposed by one Operations user and approved by
+    another. A `WITHDRAWAL` is one Partner taking their own available balance: proposed by the
+    Partner, approved by policy when it passes the withdrawal rules (`approval_basis=POLICY`), or
+    by Operations when it does not — the first payout to a new bank account always goes to them.
+    Both reserve the same ledger entries the same way and are sent by the same command, so there
+    is one money path rather than two.
     """
+
+    class Kind(models.TextChoices):
+        RUN = "RUN", "Payout run"
+        WITHDRAWAL = "WITHDRAWAL", "Partner withdrawal"
+
+    class ApprovalBasis(models.TextChoices):
+        #: Maker-checker: a second Operations user approved it.
+        OPERATIONS = "OPERATIONS", "Approved by Operations"
+        #: A withdrawal that passed every rule, approved without a person.
+        POLICY = "POLICY", "Approved by withdrawal policy"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -245,7 +372,14 @@ class PayoutBatch(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=64, unique=True)
+    kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.RUN)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    approval_basis = models.CharField(max_length=12, choices=ApprovalBasis.choices, blank=True)
+    #: Why a withdrawal waits for Operations instead of being sent by policy — the first payout to
+    #: a bank account, or a balance above the withdrawal maximum. Empty for a run.
+    review_reasons = models.JSONField(default=list, blank=True)
+    #: Operations' reason for declining a withdrawal. The Partner reads it, so it says what to do.
+    review_note = models.CharField(max_length=240, blank=True)
     period_start = models.DateTimeField()
     period_end = models.DateTimeField()
 
@@ -292,29 +426,48 @@ class PayoutBatch(models.Model):
                 condition=models.Q(period_end__gt=models.F("period_start")),
                 name="payouts_batch_period_is_ordered",
             ),
+            models.CheckConstraint(
+                # Only a withdrawal may be approved without a person, and only by policy.
+                condition=(
+                    ~models.Q(approval_basis="POLICY")
+                    | models.Q(kind="WITHDRAWAL", approved_by__isnull=True)
+                ),
+                name="payouts_policy_approves_only_withdrawals",
+            ),
         ]
+        indexes = [models.Index(fields=("kind", "status"))]
 
     def __str__(self) -> str:
         return f"{self.reference}:{self.status}"
 
 
 class PayoutBatchItem(models.Model):
-    """One ledger entry's reservation inside one batch, and the provider result for it."""
+    """One transfer to one Partner inside one batch, and what the provider said about it.
+
+    A transfer covers every cleared ledger entry the Partner had when the batch was proposed —
+    earnings and the refunds that reduce them — listed in `PayoutItemEntry`. One transfer per
+    Partner rather than one per visit is what lets a refund come off the amount paid, and what
+    stops a busy week costing a provider fee per job.
+    """
 
     class Status(models.TextChoices):
         RESERVED = "RESERVED", "Reserved"
+        #: Claimed for sending: the provider call is being made, outside any database lock. If
+        #: the process dies here, nobody knows whether the payout left, so it is settled like an
+        #: ambiguous one — looked up by its reference, never sent again.
+        SUBMITTING = "SUBMITTING", "Sending"
         SUBMITTED = "SUBMITTED", "Submitted"
         PAID = "PAID", "Paid"
         FAILED = "FAILED", "Failed"
         #: Ambiguous provider result. Never guessed either way — Finance reconciles it.
         UNDER_REVIEW = "UNDER_REVIEW", "Under review"
         RELEASED = "RELEASED", "Released"
+        #: Paid, then returned by the beneficiary's bank (RazorpayX allows up to T+3 working
+        #: days). The money is back in the Partner's balance, exactly once.
+        REVERSED = "REVERSED", "Reversed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch = models.ForeignKey(PayoutBatch, on_delete=models.PROTECT, related_name="items")
-    ledger_entry = models.ForeignKey(
-        PartnerLedgerEntry, on_delete=models.PROTECT, related_name="payout_items"
-    )
     partner = models.ForeignKey(
         PartnerProfile, on_delete=models.PROTECT, related_name="payout_items"
     )
@@ -322,12 +475,25 @@ class PayoutBatchItem(models.Model):
         PartnerPayoutAccount, on_delete=models.PROTECT, related_name="payout_items"
     )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.RESERVED)
+    #: Copied from the batch kind so the one-withdrawal-in-flight index can see it: a partial
+    #: index only reads its own table.
+    is_withdrawal = models.BooleanField(default=False)
     amount_paise = models.BigIntegerField()
     currency = models.CharField(max_length=3, default="INR")
     provider_payout_id = models.CharField(max_length=128, blank=True)
     failure_code = models.SlugField(max_length=80, blank=True)
     #: Sent to the provider so a retried submission cannot pay twice.
     idempotency_key = models.CharField(max_length=128)
+    #: The provider's own last-known status (`queued`, `processing`, `processed`, …) and what it
+    #: reported alongside. Tracking only — `status` above is the decision; these are the evidence
+    #: Finance reconciles against, and a `payout.updated` webhook may change them without
+    #: changing the decision.
+    provider_status = models.CharField(max_length=24, blank=True)
+    utr = models.CharField(max_length=64, blank=True)
+    mode = models.CharField(max_length=8, blank=True)
+    fees_paise = models.BigIntegerField(null=True, blank=True)
+    tax_paise = models.BigIntegerField(null=True, blank=True)
+    status_reason = models.CharField(max_length=240, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -335,17 +501,11 @@ class PayoutBatchItem(models.Model):
 
     class Meta:
         ordering = ("created_at", "id")
-        indexes = [models.Index(fields=("batch", "status"))]
+        indexes = [
+            models.Index(fields=("batch", "status")),
+            models.Index(fields=("provider_payout_id",), name="payouts_item_provider_id_idx"),
+        ]
         constraints = [
-            models.UniqueConstraint(
-                # **The double-pay guarantee.** A ledger entry may be held by at most one item
-                # that is not finished with it. A released or failed item frees the entry for a
-                # later batch; a live one makes a second reservation an IntegrityError rather
-                # than a race that occasionally pays a Partner twice for one visit.
-                fields=("ledger_entry",),
-                condition=models.Q(status__in=("RESERVED", "SUBMITTED", "PAID", "UNDER_REVIEW")),
-                name="payouts_one_live_reservation_per_ledger_entry",
-            ),
             models.UniqueConstraint(
                 fields=("idempotency_key",),
                 name="payouts_unique_item_key",
@@ -354,7 +514,90 @@ class PayoutBatchItem(models.Model):
                 condition=models.Q(amount_paise__gt=0),
                 name="payouts_item_amount_is_positive",
             ),
+            models.UniqueConstraint(
+                # One withdrawal in flight per Partner — waiting for Operations, being sent or not
+                # yet settled. The service checks first for a typed refusal; this is what holds
+                # when two taps race.
+                fields=("partner",),
+                condition=models.Q(
+                    is_withdrawal=True,
+                    status__in=("RESERVED", "SUBMITTING", "SUBMITTED", "UNDER_REVIEW"),
+                ),
+                name="payouts_one_withdrawal_in_flight_per_partner",
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.batch_id}:{self.ledger_entry_id}:{self.status}"
+        return f"{self.batch_id}:{self.partner_id}:{self.status}"
+
+
+class PayoutItemEntry(models.Model):
+    """One ledger entry inside one transfer, at the amount it contributed.
+
+    `amount_paise` is signed, like the ledger: a refund's reversal contributes a negative line, and
+    the transfer is the sum of its lines.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    item = models.ForeignKey(PayoutBatchItem, on_delete=models.PROTECT, related_name="entries")
+    ledger_entry = models.ForeignKey(
+        PartnerLedgerEntry, on_delete=models.PROTECT, related_name="payout_lines"
+    )
+    amount_paise = models.BigIntegerField()
+    #: True while the transfer still holds this entry — reserved, sent, paid or uncertain. Kept
+    #: on the line rather than read from the item because the double-pay index below can only
+    #: look at its own table.
+    is_live = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                # **The double-pay guarantee.** A ledger entry may be held by at most one live
+                # transfer. A released, failed or reversed transfer frees its entries for a later
+                # batch; a live one makes a second reservation an IntegrityError rather than a
+                # race that occasionally pays a Partner twice for one visit.
+                fields=("ledger_entry",),
+                condition=models.Q(is_live=True),
+                name="payouts_one_live_line_per_ledger_entry",
+            ),
+            models.UniqueConstraint(
+                fields=("item", "ledger_entry"), name="payouts_entry_once_per_item"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.item_id}:{self.ledger_entry_id}:{self.amount_paise}"
+
+
+class PayoutWebhookEvent(models.Model):
+    """Every verified RazorpayX payout webhook, recorded once.
+
+    The provider's event id is unique, so a redelivery is recognised and changes nothing. Only a
+    summary of the payout is kept — never the fund account, which can carry bank details.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provider_event_id = models.CharField(max_length=128, unique=True)
+    event_type = models.CharField(max_length=64)
+    provider_payout_id = models.CharField(max_length=128, blank=True)
+    provider_status = models.CharField(max_length=24, blank=True)
+    payout_item = models.ForeignKey(
+        PayoutBatchItem,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="webhook_events",
+    )
+    #: Whether this delivery changed the item's decided status (not just its tracking fields).
+    changed_status = models.BooleanField(default=False)
+    summary = models.JSONField(default=dict)
+    payload_sha256 = models.CharField(max_length=64)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-received_at", "id")
+
+    def __str__(self) -> str:
+        return f"{self.event_type}:{self.provider_event_id}"

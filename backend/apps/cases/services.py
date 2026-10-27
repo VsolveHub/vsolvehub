@@ -24,7 +24,12 @@ from apps.cases.models import (
 )
 from apps.identity.models import User
 from apps.payouts.exceptions import CaseConflictApiError, CaseInvalidApiError
-from apps.payouts.services import release_payout_hold
+from apps.payouts.models import PartnerEarningHold
+from apps.payouts.services import (
+    place_earning_hold,
+    release_hold_for_source,
+    release_payout_hold,
+)
 
 #: Case types that hold a Partner's money until somebody decides. A dispute or a safety
 #: investigation must not be paid out from under.
@@ -135,8 +140,26 @@ def open_case(
             context={"response_due_at": response_due_at.isoformat()},
         )
     if case.holds_payout:
+        _hold_booking_payout(case)
         _hold_m2_payouts(case)
     return case
+
+
+def _hold_booking_payout(case: OperationsCase) -> None:
+    """Freeze a booking's earning while a payout-holding case about it runs.
+
+    An explicit hold rather than a status change, so it also catches an earning that is already
+    `AVAILABLE` and is lifted by this case alone when it closes.
+    """
+
+    if case.booking_id is None:
+        return
+    place_earning_hold(
+        reason=PartnerEarningHold.Reason.OPERATIONS_CASE,
+        source_id=str(case.id),
+        booking_id=case.booking_id,
+        actor=case.opened_by,
+    )
 
 
 def _record(
@@ -282,9 +305,18 @@ def resolve_case(
         body=case.resolution_note,
         context={"resolution": resolution},
     )
+    # Every hold this case placed — on its booking, or on each M2 entry it froze — and only those.
+    # Another open case on the same subject placed its own holds under its own id, so lifting
+    # these never frees money that case is still looking at.
+    release_hold_for_source(
+        reason=PartnerEarningHold.Reason.OPERATIONS_CASE,
+        source_id=str(case.id),
+        actor=actor,
+        note=resolution,
+    )
     booking_id = case.booking_id
     if booking_id is not None and not _subject_has_other_holds(case, booking_id=booking_id):
-        release_payout_hold(booking_id=booking_id)
+        release_payout_hold(booking_id=booking_id, actor=actor, note=resolution)
     _release_m2_payouts(case)
     return case
 
@@ -576,6 +608,7 @@ def decide_case_appeal(
         context={"outcome": outcome},
     )
     if outcome == APPEAL_OVERTURNED and case.holds_payout:
+        _hold_booking_payout(case)
         _hold_m2_payouts(case)
     return case
 

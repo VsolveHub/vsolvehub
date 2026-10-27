@@ -18,12 +18,44 @@ activation.
 
 import hashlib
 import hmac
+import logging
+import re
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Protocol, cast
 
 import requests
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+#: RazorpayX's own limits on a payout request. Checked before sending, because breaking any of
+#: them is a 400 on every payout in a batch — the request is refused, never half-applied.
+#: `X-Payout-Idempotency`: 4 to 36 letters, digits, hyphens, underscores or spaces.
+_IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9 _-]{4,36}$")
+#: `reference_id`: at most 40 characters.
+REFERENCE_ID_MAX_LENGTH = 40
+#: `narration` is what the Partner's bank statement shows: at most 30 letters, digits and spaces,
+#: and banks may cut it after nine, so the brand comes first.
+PAYOUT_NARRATION = "VSolveHub payout"
+
+#: Longest provider text kept on an exception or in a log line.
+_DETAIL_MAX_LENGTH = 240
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderErrorDetail:
+    """What RazorpayX said when it refused, from its `{"error": {...}}` body.
+
+    Empty strings when the body had none of it. RazorpayX writes `"NA"` for a reason it does not
+    have, which is stored as empty rather than as a reason called "NA".
+    """
+
+    http_status: int | None = None
+    code: str = ""
+    reason: str = ""
+    field: str = ""
+    description: str = ""
 
 
 class PayoutProviderError(RuntimeError):
@@ -35,7 +67,15 @@ class PayoutProviderAmbiguousError(PayoutProviderError):
 
 
 class PayoutProviderRejectedError(PayoutProviderError):
-    """The provider explicitly refused. No money moved, so a retry is safe."""
+    """The provider explicitly refused. No money moved, so a retry is safe.
+
+    `detail` carries the provider's reason, so a refused payout says *why* rather than only that
+    it was refused.
+    """
+
+    def __init__(self, message: str, *, detail: ProviderErrorDetail | None = None) -> None:
+        super().__init__(message)
+        self.detail = detail or ProviderErrorDetail()
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +87,13 @@ class ProviderPayout:
     #: adapter that interpreted status would be a second place the state machine lives.
     status: str
     failure_reason: str = ""
+    #: Tracking data, recorded but never decided on. RazorpayX fills fees and tax only once a
+    #: payout reaches `processing`, and the UTR once the bank has it.
+    utr: str = ""
+    mode: str = ""
+    fees_paise: int | None = None
+    tax_paise: int | None = None
+    status_reason: str = ""
 
 
 class PayoutAccountProvider(Protocol):
@@ -76,9 +123,14 @@ class PayoutProvider(Protocol):
         currency: str,
         reference: str,
         idempotency_key: str,
+        batch_reference: str,
     ) -> ProviderPayout: ...
 
     def fetch_payout(self, *, provider_payout_id: str) -> ProviderPayout: ...
+
+    def find_payout_by_reference(self, *, reference: str) -> ProviderPayout | None:
+        """The payout created with this `reference_id`, or None if the provider has none."""
+        ...
 
     def verify_webhook(self, *, body: bytes, signature: str) -> bool: ...
 
@@ -86,8 +138,8 @@ class PayoutProvider(Protocol):
 class FakePayoutProvider:
     """Deterministic, and deliberately able to produce every outcome the real one can.
 
-    A fake that only ever succeeds tests one branch of a three-branch state machine. The
-    reference prefix selects the outcome so a test can ask for an ambiguous or rejected payout
+    A fake that only ever succeeds tests one branch of a three-branch state machine. The batch
+    reference's prefix selects the outcome so a test can ask for an ambiguous or rejected payout
     without patching anything.
     """
 
@@ -99,18 +151,21 @@ class FakePayoutProvider:
         fund_account_id: str,  # noqa: ARG002 - the fake has no account to pay into
         amount_paise: int,
         currency: str,
-        reference: str,
+        reference: str,  # noqa: ARG002 - the fake keeps no record to reconcile against
         idempotency_key: str,
+        batch_reference: str,
     ) -> ProviderPayout:
-        if reference.startswith("ambiguous"):
+        if batch_reference.startswith("ambiguous"):
             raise PayoutProviderAmbiguousError("The fake provider returned no conclusive answer.")
-        if reference.startswith("reject"):
+        if batch_reference.startswith("reject"):
             raise PayoutProviderRejectedError("The fake provider rejected this payout.")
+        # `processing`, as RazorpayX answers a new payout: the outcome comes later, by webhook or
+        # by `fetch_payout`, never in the create response.
         return ProviderPayout(
             provider_payout_id=f"fake_payout_{idempotency_key}",
             amount_paise=amount_paise,
             currency=currency,
-            status="processed",
+            status="processing",
         )
 
     def fetch_payout(self, *, provider_payout_id: str) -> ProviderPayout:
@@ -120,6 +175,10 @@ class FakePayoutProvider:
             currency="INR",
             status="processed",
         )
+
+    def find_payout_by_reference(self, *, reference: str) -> ProviderPayout | None:  # noqa: ARG002
+        # The fake keeps no record, so it has never received anything a lookup could find.
+        return None
 
     def verify_webhook(self, *, body: bytes, signature: str) -> bool:  # noqa: ARG002
         # No signing key to check against; the fixed token is what a test asserts with.
@@ -167,6 +226,7 @@ class RazorpayXPayoutProvider:
         *,
         payload: dict[str, object] | None = None,
         headers: dict[str, str] | None = None,
+        params: dict[str, str] | None = None,
     ) -> dict[str, object]:
         try:
             response = requests.request(
@@ -175,18 +235,43 @@ class RazorpayXPayoutProvider:
                 auth=self._auth,
                 json=cast(Any, payload),
                 headers=headers,
+                params=params,
                 timeout=self._timeout,
             )
         except (requests.Timeout, requests.ConnectionError) as exc:
             # The request may have been received. Anything other than "we do not know" here
             # would be a guess about whether money left.
+            logger.warning(
+                "RazorpayX did not answer %s %s",
+                method,
+                path,
+                extra={"error_type": type(exc).__name__},
+            )
             raise PayoutProviderAmbiguousError(
                 "RazorpayX did not return a conclusive response."
             ) from exc
-        if response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
-            raise PayoutProviderAmbiguousError("RazorpayX returned a temporary server error.")
         if response.status_code >= HTTPStatus.BAD_REQUEST:
-            raise PayoutProviderRejectedError("RazorpayX rejected the payout command.")
+            detail = _error_detail(response)
+            # Never the request body: it can carry a full bank account number. RazorpayX's error
+            # fields name the problem without echoing the input.
+            logger.warning(
+                "RazorpayX refused %s %s",
+                method,
+                path,
+                extra={
+                    "http_status": detail.http_status,
+                    "provider_error_code": detail.code,
+                    "provider_error_reason": detail.reason,
+                    "provider_error_field": detail.field,
+                    "provider_error_description": detail.description,
+                },
+            )
+            if response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+                raise PayoutProviderAmbiguousError("RazorpayX returned a temporary server error.")
+            said = detail.description or detail.code or "no reason given"
+            raise PayoutProviderRejectedError(
+                f"RazorpayX rejected the request: {said}", detail=detail
+            )
         try:
             data = response.json()
         except requests.JSONDecodeError as exc:
@@ -196,7 +281,7 @@ class RazorpayXPayoutProvider:
         return cast(dict[str, object], data)
 
     @staticmethod
-    def _payout(data: dict[str, object]) -> ProviderPayout:
+    def parse_payout(data: dict[str, object]) -> ProviderPayout:
         identifier = data.get("id")
         amount = data.get("amount")
         if (
@@ -205,12 +290,21 @@ class RazorpayXPayoutProvider:
             or not isinstance(amount, int)
         ):
             raise PayoutProviderAmbiguousError("RazorpayX omitted a payout identifier or amount.")
+        raw_details = data.get("status_details")
+        details: dict[str, object] = (
+            cast(dict[str, object], raw_details) if isinstance(raw_details, dict) else {}
+        )
         return ProviderPayout(
             provider_payout_id=identifier,
             amount_paise=amount,
             currency=str(data.get("currency", "INR")),
             status=str(data.get("status", "")),
-            failure_reason=str(data.get("failure_reason") or ""),
+            failure_reason=str(data.get("failure_reason") or details.get("reason") or ""),
+            utr=_text(data.get("utr"), 64),
+            mode=_text(data.get("mode"), 8),
+            fees_paise=_paise(data.get("fees")),
+            tax_paise=_paise(data.get("tax")),
+            status_reason=_text(details.get("description"), _DETAIL_MAX_LENGTH),
         )
 
     def create_payout(
@@ -221,7 +315,9 @@ class RazorpayXPayoutProvider:
         currency: str,
         reference: str,
         idempotency_key: str,
+        batch_reference: str,
     ) -> ProviderPayout:
+        _check_payout_limits(reference=reference, idempotency_key=idempotency_key)
         data = self._request(
             "POST",
             "/payouts",
@@ -234,13 +330,37 @@ class RazorpayXPayoutProvider:
                 "purpose": "payout",
                 "queue_if_low_balance": True,
                 "reference_id": reference,
+                "narration": PAYOUT_NARRATION,
+                # The run this payout belongs to, for the RazorpayX dashboard. It used to ride in
+                # `reference_id`, which RazorpayX caps at 40 characters.
+                "notes": {"batch_reference": batch_reference},
             },
             headers={"X-Payout-Idempotency": idempotency_key},
         )
-        return self._payout(data)
+        return self.parse_payout(data)
 
     def fetch_payout(self, *, provider_payout_id: str) -> ProviderPayout:
-        return self._payout(self._request("GET", f"/payouts/{provider_payout_id}"))
+        return self.parse_payout(self._request("GET", f"/payouts/{provider_payout_id}"))
+
+    def find_payout_by_reference(self, *, reference: str) -> ProviderPayout | None:
+        """RazorpayX's Fetch All Payouts filtered by our `reference_id`.
+
+        How an ambiguous submission is settled without sending it again: if RazorpayX received
+        it, a payout with this reference exists and says what happened to it.
+        """
+
+        data = self._request(
+            "GET",
+            "/payouts",
+            params={"account_number": self._account_number, "reference_id": reference},
+        )
+        items = data.get("items")
+        if not isinstance(items, list):
+            raise PayoutProviderAmbiguousError("RazorpayX returned an invalid payout list.")
+        for candidate in items:
+            if isinstance(candidate, dict) and candidate.get("reference_id") == reference:
+                return self.parse_payout(cast(dict[str, object], candidate))
+        return None
 
     def verify_webhook(self, *, body: bytes, signature: str) -> bool:
         return verify_razorpayx_signature(body=body, signature=signature)
@@ -278,6 +398,60 @@ class RazorpayXPayoutProvider:
             },
         )
         return self._identifier(data, "fund account")
+
+
+def _check_payout_limits(*, reference: str, idempotency_key: str) -> None:
+    """Refuse locally what RazorpayX would refuse anyway, so nothing is sent.
+
+    A rejection here moves no money, exactly like a provider 400, so it takes the same path: the
+    item fails and its ledger entry goes back to the pool for a later batch.
+    """
+
+    if not _IDEMPOTENCY_KEY.match(idempotency_key):
+        raise PayoutProviderRejectedError(
+            "The payout idempotency key is outside RazorpayX's limits.",
+            detail=ProviderErrorDetail(reason="idempotency_key_invalid"),
+        )
+    if not reference or len(reference) > REFERENCE_ID_MAX_LENGTH:
+        raise PayoutProviderRejectedError(
+            "The payout reference is outside RazorpayX's limits.",
+            detail=ProviderErrorDetail(reason="reference_id_invalid"),
+        )
+
+
+def _text(value: object, limit: int) -> str:
+    return value.strip()[:limit] if isinstance(value, str) else ""
+
+
+def _paise(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _error_text(error: dict[str, object], key: str) -> str:
+    value = error.get(key)
+    if not isinstance(value, str) or value.strip().upper() in ("", "NA"):
+        return ""
+    return value.strip()[:_DETAIL_MAX_LENGTH]
+
+
+def _error_detail(response: requests.Response) -> ProviderErrorDetail:
+    """RazorpayX's `{"error": {"code", "description", "reason", "field", ...}}`, if it sent one."""
+
+    try:
+        data = response.json()
+    except (requests.JSONDecodeError, ValueError):
+        return ProviderErrorDetail(http_status=response.status_code)
+    error = data.get("error") if isinstance(data, dict) else None
+    if not isinstance(error, dict):
+        return ProviderErrorDetail(http_status=response.status_code)
+    error = cast(dict[str, object], error)
+    return ProviderErrorDetail(
+        http_status=response.status_code,
+        code=_error_text(error, "code"),
+        reason=_error_text(error, "reason"),
+        field=_error_text(error, "field"),
+        description=_error_text(error, "description"),
+    )
 
 
 def verify_razorpayx_signature(*, body: bytes, signature: str) -> bool:

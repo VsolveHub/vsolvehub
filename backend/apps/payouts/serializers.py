@@ -27,6 +27,7 @@ from apps.payouts.models import (
     PayoutBatch,
     PayoutBatchItem,
 )
+from apps.payouts.services import WITHDRAWAL_REFUSAL_REASONS, WITHDRAWAL_REVIEW_REASONS
 
 
 class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntry]):
@@ -40,6 +41,20 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
 
     booking_id = serializers.UUIDField(read_only=True, allow_null=True)
     corrects_id = serializers.UUIDField(read_only=True, allow_null=True)
+    clears_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "Not payable before this instant: the end of the Customer's dispute window. Null "
+            "when the line counts at once (corrections, refunds)."
+        ),
+    )
+    is_on_hold = serializers.SerializerMethodField(
+        help_text=(
+            "A dispute or case on this line's booking is freezing it. Held money is not paid "
+            "until the hold is lifted."
+        )
+    )
 
     class Meta:
         model = PartnerLedgerEntry
@@ -55,9 +70,20 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
             "calculation_snapshot",
             "corrects_id",
             "reason",
+            "clears_at",
+            "is_on_hold",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_is_on_hold(self, instance: PartnerLedgerEntry) -> bool:
+        # Annotated by the views that list lines (`selectors.with_hold_flags`); a line created a
+        # moment ago and serialised directly has had no chance to be held.
+        return bool(
+            getattr(instance, "booking_on_hold", False)
+            or getattr(instance, "rental_on_hold", False)
+            or getattr(instance, "entry_on_hold", False)
+        )
 
 
 class PartnerBalanceSerializer(serializers.Serializer[dict[str, Any]]):
@@ -68,9 +94,27 @@ class PartnerBalanceSerializer(serializers.Serializer[dict[str, Any]]):
     which part of it is actually coming.
     """
 
-    pending_paise = serializers.IntegerField()
-    available_paise = serializers.IntegerField()
-    reserved_paise = serializers.IntegerField()
+    pending_paise = serializers.IntegerField(
+        help_text="Earned but not yet payable: `held_paise` plus `clearing_paise`."
+    )
+    available_paise = serializers.IntegerField(
+        help_text=(
+            "Payable now: cleared, not on hold, refunds already subtracted. Negative when refunds "
+            "exceed what has cleared; that much comes off the next earnings."
+        )
+    )
+    clearing_paise = serializers.IntegerField(
+        help_text="Earned, waiting out the Customer's dispute window before it can be paid."
+    )
+    held_paise = serializers.IntegerField(
+        help_text="Frozen by a dispute or an Operations case until it is decided."
+    )
+    withdrawable_paise = serializers.IntegerField(
+        help_text="What one payout could send right now: `available_paise`, never below zero."
+    )
+    reserved_paise = serializers.IntegerField(
+        help_text="In a payout that has been reserved or sent and has not yet settled."
+    )
     paid_paise = serializers.IntegerField()
     currency = serializers.CharField()
     server_now = serializers.DateTimeField()
@@ -113,13 +157,33 @@ class PartnerPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayoutAc
 _IFSC = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
 #: Indian bank account numbers run from 9 to 18 digits.
 _ACCOUNT_NUMBER = re.compile(r"^\d{9,18}$")
+#: The holder name becomes the RazorpayX contact name, the stricter of the two places it goes (a
+#: fund account allows 120 characters): 3 to 50 characters of letters, digits, space, the right
+#: single quote (U+2019) and - _ / ( ) . -- ending in a letter, digit or full stop. Anything else
+#: is a 400 from RazorpayX, which the Partner would only see as "details not accepted".
+HOLDER_NAME_MIN_LENGTH = 3
+HOLDER_NAME_MAX_LENGTH = 50
+_HOLDER_NAME = re.compile(r"^[A-Za-z0-9 \u2019\-_/().]*[A-Za-z0-9.]$")
+#: Phone keyboards type a straight quote or a left quote (U+2018); RazorpayX accepts only the
+#: right one, so both are stored as U+2019.
+_APOSTROPHES = str.maketrans({"'": "\u2019", "\u2018": "\u2019"})
+_ALLOWED_NAME_MARKS = "\u2019 - _ / ( ) ."
 
 
 class PartnerPayoutAccountCreateSerializer(serializers.Serializer[dict[str, str]]):
     """Bank details as the Partner types them. The full number is write-only: it is passed to the
     payout provider and never echoed, stored or logged."""
 
-    holder_name = serializers.CharField(min_length=2, max_length=140, trim_whitespace=True)
+    holder_name = serializers.CharField(
+        min_length=HOLDER_NAME_MIN_LENGTH,
+        max_length=HOLDER_NAME_MAX_LENGTH,
+        trim_whitespace=True,
+        help_text=(
+            "As on the bank account. 3 to 50 characters: letters, numbers, spaces and "
+            f"{_ALLOWED_NAME_MARKS}, ending in a letter, number or full stop. A straight "
+            "apostrophe is stored as \u2019."
+        ),
+    )
     account_number = serializers.CharField(write_only=True, max_length=40)
     confirm_account_number = serializers.CharField(write_only=True, max_length=40)
     ifsc = serializers.CharField(max_length=16)
@@ -127,6 +191,17 @@ class PartnerPayoutAccountCreateSerializer(serializers.Serializer[dict[str, str]
     @staticmethod
     def _digits(value: str) -> str:
         return re.sub(r"[\s-]", "", value)
+
+    def validate_holder_name(self, value: str) -> str:
+        name = " ".join(value.translate(_APOSTROPHES).split())
+        if len(name) < HOLDER_NAME_MIN_LENGTH:
+            raise serializers.ValidationError("Enter the name as it appears on the bank account.")
+        if not _HOLDER_NAME.match(name):
+            raise serializers.ValidationError(
+                f"Use only letters, numbers, spaces and {_ALLOWED_NAME_MARKS} in the name, and "
+                "end it with a letter, number or full stop."
+            )
+        return name
 
     def validate_account_number(self, value: str) -> str:
         digits = self._digits(value)
@@ -201,24 +276,38 @@ class PayoutWebhookAcceptedSerializer(serializers.Serializer[dict[str, object]])
 
 
 class PayoutBatchItemSerializer(serializers.ModelSerializer[PayoutBatchItem]):
+    """One transfer to one Partner: the sum of its ledger lines, refunds included."""
+
     partner_id = serializers.UUIDField(read_only=True)
-    ledger_entry_id = serializers.UUIDField(read_only=True)
+    entry_count = serializers.SerializerMethodField(
+        help_text="How many ledger lines this transfer covers, refunds included."
+    )
 
     class Meta:
         model = PayoutBatchItem
         fields = (
             "id",
             "partner_id",
-            "ledger_entry_id",
             "status",
             "amount_paise",
             "currency",
+            "entry_count",
             "provider_payout_id",
+            "provider_status",
+            "utr",
+            "mode",
+            "fees_paise",
+            "tax_paise",
+            "status_reason",
             "failure_code",
             "submitted_at",
             "completed_at",
         )
         read_only_fields = fields
+
+    def get_entry_count(self, instance: PayoutBatchItem) -> int:
+        # `len(...all())` rather than `.count()`, so a prefetched batch costs no query per item.
+        return len(instance.entries.all())
 
 
 class PayoutBatchSerializer(serializers.ModelSerializer[PayoutBatch]):
@@ -241,6 +330,8 @@ class PayoutBatchSerializer(serializers.ModelSerializer[PayoutBatch]):
         fields = (
             "id",
             "reference",
+            "kind",
+            "approval_basis",
             "status",
             "period_start",
             "period_end",
@@ -285,6 +376,7 @@ class PayoutBatchListSerializer(serializers.ModelSerializer[PayoutBatch]):
         fields = (
             "id",
             "reference",
+            "kind",
             "status",
             "period_start",
             "period_end",
@@ -373,3 +465,277 @@ class PartnerPerformanceSerializer(serializers.Serializer[dict[str, object]]):
     daily = PartnerDailyPerformanceSerializer(many=True)
     currency = serializers.CharField()
     server_now = serializers.DateTimeField()
+
+
+# --------------------------------------------------------------------------------------------
+# Withdrawals
+# --------------------------------------------------------------------------------------------
+
+#: The four states a Partner follows a withdrawal through. Coarser than the transfer's own
+#: status on purpose: "under review with the provider" and "submitted" are the same thing to
+#: someone waiting for money — it has been sent and is on its way.
+WITHDRAWAL_REQUESTED = "REQUESTED"
+WITHDRAWAL_SENT = "SENT"
+WITHDRAWAL_PAID = "PAID"
+WITHDRAWAL_FAILED = "FAILED"
+WITHDRAWAL_STATUSES = (
+    WITHDRAWAL_REQUESTED,
+    WITHDRAWAL_SENT,
+    WITHDRAWAL_PAID,
+    WITHDRAWAL_FAILED,
+)
+_SENT_ITEM_STATUSES = (PayoutBatchItem.Status.SUBMITTED, PayoutBatchItem.Status.UNDER_REVIEW)
+_FAILED_ITEM_STATUSES = (
+    PayoutBatchItem.Status.FAILED,
+    PayoutBatchItem.Status.RELEASED,
+    PayoutBatchItem.Status.REVERSED,
+)
+_BALANCE_RESTORED = "The money is back in your balance."
+
+
+def withdrawal_status(item: PayoutBatchItem) -> str:
+    if item.status == PayoutBatchItem.Status.PAID:
+        return WITHDRAWAL_PAID
+    if item.status in _FAILED_ITEM_STATUSES:
+        return WITHDRAWAL_FAILED
+    if item.status in _SENT_ITEM_STATUSES:
+        return WITHDRAWAL_SENT
+    return WITHDRAWAL_REQUESTED
+
+
+def withdrawal_fee_paise(item: PayoutBatchItem) -> int:
+    """The fee carried as a line of this transfer; 0 for a free withdrawal."""
+
+    return -sum(
+        line.amount_paise
+        for line in item.entries.all()
+        if line.ledger_entry.kind == PartnerLedgerEntry.Kind.FEE
+    )
+
+
+def _withdrawal_failure_message(item: PayoutBatchItem) -> str | None:
+    if withdrawal_status(item) != WITHDRAWAL_FAILED:
+        return None
+    if item.failure_code == "declined_by_operations":
+        note = item.batch.review_note or "Our team could not approve this withdrawal."
+        return f"{note} {_BALANCE_RESTORED}"
+    if item.status == PayoutBatchItem.Status.REVERSED:
+        return f"Your bank sent this payment back. {_BALANCE_RESTORED}"
+    if item.status == PayoutBatchItem.Status.RELEASED:
+        return f"This withdrawal was stopped before it was sent. {_BALANCE_RESTORED}"
+    return (
+        f"The bank did not accept this payment. {_BALANCE_RESTORED} If it happens again, check "
+        "your bank details."
+    )
+
+
+class PartnerWithdrawalSerializer(serializers.ModelSerializer[PayoutBatchItem]):
+    """One withdrawal as the Partner follows it: Requested, Sent, Paid — or Failed, with the
+    money back in their balance.
+
+    `balance_paise` is what left the balance, `amount_paise` what the bank receives, and the
+    difference is `fee_paise`. No batch id: it names machinery the Partner cannot act on.
+    """
+
+    status = serializers.SerializerMethodField()
+    is_awaiting_review = serializers.SerializerMethodField(
+        help_text="Waiting for our team to check it before it is sent: the first payout to a "
+        "new bank account, or a balance above the withdrawal maximum."
+    )
+    balance_paise = serializers.SerializerMethodField(
+        help_text="Taken from the available balance: the amount sent plus any fee."
+    )
+    fee_paise = serializers.SerializerMethodField()
+    account_last4 = serializers.CharField(source="payout_account.account_last4", read_only=True)
+    failure_message = serializers.SerializerMethodField()
+    requested_at = serializers.DateTimeField(source="created_at", read_only=True)
+    sent_at = serializers.DateTimeField(source="submitted_at", read_only=True, allow_null=True)
+
+    class Meta:
+        model = PayoutBatchItem
+        fields = (
+            "id",
+            "status",
+            "is_awaiting_review",
+            "balance_paise",
+            "fee_paise",
+            "amount_paise",
+            "currency",
+            "account_last4",
+            "utr",
+            "failure_message",
+            "requested_at",
+            "sent_at",
+            "completed_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.ChoiceField(choices=WITHDRAWAL_STATUSES))
+    def get_status(self, instance: PayoutBatchItem) -> str:
+        return withdrawal_status(instance)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_awaiting_review(self, instance: PayoutBatchItem) -> bool:
+        return instance.batch.status == PayoutBatch.Status.PENDING_APPROVAL
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_balance_paise(self, instance: PayoutBatchItem) -> int:
+        return instance.amount_paise + withdrawal_fee_paise(instance)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_fee_paise(self, instance: PayoutBatchItem) -> int:
+        return withdrawal_fee_paise(instance)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_failure_message(self, instance: PayoutBatchItem) -> str | None:
+        return _withdrawal_failure_message(instance)
+
+
+class PartnerWithdrawalPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = PartnerWithdrawalSerializer(many=True)
+
+
+class PartnerWithdrawalPreviewSerializer(serializers.Serializer[dict[str, Any]]):
+    """What tapping Withdraw would do right now, decided by the rules the request applies.
+
+    The Partner app renders the button from this, so it never offers a withdrawal the request
+    would refuse, and never refuses without saying why.
+    """
+
+    is_enabled = serializers.BooleanField(
+        help_text="Whether withdrawals are open at all. When false, show no Withdraw button."
+    )
+    can_withdraw = serializers.BooleanField()
+    refusal_reason = serializers.ChoiceField(
+        choices=WITHDRAWAL_REFUSAL_REASONS, allow_null=True, required=False
+    )
+    refusal_message = serializers.CharField(allow_null=True, required=False)
+    amount_paise = serializers.IntegerField(
+        help_text="The whole available balance a withdrawal takes. Full balance only."
+    )
+    fee_paise = serializers.IntegerField(help_text="0 for the week's free withdrawal.")
+    send_paise = serializers.IntegerField(help_text="What reaches the bank: amount less fee.")
+    needs_review = serializers.BooleanField(
+        help_text="It would wait for our team to check it before it is sent."
+    )
+    review_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=WITHDRAWAL_REVIEW_REASONS)
+    )
+    minimum_paise = serializers.IntegerField()
+    maximum_paise = serializers.IntegerField(
+        help_text="A balance above this still withdraws in full, after our team checks it."
+    )
+    withdrawals_left_today = serializers.IntegerField()
+    free_withdrawals_left_this_week = serializers.IntegerField()
+    account_last4 = serializers.CharField(allow_null=True, required=False)
+    account_payable_from = serializers.DateTimeField(
+        allow_null=True,
+        required=False,
+        help_text="When a new bank account's waiting period ends. Null once it has.",
+    )
+    currency = serializers.CharField()
+    server_now = serializers.DateTimeField()
+
+
+class OperationsWithdrawalTransferSerializer(serializers.ModelSerializer[PayoutBatchItem]):
+    """The one transfer inside a withdrawal, with what a reviewer checks it against."""
+
+    partner_id = serializers.UUIDField(read_only=True)
+    partner_display_name = serializers.CharField(source="partner.display_name", read_only=True)
+    partner_phone_number = serializers.CharField(source="partner.user.phone_number", read_only=True)
+    account_last4 = serializers.CharField(source="payout_account.account_last4", read_only=True)
+    account_ifsc = serializers.CharField(source="payout_account.ifsc", read_only=True)
+    account_holder_name = serializers.CharField(source="payout_account.holder_name", read_only=True)
+    account_verified_at = serializers.DateTimeField(
+        source="payout_account.verified_at", read_only=True, allow_null=True
+    )
+    account_added_at = serializers.DateTimeField(source="payout_account.created_at", read_only=True)
+    balance_paise = serializers.SerializerMethodField()
+    fee_paise = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PayoutBatchItem
+        fields = (
+            "id",
+            "status",
+            "partner_id",
+            "partner_display_name",
+            "partner_phone_number",
+            "account_last4",
+            "account_ifsc",
+            "account_holder_name",
+            "account_verified_at",
+            "account_added_at",
+            "balance_paise",
+            "fee_paise",
+            "amount_paise",
+            "currency",
+            "utr",
+            "failure_code",
+            "submitted_at",
+            "completed_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_balance_paise(self, instance: PayoutBatchItem) -> int:
+        return instance.amount_paise + withdrawal_fee_paise(instance)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_fee_paise(self, instance: PayoutBatchItem) -> int:
+        return withdrawal_fee_paise(instance)
+
+
+class OperationsWithdrawalSerializer(serializers.ModelSerializer[PayoutBatch]):
+    """A Partner withdrawal in the Operations queue. `review_reasons` says why it is there."""
+
+    review_reasons = serializers.ListField(
+        child=serializers.ChoiceField(choices=WITHDRAWAL_REVIEW_REASONS), read_only=True
+    )
+    proposed_by_id = serializers.UUIDField(read_only=True)
+    approved_by_id = serializers.UUIDField(read_only=True, allow_null=True)
+    cancelled_by_id = serializers.UUIDField(read_only=True, allow_null=True)
+    transfer = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PayoutBatch
+        fields = (
+            "id",
+            "reference",
+            "status",
+            "version",
+            "review_reasons",
+            "review_note",
+            "approval_basis",
+            "proposed_by_id",
+            "approved_by_id",
+            "approved_at",
+            "cancelled_by_id",
+            "cancelled_at",
+            "transfer",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(OperationsWithdrawalTransferSerializer(allow_null=True))
+    def get_transfer(self, instance: PayoutBatch) -> Any:
+        items = list(instance.items.all())
+        return OperationsWithdrawalTransferSerializer(items[0]).data if items else None
+
+
+class OperationsWithdrawalPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = OperationsWithdrawalSerializer(many=True)
+
+
+class DeclineWithdrawalRequestSerializer(serializers.Serializer[dict[str, Any]]):
+    expected_version = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(
+        min_length=3,
+        max_length=240,
+        trim_whitespace=True,
+        help_text="Shown to the Partner. Say what they can do next.",
+    )

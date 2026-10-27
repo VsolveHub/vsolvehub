@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.82.0)
- * Checksum: e1169bf67e619670
+ * Source:   contracts/openapi/v1.yaml (version 1.85.0)
+ * Checksum: c4840af02feeb8bf
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4176,6 +4176,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/withdrawals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Partner withdrawals. Defaults to the queue: the ones the rules sent to a person. */
+        get: operations["operations_withdrawals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/withdrawals/{batch_id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Lets a queued withdrawal through and queues it to send. Step-up: money leaves on it. */
+        post: operations["operations_withdrawal_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/withdrawals/{batch_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description No step-up, like cancelling a run: declining only puts the money back in the balance. */
+        post: operations["operations_withdrawal_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/work-items/": {
         parameters: {
             query?: never;
@@ -5596,9 +5647,8 @@ export interface paths {
          * @description What the Partner is owed, split by state.
          *
          *     One number would be a lie: money held behind an open quality case is not money you can plan
-         *     around. `05-pricing-payments-and-settlement.md` also rules out on-demand withdrawal in M1, so
-         *     this deliberately publishes no "withdraw" affordance — payouts run as a reviewed batch, and a
-         *     button that implied otherwise would be promising something the platform does not do.
+         *     around. Whether that money can be withdrawn right now is a separate question with its own
+         *     rules, answered by `/partner/withdrawals/preview/` rather than guessed from these numbers.
          */
         get: operations["partner_earnings_retrieve"];
         put?: never;
@@ -6956,6 +7006,60 @@ export interface paths {
         put?: never;
         /** @description ``accept`` or ``decline`` (with an optional reason) a visit request. */
         post: operations["partner_stays_visit_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/withdrawals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The Partner's own withdrawals, newest first, and the Withdraw tap itself.
+         *
+         *     The tap takes no body: the amount is always the whole available balance, decided on the
+         *     server from the locked ledger, so there is nothing for a client to get wrong. It needs an
+         *     `Idempotency-Key`, so a retried tap replays the first answer instead of withdrawing twice,
+         *     and it is rate-limited on top of the daily limit, which is the real rule.
+         */
+        get: operations["partner_withdrawals_list"];
+        put?: never;
+        /**
+         * @description The Partner's own withdrawals, newest first, and the Withdraw tap itself.
+         *
+         *     The tap takes no body: the amount is always the whole available balance, decided on the
+         *     server from the locked ledger, so there is nothing for a client to get wrong. It needs an
+         *     `Idempotency-Key`, so a retried tap replays the first answer instead of withdrawing twice,
+         *     and it is rate-limited on top of the daily limit, which is the real rule.
+         */
+        post: operations["partner_withdrawal_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/withdrawals/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What tapping Withdraw would do right now: allowed or why not, how much, any fee.
+         *
+         *     Built by the same function the request runs (`quote_withdrawal`), so the button the app
+         *     draws from this can never promise what the request then refuses.
+         */
+        get: operations["partner_withdrawal_preview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10609,6 +10713,11 @@ export interface components {
             /** @default  */
             note: string;
         };
+        DeclineWithdrawalRequestRequest: {
+            expected_version: number;
+            /** @description Shown to the Partner. Say what they can do next. */
+            reason: string;
+        };
         /** @description Raise a delay claim. Deliberately carries no amount — see `ProjectDelayClaimSerializer`. */
         DelayClaimCreateRequest: {
             reason_code: string;
@@ -11765,9 +11874,10 @@ export interface components {
          * @description * `EARNING` - Earning
          *     * `ADJUSTMENT` - Adjustment
          *     * `REVERSAL` - Reversal
+         *     * `FEE` - Fee
          * @enum {string}
          */
-        LedgerEntryKindEnum: "EARNING" | "ADJUSTMENT" | "REVERSAL";
+        LedgerEntryKindEnum: "EARNING" | "ADJUSTMENT" | "REVERSAL" | "FEE";
         /**
          * @description * `PENDING` - Pending
          *     * `AVAILABLE` - Available
@@ -12590,6 +12700,64 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        /** @description A Partner withdrawal in the Operations queue. `review_reasons` says why it is there. */
+        OperationsWithdrawal: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly reference: string;
+            readonly status: components["schemas"]["PayoutBatchStatusEnum"];
+            readonly version: number;
+            readonly review_reasons: components["schemas"]["WithdrawalReviewReasonEnum"][];
+            readonly review_note: string;
+            readonly approval_basis: components["schemas"]["PayoutBatchApprovalBasisEnum"];
+            /** Format: uuid */
+            readonly proposed_by_id: string;
+            /** Format: uuid */
+            readonly approved_by_id: string | null;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: uuid */
+            readonly cancelled_by_id: string | null;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
+            readonly transfer: components["schemas"]["OperationsWithdrawalTransfer"] | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        OperationsWithdrawalPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsWithdrawal"][];
+        };
+        /** @description The one transfer inside a withdrawal, with what a reviewer checks it against. */
+        OperationsWithdrawalTransfer: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["PayoutBatchItemStatusEnum"];
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly partner_display_name: string;
+            readonly partner_phone_number: string;
+            readonly account_last4: string;
+            readonly account_ifsc: string;
+            readonly account_holder_name: string;
+            /** Format: date-time */
+            readonly account_verified_at: string | null;
+            /** Format: date-time */
+            readonly account_added_at: string;
+            readonly balance_paise: number;
+            readonly fee_paise: number;
+            readonly amount_paise: number;
+            readonly currency: string;
+            readonly utr: string;
+            readonly failure_code: string;
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+        };
         OpsCancelStayReservationRequest: {
             /** @default  */
             reason: string;
@@ -13070,8 +13238,17 @@ export interface components {
          *     which part of it is actually coming.
          */
         PartnerBalance: {
+            /** @description Earned but not yet payable: `held_paise` plus `clearing_paise`. */
             pending_paise: number;
+            /** @description Payable now: cleared, not on hold, refunds already subtracted. Negative when refunds exceed what has cleared; that much comes off the next earnings. */
             available_paise: number;
+            /** @description Earned, waiting out the Customer's dispute window before it can be paid. */
+            clearing_paise: number;
+            /** @description Frozen by a dispute or an Operations case until it is decided. */
+            held_paise: number;
+            /** @description What one payout could send right now: `available_paise`, never below zero. */
+            withdrawable_paise: number;
+            /** @description In a payout that has been reserved or sent and has not yet settled. */
             reserved_paise: number;
             paid_paise: number;
             currency: string;
@@ -13460,6 +13637,13 @@ export interface components {
             /** Format: uuid */
             readonly corrects_id: string | null;
             readonly reason: string;
+            /**
+             * Format: date-time
+             * @description Not payable before this instant: the end of the Customer's dispute window. Null when the line counts at once (corrections, refunds).
+             */
+            readonly clears_at: string | null;
+            /** @description A dispute or case on this line's booking is freezing it. Held money is not paid until the hold is lifted. */
+            readonly is_on_hold: boolean;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -13594,6 +13778,7 @@ export interface components {
          *     payout provider and never echoed, stored or logged.
          */
         PartnerPayoutAccountCreateRequest: {
+            /** @description As on the bank account. 3 to 50 characters: letters, numbers, spaces and ’ - _ / ( ) ., ending in a letter, number or full stop. A straight apostrophe is stored as ’. */
             holder_name: string;
             account_number: string;
             confirm_account_number: string;
@@ -13963,6 +14148,85 @@ export interface components {
             readonly upcoming_booking_count: number;
             readonly rooms: components["schemas"]["Room"][];
         };
+        /**
+         * @description One withdrawal as the Partner follows it: Requested, Sent, Paid — or Failed, with the
+         *     money back in their balance.
+         *
+         *     `balance_paise` is what left the balance, `amount_paise` what the bank receives, and the
+         *     difference is `fee_paise`. No batch id: it names machinery the Partner cannot act on.
+         */
+        PartnerWithdrawal: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["PartnerWithdrawalStatusEnum"];
+            /** @description Waiting for our team to check it before it is sent: the first payout to a new bank account, or a balance above the withdrawal maximum. */
+            readonly is_awaiting_review: boolean;
+            /** @description Taken from the available balance: the amount sent plus any fee. */
+            readonly balance_paise: number;
+            readonly fee_paise: number;
+            readonly amount_paise: number;
+            readonly currency: string;
+            readonly account_last4: string;
+            readonly utr: string;
+            readonly failure_message: string | null;
+            /** Format: date-time */
+            readonly requested_at: string;
+            /** Format: date-time */
+            readonly sent_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+        };
+        PartnerWithdrawalPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["PartnerWithdrawal"][];
+        };
+        /**
+         * @description What tapping Withdraw would do right now, decided by the rules the request applies.
+         *
+         *     The Partner app renders the button from this, so it never offers a withdrawal the request
+         *     would refuse, and never refuses without saying why.
+         */
+        PartnerWithdrawalPreview: {
+            /** @description Whether withdrawals are open at all. When false, show no Withdraw button. */
+            is_enabled: boolean;
+            can_withdraw: boolean;
+            refusal_reason?: (components["schemas"]["WithdrawalRefusalReasonEnum"] | components["schemas"]["NullEnum"]) | null;
+            refusal_message?: string | null;
+            /** @description The whole available balance a withdrawal takes. Full balance only. */
+            amount_paise: number;
+            /** @description 0 for the week's free withdrawal. */
+            fee_paise: number;
+            /** @description What reaches the bank: amount less fee. */
+            send_paise: number;
+            /** @description It would wait for our team to check it before it is sent. */
+            needs_review: boolean;
+            review_reasons: components["schemas"]["WithdrawalReviewReasonEnum"][];
+            minimum_paise: number;
+            /** @description A balance above this still withdraws in full, after our team checks it. */
+            maximum_paise: number;
+            withdrawals_left_today: number;
+            free_withdrawals_left_this_week: number;
+            account_last4?: string | null;
+            /**
+             * Format: date-time
+             * @description When a new bank account's waiting period ends. Null once it has.
+             */
+            account_payable_from?: string | null;
+            currency: string;
+            /** Format: date-time */
+            server_now: string;
+        };
+        /**
+         * @description * `REQUESTED` - REQUESTED
+         *     * `SENT` - SENT
+         *     * `PAID` - PAID
+         *     * `FAILED` - FAILED
+         * @enum {string}
+         */
+        PartnerWithdrawalStatusEnum: "REQUESTED" | "SENT" | "PAID" | "FAILED";
         /**
          * @description A case as one of its two parties may read it.
          *
@@ -14341,6 +14605,8 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly reference: string;
+            readonly kind: components["schemas"]["PayoutBatchKindEnum"];
+            readonly approval_basis: components["schemas"]["PayoutBatchApprovalBasisEnum"];
             readonly status: components["schemas"]["PayoutBatchStatusEnum"];
             /** Format: date-time */
             readonly period_start: string;
@@ -14366,17 +14632,30 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `OPERATIONS` - Approved by Operations
+         *     * `POLICY` - Approved by withdrawal policy
+         * @enum {string}
+         */
+        PayoutBatchApprovalBasisEnum: "OPERATIONS" | "POLICY";
+        /** @description One transfer to one Partner: the sum of its ledger lines, refunds included. */
         PayoutBatchItem: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             readonly partner_id: string;
-            /** Format: uuid */
-            readonly ledger_entry_id: string;
             readonly status: components["schemas"]["PayoutBatchItemStatusEnum"];
             readonly amount_paise: number;
             readonly currency: string;
+            /** @description How many ledger lines this transfer covers, refunds included. */
+            readonly entry_count: number;
             readonly provider_payout_id: string;
+            readonly provider_status: string;
+            readonly utr: string;
+            readonly mode: string;
+            readonly fees_paise: number | null;
+            readonly tax_paise: number | null;
+            readonly status_reason: string;
             readonly failure_code: string;
             /** Format: date-time */
             readonly submitted_at: string | null;
@@ -14385,14 +14664,22 @@ export interface components {
         };
         /**
          * @description * `RESERVED` - Reserved
+         *     * `SUBMITTING` - Sending
          *     * `SUBMITTED` - Submitted
          *     * `PAID` - Paid
          *     * `FAILED` - Failed
          *     * `UNDER_REVIEW` - Under review
          *     * `RELEASED` - Released
+         *     * `REVERSED` - Reversed
          * @enum {string}
          */
-        PayoutBatchItemStatusEnum: "RESERVED" | "SUBMITTED" | "PAID" | "FAILED" | "UNDER_REVIEW" | "RELEASED";
+        PayoutBatchItemStatusEnum: "RESERVED" | "SUBMITTING" | "SUBMITTED" | "PAID" | "FAILED" | "UNDER_REVIEW" | "RELEASED" | "REVERSED";
+        /**
+         * @description * `RUN` - Payout run
+         *     * `WITHDRAWAL` - Partner withdrawal
+         * @enum {string}
+         */
+        PayoutBatchKindEnum: "RUN" | "WITHDRAWAL";
         /**
          * @description The list row. Items are omitted: a run can hold hundreds, and a list of runs is not where
          *     anybody reads them.
@@ -14401,6 +14688,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly reference: string;
+            readonly kind: components["schemas"]["PayoutBatchKindEnum"];
             readonly status: components["schemas"]["PayoutBatchStatusEnum"];
             /** Format: date-time */
             readonly period_start: string;
@@ -18776,6 +19064,27 @@ export interface components {
          * @enum {string}
          */
         WelcomeRewardStatusEnum: "PENDING" | "QUALIFIED";
+        /**
+         * @description * `withdrawals_disabled` - withdrawals_disabled
+         *     * `payouts_paused` - payouts_paused
+         *     * `partner_suspended` - partner_suspended
+         *     * `no_payout_account` - no_payout_account
+         *     * `account_under_review` - account_under_review
+         *     * `account_rejected` - account_rejected
+         *     * `account_cooling` - account_cooling
+         *     * `withdrawal_in_progress` - withdrawal_in_progress
+         *     * `daily_limit_reached` - daily_limit_reached
+         *     * `below_minimum` - below_minimum
+         *     * `extra_withdrawals_unavailable` - extra_withdrawals_unavailable
+         * @enum {string}
+         */
+        WithdrawalRefusalReasonEnum: "withdrawals_disabled" | "payouts_paused" | "partner_suspended" | "no_payout_account" | "account_under_review" | "account_rejected" | "account_cooling" | "withdrawal_in_progress" | "daily_limit_reached" | "below_minimum" | "extra_withdrawals_unavailable";
+        /**
+         * @description * `first_payout_to_account` - first_payout_to_account
+         *     * `over_maximum` - over_maximum
+         * @enum {string}
+         */
+        WithdrawalReviewReasonEnum: "first_payout_to_account" | "over_maximum";
         /**
          * @description Evidence metadata only.
          *
@@ -27213,6 +27522,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor. */
                 cursor?: string;
+                /** @description RUN or WITHDRAWAL. Omitted, both are listed. */
+                kind?: string;
                 /** @description Filter by batch status. */
                 status?: string;
             };
@@ -28393,6 +28704,170 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_withdrawals_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+                /** @description PENDING_APPROVAL (default, oldest first), PAYING, PAID, FAILED or CANCELLED (newest first). */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWithdrawalPage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_withdrawal_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedBatchCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedBatchCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedBatchCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWithdrawal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_withdrawal_decline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclineWithdrawalRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeclineWithdrawalRequestRequest"];
+                "multipart/form-data": components["schemas"]["DeclineWithdrawalRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWithdrawal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -34645,6 +35120,117 @@ export interface operations {
             };
         };
     };
+    partner_withdrawals_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWithdrawalPage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_withdrawal_request: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWithdrawal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_withdrawal_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWithdrawalPreview"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_partner_workspace_list: {
         parameters: {
             query?: never;
@@ -34860,6 +35446,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description RazorpayX's id for this event. A redelivery with an id already recorded changes nothing. */
+                "X-Razorpay-Event-Id"?: string;
                 /** @description HMAC-SHA256 of the raw body with the RazorpayX webhook secret. */
                 "X-Razorpay-Signature": string;
             };

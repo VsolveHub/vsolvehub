@@ -4,9 +4,15 @@ import { Badge, Button, Card, ErrorState, Skeleton, Spinner, formatMoney } from 
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
-import { usePartnerBalance, usePartnerLedger, usePartnerPerformance } from "../queries";
+import {
+  usePartnerBalance,
+  usePartnerLedger,
+  usePartnerPerformance,
+  type LedgerEntry,
+} from "../queries";
 import { EarningsChart, toDailyEarnings } from "./earnings-chart";
 import { PayoutAccountCard } from "./payout-account-card";
+import { WithdrawCard } from "./withdraw-card";
 
 /**
  * What the Partner has earned.
@@ -17,12 +23,15 @@ import { PayoutAccountCard } from "./payout-account-card";
  * quality case. A Partner planning their week needs to know which part is actually coming, so
  * the balance is shown split and the held part is labelled rather than folded into a total.
  *
- * ## No withdraw button, and that is the product
+ * ## Clearing is not on hold
  *
- * M1 pays through a reviewed weekly run. `05-pricing-payments-and-settlement.md` rules out
- * on-demand withdrawal until account-change cooling, fraud monitoring and reconciliation are all
- * proven, and two of those three are still open. A button here would promise something that does
- * not exist — the screen says when money moves instead.
+ * Money still inside the Customer's dispute window is waiting on time, not on a decision, so it
+ * has its own tile. Only money a dispute or a case is freezing is called "on hold".
+ *
+ * ## Withdraw comes from the server's rules
+ *
+ * `WithdrawCard` draws itself from the withdrawal preview, and draws nothing while withdrawals
+ * are switched off (contract 1.85.0).
  *
  * ## The cooling period is explained, not hidden
  *
@@ -41,10 +50,17 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning"> = 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "ON HOLD",
   AVAILABLE: "READY",
-  RESERVED: "IN NEXT RUN",
+  RESERVED: "ON THE WAY",
   PAID: "PAID",
   RELEASED: "RELEASED",
 };
+
+/** Withdrawal fee lines and their refunds read as what they are, not as "for the work". */
+function feeLabel(entry: LedgerEntry): string | null {
+  if (entry.kind === "FEE") return "Extra withdrawal fee";
+  if (entry.reason.startsWith("withdrawal_fee_refund")) return "Withdrawal fee given back";
+  return null;
+}
 
 const BALANCE_TONE = {
   info: "border-info-line bg-info-surface text-info-text",
@@ -110,7 +126,7 @@ export function EarningsPanel() {
   return (
     <div className="space-y-5">
       {/* Warning banner */}
-      {data.pending_paise > 0 ? (
+      {data.held_paise > 0 ? (
         <div className="flex gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
           <Pictogram name="later" size="sm" className="mt-0.5 shrink-0 text-warning-text" />
           <div>
@@ -118,7 +134,7 @@ export function EarningsPanel() {
               Some of your earnings are on hold
             </p>
             <p className="mt-0.5 text-sm text-warning-text/80">
-              Review the required documentation to release funds.
+              A customer dispute or a case about a job is holding it until it is decided.
             </p>
           </div>
         </div>
@@ -170,11 +186,22 @@ export function EarningsPanel() {
 
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           <BalanceTile label="Ready" amountPaise={data.available_paise} tone="info" icon="money" />
-          <BalanceTile label="Next run" amountPaise={data.reserved_paise} tone="info" icon="held" />
-          <BalanceTile label="On hold" amountPaise={data.pending_paise} tone="warning" icon="later" />
-          <BalanceTile label="Paid" amountPaise={data.paid_paise} tone="success" icon="done" />
+          <BalanceTile label="Clearing" amountPaise={data.clearing_paise} tone="info" icon="time" />
+          <BalanceTile label="On hold" amountPaise={data.held_paise} tone="warning" icon="held" />
+          <BalanceTile label="On the way" amountPaise={data.reserved_paise} tone="success" icon="go" />
         </div>
+        <p className="mt-3 text-xs leading-5 text-text-secondary">
+          {data.clearing_paise > 0
+            ? "Clearing money becomes ready once the customer’s window to raise a problem has closed. "
+            : ""}
+          Paid to you so far:{" "}
+          <span data-numeric className="font-semibold text-text">
+            {formatMoney(data.paid_paise)}
+          </span>
+        </p>
       </Card>
+
+      <WithdrawCard />
 
       <Card className="p-5">
         <h2 className="text-base font-bold text-text">How you are doing</h2>
@@ -261,22 +288,28 @@ export function EarningsPanel() {
                     <Badge tone={STATUS_TONE[entry.status] ?? "neutral"}>
                       {STATUS_LABEL[entry.status] ?? entry.status}
                     </Badge>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      <span data-numeric className="font-medium text-text">
-                        {formatMoney(entry.gross_paise)}
-                      </span>
-                      {" for the work"}
-                      {entry.commission_paise > 0 ? (
-                        <>
-                          {" less "}
-                          <span data-numeric>{formatMoney(entry.commission_paise)}</span>
-                          {" commission"}
-                        </>
-                      ) : null}
-                    </p>
-                    {entry.reason ? (
-                      <p className="mt-0.5 text-xs text-text-muted">{entry.reason}</p>
-                    ) : null}
+                    {feeLabel(entry) ? (
+                      <p className="mt-1 text-sm text-text-secondary">{feeLabel(entry)}</p>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          <span data-numeric className="font-medium text-text">
+                            {formatMoney(entry.gross_paise)}
+                          </span>
+                          {" for the work"}
+                          {entry.commission_paise > 0 ? (
+                            <>
+                              {" less "}
+                              <span data-numeric>{formatMoney(entry.commission_paise)}</span>
+                              {" commission"}
+                            </>
+                          ) : null}
+                        </p>
+                        {entry.reason ? (
+                          <p className="mt-0.5 text-xs text-text-muted">{entry.reason}</p>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                   <span data-numeric className="shrink-0 text-base font-bold text-text">
                     {formatMoney(entry.net_paise)}

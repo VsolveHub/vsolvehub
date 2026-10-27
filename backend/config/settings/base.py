@@ -5,6 +5,14 @@ from pathlib import Path
 import environ
 from corsheaders.defaults import default_headers
 
+from config.settings.guards import (
+    WITHDRAWAL_FEE_UNSET,
+    guard_payout_account_cooling,
+    guard_payout_clearing,
+    guard_payout_minimum,
+    guard_withdrawal_limits,
+)
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 env = environ.Env(
@@ -279,6 +287,8 @@ REST_FRAMEWORK = {
         "m2_quote_action": "120/hour",
         # Each submission creates a RazorpayX contact and fund account and restarts cooling.
         "payout_account": "10/hour",
+        # Withdraw taps. The daily limit is the real rule; this only stops a loop hammering it.
+        "payout_withdrawal": "20/hour",
     },
 }
 
@@ -405,7 +415,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.82.0",
+    "VERSION": "1.85.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -474,6 +484,13 @@ SPECTACULAR_SETTINGS = {
         "PayoutAccountStatusEnum": "apps.payouts.models.PartnerPayoutAccount.Status",
         "PayoutBatchStatusEnum": "apps.payouts.models.PayoutBatch.Status",
         "PayoutBatchItemStatusEnum": "apps.payouts.models.PayoutBatchItem.Status",
+        # Partner withdrawals (1.85.0). `kind`, `status` and `reason` are all reused field names,
+        # so each new choice set is named here rather than left to a positional hash.
+        "PayoutBatchKindEnum": "apps.payouts.models.PayoutBatch.Kind",
+        "PayoutBatchApprovalBasisEnum": "apps.payouts.models.PayoutBatch.ApprovalBasis",
+        "PartnerWithdrawalStatusEnum": "apps.payouts.serializers.WITHDRAWAL_STATUSES",
+        "WithdrawalRefusalReasonEnum": "apps.payouts.services.WITHDRAWAL_REFUSAL_REASONS",
+        "WithdrawalReviewReasonEnum": "apps.payouts.services.WITHDRAWAL_REVIEW_REASONS",
         "KillSwitchScopeEnum": "apps.notifications.models.KillSwitch.Scope",
         "NotificationChannelEnum": "apps.notifications.models.NotificationIntent.Channel",
         "NotificationIntentStatusEnum": "apps.notifications.models.NotificationIntent.Status",
@@ -715,9 +732,50 @@ RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
 RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
 RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
-# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded.
+# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded. The name is
+# older than test mode: RazorpayX test keys need it on too, and move only dummy money.
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
+# How long a new or changed payout account waits before money can leave through it: the
+# account-takeover control. Production refuses less than 24 hours; a test-mode run may set 0.
+PAYOUT_ACCOUNT_COOLING_HOURS = env.int("PAYOUT_ACCOUNT_COOLING_HOURS", default=24)
+guard_payout_account_cooling(PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=0)
+# How long a visit's earning waits after settlement before it can be paid: the Customer's quality
+# dispute window, so a dispute always freezes money before any of it leaves. Production refuses
+# less than that window; a test-mode run may set 0.
+PAYOUT_CLEARING_HOURS = env.int("PAYOUT_CLEARING_HOURS", default=M1_QUALITY_DISPUTE_WINDOW_HOURS)
+guard_payout_clearing(PAYOUT_CLEARING_HOURS, minimum_hours=0)
+# The smallest transfer a payout run sends. A Partner owed less carries it to the next run rather
+# than being sent a payout that costs more in fees than it pays. RazorpayX's own floor is ₹1.
+PAYOUT_MINIMUM_PAISE = env.int("PAYOUT_MINIMUM_PAISE", default=100)
+guard_payout_minimum(PAYOUT_MINIMUM_PAISE)
+# A payout whose submission got no clear answer, and that RazorpayX still has no record of this
+# long afterwards, was never received: its money goes back to the Partner's balance. Before then
+# it is only looked up, never re-sent.
+PAYOUT_AMBIGUOUS_RELEASE_HOURS = 24
+# A payout claimed for sending (`SUBMITTING`) that has not recorded an answer this long afterwards
+# is one whose process died mid-call. Reconciliation looks it up by reference, like an ambiguous
+# one, and never sends it again.
+PAYOUT_SUBMITTING_STALE_MINUTES = 10
+
+# Partner instant withdrawals (Phase 2). Off until Operations decides to open them, and then best
+# started with a low maximum. Full available balance only; one in progress at a time.
+PAYOUT_WITHDRAW_ENABLED = env.bool("PAYOUT_WITHDRAW_ENABLED", default=False)
+PAYOUT_WITHDRAWAL_MIN_PAISE = env.int("PAYOUT_WITHDRAWAL_MIN_PAISE", default=10_000)
+PAYOUT_WITHDRAWAL_MAX_PAISE = env.int("PAYOUT_WITHDRAWAL_MAX_PAISE", default=2_500_000)
+PAYOUT_WITHDRAWALS_PER_DAY = env.int("PAYOUT_WITHDRAWALS_PER_DAY", default=2)
+# VSolveHub pays for this many withdrawals a week (Monday to Sunday, India time); the Partner pays
+# PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE for each one after that. Unset (-1), extra withdrawals are
+# refused rather than charged a price nobody chose.
+PAYOUT_FREE_WITHDRAWALS_PER_WEEK = env.int("PAYOUT_FREE_WITHDRAWALS_PER_WEEK", default=1)
+PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE = env.int(
+    "PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE", default=WITHDRAWAL_FEE_UNSET
+)
+guard_withdrawal_limits(
+    minimum_paise=PAYOUT_WITHDRAWAL_MIN_PAISE,
+    maximum_paise=PAYOUT_WITHDRAWAL_MAX_PAISE,
+    fee_paise=PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE,
+)
 
 # Outbound message transport for SMS, WhatsApp and voice. MSG91 sends only when MSG91_AUTH_KEY
 # is set. An empty key refuses rather than reporting a send that never left.
@@ -975,6 +1033,13 @@ CELERY_BEAT_SCHEDULE = {
         # Pays booking coins and referral rewards once their waiting period is over.
         "task": "apps.loyalty.tasks.release_due_loyalty_rewards",
         "schedule": 60.0 * 15,
+    },
+    "resume-payout-submissions": {
+        "task": "apps.payouts.tasks.resume_payout_submissions",
+        # Five minutes. Re-queues a transfer whose send job was lost between being approved and
+        # being sent. Never re-sends: a transfer already claimed for sending is left to
+        # reconciliation, which only looks it up.
+        "schedule": 60.0 * 5,
     },
     "reconcile-payouts": {
         "task": "apps.payouts.tasks.reconcile_payouts",

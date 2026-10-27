@@ -3,7 +3,12 @@
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *
-from config.settings.guards import guard_per_host_sessions
+from config.settings.guards import (
+    PRODUCTION_MINIMUM_PAYOUT_COOLING_HOURS,
+    guard_payout_account_cooling,
+    guard_payout_clearing,
+    guard_per_host_sessions,
+)
 
 DEBUG = False
 
@@ -132,6 +137,10 @@ if PAYOUT_PROVIDER == "razorpayx":
         raise ImproperlyConfigured("RAZORPAYX_API_BASE_URL must use HTTPS.")
 if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER != "razorpayx":
     raise ImproperlyConfigured("PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx.")
+guard_payout_account_cooling(
+    PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=PRODUCTION_MINIMUM_PAYOUT_COOLING_HOURS
+)
+guard_payout_clearing(PAYOUT_CLEARING_HOURS, minimum_hours=M1_QUALITY_DISPUTE_WINDOW_HOURS)
 
 if not PAYMENT_LIVE_COLLECTIONS_APPROVED:
     raise ImproperlyConfigured(

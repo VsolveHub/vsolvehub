@@ -29,8 +29,13 @@ from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
 from apps.partners.capabilities import has_approved_application, is_approved_rental_owner
 from apps.partners.models import PartnerApplication
-from apps.payouts.models import PartnerLedgerEntry
-from apps.payouts.services import record_adjustment, release_payout_hold, settle_rental_earning
+from apps.payouts.models import PartnerEarningHold
+from apps.payouts.services import (
+    place_earning_hold,
+    record_adjustment,
+    release_payout_hold,
+    settle_rental_earning,
+)
 from apps.rental.field_options import with_suggestions
 from apps.rental.models import (
     AssetReservation,
@@ -1106,9 +1111,15 @@ def dispute_deposit(
     booking.status = RentalBooking.Status.DISPUTED
     booking.save(update_fields=("status", "updated_at"))
 
-    PartnerLedgerEntry.objects.filter(
-        rental_booking=booking, kind=PartnerLedgerEntry.Kind.EARNING
-    ).update(status=PartnerLedgerEntry.Status.PENDING)
+    # The hold freezes the owner's earning: unpaid money moves to `PENDING`, and a transfer
+    # already reserved in a run is stopped before it is sent. This used to flip the earning to
+    # `PENDING` whatever it was, a `PAID` one included, and the dispute's release then made paid
+    # money `AVAILABLE` to be paid a second time.
+    place_earning_hold(
+        reason=PartnerEarningHold.Reason.RENTAL_DEPOSIT_DISPUTE,
+        source_id=str(booking.id),
+        rental_booking_id=booking.id,
+    )
     return booking
 
 

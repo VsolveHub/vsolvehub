@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.82.0
+  version: 1.85.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -8901,6 +8901,11 @@ paths:
           type: string
         description: Opaque page cursor.
       - in: query
+        name: kind
+        schema:
+          type: string
+        description: RUN or WITHDRAWAL. Omitted, both are listed.
+      - in: query
         name: status
         schema:
           type: string
@@ -10132,6 +10137,180 @@ paths:
                 $ref: '#/components/schemas/UnpayablePartner'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/withdrawals/:
+    get:
+      operationId: operations_withdrawals_list
+      description: 'Partner withdrawals. Defaults to the queue: the ones the rules
+        sent to a person.'
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: PENDING_APPROVAL (default, oldest first), PAYING, PAID, FAILED
+          or CANCELLED (newest first).
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsWithdrawalPage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/withdrawals/{batch_id}/approve/:
+    post:
+      operationId: operations_withdrawal_approve
+      description: 'Lets a queued withdrawal through and queues it to send. Step-up:
+        money leaves on it.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsWithdrawal'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/withdrawals/{batch_id}/decline/:
+    post:
+      operationId: operations_withdrawal_decline
+      description: 'No step-up, like cancelling a run: declining only puts the money
+        back in the balance.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclineWithdrawalRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeclineWithdrawalRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeclineWithdrawalRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsWithdrawal'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -13802,9 +13981,8 @@ paths:
         What the Partner is owed, split by state.
 
         One number would be a lie: money held behind an open quality case is not money you can plan
-        around. `05-pricing-payments-and-settlement.md` also rules out on-demand withdrawal in M1, so
-        this deliberately publishes no "withdraw" affordance — payouts run as a reviewed batch, and a
-        button that implied otherwise would be promising something the platform does not do.
+        around. Whether that money can be withdrawn right now is a separate question with its own
+        rules, answered by `/partner/withdrawals/preview/` rather than guessed from these numbers.
       tags:
       - Partner
       security:
@@ -16701,6 +16879,117 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerStayVisit'
           description: ''
+  /api/v1/partner/withdrawals/:
+    get:
+      operationId: partner_withdrawals_list
+      description: |-
+        The Partner's own withdrawals, newest first, and the Withdraw tap itself.
+
+        The tap takes no body: the amount is always the whole available balance, decided on the
+        server from the locked ledger, so there is nothing for a client to get wrong. It needs an
+        `Idempotency-Key`, so a retried tap replays the first answer instead of withdrawing twice,
+        and it is rate-limited on top of the daily limit, which is the real rule.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWithdrawalPage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: partner_withdrawal_request
+      description: |-
+        The Partner's own withdrawals, newest first, and the Withdraw tap itself.
+
+        The tap takes no body: the amount is always the whole available balance, decided on the
+        server from the locked ledger, so there is nothing for a client to get wrong. It needs an
+        `Idempotency-Key`, so a retried tap replays the first answer instead of withdrawing twice,
+        and it is rate-limited on top of the daily limit, which is the real rule.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWithdrawal'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/withdrawals/preview/:
+    get:
+      operationId: partner_withdrawal_preview
+      description: |-
+        What tapping Withdraw would do right now: allowed or why not, how much, any fee.
+
+        Built by the same function the request runs (`quote_withdrawal`), so the button the app
+        draws from this can never promise what the request then refuses.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWithdrawalPreview'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/workspaces/:
     get:
       operationId: m2_partner_workspace_list
@@ -16932,6 +17221,12 @@ paths:
         Applied inline: settling one item is a few row updates. A failure returns 5xx, which
         RazorpayX retries, and `reconcile_payouts` still polls anything left in flight.
       parameters:
+      - in: header
+        name: X-Razorpay-Event-Id
+        schema:
+          type: string
+        description: RazorpayX's id for this event. A redelivery with an id already
+          recorded changes nothing.
       - in: header
         name: X-Razorpay-Signature
         schema:
@@ -25985,6 +26280,20 @@ components:
           type: string
           default: ''
           maxLength: 240
+    DeclineWithdrawalRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 3
+          description: Shown to the Partner. Say what they can do next.
+          maxLength: 240
+      required:
+      - expected_version
+      - reason
     DelayClaimCreateRequest:
       type: object
       description: Raise a delay claim. Deliberately carries no amount — see `ProjectDelayClaimSerializer`.
@@ -28933,11 +29242,13 @@ components:
       - EARNING
       - ADJUSTMENT
       - REVERSAL
+      - FEE
       type: string
       description: |-
         * `EARNING` - Earning
         * `ADJUSTMENT` - Adjustment
         * `REVERSAL` - Reversal
+        * `FEE` - Fee
     LedgerEntryStatusEnum:
       enum:
       - PENDING
@@ -30988,6 +31299,193 @@ components:
       required:
       - expected_version
       - target_status
+    OperationsWithdrawal:
+      type: object
+      description: A Partner withdrawal in the Operations queue. `review_reasons`
+        says why it is there.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        review_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/WithdrawalReviewReasonEnum'
+          readOnly: true
+        review_note:
+          type: string
+          readOnly: true
+        approval_basis:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchApprovalBasisEnum'
+          readOnly: true
+        proposed_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        approved_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        transfer:
+          allOf:
+          - $ref: '#/components/schemas/OperationsWithdrawalTransfer'
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approval_basis
+      - approved_at
+      - approved_by_id
+      - cancelled_at
+      - cancelled_by_id
+      - created_at
+      - id
+      - proposed_by_id
+      - reference
+      - review_note
+      - review_reasons
+      - status
+      - transfer
+      - version
+    OperationsWithdrawalPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsWithdrawal'
+      required:
+      - next
+      - previous
+      - results
+    OperationsWithdrawalTransfer:
+      type: object
+      description: The one transfer inside a withdrawal, with what a reviewer checks
+        it against.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchItemStatusEnum'
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        partner_phone_number:
+          type: string
+          readOnly: true
+        account_last4:
+          type: string
+          readOnly: true
+        account_ifsc:
+          type: string
+          readOnly: true
+        account_holder_name:
+          type: string
+          readOnly: true
+        account_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        account_added_at:
+          type: string
+          format: date-time
+          readOnly: true
+        balance_paise:
+          type: integer
+          readOnly: true
+        fee_paise:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        utr:
+          type: string
+          readOnly: true
+        failure_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - account_added_at
+      - account_holder_name
+      - account_ifsc
+      - account_last4
+      - account_verified_at
+      - amount_paise
+      - balance_paise
+      - completed_at
+      - currency
+      - failure_code
+      - fee_paise
+      - id
+      - partner_display_name
+      - partner_id
+      - partner_phone_number
+      - status
+      - submitted_at
+      - utr
     OpsCancelStayReservationRequest:
       type: object
       properties:
@@ -32288,10 +32786,27 @@ components:
       properties:
         pending_paise:
           type: integer
+          description: 'Earned but not yet payable: `held_paise` plus `clearing_paise`.'
         available_paise:
           type: integer
+          description: 'Payable now: cleared, not on hold, refunds already subtracted.
+            Negative when refunds exceed what has cleared; that much comes off the
+            next earnings.'
+        clearing_paise:
+          type: integer
+          description: Earned, waiting out the Customer's dispute window before it
+            can be paid.
+        held_paise:
+          type: integer
+          description: Frozen by a dispute or an Operations case until it is decided.
+        withdrawable_paise:
+          type: integer
+          description: 'What one payout could send right now: `available_paise`, never
+            below zero.'
         reserved_paise:
           type: integer
+          description: In a payout that has been reserved or sent and has not yet
+            settled.
         paid_paise:
           type: integer
         currency:
@@ -32301,11 +32816,14 @@ components:
           format: date-time
       required:
       - available_paise
+      - clearing_paise
       - currency
+      - held_paise
       - paid_paise
       - pending_paise
       - reserved_paise
       - server_now
+      - withdrawable_paise
     PartnerBooking:
       type: object
       description: |-
@@ -33335,6 +33853,18 @@ components:
         reason:
           type: string
           readOnly: true
+        clears_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: 'Not payable before this instant: the end of the Customer''s
+            dispute window. Null when the line counts at once (corrections, refunds).'
+        is_on_hold:
+          type: boolean
+          readOnly: true
+          description: A dispute or case on this line's booking is freezing it. Held
+            money is not paid until the hold is lifted.
         created_at:
           type: string
           format: date-time
@@ -33342,12 +33872,14 @@ components:
       required:
       - booking_id
       - calculation_snapshot
+      - clears_at
       - commission_paise
       - corrects_id
       - created_at
       - currency
       - gross_paise
       - id
+      - is_on_hold
       - kind
       - net_paise
       - reason
@@ -33717,8 +34249,11 @@ components:
       properties:
         holder_name:
           type: string
-          minLength: 2
-          maxLength: 140
+          minLength: 3
+          description: 'As on the bank account. 3 to 50 characters: letters, numbers,
+            spaces and ’ - _ / ( ) ., ending in a letter, number or full stop. A straight
+            apostrophe is stored as ’.'
+          maxLength: 50
         account_number:
           type: string
           writeOnly: true
@@ -34695,6 +35230,188 @@ components:
       - nightly_rate_paise
       - rooms
       - upcoming_booking_count
+    PartnerWithdrawal:
+      type: object
+      description: |-
+        One withdrawal as the Partner follows it: Requested, Sent, Paid — or Failed, with the
+        money back in their balance.
+
+        `balance_paise` is what left the balance, `amount_paise` what the bank receives, and the
+        difference is `fee_paise`. No batch id: it names machinery the Partner cannot act on.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerWithdrawalStatusEnum'
+          readOnly: true
+        is_awaiting_review:
+          type: boolean
+          readOnly: true
+          description: 'Waiting for our team to check it before it is sent: the first
+            payout to a new bank account, or a balance above the withdrawal maximum.'
+        balance_paise:
+          type: integer
+          readOnly: true
+          description: 'Taken from the available balance: the amount sent plus any
+            fee.'
+        fee_paise:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        account_last4:
+          type: string
+          readOnly: true
+        utr:
+          type: string
+          readOnly: true
+        failure_message:
+          type: string
+          nullable: true
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        sent_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - account_last4
+      - amount_paise
+      - balance_paise
+      - completed_at
+      - currency
+      - failure_message
+      - fee_paise
+      - id
+      - is_awaiting_review
+      - requested_at
+      - sent_at
+      - status
+      - utr
+    PartnerWithdrawalPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerWithdrawal'
+      required:
+      - next
+      - previous
+      - results
+    PartnerWithdrawalPreview:
+      type: object
+      description: |-
+        What tapping Withdraw would do right now, decided by the rules the request applies.
+
+        The Partner app renders the button from this, so it never offers a withdrawal the request
+        would refuse, and never refuses without saying why.
+      properties:
+        is_enabled:
+          type: boolean
+          description: Whether withdrawals are open at all. When false, show no Withdraw
+            button.
+        can_withdraw:
+          type: boolean
+        refusal_reason:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/WithdrawalRefusalReasonEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        refusal_message:
+          type: string
+          nullable: true
+        amount_paise:
+          type: integer
+          description: The whole available balance a withdrawal takes. Full balance
+            only.
+        fee_paise:
+          type: integer
+          description: 0 for the week's free withdrawal.
+        send_paise:
+          type: integer
+          description: 'What reaches the bank: amount less fee.'
+        needs_review:
+          type: boolean
+          description: It would wait for our team to check it before it is sent.
+        review_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/WithdrawalReviewReasonEnum'
+        minimum_paise:
+          type: integer
+        maximum_paise:
+          type: integer
+          description: A balance above this still withdraws in full, after our team
+            checks it.
+        withdrawals_left_today:
+          type: integer
+        free_withdrawals_left_this_week:
+          type: integer
+        account_last4:
+          type: string
+          nullable: true
+        account_payable_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a new bank account's waiting period ends. Null once it
+            has.
+        currency:
+          type: string
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - amount_paise
+      - can_withdraw
+      - currency
+      - fee_paise
+      - free_withdrawals_left_this_week
+      - is_enabled
+      - maximum_paise
+      - minimum_paise
+      - needs_review
+      - review_reasons
+      - send_paise
+      - server_now
+      - withdrawals_left_today
+    PartnerWithdrawalStatusEnum:
+      enum:
+      - REQUESTED
+      - SENT
+      - PAID
+      - FAILED
+      type: string
+      description: |-
+        * `REQUESTED` - REQUESTED
+        * `SENT` - SENT
+        * `PAID` - PAID
+        * `FAILED` - FAILED
     PartyCase:
       type: object
       description: |-
@@ -35597,6 +36314,14 @@ components:
         reference:
           type: string
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchKindEnum'
+          readOnly: true
+        approval_basis:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchApprovalBasisEnum'
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/PayoutBatchStatusEnum'
@@ -35659,6 +36384,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - approval_basis
       - approved_at
       - approved_by_id
       - cancelled_at
@@ -35668,6 +36394,7 @@ components:
       - id
       - item_count
       - items
+      - kind
       - period_end
       - period_start
       - proposed_by_id
@@ -35676,18 +36403,24 @@ components:
       - status
       - total_paise
       - version
+    PayoutBatchApprovalBasisEnum:
+      enum:
+      - OPERATIONS
+      - POLICY
+      type: string
+      description: |-
+        * `OPERATIONS` - Approved by Operations
+        * `POLICY` - Approved by withdrawal policy
     PayoutBatchItem:
       type: object
+      description: 'One transfer to one Partner: the sum of its ledger lines, refunds
+        included.'
       properties:
         id:
           type: string
           format: uuid
           readOnly: true
         partner_id:
-          type: string
-          format: uuid
-          readOnly: true
-        ledger_entry_id:
           type: string
           format: uuid
           readOnly: true
@@ -35701,7 +36434,31 @@ components:
         currency:
           type: string
           readOnly: true
+        entry_count:
+          type: integer
+          readOnly: true
+          description: How many ledger lines this transfer covers, refunds included.
         provider_payout_id:
+          type: string
+          readOnly: true
+        provider_status:
+          type: string
+          readOnly: true
+        utr:
+          type: string
+          readOnly: true
+        mode:
+          type: string
+          readOnly: true
+        fees_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        tax_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        status_reason:
           type: string
           readOnly: true
         failure_code:
@@ -35722,29 +36479,47 @@ components:
       - amount_paise
       - completed_at
       - currency
+      - entry_count
       - failure_code
+      - fees_paise
       - id
-      - ledger_entry_id
+      - mode
       - partner_id
       - provider_payout_id
+      - provider_status
       - status
+      - status_reason
       - submitted_at
+      - tax_paise
+      - utr
     PayoutBatchItemStatusEnum:
       enum:
       - RESERVED
+      - SUBMITTING
       - SUBMITTED
       - PAID
       - FAILED
       - UNDER_REVIEW
       - RELEASED
+      - REVERSED
       type: string
       description: |-
         * `RESERVED` - Reserved
+        * `SUBMITTING` - Sending
         * `SUBMITTED` - Submitted
         * `PAID` - Paid
         * `FAILED` - Failed
         * `UNDER_REVIEW` - Under review
         * `RELEASED` - Released
+        * `REVERSED` - Reversed
+    PayoutBatchKindEnum:
+      enum:
+      - RUN
+      - WITHDRAWAL
+      type: string
+      description: |-
+        * `RUN` - Payout run
+        * `WITHDRAWAL` - Partner withdrawal
     PayoutBatchList:
       type: object
       description: |-
@@ -35757,6 +36532,10 @@ components:
           readOnly: true
         reference:
           type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchKindEnum'
           readOnly: true
         status:
           allOf:
@@ -35798,6 +36577,7 @@ components:
       - currency
       - id
       - item_count
+      - kind
       - period_end
       - period_start
       - proposed_by_id
@@ -46403,6 +47183,40 @@ components:
       description: |-
         * `PENDING` - PENDING
         * `QUALIFIED` - QUALIFIED
+    WithdrawalRefusalReasonEnum:
+      enum:
+      - withdrawals_disabled
+      - payouts_paused
+      - partner_suspended
+      - no_payout_account
+      - account_under_review
+      - account_rejected
+      - account_cooling
+      - withdrawal_in_progress
+      - daily_limit_reached
+      - below_minimum
+      - extra_withdrawals_unavailable
+      type: string
+      description: |-
+        * `withdrawals_disabled` - withdrawals_disabled
+        * `payouts_paused` - payouts_paused
+        * `partner_suspended` - partner_suspended
+        * `no_payout_account` - no_payout_account
+        * `account_under_review` - account_under_review
+        * `account_rejected` - account_rejected
+        * `account_cooling` - account_cooling
+        * `withdrawal_in_progress` - withdrawal_in_progress
+        * `daily_limit_reached` - daily_limit_reached
+        * `below_minimum` - below_minimum
+        * `extra_withdrawals_unavailable` - extra_withdrawals_unavailable
+    WithdrawalReviewReasonEnum:
+      enum:
+      - first_payout_to_account
+      - over_maximum
+      type: string
+      description: |-
+        * `first_payout_to_account` - first_payout_to_account
+        * `over_maximum` - over_maximum
     WorkEvidence:
       type: object
       description: |-

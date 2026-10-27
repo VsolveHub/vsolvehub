@@ -222,6 +222,9 @@ def test_directly_settled_crew_work_counts_as_earnings_and_one_completed_job(
     assert partner_balance_paise(world.vendor) == {
         "pending_paise": 0,
         "available_paise": 0,
+        "clearing_paise": 0,
+        "held_paise": 0,
+        "withdrawable_paise": 0,
         "reserved_paise": 0,
         "paid_paise": 0,
     }

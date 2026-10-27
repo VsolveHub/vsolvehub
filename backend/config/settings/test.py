@@ -1,8 +1,14 @@
 """Automated-test settings."""
 
 from config.settings.base import *
+from config.settings.guards import guard_razorpayx_test_keys
 
 DEBUG = False
+# Automated suites never call RazorpayX, but a live key in the environment is still refused.
+guard_razorpayx_test_keys(RAZORPAYX_KEY_ID)
+# Suites that settle a visit and pay it in the same test would otherwise wait three days. The
+# clearing window has its own tests, which set it back to the production value.
+PAYOUT_CLEARING_HOURS = 0
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 CACHES = {

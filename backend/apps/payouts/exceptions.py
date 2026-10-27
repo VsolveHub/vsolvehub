@@ -110,6 +110,24 @@ class PayoutAccountSelfReviewApiError(APIException):
     retryable = False
 
 
+class WithdrawalRefusedApiError(APIException):
+    """A Withdraw tap the rules do not allow right now.
+
+    One error with a `reason` rather than one class per rule: the Partner app shows the message
+    as given, and branches on the reason only to offer the next step (add a bank account, wait).
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "withdrawal_refused"
+    error_code = "withdrawal_refused"
+    retryable = False
+
+    def __init__(self, *, reason: str, message: str) -> None:
+        super().__init__(detail=message, code=self.default_code)
+        self.safe_message = message
+        self.api_details: dict[str, object] = {"reason": reason}
+
+
 class CaseInvalidApiError(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_code = "operations_case_invalid"
