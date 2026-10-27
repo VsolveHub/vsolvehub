@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.85.0
+  version: 1.85.1
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -15216,7 +15216,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: ''
+          description: '`payout_account_not_found`: the Partner has not added a bank
+            account yet. An answer, not a fault — show the way to add one, and do
+            not retry.'
     post:
       operationId: partner_payout_account_submit
       description: |-

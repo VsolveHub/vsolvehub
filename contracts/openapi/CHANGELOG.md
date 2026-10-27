@@ -1,5 +1,14 @@
 # API Contract Changelog
 
+## 1.85.1 - "No payout account" follows the error envelope
+
+**Partners**
+
+- `GET /partner/payout-account/` now answers a Partner with no bank account with the standard
+  error envelope, code `payout_account_not_found`, as its published `404` always said. It used to
+  send a bare `{"detail": ...}` body, which clients read as a malformed response rather than as
+  "none yet". No shape changes elsewhere.
+
 ## 1.85.0 - Partner withdrawals, the lock-free send, entry-level holds
 
 **Partners**

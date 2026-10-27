@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.85.0)
- * Checksum: c4840af02feeb8bf
+ * Source:   contracts/openapi/v1.yaml (version 1.85.1)
+ * Checksum: bb1f740cb8892685
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -33586,6 +33586,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description `payout_account_not_found`: the Partner has not added a bank account yet. An answer, not a fault — show the way to add one, and do not retry. */
             404: {
                 headers: {
                     [name: string]: unknown;

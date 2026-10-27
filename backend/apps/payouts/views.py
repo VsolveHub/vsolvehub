@@ -30,7 +30,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -47,6 +47,7 @@ from apps.partners.permissions import (
     IsOperationsUser,
     IsPartnerUser,
 )
+from apps.payouts.exceptions import PayoutAccountNotFoundApiError
 from apps.payouts.models import (
     PartnerLedgerEntry,
     PartnerPayoutAccount,
@@ -310,7 +311,13 @@ class PartnerPayoutAccountView(APIView):
         responses={
             200: PartnerPayoutAccountSerializer,
             403: ApiErrorSerializer,
-            404: ApiErrorSerializer,
+            404: OpenApiResponse(
+                ApiErrorSerializer,
+                description=(
+                    "`payout_account_not_found`: the Partner has not added a bank account yet. "
+                    "An answer, not a fault — show the way to add one, and do not retry."
+                ),
+            ),
         },
     )
     def get(self, request: Request) -> Response:
@@ -322,9 +329,7 @@ class PartnerPayoutAccountView(APIView):
             .first()
         )
         if account is None:
-            return Response(
-                {"detail": "No payout account is registered."}, status=status.HTTP_404_NOT_FOUND
-            )
+            raise PayoutAccountNotFoundApiError
         return Response(PartnerPayoutAccountSerializer(account).data)
 
 
