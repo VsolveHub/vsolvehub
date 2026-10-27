@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { EmptyState } from "@vsolve/ui";
@@ -119,7 +120,7 @@ async function CategoryGrid() {
         {/* Row 1: 5 categories */}
         <div className="grid grid-cols-5 gap-5 lg:gap-7">
           {firstRow.map((category) => (
-            <Link
+            <IntentLink
               key={category.id}
               href={catalogCategoryHref(category.slug)}
               className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
@@ -159,7 +160,7 @@ async function CategoryGrid() {
                   {category.name}
                 </h3>
               </div>
-            </Link>
+            </IntentLink>
           ))}
         </div>
 
@@ -167,7 +168,7 @@ async function CategoryGrid() {
         {secondRow.length > 0 ? (
           <div className="grid grid-cols-4 gap-5 lg:gap-7 max-w-[80%] mx-auto w-full">
             {secondRow.map((category) => (
-              <Link
+              <IntentLink
                 key={category.id}
                 href={catalogCategoryHref(category.slug)}
                 className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
@@ -207,7 +208,7 @@ async function CategoryGrid() {
                     {category.name}
                   </h3>
                 </div>
-              </Link>
+              </IntentLink>
             ))}
           </div>
         ) : null}
@@ -217,7 +218,7 @@ async function CategoryGrid() {
       <ul className="grid md:hidden list-none grid-cols-3 gap-3 p-0">
         {categories.map((category) => (
           <li key={category.id} className="min-w-0">
-            <Link
+            <IntentLink
               href={catalogCategoryHref(category.slug)}
               className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
@@ -250,7 +251,7 @@ async function CategoryGrid() {
               <span className="line-clamp-2 w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
                 {category.name}
               </span>
-            </Link>
+            </IntentLink>
           </li>
         ))}
       </ul>
@@ -461,7 +462,7 @@ export default async function HomePage() {
             <ul className="grid list-none grid-cols-3 gap-3 sm:gap-4 p-0">
               {categories.map((category, index) => (
                 <li key={category.id} className="min-w-0">
-                  <Link
+                  <IntentLink
                     href={catalogCategoryHref(category.slug)}
                     className="group flex flex-col items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                   >
@@ -500,7 +501,7 @@ export default async function HomePage() {
                     <span className="line-clamp-2 w-full text-center text-[11px] sm:text-xs font-bold leading-tight text-[#00112e] group-hover:text-[#f87000] transition-colors px-0.5">
                       {category.name}
                     </span>
-                  </Link>
+                  </IntentLink>
                 </li>
               ))}
             </ul>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { cn, formatMoney } from "@vsolve/ui";
 import { Clock, ShieldCheck, Ban, X } from "lucide-react";
 
@@ -323,13 +323,13 @@ export function TileServiceDetailPanel({
             size="panel"
           />
         </div>
-        <Link
+        <IntentLink
           href={`/catalog/${categorySlug}/${service.slug}`}
           className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-navy-800 hover:text-action"
         >
           See price details
           <span aria-hidden>→</span>
-        </Link>
+        </IntentLink>
       </div>
     </aside>
   );

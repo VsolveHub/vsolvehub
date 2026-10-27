@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { formatMoney, useHydrated } from "@vsolve/ui";
 import { RemoteImage } from "@/components/remote-image";
 import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@/features/checkout/queries";
@@ -182,7 +182,7 @@ export function ServiceCard({
   if (isLarge) {
     return (
       <div className="group md:col-span-2 flex flex-col md:flex-row overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
-        <Link
+        <IntentLink
           href={serviceHref(service, categorySlug)}
           className="relative md:w-5/12 aspect-[16/10] md:aspect-auto overflow-hidden bg-[#F4F1EC] shrink-0 block cursor-pointer"
         >
@@ -203,9 +203,9 @@ export function ServiceCard({
               <ServicePhoto imageUrl="" iconKey={service.icon_key} className="size-full rounded-none shadow-none" />
             </div>
           )}
-        </Link>
+        </IntentLink>
         <div className="flex flex-col md:w-7/12 flex-1 p-6 md:p-8 justify-between">
-          <Link
+          <IntentLink
             href={serviceHref(service, categorySlug)}
             className="flex-1 flex flex-col cursor-pointer"
           >
@@ -223,7 +223,7 @@ export function ServiceCard({
             <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-text-secondary">
               {service.short_description || `Expert repair and installation for ${service.name}. Restores smooth functionality and ensures quality.`}
             </p>
-          </Link>
+          </IntentLink>
 
           <div className="mt-6 flex items-end justify-between gap-3 pt-4 border-t border-line/50">
             {service.starting_price !== null ? (
@@ -246,7 +246,7 @@ export function ServiceCard({
 
   return (
     <div className="group md:col-span-1 flex flex-col overflow-hidden rounded-card border border-transparent bg-white shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised">
-      <Link
+      <IntentLink
         href={serviceHref(service, categorySlug)}
         className="flex flex-col cursor-pointer"
       >
@@ -286,7 +286,7 @@ export function ServiceCard({
             {service.short_description || `Complete service carried out at your address by a verified professional.`}
           </p>
         </div>
-      </Link>
+      </IntentLink>
 
       <div className="p-5 md:p-6 pt-4 flex-1 flex flex-col justify-end">
         <div className="flex items-end justify-between gap-3 border-t border-line/50 pt-5">

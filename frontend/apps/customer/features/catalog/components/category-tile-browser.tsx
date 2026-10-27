@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useRouter } from "next/navigation";
 import { formatMoney, cn } from "@vsolve/ui";
 import { ChevronRight, ClipboardList, X } from "lucide-react";
@@ -284,7 +284,7 @@ export function CategoryTileBrowser({
               const isActive = tile.slug === activeTile.slug;
               return (
                 <li key={tile.slug}>
-                  <Link
+                  <IntentLink
                     href={`/catalog/${category.slug}?tile=${tile.slug}`}
                     scroll={false}
                     aria-current={isActive ? "page" : undefined}
@@ -318,7 +318,7 @@ export function CategoryTileBrowser({
                     >
                       {tile.name}
                     </span>
-                  </Link>
+                  </IntentLink>
                 </li>
               );
             })}
@@ -351,7 +351,7 @@ export function CategoryTileBrowser({
               const imgUrl = service.cover?.url ?? activeTile.imageUrl;
               return (
                 <li key={service.id}>
-                  <Link
+                  <IntentLink
                     href={serviceHref(service, category.slug)}
                     className="group flex items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-line/80 bg-white p-3 sm:p-4 shadow-xs transition-all duration-150 hover:shadow-md hover:border-line-strong active:scale-[0.99]"
                   >
@@ -408,7 +408,7 @@ export function CategoryTileBrowser({
 
                     {/* Arrow on Right */}
                     <ChevronRight className="size-5 shrink-0 text-text-muted group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all self-center hidden min-[400px]:block" />
-                  </Link>
+                  </IntentLink>
                 </li>
               );
             })}

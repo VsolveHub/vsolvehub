@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, formatMoney, ProgressiveImage } from "@vsolve/ui";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 
 import { ServicePhoto } from "@/features/catalog/components/category-artwork";
 import { isServiceCoverUrl } from "@/features/catalog/service-cover";
@@ -75,7 +75,7 @@ export function CartSuggestions({
               key={card.slug}
               className="flex w-56 shrink-0 flex-col rounded-card border border-line bg-surface p-3 sm:p-4"
             >
-              <Link
+              <IntentLink
                 href={`/catalog/${card.category_slug}/${card.slug}`}
                 className="group min-w-0 flex flex-col flex-1"
               >
@@ -104,7 +104,7 @@ export function CartSuggestions({
                 <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
                   {card.short_description}
                 </p>
-              </Link>
+              </IntentLink>
 
               <div className="mt-auto pt-3">
               {/*
@@ -139,12 +139,12 @@ export function CartSuggestions({
                   Add<span className="sr-only"> {card.name} to your cart</span>
                 </Button>
               ) : (
-                <Link
+                <IntentLink
                   href={`/catalog/${card.category_slug}/${card.slug}`}
                   className="mt-2 block rounded-md border border-line-strong px-3 py-1.5 text-center text-xs font-semibold text-text hover:bg-surface-hover"
                 >
                   Choose an option<span className="sr-only"> for {card.name}</span>
-                </Link>
+                </IntentLink>
               )}
             </div>
           </li>

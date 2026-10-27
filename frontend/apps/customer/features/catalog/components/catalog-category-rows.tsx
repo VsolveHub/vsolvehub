@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { EmptyState } from "@vsolve/ui";
 
 import { ServicePhoto } from "./category-artwork";
@@ -60,7 +60,7 @@ export function CatalogCategoryRows({ categories }: { categories: readonly Categ
               {category.name}
             </h2>
             {subcategories.length > 3 ? (
-              <Link
+              <IntentLink
                 href={catalogCategoryHref(category.slug)}
                 aria-label={`See all ${category.name} subcategories`}
                 className={`inline-flex min-h-11 items-center gap-1 rounded-control px-1 text-sm font-bold text-action transition-opacity duration-fast hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring`}
@@ -78,7 +78,7 @@ export function CatalogCategoryRows({ categories }: { categories: readonly Categ
                 >
                   <path d="m7.5 4.5 5.5 5.5-5.5 5.5" />
                 </svg>
-              </Link>
+              </IntentLink>
             ) : null}
           </header>
 
@@ -98,7 +98,7 @@ export function CatalogCategoryRows({ categories }: { categories: readonly Categ
                 key={subcategory.id}
                 className="w-[92px] shrink-0 snap-start sm:w-[110px] lg:w-[128px]"
               >
-                <Link
+                <IntentLink
                   href={catalogCategoryHref(category.slug, subcategory.slug)}
                   className="group flex min-h-11 flex-col items-center gap-2 rounded-card active:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 >
@@ -109,7 +109,7 @@ export function CatalogCategoryRows({ categories }: { categories: readonly Categ
                   <span className="line-clamp-2 w-full text-center text-[12px] font-semibold leading-tight text-text sm:text-[13px]">
                     {subcategory.name}
                   </span>
-                </Link>
+                </IntentLink>
               </li>
             ))}
           </ul>
