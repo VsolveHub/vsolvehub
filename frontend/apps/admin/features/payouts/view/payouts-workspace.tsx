@@ -9,6 +9,7 @@ import { SectionTabs } from "@/features/shared/section-tabs";
 import { LedgerAdjustment } from "./ledger-adjustment";
 import { PayoutAccountReview } from "./payout-account-review";
 import { PayoutConsole } from "./payout-console";
+import { WithdrawalQueue } from "./withdrawal-queue";
 
 /**
  * Paying partners. Approving, paying and correcting balances move money, so the identity check
@@ -37,6 +38,23 @@ export function PayoutsWorkspace() {
                 }}
               />
               <PayoutConsole />
+            </div>
+          ),
+        },
+        {
+          id: "withdrawals",
+          label: "Withdrawals",
+          render: () => (
+            <div className="flex flex-col gap-6">
+              <StepUpGate
+                session={session}
+                reason={reason ?? undefined}
+                onSteppedUp={(stepped) => {
+                  setSession(stepped);
+                  setReason(null);
+                }}
+              />
+              <WithdrawalQueue onStepUpRequired={setReason} />
             </div>
           ),
         },

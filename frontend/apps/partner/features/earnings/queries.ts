@@ -1,21 +1,25 @@
 "use client";
 
-import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
+import {
+  ApiRequestError,
+  clearIdempotencyKey,
+  getStableIdempotencyKey,
+  request,
+  type Schemas,
+} from "@vsolve/api-client";
 import { EXPIRING_STATE, cursorFromNextUrl, queryKeys } from "@vsolve/query";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * The Partner's own earnings (contract 1.17.0).
+ * The Partner's own earnings (contract 1.17.0) and withdrawals (contract 1.85.0).
  *
- * No withdrawals, and that is the product rather than an omission. M1 pays through a reviewed
- * weekly run — `05-pricing-payments-and-settlement.md` rules out on-demand withdrawal until
- * account-change cooling, fraud monitoring and reconciliation are all proven, and two of those
- * three are still open. A withdraw mutation here would promise something that does not exist.
- * The one write is the bank account itself, which Operations reviews before it is paid into.
+ * Two writes: the bank account, which Operations reviews before it is paid into, and a
+ * withdrawal of the whole available balance. Withdrawals are off until the backend's
+ * `PAYOUT_WITHDRAW_ENABLED` is set; the preview says so, and the screen then draws no button.
  *
- * There is no `partner_id` anywhere: both endpoints resolve the Partner from the session, so
+ * There is no `partner_id` anywhere: every endpoint resolves the Partner from the session, so
  * there is no identifier for this layer to get wrong.
  */
 
@@ -78,6 +82,86 @@ export function useSubmitPayoutAccount() {
       request(() => getApiClient().POST("/api/v1/partner/payout-account/", { body })),
     onSuccess: (account) => {
       queryClient.setQueryData(queryKeys.partnerMoney.payoutAccount(), account);
+    },
+    retry: false,
+  });
+}
+
+/* -------------------------------------------------------------------------
+   Withdrawals (contract 1.85.0)
+   ------------------------------------------------------------------------- */
+
+export type Withdrawal = Schemas["PartnerWithdrawal"];
+export type WithdrawalPreview = Schemas["PartnerWithdrawalPreview"];
+
+/** What tapping Withdraw would do right now — the server's own answer, never worked out here. */
+export function useWithdrawalPreview() {
+  return useQuery({
+    queryKey: queryKeys.partnerMoney.withdrawalPreview(),
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/withdrawals/preview/", {})),
+    ...EXPIRING_STATE,
+  });
+}
+
+/** Withdrawals still moving get re-read every so often, so Sent turns into Paid on its own. */
+function hasWithdrawalInFlight(pages: { results: Withdrawal[] }[] | undefined): boolean {
+  return (pages ?? []).some((page) =>
+    page.results.some((item) => item.status === "REQUESTED" || item.status === "SENT"),
+  );
+}
+
+export function usePartnerWithdrawals() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.partnerMoney.withdrawals(),
+    queryFn: async ({ pageParam }) => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/partner/withdrawals/", {
+          params: { query: { ...(pageParam ? { cursor: pageParam } : {}) } },
+        }),
+      );
+      cursorFromNextUrl(page.next);
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
+    refetchInterval: (query) => (hasWithdrawalInFlight(query.state.data?.pages) ? 30_000 : false),
+    ...EXPIRING_STATE,
+  });
+}
+
+/** One stored key per withdrawal attempt, shared by every retry of it. */
+const WITHDRAWAL_ATTEMPT = "partner-withdrawal";
+
+/** `409 withdrawal_refused`: a rule says no. Its message is written for the Partner. */
+export function isWithdrawalRefused(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "withdrawal_refused";
+}
+
+/**
+ * Withdraw the whole available balance. No body: the server decides the amount from the locked
+ * ledger, so the amount on screen is a preview and the response is the truth.
+ *
+ * The idempotency key survives a lost response, so tapping again after a timeout replays the
+ * first withdrawal instead of making a second one. It is dropped only once the server has given
+ * a definite answer — created, or refused. Never auto-retried.
+ */
+export function useRequestWithdrawal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      request(() =>
+        getApiClient().POST("/api/v1/partner/withdrawals/", {
+          params: {
+            header: { "Idempotency-Key": getStableIdempotencyKey(WITHDRAWAL_ATTEMPT) },
+          },
+        }),
+      ),
+    onSuccess: () => clearIdempotencyKey(WITHDRAWAL_ATTEMPT),
+    onError: (error) => {
+      if (isWithdrawalRefused(error)) clearIdempotencyKey(WITHDRAWAL_ATTEMPT);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.partnerMoney.all });
     },
     retry: false,
   });

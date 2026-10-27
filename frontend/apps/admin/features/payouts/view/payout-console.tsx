@@ -237,7 +237,7 @@ function BatchDetail({ batchId }: { batchId: string }) {
 
 export function PayoutConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const batches = usePayoutBatches();
+  const batches = usePayoutBatches({ kind: "RUN" });
   const rows = batches.data?.pages.flatMap((page) => page.results) ?? [];
 
   return (
