@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { JobProfileForm } from "@/features/listings/view";
 import { useCustomerSession } from "@/features/session/queries";
+import { SignInCard } from "@/features/session/view/sign-in-gate";
 
 function ProfilePage() {
   const session = useCustomerSession();
@@ -24,13 +25,10 @@ function ProfilePage() {
       {session.isAuthenticated ? (
         <JobProfileForm defaultName={session.fullName || ""} returnTo={back} />
       ) : (
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
-          className="self-start rounded-control bg-action px-5 py-2.5 text-sm font-bold text-action-text"
-        >
-          Sign in to create your job profile
-        </button>
+        <SignInCard
+          title="Sign in to create your job profile"
+          message="Fill it once, and matching jobs find you. Sign in with your phone number first."
+        />
       )}
     </main>
   );

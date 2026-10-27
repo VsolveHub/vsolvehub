@@ -16,6 +16,8 @@ import {
   type StayProperty,
 } from "../model";
 import { createStayVisit, fetchVisitSlots, type StayVisit } from "../queries";
+import { useCustomerSession } from "@/features/session/queries";
+import { SignInCard, isSignInError } from "@/features/session/view/sign-in-gate";
 
 function visitRefusal(err: unknown): string {
   if (isApiRequestError(err)) {
@@ -65,6 +67,8 @@ export function StayVisitPanel({
   const activeDay = day ?? days[0]?.date ?? null;
   const chosenDay = days.find((row) => row.date === activeDay) ?? null;
 
+  // Visiting times are open to everyone; requesting one needs an account.
+  const session = useCustomerSession();
   const mutation = useMutation({
     mutationFn: () =>
       createStayVisit({
@@ -78,8 +82,12 @@ export function StayVisitPanel({
         message,
       }),
     onSuccess: (visit) => setRequested(visit as StayVisit),
-    onError: (err: unknown) => setError(visitRefusal(err)),
+    // A 401 shows as the "session ended" card, not as a message.
+    onError: (err: unknown) => {
+      if (!isSignInError(err)) setError(visitRefusal(err));
+    },
   });
+  const sessionEnded = isSignInError(mutation.error);
 
   if (requested) {
     return (
@@ -221,14 +229,23 @@ export function StayVisitPanel({
         </div>
       ) : null}
 
-      <Button
-        type="submit"
-        loading={mutation.isPending}
-        loadingLabel="Requesting visit…"
-        className="w-full py-3 text-sm font-bold"
-      >
-        Request visit
-      </Button>
+      {session.isAnonymous || sessionEnded ? (
+        <SignInCard
+          title="Sign in to request a visit"
+          message="The host confirms the time with you. Your chosen day stays here while you sign in."
+          expired={sessionEnded && !session.isAnonymous}
+          onSignIn={() => mutation.reset()}
+        />
+      ) : (
+        <Button
+          type="submit"
+          loading={mutation.isPending}
+          loadingLabel="Requesting visit…"
+          className="w-full py-3 text-sm font-bold"
+        >
+          Request visit
+        </Button>
+      )}
     </form>
   );
 }

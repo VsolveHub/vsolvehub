@@ -16,6 +16,8 @@ import {
   type StayProperty,
 } from "../model";
 import { createStayEnquiry, fetchStayQuote } from "../queries";
+import { useCustomerSession } from "@/features/session/queries";
+import { SignInCard, isSignInError } from "@/features/session/view/sign-in-gate";
 
 interface StayQuotePanelProps {
   property: StayProperty;
@@ -119,6 +121,9 @@ export function StayQuotePanel({
   const estimate = quote.data?.total_quote_paise ?? rate * length;
   const quoteProblem = quote.error ? refusalMessage(quote.error, minimumLabel) : null;
 
+  // The quote is open to everyone; sending an enquiry shares the guest's name and phone, so it
+  // needs an account.
+  const session = useCustomerSession();
   const mutation = useMutation({
     mutationFn: () =>
       createStayEnquiry({
@@ -133,8 +138,12 @@ export function StayQuotePanel({
         message,
       }),
     onSuccess: () => router.push("/stays/mine"),
-    onError: (err: unknown) => setError(refusalMessage(err, minimumLabel)),
+    // A 401 shows as the "session ended" card, not as a message.
+    onError: (err: unknown) => {
+      if (!isSignInError(err)) setError(refusalMessage(err, minimumLabel));
+    },
   });
+  const sessionEnded = isSignInError(mutation.error);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -376,15 +385,24 @@ export function StayQuotePanel({
           </div>
         )}
 
-        <Button
-          type="submit"
-          disabled={mutation.isPending || Boolean(quoteProblem)}
-          loading={mutation.isPending}
-          loadingLabel="Sending enquiry…"
-          className="w-full py-3 text-sm font-bold"
-        >
-          Send enquiry
-        </Button>
+        {session.isAnonymous || sessionEnded ? (
+          <SignInCard
+            title="Sign in to send an enquiry"
+            message="The host calls you on your phone number. Your dates stay here while you sign in."
+            expired={sessionEnded && !session.isAnonymous}
+            onSignIn={() => mutation.reset()}
+          />
+        ) : (
+          <Button
+            type="submit"
+            disabled={mutation.isPending || Boolean(quoteProblem)}
+            loading={mutation.isPending}
+            loadingLabel="Sending enquiry…"
+            className="w-full py-3 text-sm font-bold"
+          >
+            Send enquiry
+          </Button>
+        )}
       </form>
     </div>
   );

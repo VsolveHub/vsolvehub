@@ -14,6 +14,18 @@ const router = vi.hoisted(() => ({
   prefetch: vi.fn(),
 }));
 
+/** Signed in unless a test says otherwise; the panel asks a signed-out visitor to sign in. */
+const session = vi.hoisted(() => ({ signedIn: true, refetch: vi.fn() }));
+vi.mock("@/features/session/queries", () => ({
+  useCustomerSession: () => ({
+    isResolving: false,
+    isAuthenticated: session.signedIn,
+    isAnonymous: !session.signedIn,
+    isUnavailable: false,
+    refetch: session.refetch,
+  }),
+}));
+
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
@@ -126,6 +138,8 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
+  session.signedIn = true;
+  session.refetch.mockReset();
   router.push.mockReset();
   router.replace.mockReset();
   queryClient = new QueryClient({
@@ -278,6 +292,57 @@ describe("RentalBookPanel", () => {
     expect(block).toHaveTextContent("9 AM – 9 PM");
     expect(block).toHaveTextContent("9 AM – 6 PM");
     expect(block).toHaveTextContent("Closed");
+  });
+
+  it("asks a signed-out visitor to sign in instead of showing Book", () => {
+    session.signedIn = false;
+    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
+
+    // The price is still open to everyone.
+    expect(screen.getByText("Refundable Security Deposit")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm Rental Booking" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in to book this rental" })).toBeInTheDocument();
+  });
+
+  it("never offers a signed-out visitor the address form for a delivery", () => {
+    session.signedIn = false;
+    render(<RentalBookPanel asset={mockAsset({ delivery_available: true })} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Request Delivery" }));
+
+    expect(screen.queryByRole("button", { name: "Choose delivery address" })).not.toBeInTheDocument();
+    expect(document.getElementById("delivery-phone")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Sign in to request delivery" })).toBeInTheDocument();
+    // No account reads for a visitor with no account.
+    expect(client.GET).not.toHaveBeenCalledWith("/api/v1/addresses/", expect.anything());
+  });
+
+  it("opens the sign-in popup from the card", () => {
+    session.signedIn = false;
+    const opened = vi.fn();
+    window.addEventListener("open-login-popup", opened);
+    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(session.refetch).toHaveBeenCalled();
+    window.removeEventListener("open-login-popup", opened);
+  });
+
+  it("says the session ended instead of the raw 401 message", async () => {
+    client.GET.mockResolvedValue(ok({ percent: 0 }));
+    client.POST.mockResolvedValue(
+      errorResponse("not_authenticated", "Authentication credentials were not provided.", 401),
+    );
+    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Your session ended. Sign in again" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Authentication credentials/)).not.toBeInTheDocument();
   });
 
   it("offers delivery only when the owner does", () => {

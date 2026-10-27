@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { CheckCircle2, Clock, LogIn, Send, User } from "lucide-react";
+import { CheckCircle2, Clock, Send } from "lucide-react";
+
+import { SignInCard } from "@/features/session/view/sign-in-gate";
 import { Card, PhoneField } from "@vsolve/ui";
 
 import type { ApplyFormState } from "../model";
@@ -57,23 +59,11 @@ export function ApplyPanel({
       ) : activeApplication ? (
         <AlreadyAppliedCard posterName={posterName} status={activeApplication.status} />
       ) : !isAuthenticated ? (
-        <div className="mt-5 rounded-card border border-navy-200 bg-navy-50/60 p-6 text-center">
-          <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-navy-100 text-navy-700">
-            <User className="size-5" />
-          </div>
-          <h3 className="mt-3 text-sm font-bold text-text">Sign in to Apply</h3>
-          <p className="mt-1 text-xs text-text-secondary leading-relaxed">
-            Please sign in with your phone number to submit your application and track responses from {posterName}.
-          </p>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
-            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-navy-900 px-4 py-2.5 text-sm font-semibold text-warm-0 shadow-card transition hover:bg-navy-800"
-          >
-            <LogIn className="size-4" />
-            Sign In / Register
-          </button>
-        </div>
+        <SignInCard
+          className="mt-5"
+          title="Sign in to apply"
+          message={`Sign in with your phone number to send your application and track replies from ${posterName}.`}
+        />
       ) : (
         <form
           className="mt-5 space-y-3.5"

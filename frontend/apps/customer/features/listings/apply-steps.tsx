@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
+import { SignInCard } from "@/features/session/view/sign-in-gate";
 import { AlreadyAppliedCard } from "./view/already-applied-card";
 import { uploadListingResume } from "./queries";
 import { applySchema, issuesToFieldErrors, type ApplyFormState } from "./model";
@@ -45,14 +46,11 @@ export function ApplySteps({
     return (
       <section id="apply-panel" className="rounded-card border border-line bg-surface p-6">
         <h2 className="text-lg font-bold">Apply for this Position</h2>
-        <p className="mt-2 text-xs text-text-secondary">Sign in to send this application to {posterName}.</p>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
-          className="mt-4 w-full rounded-control bg-action py-2.5 text-sm font-bold text-action-text"
-        >
-          Sign In / Register
-        </button>
+        <SignInCard
+          className="mt-4"
+          title="Sign in to apply"
+          message={`Sign in with your phone number to send this application to ${posterName}.`}
+        />
       </section>
     );
   }

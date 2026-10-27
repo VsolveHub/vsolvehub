@@ -16,6 +16,8 @@ import {
   type Address,
 } from "@/features/addresses/queries";
 import { useCustomerProfile } from "@/features/account/queries";
+import { useCustomerSession } from "@/features/session/queries";
+import { SignInCard, isSignInError } from "@/features/session/view/sign-in-gate";
 import { AddressStage, isGeocoded } from "@/features/booking/view/address-stage";
 import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
 import { calculateRentalDays, formatPaise, type RentalAsset } from "../model";
@@ -107,9 +109,13 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const pickupDayProblem = closedDayMessage(hours, startDate, "pickup");
   const returnDayProblem = closedDayMessage(hours, endDate, "return");
 
-  const addressesQuery = useAddresses();
+  // Dates, delivery choice and the price are open to everyone; booking needs an account, so
+  // a signed-out customer sees "Sign in" where the address and the Book button would be.
+  const session = useCustomerSession();
+  const signedOut = session.isAnonymous;
+  const addressesQuery = useAddresses(session.isAuthenticated);
   const addresses = Array.isArray(addressesQuery.data) ? addressesQuery.data : [];
-  const profileQuery = useCustomerProfile();
+  const profileQuery = useCustomerProfile(session.isAuthenticated);
   const profile =
     profileQuery.data && typeof profileQuery.data === "object" && "phone_number" in profileQuery.data
       ? (profileQuery.data as Schemas["User"])
@@ -233,6 +239,8 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
       }
     },
     onError: (err: unknown) => {
+      // Shown as the "session ended" sign-in card instead of the raw message.
+      if (isSignInError(err)) return;
       if (isApiRequestError(err)) {
         if (err.code === "out_of_stock") {
           setError("Out of stock for these dates. Try different dates or another listing.");
@@ -296,6 +304,8 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
     return code === "out_of_stock" || code === "insufficient_quantity";
   };
   const dateAwareUnavailable = isOutOfStockCode(mutation.error);
+  /** Signed in when the page opened, but the server says the session has since ended. */
+  const sessionEnded = isSignInError(mutation.error) || isSignInError(createAddress.error);
   const blockBooking = permanentlyOutOfStock || dateAwareUnavailable;
 
   return (
@@ -396,7 +406,12 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
             </p>
 
             {/* Address Selection Card / Location Prompt */}
-            {selectedAddress ? (
+            {signedOut ? (
+              <p className="flex items-start gap-2 rounded-control border border-line bg-surface p-3.5 text-xs text-text-secondary">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-text-secondary" aria-hidden />
+                Sign in below to choose a saved address or pin one on the map.
+              </p>
+            ) : selectedAddress ? (
               <div data-testid="selected-delivery-address" className="rounded-control border border-line bg-surface p-3.5 shadow-xs">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2.5 min-w-0">
@@ -468,6 +483,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
               </div>
             )}
 
+            {signedOut ? null : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field
                 label="Phone for delivery"
@@ -498,6 +514,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
                 />
               </Field>
             </div>
+            )}
           </div>
         ) : (
           <PickupLocation address={asset.pickup_address} hours={hours} showMap />
@@ -593,6 +610,17 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
           </div>
         )}
 
+        {signedOut || sessionEnded ? (
+          <SignInCard
+            title={isDelivery ? "Sign in to request delivery" : "Sign in to book this rental"}
+            message="Your dates and choices stay here while you sign in."
+            expired={sessionEnded && !signedOut}
+            onSignIn={() => {
+              mutation.reset();
+              createAddress.reset();
+            }}
+          />
+        ) : (
         <Button
           type="submit"
           disabled={mutation.isPending || isHandingOff || blockBooking}
@@ -614,6 +642,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
                 ? "Send delivery request"
                 : "Confirm Rental Booking"}
         </Button>
+        )}
       </form>
 
       {/* Address Stage Dialog (opened via addressOpenSignal) */}

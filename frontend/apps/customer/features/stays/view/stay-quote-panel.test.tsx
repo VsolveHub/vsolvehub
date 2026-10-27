@@ -16,6 +16,18 @@ const client = {
 };
 const push = vi.fn();
 
+/** Signed in unless a test says otherwise. */
+const session = vi.hoisted(() => ({ signedIn: true }));
+vi.mock("@/features/session/queries", () => ({
+  useCustomerSession: () => ({
+    isResolving: false,
+    isAuthenticated: session.signedIn,
+    isAnonymous: !session.signedIn,
+    isUnavailable: false,
+    refetch: () => {},
+  }),
+}));
+
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn(), push, replace: vi.fn() }),
@@ -92,6 +104,7 @@ beforeEach(() => {
   });
   for (const method of Object.values(client)) method.mockReset();
   push.mockReset();
+  session.signedIn = true;
 });
 
 afterEach(() => {
@@ -153,5 +166,31 @@ describe("StayQuotePanel", () => {
 
     expect(await screen.findByText("Minimum stay is 3 months.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Send enquiry/i })).toBeDisabled();
+  });
+
+  it("shows a signed-out guest the estimate and a sign-in card instead of Send", async () => {
+    session.signedIn = false;
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 50000, total_quote_paise: 150000 }));
+
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
+
+    expect(screen.queryByRole("button", { name: /Send enquiry/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in to send an enquiry" })).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it("says the session ended instead of the raw 401 message", async () => {
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 50000, total_quote_paise: 150000 }));
+    client.POST.mockResolvedValue(
+      refusal("not_authenticated", "Authentication credentials were not provided.", 401),
+    );
+
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
+    fireEvent.click(await screen.findByRole("button", { name: /Send enquiry/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Your session ended. Sign in again" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Authentication credentials/)).not.toBeInTheDocument();
   });
 });
