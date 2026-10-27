@@ -5,6 +5,8 @@ import Link from "next/link";
 import { cn, formatMoney } from "@vsolve/ui";
 import { Clock, ShieldCheck, Ban, X } from "lucide-react";
 
+import { RemoteImage } from "@/components/remote-image";
+
 import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../client-queries";
 import { durationLabel, policyTexts, warrantyText } from "../service-facts";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
@@ -222,10 +224,11 @@ export function TileServiceDetailPanel({
         {showVariantPicker ? null : (
           <div className="mt-2 overflow-hidden rounded-[1rem] bg-[#F4F1EC]">
             {imageUrl !== "" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <RemoteImage
                 src={imageUrl}
                 alt=""
+                width={480}
+                height={360}
                 className="aspect-[4/3] w-full object-cover object-center"
               />
             ) : (

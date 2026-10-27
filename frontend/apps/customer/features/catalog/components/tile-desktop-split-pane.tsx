@@ -5,6 +5,8 @@ import Link from "next/link";
 import { formatMoney, cn } from "@vsolve/ui";
 import { BadgeCheck, Headphones, ShieldCheck, Tag } from "lucide-react";
 
+import { RemoteImage } from "@/components/remote-image";
+
 import { type Category, type ServiceCard } from "../client-queries";
 import { ServicePhoto } from "./category-artwork";
 import { categoryHeadline } from "./tile-desktop-rating";
@@ -282,10 +284,11 @@ export function TileDesktopSplitPane({
             </div>
             {activeTile.imageUrl !== "" ? (
               <span className="flex h-28 w-40 shrink-0 items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <RemoteImage
                   src={activeTile.imageUrl}
                   alt=""
+                  width={160}
+                  height={112}
                   className="max-h-full max-w-full object-contain"
                 />
               </span>

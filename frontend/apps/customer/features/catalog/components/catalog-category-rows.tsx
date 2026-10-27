@@ -22,6 +22,8 @@ function SubcategoryArtwork({
     <ServicePhoto
       imageUrl={imageUrl}
       iconKey={iconKey}
+      // Matches the rail's tile widths below (`w-[92px] sm:w-[110px] lg:w-[128px]`).
+      sizes="(min-width: 1024px) 128px, (min-width: 640px) 110px, 92px"
       className="shadow-xs transition-transform duration-slow ease-out group-hover:scale-[1.03] motion-reduce:transform-none"
     />
   );

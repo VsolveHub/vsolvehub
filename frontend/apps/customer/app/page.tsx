@@ -5,6 +5,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { EmptyState } from "@vsolve/ui";
 
+import { RemoteImage } from "@/components/remote-image";
+
 import {
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
@@ -24,6 +26,17 @@ export const metadata: Metadata = {
 };
 
 export const revalidate = 300;
+
+/**
+ * The hero photograph, desktop and mobile.
+ *
+ * Drawn with `RemoteImage`, not as a CSS background: a background is found only
+ * once the stylesheet has loaded, and always arrives at the full 2070 px. JPEG
+ * at the source (no `auto=format`) so the optimizer gets a format it decodes;
+ * the phone still receives AVIF or WebP from it.
+ */
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&fit=crop";
 
 const APPROACH = [
   {
@@ -113,13 +126,15 @@ async function CategoryGrid() {
             >
               <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
                 {category.image_url !== "" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={category.image_url}
-                    alt=""
-                    loading="lazy"
-                    className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
-                  />
+                  <span className="relative size-full">
+                    <RemoteImage
+                      src={category.image_url}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1280px) 200px, 16vw"
+                      className="object-contain transition-transform duration-300 group-hover:scale-110"
+                    />
+                  </span>
                 ) : (
                   <span
                     aria-hidden
@@ -159,13 +174,15 @@ async function CategoryGrid() {
               >
                 <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
                   {category.image_url !== "" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={category.image_url}
-                      alt=""
-                      loading="lazy"
-                      className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
-                    />
+                    <span className="relative size-full">
+                      <RemoteImage
+                        src={category.image_url}
+                        alt=""
+                        fill
+                        sizes="(min-width: 1280px) 200px, 16vw"
+                        className="object-contain transition-transform duration-300 group-hover:scale-110"
+                      />
+                    </span>
                   ) : (
                     <span
                       aria-hidden
@@ -205,11 +222,11 @@ async function CategoryGrid() {
               className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               {category.image_url !== "" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <RemoteImage
                   src={category.image_url}
                   alt=""
-                  loading="lazy"
+                  width={128}
+                  height={128}
                   className="aspect-square w-full rounded-[1.25rem] bg-surface-sunken object-cover shadow-xs"
                 />
               ) : (
@@ -301,8 +318,16 @@ export default async function HomePage() {
               </div>
 
               {/* Right Image */}
-              <div className="absolute inset-0 md:static md:h-[550px] w-full md:w-3/4 md:ml-auto md:rounded-card overflow-hidden bg-navy-100 md:shadow-inner">
-                <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center md:bg-top" />
+              <div className="absolute inset-0 md:relative md:h-[550px] w-full md:w-3/4 md:ml-auto md:rounded-card overflow-hidden bg-navy-100 md:shadow-inner">
+                {/* Lazy on purpose: this tree is `display: none` on phones, and an
+                    eager image downloads even when hidden. */}
+                <RemoteImage
+                  src={HERO_IMAGE}
+                  alt=""
+                  fill
+                  sizes="(min-width: 1280px) 912px, 75vw"
+                  className="object-cover object-center md:object-top"
+                />
               </div>
             </div>
           </section>
@@ -398,9 +423,15 @@ export default async function HomePage() {
 
           {/* Hero Banner Card */}
           <div className="relative min-h-[190px] rounded-[1.5rem] overflow-hidden shadow-md">
-            <div 
-              className="absolute inset-0 bg-cover bg-center" 
-              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')` }}
+            {/* The largest thing on a phone's first screen, so it is fetched first. */}
+            <RemoteImage
+              src={HERO_IMAGE}
+              alt=""
+              fill
+              sizes="100vw"
+              loading="eager"
+              fetchPriority="high"
+              className="object-cover object-center"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-navy-900/90 via-navy-900/50 to-transparent" />
             
@@ -428,7 +459,7 @@ export default async function HomePage() {
               </Link>
             </div>
             <ul className="grid list-none grid-cols-3 gap-3 sm:gap-4 p-0">
-              {categories.map((category) => (
+              {categories.map((category, index) => (
                 <li key={category.id} className="min-w-0">
                   <Link
                     href={catalogCategoryHref(category.slug)}
@@ -436,13 +467,17 @@ export default async function HomePage() {
                   >
                     <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-2.5 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
                       {category.image_url !== "" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={category.image_url}
-                          alt=""
-                          loading="lazy"
-                          className="size-full object-contain"
-                        />
+                        <span className="relative size-full">
+                          <RemoteImage
+                            src={category.image_url}
+                            alt=""
+                            fill
+                            sizes="33vw"
+                            // The first row is on the first screen; the rest wait for scroll.
+                            loading={index < 3 ? "eager" : "lazy"}
+                            className="object-contain"
+                          />
+                        </span>
                       ) : (
                         <span
                           aria-hidden

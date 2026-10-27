@@ -1,3 +1,5 @@
+import { RemoteImage } from "@/components/remote-image";
+
 import type { ServiceDetail } from "../queries";
 import { addsToServiceCopy, warrantyText } from "../service-facts";
 
@@ -39,10 +41,11 @@ function OptionDifference({ variant }: { variant: Variant }) {
   return (
     <li className="flex items-start gap-4">
       {variant.image_url.trim() !== "" ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <RemoteImage
           src={variant.image_url}
           alt=""
+          width={80}
+          height={80}
           className="size-20 shrink-0 rounded-xl bg-surface-sunken object-cover"
         />
       ) : (

@@ -16,6 +16,7 @@ import {
   type CartItem,
 } from "@/features/checkout/queries";
 import { cartMergeConflict, duplicateCartItemConflict } from "@/features/checkout/conflicts";
+import { RemoteImage } from "@/components/remote-image";
 import { getApiClient } from "@/lib/api/browser";
 import { request } from "@vsolve/api-client";
 
@@ -321,7 +322,7 @@ const CAROUSEL_SLIDES: PromoSlide[] = [
     subtitle: "Ensure your home wiring is safe. Book modular switchboard repairs and switch safety audits starting at ₹129.",
     buttonText: "Know more",
     link: "/catalog/electrician",
-    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&fit=crop",
     bgClass: "bg-[#FFF9F5]",
     btnBg: "bg-[#EA580C] hover:bg-[#C2410C] text-white",
   },
@@ -330,7 +331,7 @@ const CAROUSEL_SLIDES: PromoSlide[] = [
     subtitle: "Trace hidden pipeline leaks and install premium, drip-free bathroom mixers starting at ₹199.",
     buttonText: "Know more",
     link: "/catalog/plumber",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&fit=crop",
     bgClass: "bg-[#F0F7FF]",
     btnBg: "bg-[#0284C7] hover:bg-[#0369a1] text-white",
   },
@@ -339,7 +340,7 @@ const CAROUSEL_SLIDES: PromoSlide[] = [
     subtitle: "Fix loose cabinet shutters, align squeaking door hinges, or mount floating wall shelves starting at ₹299.",
     buttonText: "Know more",
     link: "/catalog/technician",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&fit=crop",
     bgClass: "bg-[#FEFDF0]",
     btnBg: "bg-[#D97706] hover:bg-[#B45309] text-white",
   },
@@ -386,9 +387,13 @@ export function HeroSplitCarousel() {
 
         {/* Right Image column */}
         <div className="relative w-full md:w-[50%] h-[180px] md:h-full shrink-0 overflow-hidden">
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-all duration-500 scale-100"
-            style={{ backgroundImage: `url('${slide.image}')` }}
+          <RemoteImage
+            key={slide.image}
+            src={slide.image}
+            alt=""
+            fill
+            sizes="(min-width: 768px) 600px, 100vw"
+            className="object-cover object-center"
           />
         </div>
 

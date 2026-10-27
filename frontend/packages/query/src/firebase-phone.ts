@@ -11,16 +11,9 @@ import {
   type ApiClient,
 } from "@vsolve/api-client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import {
-  getAuth,
-  signInWithPhoneNumber,
-  signOut,
-  RecaptchaVerifier,
-  type Auth,
-  type ConfirmationResult,
-} from "firebase/auth";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+// Types only. The SDK itself is imported on first use — see `loadFirebaseAuthSdk`.
+import type { FirebaseApp, FirebaseOptions } from "firebase/app";
+import type { Auth, ConfirmationResult, RecaptchaVerifier } from "firebase/auth";
 
 import { getTabChannel } from "./cross-tab";
 import { queryKeys } from "./keys";
@@ -277,19 +270,41 @@ export function mapFirebaseError(
   };
 }
 
-let appInstance: FirebaseApp | null = null;
-let authInstance: Auth | null = null;
+/**
+ * The Firebase Auth SDK, downloaded on first use.
+ *
+ * Every page's header mounts the phone flow for its login dialog, so a static
+ * import put the Firebase SDK (~150 KB of script) on every page, for every
+ * visitor — most of whom never log in. It is now fetched when someone starts
+ * typing a number (`preloadFirebase`) or, at the latest, when they press Send.
+ */
+type FirebaseAuthSdk = typeof import("firebase/auth");
 
-export function getFirebaseApp(): FirebaseApp | null {
-  if (typeof window === "undefined") return null;
-  if (appInstance) return appInstance;
+let authSdkPromise: Promise<FirebaseAuthSdk> | null = null;
 
-  const existingApps = getApps();
-  if (existingApps.length > 0) {
-    appInstance = existingApps[0] ?? null;
-    return appInstance;
-  }
+function loadFirebaseAuthSdk(): Promise<FirebaseAuthSdk> {
+  authSdkPromise ??= import("firebase/auth").catch((error: unknown) => {
+    // A download that failed on a bad connection must not fail every later try.
+    authSdkPromise = null;
+    throw error;
+  });
+  return authSdkPromise;
+}
 
+/** Starts downloading the SDK without initializing anything. Safe to call repeatedly. */
+export function preloadFirebase(): void {
+  if (typeof window === "undefined" || firebaseConfig() === null) return;
+  void Promise.all([
+    loadFirebaseAuthSdk(),
+    import("firebase/app"),
+    import("firebase/app-check"),
+  ]).catch(() => {
+    // Send retries the download and reports a failure there.
+  });
+}
+
+/** The web app's Firebase config, or `null` when this deployment has none. */
+function firebaseConfig(): FirebaseOptions | null {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -298,19 +313,28 @@ export function getFirebaseApp(): FirebaseApp | null {
   if (!apiKey || !projectId || !appId) {
     return null;
   }
+  return { apiKey, authDomain, projectId, appId };
+}
 
-  appInstance = initializeApp({
-    apiKey,
-    authDomain,
-    projectId,
-    appId,
-  });
+let appPromise: Promise<FirebaseApp> | null = null;
+let authInstance: Auth | null = null;
 
+async function initializeFirebaseApp(config: FirebaseOptions): Promise<FirebaseApp> {
   const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY;
-  if (appCheckSiteKey && typeof window !== "undefined") {
+  const [{ initializeApp, getApps }, appCheck] = await Promise.all([
+    import("firebase/app"),
+    appCheckSiteKey ? import("firebase/app-check") : Promise.resolve(null),
+  ]);
+
+  const existingApp = getApps()[0];
+  if (existingApp) return existingApp;
+
+  const app = initializeApp(config);
+
+  if (appCheckSiteKey && appCheck) {
     try {
-      initializeAppCheck(appInstance, {
-        provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      appCheck.initializeAppCheck(app, {
+        provider: new appCheck.ReCaptchaV3Provider(appCheckSiteKey),
         isTokenAutoRefreshEnabled: true,
       });
     } catch (err) {
@@ -320,17 +344,36 @@ export function getFirebaseApp(): FirebaseApp | null {
     }
   }
 
-  return appInstance;
+  return app;
 }
 
-export function getFirebaseAuth(): Auth | null {
+/**
+ * The initialized Firebase app, or `null` when this deployment has no config.
+ *
+ * One shared promise, so App Check is always set up before anything else gets
+ * the app, however many callers race for it.
+ */
+export function getFirebaseApp(): Promise<FirebaseApp | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  const config = firebaseConfig();
+  if (!config) return Promise.resolve(null);
+
+  appPromise ??= initializeFirebaseApp(config).catch((error: unknown) => {
+    appPromise = null;
+    throw error;
+  });
+  return appPromise;
+}
+
+export async function getFirebaseAuth(): Promise<Auth | null> {
   if (typeof window === "undefined") return null;
   if (authInstance) return authInstance;
+  if (firebaseConfig() === null) return null;
 
-  const app = getFirebaseApp();
+  const [app, { getAuth }] = await Promise.all([getFirebaseApp(), loadFirebaseAuthSdk()]);
   if (!app) return null;
 
-  authInstance = getAuth(app);
+  authInstance ??= getAuth(app);
   authInstance.languageCode = "en";
   return authInstance;
 }
@@ -422,12 +465,14 @@ export function useVerifyFirebase(
 export async function startFirebasePhoneVerification(
   phone: string,
 ): Promise<(code: string) => Promise<string>> {
-  const auth = getFirebaseAuth();
+  const auth = await getFirebaseAuth();
   const host = auth ? createRecaptchaHost() : null;
   if (!auth || !host) {
     throw new Error("Phone authentication service is not configured.");
   }
 
+  // Already downloaded by `getFirebaseAuth`; this only reads the loaded module.
+  const { RecaptchaVerifier, signInWithPhoneNumber, signOut } = await loadFirebaseAuthSdk();
   const verifier = new RecaptchaVerifier(auth, host, { size: "invisible" });
   let confirmation: ConfirmationResult;
   try {
@@ -529,6 +574,9 @@ export function useFirebasePhoneFlow(
 
   const onPhoneChange = useCallback((value: string) => {
     const next = sanitizePhoneInput(value);
+    // Typing a number is the signal someone is logging in: fetch the SDK now,
+    // so it is ready by the time they press Send.
+    if (next !== "") preloadFirebase();
     setPhone(next);
     setPhoneError(null);
     setFailure(null);
@@ -561,8 +609,7 @@ export function useFirebasePhoneFlow(
     }
     if (isRequesting || resendInSeconds > 0) return;
 
-    const auth = getFirebaseAuth();
-    if (!auth) {
+    if (firebaseConfig() === null) {
       setFailure({
         kind: "unexpected",
         title: "Authentication unavailable",
@@ -581,6 +628,12 @@ export function useFirebasePhoneFlow(
     const attempt = ++sendAttemptRef.current;
     const abandoned = () => attempt !== sendAttemptRef.current;
     const canonicalPhone = formatToE164(phone);
+
+    // The SDK loads alongside the precheck instead of after it. Usually it is
+    // already here, fetched while the number was typed.
+    const firebaseReady = Promise.all([getFirebaseAuth(), loadFirebaseAuthSdk()]);
+    // A failed precheck returns before this is awaited; the send step reports its own errors.
+    firebaseReady.catch(() => undefined);
 
     // 1. Backend precheck
     try {
@@ -609,6 +662,12 @@ export function useFirebasePhoneFlow(
 
     // 2. Firebase Phone Auth with invisible RecaptchaVerifier
     try {
+      const [auth, { RecaptchaVerifier, signInWithPhoneNumber }] = await firebaseReady;
+      if (abandoned()) return;
+      if (!auth) {
+        throw new Error("Phone authentication service is not configured.");
+      }
+
       // A verifier is kept after a successful send so Resend can reuse it;
       // anything that discards it also discards its element.
       if (!verifierRef.current) {
@@ -753,13 +812,14 @@ export function useFirebasePhoneFlow(
       }
     } finally {
       // Always sign out of Firebase auth client so Django session cookie is authoritative
-      const auth = getFirebaseAuth();
-      if (auth) {
-        try {
+      try {
+        const auth = await getFirebaseAuth();
+        if (auth) {
+          const { signOut } = await loadFirebaseAuthSdk();
           await signOut(auth);
-        } catch {
-          // Ignore signOut errors
         }
+      } catch {
+        // Ignore signOut errors
       }
       setIsVerifying(false);
     }

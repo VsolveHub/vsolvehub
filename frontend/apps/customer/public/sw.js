@@ -1,64 +1,32 @@
 // V Solve Hub Service Worker
-const CACHE_NAME = "vsolve-cache-v1";
-const STATIC_ASSETS = ["/logo-mark.png", "/manifest.json"];
+//
+// Deliberately has no "fetch" handler. A worker without one is skipped by the
+// browser for every request, which is the fastest a page can load.
+//
+// The previous worker answered every navigation, script, font and image itself.
+// That cost more than it gave:
+//   - every cached file was downloaded again in the background on each visit
+//     ("stale-while-revalidate"), competing with the page on slow connections;
+//   - catalogue images come from another origin, so the worker could never cache
+//     them and only added a hop to all of them;
+//   - the offline fallback looked for a cached "/" that was never stored.
+// `/_next/static` files are already cached for a year by the browser itself
+// (`immutable`), so nothing is lost.
+//
+// This version replaces the old one on every phone that already has it: the
+// browser re-checks this file on each visit, and the new worker takes over
+// immediately and deletes the old caches. Registration stays in
+// `offline-banner.tsx` so that hand-over keeps happening.
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
-  if (event.request.method !== "GET") return;
-
-  const url = new URL(event.request.url);
-
-  // Network-first for HTML navigation, cache fallback for static assets
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request).catch(async () => {
-        const cached = await caches.match(event.request);
-        if (cached) return cached;
-        return caches.match("/");
-      })
-    );
-    return;
-  }
-
-  // Stale-while-revalidate for static images & assets
-  if (
-    url.pathname.startsWith("/_next/static/") ||
-    url.pathname.match(/\.(png|jpg|jpeg|svg|webp|woff2)$/)
-  ) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        const fetchPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(() => cached);
-
-        return cached || fetchPromise;
-      })
-    );
-  }
 });

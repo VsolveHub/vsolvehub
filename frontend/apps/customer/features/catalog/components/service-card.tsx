@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { formatMoney, useHydrated } from "@vsolve/ui";
+import { RemoteImage } from "@/components/remote-image";
 import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@/features/checkout/queries";
 import type { ServiceCard as ServiceCardData } from "../queries";
 import { serviceHref } from "../service-href";
@@ -186,11 +187,11 @@ export function ServiceCard({
           className="relative md:w-5/12 aspect-[16/10] md:aspect-auto overflow-hidden bg-[#F4F1EC] shrink-0 block cursor-pointer"
         >
           {imageUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
+            <RemoteImage
               src={imageUrl}
               alt={service.cover?.alt_text || service.name}
-              loading="lazy"
+              fill
+              sizes="(min-width: 768px) 40vw, 100vw"
               className={
                 isCoverIcon
                   ? "size-full object-contain p-6 transition-transform duration-500 group-hover:scale-105"
@@ -251,11 +252,11 @@ export function ServiceCard({
       >
         <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#F4F1EC]">
           {imageUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
+            <RemoteImage
               src={imageUrl}
               alt={service.cover?.alt_text || service.name}
-              loading="lazy"
+              fill
+              sizes="(min-width: 1024px) 400px, (min-width: 768px) 50vw, 100vw"
               className={
                 isCoverIcon
                   ? "size-full object-contain p-4 transition-transform duration-500 group-hover:scale-105"
