@@ -11,6 +11,7 @@ import {
   formatDate,
   formatDateTime,
   formatMoney,
+  useT,
 } from "@vsolve/ui";
 
 import {
@@ -33,19 +34,24 @@ import { InvoiceNotice } from "@/features/workspace/view/invoice-notice";
  * them.
  */
 export const RENTAL_BOOKING_STATUS_LABELS: Record<string, string> = {
-  ALL: "All",
-  AWAITING_TRANSPORT_QUOTE: "Delivery request",
-  PENDING_PAYMENT: "Pending payment",
-  CONFIRMED: "Confirmed",
-  HANDOVER: "Handover",
-  RETURNED: "Returned",
-  CANCELLED: "Cancelled",
-  DISPUTED: "Disputed",
+  ALL: "rentals.bookingStatus.all",
+  AWAITING_TRANSPORT_QUOTE: "rentals.bookingStatus.awaitingTransportQuote",
+  PENDING_PAYMENT: "rentals.bookingStatus.pendingPayment",
+  CONFIRMED: "rentals.bookingStatus.confirmed",
+  HANDOVER: "rentals.bookingStatus.handover",
+  RETURNED: "rentals.bookingStatus.returned",
+  CANCELLED: "rentals.bookingStatus.cancelled",
+  DISPUTED: "rentals.bookingStatus.disputed",
 };
 
-export function rentalBookingStatusLabel(status: string | undefined): string {
-  if (!status) return "Unknown";
-  return RENTAL_BOOKING_STATUS_LABELS[status.toUpperCase()] ?? status;
+/** Values above are catalogue keys; an unmapped status renders as-is. */
+export function rentalBookingStatusLabel(
+  status: string | undefined,
+  t: ReturnType<typeof useT>,
+): string {
+  if (!status) return t("rentals.bookingStatus.unknown");
+  const key = RENTAL_BOOKING_STATUS_LABELS[status.toUpperCase()];
+  return key ? t(key) : status;
 }
 
 export function rentalBookingTone(
@@ -59,17 +65,18 @@ export function rentalBookingTone(
 }
 
 const DEPOSIT_STATUS_LABELS: Record<string, string> = {
-  REQUESTED: "Requested",
-  AUTHORIZED: "Authorized",
-  HELD: "Held",
-  RELEASED: "Released",
-  PARTIALLY_CONSUMED: "Partly used",
-  FULLY_CONSUMED: "Fully used",
+  REQUESTED: "rentals.depositStatus.requested",
+  AUTHORIZED: "rentals.depositStatus.authorized",
+  HELD: "rentals.depositStatus.held",
+  RELEASED: "rentals.depositStatus.released",
+  PARTIALLY_CONSUMED: "rentals.depositStatus.partiallyConsumed",
+  FULLY_CONSUMED: "rentals.depositStatus.fullyConsumed",
 };
 
-function depositStatusLabel(status: string | undefined): string {
+function depositStatusLabel(status: string | undefined, t: ReturnType<typeof useT>): string {
   if (!status) return "—";
-  return DEPOSIT_STATUS_LABELS[status.toUpperCase()] ?? status;
+  const key = DEPOSIT_STATUS_LABELS[status.toUpperCase()];
+  return key ? t(key) : status;
 }
 
 function SheetSection({
@@ -120,6 +127,7 @@ export function RentalBookingDetailSheet({
   onAction: (bookingId: string, action: BookingAction) => void;
   isPending: boolean;
 }) {
+  const t = useT();
   const status = booking?.status ?? "";
   const primary = partnerBookingAction(status, booking?.deposit?.status);
   const showDispute = canDisputeDeposit(status, booking?.deposit?.status);
@@ -131,13 +139,13 @@ export function RentalBookingDetailSheet({
       side="end"
       open={booking !== null}
       onOpenChange={onOpenChange}
-      title={booking?.asset?.title ?? "Booking"}
-      description={booking ? rentalBookingStatusLabel(booking.status) : undefined}
+      title={booking?.asset?.title ?? t("rentals.sheet.titleFallback")}
+      description={booking ? rentalBookingStatusLabel(booking.status, t) : undefined}
       footer={
         booking ? (
           <>
             <Button variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
-              Close
+              {t("common.close")}
             </Button>
             {showCancel ? (
               <Button
@@ -145,7 +153,7 @@ export function RentalBookingDetailSheet({
                 disabled={isPending}
                 onClick={() => onAction(booking.id, "cancel")}
               >
-                {bookingActionLabel("cancel")}
+                {bookingActionLabel("cancel", t)}
               </Button>
             ) : null}
             {showDispute ? (
@@ -154,12 +162,12 @@ export function RentalBookingDetailSheet({
                 disabled={isPending}
                 onClick={() => onAction(booking.id, "dispute-deposit")}
               >
-                {bookingActionLabel("dispute-deposit")}
+                {bookingActionLabel("dispute-deposit", t)}
               </Button>
             ) : null}
             {primary ? (
               <Button disabled={isPending} onClick={() => onAction(booking.id, primary)}>
-                {bookingActionLabel(primary)}
+                {bookingActionLabel(primary, t)}
               </Button>
             ) : null}
           </>
@@ -168,25 +176,27 @@ export function RentalBookingDetailSheet({
     >
       {booking ? (
         <div className="flex flex-col gap-5 py-3">
-          <SheetSection title="Customer">
+          <SheetSection title={t("rentals.sheet.customer")}>
             <div className="rounded-card border border-dashed border-line-strong bg-surface-sunken p-3">
-              <p className="text-sm font-medium text-text-muted">Not provided</p>
+              <p className="text-sm font-medium text-text-muted">{t("rentals.sheet.notProvided")}</p>
               <p className="mt-1 text-xs text-text-secondary">
-                A rental booking does not carry the customer&rsquo;s name or number today. The
-                handover PIN is issued to them, not to you.
+                {t("rentals.sheet.customerNote")}
               </p>
             </div>
           </SheetSection>
 
-          <SheetSection title="Rental">
+          <SheetSection title={t("rentals.sheet.rental")}>
             <FactList
               items={[
-                { label: "From", value: formatDate(`${booking.start_date}`) },
-                { label: "To", value: formatDate(`${booking.end_date}`) },
-                { label: "Quantity", value: String(booking.quantity ?? 1) },
+                { label: t("rentals.sheet.from"), value: formatDate(`${booking.start_date}`) },
+                { label: t("rentals.sheet.to"), value: formatDate(`${booking.end_date}`) },
+                { label: t("rentals.sheet.quantity"), value: String(booking.quantity ?? 1) },
                 {
-                  label: "Collection",
-                  value: booking.pickup_or_delivery_mode === "DELIVERY" ? "You deliver" : "Self pickup",
+                  label: t("rentals.sheet.collection"),
+                  value:
+                    booking.pickup_or_delivery_mode === "DELIVERY"
+                      ? t("rentals.sheet.youDeliver")
+                      : t("rentals.sheet.selfPickup"),
                 },
               ]}
             />
@@ -196,24 +206,24 @@ export function RentalBookingDetailSheet({
             <DeliverySection booking={booking as PartnerRentalBooking} />
           ) : null}
 
-          <SheetSection title="Amounts">
+          <SheetSection title={t("rentals.sheet.amounts")}>
             <Readout
-              label="Rental charge"
+              label={t("rentals.sheet.rentalCharge")}
               value={formatMoney(booking.price_paise)}
               tone="active"
               size="sm"
-              caption="What the customer was charged for the rental period"
+              caption={t("rentals.sheet.rentalChargeCaption")}
             />
             <FactList
               items={[
                 {
-                  label: "Daily rate",
+                  label: t("rentals.sheet.dailyRate"),
                   value: formatMoney(booking.asset.daily_rate_paise),
                 },
                 ...((booking.platform_fee_paise ?? 0) > 0
                   ? [
                       {
-                        label: `Platform fee (${booking.platform_fee_percent ?? 0}%)`,
+                        label: t("rentals.sheet.platformFee", { percent: booking.platform_fee_percent ?? 0 }),
                         value: `−${formatMoney(booking.platform_fee_paise ?? 0)}`,
                       },
                     ]
@@ -221,13 +231,13 @@ export function RentalBookingDetailSheet({
                 ...((booking.transport_paise ?? 0) > 0
                   ? [
                       {
-                        label: `Transport (${booking.transport_fee_percent ?? 0}% commission)`,
+                        label: t("rentals.sheet.transport", { percent: booking.transport_fee_percent ?? 0 }),
                         value: formatMoney(booking.transport_paise ?? 0),
                       },
                     ]
                   : []),
                 {
-                  label: "You receive",
+                  label: t("rentals.sheet.youReceive"),
                   value: formatMoney(
                     booking.price_paise -
                       (booking.platform_fee_paise ?? 0) +
@@ -240,34 +250,33 @@ export function RentalBookingDetailSheet({
             <InvoiceNotice />
           </SheetSection>
 
-          <SheetSection title="Refundable deposit">
+          <SheetSection title={t("rentals.sheet.refundableDeposit")}>
             {deposit ? (
               <>
                 {status === "RETURNED" &&
                 (deposit.status === "HELD" || deposit.status === "AUTHORIZED") ? (
                   <p className="text-sm text-text-secondary">
-                    The item is back. Return the deposit, or raise a dispute if something is wrong.
+                    {t("rentals.sheet.depositReturnedHint")}
                   </p>
                 ) : null}
                 {status === "DISPUTED" &&
                 (deposit.status === "HELD" || deposit.status === "AUTHORIZED") ? (
                   <p className="text-sm text-text-secondary">
-                    Operations is reviewing this dispute. The deposit stays held until they approve
-                    the amount you asked to keep, or send it all back to the customer.
+                    {t("rentals.sheet.depositDisputedHint")}
                   </p>
                 ) : null}
                 <Readout
-                  label="Deposit held"
+                  label={t("rentals.sheet.depositHeld")}
                   value={formatMoney(deposit.amount_paise)}
                   tone={deposit.status === "RELEASED" ? "success" : "neutral"}
                   size="sm"
-                  caption={depositStatusLabel(deposit.status)}
+                  caption={depositStatusLabel(deposit.status, t)}
                 />
                 {(deposit.consumed_paise ?? 0) > 0 ? (
                   <FactList
                     items={[
                       {
-                        label: "Used from deposit",
+                        label: t("rentals.sheet.usedFromDeposit"),
                         value: formatMoney(deposit.consumed_paise ?? 0),
                       },
                     ]}
@@ -279,22 +288,22 @@ export function RentalBookingDetailSheet({
               </>
             ) : (
               <p className="text-sm text-text-secondary">
-                No deposit is recorded against this booking.
+                {t("rentals.sheet.noDeposit")}
               </p>
             )}
           </SheetSection>
 
           {booking.notes ? (
-            <SheetSection title="Customer notes">
+            <SheetSection title={t("rentals.sheet.customerNotes")}>
               <p className="text-sm text-text">{booking.notes}</p>
             </SheetSection>
           ) : null}
 
           {booking.created_at ? (
-            <SheetSection title="History">
-              <Timeline label="Booking history">
+            <SheetSection title={t("rentals.sheet.history")}>
+              <Timeline label={t("rentals.sheet.bookingHistory")}>
                 <TimelineEvent
-                  title="Booking placed"
+                  title={t("rentals.sheet.bookingPlaced")}
                   timestamp={formatDateTime(booking.created_at)}
                 />
               </Timeline>

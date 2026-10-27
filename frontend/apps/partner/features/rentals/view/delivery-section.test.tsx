@@ -4,6 +4,8 @@ import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 /**
  * The owner's delivery panel: the quote form, and the 0% transport commission the owner
  * decision (R-5) says must be shown wherever a transport amount is.
@@ -75,7 +77,7 @@ function booking(
 
 let queryClient: QueryClient;
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 }
 
 beforeEach(() => {

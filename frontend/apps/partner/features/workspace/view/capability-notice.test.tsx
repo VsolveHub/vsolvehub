@@ -1,9 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
+
+import { withI18n } from "@/i18n/test-utils";
 
 import { recoveryFor } from "../model/session-guard";
 import { CapabilityNotice } from "./capability-notice";
 import { WorkspaceSummaries } from "./workspace-summaries";
+
+const render = (ui: ReactElement) => rtlRender(withI18n(ui));
 
 /**
  * Mid-session degradation and the global home, at the layer a Partner sees.

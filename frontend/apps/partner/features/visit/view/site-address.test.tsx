@@ -2,10 +2,11 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { SiteAddress } from "./site-address";
+import { withI18n } from "@/i18n/test-utils";
 
 describe("SiteAddress", () => {
   it("shows only the locality while customer payment is pending", () => {
-    render(<SiteAddress address={null} approximateArea="Kukatpally, Hyderabad" />);
+    render(withI18n(<SiteAddress address={null} approximateArea="Kukatpally, Hyderabad" />));
 
     expect(screen.getByText("Near Kukatpally, Hyderabad")).toBeInTheDocument();
     expect(screen.getByText(/Exact address appears after customer payment/i)).toBeInTheDocument();
@@ -13,8 +14,7 @@ describe("SiteAddress", () => {
   });
 
   it("shows the destination after the paid visit is scheduled", () => {
-    render(
-      <SiteAddress
+    render(withI18n(<SiteAddress
         approximateArea="Kukatpally, Hyderabad"
         address={{
           line1: "Plot 14",
@@ -26,8 +26,7 @@ describe("SiteAddress", () => {
           postal_code: "500072",
           directions_url: "https://www.google.com/maps/dir/?api=1&destination=17.494812,78.399574",
         }}
-      />,
-    );
+      />));
 
     expect(screen.getByRole("heading", { name: "Site address" })).toBeInTheDocument();
     expect(screen.getByText("Plot 14")).toBeInTheDocument();
@@ -37,7 +36,7 @@ describe("SiteAddress", () => {
   });
 
   it("routes to the Customer's pin, not a search for the text", () => {
-    render(<SiteAddress approximateArea="Kukatpally, Hyderabad" address={PINNED} />);
+    render(withI18n(<SiteAddress approximateArea="Kukatpally, Hyderabad" address={PINNED} />));
 
     expect(screen.getByRole("link", { name: /open route in maps/i })).toHaveAttribute(
       "href",
@@ -46,12 +45,10 @@ describe("SiteAddress", () => {
   });
 
   it("routes to the typed address only when the server sent no pin", () => {
-    render(
-      <SiteAddress
+    render(withI18n(<SiteAddress
         approximateArea="Kukatpally, Hyderabad"
         address={{ ...PINNED, directions_url: "" }}
-      />,
-    );
+      />));
 
     const href = screen.getByRole("link", { name: /open route in maps/i }).getAttribute("href");
     expect(href).toContain("destination=Plot%2014");

@@ -1,5 +1,6 @@
 import { request, type Schemas } from "@vsolve/api-client";
 import type { Page } from "@vsolve/query";
+import type { useT } from "@vsolve/ui";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -293,14 +294,22 @@ export async function confirmPartnerStayEnquiry(
 }
 
 /** "3 months", "1 night" — how long the guest asked to stay. */
-export function stayLengthLabel(length: number, period: string | undefined | null): string {
-  const unit = period === "NIGHT" ? "night" : "month";
-  return `${length} ${unit}${length === 1 ? "" : "s"}`;
+export function stayLengthLabel(
+  length: number,
+  period: string | undefined | null,
+  t: ReturnType<typeof useT>,
+): string {
+  return period === "NIGHT"
+    ? t("stays.length.nights", { count: length })
+    : t("stays.length.months", { count: length });
 }
 
 /** "₹9,000 / month". */
-export function ratePeriodSuffix(period: string | undefined | null): string {
-  return period === "NIGHT" ? "/ night" : "/ month";
+export function ratePeriodSuffix(
+  period: string | undefined | null,
+  t: ReturnType<typeof useT>,
+): string {
+  return period === "NIGHT" ? t("stays.rate.perNight") : t("stays.rate.perMonth");
 }
 
 export async function cancelPartnerStayEnquiry(enquiryId: string): Promise<StayEnquiry> {
@@ -351,24 +360,25 @@ export async function partnerStayReservationAction(
 /** Where a property stands, in the words a host reads. */
 export function stayListingStatus(
   property: Pick<StayProperty, "moderation_status" | "listing_status">,
+  t: ReturnType<typeof useT>,
 ): {
   label: string;
   tone: "neutral" | "success" | "warning" | "danger";
 } {
-  if (property.listing_status === "ARCHIVED") return { label: "Archived", tone: "neutral" };
+  if (property.listing_status === "ARCHIVED") return { label: t("stays.status.archived"), tone: "neutral" };
   switch (property.moderation_status) {
     case "APPROVED":
       return property.listing_status === "PAUSED"
-        ? { label: "Paused — hidden from guests", tone: "neutral" }
-        : { label: "Live", tone: "success" };
+        ? { label: t("stays.status.paused"), tone: "neutral" }
+        : { label: t("stays.status.live"), tone: "success" };
     case "PENDING":
-      return { label: "Under quick review", tone: "warning" };
+      return { label: t("stays.status.pending"), tone: "warning" };
     case "REJECTED":
-      return { label: "Changes needed", tone: "danger" };
+      return { label: t("stays.status.rejected"), tone: "danger" };
     case "REMOVED":
-      return { label: "Removed by VSolve", tone: "danger" };
+      return { label: t("stays.status.removed"), tone: "danger" };
     default:
-      return { label: "Draft", tone: "neutral" };
+      return { label: t("stays.status.draft"), tone: "neutral" };
   }
 }
 
@@ -512,11 +522,12 @@ export function fetchPartnerStayVisitsPage(cursor?: string, statuses?: string) {
 
 export type VisitDeclineReason = "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
 
-export const VISIT_DECLINE_REASONS: ReadonlyArray<{ value: VisitDeclineReason; label: string }> = [
-  { value: "ROOM_UNAVAILABLE", label: "Room unavailable" },
-  { value: "DATE_MISMATCH", label: "Date doesn't match" },
-  { value: "ALREADY_OCCUPIED", label: "Already occupied" },
-  { value: "OTHER", label: "Other" },
+/** `labelKey` is a `stays.` catalogue key; resolve it with `t` at render time. */
+export const VISIT_DECLINE_REASONS: ReadonlyArray<{ value: VisitDeclineReason; labelKey: string }> = [
+  { value: "ROOM_UNAVAILABLE", labelKey: "stays.visitDecline.roomUnavailable" },
+  { value: "DATE_MISMATCH", labelKey: "stays.visitDecline.dateMismatch" },
+  { value: "ALREADY_OCCUPIED", labelKey: "stays.visitDecline.alreadyOccupied" },
+  { value: "OTHER", labelKey: "stays.visitDecline.other" },
 ];
 
 export async function partnerStayVisitAction(
@@ -540,6 +551,17 @@ export const WEEKDAY_NAMES = [
   "Friday",
   "Saturday",
   "Sunday",
+] as const;
+
+/** Catalogue keys for `WEEKDAY_NAMES`, same order (Monday first). */
+export const WEEKDAY_NAME_KEYS = [
+  "stays.weekday.monday",
+  "stays.weekday.tuesday",
+  "stays.weekday.wednesday",
+  "stays.weekday.thursday",
+  "stays.weekday.friday",
+  "stays.weekday.saturday",
+  "stays.weekday.sunday",
 ] as const;
 
 /** "17:00:00" or "17:00" → "5 PM". */

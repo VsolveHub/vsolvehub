@@ -2,9 +2,10 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { useServerCountdown, type Countdown } from "@vsolve/query";
-import { Badge, ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
+import { Badge, ErrorState, Spinner, cn, formatMoney, useT } from "@vsolve/ui";
 import Link from "next/link";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { ApplicationOverview } from "@/features/application/view/application-overview";
@@ -54,37 +55,38 @@ function Home({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function WorkHome() {
+  const t = useT();
+  const router = useRouter();
   const query = usePartnerApplication();
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
+  const isNotApproved = isMissing || query.data === undefined || query.data.status !== "APPROVED";
 
-  if (query.isPending) {
+  useEffect(() => {
+    if (!query.isPending && isNotApproved) {
+      router.replace("/apply");
+    }
+  }, [isNotApproved, query.isPending, router]);
+
+  if (query.isPending || isNotApproved) {
     return (
-      <div className="mx-auto w-full max-w-md px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
-        <ApplicationOverview />
+      <div className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-24 text-text-secondary">
+        <Spinner size="sm" />
+        <span className="text-sm font-medium">{t("apply.editor.loadingAriaLabel")}</span>
       </div>
     );
   }
 
   if (query.isError && !isMissing) {
     return (
-      <Home title="Your work">
+      <Home title={t("home.workHome.title")}>
         <ErrorState
-          title="We could not load your account"
-          message="Nothing you have saved is lost. Check your connection and try again."
-          actionLabel="Try again"
+          title={t("home.workHome.accountError.title")}
+          message={t("home.workHome.accountError.message")}
+          actionLabel={t("common.tryAgain")}
           onAction={() => void query.refetch()}
         />
       </Home>
-    );
-  }
-
-  // A 404 or non-approved application renders the full ApplicationOverview
-  if (isMissing || query.data === undefined || query.data.status !== "APPROVED") {
-    return (
-      <div className="mx-auto w-full max-w-md px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
-        <ApplicationOverview />
-      </div>
     );
   }
 
@@ -108,6 +110,7 @@ export function WorkHome() {
  * the stack. 9rem is that allowance.
  */
 function WorkStack() {
+  const t = useT();
   const stack = useWorkStack();
   const performance = usePartnerPerformance();
   // Rentals, stays and job-listing partners never get live offers: no "go online" for them.
@@ -137,7 +140,7 @@ function WorkStack() {
   if (specialty.home === "listings") {
     return (
       <main className="flex min-h-[calc(100dvh-3.5rem)] flex-col bg-surface">
-        <h1 className="sr-only">Your hiring</h1>
+        <h1 className="sr-only">{t("home.workHome.hiringTitle")}</h1>
         <div className="flex flex-1 flex-col gap-3 px-4 py-6 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
           <ListingHome />
         </div>
@@ -147,7 +150,7 @@ function WorkStack() {
 
   return (
     <main className="relative flex min-h-[calc(100dvh-3.5rem)] flex-col bg-[var(--color-ink-900)]">
-      <h1 className="sr-only">Your work</h1>
+      <h1 className="sr-only">{t("home.workHome.title")}</h1>
 
       {/* Map-style hero — earnings front and centre */}
       <div className="relative flex shrink-0 flex-col px-4 pb-12 pt-6 sm:pt-7">
@@ -227,16 +230,17 @@ function WorkStack() {
  * row is supporting context — its absence for a second costs nothing.
  */
 function MonthStrip({ performance }: { performance: PartnerPerformance | null }) {
+  const t = useT();
   if (performance === null) return null;
 
   return (
     <div className="relative z-10 mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <Metric label="This month" value={formatMoney(performance.month_net_paise)} />
+      <Metric label={t("home.workHome.monthStrip.thisMonth")} value={formatMoney(performance.month_net_paise)} />
       <Metric
-        label={performance.month_jobs === 1 ? "Job done" : "Jobs done"}
+        label={t("home.workHome.monthStrip.jobsDone", { count: performance.month_jobs })}
         value={String(performance.month_jobs)}
       />
-      <Metric label="Usual month" value={formatMoney(performance.average_monthly_net_paise)} />
+      <Metric label={t("home.workHome.monthStrip.usualMonth")} value={formatMoney(performance.average_monthly_net_paise)} />
     </div>
   );
 }
@@ -275,11 +279,12 @@ function StackBody({
   /** A stays- or listings-only Partner: nothing waiting is not "go online". */
   specialty?: "listings" | "stays" | "rentals" | null;
 }) {
+  const t = useT();
   if (stack.isPending) {
     return (
       <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
         <Spinner size="sm" />
-        Loading your work…
+        {t("home.workHome.stack.loading")}
       </p>
     );
   }
@@ -287,17 +292,19 @@ function StackBody({
   if (stack.error) {
     return (
       <ErrorState
-        title="We could not load your work"
-        message="Nothing has changed. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("home.workHome.stack.error.title")}
+        message={t("common.nothingChanged")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => window.location.reload()}
       />
     );
   }
 
   if (needsYou.length === 0) {
-    if (specialty === "stays") return <NothingWaiting href="/stays" label="Open your stays" />;
-    if (specialty === "listings") return <NothingWaiting href="/listings" label="Open your listings" />;
+    if (specialty === "stays")
+      return <NothingWaiting href="/stays" label={t("home.workHome.nothingWaiting.openStays")} />;
+    if (specialty === "listings")
+      return <NothingWaiting href="/listings" label={t("home.workHome.nothingWaiting.openListings")} />;
     return <WaitingForWork />;
   }
 
@@ -305,7 +312,7 @@ function StackBody({
     <section className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-3 px-0.5">
         <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-text-muted">
-          Needs you
+          {t("home.workHome.stack.needsYou")}
         </h2>
         <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-text-muted">
           {needsYou.length}
@@ -346,10 +353,11 @@ function WaitingForWork() {
 
 /** Nothing needs a specialty Partner right now; point them at their workspace. */
 function NothingWaiting({ href, label }: { href: string; label: string }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center">
-      <p className="font-bold text-text">Nothing needs you right now</p>
-      <p className="text-sm text-text-secondary">New enquiries and requests will show up here.</p>
+      <p className="font-bold text-text">{t("home.workHome.nothingWaiting.title")}</p>
+      <p className="text-sm text-text-secondary">{t("home.workHome.nothingWaiting.body")}</p>
       <Link href={href} className="text-sm font-semibold text-text-link hover:underline">
         {label} →
       </Link>
@@ -374,10 +382,11 @@ function subscribeToNothing(): () => void {
  * number beside it says how much.
  */
 function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number | null }) {
+  const t = useT();
   return (
     <div className="relative z-10 flex flex-col gap-1 pt-2">
       <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-surface/50">
-        Earned today
+        {t("home.workHome.today.label")}
       </span>
       <div className="flex items-end justify-between gap-3 min-w-0">
         <span
@@ -390,15 +399,13 @@ function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number 
           <span className="mb-1 flex shrink-0 flex-col items-end text-right text-sm font-medium leading-snug text-surface/55">
             {jobs === 0 ? (
               <>
-                <span>No jobs</span>
-                <span>yet today</span>
+                <span>{t("home.workHome.today.noJobsLine1")}</span>
+                <span>{t("home.workHome.today.noJobsLine2")}</span>
               </>
             ) : (
               <>
-                <span>
-                  {jobs} {jobs === 1 ? "job" : "jobs"}
-                </span>
-                <span>finished</span>
+                <span>{t("home.workHome.today.jobCount", { count: jobs })}</span>
+                <span>{t("home.workHome.today.finished")}</span>
               </>
             )}
           </span>
@@ -544,12 +551,14 @@ function startTimeLabel(item: WorkItem): string | null {
   }).format(at);
 }
 
-function durationLabel(minutes: number | null): string | null {
+function durationLabel(minutes: number | null, t: ReturnType<typeof useT>): string | null {
   if (minutes === null) return null;
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 60) return t("home.workHome.duration.minutesOnly", { count: minutes });
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return remainder === 0 ? `${hours} ${hours === 1 ? "hr" : "hrs"}` : `${hours} hr ${remainder} min`;
+  return remainder === 0
+    ? t("home.workHome.duration.hoursOnly", { count: hours })
+    : t("home.workHome.duration.hoursAndMinutesCombo", { hours, minutes: remainder });
 }
 
 /** The headline number, or the canvas's "₹ ?" for something not yet priced. */
@@ -573,47 +582,48 @@ function spokenAmount(item: WorkItem): string | null {
   return item.amountLabel === null ? amount : `${item.amountLabel.toLowerCase()} ${amount}`;
 }
 
-function cardLabel(item: WorkItem): string {
+function cardLabel(item: WorkItem, t: ReturnType<typeof useT>): string {
   const facts = [item.accessibleName];
   const amount = spokenAmount(item);
   if (amount !== null) facts.push(amount);
   const date = dateLabel(item);
   const starts = startTimeLabel(item);
-  const duration = durationLabel(item.durationMinutes);
-  if (date !== null) facts.push(`date ${date}`);
-  if (starts !== null) facts.push(`starts ${starts}`);
-  if (duration !== null) facts.push(`duration ${duration}`);
+  const duration = durationLabel(item.durationMinutes, t);
+  if (date !== null) facts.push(`${t("home.workHome.aria.date")} ${date}`);
+  if (starts !== null) facts.push(`${t("home.workHome.aria.starts")} ${starts}`);
+  if (duration !== null) facts.push(`${t("home.workHome.aria.duration")} ${duration}`);
   if (item.areaLabel !== null && item.areaLabel !== item.stateLabel) {
-    facts.push(`area ${item.areaLabel}`);
+    facts.push(`${t("home.workHome.aria.area")} ${item.areaLabel}`);
   }
   return facts.join(", ");
 }
 
 function ScheduleFacts({ item }: { readonly item: WorkItem }) {
+  const t = useT();
   const date = dateLabel(item);
   const starts = startTimeLabel(item);
-  const duration = durationLabel(item.durationMinutes);
+  const duration = durationLabel(item.durationMinutes, t);
   if (date === null && starts === null && duration === null && item.areaLabel === null) return null;
 
   return (
     <span className="grid grid-cols-2 gap-x-4 gap-y-2">
       {date === null ? null : (
-        <Fact name="date" label="Date">
+        <Fact name="date" label={t("home.workHome.fact.date")}>
           {date}
         </Fact>
       )}
       {starts === null ? null : (
-        <Fact name="time" label="Starts">
+        <Fact name="time" label={t("home.workHome.fact.starts")}>
           {starts}
         </Fact>
       )}
       {duration === null ? null : (
-        <Fact name="time" label="Duration">
+        <Fact name="time" label={t("home.workHome.fact.duration")}>
           {duration}
         </Fact>
       )}
       {item.areaLabel === null ? null : (
-        <Fact name="distance" label="Area">
+        <Fact name="distance" label={t("home.workHome.fact.area")}>
           {item.areaLabel}
         </Fact>
       )}
@@ -644,13 +654,14 @@ function ScheduleFacts({ item }: { readonly item: WorkItem }) {
  * lands shortly after and redraws the stack without it.
  */
 function LiveOfferCard({ item }: { item: WorkItem }) {
+  const t = useT();
   const countdown = useServerCountdown(item.respondsBy, 1000);
   if (countdown?.isExpired) return null;
 
   return (
     <Link
       href={item.href}
-      aria-label={cardLabel(item)}
+      aria-label={cardLabel(item, t)}
       className={cn(
         CARD,
         "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
@@ -684,7 +695,7 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
 
       <span className={cn(BAR, "bg-surface")}>
         <Pictogram name="yes" size="md" className="text-success-text" />
-        <span className="text-base font-bold text-text">Take this job</span>
+        <span className="text-base font-bold text-text">{t("home.workHome.liveOffer.cta")}</span>
       </span>
     </Link>
   );
@@ -760,12 +771,13 @@ function CountdownDial({ countdown }: { countdown: Countdown }) {
  * are not ported rather than filled with placeholder tiles.
  */
 function NeedsPriceCard({ item }: { item: WorkItem }) {
+  const t = useT();
   const at = whenLabel(item);
 
   return (
     <Link
       href={item.href}
-      aria-label={cardLabel(item)}
+      aria-label={cardLabel(item, t)}
       className={cn(CARD, "border border-line bg-surface")}
     >
       <span className="flex items-center gap-2.75">
@@ -777,12 +789,12 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
           <CardTitle item={item} />
           <span className="flex flex-col gap-1 text-text-secondary">
             {item.areaLabel ? (
-              <Fact name="distance" label="Near">
+              <Fact name="distance" label={t("home.workHome.needsPrice.near")}>
                 {item.areaLabel}
               </Fact>
             ) : null}
             {at ? (
-              <Fact name={item.whenIsDay ? "date" : "time"} label="Requested">
+              <Fact name={item.whenIsDay ? "date" : "time"} label={t("home.workHome.needsPrice.requested")}>
                 {at}
               </Fact>
             ) : null}
@@ -793,7 +805,7 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
       <span className={cn(BAR, "bg-action shadow-[0_2px_0_var(--color-action-active)]")}>
         <Pictogram name="go" size="md" className="text-action-text" />
         <span className="text-base font-bold text-action-text">
-          {item.actionLabel ?? "Review request"}
+          {item.actionLabel ?? t("home.workHome.needsPrice.reviewRequest")}
         </span>
       </span>
     </Link>
@@ -816,10 +828,11 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
  * glyph beside the number says which is which.
  */
 function DoingCard({ item }: { item: WorkItem }) {
+  const t = useT();
   return (
     <Link
       href={item.href}
-      aria-label={cardLabel(item)}
+      aria-label={cardLabel(item, t)}
       className={cn(
         CARD,
         "border border-line border-l-[6px] border-l-action-secondary bg-surface",
@@ -862,7 +875,7 @@ function DoingCard({ item }: { item: WorkItem }) {
         className={cn(BAR, "bg-action-secondary shadow-[0_2px_0_var(--color-navy-900)]")}
       >
         <Pictogram name="go" size="md" className="text-action-secondary-text" />
-        <span className="text-base font-bold text-action-secondary-text">Open this job</span>
+        <span className="text-base font-bold text-action-secondary-text">{t("home.workHome.doing.cta")}</span>
       </span>
     </Link>
   );
@@ -870,19 +883,20 @@ function DoingCard({ item }: { item: WorkItem }) {
 
 /** Settled work — with payment copy that reflects how this kind was paid. */
 function SettledCard({ item }: { item: WorkItem }) {
+  const t = useT();
   const date = dateLabel(item);
   const starts = startTimeLabel(item);
   const settlementCopy =
     item.kind === "engagement"
       ? item.amountLabel === "Collected directly"
-        ? "Paid directly by customer"
-        : "Work completed"
-      : "Held until payout";
+        ? t("home.workHome.settled.paidDirectly")
+        : t("home.workHome.settled.workCompleted")
+      : t("home.workHome.settled.heldUntilPayout");
 
   return (
     <Link
       href={item.href}
-      aria-label={cardLabel(item)}
+      aria-label={cardLabel(item, t)}
       className={cn(
         "flex min-h-14 items-center gap-3 rounded-card border border-success-line bg-success-surface px-3.5 py-2.75",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
@@ -933,10 +947,11 @@ function SettledCard({ item }: { item: WorkItem }) {
  * figure it must not draw.
  */
 function AnsweredCard({ item }: { item: WorkItem }) {
+  const t = useT();
   return (
     <Link
       href={item.href}
-      aria-label={cardLabel(item)}
+      aria-label={cardLabel(item, t)}
       className={cn(
         "flex min-h-14 items-center gap-3 rounded-card border border-info-line bg-info-surface px-3.5 py-2.75",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
@@ -955,10 +970,11 @@ function AnsweredCard({ item }: { item: WorkItem }) {
 }
 
 function OutcomeCard({ item }: { item: WorkItem }) {
+  const t = useT();
   return (
     <Link
       href={item.href}
-      aria-label={cardLabel(item)}
+      aria-label={cardLabel(item, t)}
       className={cn(
         "flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-2.75",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",

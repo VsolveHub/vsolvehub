@@ -1,6 +1,17 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
-import { DECLINE_REASONS, describeDeclineReason, findDeclineReason } from "./decline-reasons";
+import { catalogs } from "@/i18n/catalogs";
+
+import {
+  declineReasonsFor,
+  describeDeclineReason,
+  findDeclineReason as findReason,
+} from "./decline-reasons";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
+const DECLINE_REASONS = declineReasonsFor(t);
+const findDeclineReason = (code: string) => findReason(code, t);
 
 /**
  * The decline vocabulary.
@@ -52,8 +63,8 @@ describe("reading a code back", () => {
     // Reachable in two ordinary ways: `withdraw_invitation` writes
     // `requirement_changed`, and a newer deployment can add codes this bundle
     // predates. Showing the raw record beats showing nothing.
-    expect(describeDeclineReason("requirement_changed")).toBe("Requirement changed");
-    expect(describeDeclineReason("cluster-already-holds-slot")).toBe(
+    expect(describeDeclineReason("requirement_changed", t)).toBe("Requirement changed");
+    expect(describeDeclineReason("cluster-already-holds-slot", t)).toBe(
       "Cluster already holds slot",
     );
   });
@@ -61,6 +72,6 @@ describe("reading a code back", () => {
   it("shows nothing for an empty code", () => {
     // The ordinary state of a live invitation: `decline_reason_code` is blank
     // until somebody declines.
-    expect(describeDeclineReason("")).toBe("");
+    expect(describeDeclineReason("", t)).toBe("");
   });
 });

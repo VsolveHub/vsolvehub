@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "Agreements" };
 export default function ConsentPage() {
   return (
     <ApplicationEditor
-      title="Agreements"
-      description="The terms you are agreeing to as a Partner. We record which version you accepted and when."
-      saveLabel="Accept and continue"
+      title="apply.consent.pageTitle"
+      description="apply.consent.pageDescription"
+      saveLabel="apply.consent.saveLabel"
     >
       <ConsentStep />
     </ApplicationEditor>

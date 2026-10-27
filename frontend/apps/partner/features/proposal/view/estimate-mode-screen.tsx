@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 
-import { Button, Card, StepDock, cn } from "@vsolve/ui";
+import { Button, Card, StepDock, cn, useT } from "@vsolve/ui";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
@@ -53,6 +55,7 @@ export interface EstimateModeScreenProps {
 export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScreenProps) {
   const { partner, customer } = estimate;
   const itemWise = selectedMode === "ITEM_WISE";
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col bg-canvas">
@@ -60,13 +63,13 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
         title={estimate.documentTitle}
         backSlot={
           <HeaderTile>
-            <BackGlyph label="Back" />
+            <BackGlyph label={t("common.back")} />
           </HeaderTile>
         }
         trailing={
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface/12 px-2.5 py-1.5 text-[11px] font-bold text-success-line">
             <Pictogram name="yes" size="xs" />
-            Draft saved
+            {t("proposal.screens.mode.draftSaved")}
           </span>
         }
       />
@@ -89,14 +92,14 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
               {partner.verified ? (
                 <span className="shrink-0 text-info-text">
                   <Pictogram name="warranty" size="sm" />
-                  <span className="sr-only">Verified partner</span>
+                  <span className="sr-only">{t("proposal.screens.mode.verifiedPartner")}</span>
                 </span>
               ) : null}
             </span>
 
             <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-text-muted">
               <Pictogram name="rating" size="xs" className="shrink-0 text-action" />
-              <span className="sr-only">Rating</span>
+              <span className="sr-only">{t("proposal.screens.mode.rating")}</span>
               {partner.rating}
             </span>
           </span>
@@ -105,7 +108,7 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
         {/* Who it is for. Named before anything is priced, on purpose. */}
         <Card padding="sm">
           <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-muted">
-            Estimate for
+            {t("proposal.screens.mode.estimateFor")}
           </p>
 
           <div className="mt-1.5 flex items-center gap-2.5">
@@ -123,14 +126,14 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-selected-surface text-text-link"
             >
               <Pictogram name="call" size="md" />
-              <span className="sr-only">Call {customer.name}</span>
+              <span className="sr-only">{t("proposal.screens.mode.call", { name: customer.name })}</span>
             </a>
           </div>
 
           <div className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-[12.5px] font-medium text-text-muted">
             <Pictogram name="date" size="sm" className="shrink-0" />
             <span>
-              Estimate date{" "}
+              {t("proposal.screens.mode.estimateDate")}{" "}
               <strong className="font-bold text-text">{estimate.estimateDate}</strong>
             </span>
           </div>
@@ -141,8 +144,8 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
           <ModeCard
             selected={itemWise}
             icon="papers"
-            title="Item wise estimate"
-            description="Add items and set labour charges"
+            title={t("proposal.screens.mode.itemWise.title")}
+            description={t("proposal.screens.mode.itemWise.description")}
           />
 
           <div className="flex items-center justify-center gap-2.5">
@@ -151,7 +154,7 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
               aria-hidden
               className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full bg-surface-sunken text-[11px] font-extrabold tracking-[0.06em] text-text-muted"
             >
-              OR
+              {t("proposal.screens.mode.or")}
             </span>
             <span aria-hidden className="h-px flex-1 bg-line" />
           </div>
@@ -159,8 +162,8 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
           <ModeCard
             selected={!itemWise}
             icon="crew"
-            title="Labour wise estimate"
-            description="Add teams and working days"
+            title={t("proposal.screens.mode.labourWise.title")}
+            description={t("proposal.screens.mode.labourWise.description")}
           />
         </div>
 
@@ -168,13 +171,13 @@ export function EstimateModeScreen({ estimate, selectedMode }: EstimateModeScree
           <span aria-hidden className="mt-px shrink-0 text-warning-text">
             <Pictogram name="later" size="sm" />
           </span>
-          <span>Pick one. Switching later clears the rows you have already entered.</span>
+          <span>{t("proposal.screens.mode.caution")}</span>
         </p>
       </main>
 
       <StepDock>
         <Button size="lg" block>
-          {itemWise ? "Start the item list" : "Start the labour list"}
+          {itemWise ? t("proposal.screens.mode.startItems") : t("proposal.screens.mode.startLabour")}
         </Button>
       </StepDock>
     </div>
@@ -205,6 +208,7 @@ function ModeCard({
   title: string;
   description: ReactNode;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -246,7 +250,7 @@ function ModeCard({
       {selected ? (
         <span className="shrink-0 text-text-link">
           <Pictogram name="yes" size="md" />
-          <span className="sr-only">Selected</span>
+          <span className="sr-only">{t("proposal.screens.mode.selected")}</span>
         </span>
       ) : null}
     </div>

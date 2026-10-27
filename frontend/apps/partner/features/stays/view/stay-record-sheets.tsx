@@ -13,6 +13,7 @@ import {
   formatDate,
   formatDateTime,
   formatMoney,
+  useT,
 } from "@vsolve/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Phone } from "lucide-react";
@@ -26,11 +27,20 @@ import {
   type StayEnquiry,
 } from "@/features/stays/queries";
 
+type Translate = ReturnType<typeof useT>;
+
+/** "2 adults, 1 child" — the party a guest booked for. */
+export function adultsAndChildren(adults: number, children: number | undefined, t: Translate): string {
+  const adultText = t("stays.guests.adults", { count: adults });
+  return children ? `${adultText}, ${t("stays.guests.children", { count: children })}` : adultText;
+}
+
 /**
  * "Which room?" for Mark as Booked. Lists the property's rooms that aren't booked, grouped by
  * type, with the enquired type first.
  */
 export function useBookableRooms(propertyId: string | undefined, preferUnitId?: string | null) {
+  const t = useT();
   const properties = useQuery({
     queryKey: ["partner-stays", "properties"],
     queryFn: fetchPartnerStayProperties,
@@ -47,10 +57,13 @@ export function useBookableRooms(propertyId: string | undefined, preferUnitId?: 
         .sort(byRoomNumber)
         .map((room) => ({
           id: room.id,
-          label: `${room.number} · ${unit.name}${room.status === "UNAVAILABLE" ? " (switched off)" : ""}`,
+          label:
+            room.status === "UNAVAILABLE"
+              ? t("stays.roomChoice.optionOff", { number: room.number, name: unit.name })
+              : `${room.number} · ${unit.name}`,
         })),
     );
-  }, [properties.data, propertyId, preferUnitId]);
+  }, [properties.data, propertyId, preferUnitId, t]);
 }
 
 export function RoomChoice({
@@ -62,16 +75,17 @@ export function RoomChoice({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const t = useT();
   if (rooms.length === 0) {
     return (
       <p className="text-xs text-text-secondary">
-        Every room is already marked booked. The booking is still recorded.
+        {t("stays.roomChoice.allBooked")}
       </p>
     );
   }
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-semibold text-navy-900">Which room?</span>
+      <span className="text-sm font-semibold text-navy-900">{t("stays.roomChoice.label")}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -113,18 +127,19 @@ export interface StayReservationRow {
  * from here so the same row cannot be called two things on one screen.
  */
 export const STAY_RESERVATION_STATUS_LABELS: Record<string, string> = {
-  HELD: "Held",
-  PAYMENT_PENDING: "Payment pending",
-  CONFIRMED: "Confirmed",
-  CHECKED_IN: "Checked in",
-  CHECKED_OUT: "Checked out",
-  CANCELLED: "Cancelled",
-  NO_SHOW: "No show",
+  HELD: "stays.reservationStatus.held",
+  PAYMENT_PENDING: "stays.reservationStatus.paymentPending",
+  CONFIRMED: "stays.reservationStatus.confirmed",
+  CHECKED_IN: "stays.reservationStatus.checkedIn",
+  CHECKED_OUT: "stays.reservationStatus.checkedOut",
+  CANCELLED: "stays.reservationStatus.cancelled",
+  NO_SHOW: "stays.reservationStatus.noShow",
 };
 
-export function stayReservationStatusLabel(status: string | undefined): string {
-  if (!status) return "Unknown";
-  return STAY_RESERVATION_STATUS_LABELS[status] ?? status;
+export function stayReservationStatusLabel(status: string | undefined, t: Translate): string {
+  if (!status) return t("stays.status.unknown");
+  const key = STAY_RESERVATION_STATUS_LABELS[status];
+  return key ? t(key) : status;
 }
 
 /**
@@ -164,12 +179,13 @@ function GuestBlock({
   phone?: string | null;
   note: string;
 }) {
+  const t = useT();
   if (name || phone) {
     return (
       <FactList
         items={[
-          { label: "Name", value: name || "—" },
-          { label: "Phone", value: phone || "—" },
+          { label: t("stays.sheet.name"), value: name || "—" },
+          { label: t("stays.sheet.phone"), value: phone || "—" },
         ]}
       />
     );
@@ -177,7 +193,7 @@ function GuestBlock({
 
   return (
     <div className="rounded-card border border-dashed border-line-strong bg-surface-sunken p-3">
-      <p className="text-sm font-medium text-text-muted">Not provided</p>
+      <p className="text-sm font-medium text-text-muted">{t("stays.sheet.notProvided")}</p>
       <p className="mt-1 text-xs text-text-secondary">{note}</p>
     </div>
   );
@@ -228,6 +244,7 @@ export function StayReservationDetailSheet({
   isPending: boolean;
   actionError?: string | null;
 }) {
+  const t = useT();
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -248,16 +265,16 @@ export function StayReservationDetailSheet({
   const timeline: Array<{ title: string; at: string; tone: "neutral" | "success" | "danger" }> =
     [];
   if (reservation?.created_at) {
-    timeline.push({ title: "Booked", at: reservation.created_at, tone: "neutral" });
+    timeline.push({ title: t("stays.reservation.event.booked"), at: reservation.created_at, tone: "neutral" });
   }
   if (reservation?.checked_in_at) {
-    timeline.push({ title: "Checked in", at: reservation.checked_in_at, tone: "success" });
+    timeline.push({ title: t("stays.reservationStatus.checkedIn"), at: reservation.checked_in_at, tone: "success" });
   }
   if (reservation?.checked_out_at) {
-    timeline.push({ title: "Checked out", at: reservation.checked_out_at, tone: "neutral" });
+    timeline.push({ title: t("stays.reservationStatus.checkedOut"), at: reservation.checked_out_at, tone: "neutral" });
   }
   if (reservation?.cancelled_at) {
-    timeline.push({ title: "Cancelled", at: reservation.cancelled_at, tone: "danger" });
+    timeline.push({ title: t("stays.reservationStatus.cancelled"), at: reservation.cancelled_at, tone: "danger" });
   }
 
   return (
@@ -265,19 +282,25 @@ export function StayReservationDetailSheet({
       side="end"
       open={reservation !== null}
       onOpenChange={onOpenChange}
-      title={reservation ? `${reservation.property_title ?? "Stay"} · ${reservation.unit_name ?? "Room"}` : ""}
+      title={
+        reservation
+          ? `${reservation.property_title ?? t("stays.bookings.fallbackStay")} · ${
+              reservation.unit_name ?? t("stays.bookings.fallbackRoom")
+            }`
+          : ""
+      }
       description={
-        reservation ? stayReservationStatusLabel(reservation.status) : undefined
+        reservation ? stayReservationStatusLabel(reservation.status, t) : undefined
       }
       footer={
         reservation ? (
           <>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Close
+              {t("common.close")}
             </Button>
             {canCancel && !cancelling ? (
               <Button variant="ghost" disabled={isPending} onClick={() => setCancelling(true)}>
-                Cancel booking
+                {t("stays.sheet.cancelBooking")}
               </Button>
             ) : null}
             {reservation.status === "CONFIRMED" && stayHasStarted ? (
@@ -286,7 +309,7 @@ export function StayReservationDetailSheet({
                 disabled={isPending}
                 onClick={() => onNoShow(reservation.id)}
               >
-                Guest didn’t arrive
+                {t("stays.reservation.noShow")}
               </Button>
             ) : null}
             {reservation.status === "CONFIRMED" ? (
@@ -294,7 +317,7 @@ export function StayReservationDetailSheet({
                 disabled={isPending || !stayHasStarted}
                 onClick={() => onCheckIn(reservation.id)}
               >
-                Check in
+                {t("stays.reservation.checkIn")}
               </Button>
             ) : null}
             {reservation.status === "CHECKED_IN" ? (
@@ -303,7 +326,7 @@ export function StayReservationDetailSheet({
                 disabled={isPending}
                 onClick={() => onCheckOut(reservation.id)}
               >
-                Check out
+                {t("stays.reservation.checkOut")}
               </Button>
             ) : null}
           </>
@@ -315,18 +338,18 @@ export function StayReservationDetailSheet({
           {actionError ? <p className="text-sm text-danger-text">{actionError}</p> : null}
           {reservation.status === "CONFIRMED" && !stayHasStarted ? (
             <p className="text-sm text-text-secondary">
-              You can check the guest in from{" "}
-              {formatDate(`${reservation.check_in}T12:00:00`)}.
+              {t("stays.reservation.checkInFrom", {
+                date: formatDate(`${reservation.check_in}T12:00:00`),
+              })}
             </p>
           ) : null}
 
           {cancelling ? (
-            <SheetSection title="Cancel this booking">
+            <SheetSection title={t("stays.reservation.cancelTitle")}>
               <p className="text-sm text-text-secondary">
-                The guest is refunded in full and the room opens up again. Tell them why — they
-                will see this message.
+                {t("stays.reservation.cancelBody")}
               </p>
-              <Field label="Reason" required error={cancelError ?? undefined}>
+              <Field label={t("stays.reservation.reason")} required error={cancelError ?? undefined}>
                 <Textarea
                   rows={3}
                   value={cancelReason}
@@ -334,7 +357,7 @@ export function StayReservationDetailSheet({
                     setCancelReason(event.target.value);
                     setCancelError(null);
                   }}
-                  placeholder="e.g. Water damage in the room — we can’t host you on these dates."
+                  placeholder={t("stays.reservation.reasonPlaceholder")}
                 />
               </Field>
               <div className="flex flex-wrap gap-2">
@@ -343,72 +366,74 @@ export function StayReservationDetailSheet({
                   disabled={isPending}
                   onClick={() => {
                     if (!cancelReason.trim()) {
-                      setCancelError("Add a reason for the guest.");
+                      setCancelError(t("stays.reservation.reasonMissing"));
                       return;
                     }
                     onCancel(reservation.id, cancelReason.trim());
                   }}
                 >
-                  Cancel and refund guest
+                  {t("stays.reservation.cancelAndRefund")}
                 </Button>
                 <Button variant="ghost" disabled={isPending} onClick={() => setCancelling(false)}>
-                  Keep booking
+                  {t("stays.reservation.keepBooking")}
                 </Button>
               </div>
             </SheetSection>
           ) : null}
 
-          <SheetSection title="Guest">
+          <SheetSection title={t("stays.sheet.guest")}>
             <GuestBlock
               name={reservation.customer_name}
               phone={reservation.customer_phone}
-              note="This booking has no guest contact details."
+              note={t("stays.reservation.noContact")}
             />
           </SheetSection>
 
-          <SheetSection title="Stay">
+          <SheetSection title={t("stays.reservation.stay")}>
             <FactList
               items={[
                 {
-                  label: "Check in",
+                  label: t("stays.reservation.checkIn"),
                   value: formatDate(`${reservation.check_in}T12:00:00`),
                 },
                 {
-                  label: "Check out",
+                  label: t("stays.reservation.checkOut"),
                   value: formatDate(`${reservation.check_out}T12:00:00`),
                 },
-                { label: "Nights", value: String(nights) },
+                { label: t("stays.reservation.nights"), value: String(nights) },
                 {
-                  label: "Guests",
+                  label: t("stays.sheet.guests"),
                   value:
                     (reservation as { adult_count?: number }).adult_count !== undefined
-                      ? `${(reservation as { adult_count?: number }).adult_count} adult${
-                          (reservation as { adult_count?: number }).adult_count === 1 ? "" : "s"
-                        }${(reservation as { child_count?: number }).child_count ? `, ${(reservation as { child_count?: number }).child_count} child${(reservation as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""}`
+                      ? adultsAndChildren(
+                          (reservation as { adult_count?: number }).adult_count!,
+                          (reservation as { child_count?: number }).child_count,
+                          t,
+                        )
                       : String(reservation.guest_count ?? 0),
                 },
-                { label: "Room", value: reservation.unit_name ?? "—" },
+                { label: t("stays.sheet.room"), value: reservation.unit_name ?? "—" },
               ]}
             />
           </SheetSection>
 
-          <SheetSection title="Amounts">
+          <SheetSection title={t("stays.reservation.amounts")}>
             <Readout
-              label="Booking total"
+              label={t("stays.reservation.total")}
               value={typeof total === "number" ? formatMoney(total) : "—"}
               tone="active"
               size="sm"
-              caption={nights > 0 ? `Across ${nights} night${nights === 1 ? "" : "s"}` : undefined}
+              caption={nights > 0 ? t("stays.reservation.acrossNights", { count: nights }) : undefined}
             />
             {perNight !== null ? (
-              <FactList items={[{ label: "Per night (average)", value: formatMoney(perNight) }]} />
+              <FactList items={[{ label: t("stays.reservation.perNight"), value: formatMoney(perNight) }]} />
             ) : null}
             <InvoiceNotice />
           </SheetSection>
 
           {timeline.length > 0 ? (
-            <SheetSection title="History">
-              <Timeline label="Reservation history">
+            <SheetSection title={t("stays.sheet.history")}>
+              <Timeline label={t("stays.reservation.historyAria")}>
                 {timeline.map((event) => (
                   <TimelineEvent
                     key={event.title}
@@ -428,18 +453,19 @@ export function StayReservationDetailSheet({
 
 /** Words for an enquiry's status, shared by the inbox list and the sheet. */
 export const STAY_ENQUIRY_STATUS_LABELS: Record<string, string> = {
-  SUBMITTED: "New",
-  RESPONDED: "Replied",
-  CONFIRMED: "Booked",
-  DECLINED: "Not available",
-  CANCELLED: "Cancelled",
-  WITHDRAWN: "Withdrawn by guest",
-  EXPIRED: "Expired",
+  SUBMITTED: "stays.enquiryStatus.submitted",
+  RESPONDED: "stays.enquiryStatus.responded",
+  CONFIRMED: "stays.enquiryStatus.confirmed",
+  DECLINED: "stays.enquiryStatus.declined",
+  CANCELLED: "stays.enquiryStatus.cancelled",
+  WITHDRAWN: "stays.enquiryStatus.withdrawn",
+  EXPIRED: "stays.enquiryStatus.expired",
 };
 
-export function stayEnquiryStatusLabel(status: string | undefined): string {
-  if (!status) return "Unknown";
-  return STAY_ENQUIRY_STATUS_LABELS[status] ?? status;
+export function stayEnquiryStatusLabel(status: string | undefined, t: Translate): string {
+  if (!status) return t("stays.status.unknown");
+  const key = STAY_ENQUIRY_STATUS_LABELS[status];
+  return key ? t(key) : status;
 }
 
 export function stayEnquiryTone(status: string | undefined): "success" | "neutral" | "danger" | "info" {
@@ -474,6 +500,7 @@ export function StayEnquiryDetailSheet({
   isPending: boolean;
   actionError?: string | null;
 }) {
+  const t = useT();
   const [declining, setDeclining] = useState(false);
   const [booking, setBooking] = useState(false);
   const [roomId, setRoomId] = useState("");
@@ -492,33 +519,35 @@ export function StayEnquiryDetailSheet({
 
   const isOpen = enquiry ? OPEN_ENQUIRY_STATUSES.has(enquiry.status ?? "") : false;
   const length = enquiry?.stay_length
-    ? stayLengthLabel(enquiry.stay_length, enquiry.price_period)
-    : `${enquiry?.nights ?? 0} nights`;
+    ? stayLengthLabel(enquiry.stay_length, enquiry.price_period, t)
+    : t("stays.enquiry.nightsFallback", { n: enquiry?.nights ?? 0 });
 
   return (
     <Sheet
       side="end"
       open={enquiry !== null}
       onOpenChange={onOpenChange}
-      title={enquiry?.customer_name || "Guest enquiry"}
+      title={enquiry?.customer_name || t("stays.enquiry.titleFallback")}
       description={
         enquiry
-          ? `${stayEnquiryStatusLabel(enquiry.status)} · ${enquiry.property_title} · ${enquiry.unit_name ?? "Room"}`
+          ? `${stayEnquiryStatusLabel(enquiry.status, t)} · ${enquiry.property_title} · ${
+              enquiry.unit_name ?? t("stays.bookings.fallbackRoom")
+            }`
           : undefined
       }
       footer={
         enquiry && isOpen && booking ? (
           <>
             <Button type="button" variant="ghost" disabled={isPending} onClick={() => setBooking(false)}>
-              Not yet
+              {t("stays.enquiry.notYet")}
             </Button>
             <Button
               type="button"
               loading={isPending}
-              loadingLabel="Saving…"
+              loadingLabel={t("stays.visitingHours.saving")}
               onClick={() => onBooked(enquiry.id, roomId || null)}
             >
-              Yes – Mark Room Booked
+              {t("stays.enquiry.confirmBooked")}
             </Button>
           </>
         ) : enquiry && isOpen && !declining ? (
@@ -529,21 +558,21 @@ export function StayEnquiryDetailSheet({
               disabled={isPending}
               onClick={() => setDeclining(true)}
             >
-              Not available
+              {t("stays.enquiryStatus.declined")}
             </Button>
             <Button
               type="button"
               loading={isPending}
-              loadingLabel="Saving…"
+              loadingLabel={t("stays.visitingHours.saving")}
               onClick={() => setBooking(true)}
             >
-              Mark as Booked
+              {t("stays.enquiry.markBooked")}
             </Button>
           </>
         ) : enquiry && enquiry.status === "CONFIRMED" ? (
           <>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Close
+              {t("common.close")}
             </Button>
             <Button
               type="button"
@@ -551,12 +580,12 @@ export function StayEnquiryDetailSheet({
               disabled={isPending}
               onClick={() => onCancelBooking(enquiry.id)}
             >
-              Cancel booking
+              {t("stays.sheet.cancelBooking")}
             </Button>
           </>
         ) : (
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Close
+            {t("common.close")}
           </Button>
         )
       }
@@ -565,11 +594,11 @@ export function StayEnquiryDetailSheet({
         <div className="flex flex-col gap-5 py-3">
           {actionError ? <p className="text-sm text-danger-text">{actionError}</p> : null}
 
-          <SheetSection title="Guest">
+          <SheetSection title={t("stays.sheet.guest")}>
             <FactList
               items={[
-                { label: "Name", value: enquiry.customer_name || "—" },
-                { label: "Phone", value: enquiry.customer_phone || "—" },
+                { label: t("stays.sheet.name"), value: enquiry.customer_name || "—" },
+                { label: t("stays.sheet.phone"), value: enquiry.customer_phone || "—" },
               ]}
             />
             {enquiry.customer_phone ? (
@@ -578,33 +607,42 @@ export function StayEnquiryDetailSheet({
                 className="inline-flex items-center justify-center gap-2 rounded-control bg-action px-4 py-2.5 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover"
               >
                 <Phone className="size-4" aria-hidden />
-                Call {enquiry.customer_name?.split(" ")[0] || "guest"}
+                {t("stays.enquiry.call", {
+                  name: enquiry.customer_name?.split(" ")[0] || t("stays.enquiry.guestFallback"),
+                })}
               </a>
             ) : null}
             {isOpen ? (
               <p className="text-xs text-text-secondary">
-                Call to agree the room, dates and payment, then mark the outcome below.
+                {t("stays.enquiry.callHint")}
               </p>
             ) : null}
           </SheetSection>
 
-          <SheetSection title="Wants to stay">
+          <SheetSection title={t("stays.enquiry.wantsToStay")}>
             <FactList
               items={[
-                { label: "From", value: formatDate(`${enquiry.check_in}T12:00:00`) },
-                { label: "For", value: length },
+                { label: t("stays.enquiry.from"), value: formatDate(`${enquiry.check_in}T12:00:00`) },
+                { label: t("stays.enquiry.for"), value: length },
                 {
-                  label: "Guests",
+                  label: t("stays.sheet.guests"),
                   value:
                     (enquiry as { adult_count?: number }).adult_count !== undefined
-                      ? `${(enquiry as { adult_count?: number }).adult_count} adult${
-                          (enquiry as { adult_count?: number }).adult_count === 1 ? "" : "s"
-                        }${(enquiry as { child_count?: number }).child_count ? `, ${(enquiry as { child_count?: number }).child_count} child${(enquiry as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""} (${enquiry.guest_count ?? ((enquiry as { adult_count?: number }).adult_count! + ((enquiry as { child_count?: number }).child_count ?? 0))} total)`
-                      : `${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`,
+                      ? `${adultsAndChildren(
+                          (enquiry as { adult_count?: number }).adult_count!,
+                          (enquiry as { child_count?: number }).child_count,
+                          t,
+                        )} ${t("stays.guests.total", {
+                          n:
+                            enquiry.guest_count ??
+                            (enquiry as { adult_count?: number }).adult_count! +
+                              ((enquiry as { child_count?: number }).child_count ?? 0),
+                        })}`
+                      : t("stays.guests.count", { count: enquiry.guest_count ?? 1 }),
                 },
-                { label: "Room", value: enquiry.unit_name ?? "—" },
+                { label: t("stays.sheet.room"), value: enquiry.unit_name ?? "—" },
                 {
-                  label: "Estimate",
+                  label: t("stays.enquiry.estimate"),
                   value:
                     typeof enquiry.total_quote_paise === "number" && enquiry.total_quote_paise > 0
                       ? formatMoney(enquiry.total_quote_paise)
@@ -615,28 +653,28 @@ export function StayEnquiryDetailSheet({
           </SheetSection>
 
           {enquiry.message ? (
-            <SheetSection title="Message">
+            <SheetSection title={t("stays.enquiry.message")}>
               <p className="text-sm text-text">{enquiry.message}</p>
             </SheetSection>
           ) : null}
 
           {booking && isOpen ? (
-            <SheetSection title="Booking confirmed?">
+            <SheetSection title={t("stays.enquiry.bookingConfirmed")}>
               <p className="text-sm text-text-secondary">
-                The room is marked Booked and stops appearing as available. The guest is told.
+                {t("stays.enquiry.bookedBody")}
               </p>
               <RoomChoice rooms={rooms} value={roomId} onChange={setRoomId} />
             </SheetSection>
           ) : null}
 
           {declining ? (
-            <SheetSection title="Not available">
-              <Field label="Note for the guest" showOptional>
+            <SheetSection title={t("stays.enquiryStatus.declined")}>
+              <Field label={t("stays.enquiry.noteLabel")} showOptional>
                 <Textarea
                   value={note}
                   rows={3}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="e.g. The room is taken until March."
+                  placeholder={t("stays.enquiry.notePlaceholder")}
                 />
               </Field>
               <div className="flex flex-wrap gap-2">
@@ -645,27 +683,27 @@ export function StayEnquiryDetailSheet({
                   disabled={isPending}
                   onClick={() => onNotAvailable(enquiry.id, note.trim())}
                 >
-                  Tell the guest
+                  {t("stays.enquiry.tellGuest")}
                 </Button>
                 <Button variant="ghost" disabled={isPending} onClick={() => setDeclining(false)}>
-                  Back
+                  {t("common.back")}
                 </Button>
               </div>
             </SheetSection>
           ) : null}
 
           {enquiry.host_response && !isOpen ? (
-            <SheetSection title="Your note">
+            <SheetSection title={t("stays.enquiry.yourNote")}>
               <p className="text-sm text-text">{enquiry.host_response}</p>
             </SheetSection>
           ) : null}
 
-          <SheetSection title="History">
-            <Timeline label="Enquiry history">
-              <TimelineEvent title="Enquiry received" timestamp={formatDateTime(enquiry.created_at)} />
+          <SheetSection title={t("stays.sheet.history")}>
+            <Timeline label={t("stays.enquiry.historyAria")}>
+              <TimelineEvent title={t("stays.enquiry.received")} timestamp={formatDateTime(enquiry.created_at)} />
               {enquiry.responded_at ? (
                 <TimelineEvent
-                  title={stayEnquiryStatusLabel(enquiry.status)}
+                  title={stayEnquiryStatusLabel(enquiry.status, t)}
                   timestamp={formatDateTime(enquiry.responded_at)}
                   tone={enquiry.status === "DECLINED" ? "danger" : "success"}
                 />

@@ -1,5 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { withI18n } from "@/i18n/test-utils";
+
+const render = (ui: ReactElement) => rtlRender(withI18n(ui));
 
 /**
  * "Find on map" on the Partner listing forms.

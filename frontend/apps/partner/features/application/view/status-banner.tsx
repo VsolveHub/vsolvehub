@@ -1,7 +1,7 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { cn } from "@vsolve/ui";
+import { cn, useT, type Translator } from "@vsolve/ui";
 
 /**
  * The application's current standing, stated plainly.
@@ -32,81 +32,89 @@ interface Presentation {
   isWaiting: boolean;
 }
 
-const PRESENTATION: Record<Status, Presentation> = {
-  DRAFT: {
-    tone: "neutral",
-    label: "Draft",
-    headline: "Your application is not submitted yet",
-    detail: "Finish the steps below and send it for review. You can come back any time.",
-    isWaiting: false,
-  },
-  SUBMITTED: {
-    tone: "info",
-    label: "Submitted",
-    headline: "We have your application",
-    detail:
-      "Nothing more is needed from you right now. We will message you when a reviewer has looked at it.",
-    isWaiting: true,
-  },
-  UNDER_REVIEW: {
-    tone: "info",
-    label: "Under review",
-    headline: "A reviewer is checking your documents",
-    detail:
-      "Nothing more is needed from you right now. If anything is unclear, we will ask you directly.",
-    isWaiting: true,
-  },
-  CHANGES_REQUIRED: {
-    tone: "warning",
-    label: "Changes needed",
-    headline: "We need something corrected",
-    detail: "",
-    isWaiting: false,
-  },
-  APPROVED: {
-    tone: "success",
-    label: "Approved",
-    headline: "You are approved to take work",
-    detail: "Publish the hours you want to work and you will start receiving job offers.",
-    isWaiting: false,
-  },
-  SUSPENDED: {
-    tone: "danger",
-    label: "Suspended",
-    headline: "Your account is suspended",
-    detail: "You will not receive job offers. Contact support to discuss this.",
-    isWaiting: false,
-  },
-  OFFBOARDED: {
-    tone: "neutral",
-    label: "Closed",
-    headline: "Your Partner account is closed",
-    detail: "Contact support if you believe this is wrong.",
-    isWaiting: false,
-  },
-  DECLINED: {
-    tone: "neutral",
-    label: "Not approved",
-    headline: "Your application was not approved",
-    detail: "We cannot approve this application. Contact support if you believe this is a mistake.",
-    isWaiting: false,
-  },
-};
+function presentationFor(status: Status, t: Translator["t"]): Presentation {
+  switch (status) {
+    case "DRAFT":
+      return {
+        tone: "neutral",
+        label: t("apply.statusBanner.draft.label"),
+        headline: t("apply.statusBanner.draft.headline"),
+        detail: t("apply.statusBanner.draft.detail"),
+        isWaiting: false,
+      };
+    case "SUBMITTED":
+      return {
+        tone: "info",
+        label: t("apply.statusBanner.submitted.label"),
+        headline: t("apply.statusBanner.submitted.headline"),
+        detail: t("apply.statusBanner.submitted.detail"),
+        isWaiting: true,
+      };
+    case "UNDER_REVIEW":
+      return {
+        tone: "info",
+        label: t("apply.statusBanner.underReview.label"),
+        headline: t("apply.statusBanner.underReview.headline"),
+        detail: t("apply.statusBanner.underReview.detail"),
+        isWaiting: true,
+      };
+    case "CHANGES_REQUIRED":
+      return {
+        tone: "warning",
+        label: t("apply.statusBanner.changesRequired.label"),
+        headline: t("apply.statusBanner.changesRequired.headline"),
+        detail: "",
+        isWaiting: false,
+      };
+    case "APPROVED":
+      return {
+        tone: "success",
+        label: t("apply.statusBanner.approved.label"),
+        headline: t("apply.statusBanner.approved.headline"),
+        detail: t("apply.statusBanner.approved.detail"),
+        isWaiting: false,
+      };
+    case "SUSPENDED":
+      return {
+        tone: "danger",
+        label: t("apply.statusBanner.suspended.label"),
+        headline: t("apply.statusBanner.suspended.headline"),
+        detail: t("apply.statusBanner.suspended.detail"),
+        isWaiting: false,
+      };
+    case "OFFBOARDED":
+      return {
+        tone: "neutral",
+        label: t("apply.statusBanner.offboarded.label"),
+        headline: t("apply.statusBanner.offboarded.headline"),
+        detail: t("apply.statusBanner.offboarded.detail"),
+        isWaiting: false,
+      };
+    case "DECLINED":
+      return {
+        tone: "neutral",
+        label: t("apply.statusBanner.declined.label"),
+        headline: t("apply.statusBanner.declined.headline"),
+        detail: t("apply.statusBanner.declined.detail"),
+        isWaiting: false,
+      };
+  }
+}
 
 export interface ApplicationStatusBannerProps {
   application: Application;
 }
 
 export function ApplicationStatusBanner({ application }: ApplicationStatusBannerProps) {
+  const t = useT();
   // When in DRAFT, the NextAction hero card handles the primary progress guidance directly.
   if (application.status === "DRAFT") return null;
 
-  const presentation = PRESENTATION[application.status];
+  const presentation = presentationFor(application.status, t);
 
   const detail =
     application.status === "CHANGES_REQUIRED"
-      ? application.change_request_message ||
-        "A reviewer asked for changes but did not leave a note. Contact support and we will tell you what is needed."
+      ? application.change_request_message || t("apply.statusBanner.changesRequired.fallbackDetail")
       : presentation.detail;
 
   return (
@@ -141,14 +149,13 @@ export function ApplicationStatusBanner({ application }: ApplicationStatusBanner
 
       {application.submitted_at && presentation.isWaiting ? (
         <p className="mt-3 text-xs text-text-muted font-medium border-t border-line/40 pt-2">
-          Submitted on{" "}
-          <time dateTime={application.submitted_at} className="font-bold text-navy-900">
-            {new Intl.DateTimeFormat("en-IN", {
+          {t("apply.statusBanner.submittedOn", {
+            date: new Intl.DateTimeFormat("en-IN", {
               dateStyle: "medium",
               timeStyle: "short",
               timeZone: "Asia/Kolkata",
-            }).format(new Date(application.submitted_at))}
-          </time>
+            }).format(new Date(application.submitted_at)),
+          })}
         </p>
       ) : null}
     </section>

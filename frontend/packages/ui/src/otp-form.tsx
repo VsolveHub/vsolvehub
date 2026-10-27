@@ -7,6 +7,7 @@ import { cn } from "./cn";
 import { ErrorState, type ErrorSeverity } from "./error-state";
 import { Field } from "./field";
 import { Input } from "./input";
+import { useTOrDefault } from "./i18n";
 import { formatDuration } from "./readout";
 
 /**
@@ -120,19 +121,22 @@ export function OtpForm({
   signedInPhone,
   developmentCode,
   codeLength,
-  heading = "Log in",
+  heading,
   headingLevel = 2,
   description,
-  verifyLabel = "Verify and continue",
+  verifyLabel,
   footer,
   phoneDigits,
   className,
 }: OtpFormProps) {
+  const tf = useTOrDefault();
   const Heading = `h${headingLevel}` as "h1" | "h2" | "h3";
   const codeInputRef = useRef<HTMLInputElement>(null);
   const typedDigits = (phone.match(/\d/g) ?? []).length;
   const digitsLeft =
     phoneDigits !== undefined && typedDigits > 0 ? phoneDigits - typedDigits : 0;
+  const resolvedHeading = heading ?? tf("ui.otpForm.heading", "Log in");
+  const resolvedVerifyLabel = verifyLabel ?? tf("ui.otpForm.verifyLabel", "Verify and continue");
 
   // Focus follows the step. Without this, someone using a keyboard or a screen
   // reader is left on the "Send code" button after the screen has moved on.
@@ -152,7 +156,7 @@ export function OtpForm({
 
   return (
     <div className={cn("w-full max-w-sm", className)}>
-      <Heading className="text-xl font-bold text-text sm:text-2xl">{heading}</Heading>
+      <Heading className="text-xl font-bold text-text sm:text-2xl">{resolvedHeading}</Heading>
       {description ? (
         <p className="mt-1.5 text-sm text-text-secondary">{description}</p>
       ) : null}
@@ -170,7 +174,7 @@ export function OtpForm({
 
       {phase === "authenticated" ? (
         <div className="mt-4">
-          <p className="text-sm text-text-secondary">Logged in as</p>
+          <p className="text-sm text-text-secondary">{tf("ui.otpForm.loggedInAs", "Logged in as")}</p>
           <p data-numeric className="text-base font-semibold text-text">
             {signedInPhone}
           </p>
@@ -180,9 +184,9 @@ export function OtpForm({
               className="mt-3"
               onClick={onLogout}
               loading={isLoggingOut}
-              loadingLabel="Logging out"
+              loadingLabel={tf("ui.otpForm.loggingOut", "Logging out")}
             >
-              Use a different number
+              {tf("ui.otpForm.useDifferentNumber", "Use a different number")}
             </Button>
           ) : null}
         </div>
@@ -192,11 +196,17 @@ export function OtpForm({
         <form className="mt-5 flex flex-col gap-4" onSubmit={submitPhone} noValidate>
           <Field
             required
-            label="Mobile number"
+            label={tf("ui.otpForm.mobileNumber", "Mobile number")}
             description={
               digitsLeft > 0
-                ? `${digitsLeft} more ${digitsLeft === 1 ? "digit" : "digits"} to go.`
-                : `We will send a ${codeLength}-digit code by SMS.`
+                ? tf(
+                    "ui.otpForm.digitsLeft",
+                    digitsLeft === 1 ? "{count} more digit to go." : "{count} more digits to go.",
+                    { count: digitsLeft },
+                  )
+                : tf("ui.otpForm.willSendCode", "We will send a {codeLength}-digit code by SMS.", {
+                    codeLength,
+                  })
             }
             error={phoneError ?? undefined}
           >
@@ -222,9 +232,9 @@ export function OtpForm({
             block
             disabled={!canRequest}
             loading={isRequesting}
-            loadingLabel="Sending code"
+            loadingLabel={tf("ui.otpForm.sendingCode", "Sending code")}
           >
-            Send code
+            {tf("ui.otpForm.sendCode", "Send code")}
           </Button>
         </form>
       ) : null}
@@ -233,7 +243,7 @@ export function OtpForm({
         <form className="mt-5 flex flex-col gap-4" onSubmit={submitCode} noValidate>
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <p className="text-sm text-text-secondary">
-              Code sent to{" "}
+              {tf("ui.otpForm.codeSentTo", "Code sent to")}{" "}
               <span data-numeric className="font-semibold text-text">
                 {phone}
               </span>
@@ -242,7 +252,7 @@ export function OtpForm({
                 `px-3.5` used to win and indent this under the line it belongs to.
                 `min-h-11` lifts the 36px `sm` button to a phone-sized target. */}
             <Button variant="ghost" size="sm" className="min-h-11 px-0!" onClick={onChangeNumber}>
-              Change number
+              {tf("ui.otpForm.changeNumber", "Change number")}
             </Button>
           </div>
 
@@ -251,7 +261,7 @@ export function OtpForm({
             // delivery. In every deployed environment the field is null and
             // this does not render.
             <p className="rounded-control border border-dashed border-line-strong px-3 py-2 text-sm text-text-secondary">
-              Development delivery is on. Code:{" "}
+              {tf("ui.otpForm.developmentDelivery", "Development delivery is on. Code:")}{" "}
               <span data-numeric className="font-semibold tracking-[0.2em] text-text">
                 {developmentCode}
               </span>
@@ -260,7 +270,7 @@ export function OtpForm({
 
           <Field
             required
-            label={`${codeLength}-digit code`}
+            label={tf("ui.otpForm.digitCode", "{codeLength}-digit code", { codeLength })}
             error={codeError ?? undefined}
           >
             <Input
@@ -281,11 +291,11 @@ export function OtpForm({
 
           {isExpired ? (
             <p role="status" className="text-sm font-medium text-warning-text">
-              This code has expired. Request a new one to continue.
+              {tf("ui.otpForm.expired", "This code has expired. Request a new one to continue.")}
             </p>
           ) : expiresInSeconds !== null ? (
             <p aria-hidden className="text-sm text-text-secondary">
-              Code expires in{" "}
+              {tf("ui.otpForm.expiresIn", "Code expires in")}{" "}
               <span data-numeric className="font-semibold">
                 {formatDuration(expiresInSeconds * 1000)}
               </span>
@@ -298,17 +308,23 @@ export function OtpForm({
             block
             disabled={!canVerify}
             loading={isVerifying}
-            loadingLabel="Verifying code"
+            loadingLabel={tf("ui.otpForm.verifyingCode", "Verifying code")}
           >
-            {verifyLabel}
+            {resolvedVerifyLabel}
           </Button>
 
           <div className="flex justify-center">
             {resendInSeconds > 0 ? (
               <Button variant="ghost" size="sm" className="min-h-11" disabled>
-                <span aria-hidden>Resend code in {formatDuration(resendInSeconds * 1000)}</span>
+                <span aria-hidden>
+                  {tf("ui.otpForm.resendIn", "Resend code in {duration}", {
+                    duration: formatDuration(resendInSeconds * 1000),
+                  })}
+                </span>
                 <span className="sr-only">
-                  Resend code, available in {resendInSeconds} seconds
+                  {tf("ui.otpForm.resendInSr", "Resend code, available in {seconds} seconds", {
+                    seconds: resendInSeconds,
+                  })}
                 </span>
               </Button>
             ) : (
@@ -318,9 +334,9 @@ export function OtpForm({
                 className="min-h-11"
                 onClick={onResendCode}
                 loading={isRequesting}
-                loadingLabel="Sending a new code"
+                loadingLabel={tf("ui.otpForm.sendingNewCode", "Sending a new code")}
               >
-                Resend code
+                {tf("ui.otpForm.resendCode", "Resend code")}
               </Button>
             )}
           </div>

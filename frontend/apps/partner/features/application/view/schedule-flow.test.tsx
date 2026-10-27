@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@vsolve/api-client";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { AvailabilityEditor } from "./availability-editor";
 import { ReviewStep } from "./review-step";
 
@@ -126,7 +128,7 @@ function renderWithClient(ui: ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(withI18n(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>));
 }
 
 describe("Schedule auto-save behavior", () => {
@@ -139,7 +141,7 @@ describe("Schedule auto-save behavior", () => {
   it("auto-saves modified schedule before navigating to review", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
 
-    render(
+    renderWithClient(
       <AvailabilityEditor
         areas={areas}
         initialPeriods={[]}
@@ -159,7 +161,7 @@ describe("Schedule auto-save behavior", () => {
   it("auto-saves edited periods when Review Application is clicked", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
 
-    render(
+    renderWithClient(
       <AvailabilityEditor
         areas={areas}
         initialPeriods={[]}

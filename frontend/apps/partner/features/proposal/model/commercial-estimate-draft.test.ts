@@ -1,5 +1,8 @@
 import type { Schemas } from "@vsolve/api-client";
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import {
   EMPTY_COMMERCIAL_ESTIMATE,
@@ -19,6 +22,8 @@ import {
   withTemplateInstallments,
   type CommercialEstimateDraft,
 } from "./commercial-estimate-draft";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 /**
  * The rate-card estimate's pure half (contract 1.48.0).
@@ -159,12 +164,12 @@ describe("what goes on the wire", () => {
   });
 
   it("no longer demands twenty characters of scope", () => {
-    expect(validateCommercialEstimate(withTemplateInstallments(draft))).toEqual({});
+    expect(validateCommercialEstimate(withTemplateInstallments(draft), t)).toEqual({});
   });
 
   it("refuses a catalogue rate outside its band before the round trip", () => {
     const outside = itemWise({ itemLines: [{ ...catalogueItemLine(light, 1), ratePaise: 20_000 }] });
-    expect(validateCommercialEstimate(withTemplateInstallments(outside))["item-0"]).toMatch(/outside/);
+    expect(validateCommercialEstimate(withTemplateInstallments(outside), t)["item-0"]).toMatch(/outside/);
   });
 });
 

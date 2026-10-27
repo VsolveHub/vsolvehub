@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@vsolve/ui";
+import { Spinner, useT } from "@vsolve/ui";
 
 import { usePartnerApplication } from "@/features/application/queries";
 import { useApplicationReference } from "@/features/application/reference-queries";
@@ -22,6 +22,7 @@ import { PresencePanel } from "./presence-panel";
  * get the version wrong.
  */
 export function PartnerPresence({ variant = "default" }: { variant?: "default" | "driver" }) {
+  const t = useT();
   const application = usePartnerApplication();
   const reference = useApplicationReference();
 
@@ -29,7 +30,7 @@ export function PartnerPresence({ variant = "default" }: { variant?: "default" |
     return (
       <p className="flex items-center gap-2 text-text-secondary">
         <Spinner size="sm" />
-        Loading your account…
+        {t("presence.account.loading")}
       </p>
     );
   }

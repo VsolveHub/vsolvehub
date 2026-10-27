@@ -26,6 +26,8 @@ vi.mock("@/features/profile/queries", () => ({
 }));
 
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
+import { withI18n } from "@/i18n/test-utils";
+
 import { MeHome } from "./me-home";
 
 /**
@@ -40,9 +42,11 @@ import { MeHome } from "./me-home";
 function renderMeHome() {
   const client = new QueryClient();
   return render(
-    <QueryClientProvider client={client}>
-      <MeHome />
-    </QueryClientProvider>,
+    withI18n(
+      <QueryClientProvider client={client}>
+        <MeHome />
+      </QueryClientProvider>,
+    ),
   );
 }
 

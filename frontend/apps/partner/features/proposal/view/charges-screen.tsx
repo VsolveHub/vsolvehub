@@ -1,4 +1,6 @@
-import { Button, Input, StepDock, cn } from "@vsolve/ui";
+"use client";
+
+import { Button, Input, StepDock, cn, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 import type {
@@ -72,13 +74,13 @@ export interface ChargesScreenProps {
  * "name it" — so that choosing it reads as more work rather than as the easy
  * escape hatch, which is the behaviour a generic "Miscellaneous" rewards.
  */
-const CHARGE_OPTIONS: readonly { code: ChargeCode; label: string }[] = [
-  { code: "TRANSPORT", label: "Transportation" },
-  { code: "LOADING_UNLOADING", label: "Loading & unloading" },
-  { code: "DISPOSAL", label: "Disposal" },
-  { code: "PERMIT_FEE", label: "Permit fee" },
-  { code: "EQUIPMENT_DELIVERY", label: "Equipment delivery" },
-  { code: "CUSTOM", label: "Something else — name it" },
+const CHARGE_OPTIONS: readonly { code: ChargeCode; labelKey: string }[] = [
+  { code: "TRANSPORT", labelKey: "proposal.screens.charges.option.TRANSPORT" },
+  { code: "LOADING_UNLOADING", labelKey: "proposal.screens.charges.option.LOADING_UNLOADING" },
+  { code: "DISPOSAL", labelKey: "proposal.screens.charges.option.DISPOSAL" },
+  { code: "PERMIT_FEE", labelKey: "proposal.screens.charges.option.PERMIT_FEE" },
+  { code: "EQUIPMENT_DELIVERY", labelKey: "proposal.screens.charges.option.EQUIPMENT_DELIVERY" },
+  { code: "CUSTOM", labelKey: "proposal.screens.charges.option.CUSTOM" },
 ];
 
 /**
@@ -93,13 +95,14 @@ function rupeeDigits(amount: string): string {
 }
 
 export function ChargesScreen({ estimate, openChargeId }: ChargesScreenProps) {
+  const t = useT();
   return (
     <div className="flex h-full flex-col bg-canvas">
       <FocusedHeader
         title={estimate.documentTitle}
         backSlot={
           <HeaderTile>
-            <BackGlyph label="Back to the estimate lines" />
+            <BackGlyph label={t("proposal.screens.charges.backToLines")} />
           </HeaderTile>
         }
       />
@@ -107,10 +110,10 @@ export function ChargesScreen({ estimate, openChargeId }: ChargesScreenProps) {
       <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 pt-4">
         <div>
           <h2 className="text-xs font-extrabold uppercase tracking-[0.06em] text-text-link">
-            Other charges (if any)
+            {t("proposal.screens.charges.heading")}
           </h2>
           <p className="mt-[3px] text-[11.5px] font-medium leading-4 text-text-muted">
-            Named charges only. Every charge is a real cost the customer can see.
+            {t("proposal.screens.charges.subheading")}
           </p>
         </div>
 
@@ -123,13 +126,13 @@ export function ChargesScreen({ estimate, openChargeId }: ChargesScreenProps) {
         {/* Server-derived, every figure. The divider is the only arithmetic on
             this screen and it is drawn, not computed. */}
         <div className="flex flex-col gap-2.5 rounded-card border border-line bg-surface p-3.5">
-          <TotalsRow label="Items total (labour)" value={estimate.totals.linesTotal} />
-          <TotalsRow label="Other charges" value={estimate.totals.chargesTotal} />
+          <TotalsRow label={t("proposal.screens.charges.itemsTotal")} value={estimate.totals.linesTotal} />
+          <TotalsRow label={t("proposal.screens.shared.otherCharges")} value={estimate.totals.chargesTotal} />
 
           <span aria-hidden className="my-0.5 h-px bg-line" />
 
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-sm font-bold text-text">Subtotal</span>
+            <span className="text-sm font-bold text-text">{t("proposal.screens.charges.subtotal")}</span>
             <span className="text-[19px] font-extrabold tracking-[-0.02em] tabular-nums text-text">
               {estimate.totals.taxableValue}
             </span>
@@ -139,7 +142,7 @@ export function ChargesScreen({ estimate, openChargeId }: ChargesScreenProps) {
 
       <StepDock>
         <Button block size="lg">
-          Continue to summary
+          {t("proposal.screens.charges.continue")}
         </Button>
       </StepDock>
     </div>
@@ -154,6 +157,7 @@ export function ChargesScreen({ estimate, openChargeId }: ChargesScreenProps) {
  * trick `LedgerRow` uses, and for the same reason.
  */
 function ChargeCard({ charge, open }: { charge: ChargeView; open: boolean }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -180,7 +184,7 @@ function ChargeCard({ charge, open }: { charge: ChargeView; open: boolean }) {
             size="sm"
             className={cn("shrink-0", open ? "rotate-90" : "-rotate-90")}
           />
-          <span className="sr-only">Change what this charge is</span>
+          <span className="sr-only">{t("proposal.screens.charges.changeWhat")}</span>
         </button>
 
         <span className="relative w-24 shrink-0">
@@ -191,7 +195,7 @@ function ChargeCard({ charge, open }: { charge: ChargeView; open: boolean }) {
             ₹
           </span>
           <Input
-            aria-label={`Amount for ${charge.label}`}
+            aria-label={t("proposal.screens.charges.amountFor", { label: charge.label })}
             inputMode="numeric"
             defaultValue={rupeeDigits(charge.amount)}
             placeholder="0"
@@ -215,6 +219,7 @@ function ChargeCard({ charge, open }: { charge: ChargeView; open: boolean }) {
  * instead.
  */
 function ChargeCodeList({ selected }: { selected: ChargeCode }) {
+  const t = useT();
   return (
     <ul className="mt-2 overflow-hidden rounded-[10px] border border-line bg-surface shadow-raised">
       {CHARGE_OPTIONS.map((option, index) => {
@@ -239,7 +244,7 @@ function ChargeCodeList({ selected }: { selected: ChargeCode }) {
                 // Holds the tick's column so the labels stay on one left edge.
                 <span aria-hidden className="w-4 shrink-0" />
               )}
-              <span className="truncate">{option.label}</span>
+              <span className="truncate">{t(option.labelKey)}</span>
             </button>
           </li>
         );
@@ -250,6 +255,7 @@ function ChargeCodeList({ selected }: { selected: ChargeCode }) {
 
 /** 44x44, per the touch-target rule, even though the glyph inside it is 16px. */
 function RemoveChargeControl({ label }: { label: string }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -259,7 +265,7 @@ function RemoveChargeControl({ label }: { label: string }) {
       )}
     >
       <Pictogram name="no" size="sm" />
-      <span className="sr-only">Remove {label}</span>
+      <span className="sr-only">{t("proposal.screens.charges.remove", { label })}</span>
     </button>
   );
 }
@@ -272,6 +278,7 @@ function RemoveChargeControl({ label }: { label: string }) {
  * without needing a label to explain that.
  */
 function AddChargeControl() {
+  const t = useT();
   return (
     <button
       type="button"
@@ -283,7 +290,7 @@ function AddChargeControl() {
       )}
     >
       <Pictogram name="more" size="sm" />
-      Add another charge
+      {t("proposal.screens.charges.addAnother")}
     </button>
   );
 }

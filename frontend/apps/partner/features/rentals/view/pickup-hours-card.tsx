@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Card, Dialog, Input, Spinner, cn, useToast } from "@vsolve/ui";
+import { Button, Card, Dialog, Input, Spinner, cn, useT, useToast } from "@vsolve/ui";
 import { Clock, Copy, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -13,7 +13,16 @@ import {
   type PickupHours,
 } from "@/features/rentals/queries";
 
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+/** Catalogue keys, Monday first — resolved with `t` at render time. */
+const DAY_NAMES = [
+  "rentals.day.monday",
+  "rentals.day.tuesday",
+  "rentals.day.wednesday",
+  "rentals.day.thursday",
+  "rentals.day.friday",
+  "rentals.day.saturday",
+  "rentals.day.sunday",
+];
 /** The form starts here for an owner who hasn't saved hours yet. */
 const DEFAULT_OPEN = "09:00";
 const DEFAULT_CLOSE = "21:00";
@@ -38,10 +47,10 @@ export function rowsFrom(hours: PickupHours | undefined): DayRow[] {
 }
 
 /** Why these rows can't be saved, or null. */
-export function rowsProblem(rows: DayRow[]): string | null {
-  if (!rows.some((r) => r.open)) return "Open at least one day.";
+export function rowsProblem(rows: DayRow[], t: ReturnType<typeof useT>): string | null {
+  if (!rows.some((r) => r.open)) return t("rentals.hours.errorNoDay");
   const bad = rows.find((r) => r.open && r.closesAt <= r.opensAt);
-  return bad ? `On ${DAY_NAMES[bad.weekday]}, closing time must be after opening time.` : null;
+  return bad ? t("rentals.hours.errorCloseBeforeOpen", { day: t(DAY_NAMES[bad.weekday]!) }) : null;
 }
 
 /** Today in the owner's own calendar, as `YYYY-MM-DD` — the earliest day worth closing. */
@@ -68,14 +77,14 @@ export function closedDateLabel(iso: string): string {
 }
 
 /** "12 hr", "9 hr 30 min". */
-export function hoursOpenText(opensAt: string, closesAt: string): string {
+export function hoursOpenText(opensAt: string, closesAt: string, t: ReturnType<typeof useT>): string {
   const [oh = 0, om = 0] = opensAt.split(":").map(Number);
   const [ch = 0, cm = 0] = closesAt.split(":").map(Number);
   const minutes = ch * 60 + cm - (oh * 60 + om);
   if (minutes <= 0) return "";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return [h ? `${h} hr` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
+  return [h ? t("rentals.hours.hr", { h }) : "", m ? t("rentals.hours.min", { m }) : ""].filter(Boolean).join(" ");
 }
 
 /**
@@ -86,6 +95,7 @@ export function hoursOpenText(opensAt: string, closesAt: string): string {
  * opens the full schedule editor in a focused modal Dialog.
  */
 export function PickupHoursCard({ className }: { className?: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const { notify } = useToast();
   const hours = useQuery({ queryKey: ["partner-rentals", "pickup-hours"], queryFn: fetchPartnerPickupHours });
@@ -113,7 +123,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
     onSuccess: (data) => {
       qc.setQueryData(["partner-rentals", "pickup-hours"], data);
       void qc.invalidateQueries({ queryKey: ["partner-rentals", "assets"] });
-      notify("Pickup hours saved.", "success");
+      notify(t("rentals.hours.saved"), "success");
       setOpen(false);
     },
     onError: (err) => setError(friendlyErrorMessage(err)),
@@ -145,11 +155,11 @@ export function PickupHoursCard({ className }: { className?: string }) {
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-bold text-navy-900">Pickup hours</h2>
+                <h2 className="text-sm font-bold text-navy-900">{t("rentals.hours.title")}</h2>
                 {hours.isPending ? (
                   <span className="flex items-center gap-1.5 text-xs text-text-secondary">
                     <Spinner size="sm" />
-                    Loading…
+                    {t("common.loading")}
                   </span>
                 ) : isSet ? (
                   <span className="inline-flex items-center rounded-full bg-selected-surface px-2.5 py-0.5 text-xs font-semibold text-navy-900">
@@ -157,19 +167,19 @@ export function PickupHoursCard({ className }: { className?: string }) {
                   </span>
                 ) : (
                   <span className="inline-flex items-center rounded-full bg-warning-surface px-2.5 py-0.5 text-xs font-bold text-warning-text">
-                    Not set
+                    {t("rentals.hours.notSet")}
                   </span>
                 )}
                 {closedCount > 0 ? (
                   <span className="text-xs text-text-secondary">
-                    · {closedCount} {closedCount === 1 ? "day off" : "days off"}
+                    · {t("rentals.hours.daysOff", { count: closedCount })}
                   </span>
                 ) : null}
               </div>
               <p className="mt-0.5 text-xs text-text-secondary">
                 {isSet
-                  ? "When customers can collect and return items. Click to update days, times, or days off."
-                  : "Customers collect and return items inside these hours. Set hours to activate your ads."}
+                  ? t("rentals.hours.summarySet")
+                  : t("rentals.hours.summaryNotSet")}
               </p>
             </div>
           </div>
@@ -189,7 +199,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
             className="shrink-0 self-start sm:self-center"
           >
             <Clock className="size-4" aria-hidden />
-            {isSet ? "Edit pickup hours" : "Set pickup hours"}
+            {isSet ? t("rentals.hours.edit") : t("rentals.hours.set")}
           </Button>
         </div>
       </Card>
@@ -200,13 +210,13 @@ export function PickupHoursCard({ className }: { className?: string }) {
           if (!next) setError(null);
           setOpen(next);
         }}
-        title="Pickup hours"
-        description="When customers can collect and return items. They come any time inside these hours — no time slots. Used for all your rental items."
+        title={t("rentals.hours.title")}
+        description={t("rentals.hours.dialogDescription")}
         className="max-w-2xl"
         footer={
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             {summaryText ? (
-              <p className="hidden text-xs text-text-secondary sm:inline">Current: {summaryText}</p>
+              <p className="hidden text-xs text-text-secondary sm:inline">{t("rentals.hours.current", { summary: summaryText })}</p>
             ) : (
               <span />
             )}
@@ -218,20 +228,20 @@ export function PickupHoursCard({ className }: { className?: string }) {
                 disabled={save.isPending}
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 loading={save.isPending}
-                loadingLabel="Saving…"
+                loadingLabel={t("rentals.common.saving")}
                 onClick={() => {
-                  const problem = rowsProblem(rows);
+                  const problem = rowsProblem(rows, t);
                   if (problem) return setError(problem);
                   save.mutate();
                 }}
               >
-                Save pickup hours
+                {t("rentals.hours.save")}
               </Button>
             </div>
           </div>
@@ -240,7 +250,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
         <div className="flex flex-col gap-4 py-1">
           <ul className="flex flex-col divide-y divide-line overflow-visible rounded-card border border-line bg-surface">
             {rows.map((row) => {
-              const name = DAY_NAMES[row.weekday]!;
+              const name = t(DAY_NAMES[row.weekday]!);
               return (
                 <li
                   key={row.weekday}
@@ -261,7 +271,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
                   {row.open ? (
                     <div className="flex flex-1 flex-wrap items-center gap-2">
                       <TimePicker
-                        label={`${name} opens`}
+                        label={t("rentals.hours.opens", { day: name })}
                         value={row.opensAt}
                         minutes={HALF_HOURS}
                         onChange={(value) => patch(row.weekday, { opensAt: value })}
@@ -270,18 +280,18 @@ export function PickupHoursCard({ className }: { className?: string }) {
                         –
                       </span>
                       <TimePicker
-                        label={`${name} closes`}
+                        label={t("rentals.hours.closes", { day: name })}
                         value={row.closesAt}
                         minutes={HALF_HOURS}
                         onChange={(value) => patch(row.weekday, { closesAt: value })}
                       />
                       <span className="hidden text-xs text-text-muted sm:inline">
-                        {hoursOpenText(row.opensAt, row.closesAt)}
+                        {hoursOpenText(row.opensAt, row.closesAt, t)}
                       </span>
                       <button
                         type="button"
-                        aria-label={`Copy ${name} hours to all days`}
-                        title="Copy to all days"
+                        aria-label={t("rentals.hours.copyDay", { day: name })}
+                        title={t("rentals.hours.copyToAll")}
                         onClick={() => copyToAll(row)}
                         className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-selected-surface hover:text-navy-900"
                       >
@@ -289,22 +299,29 @@ export function PickupHoursCard({ className }: { className?: string }) {
                       </button>
                     </div>
                   ) : (
-                    <p className="flex-1 text-sm text-text-muted">Closed</p>
+                    <p className="flex-1 text-sm text-text-muted">{t("rentals.hours.closed")}</p>
                   )}
                 </li>
               );
             })}
           </ul>
           <p className="-mt-2 text-xs text-text-secondary">
-            Tick a day to open it. <Copy className="inline size-3" aria-hidden /> copies that
-            day&apos;s hours to every day.
+            {(() => {
+              const [before, after = ""] = t("rentals.hours.tickHint").split("{icon}");
+              return (
+                <>
+                  {before}
+                  <Copy className="inline size-3" aria-hidden />
+                  {after}
+                </>
+              );
+            })()}
           </p>
 
           <div className="flex flex-col gap-2 pt-2">
-            <p className="text-sm font-semibold text-navy-900">Days off</p>
+            <p className="text-sm font-semibold text-navy-900">{t("rentals.hours.daysOffTitle")}</p>
             <p className="text-xs text-text-secondary">
-              No pickups or returns on these dates, whatever the weekly hours say. An item already
-              out with a customer can stay out across them.
+              {t("rentals.hours.daysOffHint")}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {closedDates.map((day) => (
@@ -315,7 +332,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
                   {closedDateLabel(day)}
                   <button
                     type="button"
-                    aria-label={`Remove ${closedDateLabel(day)}`}
+                    aria-label={t("rentals.hours.removeDay", { date: closedDateLabel(day) })}
                     onClick={() => {
                       setError(null);
                       setClosedDates((current) => current.filter((d) => d !== day));
@@ -327,7 +344,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
               ))}
               <Input
                 type="date"
-                aria-label="Add a day off"
+                aria-label={t("rentals.hours.addDayOffAria")}
                 min={today}
                 value={newClosedDate}
                 onChange={(event) => setNewClosedDate(event.target.value)}
@@ -343,7 +360,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
                   setNewClosedDate("");
                 }}
               >
-                Add day off
+                {t("rentals.hours.addDayOff")}
               </Button>
             </div>
           </div>

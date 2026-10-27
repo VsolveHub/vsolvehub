@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ChoiceChips, Disclosure, ErrorState, QuantityStepper, cn, formatMoney } from "@vsolve/ui";
+import { Button, ChoiceChips, Disclosure, ErrorState, QuantityStepper, cn, formatMoney, useT } from "@vsolve/ui";
 import {
   attendanceCeiling,
   describeError,
@@ -52,12 +52,19 @@ export interface EveningCloseProps {
   readonly onBusy: (busy: boolean) => void;
 }
 
-const OVERTIME_OPTIONS = [
-  { value: "0", label: "None" },
-  { value: "1", label: "1 h" },
-  { value: "2", label: "2 h" },
-  { value: "3", label: "3 h" },
-] as const;
+function overtimeOptions(t: ReturnType<typeof useT>) {
+  return [
+    { value: "0", label: t("work.eveningClose.overtime.none") },
+    { value: "1", label: t("work.eveningClose.overtime.hours", { hours: 1 }) },
+    { value: "2", label: t("work.eveningClose.overtime.hours", { hours: 2 }) },
+    { value: "3", label: t("work.eveningClose.overtime.hours", { hours: 3 }) },
+  ] as const;
+}
+
+/** The amendment reason the customer reads: "2 extra hours on Day 3". */
+function overtimeReason(t: ReturnType<typeof useT>, hours: number, dayName: string): string {
+  return t("work.eveningClose.overtimeReason", { count: hours, day: dayName });
+}
 
 const CHIP =
   "flex min-h-11 items-center gap-2 rounded-control border px-3 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
@@ -67,6 +74,7 @@ function crewKey(member: ShiftDay["crew"][number], index: number): string {
 }
 
 export function EveningClose({ day, scope, canConfirm, canPropose, customerFirstName, onBusy }: EveningCloseProps) {
+  const t = useT();
   const record = useRecordShiftAttendance(scope);
   const propose = useProposeShiftExtra(scope);
   const overtime = shiftOvertime(day);
@@ -83,7 +91,10 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
   const basePaise = present * day.per_worker_paise;
   const overtimeHours = overtime.hourlyPaise === null ? 0 : hours;
   const overtimePaise = overtime.hourlyPaise === null ? 0 : overtimeHours * present * overtime.hourlyPaise;
-  const dayName = day.day_label.trim() === "" ? `Day ${day.position}` : day.day_label;
+  const dayName =
+    day.day_label.trim() === ""
+      ? t("work.shiftDay.dayPosition", { position: day.position })
+      : day.day_label;
 
   const send = async () => {
     onBusy(true);
@@ -101,7 +112,7 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
           hours: overtimeHours,
           addOnCode: "",
           workerDays: 0,
-          reason: `${overtimeHours} extra ${overtimeHours === 1 ? "hour" : "hours"} on ${dayName}`,
+          reason: overtimeReason(t, overtimeHours, dayName),
         });
       } catch {
         setOvertimeFailed(true);
@@ -117,7 +128,11 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
     return (
       <section className="flex flex-col gap-3">
         <p className="text-sm font-semibold text-text">
-          {present} of {expected ?? present} sent to {customerFirstName}.
+          {t("work.eveningClose.sentTo", {
+            present,
+            expected: expected ?? present,
+            name: customerFirstName,
+          })}
         </p>
         <ExtraFailure error={propose.error} />
         <Button
@@ -131,18 +146,18 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
                 hours: overtimeHours,
                 addOnCode: "",
                 workerDays: 0,
-                reason: `${overtimeHours} extra ${overtimeHours === 1 ? "hour" : "hours"} on ${dayName}`,
+                reason: overtimeReason(t, overtimeHours, dayName),
               })
               .then(() => onBusy(false))
               .catch(() => setOvertimeFailed(true));
           }}
           loading={propose.isPending}
-          loadingLabel="Sending"
+          loadingLabel={t("work.eveningClose.sending")}
         >
-          Retry overtime ({overtimeHours} h)
+          {t("work.eveningClose.retryOvertime", { hours: overtimeHours })}
         </Button>
         <Button type="button" variant="ghost" block onClick={() => onBusy(false)}>
-          Skip overtime
+          {t("work.eveningClose.skipOvertime")}
         </Button>
       </section>
     );
@@ -151,15 +166,16 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
   return (
     <section className="flex flex-col gap-5" aria-labelledby="close-heading">
       <h2 id="close-heading" className="text-lg font-semibold text-text">
-        Close {dayName}
+        {t("work.eveningClose.heading", { day: dayName })}
       </h2>
 
       <div id={WHO_CAME_ID} className="flex flex-col gap-2 scroll-mt-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Who came?</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("work.eveningClose.whoCame")}</p>
           <p className="text-sm font-semibold tabular-nums text-text">
-            {present}
-            {expected === null ? "" : ` of ${expected}`}
+            {expected === null
+              ? present
+              : t("work.eveningClose.presentOfExpected", { present, expected })}
           </p>
         </div>
         {crew.length > 0 ? (
@@ -189,13 +205,13 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
           </div>
         ) : (
           <QuantityStepper
-            label="People here today"
+            label={t("work.eveningClose.peopleHere")}
             value={counted}
             onChange={setCounted}
             min={0}
             {...(ceiling === null ? {} : { max: ceiling })}
-            decrementLabel="One fewer"
-            incrementLabel="One more"
+            decrementLabel={t("work.eveningClose.oneFewer")}
+            incrementLabel={t("work.eveningClose.oneMore")}
             disabled={record.isPending || !canConfirm}
           />
         )}
@@ -203,26 +219,30 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
 
       {overtime.hourlyPaise === null ? null : (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Extra hours?</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("work.eveningClose.extraHoursQ")}</p>
           <ChoiceChips
-            label="Extra hours past the standard day"
+            label={t("work.eveningClose.extraHoursLabel")}
             name="overtime-hours"
             layout="bar"
-            options={OVERTIME_OPTIONS}
+            options={overtimeOptions(t)}
             value={String(hours)}
             onChange={(value) => setHours(Number.parseInt(value, 10))}
             disabled={record.isPending || propose.isPending || !canPropose}
           />
           {overtimeHours > 0 ? (
             <p className="text-sm text-text-secondary">
-              {overtimeHours} h × {present} people = {formatMoney(overtimePaise)} (needs OK)
+              {t("work.eveningClose.overtimeMaths", {
+                hours: overtimeHours,
+                present,
+                amount: formatMoney(overtimePaise),
+              })}
             </p>
           ) : null}
         </div>
       )}
 
       <dl className="flex flex-col gap-1 rounded-control border border-line bg-surface-sunken px-3 py-2 text-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Today&rsquo;s amount</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("work.eveningClose.todaysAmount")}</p>
         <div className="flex justify-between gap-2">
           <dt className="text-text-secondary">
             {present} × {formatMoney(day.per_worker_paise)}
@@ -231,14 +251,14 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
         </div>
         {overtimeHours > 0 ? (
           <div className="flex justify-between gap-2">
-            <dt className="text-text-secondary">Overtime {overtimeHours} h</dt>
+            <dt className="text-text-secondary">{t("work.eveningClose.overtimeLine", { hours: overtimeHours })}</dt>
             <dd className="tabular-nums text-text-secondary">
-              {formatMoney(overtimePaise)} <span className="text-xs">pending</span>
+              {formatMoney(overtimePaise)} <span className="text-xs">{t("work.eveningClose.pending")}</span>
             </dd>
           </div>
         ) : null}
         <div className="flex justify-between gap-2 border-t border-line pt-1">
-          <dt className="font-semibold text-text">Collect from {customerFirstName}</dt>
+          <dt className="font-semibold text-text">{t("work.eveningClose.collectFrom", { name: customerFirstName })}</dt>
           <dd className="font-semibold tabular-nums text-text">
             {overtimePaise > 0
               ? `${formatMoney(basePaise)}–${formatMoney(basePaise + overtimePaise)}`
@@ -254,13 +274,13 @@ export function EveningClose({ day, scope, canConfirm, canPropose, customerFirst
           size="lg"
           onClick={() => void send()}
           loading={record.isPending || propose.isPending}
-          loadingLabel="Sending"
+          loadingLabel={t("work.eveningClose.sending")}
           disabled={record.isPending || propose.isPending}
         >
-          Send to {customerFirstName}
+          {t("work.eveningClose.sendTo", { name: customerFirstName })}
         </Button>
       ) : (
-        <p className="text-sm text-text-secondary">Your account cannot record attendance right now.</p>
+        <p className="text-sm text-text-secondary">{t("work.eveningClose.cannotConfirm")}</p>
       )}
 
       {record.isError ? <AttendanceFailure error={record.error} /> : null}
@@ -289,6 +309,7 @@ export function ExtrasDisclosure({
   /** The evening screen asks for overtime itself; only add-ons go behind the chevron. */
   readonly addOnsOnly?: boolean;
 }) {
+  const t = useT();
   const propose = useProposeShiftExtra(scope);
   const addOns = shiftAddOns(day);
   const overtime = shiftOvertime(day);
@@ -300,20 +321,27 @@ export function ExtrasDisclosure({
 
   if (!canPropose || (addOns.length === 0 && !offersOvertime)) return null;
 
-  const dayName = day.day_label.trim() === "" ? `Day ${day.position}` : day.day_label;
+  const dayName =
+    day.day_label.trim() === ""
+      ? t("work.shiftDay.dayPosition", { position: day.position })
+      : day.day_label;
   const chosen = addOns.find((addOn) => addOn.code === code) ?? null;
 
   return (
-    <Disclosure summary={offersOvertime ? "Add overtime or an add-on" : "Add an add-on"}>
+    <Disclosure summary={
+        offersOvertime
+          ? t("work.eveningClose.extras.summaryWithOvertime")
+          : t("work.eveningClose.extras.summary")
+      }>
       <div className="flex flex-col gap-4 py-2">
         {offersOvertime ? (
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Extra hours</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("work.eveningClose.extras.extraHours")}</p>
             <ChoiceChips
-              label="Extra hours past the standard day"
+              label={t("work.eveningClose.extraHoursLabel")}
               name="late-overtime-hours"
               layout="bar"
-              options={OVERTIME_OPTIONS}
+              options={overtimeOptions(t)}
               value={String(hours)}
               onChange={(value) => setHours(Number.parseInt(value, 10))}
               disabled={propose.isPending}
@@ -329,15 +357,15 @@ export function ExtrasDisclosure({
                       hours,
                       addOnCode: "",
                       workerDays: 0,
-                      reason: `${hours} extra ${hours === 1 ? "hour" : "hours"} on ${dayName}`,
+                      reason: overtimeReason(t, hours, dayName),
                     },
                     { onSuccess: () => setHours(0) },
                   )
                 }
                 loading={propose.isPending}
-                loadingLabel="Sending"
+                loadingLabel={t("work.eveningClose.sending")}
               >
-                Ask {customerFirstName} for {hours} h
+                {t("work.eveningClose.extras.askHours", { name: customerFirstName, hours })}
               </Button>
             ) : null}
           </div>
@@ -345,14 +373,16 @@ export function ExtrasDisclosure({
 
         {addOns.length === 0 ? null : (
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Add-on</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("work.eveningClose.extras.addOn")}</p>
             <ChoiceChips
-              label="Which add-on?"
+              label={t("work.eveningClose.extras.whichAddOn")}
               name="add-on-code"
               options={addOns.map((addOn) => ({
                 value: addOn.code,
                 label: addOn.code.replace(/[_-]+/g, " "),
-                description: `${formatMoney(addOn.ratePaise)} per worker-day`,
+                description: t("work.eveningClose.extras.perWorkerDay", {
+                  amount: formatMoney(addOn.ratePaise),
+                }),
               }))}
               value={code}
               onChange={setCode}
@@ -361,12 +391,12 @@ export function ExtrasDisclosure({
             {chosen === null ? null : (
               <>
                 <QuantityStepper
-                  label="Worker-days"
+                  label={t("work.eveningClose.extras.workerDays")}
                   value={workerDays}
                   onChange={setWorkerDays}
                   min={1}
-                  decrementLabel="One fewer"
-                  incrementLabel="One more"
+                  decrementLabel={t("work.eveningClose.oneFewer")}
+                  incrementLabel={t("work.eveningClose.oneMore")}
                   disabled={propose.isPending}
                 />
                 <Button
@@ -379,22 +409,29 @@ export function ExtrasDisclosure({
                         hours: 0,
                         addOnCode: chosen.code,
                         workerDays,
-                        reason: `${chosen.code.replace(/[_-]+/g, " ")} × ${workerDays} worker-days on ${dayName}`,
+                        reason: t("work.eveningClose.extras.addOnReason", {
+                          addOn: chosen.code.replace(/[_-]+/g, " "),
+                          workerDays,
+                          day: dayName,
+                        }),
                       },
                       { onSuccess: () => setCode(null) },
                     )
                   }
                   loading={propose.isPending}
-                  loadingLabel="Sending"
+                  loadingLabel={t("work.eveningClose.sending")}
                 >
-                  Ask {customerFirstName} · {formatMoney(chosen.ratePaise * workerDays)}
+                  {t("work.eveningClose.extras.askAmount", {
+                    name: customerFirstName,
+                    amount: formatMoney(chosen.ratePaise * workerDays),
+                  })}
                 </Button>
               </>
             )}
           </div>
         )}
 
-        {propose.isSuccess ? <p className="text-sm text-text-secondary">Sent — {customerFirstName} has to OK it.</p> : null}
+        {propose.isSuccess ? <p className="text-sm text-text-secondary">{t("work.eveningClose.extras.sent", { name: customerFirstName })}</p> : null}
         {propose.isError ? <ExtraFailure error={propose.error} /> : null}
       </div>
     </Disclosure>
@@ -402,12 +439,13 @@ export function ExtrasDisclosure({
 }
 
 function AttendanceFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
   if (isStageTransitionNotAllowed(error)) {
     return (
       <ErrorState
-        title="This day moved"
-        message="The customer may have answered already, or the count is above the booked crew — reload to see."
+        title={t("work.eveningClose.moved.title")}
+        message={t("work.eveningClose.moved.message")}
         severity="warning"
         reference={presentation.reference}
       />
@@ -425,12 +463,13 @@ function AttendanceFailure({ error }: { readonly error: unknown }) {
 
 /** `m2_policy_unavailable` is Vsolve's gap: the after-shift window is not set. */
 function ExtraFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
   if (isPolicyUnavailable(error)) {
     return (
       <ErrorState
-        title="Overtime after the shift is not open yet"
-        message="Ask before the shift ends, or contact support."
+        title={t("work.eveningClose.policy.title")}
+        message={t("work.eveningClose.policy.message")}
         severity="warning"
         reference={presentation.reference}
       />
@@ -439,7 +478,7 @@ function ExtraFailure({ error }: { readonly error: unknown }) {
   if (isAmendmentRequired(error) || isStageTransitionNotAllowed(error)) {
     return (
       <ErrorState
-        title="This booking has no published price for that"
+        title={t("work.eveningClose.noPrice")}
         message={presentation.message}
         severity="warning"
         reference={presentation.reference}

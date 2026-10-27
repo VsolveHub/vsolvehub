@@ -113,10 +113,11 @@ export {
   I18nProvider,
   useTranslator,
   useT,
-  createTranslator,
-  DEFAULT_LOCALE,
+  useTOrDefault,
 } from "./i18n";
-export type { Catalog, Locale, Message, Translator } from "./i18n";
+// From the plain module, not the "use client" one, so server components can call it.
+export { createTranslator, DEFAULT_LOCALE } from "./i18n-core";
+export type { Catalog, Locale, Message, Translator } from "./i18n-core";
 
 // The signature device: money, countdowns and OTP codes.
 export {

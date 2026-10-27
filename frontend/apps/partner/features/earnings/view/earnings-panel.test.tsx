@@ -1,5 +1,8 @@
+import { I18nProvider } from "@vsolve/ui";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 vi.mock("../queries", () => ({
   usePartnerBalance: vi.fn(),
@@ -76,7 +79,11 @@ describe("EarningsPanel", () => {
   });
 
   it("separates direct-paid earnings from the Vsolve payout balance", () => {
-    render(<EarningsPanel />);
+    render(
+      <I18nProvider locale="en-IN" catalog={catalogs["en-IN"]}>
+        <EarningsPanel />
+      </I18nProvider>,
+    );
 
     expect(screen.getByText("Total earned this month")).toBeInTheDocument();
     expect(screen.getByText("₹7,550 was paid directly by customers.")).toBeInTheDocument();
@@ -106,7 +113,11 @@ describe("EarningsPanel", () => {
       isError: false,
     } as never);
 
-    render(<EarningsPanel />);
+    render(
+      <I18nProvider locale="en-IN" catalog={catalogs["en-IN"]}>
+        <EarningsPanel />
+      </I18nProvider>,
+    );
 
     expect(screen.getByText("Clearing")).toBeInTheDocument();
     expect(screen.getByText("₹3,000")).toBeInTheDocument();

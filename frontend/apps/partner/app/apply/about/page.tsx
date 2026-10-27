@@ -8,8 +8,8 @@ export const metadata: Metadata = { title: "Personal Information" };
 export default function AboutPage() {
   return (
     <ApplicationEditor
-      title="Personal Information"
-      description="Enter your basic profile details for your partner account."
+      title="apply.about.pageTitle"
+      description="apply.about.pageDescription"
     >
       <AboutStep />
     </ApplicationEditor>

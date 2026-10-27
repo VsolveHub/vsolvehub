@@ -17,19 +17,25 @@ export { safeNextPath };
 
 type Status = Schemas["PartnerApplicationStatusEnum"];
 
-/** Statuses whose remaining work lives in the onboarding tree. */
-const UNFINISHED: readonly Status[] = ["DRAFT", "CHANGES_REQUIRED"];
+/** Statuses whose remaining work or waiting review lives in the onboarding tree. */
+const ONBOARDING_STATUSES: readonly Status[] = [
+  "DRAFT",
+  "CHANGES_REQUIRED",
+  "SUBMITTED",
+  "UNDER_REVIEW",
+];
 
 /**
  * The signed-in landing page for an application in this state.
  *
- * An absent application counts as unfinished: the person has not started, and
- * `/apply` is where starting happens. Everything else — including the waiting
- * states and the closed ones — belongs on the home, which states plainly that
- * nothing is owed and links onward. Sending a `SUBMITTED` applicant back into
- * the form would invite them to edit a record a reviewer is holding.
+ * An applicant with an unfinished or submitted application belongs in the
+ * onboarding registration flow (/apply). Only fully APPROVED partners belong on
+ * the portal home (/home).
  */
-export function homeForApplication(status: Status | null): "/apply" | "/home" {
-  if (status === null || UNFINISHED.includes(status)) return "/apply";
+export function homeForApplication(
+  status: Status | null,
+  hasRejectedDocs = false,
+): "/apply" | "/home" {
+  if (status === null || ONBOARDING_STATUSES.includes(status) || hasRejectedDocs) return "/apply";
   return "/home";
 }

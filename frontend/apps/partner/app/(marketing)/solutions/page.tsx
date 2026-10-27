@@ -23,7 +23,7 @@ const HIGHLIGHTS = [
 export default function SolutionsPage() {
   return (
     <main className="bg-surface-muted">
-      <section className="px-5 pt-16 pb-20">
+      <section className="px-5 pt-24 sm:pt-28 lg:pt-32 pb-20">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
             <h1 className="text-3xl font-bold text-ink-900 sm:text-4xl">What service do you offer?</h1>

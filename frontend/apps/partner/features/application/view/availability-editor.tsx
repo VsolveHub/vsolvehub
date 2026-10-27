@@ -1,17 +1,20 @@
 "use client";
 
-import { Badge, Button } from "@vsolve/ui";
+import { Badge, Button, useT } from "@vsolve/ui";
 import { Plus, Trash2, X, Clock, Edit2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { WEEKDAYS, scheduleProblems, weeklyHours, type DraftPeriod, type PeriodProblem } from "../model/schedule";
+import { WEEKDAY_KEYS, scheduleProblems, weeklyHours, type DraftPeriod, type PeriodProblem } from "../model/schedule";
 
-const PROBLEM_MESSAGES: Record<PeriodProblem, string> = {
-  ZERO_LENGTH: "Start and end are the same. Tick 'ends next day' for a full day.",
-  ENDS_BEFORE_START: "This ends before it starts. Tick 'ends next day' if it runs overnight.",
-  OVERLAPS_ANOTHER: "This overlaps another period on the same day.",
+/** Catalogue keys, resolved with `t` at render time. */
+const PROBLEM_MESSAGE_KEYS: Record<PeriodProblem, string> = {
+  ZERO_LENGTH: "apply.schedule.problem.zeroLength",
+  ENDS_BEFORE_START: "apply.schedule.problem.endsBeforeStart",
+  OVERLAPS_ANOTHER: "apply.schedule.problem.overlaps",
 };
+
+const SHIFT_FALLBACK_KEY = "apply.schedule.shiftFallback";
 
 export interface ServiceAreaOption {
   id: string;
@@ -28,7 +31,8 @@ export interface AvailabilityEditorProps {
 
 type ModalShiftState = {
   weekday: number;
-  weekdayLabel: string;
+  /** Catalogue key for the day's name, resolved with `t` at render time. */
+  weekdayLabelKey: string;
   startsAt: string;
   endsAt: string;
   endsNextDay: boolean;
@@ -46,6 +50,7 @@ export function AvailabilityEditor({
   const router = useRouter();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
   const [modalShift, setModalShift] = useState<ModalShiftState>(null);
+  const t = useT();
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
 
   const problems = useMemo(() => scheduleProblems(periods), [periods]);
@@ -90,7 +95,7 @@ export function AvailabilityEditor({
     const areaId = areas[0]?.id ?? "";
     setModalShift({
       weekday,
-      weekdayLabel: WEEKDAYS[weekday] ?? "Shift",
+      weekdayLabelKey: WEEKDAY_KEYS[weekday] ?? SHIFT_FALLBACK_KEY,
       startsAt: "09:00",
       endsAt: "18:00",
       endsNextDay: false,
@@ -101,7 +106,7 @@ export function AvailabilityEditor({
   function openEditShiftModal(period: DraftPeriod) {
     setModalShift({
       weekday: period.weekday,
-      weekdayLabel: WEEKDAYS[period.weekday] ?? "Shift",
+      weekdayLabelKey: WEEKDAY_KEYS[period.weekday] ?? SHIFT_FALLBACK_KEY,
       startsAt: period.startsAt,
       endsAt: period.endsAt,
       endsNextDay: period.endsNextDay,
@@ -169,7 +174,7 @@ export function AvailabilityEditor({
   if (areas.length === 0) {
     return (
       <p className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
-        Choose where you work before publishing hours — your schedule is per area.
+        {t("apply.schedule.chooseAreaFirst")}
       </p>
     );
   }
@@ -178,9 +183,9 @@ export function AvailabilityEditor({
     <div className="flex flex-col gap-6 pb-24">
       {/* Section Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-navy-900">Weekly Schedule</h2>
+        <h2 className="text-sm font-bold text-navy-900">{t("apply.schedule.weeklySchedule")}</h2>
         <Badge tone={hours > 0 ? "success" : "neutral"} className="tabular-nums font-bold">
-          {hours === 0 ? "No hours set" : `${hours} hrs / week`}
+          {hours === 0 ? t("apply.schedule.noHoursSet") : t("apply.schedule.hoursPerWeek", { hours })}
         </Badge>
       </div>
 
@@ -191,14 +196,14 @@ export function AvailabilityEditor({
           onClick={() => applyPreset("fulltime")}
           className="inline-flex min-h-11 items-center rounded-control bg-surface px-3 py-1.5 text-xs font-semibold text-navy-900 border border-line hover:border-line-strong transition-colors"
         >
-          Mon – Sat (9 AM – 6 PM)
+          {t("apply.schedule.preset.fulltime")}
         </button>
         <button
           type="button"
           onClick={() => applyPreset("weekdays")}
           className="inline-flex min-h-11 items-center rounded-control bg-surface px-3 py-1.5 text-xs font-semibold text-navy-900 border border-line hover:border-line-strong transition-colors"
         >
-          Mon – Fri (9 AM – 6 PM)
+          {t("apply.schedule.preset.weekdays")}
         </button>
         {periods.length > 0 && (
           <button
@@ -206,14 +211,15 @@ export function AvailabilityEditor({
             onClick={() => applyPreset("clear")}
             className="inline-flex min-h-11 items-center rounded-control bg-surface px-3 py-1.5 text-xs font-semibold text-danger-text border border-line hover:bg-danger-surface transition-colors"
           >
-            Clear all
+            {t("common.clearAll")}
           </button>
         )}
       </div>
 
       {/* Weekday List */}
       <div className="flex flex-col gap-2.5">
-        {WEEKDAYS.map((weekdayLabel, weekday) => {
+        {WEEKDAY_KEYS.map((weekdayKey, weekday) => {
+          const weekdayLabel = t(weekdayKey);
           const dayPeriods = periods.filter((period) => period.weekday === weekday);
           const dayHours = dayPeriods.reduce((acc, p) => {
             const start = Number(p.startsAt.split(":")[0]) + Number(p.startsAt.split(":")[1]) / 60;
@@ -225,7 +231,7 @@ export function AvailabilityEditor({
 
           return (
             <div
-              key={weekdayLabel}
+              key={weekdayKey}
               className={[
                 "rounded-control border p-3.5 transition-colors",
                 isActive ? "border-line bg-surface" : "border-line/60 bg-surface-sunken/40",
@@ -238,10 +244,10 @@ export function AvailabilityEditor({
                   </span>
                   {isActive ? (
                     <span className="text-xs font-semibold text-success-text">
-                      {Math.round(dayHours * 10) / 10} hrs
+                      {t("apply.schedule.dayHours", { hours: Math.round(dayHours * 10) / 10 })}
                     </span>
                   ) : (
-                    <span className="text-xs text-text-muted">Off Duty</span>
+                    <span className="text-xs text-text-muted">{t("apply.schedule.offDuty")}</span>
                   )}
                 </div>
 
@@ -252,7 +258,7 @@ export function AvailabilityEditor({
                     className="inline-flex min-h-11 items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-xs font-bold text-navy-800 hover:bg-surface-sunken hover:border-line-strong transition-colors"
                   >
                     <Plus size={13} />
-                    <span>Set Shift</span>
+                    <span>{t("apply.schedule.setShift")}</span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -262,13 +268,13 @@ export function AvailabilityEditor({
                       className="inline-flex min-h-11 items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-navy-800 hover:bg-surface-sunken transition-colors"
                     >
                       <Edit2 size={12} />
-                      <span>Edit</span>
+                      <span>{t("common.edit")}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => dayPeriods.forEach((p) => remove(p.key))}
                       className="grid h-11 w-11 place-items-center rounded-full text-text-muted hover:bg-danger-surface hover:text-danger-text transition-colors"
-                      aria-label={`Clear ${weekdayLabel}`}
+                      aria-label={t("apply.schedule.clearDay", { weekday: weekdayLabel })}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -284,13 +290,13 @@ export function AvailabilityEditor({
                   <div key={period.key} className="mt-2.5 border-t border-line/60 pt-2 flex flex-col gap-1">
                     <div className="flex items-center justify-between text-xs text-text-secondary">
                       <span className="font-semibold text-navy-900">
-                        {period.startsAt} – {period.endsAt} {period.endsNextDay && "(Next day)"}
+                        {period.startsAt} – {period.endsAt} {period.endsNextDay && t("apply.schedule.nextDay")}
                       </span>
                     </div>
 
                     {problem ? (
                       <p role="alert" className="text-xs font-semibold text-danger-text">
-                        ⚠️ {PROBLEM_MESSAGES[problem]}
+                        ⚠️ {t(PROBLEM_MESSAGE_KEYS[problem])}
                       </p>
                     ) : null}
                   </div>
@@ -310,14 +316,14 @@ export function AvailabilityEditor({
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-signal-500" />
                 <h3 className="text-base font-bold text-navy-900">
-                  Set Shift: {modalShift.weekdayLabel}
+                  {t("apply.schedule.modal.setShiftTitle", { weekday: t(modalShift.weekdayLabelKey) })}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setModalShift(null)}
                 className="grid h-11 w-11 place-items-center rounded-full text-text-muted hover:bg-surface-sunken hover:text-text transition-colors"
-                aria-label="Close"
+                aria-label={t("common.close")}
               >
                 <X size={18} />
               </button>
@@ -327,7 +333,7 @@ export function AvailabilityEditor({
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-navy-900">Starts At</label>
+                  <label className="text-xs font-bold text-navy-900">{t("apply.schedule.modal.startsAt")}</label>
                   <input
                     type="time"
                     value={modalShift.startsAt}
@@ -339,7 +345,7 @@ export function AvailabilityEditor({
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-navy-900">Ends At</label>
+                  <label className="text-xs font-bold text-navy-900">{t("apply.schedule.modal.endsAt")}</label>
                   <input
                     type="time"
                     value={modalShift.endsAt}
@@ -353,7 +359,7 @@ export function AvailabilityEditor({
 
               {/* Quick Presets */}
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-text-muted">Preset:</span>
+                <span className="text-[11px] font-semibold text-text-muted">{t("apply.schedule.modal.preset")}</span>
                 <button
                   type="button"
                   onClick={() =>
@@ -361,7 +367,7 @@ export function AvailabilityEditor({
                   }
                   className="inline-flex min-h-11 items-center rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold hover:bg-surface-sunken"
                 >
-                  9 AM – 6 PM
+                  {t("apply.schedule.modal.preset1")}
                 </button>
                 <button
                   type="button"
@@ -370,7 +376,7 @@ export function AvailabilityEditor({
                   }
                   className="inline-flex min-h-11 items-center rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold hover:bg-surface-sunken"
                 >
-                  10 AM – 7 PM
+                  {t("apply.schedule.modal.preset2")}
                 </button>
               </div>
 
@@ -384,7 +390,7 @@ export function AvailabilityEditor({
                   }
                   className="h-4 w-4 accent-signal-500 rounded"
                 />
-                <span>Overnight shift (ends on the next morning)</span>
+                <span>{t("apply.schedule.modal.overnight")}</span>
               </label>
             </div>
 
@@ -395,13 +401,13 @@ export function AvailabilityEditor({
                 onClick={() => setModalShift(null)}
                 className="font-semibold text-xs"
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={saveModalShift}
                 className="font-bold text-xs"
               >
-                Save Shift
+                {t("apply.schedule.modal.saveShift")}
               </Button>
             </div>
           </div>
@@ -426,7 +432,7 @@ export function AvailabilityEditor({
             loading={navigatingTo === "/apply/documents"}
             className="shrink-0 font-bold text-sm h-12 px-5"
           >
-            Back
+            {t("common.back")}
           </Button>
 
           <div className="flex items-center gap-2.5">
@@ -435,20 +441,20 @@ export function AvailabilityEditor({
               onClick={() => void onSave(periods)}
               disabled={hasProblems || isSaving || navigatingTo !== null || !hasChanges}
               loading={isSaving && navigatingTo === null}
-              loadingLabel="Saving"
+              loadingLabel={t("common.saving")}
               className="font-bold text-sm h-12 px-4"
             >
-              {hasChanges ? "Save Hours" : "Saved"}
+              {hasChanges ? t("apply.schedule.saveHours") : t("apply.schedule.savedLabel")}
             </Button>
             <Button
               size="lg"
               onClick={() => void handleNavigate("/apply/review")}
               disabled={hasProblems || isSaving || navigatingTo !== null}
               loading={navigatingTo === "/apply/review"}
-              loadingLabel={hasChanges ? "Saving & Reviewing…" : undefined}
+              loadingLabel={hasChanges ? t("apply.schedule.savingAndReviewing") : undefined}
               className="font-bold text-sm h-12 px-5 shadow-md"
             >
-              Review Application
+              {t("apply.schedule.reviewApplication")}
             </Button>
           </div>
         </div>

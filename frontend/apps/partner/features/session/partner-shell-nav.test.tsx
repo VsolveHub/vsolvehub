@@ -14,6 +14,7 @@ import {
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import type { WorkspaceGrant } from "@vsolve/query";
+import { withI18n } from "@/i18n/test-utils";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/home",
@@ -87,7 +88,7 @@ describe("PartnerShell primary nav chrome", () => {
     const workspaces = resolveWorkspaces([grant(LISTING_WORKSPACE)]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     const nav = screen.getByRole("navigation", { name: "Partner navigation" });
     const hrefs = within(nav)
@@ -104,7 +105,7 @@ describe("PartnerShell primary nav chrome", () => {
     const workspaces = resolveWorkspaces([grant(LISTING_WORKSPACE)]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     expect(screen.getByRole("link", { name: /Listings/i })).toHaveAttribute("href", "/listings");
     expect(screen.queryByRole("link", { name: /^Work$/i })).toBeNull();
@@ -117,7 +118,7 @@ describe("PartnerShell primary nav chrome", () => {
     ]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     const nav = screen.getByRole("navigation", { name: "Partner navigation" });
     const hrefs = within(nav)
@@ -133,7 +134,7 @@ describe("PartnerShell primary nav chrome", () => {
     const items = primaryShellNavFor(workspaces);
     const workspaceKeys = workspaces.map((w) => w.key);
 
-    render(<BottomTabBar items={items} workspaceKeys={workspaceKeys} />);
+    render(withI18n(<BottomTabBar items={items} workspaceKeys={workspaceKeys} />));
 
     const dock = screen.getByRole("navigation", { name: "Partner navigation" });
     const dockHrefs = within(dock)
@@ -144,7 +145,7 @@ describe("PartnerShell primary nav chrome", () => {
     expect(dockHrefs).not.toContain("/stays/enquiries");
     expect(dockHrefs).not.toContain("/stays/bookings");
 
-    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaceKeys} />);
+    render(withI18n(<DesktopPrimaryNav items={items} workspaceKeys={workspaceKeys} />));
 
     expect(screen.getByRole("link", { name: /Enquiries/i })).toHaveAttribute(
       "href",
@@ -157,7 +158,7 @@ describe("PartnerShell primary nav chrome", () => {
     const workspaces = resolveWorkspaces([grant(RENTAL_WORKSPACE)]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     expect(screen.getByRole("link", { name: /Bookings/i })).toHaveAttribute(
       "href",

@@ -13,6 +13,7 @@ import {
   StatCard,
   Textarea,
   cn,
+  useT,
 } from "@vsolve/ui";
 import { Camera, CheckCircle2, Clock, MapPin, PackageOpen, Plus, Power, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
@@ -31,7 +32,7 @@ import { PickupHoursCard } from "@/features/rentals/view/pickup-hours-card";
 import { RentalAdEditor } from "@/features/rentals/view/rental-ad-editor";
 import { RentalAssetCard } from "@/features/rentals/view/rental-asset-card";
 import { RentalFieldInput, fieldLabel, type SchemaProperty } from "@/features/rentals/view/rental-field-input";
-import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
+import { useRentalSections } from "@/features/rentals/view/rental-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const MAX_PHOTOS = 8;
@@ -105,6 +106,8 @@ function newLocalId(): string {
  * scroll past the form to reach.
  */
 export function PartnerRentalsWorkspace() {
+  const t = useT();
+  const rentalSections = useRentalSections();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
@@ -224,7 +227,7 @@ export function PartnerRentalsWorkspace() {
     if (!fileList?.length) return;
     const remaining = MAX_PHOTOS - photos.length;
     if (remaining <= 0) {
-      setFormError(`You can add up to ${MAX_PHOTOS} photos.`);
+      setFormError(t("rentals.ads.errorMaxPhotos", { max: MAX_PHOTOS }));
       return;
     }
     const chosen = Array.from(fileList).slice(0, remaining);
@@ -245,7 +248,7 @@ export function PartnerRentalsWorkspace() {
         } catch (err) {
           patchPhoto(draft.localId, {
             uploading: false,
-            error: friendlyErrorMessage(err, "Could not upload this photo."),
+            error: friendlyErrorMessage(err, t("rentals.ads.errorPhotoUpload")),
           });
         }
       }),
@@ -270,40 +273,40 @@ export function PartnerRentalsWorkspace() {
         : rupeesToPaise(deposit);
     const quantityAvailable = Number.parseInt(quantity.trim(), 10);
     if (!variantId || !title.trim()) {
-      setFormError("Choose what you are renting, and add a title.");
+      setFormError(t("rentals.ads.errorChooseItem"));
       return;
     }
     if (!address.line.trim() || !address.city.trim()) {
-      setFormError("Add the pickup address and city. Customers come here to collect the item.");
+      setFormError(t("rentals.ads.errorAddress"));
       return;
     }
     if (!PINCODE.test(address.pincode.trim())) {
-      setFormError("Enter the 6-digit pincode of the pickup address.");
+      setFormError(t("rentals.ads.errorPincode"));
       return;
     }
     if (dailyPaise == null || dailyPaise < 1) {
-      setFormError("Enter a daily rate in rupees, for example 250 or 249.50.");
+      setFormError(t("rentals.ads.errorDailyRate"));
       return;
     }
     if (depositPaise == null) {
-      setFormError("Choose what you are renting so the refundable deposit can load.");
+      setFormError(t("rentals.ads.errorDeposit"));
       return;
     }
     if (!Number.isFinite(quantityAvailable) || quantityAvailable < 1) {
-      setFormError("Quantity must be at least 1.");
+      setFormError(t("rentals.ads.errorQuantity"));
       return;
     }
     if (photos.some((photo) => photo.uploading)) {
-      setFormError("Wait for every photo to finish uploading.");
+      setFormError(t("rentals.ads.errorPhotosUploading"));
       return;
     }
     if (photos.some((photo) => photo.error)) {
-      setFormError("Remove failed photos or try uploading them again.");
+      setFormError(t("rentals.ads.errorPhotosFailed"));
       return;
     }
     const urls = photos.map((photo) => photo.remoteUrl).filter((url): url is string => Boolean(url));
     if (urls.length < 1) {
-      setFormError("Add at least one photo. Customers see the first photo as the cover.");
+      setFormError(t("rentals.ads.errorNoPhotos"));
       return;
     }
     const fields: Record<string, string | number | boolean> = {};
@@ -311,7 +314,7 @@ export function PartnerRentalsWorkspace() {
       const raw = structuredFields[key]?.trim() ?? "";
       if (!raw) {
         if (requiredSchemaKeys.has(key)) {
-          setFormError(`Fill in ${fieldLabel(key, schemaProps[key] ?? {}).toLowerCase()}.`);
+          setFormError(t("rentals.ads.errorFillField", { field: fieldLabel(key, schemaProps[key] ?? {}).toLowerCase() }));
           return;
         }
         continue;
@@ -365,29 +368,29 @@ export function PartnerRentalsWorkspace() {
       {/* Top Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Rental inventory</p>
-          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Your rental items</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("rentals.inventory.eyebrow")}</p>
+          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("rentals.inventory.title")}</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Manage your catalog, edit details, or pause and resume ads anytime. Existing bookings continue unaffected.
+            {t("rentals.inventory.intro")}
           </p>
         </div>
         {!creating ? (
           <Button onClick={() => setCreating(true)}>
             <Plus className="mr-1.5 size-4" aria-hidden />
-            Post an item
+            {t("rentals.inventory.postItem")}
           </Button>
         ) : null}
       </div>
 
-      <SectionNav label="Rental sections" items={RENTAL_SECTIONS} />
+      <SectionNav label={t("rentals.sections.ariaLabel")} items={rentalSections} />
 
       {/* Inventory Overview Stats Bar */}
       {allAssets.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total items" value={allAssets.length} icon={<PackageOpen className="size-4" />} />
-          <StatCard label="🟢 Live on store" value={liveCount} icon={<CheckCircle2 className="size-4 text-positive-text" />} />
-          <StatCard label="🟡 Paused / Disabled" value={pausedCount} icon={<Power className="size-4 text-warning-text" />} />
-          <StatCard label="Drafts" value={draftCount} icon={<Clock className="size-4 text-text-secondary" />} />
+          <StatCard label={t("rentals.inventory.statTotal")} value={allAssets.length} icon={<PackageOpen className="size-4" />} />
+          <StatCard label={t("rentals.inventory.statLive")} value={liveCount} icon={<CheckCircle2 className="size-4 text-positive-text" />} />
+          <StatCard label={t("rentals.inventory.statPaused")} value={pausedCount} icon={<Power className="size-4 text-warning-text" />} />
+          <StatCard label={t("rentals.inventory.statDrafts")} value={draftCount} icon={<Clock className="size-4 text-text-secondary" />} />
         </div>
       ) : null}
 
@@ -396,20 +399,20 @@ export function PartnerRentalsWorkspace() {
         <Card padding="lg" className="border-action/40 shadow-sm">
           <div className="mb-6 flex items-center justify-between border-b border-line pb-4">
             <div>
-              <h2 className="text-lg font-bold text-navy-900">Post a new rental item</h2>
-              <p className="text-xs text-text-secondary">Add photos, daily rental rate, and pickup details.</p>
+              <h2 className="text-lg font-bold text-navy-900">{t("rentals.inventory.createTitle")}</h2>
+              <p className="text-xs text-text-secondary">{t("rentals.inventory.createHint")}</p>
             </div>
             <Button variant="outline" size="sm" type="button" onClick={() => setCreating(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
 
           <form className="flex flex-col gap-6" onSubmit={onCreate}>
           <section className="flex flex-col gap-3">
             <Field
-              label="Photos"
+              label={t("rentals.ads.photos")}
               required
-              description={`First photo is the cover. JPEG, PNG or WebP, up to ${MAX_PHOTOS} photos.`}
+              description={t("rentals.ads.photosHint", { max: MAX_PHOTOS })}
             >
               <input
                 ref={fileInputRef}
@@ -432,24 +435,24 @@ export function PartnerRentalsWorkspace() {
                     <img src={photo.previewUrl} alt="" className="size-full object-cover" />
                     {index === 0 ? (
                       <span className="absolute left-1.5 top-1.5 rounded-control bg-navy-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                        Cover
+                        {t("rentals.ads.cover")}
                       </span>
                     ) : null}
                     {photo.uploading ? (
                       <span className="absolute inset-x-0 bottom-0 bg-navy-900/80 px-2 py-1 text-center text-[11px] font-medium text-white">
-                        Uploading…
+                        {t("rentals.ads.uploading")}
                       </span>
                     ) : null}
                     {photo.error ? (
                       <span className="absolute inset-x-0 bottom-0 bg-danger-text px-2 py-1 text-center text-[11px] font-medium text-white">
-                        Failed
+                        {t("rentals.ads.failed")}
                       </span>
                     ) : null}
                     <button
                       type="button"
                       className="absolute right-1.5 top-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-navy-900 shadow-xs"
                       onClick={() => removePhoto(photo.localId)}
-                      aria-label="Remove photo"
+                      aria-label={t("rentals.ads.removePhoto")}
                     >
                       <X className="size-3.5" />
                     </button>
@@ -463,7 +466,7 @@ export function PartnerRentalsWorkspace() {
                       className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-line-strong bg-surface-sunken text-text-secondary transition hover:border-action hover:bg-surface hover:text-navy-900"
                     >
                       <Camera className="size-7" />
-                      <span className="text-xs font-semibold">Add photo</span>
+                      <span className="text-xs font-semibold">{t("rentals.ads.addPhoto")}</span>
                     </button>
                   </li>
                 ) : null}
@@ -472,7 +475,7 @@ export function PartnerRentalsWorkspace() {
           </section>
 
           <section className="grid gap-3 sm:grid-cols-2">
-            <Field label="Type" required>
+            <Field label={t("rentals.ads.type")} required>
               <Select
                 id="rental-subcategory"
                 value={subcategorySlug}
@@ -484,7 +487,7 @@ export function PartnerRentalsWorkspace() {
                   setDepositOverride(null);
                 }}
               >
-                <option value="">Select a type</option>
+                <option value="">{t("rentals.ads.selectType")}</option>
                 {subcategories.map((sub) => (
                   <option key={sub.id} value={sub.slug}>
                     {sub.name}
@@ -492,7 +495,7 @@ export function PartnerRentalsWorkspace() {
                 ))}
               </Select>
             </Field>
-            <Field label="What are you renting?" required>
+            <Field label={t("rentals.ads.whatRenting")} required>
               <Select
                 id="rental-service"
                 value={serviceId}
@@ -509,7 +512,7 @@ export function PartnerRentalsWorkspace() {
                   }
                 }}
               >
-                <option value="">Select an item</option>
+                <option value="">{t("rentals.ads.selectItem")}</option>
                 {selectedSub?.services.map((svc) => (
                   <option key={svc.id} value={svc.id}>
                     {svc.name}
@@ -518,7 +521,7 @@ export function PartnerRentalsWorkspace() {
               </Select>
             </Field>
             {(selectedService?.variants.length ?? 0) > 1 ? (
-              <Field label="Option" required>
+              <Field label={t("rentals.ads.option")} required>
                 <Select
                   id="rental-variant"
                   value={variantId}
@@ -528,7 +531,7 @@ export function PartnerRentalsWorkspace() {
                     setDepositOverride(null);
                   }}
                 >
-                  <option value="">Select an option</option>
+                  <option value="">{t("rentals.ads.selectOption")}</option>
                   {selectedService?.variants.map((variant) => (
                     <option key={variant.id} value={variant.id}>
                       {variant.name}
@@ -540,21 +543,21 @@ export function PartnerRentalsWorkspace() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <Field label="Ad title" required>
+            <Field label={t("rentals.ads.adTitle")} required>
               <Input
                 id="rental-title"
                 value={title}
                 maxLength={180}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Bosch hammer drill, lightly used"
+                placeholder={t("rentals.ads.adTitlePlaceholder")}
               />
             </Field>
-            <Field label="Description" showOptional={false}>
+            <Field label={t("rentals.ads.description")} showOptional={false}>
               <Textarea
                 id="rental-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Condition, what is included, and pickup notes."
+                placeholder={t("rentals.ads.descriptionPlaceholder")}
               />
             </Field>
             {schemaKeys.length > 0 ? (
@@ -575,7 +578,7 @@ export function PartnerRentalsWorkspace() {
           </section>
 
           <section className="grid gap-3 sm:grid-cols-3">
-            <Field label="Daily rate" required description="Amount in rupees. Customers see this per day.">
+            <Field label={t("rentals.ads.dailyRate")} required description={t("rentals.ads.dailyRateHint")}>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
                   ₹
@@ -591,9 +594,9 @@ export function PartnerRentalsWorkspace() {
               </div>
             </Field>
             <Field
-              label="Refundable deposit"
+              label={t("rentals.ads.deposit")}
               required
-              description="Suggested from this variant's category policy. Change it only if this asset needs a different hold."
+              description={t("rentals.ads.depositHint")}
             >
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
@@ -608,7 +611,7 @@ export function PartnerRentalsWorkspace() {
                 />
               </div>
             </Field>
-            <Field label="Quantity available" required description="How many identical units you can rent out.">
+            <Field label={t("rentals.ads.quantity")} required description={t("rentals.ads.quantityHint")}>
               <Input
                 id="rental-quantity"
                 inputMode="numeric"
@@ -622,15 +625,13 @@ export function PartnerRentalsWorkspace() {
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-bold text-navy-900">Pickup address</h2>
+                <h2 className="text-sm font-bold text-navy-900">{t("rentals.ads.pickupAddress")}</h2>
                 <p className="mt-0.5 text-xs text-text-secondary">
-                  Customers who choose Self Pickup see this address and a View Location button that
-                  opens Google Maps. Prefilled from your last item; edit it or find it on the map if
-                  this one is elsewhere.
+                  {t("rentals.ads.pickupAddressHint")}
                 </p>
               </div>
               <FindOnMap
-                title="Find the pickup location"
+                title={t("rentals.ads.findPickup")}
                 pin={address.pin}
                 onPicked={(picked) =>
                   // Area, city and pincode follow the pin. The first line keeps
@@ -654,42 +655,42 @@ export function PartnerRentalsWorkspace() {
                 <p className="text-sm font-medium text-text">{address.formattedAddress}</p>
               </div>
             ) : null}
-            <Field label="Shop / building, street" required>
+            <Field label={t("rentals.ads.line")} required>
               <Input
                 id="rental-pickup-line"
                 value={address.line}
                 maxLength={240}
                 onChange={(e) => setAddress((a) => ({ ...a, line: e.target.value }))}
-                placeholder="e.g. Vishnu Tools, beside SBI ATM"
+                placeholder={t("rentals.ads.linePlaceholder")}
               />
             </Field>
             {/* Geocoded fields: collapsed behind a disclosure when a pin fills them,
                 expanded when the user has not pinned yet (manual entry). */}
             {address.pin && address.city && address.pincode ? (
               <Disclosure
-                summary="Edit area, city or pincode"
+                summary={t("rentals.ads.editArea")}
                 hint={[address.area, address.city, address.pincode].filter(Boolean).join(", ")}
               >
                 <div className="grid gap-3 pt-1 sm:grid-cols-3">
-                  <Field label="Area" showOptional={false}>
+                  <Field label={t("rentals.ads.area")} showOptional={false}>
                     <Input
                       id="rental-pickup-area"
                       value={address.area}
                       maxLength={120}
                       onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
-                      placeholder="e.g. Kukatpally"
+                      placeholder={t("rentals.ads.areaPlaceholder")}
                     />
                   </Field>
-                  <Field label="City" required>
+                  <Field label={t("rentals.ads.city")} required>
                     <Input
                       id="rental-pickup-city"
                       value={address.city}
                       maxLength={120}
                       onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
-                      placeholder="e.g. Hyderabad"
+                      placeholder={t("rentals.ads.cityPlaceholder")}
                     />
                   </Field>
-                  <Field label="Pincode" required>
+                  <Field label={t("rentals.ads.pincode")} required>
                     <Input
                       id="rental-pickup-pincode"
                       inputMode="numeric"
@@ -702,25 +703,25 @@ export function PartnerRentalsWorkspace() {
               </Disclosure>
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Area" showOptional={false}>
+                <Field label={t("rentals.ads.area")} showOptional={false}>
                   <Input
                     id="rental-pickup-area"
                     value={address.area}
                     maxLength={120}
                     onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
-                    placeholder="e.g. Kukatpally"
+                    placeholder={t("rentals.ads.areaPlaceholder")}
                   />
                 </Field>
-                <Field label="City" required>
+                <Field label={t("rentals.ads.city")} required>
                   <Input
                     id="rental-pickup-city"
                     value={address.city}
                     maxLength={120}
                     onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
-                    placeholder="e.g. Hyderabad"
+                    placeholder={t("rentals.ads.cityPlaceholder")}
                   />
                 </Field>
-                <Field label="Pincode" required>
+                <Field label={t("rentals.ads.pincode")} required>
                   <Input
                     id="rental-pickup-pincode"
                     inputMode="numeric"
@@ -742,11 +743,9 @@ export function PartnerRentalsWorkspace() {
               onChange={(e) => setDeliveryAvailable(e.target.checked)}
             />
             <span className="text-sm">
-              <span className="font-semibold text-navy-900">Delivery available on request</span>
+              <span className="font-semibold text-navy-900">{t("rentals.ads.delivery")}</span>
               <span className="mt-0.5 block text-xs text-text-secondary">
-                Customers can ask you to deliver. You check each request, arrange a vehicle and send
-                the transport price. V Solve Hub takes no commission on transport — you receive the
-                full amount.
+                {t("rentals.ads.deliveryHint")}
               </span>
             </span>
           </label>
@@ -755,10 +754,10 @@ export function PartnerRentalsWorkspace() {
 
           <div className="flex items-center justify-end gap-3 border-t border-line pt-4">
             <Button variant="outline" type="button" onClick={() => setCreating(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" size="lg" disabled={create.isPending || uploadingCount > 0}>
-              {create.isPending ? "Posting ad…" : "Post ad"}
+              {create.isPending ? t("rentals.ads.posting") : t("rentals.ads.post")}
             </Button>
           </div>
         </form>
@@ -780,7 +779,7 @@ export function PartnerRentalsWorkspace() {
                     : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
                 )}
               >
-                All items ({allAssets.length})
+                {t("rentals.inventory.tabAll", { count: allAssets.length })}
               </button>
               <button
                 type="button"
@@ -792,7 +791,7 @@ export function PartnerRentalsWorkspace() {
                     : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
                 )}
               >
-                Live ({liveCount})
+                {t("rentals.inventory.tabLive", { count: liveCount })}
               </button>
               <button
                 type="button"
@@ -804,7 +803,7 @@ export function PartnerRentalsWorkspace() {
                     : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
                 )}
               >
-                Paused / Disabled ({pausedCount})
+                {t("rentals.inventory.tabPaused", { count: pausedCount })}
               </button>
               <button
                 type="button"
@@ -816,13 +815,13 @@ export function PartnerRentalsWorkspace() {
                     : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
                 )}
               >
-                Drafts ({draftCount})
+                {t("rentals.inventory.tabDrafts", { count: draftCount })}
               </button>
             </div>
           </div>
         ) : null}
 
-        {assets.isLoading ? <p className="text-sm text-text-secondary">Loading your items…</p> : null}
+        {assets.isLoading ? <p className="text-sm text-text-secondary">{t("rentals.inventory.loading")}</p> : null}
         {assets.error ? (
           <p className="text-sm text-danger-text">{friendlyErrorMessage(assets.error)}</p>
         ) : null}
@@ -830,12 +829,12 @@ export function PartnerRentalsWorkspace() {
         {allAssets.length === 0 && !creating ? (
           <EmptyState
             compact
-            title="No rental items listed yet"
-            description="Post your first item with photos and a daily rate to start receiving bookings."
+            title={t("rentals.inventory.emptyTitle")}
+            description={t("rentals.inventory.emptyDescription")}
             action={
               <Button onClick={() => setCreating(true)}>
                 <Plus className="mr-1.5 size-4" aria-hidden />
-                Post an item
+                {t("rentals.inventory.postItem")}
               </Button>
             }
           />
@@ -852,8 +851,8 @@ export function PartnerRentalsWorkspace() {
         ) : allAssets.length > 0 && !creating ? (
           <EmptyState
             compact
-            title="No items in this tab"
-            description="Try switching to another tab or post a new item."
+            title={t("rentals.inventory.emptyTabTitle")}
+            description={t("rentals.inventory.emptyTabDescription")}
           />
         ) : null}
       </section>

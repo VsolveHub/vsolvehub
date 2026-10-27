@@ -1,5 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
-import { Card } from "@vsolve/ui";
+import { Card, useT } from "@vsolve/ui";
 
 /**
  * How many men and how many women, role by role.
@@ -34,6 +34,7 @@ export interface CrewMixTableProps {
 }
 
 export function CrewMixTable({ lines, footnote }: CrewMixTableProps) {
+  const t = useT();
   if (lines.length === 0) return null;
 
   const men = lines.reduce((sum, line) => sum + line.men, 0);
@@ -42,9 +43,10 @@ export function CrewMixTable({ lines, footnote }: CrewMixTableProps) {
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-bold text-text">Who they need</h2>
+        <h2 className="text-base font-bold text-text">{t("work.crewOfferMixTable.title")}</h2>
         <p className="text-sm font-bold text-text-secondary">
-          {men} {men === 1 ? "man" : "men"} · {women} {women === 1 ? "woman" : "women"}
+          {t("work.crewOfferMixTable.menCount", { count: men })} ·{" "}
+          {t("work.crewOfferMixTable.womenCount", { count: women })}
         </p>
       </div>
 
@@ -52,13 +54,13 @@ export function CrewMixTable({ lines, footnote }: CrewMixTableProps) {
         <thead>
           <tr className="border-b border-line text-left">
             <th scope="col" className="pb-2 font-semibold text-text-secondary">
-              Role
+              {t("work.crewOfferMixTable.header.role")}
             </th>
             <th scope="col" className="pb-2 text-right font-semibold text-text-secondary">
-              Men
+              {t("work.crewOfferMixTable.header.men")}
             </th>
             <th scope="col" className="pb-2 text-right font-semibold text-text-secondary">
-              Women
+              {t("work.crewOfferMixTable.header.women")}
             </th>
           </tr>
         </thead>

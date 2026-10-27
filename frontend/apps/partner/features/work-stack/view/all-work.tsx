@@ -1,6 +1,6 @@
 "use client";
 
-import { ChoiceChips, ErrorState, Spinner } from "@vsolve/ui";
+import { ChoiceChips, ErrorState, Spinner, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { Pictogram } from "@/components/pictogram";
@@ -31,18 +31,18 @@ import { WorkCard } from "./work-home";
  */
 
 /** The section each urgency belongs under, and the order the sections run in. */
-const SECTIONS: readonly { readonly title: string; readonly urgencies: readonly WorkUrgency[] }[] =
+const SECTIONS: readonly { readonly id: string; readonly titleKey: string; readonly urgencies: readonly WorkUrgency[] }[] =
   [
-    { title: "Needs you", urgencies: ["live", "needs_price"] },
-    { title: "In hand", urgencies: ["doing"] },
-    { title: "Waiting on the customer", urgencies: ["answered"] },
+    { id: "needsYou", titleKey: "work.allWork.section.needsYou", urgencies: ["live", "needs_price"] },
+    { id: "inHand", titleKey: "work.allWork.section.inHand", urgencies: ["doing"] },
+    { id: "waitingOnCustomer", titleKey: "work.allWork.section.waitingOnCustomer", urgencies: ["answered"] },
     // `not_chosen` and `closed` used to have no section to render into on this
     // screen at all — a quote the customer picked someone else for, or an
     // enquiry the customer cancelled, existed in the stack and was invisible
     // everywhere. They read as "done" to a vendor exactly as a settled job
     // does: nothing more to do, and it belongs beside the filter chip below
     // that groups all three the same way.
-    { title: "Done", urgencies: ["settled", "not_chosen", "closed"] },
+    { id: "done", titleKey: "work.allWork.section.done", urgencies: ["settled", "not_chosen", "closed"] },
   ];
 
 /**
@@ -53,14 +53,14 @@ const SECTIONS: readonly { readonly title: string; readonly urgencies: readonly 
  * later and forgets to add here fails obviously (an item with no home) rather
  * than silently landing in `all` alone.
  */
-const FILTERS: readonly { readonly value: string; readonly label: string; readonly urgencies: readonly WorkUrgency[] | null }[] =
+const FILTERS: readonly { readonly value: string; readonly labelKey: string; readonly urgencies: readonly WorkUrgency[] | null }[] =
   [
-    { value: "all", label: "All", urgencies: null },
-    { value: "offers", label: "Offers", urgencies: ["live"] },
-    { value: "enquiries", label: "Enquiries", urgencies: ["needs_price"] },
-    { value: "in_progress", label: "In progress", urgencies: ["doing"] },
-    { value: "waiting", label: "Waiting", urgencies: ["answered"] },
-    { value: "done", label: "Done", urgencies: ["settled", "closed", "not_chosen"] },
+    { value: "all", labelKey: "work.allWork.filter.all", urgencies: null },
+    { value: "offers", labelKey: "work.allWork.filter.offers", urgencies: ["live"] },
+    { value: "enquiries", labelKey: "work.allWork.filter.enquiries", urgencies: ["needs_price"] },
+    { value: "in_progress", labelKey: "work.allWork.filter.inProgress", urgencies: ["doing"] },
+    { value: "waiting", labelKey: "work.allWork.filter.waiting", urgencies: ["answered"] },
+    { value: "done", labelKey: "work.allWork.filter.done", urgencies: ["settled", "closed", "not_chosen"] },
   ];
 
 const FILTER_STORAGE_KEY = "vsolve.partner.work-all.filter";
@@ -84,6 +84,7 @@ function writeStoredFilter(value: string): void {
 }
 
 export function AllWork() {
+  const t = useT();
   const stack = useWorkStack();
   // Lazy initializer rather than an effect: reading storage in `useState`'s
   // initializer runs once, before the first paint, so the remembered chip is
@@ -106,7 +107,7 @@ export function AllWork() {
         out.
       */}
       <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3.5">
-        <h1 className="flex-1 text-[1.0625rem] font-bold text-text">All your work</h1>
+        <h1 className="flex-1 text-[1.0625rem] font-bold text-text">{t("work.allWork.title")}</h1>
         <Count stack={stack} />
       </div>
 
@@ -146,12 +147,13 @@ function FilterRow({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useT();
   const known = stack.isPending || stack.error ? null : stack.items;
 
   return (
     <div className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <ChoiceChips
-        label="Filter your work"
+        label={t("work.allWork.filterRow.ariaLabel")}
         name="work-filter"
         layout="wrap"
         value={value}
@@ -160,8 +162,8 @@ function FilterRow({
           value: option.value,
           label:
             known === null
-              ? option.label
-              : `${option.label} · ${countFor(known, option.urgencies)}`,
+              ? t(option.labelKey)
+              : `${t(option.labelKey)} · ${countFor(known, option.urgencies)}`,
         }))}
       />
     </div>
@@ -188,11 +190,12 @@ function Body({
   stack: ReturnType<typeof useWorkStack>;
   filter: (typeof FILTERS)[number];
 }) {
+  const t = useT();
   if (stack.isPending) {
     return (
       <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
         <Spinner size="sm" />
-        Loading your work…
+        {t("work.allWork.loading")}
       </p>
     );
   }
@@ -200,9 +203,9 @@ function Body({
   if (stack.error) {
     return (
       <ErrorState
-        title="We could not load your work"
-        message="Nothing has changed. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("work.allWork.error.title")}
+        message={t("common.nothingChanged")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => window.location.reload()}
       />
     );
@@ -224,7 +227,9 @@ function Body({
           {/* "Nothing here yet" unfiltered — nothing has ever arrived on this
               account. A chosen chip finding nothing is a different fact: the
               work exists, just not in this bucket right now — so it is named. */}
-          {filter.value === "all" ? "Nothing here yet" : `Nothing here — ${filter.label}`}
+          {filter.value === "all"
+            ? t("work.allWork.empty.unfiltered")
+            : t("work.allWork.empty.filtered", { filter: t(filter.labelKey) })}
         </p>
       </div>
     );
@@ -245,10 +250,10 @@ function Body({
         if (sectionItems.length === 0) return null;
 
         return (
-          <section key={section.title} className="flex flex-col gap-2.5">
+          <section key={section.id} className="flex flex-col gap-2.5">
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-                {section.title}
+                {t(section.titleKey)}
               </h2>
               <span className="text-[0.6875rem] font-bold text-text-muted">
                 {sectionItems.length}

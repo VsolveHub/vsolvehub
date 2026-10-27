@@ -1,20 +1,28 @@
 import { Check, Crown, X } from "lucide-react";
+import { useT, type Translator } from "@vsolve/ui";
 import type { VendorSubscriptionPlan } from "../queries";
 
-const CAPABILITY_LABELS: Record<string, string> = {
-  FEATURED_PLACEMENT: "Featured jobs",
-  CANDIDATE_MATCHING: "Matching candidates: see and invite people before they apply",
-  CANDIDATE_CONTACT: "Candidate phone numbers in matches",
-};
+function capabilityLabel(t: Translator["t"], code: string): string {
+  switch (code) {
+    case "FEATURED_PLACEMENT":
+      return t("listings.subscription.capability.featuredPlacement");
+    case "CANDIDATE_MATCHING":
+      return t("listings.subscription.capability.candidateMatching");
+    case "CANDIDATE_CONTACT":
+      return t("listings.subscription.capability.candidateContact");
+    default:
+      return code.replaceAll("_", " ");
+  }
+}
 
-function premiumLabels(plan: VendorSubscriptionPlan): string[] {
+function premiumLabels(t: Translator["t"], plan: VendorSubscriptionPlan): string[] {
   const raw = plan.premium_capabilities;
   if (!Array.isArray(raw)) return [];
   return raw
     .map((entry) => {
-      if (typeof entry === "string") return CAPABILITY_LABELS[entry] ?? entry.replaceAll("_", " ");
+      if (typeof entry === "string") return capabilityLabel(t, entry);
       if (entry && typeof entry === "object" && "code" in entry) {
-        return String((entry as { code: string }).code).replaceAll("_", " ");
+        return capabilityLabel(t, String((entry as { code: string }).code));
       }
       return "";
     })
@@ -40,6 +48,7 @@ export function SubscriptionDialog({
   isPending,
   error,
 }: SubscriptionDialogProps) {
+  const t = useT();
   if (!isOpen) return null;
 
   return (
@@ -49,10 +58,10 @@ export function SubscriptionDialog({
           <div>
             <h2 className="text-lg font-bold text-text flex items-center gap-2">
               <Crown className="size-5 text-signal-500" />
-              Hiring Subscription Plans
+              {t("listings.subscription.title")}
             </h2>
             <p className="text-xs text-text-muted">
-              Upgrade your listing capacity and unlock premium featured placements.
+              {t("listings.subscription.description")}
             </p>
           </div>
           <button
@@ -68,12 +77,12 @@ export function SubscriptionDialog({
           {plans.map((plan) => {
             const priceInRupees = plan.price_paise / 100;
             const isCurrent = currentPlanName === plan.name;
-            const premiums = premiumLabels(plan);
+            const premiums = premiumLabels(t, plan);
             const details = typeof plan.details === "string" ? plan.details.trim() : "";
             const serviceLabel =
               typeof plan.service_name === "string" && plan.service_name.trim()
                 ? plan.service_name.trim()
-                : "All hiring services";
+                : t("listings.subscription.allHiringServices");
 
             return (
               <div
@@ -89,7 +98,7 @@ export function SubscriptionDialog({
                     <h3 className="font-bold text-text">{plan.name}</h3>
                     {isCurrent && (
                       <span className="rounded-full bg-signal-100 px-2 py-0.5 text-[10px] font-bold text-signal-800">
-                        Current
+                        {t("listings.subscription.current")}
                       </span>
                     )}
                   </div>
@@ -98,7 +107,7 @@ export function SubscriptionDialog({
 
                   <div className="mt-3">
                     <span className="text-2xl font-extrabold text-text">₹{priceInRupees}</span>
-                    <span className="text-xs text-text-muted"> / {plan.duration_days} days</span>
+                    <span className="text-xs text-text-muted"> {t("listings.subscription.perDays", { days: plan.duration_days ?? "" })}</span>
                   </div>
 
                   {details ? (
@@ -108,11 +117,11 @@ export function SubscriptionDialog({
                   <ul className="mt-4 space-y-2 text-xs text-text-secondary">
                     <li className="flex items-center gap-1.5">
                       <Check className="size-3.5 text-success-text shrink-0" />
-                      Up to {plan.max_active_listings} active openings
+                      {t("listings.subscription.activeOpenings", { count: plan.max_active_listings ?? "" })}
                     </li>
                     <li className="flex items-center gap-1.5">
                       <Check className="size-3.5 text-success-text shrink-0" />
-                      Direct applicant contact reveal
+                      {t("listings.subscription.directContactReveal")}
                     </li>
                     {premiums.length > 0 ? (
                       premiums.map((label) => (
@@ -124,13 +133,13 @@ export function SubscriptionDialog({
                     ) : (
                       <li className="flex items-center gap-1.5">
                         <Check className="size-3.5 text-success-text shrink-0" />
-                        Verified hiring badge
+                        {t("listings.subscription.verifiedBadge")}
                       </li>
                     )}
                     {(plan.premium_price_paise ?? 0) > 0 ? (
                       <li className="flex items-center gap-1.5">
                         <Check className="size-3.5 text-success-text shrink-0" />
-                        Premium placement from ₹{((plan.premium_price_paise ?? 0) / 100).toFixed(0)}
+                        {t("listings.subscription.premiumFrom", { amount: ((plan.premium_price_paise ?? 0) / 100).toFixed(0) })}
                       </li>
                     ) : null}
                   </ul>
@@ -143,7 +152,7 @@ export function SubscriptionDialog({
                       disabled
                       className="w-full rounded-control border border-line bg-surface-sunken py-2 text-xs font-semibold text-text-muted"
                     >
-                      Active Plan
+                      {t("listings.subscription.activePlan")}
                     </button>
                   ) : (
                     <button
@@ -152,7 +161,7 @@ export function SubscriptionDialog({
                       disabled={isPending}
                       className="w-full rounded-control bg-action py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
                     >
-                      {isPending ? "Processing..." : "Select Plan"}
+                      {isPending ? t("listings.subscription.processing") : t("listings.subscription.selectPlan")}
                     </button>
                   )}
                 </div>

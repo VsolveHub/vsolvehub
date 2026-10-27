@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, formatMoney, useToast } from "@vsolve/ui";
+import { Badge, Button, Card, formatMoney, useT, useToast } from "@vsolve/ui";
 import { Camera, MapPin, Pencil, Play, Power, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,6 +20,7 @@ export function RentalAssetCard({
   asset: RentalAsset;
   onEdit: (asset: RentalAsset) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const { notify } = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -36,10 +37,10 @@ export function RentalAssetCard({
       invalidate();
       notify(
         action === "pause"
-          ? "Ad disabled. It will no longer show in customer search."
+          ? t("rentals.assetCard.toastDisabled")
           : action === "resume"
-            ? "Ad enabled. It is now live for bookings."
-            : "Ad published! It is now live for bookings.",
+            ? t("rentals.assetCard.toastEnabled")
+            : t("rentals.assetCard.toastPublished"),
         "success",
       );
     },
@@ -51,7 +52,7 @@ export function RentalAssetCard({
     onSuccess: () => {
       setActionError(null);
       invalidate();
-      notify("Ad archived.", "info");
+      notify(t("rentals.assetCard.toastArchived"), "info");
     },
     onError: (err: unknown) => setActionError(friendlyErrorMessage(err)),
   });
@@ -80,30 +81,30 @@ export function RentalAssetCard({
         ) : (
           <div className="flex size-full flex-col items-center justify-center gap-1 text-sm text-text-muted">
             <Camera className="size-6 text-text-muted/60" aria-hidden />
-            <span>No photos</span>
+            <span>{t("rentals.assetCard.noPhotos")}</span>
           </div>
         )}
 
         {/* Top Badges */}
         <div className="absolute right-2 top-2 flex flex-col items-end gap-1.5">
           {isLive ? (
-            <Badge tone="success">Live</Badge>
+            <Badge tone="success">{t("rentals.assetCard.live")}</Badge>
           ) : isPaused ? (
-            <Badge tone="warning">Paused / Disabled</Badge>
+            <Badge tone="warning">{t("rentals.assetCard.paused")}</Badge>
           ) : isRejected ? (
-            <Badge tone="danger">Changes requested</Badge>
+            <Badge tone="danger">{t("rentals.assetCard.changesRequested")}</Badge>
           ) : isPendingReview ? (
-            <Badge tone="neutral">Under review</Badge>
+            <Badge tone="neutral">{t("rentals.assetCard.underReview")}</Badge>
           ) : (
-            <Badge tone="neutral">Draft</Badge>
+            <Badge tone="neutral">{t("rentals.assetCard.draft")}</Badge>
           )}
 
-          {typeof qty === "number" ? <Badge tone="neutral">Qty {qty}</Badge> : null}
+          {typeof qty === "number" ? <Badge tone="neutral">{t("rentals.ads.qty", { qty })}</Badge> : null}
         </div>
 
         {photos.length > 1 ? (
           <div className="absolute bottom-2 left-2 rounded-full bg-navy-900/75 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
-            {photos.length} photos
+            {t("rentals.assetCard.photoCount", { count: photos.length })}
           </div>
         ) : null}
       </div>
@@ -113,11 +114,11 @@ export function RentalAssetCard({
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-lg font-extrabold text-navy-900">
               {formatMoney(asset.daily_rate_paise)}{" "}
-              <span className="text-xs font-semibold text-text-secondary">/ day</span>
+              <span className="text-xs font-semibold text-text-secondary">{t("rentals.assetCard.perDay")}</span>
             </p>
             {asset.deposit_paise > 0 ? (
               <span className="text-xs font-medium text-text-secondary">
-                {formatMoney(asset.deposit_paise)} deposit
+                {t("rentals.assetCard.deposit", { amount: formatMoney(asset.deposit_paise) })}
               </span>
             ) : null}
           </div>
@@ -133,32 +134,32 @@ export function RentalAssetCard({
 
           {asset.delivery_available ? (
             <div className="pt-0.5">
-              <Badge tone="neutral">Delivery on request</Badge>
+              <Badge tone="neutral">{t("rentals.ads.deliveryOnRequest")}</Badge>
             </div>
           ) : null}
 
           {/* Contextual Status Alerts */}
           {isPaused ? (
             <p className="mt-1 rounded-control bg-warning-surface/70 px-2.5 py-1.5 text-xs text-warning-text">
-              Disabled by you. Item is hidden from customer search; existing bookings continue as planned.
+              {t("rentals.assetCard.pausedNote")}
             </p>
           ) : null}
 
           {isDraft ? (
             <p className="mt-1 rounded-control bg-surface-sunken px-2.5 py-1.5 text-xs text-text-secondary">
-              Draft. Add photos and pickup details, then publish to go live.
+              {t("rentals.assetCard.draftNote")}
             </p>
           ) : null}
 
           {isRejected ? (
             <p className="mt-1 rounded-control bg-danger-surface px-2.5 py-1.5 text-xs text-danger-text">
-              Updates required before this item can go live. Edit this ad to make updates and publish.
+              {t("rentals.assetCard.rejectedNote")}
             </p>
           ) : null}
 
           {isPendingReview ? (
             <p className="mt-1 rounded-control bg-surface-sunken px-2.5 py-1.5 text-xs text-text-secondary">
-              Publishing item…
+              {t("rentals.assetCard.pendingNote")}
             </p>
           ) : null}
 
@@ -170,7 +171,7 @@ export function RentalAssetCard({
           {canEdit ? (
             <Button size="sm" variant="secondary" onClick={() => onEdit(asset)}>
               <Pencil className="mr-1.5 size-3.5" aria-hidden />
-              Edit ad
+              {t("rentals.assetCard.edit")}
             </Button>
           ) : null}
 
@@ -182,7 +183,7 @@ export function RentalAssetCard({
               onClick={() => act.mutate("pause")}
             >
               <Power className="mr-1.5 size-3.5 text-warning-text" aria-hidden />
-              {act.isPending ? "Pausing…" : "Disable ad"}
+              {act.isPending ? t("rentals.assetCard.pausing") : t("rentals.assetCard.disable")}
             </Button>
           ) : null}
 
@@ -194,7 +195,7 @@ export function RentalAssetCard({
               onClick={() => act.mutate("resume")}
             >
               <Play className="mr-1.5 size-3.5 text-action" aria-hidden />
-              {act.isPending ? "Resuming…" : "Enable ad"}
+              {act.isPending ? t("rentals.assetCard.resuming") : t("rentals.assetCard.enable")}
             </Button>
           ) : null}
 
@@ -206,7 +207,7 @@ export function RentalAssetCard({
               onClick={() => act.mutate("submit")}
             >
               <Send className="mr-1.5 size-3.5" aria-hidden />
-              {act.isPending ? "Publishing…" : "Publish ad"}
+              {act.isPending ? t("rentals.assetCard.publishing") : t("rentals.assetCard.publish")}
             </Button>
           ) : null}
 
@@ -216,12 +217,12 @@ export function RentalAssetCard({
               variant="ghost"
               disabled={archive.isPending}
               onClick={() => {
-                if (window.confirm("Archive this rental ad? It will be removed from your catalog.")) {
+                if (window.confirm(t("rentals.assetCard.archiveConfirm"))) {
                   archive.mutate();
                 }
               }}
               className="ml-auto text-text-muted hover:text-danger-text"
-              aria-label="Archive ad"
+              aria-label={t("rentals.assetCard.archive")}
             >
               <Trash2 className="size-3.5" aria-hidden />
             </Button>

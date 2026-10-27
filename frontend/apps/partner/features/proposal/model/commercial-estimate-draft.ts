@@ -1,4 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
+import { createTranslator, type useT } from "@vsolve/ui";
+
+import { catalogs } from "@/i18n/catalogs";
 
 export type EstimateMode = Schemas["EstimateTypeEnum"];
 export type EstimateUnit = Schemas["UnitEnum"];
@@ -134,26 +137,43 @@ export interface CommercialEstimateDraft {
   readonly materialBrandTier: MaterialBrandTier;
 }
 
-export const ESTIMATE_UNITS: readonly { value: EstimateUnit; label: string }[] = [
-  { value: "each", label: "Nos" },
-  { value: "job", label: "Job" },
-  { value: "day", label: "Days" },
-  { value: "hour", label: "Hours" },
-  { value: "sq_ft", label: "Sq ft" },
-  { value: "running_ft", label: "Running ft" },
-  { value: "metre", label: "Metre" },
-  { value: "kg", label: "Kg" },
-  { value: "litre", label: "Litre" },
-  { value: "set", label: "Set" },
+/**
+ * Units. `label` is the English caption (kept so existing callers compile);
+ * screens show `t(labelKey)`.
+ */
+export const ESTIMATE_UNITS: readonly { value: EstimateUnit; label: string; labelKey: string }[] = [
+  { value: "each", label: "Nos", labelKey: "proposal.unit.each" },
+  { value: "job", label: "Job", labelKey: "proposal.unit.job" },
+  { value: "day", label: "Days", labelKey: "proposal.unit.day" },
+  { value: "hour", label: "Hours", labelKey: "proposal.unit.hour" },
+  { value: "sq_ft", label: "Sq ft", labelKey: "proposal.unit.sqFt" },
+  { value: "running_ft", label: "Running ft", labelKey: "proposal.unit.runningFt" },
+  { value: "metre", label: "Metre", labelKey: "proposal.unit.metre" },
+  { value: "kg", label: "Kg", labelKey: "proposal.unit.kg" },
+  { value: "litre", label: "Litre", labelKey: "proposal.unit.litre" },
+  { value: "set", label: "Set", labelKey: "proposal.unit.set" },
 ];
 
-export const CHARGE_OPTIONS: readonly { value: ChargeCode; label: string }[] = [
-  { value: "TRANSPORT", label: "Transportation" },
-  { value: "LOADING_UNLOADING", label: "Loading and unloading" },
-  { value: "DISPOSAL", label: "Waste disposal" },
-  { value: "EQUIPMENT_DELIVERY", label: "Equipment delivery" },
-  { value: "PERMIT", label: "Permit or approval" },
-  { value: "CUSTOM", label: "Other named charge" },
+/**
+ * The charge kinds. `label` is the wire value written into `OtherChargeDraft.label`
+ * (the customer's document, so it stays in one canonical wording); `labelKey` is
+ * what the vendor reads on screen.
+ */
+export const CHARGE_OPTIONS: readonly { value: ChargeCode; label: string; labelKey: string }[] = [
+  { value: "TRANSPORT", label: "Transportation", labelKey: "proposal.charge.TRANSPORT" },
+  {
+    value: "LOADING_UNLOADING",
+    label: "Loading and unloading",
+    labelKey: "proposal.charge.LOADING_UNLOADING",
+  },
+  { value: "DISPOSAL", label: "Waste disposal", labelKey: "proposal.charge.DISPOSAL" },
+  {
+    value: "EQUIPMENT_DELIVERY",
+    label: "Equipment delivery",
+    labelKey: "proposal.charge.EQUIPMENT_DELIVERY",
+  },
+  { value: "PERMIT", label: "Permit or approval", labelKey: "proposal.charge.PERMIT" },
+  { value: "CUSTOM", label: "Other named charge", labelKey: "proposal.charge.CUSTOM" },
 ];
 
 export const EMPTY_COMMERCIAL_ESTIMATE: CommercialEstimateDraft = {
@@ -777,42 +797,50 @@ export function materialFulfilmentFields(
 
 export type CommercialEstimateErrors = Readonly<Record<string, string>>;
 
+/** Used where only the presence of an error matters, never its wording. */
+const KEY_ONLY = ((key: string) => key) as ReturnType<typeof useT>;
+
+/**
+ * `t` is optional only so callers not yet threading it keep compiling; without
+ * it the messages are English.
+ */
 export function validateCommercialEstimate(
   draft: CommercialEstimateDraft,
+  t: ReturnType<typeof useT> = createTranslator("en-IN", catalogs["en-IN"]).t,
 ): CommercialEstimateErrors {
   const errors: Record<string, string> = {};
   if (draft.mode === null) {
-    errors.mode = "Choose Item-wise or Labour-wise pricing.";
+    errors.mode = t("proposal.commercialDraft.error.mode");
   } else if (draft.mode === "ITEM_WISE") {
-    if (draft.itemLines.length === 0) errors.lines = "Add at least one priced item.";
+    if (draft.itemLines.length === 0) errors.lines = t("proposal.commercialDraft.error.noItems");
     draft.itemLines.forEach((line, index) => {
       if (line.title.trim() === "") {
-        errors[`item-${index}`] = "Name the item.";
+        errors[`item-${index}`] = t("proposal.commercialDraft.error.itemName");
       } else if (itemLineAmount(line) === null) {
-        errors[`item-${index}`] = "Enter a quantity and rate greater than zero.";
+        errors[`item-${index}`] = t("proposal.commercialDraft.error.quantityRate");
       } else if (checkBand(line, line.ratePaise) === "below" || checkBand(line, line.ratePaise) === "above") {
-        errors[`item-${index}`] = "This rate is outside the allowed range.";
+        errors[`item-${index}`] = t("proposal.commercialDraft.error.outsideRange");
       }
     });
   } else {
-    if (draft.labourLines.length === 0) errors.lines = "Add at least one labour role.";
+    if (draft.labourLines.length === 0) errors.lines = t("proposal.commercialDraft.error.noLabour");
     draft.labourLines.forEach((line, index) => {
-      if (line.role.trim() === "") errors[`labour-${index}`] = "Name this role or team.";
+      if (line.role.trim() === "") errors[`labour-${index}`] = t("proposal.commercialDraft.error.labourName");
       else if (line.memberCount < 1 || line.dayCount < 1 || labourLineAmount(line) === null) {
-        errors[`labour-${index}`] = "Enter members, days and a daily rate greater than zero.";
+        errors[`labour-${index}`] = t("proposal.commercialDraft.error.labourAmounts");
       }
     });
   }
 
   draft.materialLines.forEach((line, index) => {
-    if (line.title.trim() === "") errors[`material-${index}`] = "Name this material.";
+    if (line.title.trim() === "") errors[`material-${index}`] = t("proposal.commercialDraft.error.materialName");
     else if (materialLineAmount(line) === null) {
-      errors[`material-${index}`] = "Enter a quantity and rate greater than zero.";
+      errors[`material-${index}`] = t("proposal.commercialDraft.error.quantityRate");
     }
   });
   draft.otherCharges.forEach((charge, index) => {
     if (charge.label.trim() === "" || (charge.amountPaise ?? 0) <= 0) {
-      errors[`charge-${index}`] = "Give this charge a clear label and amount.";
+      errors[`charge-${index}`] = t("proposal.commercialDraft.error.charge");
     }
   });
 
@@ -822,18 +850,18 @@ export function validateCommercialEstimate(
 
   const serviceSubtotal = partnerServiceSubtotal(draft);
   if (draft.installments.length === 0) {
-    errors.installments = "Add at least one payment installment.";
+    errors.installments = t("proposal.commercialDraft.error.noInstallments");
   } else if (
     draft.installments.some(
       (row) => row.title.trim() === "" || (row.amountPaise ?? 0) <= 0,
     )
   ) {
-    errors.installments = "Name every installment and enter its service amount.";
+    errors.installments = t("proposal.commercialDraft.error.installmentIncomplete");
   } else if (
     serviceSubtotal !== null &&
     allocatedInstallmentSubtotal(draft) !== serviceSubtotal
   ) {
-    errors.installments = "Installments must exactly match priced work and named charges.";
+    errors.installments = t("proposal.commercialDraft.error.installmentMismatch");
   }
   return errors;
 }
@@ -852,7 +880,7 @@ function requestBody(input: {
   draft: CommercialEstimateDraft;
 }): ProposalRequest {
   const draft = withAutoText(input.draft);
-  if (hasCommercialEstimateErrors(validateCommercialEstimate(draft)) || draft.mode === null) {
+  if (hasCommercialEstimateErrors(validateCommercialEstimate(draft, KEY_ONLY)) || draft.mode === null) {
     throw new Error("An incomplete estimate cannot be sent.");
   }
   return {

@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { ConfirmAction, ErrorState, Spinner, buttonStyles, formatMoney } from "@vsolve/ui";
+import { ConfirmAction, ErrorState, Spinner, buttonStyles, formatMoney, useT } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -78,6 +78,7 @@ import { RequirementSummary } from "./requirement-summary";
  */
 
 export function EnquiryDetailScreen({ invitationId }: { invitationId: string }) {
+  const t = useT();
   const enquiry = usePartnerEnquiry(invitationId);
 
   if (enquiry.isPending) {
@@ -85,7 +86,7 @@ export function EnquiryDetailScreen({ invitationId }: { invitationId: string }) 
       <Screen>
         <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
           <Spinner size="sm" />
-          Loading this enquiry…
+          {t("enquiry.detail.loading")}
         </p>
       </Screen>
     );
@@ -98,14 +99,18 @@ export function EnquiryDetailScreen({ invitationId }: { invitationId: string }) 
       <Screen>
         <div className="px-4 py-6">
           <ErrorState
-            title={forbidden ? "This enquiry is not yours to read" : (presentation?.title ?? "We could not load this enquiry")}
+            title={
+              forbidden
+                ? t("enquiry.detail.forbidden.title")
+                : (presentation?.title ?? t("enquiry.detail.loadError.title"))
+            }
             message={
               forbidden
-                ? "Vsolve has no enquiry with this reference on your account. If you followed a link from somewhere else, it may belong to another vendor."
-                : (presentation?.message ?? "Check your connection and try again.")
+                ? t("enquiry.detail.forbidden.message")
+                : (presentation?.message ?? t("visit.arrival.loadError.message"))
             }
             severity={presentation?.severity}
-            actionLabel={forbidden ? undefined : "Try again"}
+            actionLabel={forbidden ? undefined : t("common.tryAgain")}
             onAction={forbidden ? undefined : () => void enquiry.refetch()}
             reference={presentation?.reference}
           />
@@ -152,6 +157,7 @@ export function EnquiryDetailScreen({ invitationId }: { invitationId: string }) 
  * second empty card saying it again is furniture.
  */
 function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
+  const t = useT();
   const router = useRouter();
   const enquiry = readEnquiryRecord(detail);
   const permissions = permissionsFor(enquiry.status);
@@ -241,10 +247,10 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
         {acceptPresentation ? (
           <ErrorState
             inline
-            title={kycGate ? "Vsolve needs to verify you first" : acceptPresentation.title}
+            title={kycGate ? t("enquiry.detail.kyc.title") : acceptPresentation.title}
             message={acceptPresentation.message}
             severity={acceptPresentation.severity}
-            actionLabel={kycGate ? "Finish verification" : "Try again"}
+            actionLabel={kycGate ? t("enquiry.detail.kyc.action") : t("common.tryAgain")}
             onAction={
               kycGate
                 ? () => router.push("/apply")
@@ -295,7 +301,7 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
               className="flex h-16 items-center justify-center gap-3 rounded-[20px] bg-success-text shadow-[0_3px_0_var(--color-success-active)] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               <Pictogram name="yes" size="md" className="text-surface" />
-              <span className="text-lg font-bold text-surface">Accept</span>
+              <span className="text-lg font-bold text-surface">{t("enquiry.detail.accept")}</span>
             </button>
           ) : null}
 
@@ -307,7 +313,9 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
               className="flex h-14 items-center justify-center gap-2.5 rounded-[18px] border border-line bg-surface disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               <Pictogram name="no" size="md" className="text-text-muted" />
-              <span className="text-base font-bold text-text-secondary">Decline</span>
+              <span className="text-base font-bold text-text-secondary">
+                {t("enquiry.declineDialog.decline")}
+              </span>
             </button>
           ) : null}
         </div>
@@ -318,9 +326,9 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
       <ConfirmAction
         open={confirmingAccept}
         onOpenChange={setConfirmingAccept}
-        title="Accept this enquiry"
-        consequence="Accepting takes one of the customer's quote slots and holds your availability for these dates. You are not committing to a price yet — your quote comes next."
-        confirmLabel="Accept"
+        title={t("enquiry.detail.acceptDialog.title")}
+        consequence={t("enquiry.detail.acceptDialog.consequence")}
+        confirmLabel={t("enquiry.detail.accept")}
         pending={accept.isPending}
         onConfirm={() => {
           // Closed on either outcome here, at the call site, rather than by a
@@ -384,6 +392,7 @@ function EnquiryHero({
    */
   readonly showsEarning: boolean;
 }) {
+  const t = useT();
   const showsLocality = enquiry.siteAddress === null && enquiry.approximateArea.trim() !== "";
 
   return (
@@ -400,22 +409,24 @@ function EnquiryHero({
       */}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-          {isProject ? "Project enquiry" : "Workforce enquiry"}
+          {isProject ? t("enquiry.detail.hero.project") : t("enquiry.detail.hero.workforce")}
         </span>
         <h1 className="truncate text-[1.1875rem] font-bold leading-snug text-surface">
-          {enquiry.serviceName === "" ? "Enquiry" : enquiry.serviceName}
+          {enquiry.serviceName === "" ? t("enquiry.detail.hero.defaultTitle") : enquiry.serviceName}
         </h1>
         {showsLocality ? (
           <span className="flex items-center gap-1 text-xs font-semibold text-navy-100">
             <Pictogram name="distance" size="xs" className="shrink-0" />
-            <span className="truncate">Near {enquiry.approximateArea}</span>
+            <span className="truncate">
+              {t("visit.siteAddress.near", { place: enquiry.approximateArea })}
+            </span>
           </span>
         ) : null}
       </span>
 
       {isProject && enquiry.status === "QUOTED" ? (
         <span className="shrink-0 rounded-full bg-success-surface px-3 py-2 text-xs font-extrabold text-success-text">
-          Estimate sent
+          {t("enquiry.detail.hero.estimateSent")}
         </span>
       ) : showsEarning && enquiry.fixedVisitEarningPaise !== null ? (
         <span className="flex shrink-0 flex-col items-end rounded-2xl bg-navy-800/70 px-3 py-2 text-right">
@@ -423,7 +434,7 @@ function EnquiryHero({
             {formatMoney(enquiry.fixedVisitEarningPaise)}
           </span>
           <span className="mt-1 text-[0.625rem] font-bold uppercase tracking-wide text-navy-200">
-            for this visit
+            {t("enquiry.detail.hero.forThisVisit")}
           </span>
         </span>
       ) : (
@@ -468,12 +479,13 @@ function ProjectNow({
 }
 
 function QuoteAction() {
+  const t = useT();
   return (
     <ErrorState
       inline
       severity="info"
-      title="No quote form for this yet"
-      message="Vsolve cannot show a quote form for this kind of work in this version of the app. Support can take your quote over the phone."
+      title={t("enquiry.detail.noQuoteForm.title")}
+      message={t("enquiry.detail.noQuoteForm.message")}
     />
   );
 }
@@ -513,7 +525,8 @@ function Screen({ children }: { children: ReactNode }) {
  * claimed the second even though the first is what actually happens.
  */
 function ClosedNotice({ enquiry }: { readonly enquiry: EnquiryRecord }) {
-  const status = describeStatus(enquiry.status, enquiry.declineReasonCode);
+  const t = useT();
+  const status = describeStatus(enquiry.status, t, enquiry.declineReasonCode);
   return (
     <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-surface px-6 py-10 text-center">
       <span
@@ -525,7 +538,7 @@ function ClosedNotice({ enquiry }: { readonly enquiry: EnquiryRecord }) {
       <p className="text-lg font-extrabold tracking-[-0.02em] text-text">{status.label}</p>
       <p className="max-w-xs text-sm leading-6 text-text-secondary">{status.meaning}</p>
       <Link href="/work/all" className={buttonStyles({ variant: "outline", className: "mt-2" })}>
-        Back to Work
+        {t("visit.screen.backToWork")}
       </Link>
     </div>
   );

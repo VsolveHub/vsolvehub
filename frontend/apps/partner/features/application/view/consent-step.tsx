@@ -1,10 +1,11 @@
 "use client";
 
-import { ErrorState, Spinner } from "@vsolve/ui";
+import { ErrorState, Spinner, useT } from "@vsolve/ui";
 import { useApplicationReference } from "../reference-queries";
 import { useApplicationEditor } from "./application-editor";
 
 export function ConsentStep() {
+  const t = useT();
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
 
@@ -12,7 +13,7 @@ export function ConsentStep() {
     return (
       <p className="flex items-center gap-2 py-6 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Loading agreements…
+        {t("apply.consent.loading")}
       </p>
     );
   }
@@ -20,9 +21,9 @@ export function ConsentStep() {
   if (reference.isError) {
     return (
       <ErrorState
-        title="Could not load agreements"
-        message="Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.consent.loadError.title")}
+        message={t("apply.common.checkConnectionAndRetry")}
+        actionLabel={t("common.tryAgain")}
         onAction={reference.refetch}
       />
     );
@@ -34,7 +35,7 @@ export function ConsentStep() {
         role="status"
         className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary"
       >
-        No agreements are required at this time.
+        {t("apply.consent.empty")}
       </p>
     );
   }
@@ -55,7 +56,7 @@ export function ConsentStep() {
     <fieldset className="border-0 p-0 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <legend className="text-sm font-bold text-navy-900">
-          Required Agreements <span className="text-danger-text">*</span>
+          {t("apply.consent.legend")} <span className="text-danger-text">*</span>
         </legend>
 
         {!isReadOnly && requiredConsents.length > 1 && (
@@ -86,7 +87,7 @@ export function ConsentStep() {
             }}
             className="text-xs font-semibold text-navy-700 hover:text-signal-700"
           >
-            {allRequiredAccepted ? "Deselect all" : "Accept all required"}
+            {allRequiredAccepted ? t("apply.areas.deselectAll") : t("apply.consent.acceptAllRequired")}
           </button>
         )}
       </div>
@@ -134,16 +135,16 @@ export function ConsentStep() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-text">
-                      I agree to the {document.title}
+                      {t("apply.consent.iAgreeTo", { title: document.title })}
                     </span>
                     {document.is_required_for_submission ? (
-                      <span className="text-xs font-semibold text-danger-text">* Required</span>
+                      <span className="text-xs font-semibold text-danger-text">* {t("common.required")}</span>
                     ) : (
-                      <span className="text-xs text-text-muted">Optional</span>
+                      <span className="text-xs text-text-muted">{t("common.optional")}</span>
                     )}
                   </div>
                   <div className="mt-2 flex items-center justify-between text-xs text-text-secondary">
-                    <span>Version {document.document_version}</span>
+                    <span>{t("apply.consent.version", { version: document.document_version })}</span>
                     <a
                       href={document.document_url}
                       target="_blank"
@@ -151,7 +152,7 @@ export function ConsentStep() {
                       onClick={(e) => e.stopPropagation()}
                       className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-xs font-bold text-navy-900 hover:bg-surface-sunken hover:border-line-strong transition-colors shadow-xs"
                     >
-                      <span>Read document</span>
+                      <span>{t("apply.consent.readDocument")}</span>
                       <span>↗</span>
                     </a>
                   </div>

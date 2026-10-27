@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { useT } from "@vsolve/ui";
 
 /**
  * A site visit in the vendor's own terms, and what confirming one commits them
@@ -38,54 +39,53 @@ export interface VisitStatusCopy {
   readonly meaning: string;
 }
 
+/** Catalogue keys, resolved with `t` in `describeVisitStatus`. */
 const STATUS_COPY: Record<SiteVisitStatus, VisitStatusCopy> = {
   REQUESTED: {
-    label: "Slot held",
+    label: "visit.status.requested.label",
     tone: "progress",
     // Deliberately not "Confirmed". A plan visit sits here while the Customer's
     // visit-plan payment is being verified.
-    meaning:
-      "Your time is held while the customer pays for their visit plan. Vsolve confirms it the moment that payment clears. If they never pay, the hold simply lapses — you are not owed a journey and nothing is charged to anyone.",
+    meaning: "visit.status.requested.meaning",
   },
   SCHEDULED: {
-    label: "Confirmed",
+    label: "visit.status.scheduled.label",
     tone: "action",
-    meaning:
-      "This visit is booked and your calendar is held for it. Travel to the site at this time, confirm you have arrived, and write the estimate before you leave.",
+    meaning: "visit.status.scheduled.meaning",
   },
   IN_PROGRESS: {
-    label: "You are on site",
+    label: "visit.status.inProgress.label",
     tone: "action",
-    meaning:
-      "Vsolve has your arrival. Close the visit when you are done and send the estimate — the estimate is what the customer paid for, so a visit without one is not complete.",
+    meaning: "visit.status.inProgress.meaning",
   },
   COMPLETED: {
-    label: "Visit done",
+    label: "visit.status.completed.label",
     tone: "progress",
-    meaning:
-      "The visit is closed. Send your estimate inside the window below — a completed visit that produces no estimate is refunded to the customer and pays you nothing.",
+    meaning: "visit.status.completed.meaning",
   },
   CANCELLED: {
-    label: "Cancelled",
+    label: "visit.status.cancelled.label",
     tone: "gone",
-    meaning: "This visit is off. Your slot is released and your calendar is free again.",
+    meaning: "visit.status.cancelled.meaning",
   },
   VENDOR_NO_SHOW: {
-    label: "Recorded as a no-show",
+    label: "visit.status.vendorNoShow.label",
     tone: "gone",
-    meaning:
-      "The customer reported that nobody arrived. This visit pays nothing, their share is refunded or replaced, and it counts against your standing. Tell support if this is wrong.",
+    meaning: "visit.status.vendorNoShow.meaning",
   },
   CUSTOMER_NO_SHOW: {
-    label: "Nobody was on site",
+    label: "visit.status.customerNoShow.label",
     tone: "settled",
-    meaning:
-      "You reported that nobody was there. You travelled, so your visit payout still stands — Vsolve settles it through your usual payouts.",
+    meaning: "visit.status.customerNoShow.meaning",
   },
 };
 
-export function describeVisitStatus(status: SiteVisitStatus): VisitStatusCopy {
-  return STATUS_COPY[status];
+export function describeVisitStatus(
+  status: SiteVisitStatus,
+  t: ReturnType<typeof useT>,
+): VisitStatusCopy {
+  const copy = STATUS_COPY[status];
+  return { ...copy, label: t(copy.label), meaning: t(copy.meaning) };
 }
 
 /* ---------------------------------------------------------------------------
@@ -136,9 +136,10 @@ export function visitPermissionsFor(visit: SiteVisit | null): VisitPermissions {
  * Stated before the tap, not after. This is a person deciding whether to get on
  * a bike, and the two facts that decide it are: you travel at this time, and you
  * write the estimate there.
+ *
+ * A catalogue key: resolve it with `t` where it renders.
  */
-export const CONFIRM_COMMITMENT =
-  "This accepts the project enquiry and takes one visit slot. Book only if you can reach the site at this time and complete the estimate during the visit.";
+export const CONFIRM_COMMITMENT_KEY = "visit.state.confirmCommitment";
 
 export interface ConfirmationOutcome {
   readonly title: string;
@@ -147,9 +148,12 @@ export interface ConfirmationOutcome {
   readonly isHeld: boolean;
 }
 
-export function describeEstimateWindow(estimateDueAt: string | null): string {
+export function describeEstimateWindow(
+  estimateDueAt: string | null,
+  t: ReturnType<typeof useT>,
+): string {
   if (estimateDueAt === null) {
-    return "Send your estimate as soon as you can. A completed visit that never produces one is refunded to the customer and pays you nothing.";
+    return t("visit.state.estimateWindow.noDeadline");
   }
-  return "Your estimate is due by the time shown. Miss it and the customer's share is refunded or given to another vendor, this visit pays you nothing, and it counts against your standing.";
+  return t("visit.state.estimateWindow.withDeadline");
 }

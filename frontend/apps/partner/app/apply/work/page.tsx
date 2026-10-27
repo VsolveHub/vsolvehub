@@ -13,8 +13,8 @@ export default async function WorkPage() {
   return (
     <ListingStepGuard redirectTo="/apply/about">
     <ApplicationEditor
-      title="Your trades"
-      description="Choose your main categories and the job types you want under each one."
+      title="apply.work.pageTitle"
+      description="apply.work.pageDescription"
     >
       <WorkStep mainCategories={mainCategories} services={services} />
     </ApplicationEditor>

@@ -1,3 +1,5 @@
+import type { useT } from "@vsolve/ui";
+
 /**
  * Partner booking lifecycle actions for A7 rentals.
  * Django owns transitions; this only decides which UI control to offer.
@@ -61,18 +63,18 @@ export function canDisputeDeposit(
   );
 }
 
-export function bookingActionLabel(action: BookingAction): string {
+export function bookingActionLabel(action: BookingAction, t: ReturnType<typeof useT>): string {
   switch (action) {
     case "handover":
-      return "Handover";
+      return t("rentals.action.handover");
     case "return":
-      return "Return";
+      return t("rentals.action.return");
     case "release-deposit":
-      return "Return deposit";
+      return t("rentals.action.releaseDeposit");
     case "dispute-deposit":
-      return "Raise dispute";
+      return t("rentals.action.disputeDeposit");
     case "cancel":
-      return "Cancel booking";
+      return t("rentals.action.cancel");
   }
 }
 

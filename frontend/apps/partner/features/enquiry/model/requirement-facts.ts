@@ -1,4 +1,7 @@
 import { formatMoney } from "@vsolve/ui";
+import type { useT } from "@vsolve/ui";
+
+type T = ReturnType<typeof useT>;
 
 /**
  * Reading the frozen requirement a vendor was invited against.
@@ -69,13 +72,20 @@ export function labelForCode(code: string): string {
  * structure this build does not understand is a structure it should not
  * paraphrase to a vendor who is about to price against it — the detail screen
  * says so explicitly instead.
+ *
+ * `t` translates the Yes/No a boolean answer reads as; without it they stay English.
  */
-export function formatAnswerValue(value: unknown): string | null {
+export function formatAnswerValue(value: unknown, t?: T): string | null {
   if (typeof value === "string") return value.trim() === "" ? null : value;
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "boolean") {
+    if (t) return t(value ? "common.yes" : "common.no");
+    return value ? "Yes" : "No";
+  }
   if (Array.isArray(value)) {
-    const parts = value.map(formatAnswerValue).filter((part): part is string => part !== null);
+    const parts = value
+      .map((item) => formatAnswerValue(item, t))
+      .filter((part): part is string => part !== null);
     return parts.length > 0 ? parts.join(", ") : null;
   }
   return null;
@@ -95,10 +105,10 @@ export interface RequirementFact {
  * decides what a vendor reads first, and re-sorting here would put this client
  * in charge of an ordering the catalogue owns.
  */
-export function requirementFacts(answers: AnswerMap): RequirementFact[] {
+export function requirementFacts(answers: AnswerMap, t?: T): RequirementFact[] {
   const facts: RequirementFact[] = [];
   for (const [code, raw] of Object.entries(answers)) {
-    const value = formatAnswerValue(raw);
+    const value = formatAnswerValue(raw, t);
     if (value === null) continue;
     facts.push({ code, label: labelForCode(code), value });
   }
@@ -118,11 +128,15 @@ export function unreadableAnswerCount(answers: AnswerMap): number {
  * `classify_usability` compares a quote against the ceiling alone, and a vendor
  * who cannot see it is quoting blind into an `OUT_OF_BUDGET` label.
  */
-export function budgetLine(minPaise: number | null, maxPaise: number | null): string | null {
+export function budgetLine(
+  minPaise: number | null,
+  maxPaise: number | null,
+  t: T,
+): string | null {
   if (minPaise !== null && maxPaise !== null) {
     return `${formatMoney(minPaise)} – ${formatMoney(maxPaise)}`;
   }
-  if (maxPaise !== null) return `Up to ${formatMoney(maxPaise)}`;
-  if (minPaise !== null) return `From ${formatMoney(minPaise)}`;
+  if (maxPaise !== null) return t("enquiry.budget.upTo", { amount: formatMoney(maxPaise) });
+  if (minPaise !== null) return t("enquiry.budget.from", { amount: formatMoney(minPaise) });
   return null;
 }

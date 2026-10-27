@@ -1,3 +1,4 @@
+import { createTranslator } from "@vsolve/ui";
 import type { Schemas } from "@vsolve/api-client";
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +13,9 @@ import {
   stepsRemaining,
   type ExpressProgress,
 } from "./express-path";
+import { catalogs } from "@/i18n/catalogs";
+
+const t = createTranslator("en-IN", catalogs["en-IN"]).t;
 
 /**
  * The flow-weight budget, enforced rather than written down.
@@ -156,13 +160,13 @@ describe("resuming", () => {
 
 describe("the view model", () => {
   it("marks exactly one step as current", () => {
-    const view = describeExpressPath({ ...NOBODY, hasPhone: true });
+    const view = describeExpressPath({ ...NOBODY, hasPhone: true }, t);
     expect(view.steps.filter((step) => step.isCurrent)).toHaveLength(1);
     expect(view.steps.find((step) => step.isCurrent)?.key).toBe("IDENTITY");
   });
 
   it("marks no step current once demand is reachable", () => {
-    const view = describeExpressPath(READY);
+    const view = describeExpressPath(READY, t);
     expect(view.steps.every((step) => step.isComplete)).toBe(true);
     expect(view.steps.some((step) => step.isCurrent)).toBe(false);
     expect(view.canSeeDemand).toBe(true);
@@ -172,7 +176,7 @@ describe("the view model", () => {
     // One answer, three callers. The M1 bug this replaces was a "continue"
     // button that did not continue, because the nav held the order and the
     // editor held none.
-    const view = describeExpressPath({ ...NOBODY, hasPhone: true });
+    const view = describeExpressPath({ ...NOBODY, hasPhone: true }, t);
     expect(view.destination).toBe(expressDestination({ ...NOBODY, hasPhone: true }));
   });
 });

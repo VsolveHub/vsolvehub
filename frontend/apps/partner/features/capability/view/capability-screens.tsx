@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Button, Card, ErrorState, Field, Input, buttonStyles } from "@vsolve/ui";
+import { Button, Card, ErrorState, Field, Input, buttonStyles, useT } from "@vsolve/ui";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -95,6 +95,7 @@ function messageOf(error: unknown): string | null {
  * person who came to fix a `CHANGES_REQUIRED` note has to find it first.
  */
 export function RegistrationScreen() {
+  const t = useT();
   const role = usePartnerRole();
   const partnerOnly = { enabled: role.isResolved && role.isPartner };
 
@@ -128,18 +129,21 @@ export function RegistrationScreen() {
     ? { status: "loading" }
     : {
         status: "ready",
-        data: describeRegistrationPlan({
-          application: application.data ?? null,
-          businessProfile: businessProfile.data ?? null,
-          capabilities: capabilities.data?.capabilities ?? [],
-          options: options.data?.capabilities ?? [],
-          gates: gates.data?.gates ?? [],
-          insurance: insurance.data ?? null,
-          // `null`, not an empty schedule: an unread availability must not read
-          // as "no hours published", which would demand a step nobody owes.
-          schedule: availability.data ?? null,
-          serverNow: options.data?.server_now ?? new Date().toISOString(),
-        }),
+        data: describeRegistrationPlan(
+          {
+            application: application.data ?? null,
+            businessProfile: businessProfile.data ?? null,
+            capabilities: capabilities.data?.capabilities ?? [],
+            options: options.data?.capabilities ?? [],
+            gates: gates.data?.gates ?? [],
+            insurance: insurance.data ?? null,
+            // `null`, not an empty schedule: an unread availability must not read
+            // as "no hours published", which would demand a step nobody owes.
+            schedule: availability.data ?? null,
+            serverNow: options.data?.server_now ?? new Date().toISOString(),
+          },
+          t,
+        ),
       };
 
   const serverNow = capabilities.data?.server_now ?? options.data?.server_now ?? "";
@@ -150,7 +154,7 @@ export function RegistrationScreen() {
       list.capabilities.map((record) => ({
         id: record.id,
         variantName: record.variant_name,
-        presentation: describeCapability(record, serverNow || list.server_now),
+        presentation: describeCapability(record, serverNow || list.server_now, t),
       })),
   );
 
@@ -159,10 +163,9 @@ export function RegistrationScreen() {
   return (
     <section className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-text sm:text-2xl">Specialist work</h1>
+        <h1 className="text-xl font-bold text-text sm:text-2xl">{t("me.capability.screen.specialistWork.title")}</h1>
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          Supplying a crew by the day, or quoting for a whole project, is reviewed separately from
-          ordinary jobs. Asking costs nothing and does not affect the work you already do.
+          {t("me.capability.screen.specialistWork.description")}
         </p>
       </header>
 
@@ -176,7 +179,7 @@ export function RegistrationScreen() {
       />
 
       <section>
-        <h2 className="text-base font-semibold text-text">Where your requests stand</h2>
+        <h2 className="text-base font-semibold text-text">{t("me.capability.screen.whereRequestsStand")}</h2>
         <CapabilityStatusList
           className="mt-3"
           state={
@@ -191,10 +194,10 @@ export function RegistrationScreen() {
       </section>
 
       <section>
-        <h2 className="text-base font-semibold text-text">Ask to be approved</h2>
+        <h2 className="text-base font-semibold text-text">{t("me.capability.screen.askToBeApproved")}</h2>
         <CapabilityPicker
           className="mt-3"
-          state={asyncStateFrom(options, describeCapabilityOptions)}
+          state={asyncStateFrom(options, (data) => describeCapabilityOptions(data, t))}
           pendingVariantId={requestCapability.isPending ? pendingVariantId : null}
           error={
             requestError && pendingVariantId
@@ -241,6 +244,7 @@ const BUSINESS_FIELDS: readonly BusinessField[] = [
  * step on a question most Partners never need to answer differently.
  */
 export function BusinessProfileScreen() {
+  const t = useT();
   const profile = usePartnerBusinessProfile();
   const options = useCapabilityOptions();
   const save = useSaveBusinessProfile();
@@ -250,9 +254,9 @@ export function BusinessProfileScreen() {
   const update = (patch: Partial<BusinessProfileInput>) =>
     setDraft(normalizeForType({ ...current, ...patch }));
 
-  const choices = options.data ? describeCapabilityOptions(options.data).businessTypes : [];
+  const choices = options.data ? describeCapabilityOptions(options.data, t).businessTypes : [];
   const visible = fieldsFor(current.business_type);
-  const refusals = certainRefusals(current);
+  const refusals = certainRefusals(current, t);
   const expected = missingExpected(current);
   const serverProblems = serverFieldProblems(save.error, BUSINESS_FIELDS);
 
@@ -263,20 +267,19 @@ export function BusinessProfileScreen() {
   return (
     <section className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-text sm:text-2xl">How you work</h1>
+        <h1 className="text-xl font-bold text-text sm:text-2xl">{t("me.capability.screen.howYouWork.title")}</h1>
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          This decides who signs, who is liable and who the customer pays. We never work it out
-          from the services you offer.
+          {t("me.capability.screen.howYouWork.description")}
         </p>
       </header>
 
       {options.isPending || profile.isPending ? (
-        <p className="text-sm text-text-secondary">Loading your details…</p>
+        <p className="text-sm text-text-secondary">{t("me.capability.screen.loadingDetails")}</p>
       ) : options.isError ? (
         <ErrorState
-          title="We could not load the options"
-          message="Nothing you have entered is lost. Check your connection and try again."
-          actionLabel="Try again"
+          title={t("me.capability.screen.loadOptionsErrorTitle")}
+          message={t("me.capability.screen.loadOptionsErrorMessage")}
+          actionLabel={t("common.tryAgain")}
           onAction={() => void options.refetch()}
         />
       ) : (
@@ -298,8 +301,8 @@ export function BusinessProfileScreen() {
           <Card className="flex flex-col gap-4 p-5">
             {visible.includes("legal_name") ? (
               <Field
-                label="Registered business name"
-                description="As it appears on your registration, if you have one."
+                label={t("me.capability.business.legalNameLabel")}
+                description={t("me.capability.business.legalNameDescription")}
                 error={problemFor("legal_name")}
               >
                 <Input
@@ -312,7 +315,7 @@ export function BusinessProfileScreen() {
 
             {visible.includes("registration_number") ? (
               <Field
-                label="Registration number"
+                label={t("me.capability.business.registrationNumberLabel")}
                 error={problemFor("registration_number")}
               >
                 <Input
@@ -329,11 +332,11 @@ export function BusinessProfileScreen() {
                 onChange={(event) => update({ gst_registered: event.target.checked })}
                 className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-action)]"
               />
-              <span>I am GST registered</span>
+              <span>{t("me.capability.business.gstRegisteredLabel")}</span>
             </label>
 
             {current.gst_registered ? (
-              <Field label="GSTIN" error={problemFor("gstin")}>
+              <Field label={t("me.capability.business.gstinLabel")} error={problemFor("gstin")}>
                 <Input
                   value={current.gstin}
                   onChange={(event) => update({ gstin: event.target.value })}
@@ -342,7 +345,7 @@ export function BusinessProfileScreen() {
             ) : null}
 
             <Field
-              label="Years in operation"
+              label={t("me.capability.business.yearsInOperationLabel")}
               error={problemFor("years_in_operation")}
             >
               <Input
@@ -363,15 +366,14 @@ export function BusinessProfileScreen() {
               get past this screen has no account at all. */}
           {expected.length > 0 ? (
             <p className="text-sm text-text-secondary">
-              An agency or vendor is usually asked for a registered business name. You can save
-              without one and add it later.
+              {t("me.capability.business.expectedNameHint")}
             </p>
           ) : null}
 
           {save.isError ? (
             <ErrorState
               inline
-              title="We could not save this"
+              title={t("me.capability.business.saveErrorTitle")}
               message={messageOf(save.error) ?? ""}
               severity="error"
             />
@@ -379,16 +381,16 @@ export function BusinessProfileScreen() {
 
           {save.isSuccess ? (
             <p role="status" className="text-sm font-medium text-success-text">
-              Saved.
+              {t("me.capability.business.saved")}
             </p>
           ) : null}
 
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" loading={save.isPending} loadingLabel="Saving">
-              Save
+            <Button type="submit" loading={save.isPending} loadingLabel={t("common.saving")}>
+              {t("common.save")}
             </Button>
             <Link href="/apply/capabilities" className={buttonStyles({ variant: "ghost" })}>
-              Back to specialist work
+              {t("me.capability.backToSpecialistWork")}
             </Link>
           </div>
         </form>
@@ -402,6 +404,7 @@ export function BusinessProfileScreen() {
    --------------------------------------------------------------------------- */
 
 export function InsuranceScreen() {
+  const t = useT();
   const insurance = usePartnerInsurance();
   const options = useCapabilityOptions();
   const save = useSaveInsurance();
@@ -416,20 +419,19 @@ export function InsuranceScreen() {
   return (
     <section className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-text sm:text-2xl">Worker insurance</h1>
+        <h1 className="text-xl font-bold text-text sm:text-2xl">{t("me.capability.screen.insurance.title")}</h1>
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          Required before workforce capabilities are approved. Operations checks it — until then it
-          is a declaration, not cover we have stood behind.
+          {t("me.capability.screen.insurance.description")}
         </p>
       </header>
 
       {insurance.isPending ? (
-        <p className="text-sm text-text-secondary">Loading your declaration…</p>
+        <p className="text-sm text-text-secondary">{t("me.capability.screen.loadingDeclaration")}</p>
       ) : insurance.isError ? (
         <ErrorState
-          title="We could not load your declaration"
-          message="Nothing you have entered is lost. Check your connection and try again."
-          actionLabel="Try again"
+          title={t("me.capability.screen.loadDeclarationErrorTitle")}
+          message={t("me.capability.screen.loadOptionsErrorMessage")}
+          actionLabel={t("common.tryAgain")}
           onAction={() => void insurance.refetch()}
         />
       ) : (
@@ -455,7 +457,7 @@ export function InsuranceScreen() {
               valid_from: input.validFrom,
               valid_to: input.validTo,
             };
-            const problems = insuranceProblems(body);
+            const problems = insuranceProblems(body, t);
             setAttempted(problems);
             if (problems.length > 0) return;
             save.mutate(body);
@@ -464,7 +466,7 @@ export function InsuranceScreen() {
       )}
 
       <Link href="/apply/capabilities" className={buttonStyles({ variant: "ghost" })}>
-        Back to specialist work
+        {t("me.capability.backToSpecialistWork")}
       </Link>
     </section>
   );
@@ -484,6 +486,7 @@ export function InsuranceScreen() {
  * you work yet".
  */
 export function DemandScreen() {
+  const t = useT();
   const role = usePartnerRole();
   const enabled = role.isResolved && role.isPartner;
 
@@ -491,20 +494,22 @@ export function DemandScreen() {
   const businessProfile = usePartnerBusinessProfile();
   const demand = usePartnerDemandPreview({ enabled });
 
-  const path = describeExpressPath({
-    // Signed in by construction — this route is behind the session shell.
-    hasPhone: true,
-    application: application.data ?? null,
-    businessProfile: businessProfile.data ?? null,
-  });
+  const path = describeExpressPath(
+    {
+      // Signed in by construction — this route is behind the session shell.
+      hasPhone: true,
+      application: application.data ?? null,
+      businessProfile: businessProfile.data ?? null,
+    },
+    t,
+  );
 
   return (
     <section className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-text sm:text-2xl">Work near you</h1>
+        <h1 className="text-xl font-bold text-text sm:text-2xl">{t("me.capability.screen.demand.title")}</h1>
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          Live requests from customers in the areas you chose. Names, phone numbers and exact
-          addresses stay hidden until a customer invites you.
+          {t("me.capability.screen.demand.description")}
         </p>
       </header>
 
@@ -521,11 +526,10 @@ export function DemandScreen() {
       {role.isResolved && !role.isPartner ? (
         <Card className="p-5">
           <h2 className="text-base font-semibold text-text">
-            Finish the steps above to see work
+            {t("me.capability.screen.demand.finishStepsTitle")}
           </h2>
           <p className="mt-1 text-sm leading-6 text-text-secondary">
-            We match requests against the service and the city you give us. Until we have both,
-            there is nothing honest to show you here.
+            {t("me.capability.screen.demand.finishStepsBody")}
           </p>
         </Card>
       ) : (

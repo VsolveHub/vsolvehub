@@ -1,13 +1,13 @@
 "use client";
 
 import { hasWorkspaceAction, useLogout } from "@vsolve/query";
-import { Button } from "@vsolve/ui";
+import { Button, useT, useTranslator, type Locale } from "@vsolve/ui";
 import { ChevronRight, Globe, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import {
-  PARTNER_SUPPORT_HOURS,
+  PARTNER_SUPPORT_HOURS_KEY,
   PARTNER_SUPPORT_PHONE,
   PARTNER_SUPPORT_PHONE_DISPLAY,
 } from "@/features/support/contact";
@@ -20,7 +20,16 @@ import {
 } from "@/features/workspace/registry";
 import { getApiClient } from "@/lib/api/browser";
 
+/** Each language named in its own script, as the language picker shows it. */
+const LANGUAGE_NAMES: Record<Locale, string> = {
+  "en-IN": "English",
+  "te-IN": "తెలుగు",
+  "hi-IN": "हिन्दी",
+};
+
 export function MeHome() {
+  const t = useT();
+  const { locale } = useTranslator();
   const logout = useLogout(getApiClient());
   const grants = usePartnerWorkspaceGrants();
   // Rentals, stays and listings partners never get live offers, so no availability switch.
@@ -33,7 +42,7 @@ export function MeHome() {
 
   return (
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas pb-8 lg:mx-auto lg:min-h-[calc(100dvh-5rem)] lg:w-full lg:max-w-4xl lg:pb-12">
-      <h1 className="sr-only">Partner Account & Settings</h1>
+      <h1 className="sr-only">{t("me.home.srTitle")}</h1>
 
       {/* Clean Professional Profile Card */}
       <IdentityCard />
@@ -50,22 +59,22 @@ export function MeHome() {
         {/* Account & Profile Section */}
         <section className="flex flex-col gap-1.5">
           <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-            Account & Profile
+            {t("me.home.sectionAccountProfile")}
           </p>
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs divide-y divide-line/60">
             <SettingsRow
               href="/me/profile"
               icon={User}
-              title="Personal Profile"
-              subtitle="Contact details, craft & KYC documents"
+              title={t("me.home.personalProfileTitle")}
+              subtitle={t("me.home.personalProfileSubtitle")}
               colorClass="bg-blue-50 border-blue-100/80"
               iconClass="text-blue-600"
             />
             <SettingsRow
               href="/me/language"
               icon={Globe}
-              title="App Language"
-              subtitle="English (India)"
+              title={t("me.home.appLanguageTitle")}
+              subtitle={LANGUAGE_NAMES[locale]}
               colorClass="bg-purple-50 border-purple-100/80"
               iconClass="text-purple-600"
             />
@@ -76,15 +85,15 @@ export function MeHome() {
         {showMoney || canManageCrew ? (
         <section className="flex flex-col gap-1.5">
           <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-            Work & Financials
+            {t("me.home.sectionWorkFinancials")}
           </p>
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs divide-y divide-line/60">
             {showMoney ? (
               <SettingsRow
                 href="/money"
                 icon={Wallet}
-                title="Money & Earnings"
-                subtitle="Daily earnings, passbook & settlements"
+                title={t("me.home.moneyTitle")}
+                subtitle={t("me.home.moneySubtitle")}
                 colorClass="bg-emerald-50 border-emerald-100/80"
                 iconClass="text-emerald-600"
               />
@@ -93,8 +102,8 @@ export function MeHome() {
               <SettingsRow
                 href="/me/crew"
                 icon={Users}
-                title="Contractor Crew"
-                subtitle="Manage team roster & crew dispatch"
+                title={t("me.home.crewTitle")}
+                subtitle={t("me.home.crewSubtitle")}
                 colorClass="bg-amber-50 border-amber-100/80"
                 iconClass="text-amber-600"
               />
@@ -106,7 +115,7 @@ export function MeHome() {
         {/* Help & Support Section */}
         <section className="flex flex-col gap-1.5">
           <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-            Support & Safety
+            {t("me.home.sectionSupportSafety")}
           </p>
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
             <a
@@ -118,9 +127,9 @@ export function MeHome() {
                   <Phone className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-navy-900 leading-tight">Partner Helpline</p>
+                  <p className="text-sm font-bold text-navy-900 leading-tight">{t("me.home.helplineTitle")}</p>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    {PARTNER_SUPPORT_PHONE_DISPLAY} • {PARTNER_SUPPORT_HOURS}
+                    {PARTNER_SUPPORT_PHONE_DISPLAY} • {t(PARTNER_SUPPORT_HOURS_KEY)}
                   </p>
                 </div>
               </div>
@@ -138,10 +147,10 @@ export function MeHome() {
             icon={<Power className="h-4 w-4 text-red-600" />}
             onClick={() => logout.mutate()}
             loading={logout.isPending}
-            loadingLabel="Signing out"
+            loadingLabel={t("common.signingOut")}
             className="border-red-200 text-red-700 bg-red-50/40 hover:bg-red-50 hover:border-red-300 font-bold h-12"
           >
-            Sign Out
+            {t("common.signOut")}
           </Button>
         </div>
       </div>
@@ -153,9 +162,10 @@ export function MeHome() {
  * Clean, executive partner identity card with authentic dynamic state.
  */
 function IdentityCard() {
+  const t = useT();
   const profile = usePartnerProfile();
   const trade = profile.data?.skills[0] ?? null;
-  const displayName = profile.data?.display_name ?? "Partner";
+  const displayName = profile.data?.display_name ?? t("me.home.defaultName");
   const initial = displayName.charAt(0).toUpperCase() || "P";
 
   return (
@@ -189,7 +199,7 @@ function IdentityCard() {
         {/* Status Pill */}
         <div className="shrink-0 self-start">
           <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-            <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified
+            <ShieldCheck className="h-3 w-3 text-emerald-600" /> {t("me.home.verified")}
           </span>
         </div>
       </div>

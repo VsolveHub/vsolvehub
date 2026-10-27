@@ -13,18 +13,19 @@
 
 export interface ApplicationStep {
   href: string;
-  label: string;
+  /** A catalogue key (`@vsolve/ui` `useT`), not the label itself — resolve with `t(labelKey)`. */
+  labelKey: string;
 }
 
 export const APPLICATION_STEPS: readonly ApplicationStep[] = [
-  { href: "/apply", label: "Overview" },
-  { href: "/apply/about", label: "About you" },
-  { href: "/apply/work", label: "Your trades" },
-  { href: "/apply/areas", label: "Where you work" },
-  { href: "/apply/consent", label: "Agreements" },
-  { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/schedule", label: "Your hours" },
-  { href: "/apply/review", label: "Review and send" },
+  { href: "/apply", labelKey: "apply.steps.overview" },
+  { href: "/apply/about", labelKey: "apply.steps.about" },
+  { href: "/apply/work", labelKey: "apply.steps.work" },
+  { href: "/apply/areas", labelKey: "apply.steps.areas" },
+  { href: "/apply/consent", labelKey: "apply.steps.consent" },
+  { href: "/apply/documents", labelKey: "apply.steps.documents" },
+  { href: "/apply/schedule", labelKey: "apply.steps.schedule" },
+  { href: "/apply/review", labelKey: "apply.steps.review" },
 ] as const;
 
 /**
@@ -64,10 +65,10 @@ export function applicationSteps(track?: string | null): readonly ApplicationSte
  * orients somebody who is here and stays invisible to everybody else.
  */
 export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
-  { href: "/apply/capabilities", label: "Specialist work" },
-  { href: "/apply/business", label: "How you work" },
-  { href: "/apply/insurance", label: "Worker insurance" },
-  { href: "/apply/demand", label: "Work near you" },
+  { href: "/apply/capabilities", labelKey: "apply.steps.capabilities" },
+  { href: "/apply/business", labelKey: "apply.steps.business" },
+  { href: "/apply/insurance", labelKey: "apply.steps.insurance" },
+  { href: "/apply/demand", labelKey: "apply.steps.demand" },
 ] as const;
 
 /**

@@ -10,8 +10,8 @@ export default function AreasPage() {
   return (
     <ListingStepGuard redirectTo="/apply/consent">
     <ApplicationEditor
-      title="Where you work"
-      description="Pick the areas you are willing to travel to. You will only be offered jobs inside them."
+      title="apply.areas.pageTitle"
+      description="apply.areas.pageDescription"
     >
       <AreasStep />
     </ApplicationEditor>

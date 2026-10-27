@@ -40,6 +40,8 @@ vi.mock("@/features/stays/queries", async (importOriginal) => {
   };
 });
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { PartnerStayEnquiriesWorkspace } from "./stay-enquiries-workspace";
 
 let client: QueryClient;
@@ -55,7 +57,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("enquiry card actions", () => {
   it("marks Booked from the card, with the enquired room pre-selected", async () => {
-    render(<PartnerStayEnquiriesWorkspace />, { wrapper });
+    render(withI18n(<PartnerStayEnquiriesWorkspace />), { wrapper });
     fireEvent.click(await screen.findByRole("button", { name: /^Booked$/ }));
     expect(await screen.findByText("Booking confirmed?")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("room-101"));
@@ -64,7 +66,7 @@ describe("enquiry card actions", () => {
   });
 
   it("marks Not available from the card with an optional note", async () => {
-    render(<PartnerStayEnquiriesWorkspace />, { wrapper });
+    render(withI18n(<PartnerStayEnquiriesWorkspace />), { wrapper });
     fireEvent.click(await screen.findByRole("button", { name: /Not available/ }));
     fireEvent.change(await screen.findByRole("textbox"), { target: { value: "Full till the 20th" } });
     fireEvent.click(screen.getByRole("button", { name: "Tell the guest" }));

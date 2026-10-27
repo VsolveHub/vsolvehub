@@ -2,7 +2,7 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { ErrorState, Spinner } from "@vsolve/ui";
+import { ErrorState, Spinner, useT } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 import { Pictogram } from "@/components/pictogram";
@@ -73,6 +73,7 @@ import { VisitJobView } from "./visit-job-view";
  * once per id rather than once per render.
  */
 export function JobDetailScreen({ id }: { id: string }) {
+  const t = useT();
   const engagement = usePartnerEngagement(id);
 
   // The one signal that means "ask the other table". Byte-identical to
@@ -91,7 +92,7 @@ export function JobDetailScreen({ id }: { id: string }) {
       <Screen>
         <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
           <Spinner size="sm" />
-          Loading this job…
+          {t("work.jobDetail.loading")}
         </p>
       </Screen>
     );
@@ -110,7 +111,7 @@ export function JobDetailScreen({ id }: { id: string }) {
 
   // The engagement read failed for a reason a retry can fix.
   if (!notAnEngagement) {
-    return <ReadFailure error={engagement.error} onRetry={() => void engagement.refetch()} />;
+    return <ReadFailure error={engagement.error} onRetry={() => void engagement.refetch()} t={t} />;
   }
 
   if (visit.data !== undefined) {
@@ -130,7 +131,7 @@ export function JobDetailScreen({ id }: { id: string }) {
   // publishing one does not fall through into a retry loop.
   if (isNotYours(visit.error)) return <Gone />;
 
-  return <ReadFailure error={visit.error} onRetry={() => void visit.refetch()} />;
+  return <ReadFailure error={visit.error} onRetry={() => void visit.refetch()} t={t} />;
 }
 
 /** `404`: the engagement read's honest "not an agreement you are party to". */
@@ -164,7 +165,15 @@ function Screen({ children }: { children: ReactNode }) {
 }
 
 /** A read that failed for a reason a retry can fix, bound to that read's own refetch. */
-function ReadFailure({ error, onRetry }: { readonly error: unknown; readonly onRetry: () => void }) {
+function ReadFailure({
+  error,
+  onRetry,
+  t,
+}: {
+  readonly error: unknown;
+  readonly onRetry: () => void;
+  readonly t: ReturnType<typeof useT>;
+}) {
   const presentation = describeError(error, "read");
 
   return (
@@ -174,7 +183,7 @@ function ReadFailure({ error, onRetry }: { readonly error: unknown; readonly onR
           title={presentation.title}
           message={presentation.message}
           severity={presentation.severity}
-          actionLabel="Try again"
+          actionLabel={t("common.tryAgain")}
           onAction={onRetry}
           reference={presentation.reference}
         />
@@ -193,6 +202,7 @@ function ReadFailure({ error, onRetry }: { readonly error: unknown; readonly onR
  * bar is the way off the screen.
  */
 function Gone() {
+  const t = useT();
   return (
     <Screen>
       <div className="flex flex-1 flex-col items-center justify-center py-16">
@@ -200,7 +210,7 @@ function Gone() {
           <Pictogram name="stopped" className="h-21 w-21 text-[var(--color-warm-400)]" />
         </div>
         <p className="mt-5 max-w-[22ch] text-center text-base font-semibold text-text-secondary">
-          No job with this reference on your account
+          {t("work.jobDetail.gone")}
         </p>
       </div>
     </Screen>

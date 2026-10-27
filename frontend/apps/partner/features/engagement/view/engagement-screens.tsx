@@ -1,11 +1,12 @@
 "use client";
 
 import { PROJECT_BUCKETS, WORKFORCE_BUCKETS, projectBucketFor, workforceBucketFor } from "@vsolve/query";
+import { useT } from "@vsolve/ui";
 
 import { WorkspaceRoute } from "@/features/workspace/view/workspace-route";
 import { PROJECT_WORKSPACE, WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 
-import { PROJECT_WORDING, WORKFORCE_WORDING } from "../model/engagement-copy";
+import { getProjectWording, getWorkforceWording } from "../model/engagement-copy";
 import { EngagementDetail } from "./engagement-detail";
 import { EngagementList } from "./engagement-list";
 
@@ -34,16 +35,12 @@ import { EngagementList } from "./engagement-list";
  * invented here, because inventing one would be this client authorising itself.
  */
 
-const ENQUIRY_LABELS = {
-  workforce: "people by the day",
-  project: "a project quoted end to end",
-} as const;
-
 export interface WorkforceEngagementsScreenProps {
   readonly heading: string;
 }
 
 export function WorkforceEngagementsScreen({ heading }: WorkforceEngagementsScreenProps) {
+  const t = useT();
   return (
     <WorkspaceRoute workspaceKey={WORKFORCE_WORKSPACE} actions={["attendance.confirm"]}>
       {() => (
@@ -53,8 +50,8 @@ export function WorkforceEngagementsScreen({ heading }: WorkforceEngagementsScre
             buckets={WORKFORCE_BUCKETS}
             bucketFor={workforceBucketFor}
             commercialMode="LEAD_ONLY"
-            wording={WORKFORCE_WORDING}
-            workLabel={ENQUIRY_LABELS.workforce}
+            wording={getWorkforceWording(t)}
+            workLabel={t("work.engagementScreens.enquiryLabel.workforce")}
           />
         </>
       )}
@@ -67,6 +64,7 @@ export interface ProjectEngagementsScreenProps {
 }
 
 export function ProjectEngagementsScreen({ heading }: ProjectEngagementsScreenProps) {
+  const t = useT();
   return (
     <WorkspaceRoute workspaceKey={PROJECT_WORKSPACE} actions={["stage.submit_evidence"]}>
       {() => (
@@ -76,8 +74,8 @@ export function ProjectEngagementsScreen({ heading }: ProjectEngagementsScreenPr
             buckets={PROJECT_BUCKETS}
             bucketFor={projectBucketFor}
             commercialMode="MANAGED_PAYMENT_REQUIRED"
-            wording={PROJECT_WORDING}
-            workLabel={ENQUIRY_LABELS.project}
+            wording={getProjectWording(t)}
+            workLabel={t("work.engagementScreens.enquiryLabel.project")}
           />
         </>
       )}
@@ -91,12 +89,13 @@ export interface EngagementDetailScreenProps {
 }
 
 export function WorkforceEngagementScreen({ engagementId }: EngagementDetailScreenProps) {
+  const t = useT();
   return (
     <WorkspaceRoute workspaceKey={WORKFORCE_WORKSPACE} actions={["attendance.confirm"]}>
       {() => (
         <EngagementDetail
           engagementId={engagementId}
-          wording={WORKFORCE_WORDING}
+          wording={getWorkforceWording(t)}
           workspace="workforce"
         />
       )}
@@ -108,12 +107,13 @@ export function ProjectEngagementScreen({
   engagementId,
   stageId,
 }: EngagementDetailScreenProps) {
+  const t = useT();
   return (
     <WorkspaceRoute workspaceKey={PROJECT_WORKSPACE} actions={["stage.submit_evidence"]}>
       {() => (
         <EngagementDetail
           engagementId={engagementId}
-          wording={PROJECT_WORDING}
+          wording={getProjectWording(t)}
           workspace="project"
           focusStageId={stageId}
         />

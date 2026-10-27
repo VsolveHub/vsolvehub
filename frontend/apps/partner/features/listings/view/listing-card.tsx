@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Briefcase, Check, CheckCircle2, Copy, IndianRupee, MapPin, Pencil, RotateCcw, Send, UserPlus, Users, XCircle } from "lucide-react";
-import { Badge, Card, StatusChip, formatMoney, formatMoneyText, formatDate } from "@vsolve/ui";
+import { Badge, Card, StatusChip, formatMoney, formatMoneyText, formatDate, useT } from "@vsolve/ui";
 
 import type { PartnerListing } from "../queries";
 
@@ -26,6 +26,7 @@ export function ListingCard({
   onAction,
   isActionPending,
 }: ListingCardProps) {
+  const t = useT();
   let displayPay = "";
   if (listing.salary_min_paise && listing.salary_min_paise > 0) {
     const minStr = formatMoney(listing.salary_min_paise);
@@ -87,7 +88,7 @@ export function ListingCard({
 
           {quickJob ? (
             <p className="text-sm font-semibold text-navy-900">
-              👥 {listing.vacancies ?? 1} needed
+              👥 {t("listings.card.vacanciesNeeded", { count: listing.vacancies ?? 1 })}
             </p>
           ) : null}
           {skills.length > 0 ? (
@@ -107,28 +108,28 @@ export function ListingCard({
             
             {listing.moderation_status === "APPROVED" && listing.status !== "PUBLISHED" && (
               <Badge tone="info">
-                <CheckCircle2 className="size-3" /> Moderation Approved
+                <CheckCircle2 className="size-3" /> {t("listings.card.moderationApproved")}
               </Badge>
             )}
-            
+
             <span className="text-xs text-text-muted">
-              Created {formatDate(listing.created_at)}
+              {t("listings.card.created", { date: formatDate(listing.created_at) })}
             </span>
           </div>
 
           {listing.counts ? (
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary" aria-label="Job activity">
-              <li>👁 {listing.counts.views} views</li>
-              <li>{listing.counts.applied} applied</li>
-              <li>{listing.counts.shortlisted} shortlisted</li>
-              <li>{listing.counts.interviews} interviews</li>
-              <li>{listing.counts.connected} connected</li>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary" aria-label={t("listings.card.jobActivityAriaLabel")}>
+              <li>👁 {t("listings.card.views", { count: listing.counts.views })}</li>
+              <li>{t("listings.card.applied", { count: listing.counts.applied })}</li>
+              <li>{t("listings.card.shortlisted", { count: listing.counts.shortlisted })}</li>
+              <li>{t("listings.card.interviews", { count: listing.counts.interviews })}</li>
+              <li>{t("listings.card.connected", { count: listing.counts.connected })}</li>
             </ul>
           ) : null}
 
           {listing.moderation_reason && (
             <div className="mt-2 rounded-control border border-warning-line bg-warning-surface p-2.5 text-xs text-warning-text">
-              <span className="font-semibold">Moderation Note:</span> {listing.moderation_reason}
+              <span className="font-semibold">{t("listings.card.moderationNote")}</span> {listing.moderation_reason}
             </div>
           )}
         </div>
@@ -140,7 +141,7 @@ export function ListingCard({
             className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text transition hover:border-line-strong hover:bg-surface-hover"
           >
             <Users className="size-3.5 text-action" />
-            View Applicants ({listing.application_count})
+            {t("listings.card.viewApplicants", { count: listing.application_count })}
           </Link>
 
           {(listing.counts?.matches ?? 0) > 0 ? (
@@ -149,7 +150,7 @@ export function ListingCard({
               className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text transition hover:border-line-strong hover:bg-surface-hover"
             >
               <UserPlus className="size-3.5 text-action" />
-              Matching candidates ({listing.counts?.matches})
+              {t("listings.card.matchingCandidates", { count: listing.counts?.matches ?? 0 })}
             </Link>
           ) : null}
 
@@ -158,7 +159,7 @@ export function ListingCard({
               href={`/listings/post?edit=${listing.id}`}
               className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text-secondary transition hover:border-line-strong hover:bg-surface-hover"
             >
-              <Pencil className="size-3.5 text-text-muted" /> Edit job
+              <Pencil className="size-3.5 text-text-muted" /> {t("listings.card.editJob")}
             </Link>
           )}
 
@@ -168,7 +169,7 @@ export function ListingCard({
             disabled={isActionPending}
             className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text-secondary transition hover:border-line-strong hover:bg-surface-hover disabled:opacity-50"
           >
-            <Copy className="size-3.5 text-text-muted" /> Post again
+            <Copy className="size-3.5 text-text-muted" /> {t("listings.card.postAgain")}
           </button>
 
           {listing.status === "DRAFT" && quickJob && (
@@ -178,7 +179,7 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control bg-action px-3.5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover disabled:opacity-50"
             >
-              <Send className="size-3.5" /> Publish now
+              <Send className="size-3.5" /> {t("listings.card.publishNow")}
             </button>
           )}
 
@@ -188,7 +189,7 @@ export function ListingCard({
               onClick={() => onStartEdit(listing)}
               className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text-secondary transition hover:border-line-strong hover:bg-surface-hover"
             >
-              <Pencil className="size-3.5 text-text-muted" /> Edit Job
+              <Pencil className="size-3.5 text-text-muted" /> {t("listings.card.editJob")}
             </button>
           )}
 
@@ -199,7 +200,7 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control bg-action px-3.5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
             >
-              <Send className="size-3.5" /> Publish now
+              <Send className="size-3.5" /> {t("listings.card.publishNow")}
             </button>
           )}
 
@@ -210,7 +211,7 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control bg-navy-900 px-3.5 py-2 text-xs font-semibold text-warm-0 transition hover:bg-navy-800 disabled:opacity-50"
             >
-              <Check className="size-3.5" /> Publish Live
+              <Check className="size-3.5" /> {t("listings.card.publishLive")}
             </button>
           )}
 
@@ -227,7 +228,7 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-medium text-text-muted hover:border-danger-line hover:text-danger-text hover:bg-danger-surface/20 disabled:opacity-50"
             >
-              <XCircle className="size-3.5 text-text-muted" /> Close job
+              <XCircle className="size-3.5 text-text-muted" /> {t("listings.card.closeJob")}
             </button>
           )}
 
@@ -242,7 +243,7 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface-sunken px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50"
             >
-              <RotateCcw className="size-3.5 text-text-muted" /> Reopen
+              <RotateCcw className="size-3.5 text-text-muted" /> {t("listings.card.reopen")}
             </button>
           )}
         </div>

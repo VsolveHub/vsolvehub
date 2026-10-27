@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "./cn";
+import { useTOrDefault } from "./i18n";
 
 /**
  * Presentational error state.
@@ -108,6 +109,7 @@ export function ErrorState({
   className,
 }: ErrorStateProps) {
   const styles = SEVERITY_STYLES[severity];
+  const tf = useTOrDefault();
 
   return (
     <div
@@ -171,7 +173,8 @@ export function ErrorState({
           // `break-all`: a Next error digest is 64 unbroken hex characters, which
           // is wider than a 375px viewport and pushes the whole page sideways.
           <p className="mt-3 font-mono text-xs opacity-70">
-            Reference: <span className="select-all break-all">{reference}</span>
+            {tf("ui.errorState.reference", "Reference:")}{" "}
+            <span className="select-all break-all">{reference}</span>
           </p>
         ) : null}
       </div>

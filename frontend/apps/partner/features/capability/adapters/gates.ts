@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import type { GateList, GateName, GateNextAction, GateStatus } from "./wire";
 
 /**
@@ -51,14 +53,16 @@ import type { GateList, GateName, GateNextAction, GateStatus } from "./wire";
  * nobody can pass. The difference is logged in `frontend-execution-plan.md` §7
  * rather than papered over with a fourth route nothing can name.
  */
-const ACTION_ROUTES: Record<GateNextAction, { href: string; label: string }> = {
-  SUBMIT_APPLICATION: { href: "/apply/review", label: "Finish your application" },
-  ADD_PAYOUT_ACCOUNT: { href: "/money", label: "Add your bank details" },
-  // Points at the roster, which the Partner reaches from the assignment they
-  // were trying to make. Not at registration — `FLOW-07` is explicit that a crew
-  // list is asked for at first assignment and never before.
-  ADD_CREW_MEMBER: { href: "/me/crew", label: "Add your crew" },
-};
+function actionRoutes(t: Translator["t"]): Record<GateNextAction, { href: string; label: string }> {
+  return {
+    SUBMIT_APPLICATION: { href: "/apply/review", label: t("me.capability.gate.action.finishApplication") },
+    ADD_PAYOUT_ACCOUNT: { href: "/money", label: t("me.capability.gate.action.addBankDetails") },
+    // Points at the roster, which the Partner reaches from the assignment they
+    // were trying to make. Not at registration — `FLOW-07` is explicit that a crew
+    // list is asked for at first assignment and never before.
+    ADD_CREW_MEMBER: { href: "/me/crew", label: t("me.capability.gate.action.addCrew") },
+  };
+}
 
 export interface GateExplanation {
   readonly gate: GateName;
@@ -93,19 +97,17 @@ export function blockingGate(
  * every unmet obligation is how a checklist becomes the screen instead of the
  * work being the screen.
  */
-export function describeGate(gate: GateStatus): GateExplanation | null {
+export function describeGate(gate: GateStatus, t: Translator["t"]): GateExplanation | null {
   if (gate.is_satisfied) return null;
 
-  const route = gate.next_action === null ? null : ACTION_ROUTES[gate.next_action];
+  const route = gate.next_action === null ? null : actionRoutes(t)[gate.next_action];
 
   return {
     gate: gate.gate,
     // An unsatisfied gate with no reason is a server contract violation (0013
     // §D1 acceptance criterion 6). Saying so beats rendering an empty paragraph
     // that reads as a UI bug the Partner cannot act on.
-    reason:
-      gate.reason.trim() ||
-      "We need one more thing before you can do this. Contact support and we will tell you what.",
+    reason: gate.reason.trim() || t("me.capability.gate.fallbackReason"),
     actionHref: route?.href ?? null,
     actionLabel: route?.label ?? null,
   };
@@ -115,9 +117,10 @@ export function describeGate(gate: GateStatus): GateExplanation | null {
 export function explainBlock(
   gates: readonly GateStatus[],
   action: string,
+  t: Translator["t"],
 ): GateExplanation | null {
   const gate = blockingGate(gates, action);
-  return gate === null ? null : describeGate(gate);
+  return gate === null ? null : describeGate(gate, t);
 }
 
 /**

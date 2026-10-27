@@ -1,11 +1,15 @@
 import type { Schemas } from "@vsolve/api-client";
 import { formatMoney } from "@vsolve/ui";
+import type { useT } from "@vsolve/ui";
 
 /**
  * A crew offer in the lead's own terms, and what accepting one commits them to.
  *
- * Pure. Every sentence here is checked against ADR-0009 and
- * `07-state-machines-and-permissions.md` §2, §4c and §7.
+ * Checked against ADR-0009 and `07-state-machines-and-permissions.md` §2, §4c
+ * and §7. Not a component, so it cannot call `useT()` at module scope — every
+ * function below that renders a sentence takes `t` as a parameter instead, and
+ * the English in this file's doc comments is commentary, not what ships; the
+ * real copy lives in the `work.crewOfferState.*` catalogue keys.
  *
  * ## The four rules this file exists to not get wrong
  *
@@ -99,17 +103,22 @@ export function isOfferLive(offer: CrewOffer, serverNow: string): boolean {
    Words for counts
    --------------------------------------------------------------------------- */
 
-export function helperNoun(headcount: number): string {
-  return headcount === 1 ? "helper" : "helpers";
+/** "5 helpers" / "1 helper", from the `work.crewOfferState.helperCount` plural. */
+export function helperCountLine(t: ReturnType<typeof useT>, headcount: number): string {
+  return t("work.crewOfferState.helperCount", { count: headcount });
 }
 
-export function dayNoun(days: number): string {
-  return days === 1 ? "day" : "days";
+/** "3 days" / "1 day", from the `work.crewOfferState.dayCount` plural. */
+export function dayCountLine(t: ReturnType<typeof useT>, days: number): string {
+  return t("work.crewOfferState.dayCount", { count: days });
 }
 
 /** "5 helpers · 3 days" */
-export function crewSizeLine(headcount: number, days: number): string {
-  return `${headcount} ${helperNoun(headcount)} · ${days} ${dayNoun(days)}`;
+export function crewSizeLine(t: ReturnType<typeof useT>, headcount: number, days: number): string {
+  return t("work.crewOfferState.crewSizeLine", {
+    helperCount: helperCountLine(t, headcount),
+    dayCount: dayCountLine(t, days),
+  });
 }
 
 /* ---------------------------------------------------------------------------
@@ -133,20 +142,28 @@ export function perWorkerDayPaise(leadDayReceiptPaise: number, headcount: number
  * `₹600 × 5 × 3` when the day figure divides exactly by the headcount, else
  * `₹3,000 a day × 3`.
  */
-export function crewMathsLine(input: {
-  readonly leadDayReceiptPaise: number;
-  readonly headcount: number;
-  readonly days: number;
-}): string {
+export function crewMathsLine(
+  t: ReturnType<typeof useT>,
+  input: {
+    readonly leadDayReceiptPaise: number;
+    readonly headcount: number;
+    readonly days: number;
+  },
+): string {
   const perWorker = perWorkerDayPaise(input.leadDayReceiptPaise, input.headcount);
   if (perWorker === null) {
-    return `${formatMoney(input.leadDayReceiptPaise)} a day × ${input.days}`;
+    return t("work.crewOfferState.mathsLine.perDay", {
+      amount: formatMoney(input.leadDayReceiptPaise),
+      days: input.days,
+    });
   }
   return `${formatMoney(perWorker)} × ${input.headcount} × ${input.days}`;
 }
 
 /** The half of the maths line that must not be softened. */
-export const PAID_DAILY = "paid daily by customer";
+export function paidDailyLabel(t: ReturnType<typeof useT>): string {
+  return t("work.crewOfferState.paidDaily");
+}
 
 /**
  * The overtime line, or null where the card publishes no rate.
@@ -155,15 +172,16 @@ export const PAID_DAILY = "paid daily by customer";
  * printing "₹0/hr" would read as free overtime.
  */
 export function overtimeLine(
+  t: ReturnType<typeof useT>,
   hourlyPaise: number | null | undefined,
   standardDayHours: number | null | undefined,
 ): string | null {
   if (hourlyPaise === null || hourlyPaise === undefined || hourlyPaise <= 0) return null;
-  const rate = `Overtime ${formatMoney(hourlyPaise)}/hr/head`;
+  const rate = t("work.crewOfferState.overtime.base", { amount: formatMoney(hourlyPaise) });
   if (standardDayHours === null || standardDayHours === undefined || standardDayHours <= 0) {
     return rate;
   }
-  return `${rate} after ${standardDayHours} hrs`;
+  return t("work.crewOfferState.overtime.afterHours", { rate, hours: standardDayHours });
 }
 
 /** "Loading & shifting · Own tools" — at most two inclusions, joined. */
@@ -194,16 +212,22 @@ export function startDayLabel(iso: string | null | undefined): string | null {
    --------------------------------------------------------------------------- */
 
 /** "Send 5 helpers for 3 days at ₹600 each per day?" */
-export function acceptQuestion(offer: CrewOffer): string {
+export function acceptQuestion(t: ReturnType<typeof useT>, offer: CrewOffer): string {
   const perWorker = perWorkerDayPaise(offer.lead_day_receipt_paise, offer.headcount);
   const rate =
     perWorker === null
-      ? `${formatMoney(offer.lead_day_receipt_paise)} a day`
-      : `${formatMoney(perWorker)} each per day`;
-  return `Send ${offer.headcount} ${helperNoun(offer.headcount)} for ${offer.days} ${dayNoun(offer.days)} at ${rate}?`;
+      ? t("work.crewOfferState.rate.flat", { amount: formatMoney(offer.lead_day_receipt_paise) })
+      : t("work.crewOfferState.rate.perWorker", { amount: formatMoney(perWorker) });
+  return t("work.crewOfferState.acceptQuestion", {
+    helperCount: helperCountLine(t, offer.headcount),
+    dayCount: dayCountLine(t, offer.days),
+    rate,
+  });
 }
 
-export const ACCEPT_CONSEQUENCE = "Fixed rate. Extras only through the app.";
+export function acceptConsequence(t: ReturnType<typeof useT>): string {
+  return t("work.crewOfferState.acceptConsequence");
+}
 
 /* ---------------------------------------------------------------------------
    The held win
@@ -217,22 +241,27 @@ export interface AcceptOutcome {
   readonly tone: "progress" | "action" | "gone";
 }
 
-export const DONT_TRAVEL_YET = "Don't travel yet — we'll ping you.";
-export const HOLD_LAPSED = "Customer didn't pay. Nothing owed, nothing against you.";
+export function dontTravelYet(t: ReturnType<typeof useT>): string {
+  return t("work.crewOfferState.dontTravelYet");
+}
+
+export function holdLapsed(t: ReturnType<typeof useT>): string {
+  return t("work.crewOfferState.holdLapsed");
+}
 
 /**
  * How a successful accept reads. `CrewOfferAccepted.status` is the whole
  * distinction, and it is the server's answer.
  */
-export function describeAccept(booking: CrewOfferAccepted): AcceptOutcome {
+export function describeAccept(t: ReturnType<typeof useT>, booking: CrewOfferAccepted): AcceptOutcome {
   const status = booking.status;
 
   if (status === "OFFER_HELD") {
     return {
       isHeld: true,
       tone: "progress",
-      title: "You got it first",
-      message: "Customer is paying the booking fee",
+      title: t("work.crewOfferState.accept.held.title"),
+      message: t("work.crewOfferState.accept.held.message"),
     };
   }
 
@@ -240,15 +269,15 @@ export function describeAccept(booking: CrewOfferAccepted): AcceptOutcome {
     return {
       isHeld: false,
       tone: "action",
-      title: "Confirmed — it's yours",
-      message: "Open it from Work when you're ready.",
+      title: t("work.crewOfferState.accept.confirmed.title"),
+      message: t("work.crewOfferState.accept.confirmed.message"),
     };
   }
 
   return {
     isHeld: false,
     tone: "gone",
-    title: "This booking moved on",
-    message: "Nothing owed, nothing against you.",
+    title: t("work.crewOfferState.accept.gone.title"),
+    message: t("work.crewOfferState.accept.gone.message"),
   };
 }

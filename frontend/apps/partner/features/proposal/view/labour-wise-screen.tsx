@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 
-import { Badge, Button, Input, StepDock, cn } from "@vsolve/ui";
+import { Badge, Button, Input, StepDock, cn, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 import type { EstimateLineView, EstimateView } from "@/features/proposal/model/estimate-view";
@@ -91,6 +93,7 @@ export function LabourWiseScreen({ estimate, openLineId }: LabourWiseScreenProps
   // Sections exist on the view type for the item-wise grouping; a labour estimate
   // is one flat list of roles, so they are flattened rather than banded.
   const roles = estimate.sections.flatMap((section) => section.lines);
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col bg-canvas">
@@ -98,7 +101,7 @@ export function LabourWiseScreen({ estimate, openLineId }: LabourWiseScreenProps
         title={estimate.documentTitle}
         backSlot={
           <HeaderTile>
-            <BackGlyph label="Back to the estimate" />
+            <BackGlyph label={t("proposal.screens.shared.backToEstimate")} />
           </HeaderTile>
         }
       />
@@ -107,15 +110,15 @@ export function LabourWiseScreen({ estimate, openLineId }: LabourWiseScreenProps
         <div className="flex items-start gap-2.5">
           <div className="min-w-0 flex-1">
             <h2 className="text-xs font-extrabold uppercase tracking-[0.06em] text-text-link">
-              Labour wise estimate
+              {t("proposal.screens.mode.labourWise.title")}
             </h2>
             <p className="mt-[3px] text-[11.5px] font-medium leading-4 text-text-muted">
-              Teams and working days
+              {t("proposal.screens.labour.subheading")}
             </p>
           </div>
 
           <Badge tone="info" className="h-9 shrink-0 px-3 font-bold">
-            {roles.length} {roles.length === 1 ? "role" : "roles"}
+            {t("proposal.screens.labour.roles", { count: roles.length })}
           </Badge>
         </div>
 
@@ -130,13 +133,13 @@ export function LabourWiseScreen({ estimate, openLineId }: LabourWiseScreenProps
           <span aria-hidden className="mt-px shrink-0 text-warning-text">
             <Pictogram name="later" size="sm" />
           </span>
-          <span>This estimate is priced by team and days only. Item rows are not part of it.</span>
+          <span>{t("proposal.screens.labour.note")}</span>
         </p>
       </main>
 
-      <StepDock label="Labour total" amount={estimate.totals.linesTotal}>
+      <StepDock label={t("proposal.screens.labour.total")} amount={estimate.totals.linesTotal}>
         <Button block size="lg">
-          Continue to charges
+          {t("proposal.screens.shared.continueToCharges")}
         </Button>
       </StepDock>
     </div>
@@ -183,6 +186,7 @@ function RoleRow({ line, open }: { line: EstimateLineView; open: boolean }) {
  */
 function OpenRoleFields({ line }: { line: EstimateLineView }) {
   const crew = crewFields(line);
+  const t = useT();
 
   return (
     <>
@@ -195,21 +199,21 @@ function OpenRoleFields({ line }: { line: EstimateLineView }) {
       <div className="mt-2.5 flex flex-col gap-2.5">
         <div className="flex gap-2.5">
           <CountStepper
-            label="Members"
+            label={t("proposal.screens.labour.members")}
             value={crew.members}
-            decrementLabel={`One less ${line.name}`}
-            incrementLabel={`One more ${line.name}`}
+            decrementLabel={t("proposal.screens.shared.oneLess", { name: line.name })}
+            incrementLabel={t("proposal.screens.shared.oneMore", { name: line.name })}
           />
           <CountStepper
-            label="Days"
+            label={t("proposal.screens.labour.days")}
             value={crew.days}
-            decrementLabel={`One day less for ${line.name}`}
-            incrementLabel={`One day more for ${line.name}`}
+            decrementLabel={t("proposal.screens.labour.dayLess", { name: line.name })}
+            incrementLabel={t("proposal.screens.labour.dayMore", { name: line.name })}
           />
         </div>
 
         <div>
-          <MiniLabel>Rate per day</MiniLabel>
+          <MiniLabel>{t("proposal.screens.labour.ratePerDay")}</MiniLabel>
 
           <div className="flex items-center gap-2.5">
             <span className="relative w-28 shrink-0">
@@ -220,7 +224,7 @@ function OpenRoleFields({ line }: { line: EstimateLineView }) {
                 ₹
               </span>
               <Input
-                aria-label={`Rate per day for one ${line.name}`}
+                aria-label={t("proposal.screens.labour.rateFor", { name: line.name })}
                 inputMode="numeric"
                 defaultValue={crew.rate}
                 placeholder="0"
@@ -291,6 +295,7 @@ function CountStepper({
 
 /** 44x44, per the touch-target rule, even though the glyph inside it is 16px. */
 function RemoveRoleControl({ name }: { name: string }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -300,7 +305,7 @@ function RemoveRoleControl({ name }: { name: string }) {
       )}
     >
       <Pictogram name="no" size="sm" />
-      <span className="sr-only">Remove {name}</span>
+      <span className="sr-only">{t("proposal.screens.shared.remove", { name })}</span>
     </button>
   );
 }
@@ -313,6 +318,7 @@ function RemoveRoleControl({ name }: { name: string }) {
  * heading above it and nothing else, which is the correct thing to show.
  */
 function AddRoleControl() {
+  const t = useT();
   return (
     <button
       type="button"
@@ -324,7 +330,7 @@ function AddRoleControl() {
       )}
     >
       <Pictogram name="more" size="sm" />
-      Add a team or role
+      {t("proposal.screens.labour.addRole")}
     </button>
   );
 }

@@ -1,8 +1,22 @@
 "use client";
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Skeleton, cn } from "@vsolve/ui";
-import { ArrowRight, BedDouble, Check, ChevronRight, Package, Sparkles, Wrench } from "lucide-react";
+import { ErrorState, Skeleton, cn, useT, type Translator } from "@vsolve/ui";
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  BedDouble,
+  Check,
+  ChevronRight,
+  Clock,
+  FileText,
+  Package,
+  ShieldCheck,
+  Sparkles,
+  UploadCloud,
+  Wrench,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -10,6 +24,7 @@ import { progressSummary, stepProgress, type StepProgress } from "../model/progr
 import { canSubmit, isEditable, rejectedDocuments } from "../model/readiness";
 import { usePartnerApplication, useUpdateApplication } from "../queries";
 import { ApplicationStatusBanner } from "./status-banner";
+import { DocumentUpload } from "./document-upload";
 
 /**
  * Where the application stands, and the one thing to do next.
@@ -39,12 +54,13 @@ import { ApplicationStatusBanner } from "./status-banner";
 type Application = Schemas["PartnerApplication"];
 
 export function ApplicationOverview() {
+  const t = useT();
   const query = usePartnerApplication();
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
     return (
-      <div role="status" aria-label="Loading your application" className="flex flex-col gap-4">
+      <div role="status" aria-label={t("apply.editor.loadingAriaLabel")} className="flex flex-col gap-4">
         <div aria-hidden className="flex flex-col gap-4">
           <Skeleton className="h-32 w-full rounded-card" />
           <Skeleton className="h-14 w-full rounded-control" />
@@ -57,9 +73,9 @@ export function ApplicationOverview() {
   if (query.isError && !isMissing) {
     return (
       <ErrorState
-        title="We could not load your application"
-        message="Nothing you have saved is lost. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.editor.loadError.title")}
+        message={t("apply.editor.loadError.message")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void query.refetch()}
       />
     );
@@ -79,6 +95,7 @@ export function ApplicationOverview() {
  * travel to a customer.
  */
 function NotStarted() {
+  const t = useT();
   const router = useRouter();
   const start = useUpdateApplication();
 
@@ -89,24 +106,23 @@ function NotStarted() {
           <Sparkles size={26} aria-hidden />
         </span>
         <h1 className="text-[1.375rem] font-extrabold leading-tight tracking-[-0.02em] text-surface">
-          Start your application
+          {t("apply.overview.notStarted.title")}
         </h1>
         <p className="max-w-[32ch] text-[0.9375rem] leading-relaxed text-navy-200">
-          About five minutes. You can stop and come back — nothing is sent for
-          review until you choose to send it.
+          {t("apply.overview.notStarted.subtitle")}
         </p>
       </div>
 
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-base font-bold text-navy-900">What will you do on VSolve?</h2>
-        <p className="text-sm text-text-secondary">Tap one to start your application.</p>
+        <h2 className="text-base font-bold text-navy-900">{t("apply.overview.notStarted.whatWillYouDo")}</h2>
+        <p className="text-sm text-text-secondary">{t("apply.overview.notStarted.tapToStart")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <TrackCard
           href="/apply/about"
           icon={<Wrench size={22} aria-hidden />}
-          title="Offer services"
-          description="Repairs, cleaning and other work at customers’ homes. You choose your areas and hours."
+          title={t("apply.overview.track.services.title")}
+          description={t("apply.overview.track.services.description")}
         />
         <TrackCard
           disabled={start.isPending}
@@ -114,8 +130,8 @@ function NotStarted() {
             start.mutate({ track: "STAY_HOST" }, { onSuccess: () => router.push("/apply/about") })
           }
           icon={<BedDouble size={22} aria-hidden />}
-          title="Stays"
-          description="Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about three minutes."
+          title={t("apply.overview.track.stays.title")}
+          description={t("apply.overview.track.stays.description")}
         />
         <TrackCard
           disabled={start.isPending}
@@ -123,17 +139,17 @@ function NotStarted() {
             start.mutate({ track: "RENTAL_OWNER" }, { onSuccess: () => router.push("/apply/about") })
           }
           icon={<Package size={22} aria-hidden />}
-          title="Rent out items"
-          description="Tools and equipment. Same short application: your details, the agreements and an ID."
+          title={t("apply.overview.track.rentals.title")}
+          description={t("apply.overview.track.rentals.description")}
         />
       </div>
       {start.isError ? (
-        <p className="text-sm text-danger-text">We could not start that. Please try again.</p>
+        <p className="text-sm text-danger-text">{t("apply.overview.startFailed")}</p>
       ) : null}
 
       <ul className="flex list-none flex-col gap-2 p-0">
-        <Promise>Nothing is sent for review until you choose to send it</Promise>
-        <Promise>Nothing is shared with customers until you are approved</Promise>
+        <Promise>{t("apply.overview.promise.notSentUntilYouSend")}</Promise>
+        <Promise>{t("apply.overview.promise.notSharedUntilApproved")}</Promise>
       </ul>
     </section>
   );
@@ -201,6 +217,7 @@ function Promise({ children }: { children: React.ReactNode }) {
 }
 
 function Standing({ application }: { application: Application }) {
+  const t = useT();
   const steps = stepProgress(application);
   const summary = progressSummary(application);
   const rejected = rejectedDocuments(application);
@@ -209,73 +226,140 @@ function Standing({ application }: { application: Application }) {
 
   return (
     <section className="flex flex-col gap-6 pb-20">
-      <h1 className="sr-only">Your application</h1>
+      <h1 className="sr-only">{t("apply.overview.heading")}</h1>
 
-      <ApplicationStatusBanner application={application} />
+      {/* Responsive 2-column layout on Desktop */}
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+        {/* Left Column (7 cols): Status Banner, Rejected docs, Hero Action, Specialist options, History */}
+        <div className="flex flex-col gap-6 lg:col-span-7 xl:col-span-8">
+          <ApplicationStatusBanner application={application} />
 
-      {/* Reviewer Rejections Alarm */}
-      {rejected.length > 0 ? (
-        <div role="alert" className="rounded-2xl border border-warning-line bg-warning-surface p-5 shadow-sm">
-          <h2 className="text-sm font-bold text-warning-text flex items-center gap-2">
-            <span>⚠️ Action Required: Replace {rejected.length === 1 ? "this document" : "these documents"}</span>
-          </h2>
-          <ul className="mt-2 flex list-none flex-col gap-2 p-0">
-            {rejected.map((document) => (
-              <li key={document.id} className="rounded-control bg-surface/80 p-3 border border-warning-line/60">
-                <p className="text-xs font-bold text-warning-text">
-                  {DOCUMENT_LABELS[document.kind]}
-                </p>
-                {document.review_reason ? (
-                  <p className="text-xs leading-relaxed text-text-secondary mt-1">
-                    {document.review_reason}
+          {/* Reviewer Rejections Alarm with In-Card Re-Upload */}
+          {rejected.length > 0 ? (
+            <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-warning-line bg-warning-surface p-5 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-warning-line/40 text-warning-text">
+                  <AlertTriangle size={18} aria-hidden />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-warning-text">
+                    {t("apply.overview.rejected.heading", { count: rejected.length })}
+                  </h2>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Please re-upload the rejected documents below. You can upload directly in each card.
                   </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          <Link
-            href="/apply/documents"
-            className="mt-4 inline-flex h-11 items-center rounded-full bg-signal-500 hover:bg-signal-600 px-5 text-xs font-bold text-white transition-colors"
-          >
-            Upload Replacement Documents
-          </Link>
-        </div>
-      ) : null}
+                </div>
+              </div>
 
-      {/* Primary Progress Hero Card */}
-      {editable ? <NextAction summary={summary} ready={ready} /> : null}
+              <div className="mt-2 flex flex-col gap-3">
+                {rejected.map((document) => {
+                  const label = documentLabel(document.kind, t);
+                  return (
+                    <div
+                      key={document.id}
+                      className="rounded-2xl border border-line bg-surface p-4 shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <FileText size={16} className="text-navy-700" aria-hidden />
+                          <p className="text-sm font-bold text-navy-900">{label}</p>
+                        </div>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-danger-line bg-danger-surface px-2.5 py-0.5 text-[11px] font-bold text-danger-text">
+                          <AlertCircle size={12} aria-hidden />
+                          Action Required
+                        </span>
+                      </div>
 
-      {/* Structured Steps Checklist */}
-      <StepList steps={steps} />
+                      {document.review_reason ? (
+                        <div className="mt-2.5 rounded-xl border border-warning-line/60 bg-warning-surface/60 p-3 text-xs text-text-secondary flex items-start gap-2">
+                          <AlertCircle size={15} className="text-warning-text shrink-0 mt-0.5" aria-hidden />
+                          <div>
+                            <strong className="font-bold text-navy-900">Reviewer Note: </strong>
+                            <span>{document.review_reason}</span>
+                          </div>
+                        </div>
+                      ) : null}
 
-      {/* Specialist & Contractor Option — not for someone listing their own property. */}
-      {application.track === "STAY_HOST" || application.track === "RENTAL_OWNER" ? null : (
-        <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-navy-900">Contractor & Multi-Crew Supply</h2>
-              <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line">
-                Optional
-              </span>
+                      {/* Direct In-Card Re-Upload Control */}
+                      <div className="mt-3">
+                        <DocumentUpload
+                          kind={document.kind}
+                          label={label}
+                          expectedVersion={application.version}
+                          replacing={true}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <p className="text-xs text-text-secondary mt-1 max-w-md leading-relaxed">
-              Have a crew of 3+ technicians? Dispatch work teams and bid for custom corporate contracts.
+          ) : null}
+
+          {/* Primary Progress Hero Card or Submitted Under-Review Hero */}
+          {editable ? (
+            <NextAction summary={summary} ready={ready} />
+          ) : application.status === "SUBMITTED" || application.status === "UNDER_REVIEW" ? (
+            <SubmittedHero application={application} />
+          ) : null}
+
+          {/* Specialist & Contractor Option — not for someone listing their own property. */}
+          {application.track === "STAY_HOST" || application.track === "RENTAL_OWNER" ? null : (
+            <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-navy-900">{t("apply.overview.crew.title")}</h2>
+                  <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line">
+                    {t("common.optional")}
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary mt-1 max-w-md leading-relaxed">
+                  {t("apply.overview.crew.description")}
+                </p>
+              </div>
+              <Link
+                href="/apply/capabilities"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs shrink-0"
+              >
+                <span>{t("apply.overview.crew.cta")}</span>
+              </Link>
+            </section>
+          )}
+
+          {application.status === "APPROVED" ? (
+            <Approved track={application.track} />
+          ) : null}
+
+          <History transitions={application.transitions} />
+        </div>
+
+        {/* Right Column (5 cols): Step Checklist & Desktop Helper */}
+        <div className="flex flex-col gap-6 lg:col-span-5 xl:col-span-4 lg:sticky lg:top-28">
+          <StepList steps={steps} />
+
+          {/* Desktop Registration Guide Box */}
+          <div className="rounded-3xl border border-line bg-surface p-6 shadow-xs flex flex-col gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
+                <Sparkles size={16} />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-navy-900">Registration Hub</h3>
+                <p className="text-[11px] text-text-secondary">Desktop Verification Mode</p>
+              </div>
+            </div>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Complete your verification on desktop. Once your application and KYC documents are approved, daily jobs and dispatches will be unlocked on the VSOLVE Partner Mobile App.
             </p>
+            <div className="pt-2 border-t border-line text-[11px] font-semibold text-text-muted flex items-center justify-between">
+              <span>Need help?</span>
+              <Link href="/contact" className="text-navy-900 underline hover:text-signal-700">
+                Contact Partner Support
+              </Link>
+            </div>
           </div>
-          <Link
-            href="/apply/capabilities"
-            className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs shrink-0"
-          >
-            <span>Explore Crew Rates</span>
-          </Link>
-        </section>
-      )}
-
-      {application.status === "APPROVED" ? (
-        <Approved track={application.track} />
-      ) : null}
-
-      <History transitions={application.transitions} />
+        </div>
+      </div>
     </section>
   );
 }
@@ -290,6 +374,7 @@ function NextAction({
   summary: ReturnType<typeof progressSummary>;
   ready: boolean;
 }) {
+  const t = useT();
   const percent = Math.round(summary.fraction * 100);
   const remaining = summary.total - summary.done;
 
@@ -307,31 +392,39 @@ function NextAction({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-signal-500" />
           </span>
           <span className="text-xs font-black uppercase tracking-wider text-amber-300">
-            Application Progress
+            {t("apply.overview.hero.progressLabel")}
           </span>
         </div>
 
         <span className="rounded-full bg-white/10 px-3.5 py-1 text-xs font-extrabold text-white border border-white/20 shadow-xs tabular-nums">
-          {ready ? "All Required Steps Done" : `${summary.done} of ${summary.total} Completed`}
+          {ready
+            ? t("apply.overview.hero.statusAllDone")
+            : t("apply.overview.hero.statusCount", { done: summary.done, total: summary.total })}
         </span>
       </div>
 
       {/* Headline & Description */}
       <div className="relative z-10">
         <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          {ready ? "Application Complete!" : `${remaining} ${remaining === 1 ? "step" : "steps"} remaining`}
+          {ready
+            ? t("apply.overview.hero.completeHeadline")
+            : t("apply.overview.hero.remainingHeadline", { count: remaining })}
         </h2>
         <p className="text-xs sm:text-sm text-navy-200 mt-2 leading-relaxed max-w-lg">
           {ready
-            ? "All required steps are filled. Review your profile details and submit for verification."
-            : `Next up: Complete your ${summary.nextIncomplete?.label.toLowerCase() ?? "documents"} to submit for fast 24h approval.`}
+            ? t("apply.overview.hero.completeBody")
+            : t("apply.overview.hero.remainingBody", {
+                step: summary.nextIncomplete
+                  ? t(summary.nextIncomplete.labelKey).toLowerCase()
+                  : t("apply.steps.documents").toLowerCase(),
+              })}
         </p>
       </div>
 
       {/* Progress Track */}
       <div className="relative z-10 flex flex-col gap-2 pt-1">
         <div className="flex items-center justify-between text-xs font-bold text-navy-200">
-          <span>Overall Completion</span>
+          <span>{t("apply.overview.hero.overallCompletion")}</span>
           <span className="text-amber-400 font-black text-sm">{percent}%</span>
         </div>
         <div
@@ -356,9 +449,69 @@ function NextAction({
         >
           <span>
             {ready
-              ? "Review & Submit Application"
-              : `Continue to ${summary.nextIncomplete?.label ?? "Next Step"}`}
+              ? t("apply.overview.hero.ctaReview")
+              : t("apply.overview.hero.ctaContinue", {
+                  step: summary.nextIncomplete ? t(summary.nextIncomplete.labelKey) : t("apply.steps.review"),
+                })}
           </span>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modern Hero Card for Submitted / Under Review applications
+ */
+function SubmittedHero({ application }: { application: Application }) {
+  return (
+    <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-6 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-5">
+      {/* Background ambient lighting */}
+      <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-cyan-500/15 blur-3xl" />
+
+      {/* Top Status & Count Row */}
+      <div className="relative z-10 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+          </span>
+          <span className="text-xs font-black uppercase tracking-wider text-emerald-300">
+            Registration Submitted
+          </span>
+        </div>
+
+        <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs font-bold text-emerald-300">
+          In Verification Queue
+        </span>
+      </div>
+
+      {/* Headline & Body */}
+      <div className="relative z-10 flex flex-col gap-2">
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          Application Received & Under Review
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
+          Thank you for applying! Our operations team is verifying your Government ID and address credentials. Verification turnaround is typically within 24 hours.
+        </p>
+      </div>
+
+      {/* Action shortcuts */}
+      <div className="relative z-10 flex flex-wrap items-center gap-3 pt-3 border-t border-white/10">
+        <Link
+          href="/apply/review"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-4 text-xs font-bold text-white transition-colors"
+        >
+          <FileText size={14} />
+          <span>Review Submitted Record</span>
+        </Link>
+        <Link
+          href="/me/documents"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-4 text-xs font-bold text-white transition-colors"
+        >
+          <ShieldCheck size={14} className="text-emerald-400" />
+          <span>Application & KYC Documents</span>
         </Link>
       </div>
     </div>
@@ -369,13 +522,14 @@ function NextAction({
  * Clean & Modern Steps Checklist
  */
 function StepList({ steps }: { steps: readonly StepProgress[] }) {
+  const t = useT();
   const rows = steps.filter((step) => step.state !== "waypoint");
 
   return (
     <section className="flex flex-col gap-3 mt-2">
       <div className="flex items-center justify-between px-1">
         <h2 className="text-xs font-black uppercase tracking-wider text-navy-900">
-          Application Checklist
+          {t("apply.overview.checklist.heading")}
         </h2>
         {/*
           "Tap", not "Click". Onboarding is a phone flow — the shell that wraps
@@ -383,7 +537,7 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
           clicking anything.
         */}
         <span className="text-xs font-semibold text-text-secondary">
-          Tap any step to edit
+          {t("apply.overview.checklist.tapHint")}
         </span>
       </div>
 
@@ -424,22 +578,20 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm sm:text-base font-bold text-navy-900 group-hover:text-signal-700 transition-colors">
-                      {step.label}
+                      {t(step.labelKey)}
                     </span>
                     {isNext && (
                       <span className="hidden sm:inline-block rounded-full bg-signal-100 text-signal-800 text-[10px] font-extrabold px-2 py-0.5 border border-signal-200">
-                        Next Up
+                        {t("apply.overview.checklist.nextUp")}
                       </span>
                     )}
                   </div>
                   <span className="text-xs text-text-secondary mt-0.5">
                     {isDone
-                      ? "Completed and verified"
+                      ? t("apply.overview.checklist.completed")
                       : isOptional
-                        ? "Optional schedule preferences"
-                        : step.outstanding === 1
-                          ? "Required details missing"
-                          : `${step.outstanding} items required`}
+                        ? t("apply.overview.checklist.optionalSchedule")
+                        : t("apply.overview.checklist.outstanding", { count: step.outstanding })}
                   </span>
                 </div>
               </div>
@@ -455,7 +607,7 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
                         : "bg-surface-sunken text-text-muted border-line",
                   )}
                 >
-                  {isDone ? "Done" : isOptional ? "Optional" : "Incomplete"}
+                  {isDone ? t("common.done") : isOptional ? t("common.optional") : t("apply.overview.checklist.incomplete")}
                 </span>
               </div>
             </Link>
@@ -477,18 +629,19 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
  * work" pointed at nothing.
  */
 function Approved({ track }: { track: Application["track"] }) {
+  const t = useT();
   if (track === "RENTAL_OWNER") {
     return (
       <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
-        <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>
+        <p className="text-[0.9375rem] font-bold text-success-text">{t("apply.overview.approved.heading")}</p>
         <p className="text-[0.875rem] leading-relaxed text-success-text/85">
-          Add the items you rent out. Customers can book them once an ad is live.
+          {t("apply.overview.approved.rental.body")}
         </p>
         <Link
           href="/rentals"
           className="mt-1 flex h-12 items-center justify-center gap-2 rounded-control bg-success-text px-6 text-[0.9375rem] font-bold text-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          List an item
+          {t("apply.overview.approved.rental.cta")}
           <ArrowRight size={18} aria-hidden />
         </Link>
       </div>
@@ -497,15 +650,15 @@ function Approved({ track }: { track: Application["track"] }) {
   if (track === "STAY_HOST") {
     return (
       <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
-        <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>
+        <p className="text-[0.9375rem] font-bold text-success-text">{t("apply.overview.approved.heading")}</p>
         <p className="text-[0.875rem] leading-relaxed text-success-text/85">
-          Add your property and rooms, publish, and guest enquiries will come to you.
+          {t("apply.overview.approved.stay.body")}
         </p>
         <Link
           href="/stays"
           className="mt-1 flex h-12 items-center justify-center gap-2 rounded-control bg-success-text px-6 text-[0.9375rem] font-bold text-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          List your property
+          {t("apply.overview.approved.stay.cta")}
           <ArrowRight size={18} aria-hidden />
         </Link>
       </div>
@@ -513,9 +666,9 @@ function Approved({ track }: { track: Application["track"] }) {
   }
   return (
     <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
-      <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>
+      <p className="text-[0.9375rem] font-bold text-success-text">{t("apply.overview.approved.heading")}</p>
       <p className="text-[0.875rem] leading-relaxed text-success-text/85">
-        Go on duty and jobs near you will start coming through.
+        {t("apply.overview.approved.services.body")}
       </p>
       {/* `/home` directly: `/dashboard` and `/work` both redirect there, and the
           duty control lives on it. `/availability` — which this used to point
@@ -525,21 +678,29 @@ function Approved({ track }: { track: Application["track"] }) {
         href="/home"
         className="mt-1 flex h-12 items-center justify-center gap-2 rounded-control bg-success-text px-6 text-[0.9375rem] font-bold text-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
-        Go to your work
+        {t("apply.overview.approved.services.cta")}
         <ArrowRight size={18} aria-hidden />
       </Link>
     </div>
   );
 }
 
-const DOCUMENT_LABELS: Record<Schemas["PartnerDocumentKindEnum"], string> = {
-  GOVERNMENT_ID: "Government photo ID",
-  ADDRESS_PROOF: "Proof of address",
-  TAX: "Tax document",
-  BANK: "Bank document",
-  BACKGROUND_CHECK: "Background check",
-  OTHER: "Document",
-};
+function documentLabel(kind: Schemas["PartnerDocumentKindEnum"], t: Translator["t"]): string {
+  switch (kind) {
+    case "GOVERNMENT_ID":
+      return t("apply.requirements.governmentId");
+    case "ADDRESS_PROOF":
+      return t("apply.requirements.addressProof");
+    case "TAX":
+      return t("apply.overview.documentLabels.tax");
+    case "BANK":
+      return t("apply.overview.documentLabels.bank");
+    case "BACKGROUND_CHECK":
+      return t("apply.overview.documentLabels.backgroundCheck");
+    case "OTHER":
+      return t("apply.overview.documentLabels.other");
+  }
+}
 
 /**
  * What has happened, in words.
@@ -558,12 +719,13 @@ const DOCUMENT_LABELS: Record<Schemas["PartnerDocumentKindEnum"], string> = {
  * worse than a history with one unpolished line.
  */
 function History({ transitions }: { transitions: Application["transitions"] }) {
+  const t = useT();
   if (transitions.length === 0) return null;
 
   return (
     <section>
       <h2 className="pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-        What has happened
+        {t("apply.overview.history.heading")}
       </h2>
       <ol className="flex list-none flex-col gap-0 p-0">
         {[...transitions].reverse().map((transition, index) => (
@@ -581,7 +743,7 @@ function History({ transitions }: { transitions: Application["transitions"] }) {
             </span>
             <div className="min-w-0 flex-1 pb-4">
               <p className="text-[0.9375rem] font-semibold text-text">
-                {describeTransition(transition.from_status, transition.to_status)}
+                {describeTransition(transition.from_status, transition.to_status, t)}
               </p>
               {transition.reason ? (
                 <p className="mt-0.5 text-[0.875rem] leading-relaxed text-text-secondary">
@@ -607,20 +769,21 @@ function History({ transitions }: { transitions: Application["transitions"] }) {
 }
 
 /** What arriving at each status actually meant for the applicant. */
-const ARRIVED: Record<string, string> = {
-  DRAFT: "You started your application",
-  SUBMITTED: "You sent it for review",
-  UNDER_REVIEW: "A reviewer started checking it",
-  CHANGES_REQUIRED: "We asked you to correct something",
-  APPROVED: "You were approved",
-  SUSPENDED: "Your account was suspended",
-  OFFBOARDED: "Your account was closed",
-  DECLINED: "Your application was not approved",
+const ARRIVED_KEY: Record<string, string> = {
+  DRAFT: "apply.overview.history.arrived.DRAFT",
+  SUBMITTED: "apply.overview.history.arrived.SUBMITTED",
+  UNDER_REVIEW: "apply.overview.history.arrived.UNDER_REVIEW",
+  CHANGES_REQUIRED: "apply.overview.history.arrived.CHANGES_REQUIRED",
+  APPROVED: "apply.overview.history.arrived.APPROVED",
+  SUSPENDED: "apply.overview.history.arrived.SUSPENDED",
+  OFFBOARDED: "apply.overview.history.arrived.OFFBOARDED",
+  DECLINED: "apply.overview.history.arrived.DECLINED",
 };
 
-function describeTransition(from: string, to: string): string {
+function describeTransition(from: string, to: string, t: Translator["t"]): string {
   // A reviewer handing it back to the queue, not the applicant sending it again.
-  if (from === "UNDER_REVIEW" && to === "SUBMITTED") return "It went back in the queue for the next reviewer";
-  if (from === "SUSPENDED" && to === "APPROVED") return "Your account was reinstated";
-  return ARRIVED[to] ?? `${from} → ${to}`;
+  if (from === "UNDER_REVIEW" && to === "SUBMITTED") return t("apply.overview.history.backToQueue");
+  if (from === "SUSPENDED" && to === "APPROVED") return t("apply.overview.history.reinstated");
+  const key = ARRIVED_KEY[to];
+  return key ? t(key) : `${from} → ${to}`;
 }

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { enquiryDetail } from "../fixtures";
 import { readEnquiryRecord } from "../model/wire";
 import { ClarificationThread } from "./clarification-thread";
+import { withI18n } from "@/i18n/test-utils";
 
 // Mock the queries
 vi.mock("../queries", () => ({
@@ -56,7 +57,7 @@ describe("ClarificationThread", () => {
       }),
     );
 
-    render(<ClarificationThread enquiry={enquiry} />);
+    render(withI18n(<ClarificationThread enquiry={enquiry} />));
 
     const trigger = screen.getByRole("button", { name: /open chat with customer/i });
     expect(slot).toContainElement(trigger);
@@ -78,7 +79,7 @@ describe("ClarificationThread", () => {
   it("renders no trigger on a route whose header has no slot", () => {
     const enquiry = readEnquiryRecord(enquiryDetail({ questions: [] }));
 
-    render(<ClarificationThread enquiry={enquiry} />);
+    render(withI18n(<ClarificationThread enquiry={enquiry} />));
 
     expect(
       screen.queryByRole("button", { name: /open chat with customer/i }),
@@ -89,7 +90,7 @@ describe("ClarificationThread", () => {
     mountHeaderSlot();
     const enquiry = readEnquiryRecord(enquiryDetail({ questions: [] }));
 
-    render(<ClarificationThread enquiry={enquiry} open onOpenChange={() => {}} />);
+    render(withI18n(<ClarificationThread enquiry={enquiry} open onOpenChange={() => {}} />));
 
     expect(screen.getByRole("dialog", { name: /chat with customer/i })).toBeInTheDocument();
   });

@@ -1,5 +1,5 @@
 import type { SiteVisit } from "./visit-state";
-import { supportsTimeZone } from "./slot-grid";
+import { supportsTimeZone, type VisitTranslator } from "./slot-grid";
 
 /**
  * When a visit is, in the words a vendor standing in traffic can act on.
@@ -96,16 +96,16 @@ export function dayKeyInZone(epochMs: number, timeZone: string): string {
   }).format(new Date(epochMs));
 }
 
-function timeIn(epochMs: number, zone: string | undefined): string {
-  return new Intl.DateTimeFormat("en-IN", {
+function timeIn(epochMs: number, zone: string | undefined, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: zone,
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(epochMs));
 }
 
-function dayIn(epochMs: number, zone: string | undefined): string {
-  return new Intl.DateTimeFormat("en-IN", {
+function dayIn(epochMs: number, zone: string | undefined, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: zone,
     weekday: "short",
     day: "numeric",
@@ -119,10 +119,10 @@ function dayIn(epochMs: number, zone: string | undefined): string {
  * For the rows where the date is already established by the block above them
  * and repeating it is the noise this module exists to remove.
  */
-export function timeOnlyInZone(iso: string, timeZone: string): string {
+export function timeOnlyInZone(iso: string, timeZone: string, locale: string = "en-IN"): string {
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return iso;
-  return timeIn(ms, zoneOrUndefined(timeZone).zone);
+  return timeIn(ms, zoneOrUndefined(timeZone).zone, locale);
 }
 
 /** Whole days between two `YYYY-MM-DD` keys. Positive when `to` is later. */
@@ -133,23 +133,23 @@ function dayGap(from: string, to: string): number {
   return Math.round((b - a) / DAY_MS);
 }
 
-function relativeLabel(deltaMs: number): string | null {
+function relativeLabel(deltaMs: number, t: VisitTranslator["t"]): string | null {
   if (deltaMs >= 0) {
     const minutes = Math.floor(deltaMs / 60_000);
-    if (minutes < 1) return "starts in under a minute";
-    if (minutes < 60) return `starts in ${minutes}m`;
+    if (minutes < 1) return t("visit.clock.startsInUnderAMinute");
+    if (minutes < 60) return t("visit.clock.startsInMinutes", { minutes });
     const hours = Math.floor(minutes / 60);
-    if (hours < 48) return `starts in ${hours}h ${minutes % 60}m`;
-    return `starts in ${Math.round(hours / 24)} days`;
+    if (hours < 48) return t("visit.clock.startsInHours", { hours, minutes: minutes % 60 });
+    return t("visit.clock.startsInDays", { days: Math.round(hours / 24) });
   }
 
   const minutesAgo = Math.floor(-deltaMs / 60_000);
-  if (minutesAgo < 1) return "starting now";
-  if (minutesAgo < 60) return `started ${minutesAgo}m ago`;
+  if (minutesAgo < 1) return t("visit.clock.startingNow");
+  if (minutesAgo < 60) return t("visit.clock.startedMinutesAgo", { minutes: minutesAgo });
   const hoursAgo = Math.floor(minutesAgo / 60);
   // Past a day there is nothing useful left to say: the screen shows the date,
   // and "started 9 days ago" is a reproach, not information.
-  if (hoursAgo < 24) return `started ${hoursAgo}h ago`;
+  if (hoursAgo < 24) return t("visit.clock.startedHoursAgo", { hours: hoursAgo });
   return null;
 }
 
@@ -157,8 +157,15 @@ function relativeLabel(deltaMs: number): string | null {
  * @param visit The plan visit. `scheduled_for` null means the slot is still
  *   held against an unverified customer payment — there is no time to describe.
  * @param nowMs The server's clock. Production callers pass `serverClock.now()`.
+ * @param translator The active translator (`useTranslator()`): words come from
+ *   `t`, weekday and month names from `Intl` in its `locale`.
  */
-export function describeVisitTiming(visit: SiteVisit, nowMs: number): VisitTiming | null {
+export function describeVisitTiming(
+  visit: SiteVisit,
+  nowMs: number,
+  translator: VisitTranslator,
+): VisitTiming | null {
+  const { t, locale } = translator;
   if (visit.scheduled_for === null || visit.scheduled_for === "") return null;
   const startMs = Date.parse(visit.scheduled_for);
   if (!Number.isFinite(startMs)) return null;
@@ -168,21 +175,28 @@ export function describeVisitTiming(visit: SiteVisit, nowMs: number): VisitTimin
   const visitKey = dayKeyInZone(startMs, visit.timezone);
   const gap = dayGap(todayKey, visitKey);
 
-  const dayLabel = gap === 0 ? "Today" : gap === 1 ? "Tomorrow" : dayIn(startMs, zone);
-  const timeLabel = timeIn(startMs, zone);
+  const dayLabel =
+    gap === 0
+      ? t("visit.clock.today")
+      : gap === 1
+        ? t("visit.clock.tomorrow")
+        : dayIn(startMs, zone, locale);
+  const timeLabel = timeIn(startMs, zone, locale);
   const hasStarted = nowMs >= startMs;
 
   return {
     dayLabel,
     timeLabel,
-    fullLabel: `${dayIn(startMs, zone)}, ${timeLabel}`,
+    fullLabel: t("visit.clock.fullLabel", { day: dayIn(startMs, zone, locale), time: timeLabel }),
     durationLabel:
-      visit.duration_minutes === null ? null : `${visit.duration_minutes} min on site`,
+      visit.duration_minutes === null
+        ? null
+        : t("visit.clock.durationOnSite", { minutes: visit.duration_minutes }),
     isVisitDay: gap === 0,
     arrivalWindowOpen: gap <= 0,
     hasStarted,
-    relative: relativeLabel(startMs - nowMs),
-    leaveBy: hasStarted ? null : timeIn(startMs - LEAVE_BY_LEAD_MS, zone),
+    relative: relativeLabel(startMs - nowMs, t),
+    leaveBy: hasStarted ? null : timeIn(startMs - LEAVE_BY_LEAD_MS, zone, locale),
     zoneUnsupported: unsupported,
   };
 }

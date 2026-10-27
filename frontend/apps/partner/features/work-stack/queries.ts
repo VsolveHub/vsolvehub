@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@vsolve/ui";
 import { useMemo } from "react";
 
 import { usePartnerCrewOffers } from "@/features/crew-offer/queries";
@@ -53,6 +54,7 @@ import { toWorkItems, type WorkItem } from "./model/work-item";
  * would drop every row in it anyway.
  */
 export function useWorkStack() {
+  const t = useT();
   const offers = usePartnerCrewOffers();
   const directOffers = usePartnerOffers();
   const enquiries = usePartnerEnquiries();
@@ -110,8 +112,9 @@ export function useWorkStack() {
             // `toWorkItems`'s own `serverNow` doc for why this is not a second
             // source of truth and never falls back to the device clock.
             serverNow: offers.data?.server_now ?? null,
-          }),
+          }, t),
     [
+      t,
       isPending,
       firstError,
       offers.data,

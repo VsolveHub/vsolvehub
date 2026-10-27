@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { Badge, Button, buttonStyles, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, Button, buttonStyles, ErrorState, Spinner, useT } from "@vsolve/ui";
 import {
   CheckCircle2,
   AlertCircle,
@@ -15,10 +15,11 @@ import {
   Send,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { canSubmit, isEditable, outstandingRequirements } from "../model/readiness";
-import { toDraft, weeklyHours, WEEKDAYS } from "../model/schedule";
+import { toDraft, weeklyHours, WEEKDAY_KEYS } from "../model/schedule";
 import { isListingTrack } from "../model/steps";
 import {
   isVersionConflict,
@@ -28,6 +29,7 @@ import {
 } from "../queries";
 import { useApplicationReference } from "../reference-queries";
 import { ApplicationStatusBanner } from "./status-banner";
+import { RegistrationSuccessModal } from "./registration-success-modal";
 
 function SectionEditLink({ href, label }: { href: string; label: string }) {
   return (
@@ -42,11 +44,14 @@ function SectionEditLink({ href, label }: { href: string; label: string }) {
 }
 
 export function ReviewStep() {
+  const router = useRouter();
   const query = usePartnerApplication();
   const availability = usePartnerAvailability();
   const reference = useApplicationReference();
   const submit = useSubmitApplication();
   const [confirmed, setConfirmed] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const t = useT();
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
@@ -54,7 +59,7 @@ export function ReviewStep() {
     return (
       <p className="flex items-center gap-2 py-8 text-text-secondary">
         <Spinner size="sm" />
-        Loading your application summary…
+        {t("apply.review.loading")}
       </p>
     );
   }
@@ -62,9 +67,9 @@ export function ReviewStep() {
   if (query.isError && !isMissing) {
     return (
       <ErrorState
-        title="We could not load your application"
-        message="Nothing you have saved is lost. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.editor.loadError.title")}
+        message={t("apply.editor.loadError.message")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void query.refetch()}
       />
     );
@@ -75,15 +80,15 @@ export function ReviewStep() {
   if (application === null) {
     return (
       <section className="rounded-card bg-surface p-6 border border-line text-center">
-        <h1 className="text-xl font-bold text-text">Review and Submit</h1>
+        <h1 className="text-xl font-bold text-text">{t("apply.review.notStarted.title")}</h1>
         <p className="mt-2 text-sm text-text-secondary">
-          You have not started your application yet.
+          {t("apply.review.notStarted.body")}
         </p>
         <Link
           href="/apply/about"
           className="mt-4 inline-flex items-center gap-2 rounded-control bg-action px-6 py-2.5 text-sm font-bold text-action-text"
         >
-          Start Your Application Now
+          {t("apply.review.notStarted.cta")}
         </Link>
       </section>
     );
@@ -105,9 +110,9 @@ export function ReviewStep() {
   return (
     <section className="flex flex-col gap-6 pb-20">
       <div>
-        <h1 className="text-2xl font-extrabold text-text tracking-tight">Review & Submit</h1>
+        <h1 className="text-2xl font-extrabold text-text tracking-tight">{t("apply.review.heading")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Please review your details below before sending for partner verification. You can edit any section.
+          {t("apply.review.subheading")}
         </p>
       </div>
 
@@ -118,7 +123,7 @@ export function ReviewStep() {
         <div className="rounded-card border border-warning-line bg-warning-surface p-4">
           <div className="flex items-center gap-2 text-sm font-bold text-warning-text">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>Items remaining before you can submit:</span>
+            <span>{t("apply.review.outstandingNotice")}</span>
           </div>
           {/*
             These are the only way to reach the step that is blocking
@@ -133,7 +138,7 @@ export function ReviewStep() {
                   href={req.href}
                   className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-navy-900"
                 >
-                  {req.label} →
+                  {t(req.labelKey)} →
                 </Link>
               </li>
             ))}
@@ -146,32 +151,32 @@ export function ReviewStep() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">1. Personal Profile</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">{t("apply.review.section1.title")}</h2>
           </div>
           {isEditable(application) ? (
-            <SectionEditLink href="/apply/about" label="Edit personal profile" />
+            <SectionEditLink href="/apply/about" label={t("apply.review.section1.editAria")} />
           ) : null}
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
           <div>
-            <span className="text-xs font-bold text-text-muted uppercase">Display Name</span>
+            <span className="text-xs font-bold text-text-muted uppercase">{t("apply.review.displayNameLabel")}</span>
             <p className="font-bold text-text mt-0.5">
-              {application.display_name || <span className="text-text-muted italic">Not set</span>}
+              {application.display_name || <span className="text-text-muted italic">{t("apply.review.notSet")}</span>}
             </p>
           </div>
           {listing ? null : (
             <div>
-              <span className="text-xs font-bold text-text-muted uppercase">Experience</span>
+              <span className="text-xs font-bold text-text-muted uppercase">{t("apply.review.experienceLabel")}</span>
               <p className="font-bold text-text mt-0.5">
-                {application.experience_years} {application.experience_years === 1 ? "Year" : "Years"}
+                {t("apply.review.experienceYears", { count: application.experience_years })}
               </p>
             </div>
           )}
           <div className="sm:col-span-2">
-            <span className="text-xs font-bold text-text-muted uppercase">Biography / About</span>
+            <span className="text-xs font-bold text-text-muted uppercase">{t("apply.review.bioLabel")}</span>
             <p className="text-xs leading-relaxed text-text-secondary mt-1 whitespace-pre-line bg-surface-sunken p-3 rounded-control border border-line">
-              {application.biography || "No biography entered yet."}
+              {application.biography || t("apply.review.noBio")}
             </p>
           </div>
         </div>
@@ -184,18 +189,18 @@ export function ReviewStep() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <Wrench className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">2. Trades & Services</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">{t("apply.review.section2.title")}</h2>
           </div>
           {isEditable(application) ? (
-            <SectionEditLink href="/apply/work" label="Edit trades and services" />
+            <SectionEditLink href="/apply/work" label={t("apply.review.section2.editAria")} />
           ) : null}
         </div>
 
         <div className="mt-4 flex flex-col gap-3 text-sm">
           <div>
-            <span className="text-xs font-bold text-text-muted uppercase">Selected Trades</span>
+            <span className="text-xs font-bold text-text-muted uppercase">{t("apply.review.selectedTrades")}</span>
             {application.skill_codes.length === 0 ? (
-              <p className="text-xs text-danger-text mt-1 font-semibold">No trade selected yet.</p>
+              <p className="text-xs text-danger-text mt-1 font-semibold">{t("apply.review.noTradeSelected")}</p>
             ) : (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {application.skill_codes.map((code) => (
@@ -211,9 +216,9 @@ export function ReviewStep() {
           </div>
 
           <div>
-            <span className="text-xs font-bold text-text-muted uppercase">Accepted Job Types</span>
+            <span className="text-xs font-bold text-text-muted uppercase">{t("apply.review.acceptedJobTypes")}</span>
             <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-              {application.service_variant_ids.length} job service variants selected
+              {t("apply.review.variantsSelected", { count: application.service_variant_ids.length })}
             </p>
           </div>
         </div>
@@ -224,16 +229,16 @@ export function ReviewStep() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">3. Travel & Service Areas</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">{t("apply.review.section3.title")}</h2>
           </div>
           {isEditable(application) ? (
-            <SectionEditLink href="/apply/areas" label="Edit service areas" />
+            <SectionEditLink href="/apply/areas" label={t("apply.review.section3.editAria")} />
           ) : null}
         </div>
 
         <div className="mt-4">
           {application.service_area_ids.length === 0 ? (
-            <p className="text-xs text-danger-text font-semibold">No service area selected.</p>
+            <p className="text-xs text-danger-text font-semibold">{t("apply.review.noAreaSelected")}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {application.service_area_ids.map((id) => (
@@ -242,7 +247,7 @@ export function ReviewStep() {
                   className="rounded-full bg-surface-sunken px-3 py-1 text-xs font-bold text-text border border-line flex items-center gap-1"
                 >
                   <MapPin className="h-3 w-3 text-signal-500" />
-                  <span>{areaNameMap.get(id) ?? `Zone ${id.slice(0, 8)}`}</span>
+                  <span>{areaNameMap.get(id) ?? t("apply.review.zoneFallback", { id: id.slice(0, 8) })}</span>
                 </span>
               ))}
             </div>
@@ -255,19 +260,19 @@ export function ReviewStep() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">4. Working Hours & Availability</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">{t("apply.review.section4.title")}</h2>
           </div>
           {isEditable(application) ? (
-            <SectionEditLink href="/apply/schedule" label="Edit working hours" />
+            <SectionEditLink href="/apply/schedule" label={t("apply.review.section4.editAria")} />
           ) : null}
         </div>
 
         <div className="mt-4 flex flex-col gap-3">
           {application.service_area_ids.length === 0 ? (
-            <p className="text-xs text-text-muted">Select a service area first to configure working hours.</p>
+            <p className="text-xs text-text-muted">{t("apply.review.hours.selectAreaFirst")}</p>
           ) : (
             application.service_area_ids.map((areaId) => {
-              const areaName = areaNameMap.get(areaId) ?? `Service area ${areaId.slice(0, 8)}`;
+              const areaName = areaNameMap.get(areaId) ?? t("apply.schedule.areaFallback", { id: areaId.slice(0, 8) });
               const areaRules = (availability.data?.rules ?? []).filter(
                 (r) => r.service_area_id === areaId && r.is_active,
               );
@@ -282,15 +287,15 @@ export function ReviewStep() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-navy-900">{areaName}</span>
-                      <Badge tone="danger">No hours set</Badge>
+                      <Badge tone="danger">{t("apply.schedule.noHoursSet")}</Badge>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-danger-text font-semibold">
-                      <span>⚠️ No working hours set for this area. Customers cannot book slots until you set hours.</span>
+                      <span>{t("apply.review.hours.noHoursWarning")}</span>
                       <Link
                         href="/apply/schedule"
                         className="underline underline-offset-2 font-bold shrink-0 hover:text-navy-900"
                       >
-                        Edit working hours →
+                        {t("apply.review.hours.editLink")}
                       </Link>
                     </div>
                   </div>
@@ -305,19 +310,19 @@ export function ReviewStep() {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-navy-900">{areaName}</span>
                     <Badge tone="success" className="tabular-nums font-bold">
-                      {totalHours} hrs / week ({areaRules.length} {areaRules.length === 1 ? "shift" : "shifts"})
+                      {t("apply.review.hours.summary", { hours: totalHours, count: areaRules.length })}
                     </Badge>
                   </div>
                   <div className="flex flex-wrap gap-1.5 text-text-secondary">
-                    {WEEKDAYS.map((dayName, dayIdx) => {
+                    {WEEKDAY_KEYS.map((dayKey, dayIdx) => {
                       const dayRules = areaRules.filter((r) => r.weekday === dayIdx);
                       if (dayRules.length === 0) return null;
                       return (
                         <span
-                          key={dayName}
+                          key={dayKey}
                           className="rounded bg-surface px-2 py-0.5 border border-line text-[11px] font-medium"
                         >
-                          <strong className="text-navy-900">{dayName.slice(0, 3)}:</strong>{" "}
+                          <strong className="text-navy-900">{t(dayKey)}:</strong>{" "}
                           {dayRules
                             .map(
                               (r) =>
@@ -344,16 +349,16 @@ export function ReviewStep() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">5. Verification Documents</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">{t("apply.review.section5.title")}</h2>
           </div>
           {isEditable(application) ? (
-            <SectionEditLink href="/apply/documents" label="Edit verification documents" />
+            <SectionEditLink href="/apply/documents" label={t("apply.review.section5.editAria")} />
           ) : null}
         </div>
 
         <div className="mt-4 flex flex-col gap-2">
           {documents.length === 0 ? (
-            <p className="text-xs text-danger-text font-semibold">No documents uploaded yet.</p>
+            <p className="text-xs text-danger-text font-semibold">{t("apply.review.noDocuments")}</p>
           ) : (
             documents.map((doc) => (
               <div
@@ -378,10 +383,10 @@ export function ReviewStep() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <FileCheck className="h-4 w-4 text-signal-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">6. Platform Agreements</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text">{t("apply.review.section6.title")}</h2>
           </div>
           {isEditable(application) ? (
-            <SectionEditLink href="/apply/consent" label="Edit platform agreements" />
+            <SectionEditLink href="/apply/consent" label={t("apply.review.section6.editAria")} />
           ) : null}
         </div>
 
@@ -391,35 +396,58 @@ export function ReviewStep() {
               {activeConsents.map((consent) => (
                 <li key={consent.id} className="flex items-center gap-2">
                   <CheckCircle2 className="h-3.5 w-3.5 text-success-text" />
-                  <span>Accepted {consent.purpose.replace(/_/g, " ")} (v{consent.document_version})</span>
+                  <span>{t("apply.review.accepted", { purpose: consent.purpose.replace(/_/g, " "), version: consent.document_version })}</span>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="text-xs text-warning-text font-semibold">
-              Partner agreements not accepted yet.
+              {t("apply.review.noAgreements")}
             </p>
           )}
         </div>
       </div>
 
       {/* Submission Actions */}
-      {isEditable(application) && (
+      {application.status === "SUBMITTED" || application.status === "UNDER_REVIEW" ? (
+        <div className="rounded-3xl border border-emerald-500/30 bg-emerald-50/60 p-6 sm:p-8 text-center flex flex-col items-center gap-3 shadow-xs mt-2">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-500/25">
+            <CheckCircle2 size={28} />
+          </div>
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200 mb-2">
+              <Clock size={12} /> {t("apply.review.submitted.badge")}
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-navy-900 tracking-tight">
+              {t("apply.review.submitted.title")}
+            </h2>
+            <p className="text-xs sm:text-sm text-text-secondary mt-1.5 max-w-md mx-auto leading-relaxed">
+              {t("apply.review.submitted.body")}
+            </p>
+          </div>
+          <Link
+            href="/apply"
+            className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-7 mt-2 shadow-sm" })}
+          >
+            {t("apply.review.submitted.cta")}
+          </Link>
+        </div>
+      ) : isEditable(application) ? (
         <div className="rounded-card border border-line bg-surface p-6 shadow-md mt-2">
           {isVersionConflict(submit.error) ? (
             <ErrorState
               inline
               className="mb-4"
               severity="warning"
-              title="Your application changed in another session"
-              message="We have reloaded the latest data. Please check and submit again."
+              title={t("apply.review.conflict.title")}
+              message={t("apply.review.conflict.message")}
             />
           ) : submit.isError ? (
             <ErrorState
               inline
               className="mb-4"
-              title="We could not submit your application"
-              message="Nothing was lost. Please verify all sections above and try again."
+              title={t("apply.review.submitError.title")}
+              message={t("apply.review.submitError.message")}
               reference={
                 submit.error instanceof ApiRequestError ? submit.error.requestId : null
               }
@@ -435,35 +463,50 @@ export function ReviewStep() {
                 className="mt-0.5 h-5 w-5 rounded border-line-strong text-signal-500 accent-signal-500"
               />
               <span className="text-xs text-text-secondary leading-relaxed">
-                I certify that all the information provided is accurate and truthful. I understand that my profile and documents will be reviewed by V Solve Hub Operations before activation.
+                {t("apply.review.certify")}
               </span>
             </label>
 
             <div className="flex items-center gap-3">
               <Link href={listing ? "/apply/documents" : "/apply/schedule"} className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
-                  Back
+                  {t("common.back")}
                 </Link>
               <Button
                 size="lg"
                 disabled={!ready || !confirmed}
                 loading={submit.isPending}
-                loadingLabel="Submitting Application…"
-                onClick={() => submit.mutate()}
+                loadingLabel={t("apply.review.submitting")}
+                onClick={() => {
+                  submit.mutate(undefined, {
+                    onSuccess: () => {
+                      setShowSuccessModal(true);
+                    },
+                  });
+                }}
                 className="font-bold gap-2 text-base shadow-md flex-1"
               >
                 <Send className="h-4 w-4" />
-                <span>Submit Application for Review</span>
+                <span>{t("apply.review.submit")}</span>
               </Button>
             </div>
 
             <p className="text-xs text-center text-text-muted">
               {ready
-                ? "Approval typically completes within 24 hours."
-                : `Please complete all ${outstanding.length} required items above to submit.`}
+                ? t("apply.review.approvalNote")
+                : t("apply.review.completeRemaining", { count: outstanding.length })}
             </p>
           </div>
         </div>
-      )}
+      ) : null}
+
+      <RegistrationSuccessModal
+        open={showSuccessModal}
+        onClose={() => {
+          setShowSuccessModal(false);
+          router.push("/apply");
+        }}
+        application={application}
+      />
     </section>
   );
 }

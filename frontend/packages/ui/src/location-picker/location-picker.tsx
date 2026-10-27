@@ -13,6 +13,7 @@ import { LocateFixed, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "../button";
+import { useTOrDefault } from "../i18n";
 import { Input } from "../input";
 import { Spinner } from "../spinner";
 
@@ -125,7 +126,14 @@ function coordsOnly(point: LatLng): PickedLocation {
  */
 type DeviceFailure = "denied" | "unavailable" | "timeout" | "unsupported";
 
-const DEVICE_FAILURE_MESSAGE: Record<DeviceFailure, string> = {
+const DEVICE_FAILURE_KEY: Record<DeviceFailure, string> = {
+  denied: "ui.locationPicker.error.denied",
+  unavailable: "ui.locationPicker.error.unavailable",
+  timeout: "ui.locationPicker.error.timeout",
+  unsupported: "ui.locationPicker.error.unsupported",
+};
+
+const DEVICE_FAILURE_DEFAULT: Record<DeviceFailure, string> = {
   denied:
     "Location permission is off for this site. Turn it on in your browser settings, or search for the place instead.",
   unavailable:
@@ -185,9 +193,11 @@ function PickerBody({
   initial = null,
   autoLocate = false,
   onConfirm,
-  confirmLabel = "Confirm location",
+  confirmLabel,
   hasMap,
 }: Omit<LocationPickerProps, "apiKey"> & { hasMap: boolean }) {
+  const tf = useTOrDefault();
+  const resolvedConfirmLabel = confirmLabel ?? tf("ui.locationPicker.confirmLabel", "Confirm location");
   // Held in a ref so a caller passing a fresh function each render does not
   // re-create every callback below.
   const geocode = useRef(reverseGeocode);
@@ -302,7 +312,7 @@ function PickerBody({
         />
       ) : (
         <p className="rounded-control border border-line bg-surface-sunken px-3 py-2.5 text-sm text-text-secondary">
-          The map is not available right now. Use your current location instead.
+          {tf("ui.locationPicker.noMap", "The map is not available right now. Use your current location instead.")}
         </p>
       )}
 
@@ -312,21 +322,21 @@ function PickerBody({
         block
         onClick={() => void locate()}
         loading={isLocating}
-        loadingLabel="Finding your location"
+        loadingLabel={tf("ui.locationPicker.locating", "Finding your location")}
       >
         <LocateFixed className="size-4" aria-hidden />
-        Use my current location
+        {tf("ui.locationPicker.useCurrentLocation", "Use my current location")}
       </Button>
       {deviceFailure ? (
         <p role="alert" className="text-sm font-medium text-danger-text">
-          {DEVICE_FAILURE_MESSAGE[deviceFailure]}
+          {tf(DEVICE_FAILURE_KEY[deviceFailure], DEVICE_FAILURE_DEFAULT[deviceFailure])}
         </p>
       ) : null}
 
       <PinPreview pin={pin} lookup={lookup} hasMap={hasMap} />
 
       <Button type="button" block onClick={confirm} disabled={!canConfirm}>
-        {confirmLabel}
+        {resolvedConfirmLabel}
       </Button>
     </div>
   );
@@ -341,24 +351,34 @@ function PinPreview({
   lookup: Lookup;
   hasMap: boolean;
 }) {
+  const tf = useTOrDefault();
   return (
     <div aria-live="polite" className="min-h-[2.75rem] text-sm">
       {pin === null ? (
         <p className="text-text-secondary">
           {hasMap
-            ? "Search for the area or drag the map to put the pin on the door."
-            : "Tap Use my current location to place the pin."}
+            ? tf(
+                "ui.locationPicker.instructions.withMap",
+                "Search for the area or drag the map to put the pin on the door.",
+              )
+            : tf(
+                "ui.locationPicker.instructions.noMap",
+                "Tap Use my current location to place the pin.",
+              )}
         </p>
       ) : lookup.status === "loading" ? (
         <p className="flex items-center gap-2 text-text-secondary">
           <Spinner />
-          Finding the address…
+          {tf("ui.locationPicker.findingAddress", "Finding the address…")}
         </p>
       ) : lookup.status === "done" ? (
         <p className="font-semibold text-text">{lookup.result.formatted_address}</p>
       ) : lookup.status === "failed" ? (
         <p className="text-warning-text">
-          We could not name this spot. You can still use the pin and type the address next.
+          {tf(
+            "ui.locationPicker.lookupFailed",
+            "We could not name this spot. You can still use the pin and type the address next.",
+          )}
         </p>
       ) : null}
     </div>
@@ -384,6 +404,7 @@ function MapCanvas({
 }) {
   const map = useMap();
   const status = useApiLoadingStatus();
+  const tf = useTOrDefault();
 
   useEffect(() => {
     if (map === null || target === null) return;
@@ -394,7 +415,7 @@ function MapCanvas({
   if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) {
     return (
       <p className="rounded-control border border-line bg-surface-sunken px-3 py-2.5 text-sm text-text-secondary">
-        The map could not load. Use your current location instead.
+        {tf("ui.locationPicker.mapLoadFailed", "The map could not load. Use your current location instead.")}
       </p>
     );
   }
@@ -449,12 +470,14 @@ interface Suggestion {
 function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
   const places = useMapsLibrary("places");
   const map = useMap();
+  const tf = useTOrDefault();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const token = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   /** Set when the input text is a picked result, so it does not search again. */
   const picked = useRef(false);
+  const searchFailed = () => tf("ui.locationPicker.search.failed", SEARCH_FAILED_DEFAULT);
 
   useEffect(() => {
     if (places === null) return;
@@ -492,13 +515,14 @@ function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
           );
         })
         .catch(() => {
-          if (!cancelled) setError(SEARCH_FAILED);
+          if (!cancelled) setError(searchFailed());
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, places, query]);
 
   async function pick(suggestion: Suggestion) {
@@ -513,7 +537,7 @@ function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
       setError(null);
       onPick({ lat: location.lat(), lng: location.lng() });
     } catch {
-      setError(SEARCH_FAILED);
+      setError(searchFailed());
     } finally {
       // The pick closes the billing session; the next search starts a new one.
       token.current = null;
@@ -523,7 +547,7 @@ function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
   return (
     <div className="relative">
       <label className="sr-only" htmlFor="location-search">
-        Search for the area, street or building
+        {tf("ui.locationPicker.search.label", "Search for the area, street or building")}
       </label>
       <div className="relative">
         <Search
@@ -534,7 +558,7 @@ function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
           id="location-search"
           type="search"
           autoComplete="off"
-          placeholder="Search area, street, society…"
+          placeholder={tf("ui.locationPicker.search.placeholder", "Search area, street, society…")}
           className="pl-9"
           value={query}
           onChange={(event) => {
@@ -550,7 +574,7 @@ function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
       </div>
       {suggestions.length > 0 ? (
         <ul
-          aria-label="Search results"
+          aria-label={tf("ui.locationPicker.search.results", "Search results")}
           className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-control border border-line bg-surface py-1 shadow-md"
         >
           {suggestions.map((suggestion) => (
@@ -578,4 +602,4 @@ function PlaceSearch({ onPick }: { onPick: (point: LatLng) => void }) {
   );
 }
 
-const SEARCH_FAILED = "Search is not working right now. Drag the map or use your location.";
+const SEARCH_FAILED_DEFAULT = "Search is not working right now. Drag the map or use your location.";

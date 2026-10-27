@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Card, ErrorState, Spinner } from "@vsolve/ui";
+import { Card, ErrorState, Spinner, useT } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -49,6 +49,7 @@ import { useVisitDay } from "./use-visit-day";
  */
 
 export function ArrivalScreen({ invitationId }: { readonly invitationId: string }) {
+  const t = useT();
   const enquiry = usePartnerEnquiry(invitationId);
   const back = `/work/enquiries/${invitationId}`;
 
@@ -57,7 +58,7 @@ export function ArrivalScreen({ invitationId }: { readonly invitationId: string 
       <Screen>
         <p className="flex items-center justify-center gap-2 py-16 text-text-secondary">
           <Spinner size="sm" />
-          Loading this visit…
+          {t("visit.arrival.loading")}
         </p>
       </Screen>
     );
@@ -69,14 +70,18 @@ export function ArrivalScreen({ invitationId }: { readonly invitationId: string 
     return (
       <Screen>
         <ErrorState
-          title={forbidden ? "This visit is not yours" : (presentation?.title ?? "We could not load this visit")}
+          title={
+            forbidden
+              ? t("visit.arrival.forbidden.title")
+              : (presentation?.title ?? t("visit.arrival.loadError.title"))
+          }
           message={
             forbidden
-              ? "Vsolve has no visit with this reference on your account."
-              : (presentation?.message ?? "Check your connection and try again.")
+              ? t("visit.arrival.forbidden.message")
+              : (presentation?.message ?? t("visit.arrival.loadError.message"))
           }
           severity={presentation?.severity}
-          actionLabel={forbidden ? undefined : "Try again"}
+          actionLabel={forbidden ? undefined : t("common.tryAgain")}
           onAction={forbidden ? undefined : () => void enquiry.refetch()}
           reference={presentation?.reference}
         />
@@ -94,6 +99,7 @@ function ArrivalEntry({
   readonly back: string;
   readonly detail: EnquiryDetail;
 }) {
+  const t = useT();
   const router = useRouter();
   const enquiry = readEnquiryRecord(detail);
   const controls = useVisitDay(enquiry);
@@ -103,13 +109,13 @@ function ArrivalEntry({
       <Screen>
         <ErrorState
           severity="info"
-          title="This visit is not waiting on an arrival code"
+          title={t("visit.arrival.notWaiting.title")}
           message={
             controls === null
-              ? "There is no booked visit on this enquiry."
-              : "It has either already started, or it is not one Vsolve can start yet."
+              ? t("visit.arrival.notWaiting.noVisit")
+              : t("visit.arrival.notWaiting.notStartable")
           }
-          actionLabel="Back to the enquiry"
+          actionLabel={t("visit.arrival.backToEnquiry")}
           onAction={() => router.replace(back)}
         />
       </Screen>
@@ -120,11 +126,13 @@ function ArrivalEntry({
     <Screen>
       <Card className="flex flex-col gap-5 p-5">
         <h1 className="text-xl font-extrabold tracking-[-0.02em] text-text">
-          Ask {enquiry.customerName ?? "the customer"} for their arrival code
+          {enquiry.customerName
+            ? t("visit.arrival.askNamed", { name: enquiry.customerName })
+            : t("visit.arrival.askCustomer")}
         </h1>
 
         <ArrivalCodeEntry
-          description="They can read it from their Vsolve app. Entering it starts the visit."
+          description={t("visit.arrival.codeDescription")}
           onSubmit={(code) =>
             controls.arrival.mutate(
               { siteVisitId: controls.visit.id, code },
@@ -146,7 +154,7 @@ function ArrivalEntry({
         onClick={() => router.push(back)}
         className="mx-auto inline-flex min-h-11 items-center rounded-control px-3 text-sm font-semibold text-text-secondary underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
-        Not there yet
+        {t("visit.arrival.notThereYet")}
       </button>
     </Screen>
   );

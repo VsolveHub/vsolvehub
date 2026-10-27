@@ -1,3 +1,4 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { CrewOffer } from "@/features/crew-offer/queries";
@@ -5,8 +6,12 @@ import type { EnquirySummary } from "@/features/enquiry/queries";
 import type { Engagement, EngagementStage } from "@/features/engagement/queries";
 import type { Offer } from "@/features/offers/queries";
 import type { PartnerVisit } from "@/features/work/queries";
+import { catalogs } from "@/i18n/catalogs";
 
-import { toWorkItems } from "./work-item";
+import { toWorkItems as toWorkItemsWith } from "./work-item";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
+const toWorkItems = (sources: Parameters<typeof toWorkItemsWith>[0]) => toWorkItemsWith(sources, t);
 
 /**
  * The merged WORK stack.

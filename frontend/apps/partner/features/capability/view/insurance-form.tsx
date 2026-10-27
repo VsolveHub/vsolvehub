@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Field, Input, Readout, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Field, Input, Readout, formatMoney, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import type { InsuranceField, InsuranceProblem, InsuranceView } from "../adapters/insurance";
@@ -78,13 +78,13 @@ export function InsuranceForm({
   const [coversWc, setCoversWc] = useState(current?.coversWorkmenCompensation ?? false);
   const [validFrom, setValidFrom] = useState(current?.validFrom ?? "");
   const [validTo, setValidTo] = useState(current?.validTo ?? "");
+  const t = useT();
 
   return (
     <Card className="p-5">
-      <h2 className="text-base font-semibold text-text">Worker insurance</h2>
+      <h2 className="text-base font-semibold text-text">{t("apply.steps.insurance")}</h2>
       <p className="mt-1 text-sm leading-6 text-text-secondary">
-        You are sending people onto someone else&rsquo;s site. This is who covers them if
-        something goes wrong there.
+        {t("apply.capability.insuranceForm.intro")}
       </p>
 
       {current ? <CurrentDeclaration view={current} /> : null}
@@ -104,7 +104,7 @@ export function InsuranceForm({
         }}
       >
         <Field
-          label="Insurer"
+          label={t("me.capability.insuranceForm.insurerLabel")}
           error={messageFor("insurer_name", problems, serverProblems)}
           required
         >
@@ -116,8 +116,8 @@ export function InsuranceForm({
         </Field>
 
         <Field
-          label="Policy number"
-          description="Exactly as it appears on the document."
+          label={t("me.capability.insuranceForm.policyNumberLabel")}
+          description={t("me.capability.insuranceForm.policyNumberDescription")}
           error={messageFor("policy_reference", problems, serverProblems)}
           required
         >
@@ -128,7 +128,7 @@ export function InsuranceForm({
         </Field>
 
         <Field
-          label="Amount covered (₹)"
+          label={t("me.capability.insuranceForm.amountCoveredLabel")}
           error={messageFor("coverage_paise", problems, serverProblems)}
           required
         >
@@ -143,7 +143,7 @@ export function InsuranceForm({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Cover starts"
+            label={t("me.capability.insuranceForm.coverStartsLabel")}
             error={messageFor("valid_from", problems, serverProblems)}
             required
           >
@@ -155,7 +155,7 @@ export function InsuranceForm({
           </Field>
 
           <Field
-            label="Cover ends"
+            label={t("me.capability.insuranceForm.coverEndsLabel")}
             error={messageFor("valid_to", problems, serverProblems)}
             required
           >
@@ -175,9 +175,9 @@ export function InsuranceForm({
             className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-action)]"
           />
           <span>
-            This policy includes workmen&rsquo;s compensation.
+            {t("apply.capability.insuranceForm.wcLabel")}
             <span className="mt-0.5 block text-xs leading-5 text-text-muted">
-              Some construction and industrial work cannot be approved without it.
+              {t("me.capability.insuranceForm.wcHelp")}
             </span>
           </span>
         </label>
@@ -185,19 +185,18 @@ export function InsuranceForm({
         {submitError ? (
           <ErrorState
             inline
-            title="We could not save this"
+            title={t("apply.editor.saveFailed.title")}
             message={submitError}
             severity="error"
           />
         ) : null}
 
-        <Button type="submit" loading={pending} loadingLabel="Saving">
-          {current ? "Update declaration" : "Save declaration"}
+        <Button type="submit" loading={pending} loadingLabel={t("common.saving")}>
+          {current ? t("me.capability.insuranceForm.updateButton") : t("me.capability.insuranceForm.saveButton")}
         </Button>
 
         <p className="text-xs leading-5 text-text-muted">
-          We check this before approving workforce capabilities. Saying you are covered when you
-          are not is grounds for suspension.
+          {t("me.capability.insuranceForm.footerNote")}
         </p>
       </form>
     </Card>
@@ -205,33 +204,36 @@ export function InsuranceForm({
 }
 
 function CurrentDeclaration({ view }: { view: InsuranceView }) {
+  const t = useT();
   return (
     <div className="mt-4 rounded-card bg-surface-sunken p-4">
       <div className="flex flex-wrap items-center gap-2">
         {/* Never a tick until Operations has checked it. */}
         <Badge tone={view.isVerified ? "success" : "neutral"}>
-          {view.isVerified ? "Checked" : "Not checked yet"}
+          {view.isVerified ? t("me.capability.insuranceForm.checkedBadge") : t("me.capability.insuranceForm.notCheckedBadge")}
         </Badge>
-        {view.isExpired ? <Badge tone="danger">Expired</Badge> : null}
-        {!view.isExpired && view.expiresSoon ? <Badge tone="warning">Ending soon</Badge> : null}
+        {view.isExpired ? <Badge tone="danger">{t("me.capability.insuranceForm.expiredBadge")}</Badge> : null}
+        {!view.isExpired && view.expiresSoon ? <Badge tone="warning">{t("me.capability.insuranceForm.endingSoonBadge")}</Badge> : null}
       </div>
 
       <Readout
         className="mt-3"
         size="sm"
-        label="Cover"
+        label={t("me.capability.insuranceForm.coverLabel")}
         value={formatMoney(view.coveragePaise)}
-        caption={`${view.insurerName} · ends ${view.validTo}`}
+        caption={t("me.capability.insuranceForm.coverCaption", { insurer: view.insurerName, validTo: view.validTo })}
       />
 
       {view.isExpired ? (
         <p className="mt-3 text-sm leading-6 text-danger-text">
-          This cover has ended. Workforce enquiries stop reaching you until it is renewed.
+          {t("me.capability.insuranceForm.expiredNote")}
         </p>
       ) : view.expiresSoon && view.daysUntilExpiry !== null ? (
         <p className="mt-3 text-sm leading-6 text-text-secondary">
-          Ends in {view.daysUntilExpiry} {view.daysUntilExpiry === 1 ? "day" : "days"}. Renew it
-          before then so your work is not interrupted.
+          {t("me.capability.insuranceForm.endingSoonTemplate", {
+            count: view.daysUntilExpiry,
+            days: view.daysUntilExpiry,
+          })}
         </p>
       ) : null}
     </div>

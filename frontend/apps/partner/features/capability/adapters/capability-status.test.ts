@@ -1,3 +1,4 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { CapabilityRecord, CapabilityStatus } from "./wire";
@@ -7,6 +8,9 @@ import {
   isExpired,
   mostUrgentCapability,
 } from "./capability-status";
+import { catalogs } from "@/i18n/catalogs";
+
+const t = createTranslator("en-IN", catalogs["en-IN"]).t;
 
 /**
  * Review states, and the exact next permitted action for each.
@@ -70,6 +74,7 @@ describe("every state has a next step", () => {
           suspension_reason_code: status === "SUSPENDED" ? "document_expired" : "",
         }),
         NOW,
+        t,
       );
 
       expect(presentation.headline.length, `${status} has no headline`).toBeGreaterThan(0);
@@ -81,7 +86,7 @@ describe("every state has a next step", () => {
     // The state onboarding loses people in: "under review" with no indication
     // whether that is normal.
     for (const status of ["REQUESTED", "UNDER_REVIEW"] as const) {
-      const presentation = describeCapability(record({ status }), NOW);
+      const presentation = describeCapability(record({ status }), NOW, t);
       expect(presentation.isWaiting).toBe(true);
       expect(presentation.action.kind).toBe("WAIT");
     }
@@ -96,6 +101,7 @@ describe("correction and resubmit", () => {
     const presentation = describeCapability(
       record({ status: "CHANGES_REQUIRED", review_notes: note }),
       NOW,
+      t,
     );
 
     expect(presentation.detail).toBe(note);
@@ -108,6 +114,7 @@ describe("correction and resubmit", () => {
     const presentation = describeCapability(
       record({ status: "CHANGES_REQUIRED", review_notes: "  " }),
       NOW,
+      t,
     );
 
     expect(presentation.detail).toContain("did not say what");
@@ -122,6 +129,7 @@ describe("suspension", () => {
     const presentation = describeCapability(
       record({ status: "SUSPENDED", suspension_reason_code: "insurance_lapsed" }),
       NOW,
+      t,
     );
 
     expect(presentation.tone).toBe("danger");
@@ -134,6 +142,7 @@ describe("suspension", () => {
     const presentation = describeCapability(
       record({ status: "SUSPENDED", suspension_reason_code: "x" }),
       NOW,
+      t,
     );
     expect(presentation.detail).toContain("already committed");
   });
@@ -145,14 +154,14 @@ describe("expiry", () => {
     const expired = record({ status: "APPROVED", expires_at: "2026-08-10T09:00:00Z" });
 
     expect(isExpired(expired, NOW)).toBe(true);
-    expect(describeCapability(expired, NOW).isActive).toBe(false);
-    expect(describeCapability(expired, NOW).label).toBe("Expired");
+    expect(describeCapability(expired, NOW, t).isActive).toBe(false);
+    expect(describeCapability(expired, NOW, t).label).toBe("Expired");
   });
 
   it("leaves a future expiry alone", () => {
     const live = record({ status: "APPROVED", expires_at: "2026-09-01T09:00:00Z" });
     expect(isExpired(live, NOW)).toBe(false);
-    expect(describeCapability(live, NOW).isActive).toBe(true);
+    expect(describeCapability(live, NOW, t).isActive).toBe(true);
   });
 
   it("measures against the server clock, not the device", () => {

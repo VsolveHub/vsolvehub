@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Card, EmptyState, buttonStyles, cn } from "@vsolve/ui";
+import { Badge, Card, EmptyState, buttonStyles, cn, useT } from "@vsolve/ui";
 import Link from "next/link";
 
 import { AsyncSection, type AsyncState } from "@/components/async-section";
@@ -63,17 +63,18 @@ export function CapabilityStatusList({
   onRetry,
   className,
 }: CapabilityStatusListProps) {
+  const t = useT();
   return (
     <AsyncSection
       state={state}
-      label="Loading what you are approved for"
+      label={t("me.capability.statusList.loading")}
       onRetry={onRetry}
       className={className}
       isEmpty={(rows) => rows.length === 0}
       empty={
         <EmptyState
-          title="You have not asked for any specialist work yet"
-          description="Workforce and project work need approval before they switch on. Everything else on your account works as it does today."
+          title={t("me.capability.statusList.emptyTitle")}
+          description={t("me.capability.statusList.emptyDescription")}
         />
       }
     >
@@ -130,6 +131,7 @@ function CapabilityStatusCard({ row }: { row: CapabilityStatusRow }) {
  * as a decision when it is the opposite.
  */
 function DecidedAt({ presentation }: { presentation: CapabilityPresentation }) {
+  const t = useT();
   if (presentation.decidedAt === null || presentation.isWaiting) return null;
 
   const parsed = Date.parse(presentation.decidedAt);
@@ -137,14 +139,16 @@ function DecidedAt({ presentation }: { presentation: CapabilityPresentation }) {
 
   return (
     <p className="mt-2 text-xs text-text-muted">
-      Decided{" "}
+      {t("me.capability.statusList.decidedLabel")}{" "}
       <time dateTime={presentation.decidedAt}>
         {new Intl.DateTimeFormat("en-IN", {
           dateStyle: "medium",
           timeZone: "Asia/Kolkata",
         }).format(parsed)}
       </time>
-      {presentation.decisionReasonCode ? ` · reference ${presentation.decisionReasonCode}` : null}
+      {presentation.decisionReasonCode
+        ? t("me.capability.statusList.referenceSuffix", { code: presentation.decisionReasonCode })
+        : null}
     </p>
   );
 }
@@ -157,6 +161,7 @@ function CapabilityActionControl({
   /** A second route is offered quieter than the first, never as an equal. */
   variant?: "primary" | "secondary";
 }) {
+  const t = useT();
   const action = presentation.action;
   const chrome =
     variant === "primary"
@@ -173,7 +178,7 @@ function CapabilityActionControl({
       // how they conclude the screen is unfinished.
       return (
         <p className="mt-3 text-sm text-text-muted">
-          Nothing to do right now. We will message you when this moves.
+          {t("me.capability.action.waitMessage")}
         </p>
       );
 

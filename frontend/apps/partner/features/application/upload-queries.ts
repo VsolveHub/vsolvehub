@@ -2,6 +2,7 @@
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { queryKeys } from "@vsolve/query";
+import { useT } from "@vsolve/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -62,6 +63,7 @@ function putBytes(
   file: File,
   contentType: string,
   onProgress: (percent: number) => void,
+  t: ReturnType<typeof useT>,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -84,36 +86,34 @@ function putBytes(
       reject(
         new UploadFailure(
           xhr.status === 403 || xhr.status === 401 ? "expired" : "network",
-          `Storage refused the upload (${xhr.status}).`,
+          t("apply.upload.error.storageRefused", { status: xhr.status }),
         ),
       );
     };
 
     xhr.onerror = () =>
-      reject(new UploadFailure("network", "The upload could not reach storage."));
-    xhr.onabort = () => reject(new UploadFailure("network", "The upload was cancelled."));
+      reject(new UploadFailure("network", t("apply.upload.error.unreachable")));
+    xhr.onabort = () => reject(new UploadFailure("network", t("apply.upload.error.cancelled")));
 
     xhr.send(file);
   });
 }
 
-function finalizeFailure(error: unknown): UploadFailure {
+function finalizeFailure(error: unknown, t: ReturnType<typeof useT>): UploadFailure {
   if (error instanceof ApiRequestError) {
     if (error.status === 409) {
-      return new UploadFailure(
-        "conflict",
-        "Your application changed while this was uploading.",
-      );
+      return new UploadFailure("conflict", t("apply.upload.error.conflict"));
     }
     // Django verified the stored object and did not accept it: wrong checksum,
     // wrong size, wrong type. Resending the same bytes cannot fix that.
-    return new UploadFailure("rejected", "We could not accept that file.");
+    return new UploadFailure("rejected", t("apply.upload.error.rejected"));
   }
-  return new UploadFailure("unknown", "The upload did not complete.");
+  return new UploadFailure("unknown", t("apply.upload.error.unknown"));
 }
 
 export function useUploadDocument() {
   const queryClient = useQueryClient();
+  const t = useT();
 
   return useMutation({
     mutationFn: async (input: UploadInput) => {
@@ -134,18 +134,19 @@ export function useUploadDocument() {
           },
         }),
       ).catch((error: unknown) => {
-        throw finalizeFailure(error);
+        throw finalizeFailure(error, t);
       });
 
       // A deadline that has already passed means the clock or the round trip is
       // badly off; sending bytes at it would waste the whole transfer.
       if (isUploadExpired(upload.expires_at)) {
-        throw new UploadFailure("expired", "That upload link expired before it was used.");
+        throw new UploadFailure("expired", t("apply.upload.error.expired"));
       }
 
       report({ phase: "uploading", percent: 0 });
       await putBytes(upload.upload_url, input.file, input.file.type, (percent) =>
         report({ phase: "uploading", percent }),
+        t,
       );
 
       report({ phase: "finalizing", percent: 100 });
@@ -154,7 +155,7 @@ export function useUploadDocument() {
           body: { expected_version: input.expectedVersion, upload_id: upload.id },
         }),
       ).catch((error: unknown) => {
-        throw finalizeFailure(error);
+        throw finalizeFailure(error, t);
       });
 
       report({ phase: "done", percent: 100 });

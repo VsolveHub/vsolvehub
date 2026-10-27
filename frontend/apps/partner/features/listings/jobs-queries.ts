@@ -83,10 +83,11 @@ export function inviteToApply(listingId: string, profileId: string) {
 
 export type InterviewMode = "IN_PERSON" | "PHONE" | "VIDEO";
 
+/** `label` is a catalogue key — resolve with `t` at render time. */
 export const INTERVIEW_MODES: ReadonlyArray<{ value: InterviewMode; label: string }> = [
-  { value: "IN_PERSON", label: "In person" },
-  { value: "PHONE", label: "Phone call" },
-  { value: "VIDEO", label: "Video call" },
+  { value: "IN_PERSON", label: "listings.interview.mode.inPerson" },
+  { value: "PHONE", label: "listings.interview.mode.phone" },
+  { value: "VIDEO", label: "listings.interview.mode.video" },
 ];
 
 export function proposeInterview(
@@ -101,7 +102,11 @@ export function proposeInterview(
   );
 }
 
-/** Hiring steps in the words both sides read. */
+/**
+ * Hiring steps in the words both sides read. These English words double as
+ * step identifiers (see `applicant-card.tsx`), which maps them to catalogue
+ * keys at render time.
+ */
 export const HIRING_STEP_LABELS: Record<string, string> = {
   SUBMITTED: "Applied",
   UNDER_REVIEW: "Applied",

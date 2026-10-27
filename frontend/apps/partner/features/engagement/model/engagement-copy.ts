@@ -1,5 +1,6 @@
 import { isMaterialAdvance } from "@vsolve/query";
 import type { Engagement, EngagementStage } from "@vsolve/query";
+import type { useT } from "@vsolve/ui";
 
 /**
  * The words this column uses for the shared spine.
@@ -10,6 +11,10 @@ import type { Engagement, EngagementStage } from "@vsolve/query";
  * state machine is shared, the vocabulary is not, and this file is where the two
  * meet — a single `StageWording` value threaded down from the route rather than
  * a lifecycle inferred from a category anywhere below it.
+ *
+ * `getWorkforceWording`/`getProjectWording` take `t` because the four nouns are
+ * locale text, not fixed English — a call site renders them inside sentences
+ * (`describeEngagementStatus`, `stageTitle`), so they cannot be hard-coded here.
  */
 
 export interface StageWording {
@@ -21,19 +26,23 @@ export interface StageWording {
   readonly parentMany: string;
 }
 
-export const WORKFORCE_WORDING: StageWording = {
-  one: "shift-day",
-  many: "shift-days",
-  parent: "booking",
-  parentMany: "bookings",
-};
+export function getWorkforceWording(t: ReturnType<typeof useT>): StageWording {
+  return {
+    one: t("work.engagementCopy.wording.workforce.one"),
+    many: t("work.engagementCopy.wording.workforce.many"),
+    parent: t("work.engagementCopy.wording.workforce.parent"),
+    parentMany: t("work.engagementCopy.wording.workforce.parentMany"),
+  };
+}
 
-export const PROJECT_WORDING: StageWording = {
-  one: "stage",
-  many: "stages",
-  parent: "project",
-  parentMany: "projects",
-};
+export function getProjectWording(t: ReturnType<typeof useT>): StageWording {
+  return {
+    one: t("work.engagementCopy.wording.project.one"),
+    many: t("work.engagementCopy.wording.project.many"),
+    parent: t("work.engagementCopy.wording.project.parent"),
+    parentMany: t("work.engagementCopy.wording.project.parentMany"),
+  };
+}
 
 export type StatusTone = "action" | "info" | "neutral" | "warning" | "danger" | "success";
 
@@ -54,51 +63,63 @@ export interface StatusCopy {
 export function describeEngagementStatus(
   engagement: Engagement,
   wording: StageWording,
+  t: ReturnType<typeof useT>,
 ): StatusCopy | null {
   switch (engagement.status) {
     case "PENDING_START":
       return {
-        label: "Not started",
+        label: t("work.engagementCopy.status.engagement.pendingStart.label"),
         tone: "info",
-        sentence: `This ${wording.parent} is agreed. Nothing has begun yet.`,
+        sentence: t("work.engagementCopy.status.engagement.pendingStart.sentence", {
+          parent: wording.parent,
+        }),
       };
     case "ACTIVE":
       return {
-        label: "Active",
+        label: t("work.engagementCopy.status.engagement.active.label"),
         tone: "action",
-        sentence: `Work is under way on this ${wording.parent}.`,
+        sentence: t("work.engagementCopy.status.engagement.active.sentence", { parent: wording.parent }),
       };
     case "COMPLETING":
       return {
-        label: "Awaiting sign-off",
+        label: t("work.engagementCopy.status.engagement.completing.label"),
         tone: "info",
-        sentence: `Every ${wording.one} is settled. The customer confirms the ${wording.parent} is done.`,
+        sentence: t("work.engagementCopy.status.engagement.completing.sentence", {
+          one: wording.one,
+          parent: wording.parent,
+        }),
       };
     case "COMPLETED":
       return {
-        label: "Completed",
+        label: t("work.engagementCopy.status.engagement.completed.label"),
         tone: "success",
-        sentence: "The customer has accepted the finished work.",
+        sentence: t("work.engagementCopy.status.engagement.completed.sentence"),
       };
     case "WARRANTY":
       return {
-        label: "In warranty",
+        label: t("work.engagementCopy.status.engagement.warranty.label"),
         tone: "info",
-        sentence: "Finished, and inside the warranty period.",
+        sentence: t("work.engagementCopy.status.engagement.warranty.sentence"),
       };
     case "CLOSED":
-      return { label: "Closed", tone: "neutral", sentence: "Nothing further is expected." };
+      return {
+        label: t("work.engagementCopy.status.engagement.closed.label"),
+        tone: "neutral",
+        sentence: t("work.engagementCopy.status.engagement.closed.sentence"),
+      };
     case "DISPUTED":
       return {
-        label: "One dispute open",
+        label: t("work.engagementCopy.status.engagement.disputed.label"),
         tone: "warning",
-        sentence: `One ${wording.one} is being argued about. Everything else carries on, and anything already paid out stays paid.`,
+        sentence: t("work.engagementCopy.status.engagement.disputed.sentence", { one: wording.one }),
       };
     case "CANCELLED":
       return {
-        label: "Cancelled",
+        label: t("work.engagementCopy.status.engagement.cancelled.label"),
         tone: "danger",
-        sentence: `This ${wording.parent} was cancelled.`,
+        sentence: t("work.engagementCopy.status.engagement.cancelled.sentence", {
+          parent: wording.parent,
+        }),
       };
     default:
       return null;
@@ -117,56 +138,67 @@ export function describeEngagementStatus(
 export function describeStageStatus(
   stage: EngagementStage,
   wording: StageWording,
+  t: ReturnType<typeof useT>,
 ): StatusCopy | null {
   switch (stage.status) {
     case "PENDING":
-      return { label: "Not started", tone: "neutral", sentence: "Nothing has begun here yet." };
+      return {
+        label: t("work.engagementCopy.status.stage.pending.label"),
+        tone: "neutral",
+        sentence: t("work.engagementCopy.status.stage.pending.sentence"),
+      };
     case "IN_PROGRESS":
       return {
-        label: "In progress",
+        label: t("work.engagementCopy.status.stage.inProgress.label"),
         tone: "action",
-        sentence: "Yours to work on. Attach what you did, then send it for review.",
+        sentence: t("work.engagementCopy.status.stage.inProgress.sentence"),
       };
     case "AWAITING_REVIEW":
       return {
-        label: "With the customer",
+        label: t("work.engagementCopy.status.stage.awaitingReview.label"),
         tone: "info",
-        sentence: "Submitted. The customer is reviewing what you sent.",
+        sentence: t("work.engagementCopy.status.stage.awaitingReview.sentence"),
       };
     case "CORRECTION_REQUESTED":
       return {
-        label: "Sent back",
+        label: t("work.engagementCopy.status.stage.correctionRequested.label"),
         tone: "warning",
-        sentence:
-          "The customer has asked for the agreed work to be done properly. Nothing about the " +
-          "price or the scope has changed, and no money has moved.",
+        sentence: t("work.engagementCopy.status.stage.correctionRequested.sentence"),
       };
     case "DISPUTED":
       return {
-        label: "Disputed",
+        label: t("work.engagementCopy.status.stage.disputed.label"),
         tone: "danger",
-        sentence:
-          `This ${wording.one} is being argued about, and only this one. You can still attach ` +
-          "evidence that answers it.",
+        sentence: t("work.engagementCopy.status.stage.disputed.sentence", { one: wording.one }),
       };
     case "APPROVED":
       return {
-        label: "Approved",
+        label: t("work.engagementCopy.status.stage.approved.label"),
         tone: "success",
-        sentence: "The customer accepted this work.",
+        sentence: t("work.engagementCopy.status.stage.approved.sentence"),
       };
     case "RELEASED":
-      return { label: "Settled", tone: "success", sentence: "Approved, and the hold is over." };
+      return {
+        label: t("work.engagementCopy.status.stage.released.label"),
+        tone: "success",
+        sentence: t("work.engagementCopy.status.stage.released.sentence"),
+      };
     default:
       return null;
   }
 }
 
 /** The stage's own name, degrading to its position when the label is blank. */
-export function stageTitle(stage: EngagementStage, wording: StageWording): string {
+export function stageTitle(
+  stage: EngagementStage,
+  wording: StageWording,
+  t: ReturnType<typeof useT>,
+): string {
   const label = stage.label.trim();
   if (label !== "") return label;
-  if (isMaterialAdvance(stage)) return `Materials ${stage.position}`;
+  if (isMaterialAdvance(stage)) {
+    return t("work.engagementCopy.materialsPosition", { position: stage.position });
+  }
   const noun = wording.one.charAt(0).toUpperCase() + wording.one.slice(1);
   return `${noun} ${stage.position}`;
 }
@@ -201,7 +233,6 @@ export { isMaterialAdvance };
  * describe them ("this is never refunded") is broader than the rule actually
  * published.
  */
-export const MATERIAL_ADVANCE_NOTE =
-  "This is the materials money from your estimate, not a piece of work. The customer funds it " +
-  "as an advance so you can buy what the job needs, and Vsolve keeps it separate from the work " +
-  "you are paid for.";
+export function materialAdvanceNote(t: ReturnType<typeof useT>): string {
+  return t("work.engagementCopy.materialAdvanceNote");
+}

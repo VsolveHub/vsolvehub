@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, formatMoney } from "@vsolve/ui";
+import { Card, formatMoney, useT } from "@vsolve/ui";
 import {
   orderedStages,
   payoutSummary,
@@ -52,6 +52,7 @@ export interface PayoutPanelProps {
 }
 
 export function PayoutPanel({ engagement, wording }: PayoutPanelProps) {
+  const t = useT();
   const totals = payoutSummary(engagement);
   const leadOnly = engagement.commercial_mode === "LEAD_ONLY";
 
@@ -60,10 +61,7 @@ export function PayoutPanel({ engagement, wording }: PayoutPanelProps) {
       <Card className="flex flex-col gap-2 p-4">
         <Header />
         <p className="text-sm leading-6 text-text-secondary">
-          The customer pays you directly for this {wording.parent}. Vsolve does not hold or
-          release any of this money, so there is no payout to track here and no hold to wait out.
-          Signing off a {wording.one} records that the work was accepted; it does not move money
-          through Vsolve, because none was collected.
+          {t("work.payoutPanel.leadOnly", { parent: wording.parent, one: wording.one })}
         </p>
       </Card>
     );
@@ -74,16 +72,15 @@ export function PayoutPanel({ engagement, wording }: PayoutPanelProps) {
       <Header />
 
       <dl className="grid grid-cols-3 gap-3 text-sm">
-        <Figure label="Earned" value={formatMoney(totals.earnedPaise)} />
-        <Figure label="Still held" value={formatMoney(totals.heldPaise)} />
-        <Figure label="Released" value={formatMoney(totals.releasedPaise)} />
+        <Figure label={t("work.payoutPanel.figure.earned")} value={formatMoney(totals.earnedPaise)} />
+        <Figure label={t("work.payoutPanel.figure.stillHeld")} value={formatMoney(totals.heldPaise)} />
+        <Figure label={t("work.payoutPanel.figure.released")} value={formatMoney(totals.releasedPaise)} />
       </dl>
       <p className="text-xs leading-5 text-text-muted">
-        &ldquo;Earned&rdquo; and &ldquo;released&rdquo; are Vsolve&rsquo;s own running totals for
-        this {wording.parent}. &ldquo;Still held&rdquo; is the difference between them.
+        {t("work.payoutPanel.figuresExplanation", { parent: wording.parent })}
         {totals.refundedPaise === 0
           ? ""
-          : ` ${formatMoney(totals.refundedPaise)} has been refunded to the customer.`}
+          : ` ${t("work.payoutPanel.refunded", { amount: formatMoney(totals.refundedPaise) })}`}
       </p>
 
       <PayoutAccountNotice />
@@ -93,19 +90,19 @@ export function PayoutPanel({ engagement, wording }: PayoutPanelProps) {
           id="payout-stages"
           className="text-xs font-semibold uppercase tracking-wide text-text-muted"
         >
-          By {wording.one}
+          {t("work.payoutPanel.byStage", { one: wording.one })}
         </h3>
         <ul className="flex flex-col divide-y divide-line">
           {orderedStages(engagement).map((stage) => (
             <li key={stage.id} className="flex flex-col gap-0.5 py-2">
               <span className="flex items-baseline justify-between gap-3">
-                <span className="truncate text-sm text-text">{stageTitle(stage, wording)}</span>
+                <span className="truncate text-sm text-text">{stageTitle(stage, wording, t)}</span>
                 <span className="shrink-0 text-sm tabular-nums text-text">
                   {formatMoney(stage.amount_paise)}
                 </span>
               </span>
               <span className="text-xs leading-5 text-text-secondary">
-                {describePayout(engagement, stage, wording)}
+                {describePayout(engagement, stage, wording, t)}
               </span>
             </li>
           ))}
@@ -113,24 +110,25 @@ export function PayoutPanel({ engagement, wording }: PayoutPanelProps) {
       </section>
 
       <p className="text-sm leading-6 text-text-secondary">
-        Earnings from {wording.parentMany} appear on your statement beside your other work.{" "}
+        {t("work.payoutPanel.statementNote", { parentMany: wording.parentMany })}{" "}
         <Link
           href="/money"
           className="font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
-          Open Money
+          {t("work.payoutPanel.openMoney")}
         </Link>{" "}
-        to see what has been paid.
+        {t("work.payoutPanel.statementNoteSuffix")}
       </p>
     </Card>
   );
 }
 
 function Header() {
+  const t = useT();
   return (
     <header className="flex items-start gap-2">
       <Banknote size={16} aria-hidden className="mt-0.5 shrink-0 text-text-muted" />
-      <h2 className="text-base font-semibold text-text">Your money</h2>
+      <h2 className="text-base font-semibold text-text">{t("work.payoutPanel.heading")}</h2>
     </header>
   );
 }
@@ -156,25 +154,25 @@ function describePayout(
   engagement: Engagement,
   stage: EngagementStage,
   wording: StageWording,
+  t: ReturnType<typeof useT>,
 ): string {
   switch (stagePayoutState(engagement, stage)) {
     case "paid_direct":
-      return "The customer pays you directly.";
+      return t("work.payoutPanel.describe.paidDirect");
     case "not_earned":
-      return `Not earned yet — this ${wording.one} has not been approved.`;
+      return t("work.payoutPanel.describe.notEarned", { one: wording.one });
     case "held_until_date":
       return stage.payout_release_due_at === null
-        ? "Earned and held."
-        : `Earned and held until ${shortDate(stage.payout_release_due_at)}, which is the customer's window to raise a problem.`;
+        ? t("work.payoutPanel.describe.heldNoDateShort")
+        : t("work.payoutPanel.describe.heldUntilDate", {
+            date: shortDate(stage.payout_release_due_at),
+          });
     case "held_no_date":
-      return (
-        "Earned. No release date is set for this — Vsolve has not configured a hold period, so " +
-        "it does not release on a clock and our team moves it. It is recorded as yours either way."
-      );
+      return t("work.payoutPanel.describe.heldNoDate");
     case "released":
       return stage.released_at === null
-        ? "Released."
-        : `Released on ${shortDate(stage.released_at)}.`;
+        ? t("work.payoutPanel.describe.releasedNoDate")
+        : t("work.payoutPanel.describe.releasedOnDate", { date: shortDate(stage.released_at) });
     default:
       return "";
   }
@@ -190,6 +188,7 @@ function describePayout(
  * approval whatever the account says.
  */
 function PayoutAccountNotice() {
+  const t = useT();
   const account = usePartnerPayoutAccount();
 
   if (account.isPending) return null;
@@ -197,13 +196,12 @@ function PayoutAccountNotice() {
   if (account.isError) {
     return (
       <Card className="border-dashed p-3 text-sm leading-6 text-text-secondary">
-        You have not given Vsolve bank details yet. Your earnings below are recorded and are
-        yours; they cannot be paid out until an account is added and verified.{" "}
+        {t("work.payoutPanel.accountNotice.missing")}{" "}
         <Link
           href="/me/profile"
           className="font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
-          Add your bank details
+          {t("work.payoutPanel.accountNotice.addBankDetails")}
         </Link>
       </Card>
     );
@@ -213,9 +211,9 @@ function PayoutAccountNotice() {
 
   return (
     <Card className="border-dashed p-3 text-sm leading-6 text-text-secondary">
-      Your bank account is on file and is not payable yet
-      {account.data.verified_at === null ? " — it has not been verified" : ""}. Earnings below are
-      recorded and are yours; they will be paid once the account clears.
+      {account.data.verified_at === null
+        ? t("work.payoutPanel.accountNotice.notVerified")
+        : t("work.payoutPanel.accountNotice.notPayable")}
     </Card>
   );
 }

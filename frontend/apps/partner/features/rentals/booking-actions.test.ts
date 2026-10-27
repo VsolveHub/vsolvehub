@@ -1,4 +1,7 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import {
   bookingActionLabel,
@@ -59,12 +62,13 @@ describe("canDisputeDeposit", () => {
 });
 
 describe("bookingActionLabel", () => {
+  const { t } = createTranslator("en-IN", catalogs["en-IN"]);
   it("labels each action for the button", () => {
-    expect(bookingActionLabel("handover")).toBe("Handover");
-    expect(bookingActionLabel("return")).toBe("Return");
-    expect(bookingActionLabel("release-deposit")).toBe("Return deposit");
-    expect(bookingActionLabel("dispute-deposit")).toBe("Raise dispute");
-    expect(bookingActionLabel("cancel")).toBe("Cancel booking");
+    expect(bookingActionLabel("handover", t)).toBe("Handover");
+    expect(bookingActionLabel("return", t)).toBe("Return");
+    expect(bookingActionLabel("release-deposit", t)).toBe("Return deposit");
+    expect(bookingActionLabel("dispute-deposit", t)).toBe("Raise dispute");
+    expect(bookingActionLabel("cancel", t)).toBe("Cancel booking");
   });
 });
 

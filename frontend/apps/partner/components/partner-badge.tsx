@@ -1,6 +1,7 @@
 "use client";
 
 import { useCurrentSession, hasRole } from "@vsolve/query";
+import { useT } from "@vsolve/ui";
 import { getApiClient } from "@/lib/api/browser";
 import { PARTNER_ROLE } from "@/features/session/partner-shell";
 import { usePartnerProfile } from "@/features/profile/queries";
@@ -12,6 +13,7 @@ import { usePartnerProfile } from "@/features/profile/queries";
  * Displays "Partner" for applicants and visitors.
  */
 export function PartnerBadge({ className = "" }: { className?: string }) {
+  const t = useT();
   const session = useCurrentSession(getApiClient());
   // Only someone holding the role can read a profile; asking for anyone else
   // is a guaranteed 403.
@@ -38,7 +40,7 @@ export function PartnerBadge({ className = "" }: { className?: string }) {
     <div
       className={`flex items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 border border-line text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-text-secondary ${className}`}
     >
-      <span>Partner</span>
+      <span>{t("shell.badge.partner")}</span>
     </div>
   );
 }

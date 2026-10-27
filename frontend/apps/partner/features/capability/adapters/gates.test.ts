@@ -1,7 +1,11 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { GateStatus } from "./wire";
 import { blockingGate, describeGate, explainBlock, outstandingGates, parseGates } from "./gates";
+import { catalogs } from "@/i18n/catalogs";
+
+const t = createTranslator("en-IN", catalogs["en-IN"]).t;
 
 /**
  * Progressive gates: browse freely, prove at the moment of the action.
@@ -87,11 +91,11 @@ describe("the explanation", () => {
   it("uses the server's sentence verbatim", () => {
     // 0013 §D1 requires the same string on the refusal. Two wordings for one
     // rule read as two rules.
-    expect(describeGate(KYC)?.reason).toBe(KYC.reason);
+    expect(describeGate(KYC, t)?.reason).toBe(KYC.reason);
   });
 
   it("carries a route and a label the frontend owns", () => {
-    const explanation = describeGate(CREW);
+    const explanation = describeGate(CREW, t);
     expect(explanation?.actionHref).toBe("/me/crew");
     expect(explanation?.actionLabel).toBeTruthy();
   });
@@ -99,16 +103,16 @@ describe("the explanation", () => {
   it("says something usable when the server sent no reason", () => {
     // A contract violation (0013 §D1 criterion 6). An empty paragraph reads as a
     // broken screen the Partner cannot act on.
-    const explanation = describeGate({ ...KYC, reason: "   " });
+    const explanation = describeGate({ ...KYC, reason: "   " }, t);
     expect(explanation?.reason.trim().length).toBeGreaterThan(0);
   });
 
   it("has nothing to say about a satisfied gate", () => {
-    expect(describeGate({ ...KYC, is_satisfied: true })).toBeNull();
+    expect(describeGate({ ...KYC, is_satisfied: true }, t)).toBeNull();
   });
 
   it("returns null from explainBlock when nothing is in the way", () => {
-    expect(explainBlock(ALL, "enquiry.view")).toBeNull();
+    expect(explainBlock(ALL, "enquiry.view", t)).toBeNull();
   });
 });
 
@@ -140,7 +144,7 @@ describe("parsing the payload", () => {
   it("drops an unrecognised next action rather than routing nowhere", () => {
     const [parsed] = parseGates({ gates: [{ ...KYC, next_action: "DO_A_BACKFLIP" }] });
     expect(parsed?.next_action).toBeNull();
-    expect(describeGate(parsed!)?.actionHref).toBeNull();
+    expect(describeGate(parsed!, t)?.actionHref).toBeNull();
   });
 
   it("survives a garbled payload without throwing", () => {

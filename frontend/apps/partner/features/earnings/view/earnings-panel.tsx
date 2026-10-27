@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Skeleton, Spinner, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Skeleton, Spinner, formatMoney, useT } from "@vsolve/ui";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
@@ -47,18 +47,20 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning"> = 
   RELEASED: "neutral",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "ON HOLD",
-  AVAILABLE: "READY",
-  RESERVED: "ON THE WAY",
-  PAID: "PAID",
-  RELEASED: "RELEASED",
+const STATUS_LABEL_KEY: Record<string, string> = {
+  PENDING: "money.earnings.status.pending",
+  AVAILABLE: "money.earnings.status.available",
+  RESERVED: "money.earnings.status.reserved",
+  PAID: "money.earnings.status.paid",
+  RELEASED: "money.earnings.status.released",
 };
 
 /** Withdrawal fee lines and their refunds read as what they are, not as "for the work". */
-function feeLabel(entry: LedgerEntry): string | null {
-  if (entry.kind === "FEE") return "Extra withdrawal fee";
-  if (entry.reason.startsWith("withdrawal_fee_refund")) return "Withdrawal fee given back";
+function feeLabelKey(entry: LedgerEntry): string | null {
+  if (entry.kind === "FEE") return "money.earnings.entry.withdrawalFee";
+  if (entry.reason.startsWith("withdrawal_fee_refund")) {
+    return "money.earnings.entry.withdrawalFeeRefund";
+  }
   return null;
 }
 
@@ -93,13 +95,14 @@ function BalanceTile({
 }
 
 export function EarningsPanel() {
+  const t = useT();
   const balance = usePartnerBalance();
   const ledger = usePartnerLedger();
   const performance = usePartnerPerformance();
 
   if (balance.isPending) {
     return (
-      <div className="space-y-5" aria-busy="true" aria-label="Loading your earnings">
+      <div className="space-y-5" aria-busy="true" aria-label={t("money.earnings.loading.ariaLabel")}>
         <Skeleton className="h-32 w-full rounded-[var(--radius-card)]" />
         <Skeleton className="h-48 w-full rounded-[var(--radius-card)]" />
         <Skeleton className="h-64 w-full rounded-[var(--radius-card)]" />
@@ -110,9 +113,9 @@ export function EarningsPanel() {
   if (balance.isError || !balance.data) {
     return (
       <ErrorState
-        title="We could not load your earnings"
-        message="Nothing has changed. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("money.earnings.error.title")}
+        message={t("common.nothingChanged")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void balance.refetch()}
       />
     );
@@ -131,10 +134,10 @@ export function EarningsPanel() {
           <Pictogram name="later" size="sm" className="mt-0.5 shrink-0 text-warning-text" />
           <div>
             <p className="text-sm font-semibold text-warning-text">
-              Some of your earnings are on hold
+              {t("money.earnings.onHold.title")}
             </p>
             <p className="mt-0.5 text-sm text-warning-text/80">
-              A customer dispute or a case about a job is holding it until it is decided.
+              {t("money.earnings.onHold.body")}
             </p>
           </div>
         </div>
@@ -143,14 +146,14 @@ export function EarningsPanel() {
       {/* Earnings lead. A direct-paid crew job is real income even though it is
           not money Vsolve can pay a second time. */}
       <Card className="p-5">
-        <p className="text-sm font-semibold text-text-secondary">Total earned this month</p>
+        <p className="text-sm font-semibold text-text-secondary">{t("money.earnings.totalThisMonth.title")}</p>
         {performance.isPending ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
             <Spinner size="sm" />
-            Loading this month…
+            {t("money.earnings.totalThisMonth.loading")}
           </p>
         ) : performance.isError || !performance.data ? (
-          <p className="mt-2 text-sm text-text-secondary">This total is temporarily unavailable.</p>
+          <p className="mt-2 text-sm text-text-secondary">{t("money.earnings.totalThisMonth.unavailable")}</p>
         ) : (
           <>
             <p data-numeric className="mt-1 text-4xl font-bold leading-tight text-text">
@@ -158,8 +161,8 @@ export function EarningsPanel() {
             </p>
             <p className="mt-2 text-sm text-text-secondary">
               {monthDirect > 0
-                ? `${formatMoney(monthDirect)} was paid directly by customers.`
-                : "Includes direct customer payments and work paid through Vsolve."}
+                ? t("money.earnings.totalThisMonth.directNote", { amount: formatMoney(monthDirect) })
+                : t("money.earnings.totalThisMonth.genericNote")}
             </p>
           </>
         )}
@@ -168,9 +171,9 @@ export function EarningsPanel() {
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold text-text-secondary">Vsolve payout balance</h2>
+            <h2 className="text-sm font-semibold text-text-secondary">{t("money.earnings.vsolveBalance.title")}</h2>
             <p className="mt-1 text-xs leading-5 text-text-secondary">
-              Money Vsolve collected and still has to pay you.
+              {t("money.earnings.vsolveBalance.subtitle")}
             </p>
           </div>
           <p data-numeric className="shrink-0 text-2xl font-bold text-text">
@@ -179,22 +182,19 @@ export function EarningsPanel() {
         </div>
         {vsolveOutstanding === 0 && monthDirect > 0 ? (
           <p className="mt-3 rounded-plate bg-info-surface px-3 py-2 text-xs leading-5 text-info-text">
-            Nothing is due from Vsolve because this month’s {formatMoney(monthDirect)} was paid
-            directly by customers.
+            {t("money.earnings.vsolveBalance.nothingDue", { amount: formatMoney(monthDirect) })}
           </p>
         ) : null}
 
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          <BalanceTile label="Ready" amountPaise={data.available_paise} tone="info" icon="money" />
-          <BalanceTile label="Clearing" amountPaise={data.clearing_paise} tone="info" icon="time" />
-          <BalanceTile label="On hold" amountPaise={data.held_paise} tone="warning" icon="held" />
-          <BalanceTile label="On the way" amountPaise={data.reserved_paise} tone="success" icon="go" />
+          <BalanceTile label={t("money.earnings.tile.ready")} amountPaise={data.available_paise} tone="info" icon="money" />
+          <BalanceTile label={t("money.earnings.tile.clearing")} amountPaise={data.clearing_paise} tone="info" icon="time" />
+          <BalanceTile label={t("money.earnings.tile.onHold")} amountPaise={data.held_paise} tone="warning" icon="held" />
+          <BalanceTile label={t("money.earnings.tile.onTheWay")} amountPaise={data.reserved_paise} tone="success" icon="go" />
         </div>
         <p className="mt-3 text-xs leading-5 text-text-secondary">
-          {data.clearing_paise > 0
-            ? "Clearing money becomes ready once the customer’s window to raise a problem has closed. "
-            : ""}
-          Paid to you so far:{" "}
+          {data.clearing_paise > 0 ? `${t("money.earnings.clearingNote")} ` : ""}
+          {t("money.earnings.paidSoFar")}{" "}
           <span data-numeric className="font-semibold text-text">
             {formatMoney(data.paid_paise)}
           </span>
@@ -204,7 +204,7 @@ export function EarningsPanel() {
       <WithdrawCard />
 
       <Card className="p-5">
-        <h2 className="text-base font-bold text-text">How you are doing</h2>
+        <h2 className="text-base font-bold text-text">{t("money.earnings.howYouAreDoing")}</h2>
         <div className="mt-3">
           {/* The series is the server's, not a regrouping of the ledger page this screen
               happens to hold — see `toDailyEarnings`. Its own loading and failure states are
@@ -212,25 +212,25 @@ export function EarningsPanel() {
               a partial source is the failure this replaced. */}
           {performance.isError ? (
             <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm text-text-secondary">
-              We could not load your last 7 days just now. Your balance above is still correct.
+              {t("money.earnings.trend.error")}
             </p>
           ) : performance.isPending ? (
             <p className="flex items-center gap-2 p-4 text-sm text-text-secondary">
               <Spinner size="sm" />
-              Loading your last 7 days…
+              {t("money.earnings.trend.loading")}
             </p>
           ) : (
             <>
               <div className="mb-4 grid grid-cols-2 gap-3">
                 <div className="rounded-plate border border-line bg-surface-sunken p-3">
-                  <p className="text-xs font-semibold text-text-secondary">Earned today</p>
+                  <p className="text-xs font-semibold text-text-secondary">{t("money.earnings.earnedToday")}</p>
                   <p data-numeric className="mt-1 text-xl font-bold text-text">
                     {formatMoney(performance.data?.today_net_paise ?? 0)}
                   </p>
                 </div>
                 <div className="rounded-plate border border-line bg-surface-sunken p-3">
                   <p className="text-xs font-semibold text-text-secondary">
-                    Jobs done this month
+                    {t("money.earnings.jobsDoneThisMonth")}
                   </p>
                   <p data-numeric className="mt-1 text-xl font-bold text-text">
                     {performance.data?.month_jobs ?? 0}
@@ -248,20 +248,19 @@ export function EarningsPanel() {
       {/* Recent Activity */}
       <section aria-labelledby="ledger">
         <h2 id="ledger" className="text-base font-bold text-text">
-          Recent Activity
+          {t("money.earnings.recentActivity")}
         </h2>
 
         {ledger.isPending ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
             <Spinner size="sm" />
-            Loading…
+            {t("money.earnings.loading")}
           </p>
         ) : null}
 
         {!ledger.isPending && entries.length === 0 ? (
           <p className="mt-3 text-sm text-text-secondary">
-            No Vsolve payout activity yet. Direct customer payments are included in the earnings
-            totals above.
+            {t("money.earnings.noActivity")}
           </p>
         ) : null}
 
@@ -270,10 +269,10 @@ export function EarningsPanel() {
             {/* Table header */}
             <div className="flex items-center justify-between bg-surface-sunken px-4 py-2">
               <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
-                Status
+                {t("money.earnings.table.status")}
               </span>
               <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
-                Amount
+                {t("money.earnings.table.amount")}
               </span>
             </div>
 
@@ -286,22 +285,22 @@ export function EarningsPanel() {
                 >
                   <div className="min-w-0">
                     <Badge tone={STATUS_TONE[entry.status] ?? "neutral"}>
-                      {STATUS_LABEL[entry.status] ?? entry.status}
+                      {STATUS_LABEL_KEY[entry.status] ? t(STATUS_LABEL_KEY[entry.status]!) : entry.status}
                     </Badge>
-                    {feeLabel(entry) ? (
-                      <p className="mt-1 text-sm text-text-secondary">{feeLabel(entry)}</p>
+                    {feeLabelKey(entry) ? (
+                      <p className="mt-1 text-sm text-text-secondary">{t(feeLabelKey(entry)!)}</p>
                     ) : (
                       <>
                         <p className="mt-1 text-sm text-text-secondary">
-                          <span data-numeric className="font-medium text-text">
-                            {formatMoney(entry.gross_paise)}
-                          </span>
-                          {" for the work"}
+                          {t("money.earnings.entry.forTheWork", {
+                            amount: formatMoney(entry.gross_paise),
+                          })}
                           {entry.commission_paise > 0 ? (
                             <>
-                              {" less "}
-                              <span data-numeric>{formatMoney(entry.commission_paise)}</span>
-                              {" commission"}
+                              {" "}
+                              {t("money.earnings.entry.lessCommission", {
+                                amount: formatMoney(entry.commission_paise),
+                              })}
                             </>
                           ) : null}
                         </p>
@@ -326,10 +325,10 @@ export function EarningsPanel() {
               variant="outline"
               icon={<Pictogram name="more" size="xs" />}
               loading={ledger.isFetchingNextPage}
-              loadingLabel="Loading"
+              loadingLabel={t("money.earnings.loading")}
               onClick={() => void ledger.fetchNextPage()}
             >
-              Load more
+              {t("money.earnings.loadMore")}
             </Button>
           </div>
         ) : null}

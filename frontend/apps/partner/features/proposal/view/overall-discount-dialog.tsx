@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Button, Dialog, ErrorState, Field, Input, cn, formatMoney } from "@vsolve/ui";
+import { Button, Dialog, ErrorState, Field, Input, cn, formatMoney, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { paiseToRupeeInput, rupeesToPaise } from "../model/proposal-draft";
@@ -35,6 +35,7 @@ function OverallDiscountForm({
   requirementId,
   initialMode = "PERCENT",
 }: OverallDiscountDialogProps) {
+  const t = useT();
   const requestedTarget =
     proposal.total_paise - Math.round((proposal.total_paise * requestedBps) / 10_000);
   const [mode, setMode] = useState<"PERCENT" | "FIXED">(initialMode);
@@ -49,12 +50,15 @@ function OverallDiscountForm({
   const maximumSaving = Math.round((proposal.total_paise * 1_500) / 10_000);
   const percentError =
     mode === "PERCENT" && (bps < 100 || bps > 1_500)
-      ? "Enter a discount from 1% to 15%."
+      ? t("proposal.screens.discount.percentError")
       : undefined;
   const finalError =
     mode === "FIXED" &&
     (parsedFinal === null || parsedFinal <= 0 || fixedSaving <= 0 || fixedSaving > maximumSaving)
-      ? `Enter a final total between ${formatMoney(proposal.total_paise - maximumSaving)} and ${formatMoney(proposal.total_paise - 1)}.`
+      ? t("proposal.screens.discount.finalError", {
+          min: formatMoney(proposal.total_paise - maximumSaving),
+          max: formatMoney(proposal.total_paise - 1),
+        })
       : undefined;
   const body: ProposalDiscountRequest | null =
     mode === "PERCENT" && percentError === undefined
@@ -84,27 +88,27 @@ function OverallDiscountForm({
       onOpenChange={(next) => {
         if (!next && !apply.isPending) onClose();
       }}
-      title="Apply overall discount"
-      description={`Confirm the final amount before estimate revision ${proposal.revision + 1} is sent to the customer.`}
+      title={t("proposal.screens.discount.title")}
+      description={t("proposal.screens.discount.description", { revision: proposal.revision + 1 })}
       dismissable={!apply.isPending}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={apply.isPending}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={submit}
             disabled={body === null || preview.data === undefined || preview.isFetching}
             loading={apply.isPending}
-            loadingLabel="Applying discount"
+            loadingLabel={t("proposal.screens.discount.applying")}
           >
-            Apply and send revised estimate
+            {t("proposal.screens.discount.apply")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4 pb-2">
-        <div aria-label="Discount format" className="grid grid-cols-2 gap-2" role="group">
+        <div aria-label={t("proposal.screens.discount.format")} className="grid grid-cols-2 gap-2" role="group">
           <button
             type="button"
             aria-pressed={mode === "PERCENT"}
@@ -116,7 +120,7 @@ function OverallDiscountForm({
             )}
             onClick={() => setMode("PERCENT")}
           >
-            Percentage
+            {t("proposal.screens.discount.percentage")}
           </button>
           <button
             type="button"
@@ -129,14 +133,14 @@ function OverallDiscountForm({
             )}
             onClick={() => setMode("FIXED")}
           >
-            Final amount
+            {t("proposal.screens.discount.finalAmount")}
           </button>
         </div>
 
         {mode === "PERCENT" ? (
           <Field
-            label="Overall discount"
-            description="The same percentage is allocated across the estimate by the server."
+            label={t("proposal.status.overallDiscount")}
+            description={t("proposal.screens.discount.percentDescription")}
             error={percentError}
             required
           >
@@ -154,8 +158,8 @@ function OverallDiscountForm({
           </Field>
         ) : (
           <Field
-            label="Final customer total"
-            description="Enter the complete amount the customer should pay after the discount."
+            label={t("proposal.status.finalCustomerTotal")}
+            description={t("proposal.screens.discount.finalDescription")}
             error={finalError}
             required
           >
@@ -174,33 +178,35 @@ function OverallDiscountForm({
         )}
 
         <div className="rounded-card border border-line bg-surface-sunken p-4" aria-live="polite">
-          <MoneyRow label="Current estimate" value={formatMoney(proposal.total_paise)} />
+          <MoneyRow label={t("proposal.status.currentEstimate")} value={formatMoney(proposal.total_paise)} />
           <MoneyRow
-            label="Overall discount"
+            label={t("proposal.status.overallDiscount")}
             value={preview.data ? `−${formatMoney(preview.data.discount_paise)}` : "—"}
             tone="success"
           />
           <div aria-hidden className="my-3 border-t border-dashed border-line" />
           <MoneyRow
-            label="New customer total"
+            label={t("proposal.screens.discount.newTotal")}
             value={preview.data ? formatMoney(preview.data.customer_total_paise) : "—"}
             emphasis
           />
           <MoneyRow
-            label="Tax"
-            value={preview.data ? formatMoney(preview.data.tax_paise) : "Recalculating…"}
+            label={t("proposal.status.fact.tax")}
+            value={preview.data ? formatMoney(preview.data.tax_paise) : t("proposal.screens.discount.recalculating")}
           />
           <MoneyRow
-            label="You receive"
+            label={t("proposal.screens.discount.youReceive")}
             value={preview.data ? formatMoney(preview.data.partner_net_paise) : "—"}
             tone="success"
           />
           <p className="mt-3 text-xs leading-5 text-text-muted">
             {preview.data
-              ? `${preview.data.stages.length + preview.data.material_lines.length} payment ${preview.data.stages.length + preview.data.material_lines.length === 1 ? "part" : "parts"} will be recalculated automatically.`
+              ? t("proposal.screens.discount.partsRecalculated", {
+                  count: preview.data.stages.length + preview.data.material_lines.length,
+                })
               : preview.isFetching
-                ? "Recalculating tax, payout and payment parts…"
-                : "Enter a valid discount to see the server-checked total."}
+                ? t("proposal.screens.discount.recalculatingAll")
+                : t("proposal.screens.discount.enterValid")}
           </p>
         </div>
 
@@ -212,8 +218,7 @@ function OverallDiscountForm({
         ) : null}
 
         <p className="text-xs leading-5 text-text-muted">
-          Scope, warranty and line-item rates stay unchanged. The previous estimate remains in
-          history, and only the new discounted revision can be chosen.
+          {t("proposal.screens.discount.footnote")}
         </p>
       </div>
     </Dialog>

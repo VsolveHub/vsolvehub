@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { EarningsPanel } from "@/features/earnings/view/earnings-panel";
+import { MoneyPageHeading } from "@/features/earnings/view/money-page-heading";
 import { PartnerShell } from "@/features/session/partner-shell";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default function MoneyPage() {
   return (
     <PartnerShell requirePartnerRole>
       <main className="mx-auto w-full max-w-2xl px-4 py-6 lg:max-w-5xl lg:px-8 lg:py-10">
-        <h1 className="sr-only">Money</h1>
+        <MoneyPageHeading />
         <EarningsPanel />
       </main>
     </PartnerShell>

@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Card, ErrorState, buttonStyles } from "@vsolve/ui";
+import { Card, ErrorState, buttonStyles, useT } from "@vsolve/ui";
 import Link from "next/link";
 
 import type { EnquiryRecord } from "@/features/enquiry/model/wire";
@@ -54,6 +54,7 @@ export function CommercialEstimateFlow({
   currentProposal,
   onSubmitted,
 }: CommercialEstimateFlowProps) {
+  const t = useT();
   const submit = useSubmitProposal();
 
   const visitIsOpen = visit !== null && visit.status !== "COMPLETED";
@@ -90,13 +91,12 @@ export function CommercialEstimateFlow({
   if (visit === null) {
     return (
       <Card className="flex flex-col gap-3 p-4">
-        <h2 className="text-base font-semibold text-text">No visit on this job yet</h2>
+        <h2 className="text-base font-semibold text-text">{t("proposal.commercialFlow.noVisitTitle")}</h2>
         <p className="text-sm leading-6 text-text-secondary">
-          A project estimate is written after you have been to see the work. Take a visit slot
-          from the enquiry first.
+          {t("proposal.commercialFlow.noVisitBody")}
         </p>
         <Link href={enquiryHref} className={buttonStyles({ variant: "primary" })}>
-          Back to the enquiry
+          {t("proposal.commercialFlow.backToEnquiry")}
         </Link>
       </Card>
     );
@@ -105,8 +105,8 @@ export function CommercialEstimateFlow({
   if (materialMode !== "CUSTOMER_PROCURES" && materialMode !== "PARTNER_TURNKEY") {
     return (
       <ErrorState
-        title="This estimate is not configured yet"
-        message="Vsolve has not published who supplies materials for this service. Your draft is safe; try again after Operations updates the service."
+        title={t("proposal.commercialFlow.notConfiguredTitle")}
+        message={t("proposal.commercialFlow.notConfiguredMessage")}
         severity="warning"
       />
     );
@@ -116,10 +116,10 @@ export function CommercialEstimateFlow({
     visitIsOpen || refusedForVisit ? (
       <ErrorState
         inline
-        title="Close the visit first"
-        message="An estimate is sent after the visit is closed. Close it on the enquiry, then come back — your priced lines are saved."
+        title={t("proposal.commercialFlow.closeVisitTitle")}
+        message={t("proposal.commercialFlow.closeVisitMessage")}
         severity="warning"
-        actionLabel="Go to the enquiry"
+        actionLabel={t("proposal.commercialFlow.goToEnquiry")}
         onAction={() => {
           window.location.href = enquiryHref;
         }}
@@ -130,7 +130,7 @@ export function CommercialEstimateFlow({
         title={presentation.title}
         message={presentation.message}
         severity={presentation.severity}
-        actionLabel="Try again"
+        actionLabel={t("common.tryAgain")}
         onAction={() => submit.reset()}
         reference={presentation.reference}
       />
@@ -141,8 +141,8 @@ export function CommercialEstimateFlow({
         <ErrorState
           inline
           severity="info"
-          title={`Revising estimate revision ${currentProposal.revision}`}
-          message={`Your current estimate is loaded below. Change only what is needed; sending creates revision ${currentProposal.revision + 1} and keeps the earlier version in the history.`}
+          title={t("proposal.commercialFlow.revisingTitle", { revision: currentProposal.revision })}
+          message={t("proposal.commercialFlow.revisingMessage", { next: currentProposal.revision + 1 })}
         />
       ) : null}
       {blockingNotice}

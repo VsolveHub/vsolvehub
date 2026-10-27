@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Input } from "@vsolve/ui";
+import { Button, Input, useT } from "@vsolve/ui";
 import { Copy, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
@@ -10,6 +10,7 @@ import { TimePicker, clockText } from "@/components/time-picker";
 
 import {
   WEEKDAY_NAMES,
+  WEEKDAY_NAME_KEYS,
   clockWindow,
   dayLabel,
   setPartnerVisitingHours,
@@ -18,19 +19,24 @@ import {
 } from "@/features/stays/queries";
 
 type SlotRow = { key: string; weekday: number; start: string; end: string };
+type Translate = ReturnType<typeof useT>;
 
 const hhmm = (value: string) => value.slice(0, 5);
 let nextKey = 0;
 const newKey = () => `slot-${(nextKey += 1)}`;
 
 /** Same-day slots that overlap, as "Saturday 10 AM – 11 AM and 10:30 AM – 11:30 AM". */
-function findOverlap(rows: SlotRow[]): string | null {
+function findOverlap(rows: SlotRow[], t: Translate): string | null {
   const sorted = [...rows].sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start));
   for (let i = 1; i < sorted.length; i += 1) {
     const prev = sorted[i - 1]!;
     const cur = sorted[i]!;
     if (prev.weekday === cur.weekday && cur.start < prev.end) {
-      return `${WEEKDAY_NAMES[cur.weekday]}: ${clockWindow(prev.start, prev.end)} overlaps ${clockWindow(cur.start, cur.end)}.`;
+      return t("stays.visitingHours.overlap", {
+        day: t(WEEKDAY_NAME_KEYS[cur.weekday]!),
+        first: clockWindow(prev.start, prev.end),
+        second: clockWindow(cur.start, cur.end),
+      });
     }
   }
   return null;
@@ -41,6 +47,7 @@ function findOverlap(rows: SlotRow[]): string | null {
  * "Schedule a visit"; several guests may pick the same slot. Slots on the same day can't overlap.
  */
 export function VisitingHours({ property }: { property: StayProperty }) {
+  const t = useT();
   const qc = useQueryClient();
   const [enabled, setEnabled] = useState(property.visits_enabled ?? true);
   const [rows, setRows] = useState<SlotRow[]>(() =>
@@ -115,10 +122,14 @@ export function VisitingHours({ property }: { property: StayProperty }) {
 
   function onSave() {
     const bad = rows.find((row) => !row.start || !row.end || row.end <= row.start);
-    if (bad) return setError(`${WEEKDAY_NAMES[bad.weekday]}: each slot must end after it starts.`);
-    const overlap = findOverlap(rows);
+    if (bad) {
+      return setError(
+        t("stays.visitingHours.endBeforeStart", { day: t(WEEKDAY_NAME_KEYS[bad.weekday]!) }),
+      );
+    }
+    const overlap = findOverlap(rows, t);
     if (overlap) return setError(overlap);
-    if (enabled && rows.length === 0) return setError("Add at least one visiting slot, or turn visits off.");
+    if (enabled && rows.length === 0) return setError(t("stays.visitingHours.needSlot"));
     setError(null);
     save.mutate();
   }
@@ -127,10 +138,9 @@ export function VisitingHours({ property }: { property: StayProperty }) {
     <section className="flex flex-col gap-4 rounded-card border border-line bg-surface-sunken p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-navy-900">Visiting hours</h3>
+          <h3 className="font-bold text-navy-900">{t("stays.visitingHours.heading")}</h3>
           <p className="text-xs text-text-secondary">
-            Guests choose one of these times for &ldquo;Schedule a visit&rdquo;. Several guests can
-            pick the same time; you accept or decline each one.
+            {t("stays.visitingHours.intro")}
           </p>
         </div>
         <button
@@ -146,18 +156,19 @@ export function VisitingHours({ property }: { property: StayProperty }) {
           }`}
         >
           <span aria-hidden className={`size-7 rounded-full ${enabled ? "bg-emerald-500" : "bg-white ring-1 ring-line"}`} />
-          {enabled ? "Visits ON" : "Visits OFF"}
+          {enabled ? t("stays.visitingHours.on") : t("stays.visitingHours.off")}
         </button>
       </div>
 
       <ul className="flex flex-col divide-y divide-line overflow-visible rounded-card border border-line bg-surface">
-        {WEEKDAY_NAMES.map((name, weekday) => {
+        {WEEKDAY_NAMES.map((dayKey, weekday) => {
+          const name = t(WEEKDAY_NAME_KEYS[weekday]!);
           const daySlots = rows
             .filter((row) => row.weekday === weekday)
             .sort((a, b) => a.start.localeCompare(b.start));
           const open = daySlots.length > 0;
           return (
-            <li key={name} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:px-4">
+            <li key={dayKey} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:px-4">
               <label className="flex w-36 shrink-0 cursor-pointer items-center gap-2.5 pt-2">
                 <input
                   type="checkbox"
@@ -169,25 +180,25 @@ export function VisitingHours({ property }: { property: StayProperty }) {
               </label>
 
               <div className="flex flex-1 flex-col gap-2">
-                {!open ? <p className="pt-2.5 text-sm text-text-muted">Unavailable</p> : null}
+                {!open ? <p className="pt-2.5 text-sm text-text-muted">{t("stays.visitingHours.unavailable")}</p> : null}
                 {daySlots.map((row, index) => (
                   <div key={row.key} className="flex flex-wrap items-center gap-2">
                     <TimePicker
-                      label={`${name} start`}
+                      label={t("stays.visitingHours.startLabel", { day: name })}
                       value={row.start}
                       onChange={(value) => change(row.key, { start: value })}
                     />
                     <span aria-hidden className="text-text-muted">–</span>
                     <TimePicker
-                      label={`${name} end`}
+                      label={t("stays.visitingHours.endLabel", { day: name })}
                       value={row.end}
                       onChange={(value) => change(row.key, { end: value })}
                     />
-                    <span className="hidden text-xs text-text-muted sm:inline">{durationText(row.start, row.end)}</span>
+                    <span className="hidden text-xs text-text-muted sm:inline">{durationText(row.start, row.end, t)}</span>
                     <button
                       type="button"
-                      aria-label={`Remove ${name} ${clockText(row.start)} slot`}
-                      title="Remove"
+                      aria-label={t("stays.visitingHours.removeSlot", { day: name, time: clockText(row.start, t) })}
+                      title={t("common.remove")}
                       onClick={() => {
                         setSaved(false);
                         setRows((current) => current.filter((r) => r.key !== row.key));
@@ -200,8 +211,8 @@ export function VisitingHours({ property }: { property: StayProperty }) {
                       <>
                         <button
                           type="button"
-                          aria-label={`Add another ${name} slot`}
-                          title="Add another time"
+                          aria-label={t("stays.visitingHours.addSlotAria", { day: name })}
+                          title={t("stays.visitingHours.addSlotTitle")}
                           onClick={() => addSlot(weekday)}
                           className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-selected-surface hover:text-navy-900"
                         >
@@ -209,8 +220,8 @@ export function VisitingHours({ property }: { property: StayProperty }) {
                         </button>
                         <button
                           type="button"
-                          aria-label={`Copy ${name} times to all days`}
-                          title="Copy to all days"
+                          aria-label={t("stays.visitingHours.copyAria", { day: name })}
+                          title={t("stays.visitingHours.copyTitle")}
                           onClick={() => copyToAllDays(weekday)}
                           className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-selected-surface hover:text-navy-900"
                         >
@@ -226,20 +237,21 @@ export function VisitingHours({ property }: { property: StayProperty }) {
         })}
       </ul>
       <p className="-mt-2 text-xs text-text-secondary">
-        Tick a day to open it. <Plus className="inline size-3" aria-hidden /> adds another time that day,{" "}
-        <Copy className="inline size-3" aria-hidden /> copies the day&apos;s times to every day.
+        {t("stays.visitingHours.hintTick")} <Plus className="inline size-3" aria-hidden />{" "}
+        {t("stays.visitingHours.hintAdd")} <Copy className="inline size-3" aria-hidden />{" "}
+        {t("stays.visitingHours.hintCopy")}
       </p>
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-semibold text-navy-900">Days off</p>
-        <p className="text-xs text-text-secondary">No visits on these dates, whatever the weekly hours say.</p>
+        <p className="text-sm font-semibold text-navy-900">{t("stays.visitingHours.daysOff")}</p>
+        <p className="text-xs text-text-secondary">{t("stays.visitingHours.daysOffHint")}</p>
         <div className="flex flex-wrap items-center gap-2">
           {blocked.map((day) => (
             <span key={day} className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold">
               {dayLabel(day)}
               <button
                 type="button"
-                aria-label={`Remove ${dayLabel(day)}`}
+                aria-label={t("stays.visitingHours.removeDayOff", { day: dayLabel(day) })}
                 onClick={() => {
                   setSaved(false);
                   setBlocked((current) => current.filter((d) => d !== day));
@@ -251,7 +263,7 @@ export function VisitingHours({ property }: { property: StayProperty }) {
           ))}
           <Input
             type="date"
-            aria-label="Add a day off"
+            aria-label={t("stays.visitingHours.addDayOffAria")}
             value={newBlocked}
             onChange={(event) => setNewBlocked(event.target.value)}
             className="w-40"
@@ -266,16 +278,16 @@ export function VisitingHours({ property }: { property: StayProperty }) {
               setNewBlocked("");
             }}
           >
-            Add day off
+            {t("stays.visitingHours.addDayOff")}
           </Button>
         </div>
       </div>
 
       {error ? <p className="text-sm text-danger-text">{error}</p> : null}
-      {saved ? <p className="text-sm text-success-text">Visiting hours saved.</p> : null}
+      {saved ? <p className="text-sm text-success-text">{t("stays.visitingHours.saved")}</p> : null}
       <div>
-        <Button onClick={onSave} loading={save.isPending} loadingLabel="Saving…">
-          Save visiting hours
+        <Button onClick={onSave} loading={save.isPending} loadingLabel={t("stays.visitingHours.saving")}>
+          {t("stays.visitingHours.save")}
         </Button>
       </div>
     </section>
@@ -283,12 +295,12 @@ export function VisitingHours({ property }: { property: StayProperty }) {
 }
 
 /** "1 hr", "1 hr 30 min", "45 min". */
-function durationText(start: string, end: string): string {
+function durationText(start: string, end: string, t: Translate): string {
   const [sh = 0, sm = 0] = start.split(":").map(Number);
   const [eh = 0, em = 0] = end.split(":").map(Number);
   const minutes = eh * 60 + em - (sh * 60 + sm);
   if (minutes <= 0) return "";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return [h ? `${h} hr` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
+  return [h ? t("stays.visitingHours.hours", { n: h }) : "", m ? t("stays.visitingHours.minutes", { n: m }) : ""].filter(Boolean).join(" ");
 }

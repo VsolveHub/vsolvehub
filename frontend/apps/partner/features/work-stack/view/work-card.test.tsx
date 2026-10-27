@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkItem } from "../model/work-item";
 import { WorkCard } from "./work-home";
+import { withI18n } from "@/i18n/test-utils";
 
 describe("WorkCard — a confirmed A1 job", () => {
   it("shows the service, estimated payout, full schedule, duration and area", () => {
@@ -23,7 +24,7 @@ describe("WorkCard — a confirmed A1 job", () => {
       accessibleName: "Bathroom deep clean",
     };
 
-    render(<WorkCard item={item} />);
+    render(withI18n(<WorkCard item={item} />));
 
     expect(screen.getByText("Bathroom deep clean")).toBeInTheDocument();
     expect(screen.getByText("Est. payout")).toBeInTheDocument();
@@ -57,7 +58,7 @@ describe("WorkCard — a project enquiry", () => {
       accessibleName: "Interior fit-out project, waiting on your answer",
     };
 
-    render(<WorkCard item={item} />);
+    render(withI18n(<WorkCard item={item} />));
 
     expect(screen.getByText("Interior fit-out project")).toBeInTheDocument();
     expect(screen.getByText("Near")).toBeInTheDocument();
@@ -86,7 +87,7 @@ describe("WorkCard — a project enquiry", () => {
       accessibleName: "Interior fit-out project, Waiting for your answer",
     };
 
-    render(<WorkCard item={item} />);
+    render(withI18n(<WorkCard item={item} />));
 
     const chip = screen.getByText("Waiting for your answer");
     // `Badge`'s `action` tone class — see `STATE_TONE` in `work-home.tsx`,
@@ -114,7 +115,7 @@ describe("WorkCard — a completed direct-paid crew job", () => {
       accessibleName: "Crew booking, Completed",
     };
 
-    render(<WorkCard item={item} />);
+    render(withI18n(<WorkCard item={item} />));
 
     expect(screen.getByText("Crew booking")).toBeInTheDocument();
     expect(screen.getByText("Paid directly by customer")).toBeInTheDocument();

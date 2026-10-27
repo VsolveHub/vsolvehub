@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Card, Field, Input, Select, Textarea } from "@vsolve/ui";
+import { Button, Card, Field, Input, Select, Textarea, useT } from "@vsolve/ui";
 import { Camera, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
@@ -52,6 +52,7 @@ export function PropertyCreateForm({
   onCreated: (property: StayProperty) => void;
   onCancel?: () => void;
 }) {
+  const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [variantId, setVariantId] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -96,10 +97,10 @@ export function PropertyCreateForm({
     if (!fileList?.length) return;
     const remaining = MAX_PHOTOS - photos.length;
     if (remaining <= 0) {
-      setError(`You can add up to ${MAX_PHOTOS} photos.`);
+      setError(t("stays.property.maxPhotos", { n: MAX_PHOTOS }));
       return;
     }
-    const { ok, tooLarge } = splitBySize(Array.from(fileList));
+    const { ok, tooLarge } = splitBySize(Array.from(fileList), t);
     const chosen = ok.slice(0, remaining);
     if (chosen.length === 0) {
       setError(tooLarge);
@@ -122,7 +123,7 @@ export function PropertyCreateForm({
         } catch (err) {
           patchPhoto(draft.localId, {
             uploading: false,
-            error: friendlyErrorMessage(err, "Could not upload this photo."),
+            error: friendlyErrorMessage(err, t("stays.property.uploadFailed")),
           });
         }
       }),
@@ -140,16 +141,18 @@ export function PropertyCreateForm({
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!selected) return setError("Choose the type of property.");
-    if (!title.trim()) return setError("Give your property a name guests will recognise.");
-    if (!location.trim()) return setError("Add the property's area and city.");
-    if (photos.some((photo) => photo.uploading)) return setError("Wait for the photos to upload.");
+    if (!selected) return setError(t("stays.property.typeMissing"));
+    if (!title.trim()) return setError(t("stays.property.nameMissing"));
+    if (!location.trim()) return setError(t("stays.property.locationMissing"));
+    if (photos.some((photo) => photo.uploading)) return setError(t("stays.property.waitForUpload"));
     if (photos.some((photo) => photo.error)) {
-      return setError("Remove the photos that failed, or try them again.");
+      return setError(t("stays.property.removeFailed"));
     }
     const urls = photos.map((photo) => photo.remoteUrl).filter((url): url is string => Boolean(url));
-    const collected = collectSchemaAnswers(selected.variant.property_schema, answers);
-    if ("missing" in collected) return setError(`Choose ${collected.missing}.`);
+    const collected = collectSchemaAnswers(selected.variant.property_schema, answers, t);
+    if ("missing" in collected) {
+      return setError(t("stays.property.chooseMissing", { field: collected.missing }));
+    }
     setError(null);
     create.mutate({
       variant_id: selected.variant.id,
@@ -173,13 +176,13 @@ export function PropertyCreateForm({
     <Card padding="lg">
       <form className="flex flex-col gap-6" onSubmit={onSubmit}>
         <div>
-          <h2 className="text-lg font-bold text-navy-900">Add a property</h2>
+          <h2 className="text-lg font-bold text-navy-900">{t("stays.workspace.addProperty")}</h2>
           <p className="text-sm text-text-secondary">
-            Start with the basics. You add rooms and prices on the next step, then publish.
+            {t("stays.property.createIntro")}
           </p>
         </div>
 
-        <Field label="Type of property" required>
+        <Field label={t("stays.property.typeLabel")} required>
           <Select
             id="stay-property-type"
             value={variantId}
@@ -189,7 +192,7 @@ export function PropertyCreateForm({
               setAmenities({});
             }}
           >
-            <option value="">Select</option>
+            <option value="">{t("stays.schema.select")}</option>
             {propertyTypes.map((type) => (
               <option key={type.variant.id} value={type.variant.id}>
                 {type.label}
@@ -218,45 +221,49 @@ export function PropertyCreateForm({
 
         {selected ? (
           <Field
-            label="Who can stay here?"
-            description="Helps guests self-filter before enquiring. Choose 'Anyone' if you welcome all."
+            label={t("stays.property.tenantLabel")}
+            description={t("stays.property.tenantDescription")}
           >
             <Select
               id="stay-tenant-preference"
               value={tenantPreference}
               onChange={(e) => setTenantPreference(e.target.value)}
             >
-              <option value="ANY">Anyone</option>
-              <option value="BACHELOR_MALE">Bachelor (male)</option>
-              <option value="BACHELOR_FEMALE">Bachelor (female / ladies)</option>
-              <option value="FAMILY">Family</option>
-              <option value="WORKING_PROFESSIONAL">Working professional</option>
+              <option value="ANY">{t("stays.property.tenant.any")}</option>
+              <option value="BACHELOR_MALE">{t("stays.property.tenant.bachelorMale")}</option>
+              <option value="BACHELOR_FEMALE">{t("stays.property.tenant.bachelorFemale")}</option>
+              <option value="FAMILY">{t("stays.property.tenant.family")}</option>
+              <option value="WORKING_PROFESSIONAL">{t("stays.property.tenant.workingProfessional")}</option>
             </Select>
           </Field>
         ) : null}
 
-        <Field label="Property name" required>
+        <Field label={t("stays.property.nameLabel")} required>
           <Input
             id="stay-title"
             value={title}
             maxLength={180}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Lakeview PG for working women"
+            placeholder={t("stays.property.namePlaceholder")}
           />
         </Field>
 
-        <Field label="Location" required description="Area and city guests search by.">
+        <Field
+          label={t("stays.property.locationLabel")}
+          required
+          description={t("stays.property.locationDescription")}
+        >
           <Input
             id="stay-location"
             value={location}
             maxLength={180}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Madhapur, Hyderabad"
+            placeholder={t("stays.property.locationPlaceholder")}
           />
         </Field>
         <div className="-mt-2">
           <FindOnMap
-            title="Find the property"
+            title={t("stays.property.findOnMap")}
             pin={pin}
             onPicked={(picked) => {
               setPin({ latitude: picked.latitude, longitude: picked.longitude });
@@ -266,14 +273,14 @@ export function PropertyCreateForm({
             }}
           />
           <p className="mt-1.5 text-xs text-text-secondary">
-            Guests see the area on a map, never the exact building.
+            {t("stays.property.mapPrivacy")}
           </p>
         </div>
 
         <Field
-          label="Building & common area photos"
+          label={t("stays.property.photosLabel")}
           showOptional={false}
-          description={`Optional: the entrance, kitchen, washroom, street. Room photos are added with each room type next. Up to ${MAX_PHOTOS} photos, 10 MB each.`}
+          description={t("stays.property.photosDescription", { n: MAX_PHOTOS })}
         >
           <input
             ref={fileInputRef}
@@ -294,24 +301,24 @@ export function PropertyCreateForm({
                 <img src={photo.previewUrl} alt="" className="size-full object-cover" />
                 {index === 0 ? (
                   <span className="absolute left-1.5 top-1.5 rounded-control bg-navy-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Cover
+                    {t("stays.property.cover")}
                   </span>
                 ) : null}
                 {photo.uploading ? (
                   <span className="absolute inset-x-0 bottom-0 bg-navy-900/80 px-2 py-1 text-center text-[11px] font-medium text-white">
-                    Uploading…
+                    {t("stays.photos.uploading")}
                   </span>
                 ) : null}
                 {photo.error ? (
                   <span className="absolute inset-x-0 bottom-0 bg-danger-text px-2 py-1 text-center text-[11px] font-medium text-white">
-                    Failed
+                    {t("stays.property.failed")}
                   </span>
                 ) : null}
                 <button
                   type="button"
                   className="absolute right-1.5 top-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-navy-900 shadow-xs"
                   onClick={() => removePhoto(photo.localId)}
-                  aria-label="Remove photo"
+                  aria-label={t("stays.photos.remove")}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -325,30 +332,30 @@ export function PropertyCreateForm({
                   className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-line-strong bg-surface-sunken text-text-secondary transition hover:border-action hover:bg-surface hover:text-navy-900"
                 >
                   <Camera className="size-7" />
-                  <span className="text-xs font-semibold">Add photo</span>
+                  <span className="text-xs font-semibold">{t("stays.photos.add")}</span>
                 </button>
               </li>
             ) : null}
           </ul>
         </Field>
 
-        <Field label="Description" showOptional>
+        <Field label={t("stays.property.descriptionLabel")} showOptional>
           <Textarea
             id="stay-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="What makes it a good place to stay — meals, Wi-Fi, what's nearby."
+            placeholder={t("stays.property.descriptionPlaceholder")}
           />
         </Field>
 
         {error ? <p className="text-sm text-danger-text">{error}</p> : null}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" size="lg" disabled={create.isPending || uploading}>
-            {create.isPending ? "Saving…" : "Save and add rooms"}
+            {create.isPending ? t("stays.visitingHours.saving") : t("stays.property.saveAndAddRooms")}
           </Button>
           {onCancel ? (
             <Button type="button" variant="ghost" size="lg" onClick={onCancel}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           ) : null}
         </div>

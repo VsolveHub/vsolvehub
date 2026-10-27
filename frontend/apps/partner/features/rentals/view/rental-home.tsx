@@ -3,7 +3,7 @@
 import { fetchAllPages } from "@vsolve/query";
 import { useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Card, Spinner, buttonStyles } from "@vsolve/ui";
+import { Badge, Card, Spinner, buttonStyles, useT } from "@vsolve/ui";
 import { ArrowRight, Clock, PackageCheck, PackageOpen, Phone, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -30,6 +30,7 @@ function time(value: string | undefined): number {
  * The home answers "who is coming today, and what do I have free".
  */
 export function RentalHome() {
+  const t = useT();
   const [now] = useState(() => new Date());
   // Only live bookings matter here, and there are few of them, so all of their pages are read.
   const bookings = useQuery({
@@ -76,7 +77,7 @@ export function RentalHome() {
     return (
       <p className="flex items-center justify-center gap-2 py-16 text-text-secondary">
         <Spinner size="sm" />
-        Loading your rentals…
+        {t("rentals.home.loading")}
       </p>
     );
   }
@@ -95,9 +96,9 @@ export function RentalHome() {
         >
           <Clock className="size-5 shrink-0 text-warning-text" aria-hidden />
           <span className="flex-1">
-            <span className="block font-semibold text-navy-900">Set your pickup hours</span>
+            <span className="block font-semibold text-navy-900">{t("rentals.home.setHours")}</span>
             <span className="block text-text-secondary">
-              Customers see when they can collect, and new items go live only once these are set.
+              {t("rentals.home.setHoursHint")}
             </span>
           </span>
           <ArrowRight className="size-4 text-text-muted" aria-hidden />
@@ -106,41 +107,41 @@ export function RentalHome() {
 
       {deliveryRequests.length > 0 ? (
         <Group
-          title="Delivery requests — send your price"
+          title={t("rentals.home.deliveryRequests")}
           icon={<Truck className="size-4" />}
           empty=""
           rows={deliveryRequests}
-          when={(b) => `Needed ${dateLabel(b.start_date)} · open it in Bookings to quote`}
+          when={(b) => t("rentals.home.neededOn", { date: dateLabel(b.start_date) })}
         />
       ) : null}
 
       <div className="grid grid-cols-3 gap-2">
-        <Tally label="Live pieces" value={pieces} />
-        <Tally label="Booked now" value={booked} tone="text-warning-text" />
-        <Tally label="Available" value={free} tone="text-success-text" />
+        <Tally label={t("rentals.home.livePieces")} value={pieces} />
+        <Tally label={t("rentals.home.bookedNow")} value={booked} tone="text-warning-text" />
+        <Tally label={t("rentals.home.available")} value={free} tone="text-success-text" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Group
-          title="Pickups today"
+          title={t("rentals.home.pickupsToday")}
           icon={<PackageOpen className="size-4" />}
-          empty="No one is collecting an item today."
+          empty={t("rentals.home.noPickups")}
           rows={pickups}
-          when={(b) => (b.pickup_or_delivery_mode === "DELIVERY" ? `Deliver · ${dateLabel(b.start_date)}` : dateLabel(b.start_date))}
+          when={(b) => (b.pickup_or_delivery_mode === "DELIVERY" ? t("rentals.home.deliverOn", { date: dateLabel(b.start_date) }) : dateLabel(b.start_date))}
         />
         <Group
-          title="Returns today"
+          title={t("rentals.home.returnsToday")}
           icon={<PackageCheck className="size-4" />}
-          empty="No items are due back today."
+          empty={t("rentals.home.noReturns")}
           rows={returns}
-          when={(b) => (time(b.end_date) < now.getTime() ? `Overdue · ${dateLabel(b.end_date)}` : dateLabel(b.end_date))}
+          when={(b) => (time(b.end_date) < now.getTime() ? t("rentals.home.overdue", { date: dateLabel(b.end_date) }) : dateLabel(b.end_date))}
           late={(b) => time(b.end_date) < now.getTime()}
         />
       </div>
 
       <Group
-        title="Next 7 days"
-        empty="No pickups booked for the coming week."
+        title={t("rentals.home.next7Days")}
+        empty={t("rentals.home.noUpcoming")}
         rows={upcoming}
         when={(b) => dateLabel(b.start_date)}
       />
@@ -148,10 +149,10 @@ export function RentalHome() {
       <div className="flex flex-wrap gap-2">
         <Link href="/rentals?add=1" className={buttonStyles({})}>
           <Plus className="size-4" />
-          Add an item
+          {t("rentals.home.addItem")}
         </Link>
         <Link href="/rentals/bookings" className={buttonStyles({ variant: "outline" })}>
-          See all bookings
+          {t("rentals.home.seeAllBookings")}
           <ArrowRight className="size-4" />
         </Link>
       </div>
@@ -183,6 +184,7 @@ function Group({
   when: (b: PartnerRentalBooking) => string;
   late?: (b: PartnerRentalBooking) => boolean;
 }) {
+  const t = useT();
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2 px-0.5">
@@ -202,10 +204,10 @@ function Group({
             <li key={b.id}>
               <Card padding="none" className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-navy-900">{b.asset?.title ?? "Rental item"}</p>
+                  <p className="truncate font-semibold text-navy-900">{b.asset?.title ?? t("rentals.home.rentalItem")}</p>
                   <p className="truncate text-sm text-text-secondary">
-                    {b.customer_name || "Customer"}
-                    {b.quantity > 1 ? ` · ${b.quantity} pieces` : ""}
+                    {b.customer_name || t("rentals.home.customer")}
+                    {b.quantity > 1 ? t("rentals.home.pieces", { count: b.quantity }) : ""}
                   </p>
                   {late?.(b) ? (
                     <Badge tone="danger" dot>
@@ -218,11 +220,11 @@ function Group({
                 {b.customer_phone ? (
                   <a
                     href={`tel:${b.customer_phone}`}
-                    aria-label={`Call ${b.customer_name || "customer"}`}
+                    aria-label={t("rentals.home.callName", { name: b.customer_name || t("rentals.home.customerLower") })}
                     className={buttonStyles({ size: "sm", variant: "outline" })}
                   >
                     <Phone className="size-4" />
-                    Call
+                    {t("rentals.home.call")}
                   </a>
                 ) : null}
               </Card>

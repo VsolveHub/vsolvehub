@@ -1,7 +1,7 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Button } from "@vsolve/ui";
+import { Button, useT } from "@vsolve/ui";
 import {
   AlertCircle,
   ExternalLink,
@@ -35,25 +35,25 @@ function getFileIcon(contentType: string) {
   return <File className="h-6 w-6 text-navy-600" />;
 }
 
-function getReadableMime(contentType: string): string {
-  if (contentType.includes("pdf")) return "PDF Document";
-  if (contentType.includes("png")) return "PNG Image";
-  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "JPEG Image";
-  return contentType || "Document";
+function getReadableMime(contentType: string, t: ReturnType<typeof useT>): string {
+  if (contentType.includes("pdf")) return t("apply.uploadedCard.type.pdf");
+  if (contentType.includes("png")) return t("apply.uploadedCard.type.png");
+  if (contentType.includes("jpeg") || contentType.includes("jpg")) return t("apply.uploadedCard.type.jpeg");
+  return contentType || t("apply.uploadedCard.type.document");
 }
 
 export function UploadedDocumentCard({
   document,
-  label,
   canReplace,
   onReplace,
 }: UploadedDocumentCardProps) {
+  const t = useT();
   const access = usePartnerDocumentAccess();
   const [accessError, setAccessError] = useState<string | null>(null);
 
   const isPdf = document.content_type?.includes("pdf");
   const ext = isPdf ? "pdf" : "jpg";
-  const fileName = `${label.toLowerCase().replace(/[^a-z0-9]/g, "_")}_v${document.version}.${ext}`;
+  const fileName = `${document.kind.toLowerCase()}_v${document.version}.${ext}`;
 
   async function handleViewDocument() {
     setAccessError(null);
@@ -62,10 +62,10 @@ export function UploadedDocumentCard({
       if (response.access_url) {
         window.open(response.access_url, "_blank", "noopener,noreferrer");
       } else {
-        setAccessError("Could not generate a preview link. Please try again.");
+        setAccessError(t("apply.uploadedCard.noPreviewLink"));
       }
     } catch {
-      setAccessError("Could not open this document right now. Please try again.");
+      setAccessError(t("apply.uploadedCard.openFailed"));
     }
   }
 
@@ -89,11 +89,11 @@ export function UploadedDocumentCard({
             </div>
 
             <p className="mt-0.5 text-xs text-text-muted">
-              {getReadableMime(document.content_type || "")} • {formatBytes(document.size_bytes)}
+              {getReadableMime(document.content_type || "", t)} • {formatBytes(document.size_bytes)}
             </p>
 
             <p className="mt-0.5 text-xs text-text-muted">
-              Uploaded{" "}
+              {t("apply.uploadedCard.uploaded")}{" "}
               <time dateTime={document.uploaded_at}>
                 {new Intl.DateTimeFormat("en-IN", {
                   dateStyle: "medium",
@@ -112,11 +112,11 @@ export function UploadedDocumentCard({
             size="sm"
             onClick={() => void handleViewDocument()}
             loading={access.isPending}
-            loadingLabel="Opening…"
+            loadingLabel={t("apply.uploadedCard.opening")}
             className="flex items-center gap-1.5 font-bold"
           >
             <Eye className="h-3.5 w-3.5" />
-            <span>View document</span>
+            <span>{t("apply.uploadedCard.view")}</span>
             <ExternalLink className="h-3 w-3 opacity-60" />
           </Button>
 
@@ -128,7 +128,7 @@ export function UploadedDocumentCard({
               className="flex items-center gap-1.5 text-navy-700 hover:text-navy-900"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              <span>Replace file</span>
+              <span>{t("apply.uploadedCard.replace")}</span>
             </Button>
           ) : null}
         </div>
@@ -139,10 +139,10 @@ export function UploadedDocumentCard({
         <div className="mt-3 flex items-start gap-2 rounded-control bg-danger-bg p-3 border border-danger-border text-xs text-danger-text">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold">Reviewer requested changes:</p>
+            <p className="font-bold">{t("apply.uploadedCard.reviewerRequested")}</p>
             <p className="mt-0.5">
               {document.review_reason ||
-                "This document could not be verified. Please click Replace file to upload a clearer photo or PDF."}
+                t("apply.uploadedCard.rejectedFallback")}
             </p>
           </div>
         </div>
@@ -157,7 +157,7 @@ export function UploadedDocumentCard({
             onClick={() => setAccessError(null)}
             className="font-bold underline ml-2 cursor-pointer"
           >
-            Dismiss
+            {t("apply.uploadedCard.dismiss")}
           </button>
         </div>
       ) : null}

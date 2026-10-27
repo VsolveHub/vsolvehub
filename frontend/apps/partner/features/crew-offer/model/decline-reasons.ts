@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { useT } from "@vsolve/ui";
 
 /**
  * Why a lead is passing on a crew offer.
@@ -17,6 +18,14 @@ import type { Schemas } from "@vsolve/api-client";
  * `RATE_TOO_LOW` is the answer that pages somebody. So the consequence on each
  * tile is the truth about what the platform does with the answer, kept to one
  * short line so the tile stays a tile.
+ *
+ * ## Locale text, not module-scope literals
+ *
+ * This is a plain module, not a component, so it cannot call `useT()` itself.
+ * The label/consequence copy lives in the `work.crewOfferDeclineReasons.*`
+ * catalogue keys and is resolved at the call site, which already has `t` —
+ * `getCrewOfferDeclineReasons`/`findCrewOfferDeclineReason` take it as a
+ * parameter rather than returning hard-coded English.
  */
 
 export type CrewOfferDeclineReasonCode = Schemas["CrewOfferDeclineReasonCodeEnum"];
@@ -30,38 +39,43 @@ export interface CrewOfferDeclineReason {
   readonly consequence: string;
 }
 
+interface ReasonKeys {
+  readonly labelKey: string;
+  readonly consequenceKey: string;
+}
+
 /**
  * Every published code, as a `Record` rather than a bare array: a value added to
  * the enum on the next regeneration fails the type check here rather than
  * silently disappearing from the list.
  */
-const REASON_COPY: Record<CrewOfferDeclineReasonCode, Omit<CrewOfferDeclineReason, "code">> = {
+const REASON_KEYS: Record<CrewOfferDeclineReasonCode, ReasonKeys> = {
   RATE_TOO_LOW: {
-    label: "Rate too low",
-    consequence: "Ops reviews the rate for your city.",
+    labelKey: "work.crewOfferDeclineReasons.rateTooLow.label",
+    consequenceKey: "work.crewOfferDeclineReasons.rateTooLow.consequence",
   },
   NO_CREW_AVAILABLE: {
-    label: "No crew free",
-    consequence: "We skip you on these dates.",
+    labelKey: "work.crewOfferDeclineReasons.noCrewAvailable.label",
+    consequenceKey: "work.crewOfferDeclineReasons.noCrewAvailable.consequence",
   },
   TOO_FAR: {
-    label: "Too far",
-    consequence: "We re-check your service areas.",
+    labelKey: "work.crewOfferDeclineReasons.tooFar.label",
+    consequenceKey: "work.crewOfferDeclineReasons.tooFar.consequence",
   },
   SITE_UNSUITABLE: {
-    label: "Not our kind of work",
-    consequence: "Ops re-checks the request.",
+    labelKey: "work.crewOfferDeclineReasons.siteUnsuitable.label",
+    consequenceKey: "work.crewOfferDeclineReasons.siteUnsuitable.consequence",
   },
   OTHER: {
-    label: "Something else",
-    consequence: "Recorded, nothing acted on.",
+    labelKey: "work.crewOfferDeclineReasons.other.label",
+    consequenceKey: "work.crewOfferDeclineReasons.other.consequence",
   },
 };
 
 /**
  * Reading order: the answer that changes the rate first.
  *
- * A ranking, never the list itself — the list is derived from `REASON_COPY`'s
+ * A ranking, never the list itself — the list is derived from `REASON_KEYS`'s
  * own keys, so a code nobody ranked sorts to the end and still renders.
  */
 const REASON_PRIORITY: readonly CrewOfferDeclineReasonCode[] = [
@@ -77,24 +91,40 @@ function rankOf(code: CrewOfferDeclineReasonCode): number {
   return index === -1 ? REASON_PRIORITY.length : index;
 }
 
-export const CREW_OFFER_DECLINE_REASONS: readonly CrewOfferDeclineReason[] = (
-  Object.keys(REASON_COPY) as CrewOfferDeclineReasonCode[]
-)
-  .map((code) => ({ code, ...REASON_COPY[code] }))
-  .sort((left, right) => rankOf(left.code) - rankOf(right.code));
+/** Every published code, in reading order. No locale text needed to validate one. */
+export const CREW_OFFER_DECLINE_REASON_CODES: readonly CrewOfferDeclineReasonCode[] = (
+  Object.keys(REASON_KEYS) as CrewOfferDeclineReasonCode[]
+).sort((left, right) => rankOf(left) - rankOf(right));
 
-const BY_CODE = new Map<string, CrewOfferDeclineReason>(
-  CREW_OFFER_DECLINE_REASONS.map((reason) => [reason.code, reason]),
-);
+/** The full tile list, worded in the caller's locale. */
+export function getCrewOfferDeclineReasons(
+  t: ReturnType<typeof useT>,
+): readonly CrewOfferDeclineReason[] {
+  return CREW_OFFER_DECLINE_REASON_CODES.map((code) => ({
+    code,
+    label: t(REASON_KEYS[code].labelKey),
+    consequence: t(REASON_KEYS[code].consequenceKey),
+  }));
+}
 
-export function findCrewOfferDeclineReason(code: string): CrewOfferDeclineReason | null {
-  return BY_CODE.get(code) ?? null;
+export function findCrewOfferDeclineReason(
+  code: string,
+  t: ReturnType<typeof useT>,
+): CrewOfferDeclineReason | null {
+  const match = CREW_OFFER_DECLINE_REASON_CODES.find((known) => known === code) ?? null;
+  if (match === null) return null;
+  return {
+    code: match,
+    label: t(REASON_KEYS[match].labelKey),
+    consequence: t(REASON_KEYS[match].consequenceKey),
+  };
 }
 
 /**
  * Narrows a free string to a published code, or nothing. A miss means the enum
- * moved under the bundle, and posting an unpublished code earns a `400`.
+ * moved under the bundle, and posting an unpublished code earns a `400`. No
+ * locale text is needed to check membership, so this takes no `t`.
  */
 export function asCrewOfferDeclineReasonCode(code: string): CrewOfferDeclineReasonCode | null {
-  return findCrewOfferDeclineReason(code)?.code ?? null;
+  return CREW_OFFER_DECLINE_REASON_CODES.find((known) => known === code) ?? null;
 }

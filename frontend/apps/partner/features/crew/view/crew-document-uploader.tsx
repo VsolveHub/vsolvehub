@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, ErrorState, cn } from "@vsolve/ui";
+import { Badge, Button, ErrorState, cn, useT, type Translator } from "@vsolve/ui";
 import { useRef, useState } from "react";
 
 import {
@@ -32,16 +32,20 @@ import { useUploadCrewDocument, type CrewDocumentKind } from "../queries";
  * The reason is the only thing that tells the Partner whether to re-photograph the same card or
  * find a different document. A rejection without one is a loop.
  */
-const OPTIONAL_KINDS: readonly { kind: CrewDocumentKind; label: string }[] = [
-  { kind: "ADDRESS_PROOF", label: "Address proof" },
-  { kind: "POLICE_VERIFICATION", label: "Police verification" },
-];
+function optionalKinds(t: Translator["t"]): readonly { kind: CrewDocumentKind; label: string }[] {
+  return [
+    { kind: "ADDRESS_PROOF", label: t("crew.documents.addressProof") },
+    { kind: "POLICE_VERIFICATION", label: t("crew.documents.policeVerification") },
+  ];
+}
 
-const STATUS_TONE = {
-  APPROVED: { tone: "success" as const, label: "Approved" },
-  PENDING: { tone: "info" as const, label: "With Operations" },
-  REJECTED: { tone: "danger" as const, label: "Rejected" },
-};
+function statusTone(t: Translator["t"]) {
+  return {
+    APPROVED: { tone: "success" as const, label: t("crew.documents.approved") },
+    PENDING: { tone: "info" as const, label: t("crew.documents.withOperations") },
+    REJECTED: { tone: "danger" as const, label: t("crew.documents.rejected") },
+  };
+}
 
 export interface CrewDocumentUploaderProps {
   readonly row: CrewRow;
@@ -49,6 +53,7 @@ export interface CrewDocumentUploaderProps {
 }
 
 export function CrewDocumentUploader({ row, className }: CrewDocumentUploaderProps) {
+  const t = useT();
   const upload = useUploadCrewDocument();
   const [activeKind, setActiveKind] = useState<CrewDocumentKind | null>(null);
   const [percent, setPercent] = useState(0);
@@ -61,11 +66,11 @@ export function CrewDocumentUploader({ row, className }: CrewDocumentUploaderPro
     // Checked here before a byte moves. The bucket refuses an oversized file and Django refuses
     // an unsupported type, but a Partner on a metered site connection should not upload eleven
     // megabytes to be told no at the end of it.
-    const rejection = rejectFile(file);
+    const rejection = rejectFile(file, t);
     if (rejection !== null) {
       setLocalProblem(
         rejection.code === "too_large"
-          ? `That file is ${formatBytes(file.size)}. Send something smaller.`
+          ? t("crew.documents.tooLarge", { size: formatBytes(file.size) })
           : rejection.message,
       );
       return;
@@ -87,8 +92,8 @@ export function CrewDocumentUploader({ row, className }: CrewDocumentUploaderPro
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       <DocumentSlot
-        label="Government ID"
-        hint="Aadhaar, voter ID, driving licence or passport. Required before they can be assigned."
+        label={t("crew.documents.governmentId")}
+        hint={t("crew.documents.governmentIdHint")}
         required
         state={stateFor("GOVERNMENT_ID")}
         busy={activeKind === "GOVERNMENT_ID"}
@@ -97,11 +102,11 @@ export function CrewDocumentUploader({ row, className }: CrewDocumentUploaderPro
         onPick={(file) => send("GOVERNMENT_ID", file)}
       />
 
-      {OPTIONAL_KINDS.map((option) => (
+      {optionalKinds(t).map((option) => (
         <DocumentSlot
           key={option.kind}
           label={option.label}
-          hint="If you have it."
+          hint={t("crew.documents.ifYouHaveIt")}
           state={stateFor(option.kind)}
           busy={activeKind === option.kind}
           percent={percent}
@@ -111,14 +116,14 @@ export function CrewDocumentUploader({ row, className }: CrewDocumentUploaderPro
       ))}
 
       {localProblem ? (
-        <ErrorState inline severity="warning" title="We cannot send that file" message={localProblem} />
+        <ErrorState inline severity="warning" title={t("crew.documents.cannotSendTitle")} message={localProblem} />
       ) : null}
 
       {upload.isError ? (
         <ErrorState
           inline
           severity="error"
-          title="The upload did not finish"
+          title={t("crew.documents.uploadFailedTitle")}
           message={describeError(upload.error, "mutation").message}
         />
       ) : null}
@@ -145,8 +150,9 @@ function DocumentSlot({
   disabled: boolean;
   onPick: (file: File) => void;
 }) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
-  const badge = state ? STATUS_TONE[state.status as keyof typeof STATUS_TONE] : undefined;
+  const badge = state ? statusTone(t)[state.status as keyof ReturnType<typeof statusTone>] : undefined;
   // Approved is the one state where re-sending is a mistake rather than a fix: it would supersede
   // a cleared document and put the worker back in the queue for no reason.
   const canReplace = state?.status !== "APPROVED";
@@ -157,7 +163,7 @@ function DocumentSlot({
         <div className="min-w-0">
           <p className="text-sm font-semibold text-text">
             {label}
-            {required ? <span className="ml-1 text-xs text-text-muted">(required)</span> : null}
+            {required ? <span className="ml-1 text-xs text-text-muted">{t("crew.documents.required")}</span> : null}
           </p>
           <p className="mt-0.5 text-xs leading-5 text-text-secondary">{hint}</p>
         </div>
@@ -172,7 +178,7 @@ function DocumentSlot({
 
       {busy ? (
         <p className="mt-2 text-xs text-text-secondary" aria-live="polite">
-          Sending… {percent}%
+          {t("crew.documents.sending", { percent })}
         </p>
       ) : canReplace ? (
         <>
@@ -195,7 +201,7 @@ function DocumentSlot({
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
           >
-            {state ? "Replace" : "Choose file"}
+            {state ? t("crew.documents.replace") : t("crew.documents.chooseFile")}
           </Button>
         </>
       ) : null}

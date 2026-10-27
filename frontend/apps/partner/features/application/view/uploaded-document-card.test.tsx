@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { UploadedDocumentCard } from "./uploaded-document-card";
 
 const api = vi.hoisted(() => {
@@ -77,14 +79,16 @@ function renderCard(
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <UploadedDocumentCard
-        document={doc}
-        label="Government photo ID"
-        canReplace={canReplace}
-        onReplace={onReplace}
-      />
-    </QueryClientProvider>,
+    withI18n(
+      <QueryClientProvider client={queryClient}>
+        <UploadedDocumentCard
+          document={doc}
+          label="Government photo ID"
+          canReplace={canReplace}
+          onReplace={onReplace}
+        />
+      </QueryClientProvider>,
+    ),
   );
 }
 
@@ -97,7 +101,7 @@ describe("UploadedDocumentCard", () => {
   it("displays file info and version", () => {
     renderCard();
 
-    expect(screen.getByText(/government_photo_id_v2\.pdf/i)).toBeInTheDocument();
+    expect(screen.getByText(/government_id_v2\.pdf/i)).toBeInTheDocument();
     expect(screen.getByText("v2")).toBeInTheDocument();
     expect(screen.getByText(/PDF Document/i)).toBeInTheDocument();
     expect(screen.getByText(/1\.0 MB/i)).toBeInTheDocument();

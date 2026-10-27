@@ -19,6 +19,7 @@ import {
   toAmendmentLineRequests,
 } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useT } from "@vsolve/ui";
 
 import { getApiClient } from "@/lib/api/browser";
 import { sha256Hex } from "@/features/application/model/upload";
@@ -391,6 +392,7 @@ function putEvidenceBytes(
   file: File,
   contentType: string,
   onProgress: (percent: number) => void,
+  t: ReturnType<typeof useT>,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -412,40 +414,40 @@ function putEvidenceBytes(
       reject(
         new EvidenceUploadFailure(
           xhr.status === 401 || xhr.status === 403 ? "expired" : "network",
-          `Storage refused the upload (${xhr.status}).`,
+          t("work.evidenceUpload.storageRefused", { status: xhr.status }),
         ),
       );
     };
 
     xhr.onerror = () =>
-      reject(new EvidenceUploadFailure("network", "The upload could not reach storage."));
+      reject(new EvidenceUploadFailure("network", t("work.evidenceUpload.unreachable")));
     xhr.onabort = () =>
-      reject(new EvidenceUploadFailure("network", "The upload was cancelled."));
+      reject(new EvidenceUploadFailure("network", t("work.evidenceUpload.cancelled")));
 
     xhr.send(file);
   });
 }
 
-function evidenceFailure(error: unknown): EvidenceUploadFailure {
+function evidenceFailure(error: unknown, t: ReturnType<typeof useT>): EvidenceUploadFailure {
   if (error instanceof EvidenceUploadFailure) return error;
   if (error instanceof ApiRequestError) {
     if (error.code === "m2_stage_transition_not_allowed") {
       return new EvidenceUploadFailure(
         "not_accepting",
-        "This stage no longer accepts evidence. Open it again to see where it got to.",
+        t("work.evidenceUpload.notAccepting"),
       );
     }
     if (error.code === "m2_attachment_unavailable" || error.status === 503) {
       return new EvidenceUploadFailure(
         "storage",
-        "Vsolve's file storage is not answering. Nothing was lost — try the file again.",
+        t("work.evidenceUpload.storageDown"),
       );
     }
     // Django fetched the stored object back and compared it with the intent.
     // Resending the same bytes cannot change that answer.
     return new EvidenceUploadFailure("rejected", error.message);
   }
-  return new EvidenceUploadFailure("unknown", "The upload did not complete.");
+  return new EvidenceUploadFailure("unknown", t("work.evidenceUpload.incomplete"));
 }
 
 export interface EvidenceUploadInput {
@@ -473,6 +475,7 @@ export interface EvidenceUploadInput {
  * on a phone, and a second attempt should be something a person chose.
  */
 export function useUploadStageEvidence(engagementId: string) {
+  const t = useT();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -494,7 +497,7 @@ export function useUploadStageEvidence(engagementId: string) {
           },
         }),
       ).catch((error: unknown) => {
-        throw evidenceFailure(error);
+        throw evidenceFailure(error, t);
       });
 
       // A deadline already past means the clock or the round trip is badly off.
@@ -502,13 +505,17 @@ export function useUploadStageEvidence(engagementId: string) {
       if (Date.parse(grant.expires_at) <= Date.now()) {
         throw new EvidenceUploadFailure(
           "expired",
-          "That upload link expired before it was used. Attach the file again.",
+          t("work.evidenceUpload.expired"),
         );
       }
 
       report({ phase: "uploading", percent: 0 });
-      await putEvidenceBytes(grant.upload_url, input.file, input.file.type, (percent) =>
-        report({ phase: "uploading", percent }),
+      await putEvidenceBytes(
+        grant.upload_url,
+        input.file,
+        input.file.type,
+        (percent) => report({ phase: "uploading", percent }),
+        t,
       );
 
       report({ phase: "finalizing", percent: 100 });
@@ -518,7 +525,7 @@ export function useUploadStageEvidence(engagementId: string) {
           body: { upload_id: grant.upload_id },
         }),
       ).catch((error: unknown) => {
-        throw evidenceFailure(error);
+        throw evidenceFailure(error, t);
       });
 
       report({ phase: "done", percent: 100 });

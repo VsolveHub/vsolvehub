@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, Disclosure, ErrorState, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, Disclosure, ErrorState, formatMoney, useT } from "@vsolve/ui";
 import {
   autoApprovalDeadline,
   correctionRequested,
@@ -21,7 +21,7 @@ import { shortDate, timeAgo } from "@/lib/format";
 
 import { useStartStage } from "../queries";
 import {
-  MATERIAL_ADVANCE_NOTE,
+  materialAdvanceNote,
   describeStageStatus,
   isMaterialAdvance,
   stageTitle,
@@ -101,7 +101,8 @@ export function StagePanel({
   compact = false,
   workspace,
 }: StagePanelProps) {
-  const status = describeStageStatus(stage, wording);
+  const t = useT();
+  const status = describeStageStatus(stage, wording, t);
   const commands = vendorStageCommands(engagement, stage);
   const correction = correctionRequested(stage);
   const material = isMaterialAdvance(stage);
@@ -114,7 +115,7 @@ export function StagePanel({
         <header className="flex flex-wrap items-baseline justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
             <h2 className="truncate text-base font-semibold text-text">
-              {stageTitle(stage, wording)}
+              {stageTitle(stage, wording, t)}
             </h2>
             <span className="flex flex-wrap items-center gap-2">
               {status ? (
@@ -122,12 +123,12 @@ export function StagePanel({
                   {status.label}
                 </Badge>
               ) : (
-                <Badge tone="neutral">State not recognised</Badge>
+                <Badge tone="neutral">{t("work.stagePanel.status.unknown")}</Badge>
               )}
               {/* `EngagementStage.kind`, published at 1.26.0. Without it a
                   material advance renders as an ordinary milestone and a vendor
                   reads the customer as approving cement as work. */}
-              {material ? <Badge tone="neutral">Materials advance</Badge> : null}
+              {material ? <Badge tone="neutral">{t("work.stagePanel.materialsAdvanceBadge")}</Badge> : null}
             </span>
           </div>
           <span className="text-sm font-semibold tabular-nums text-text">
@@ -136,12 +137,11 @@ export function StagePanel({
         </header>
 
         <p className="text-sm leading-6 text-text-secondary">
-          {status?.sentence ??
-            `Vsolve sent a state this version of the app cannot describe. Nothing here is wrong with your ${wording.parent} — updating the app usually resolves it.`}
+          {status?.sentence ?? t("work.stagePanel.unknownStatus", { parent: wording.parent })}
         </p>
 
         {material && !compact ? (
-          <p className="text-sm leading-6 text-text-secondary">{MATERIAL_ADVANCE_NOTE}</p>
+          <p className="text-sm leading-6 text-text-secondary">{materialAdvanceNote(t)}</p>
         ) : null}
 
         {deadline === null ? null : (
@@ -154,20 +154,24 @@ export function StagePanel({
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                Stage deadline
+                {t("work.stagePanel.deadline.label")}
               </span>
               <Badge tone={deadline.state === "extra" ? "warning" : deadline.state === "complete" ? "success" : "info"}>
                 {deadline.label}
               </Badge>
             </div>
             <p className="mt-2 text-sm font-semibold text-text">
-              {deadline.startsOn ? `Starts ${shortDate(deadline.startsOn)} · ` : ""}
-              Due {shortDate(deadline.dueOn)}
-              {deadline.durationDays ? ` · ${deadline.durationDays} calendar ${deadline.durationDays === 1 ? "day" : "days"}` : ""}
+              {deadline.startsOn
+                ? t("work.stagePanel.deadline.startsOn", { date: shortDate(deadline.startsOn) })
+                : ""}
+              {t("work.stagePanel.deadline.dueOn", { date: shortDate(deadline.dueOn) })}
+              {deadline.durationDays
+                ? t("work.stagePanel.deadline.duration", { count: deadline.durationDays })
+                : ""}
             </p>
             {deadline.state === "extra" ? (
               <p className="mt-1 text-xs leading-5 text-warning-text">
-                No extra charge. This is a fixed-price project, so extra days do not increase the agreed amount.
+                {t("work.stagePanel.deadline.noExtraCharge")}
               </p>
             ) : null}
           </div>
@@ -176,33 +180,34 @@ export function StagePanel({
         {correction === null ? null : (
           <Card className="border-warning-line bg-warning-surface p-3">
             <h3 className="mb-1 text-sm font-semibold text-warning-text">
-              What the customer asked for
+              {t("work.stagePanel.correction.heading")}
             </h3>
             <p className="whitespace-pre-wrap text-sm leading-6 text-warning-text">
-              {correction.trim() === ""
-                ? "They sent it back without writing a reason."
-                : correction}
+              {correction.trim() === "" ? t("work.stagePanel.correction.noReason") : correction}
             </p>
             {compact ? (
-              <Disclosure summary="What this correction changes">
-                This is a correction, not a change to what you agreed. The price, scope and stage
-                amount stay the same. New work needs a separate change request.
+              <Disclosure summary={t("work.stagePanel.correction.disclosureSummary")}>
+                {t("work.stagePanel.correction.disclosureBody")}
               </Disclosure>
             ) : (
               <p className="mt-2 text-xs leading-5 text-warning-text">
-                This is a correction, not a change to what you agreed. The price, the scope and
-                this {wording.one}&rsquo;s own amount are unchanged, and no money has moved. If they
-                want something different from what was agreed, that is a change request you
-                propose and they accept.
+                {t("work.stagePanel.correction.fullBody", { one: wording.one })}
               </p>
             )}
           </Card>
         )}
 
         {compact ? (
-          <Disclosure summary="Stage details" hint={stage.evidence.length > 0 ? `${stage.evidence.length} evidence` : undefined}>
+          <Disclosure
+            summary={t("work.stagePanel.disclosure.stageDetails")}
+            hint={
+              stage.evidence.length > 0
+                ? t("work.stagePanel.disclosure.evidenceHint", { count: stage.evidence.length })
+                : undefined
+            }
+          >
             <div className="flex flex-col gap-2">
-              {material ? <p>{MATERIAL_ADVANCE_NOTE}</p> : null}
+              {material ? <p>{materialAdvanceNote(t)}</p> : null}
               <ReviewClockLine stage={stage} wording={wording} />
             </div>
           </Disclosure>
@@ -227,7 +232,7 @@ export function StagePanel({
             href={dayHref}
             className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
-            Crew, attendance and settlement
+            {t("work.stagePanel.dayLink")}
             <ArrowRight size={16} aria-hidden />
           </Link>
         )}
@@ -237,8 +242,16 @@ export function StagePanel({
         compact ? (
           <Card className="p-4">
             <Disclosure
-              summary={commands.includes("submit") ? "Add evidence and submit" : "Evidence"}
-              hint={stage.evidence.length > 0 ? `${stage.evidence.length} added` : "Open"}
+              summary={
+                commands.includes("submit")
+                  ? t("work.stagePanel.evidenceDisclosure.summaryWithSubmit")
+                  : t("work.stagePanel.evidenceDisclosure.summary")
+              }
+              hint={
+                stage.evidence.length > 0
+                  ? t("work.stagePanel.evidenceDisclosure.hintAdded", { count: stage.evidence.length })
+                  : t("work.stagePanel.evidenceDisclosure.hintOpen")
+              }
             >
               <EvidenceComposer
                 engagement={engagement}
@@ -278,33 +291,35 @@ function ReviewClockLine({
   readonly stage: EngagementStage;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   switch (reviewClock(stage)) {
     case "auto_approves": {
       const deadline = autoApprovalDeadline(stage);
       return deadline === null ? null : (
         <p className="text-xs leading-5 text-text-muted">
-          If the customer does not answer by {shortDate(deadline)}, this {wording.one} is approved
-          automatically.
+          {t("work.stagePanel.reviewClock.autoApproves", {
+            date: shortDate(deadline),
+            one: wording.one,
+          })}
         </p>
       );
     }
     case "no_deadline":
       return (
         <p className="text-xs leading-5 text-text-muted">
-          There is no review deadline set on this {wording.one}, so it does not approve on a clock
-          — it waits for the customer.
+          {t("work.stagePanel.reviewClock.noDeadline", { one: wording.one })}
         </p>
       );
     case "stopped":
       return (
         <p className="text-xs leading-5 text-text-muted">
-          The review clock is stopped while this is disputed. It cannot approve by itself.
+          {t("work.stagePanel.reviewClock.stopped")}
         </p>
       );
     default:
       return stage.evidence_submitted_at === null ? null : (
         <p className="text-xs leading-5 text-text-muted">
-          Last sent {timeAgo(stage.evidence_submitted_at)}.
+          {t("work.stagePanel.reviewClock.lastSent", { time: timeAgo(stage.evidence_submitted_at, t) })}
         </p>
       );
   }
@@ -334,6 +349,7 @@ function StartControl({
   readonly error: unknown;
   readonly onStart: () => void;
 }) {
+  const t = useT();
   const startable = stage.status === "PENDING" || stage.status === "CORRECTION_REQUESTED";
 
   if (!startable) return null;
@@ -342,8 +358,8 @@ function StartControl({
     return (
       <p className="text-sm leading-6 text-text-secondary">
         {stage.funding_state === "PENDING"
-          ? `The customer's payment for this ${wording.one} is with the bank. Do not travel or start until it clears — Vsolve will open it here.`
-          : `The customer has not paid for this ${wording.one} yet. Do not start it. Vsolve collects one ${wording.one} at a time and opens it here once the money is in.`}
+          ? t("work.stagePanel.start.paymentWithBank", { one: wording.one })
+          : t("work.stagePanel.start.notPaidYet", { one: wording.one })}
       </p>
     );
   }
@@ -351,7 +367,7 @@ function StartControl({
   if (!workMayStart(engagement)) {
     return (
       <p className="text-sm leading-6 text-text-secondary">
-        Work has not been cleared to start on this {wording.parent} yet.
+        {t("work.stagePanel.start.notCleared", { parent: wording.parent })}
       </p>
     );
   }
@@ -362,13 +378,13 @@ function StartControl({
         type="button"
         onClick={onStart}
         loading={isPending}
-        loadingLabel="Starting"
+        loadingLabel={t("work.stagePanel.start.loading")}
         disabled={!canStart}
         icon={<Play size={16} aria-hidden />}
       >
         {stage.status === "CORRECTION_REQUESTED"
-          ? "Back to work on this"
-          : `Start this ${wording.one}`}
+          ? t("work.stagePanel.start.resume")
+          : t("work.stagePanel.start.start", { one: wording.one })}
       </Button>
       {error ? <StartFailure error={error} wording={wording} /> : null}
     </div>
@@ -382,13 +398,14 @@ function StartFailure({
   readonly error: unknown;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
 
   if (isStageTransitionNotAllowed(error)) {
     return (
       <ErrorState
-        title={`This ${wording.one} moved`}
-        message="Somebody acted on it since this screen loaded, so it is no longer waiting to be started. Reload to see where it got to — pressing again would send the same command against the state that just refused it."
+        title={t("work.stagePanel.start.movedTitle", { one: wording.one })}
+        message={t("work.stagePanel.start.movedMessage")}
         severity="warning"
         reference={presentation.reference}
       />

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { enquiryDetail } from "../fixtures";
 import { readEnquiryRecord } from "../model/wire";
 import { RequirementSummary } from "./requirement-summary";
+import { withI18n } from "@/i18n/test-utils";
 
 /**
  * The brief renders as the server labelled it (1.48.0) — question and value —
@@ -19,7 +20,7 @@ describe("the customer's brief", () => {
         ],
       }),
     );
-    render(<RequirementSummary enquiry={enquiry} />);
+    render(withI18n(<RequirementSummary enquiry={enquiry} />));
 
     expect(screen.getByText("What is wrong")).toBeInTheDocument();
     expect(screen.getByText("Power keeps tripping")).toBeInTheDocument();
@@ -32,7 +33,7 @@ describe("the customer's brief", () => {
 
   it("says the details are the vendor's to take when the brief is empty", () => {
     const enquiry = readEnquiryRecord(enquiryDetail({ brief: [] }));
-    render(<RequirementSummary enquiry={enquiry} />);
+    render(withI18n(<RequirementSummary enquiry={enquiry} />));
 
     expect(
       screen.getByText(/chose the service and a visit time — the details are yours to take on site/i),

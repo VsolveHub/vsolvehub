@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, Field, Input, QuantityStepper, Textarea, useToast } from "@vsolve/ui";
+import { Badge, Button, Card, Field, Input, QuantityStepper, Textarea, useT, useToast } from "@vsolve/ui";
 import { ArrowLeft, Check, ChevronDown, MapPin, Plus, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -248,6 +248,7 @@ function TagPicker({
   addLabel: string;
   exclude?: readonly string[];
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const shown = [...new Set([...ideas, ...value])].filter((idea) => !exclude.includes(idea));
   function add() {
@@ -296,7 +297,7 @@ function TagPicker({
           }}
         />
         <Button type="button" variant="secondary" onClick={add} disabled={!text.trim()}>
-          Add
+          {t("listings.wizard.add")}
         </Button>
       </div>
     </div>
@@ -320,6 +321,13 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * 4. Location, then a preview with the description written for you. Publish goes live at once.
  */
 export function PostJobWizard({ editId }: { editId?: string | null }) {
+  const t = useT();
+  const STEP_LABELS: Record<(typeof STEPS)[number], string> = {
+    Job: t("listings.wizard.step.job"),
+    Basics: t("listings.wizard.step.basics"),
+    Skills: t("listings.wizard.step.skills"),
+    "Location & preview": t("listings.wizard.step.locationPreview"),
+  };
   const router = useRouter();
   const qc = useQueryClient();
   const { notify } = useToast();
@@ -390,12 +398,12 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
 
   const publish = useMutation({
     mutationFn: async () => {
-      if (!draft.id) throw new Error("Save the job first.");
+      if (!draft.id) throw new Error(t("listings.wizard.errorSaveFirst"));
       if (draft.status === "PUBLISHED") return preview!;
       return publishJob(draft.id);
     },
     onSuccess: () => {
-      notify(draft.status === "PUBLISHED" ? "Job updated." : "Your job is live.");
+      notify(draft.status === "PUBLISHED" ? t("listings.wizard.jobUpdated") : t("listings.wizard.jobLive"));
       void qc.invalidateQueries({ queryKey: ["partner-listings"] });
       void qc.invalidateQueries({ queryKey: ["partner-listing-home"] });
       router.push("/listings");
@@ -405,20 +413,20 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
 
   function next() {
     setError(null);
-    if (step === 0 && !draft.title.trim()) return setError("Pick a job, or type a job title.");
+    if (step === 0 && !draft.title.trim()) return setError(t("listings.wizard.errorPickJob"));
     if (step === 1) {
-      if (!draft.jobType) return setError("Choose full time, part time or another job type.");
-      if (!(Number(draft.salaryMin) > 0)) return setError("Choose a salary range, or type the pay.");
+      if (!draft.jobType) return setError(t("listings.wizard.errorJobType"));
+      if (!(Number(draft.salaryMin) > 0)) return setError(t("listings.wizard.errorSalary"));
       if (draft.salaryMax && Number(draft.salaryMax) < Number(draft.salaryMin))
-        return setError("The maximum salary must be at least the minimum.");
+        return setError(t("listings.wizard.errorMaxSalary"));
     }
-    if (step === 2 && draft.required.length === 0) return setError("Pick at least one must-have skill.");
+    if (step === 2 && draft.required.length === 0) return setError(t("listings.wizard.errorSkill"));
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   if (options.isLoading || (editId && existing.isLoading)) {
-    return <p className="p-6 text-sm text-text-secondary">Loading…</p>;
+    return <p className="p-6 text-sm text-text-secondary">{t("listings.wizard.loading")}</p>;
   }
   if (options.error || !opts) {
     return <p className="p-6 text-sm text-danger-text">{friendlyErrorMessage(options.error)}</p>;
@@ -434,16 +442,16 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           type="button"
           onClick={() => (step === 0 || (editId && step === 1) ? router.push("/listings") : setStep(step - 1))}
           className="inline-flex size-11 min-h-11 min-w-11 items-center justify-center rounded-full border border-line bg-surface transition-colors hover:bg-surface-hover"
-          aria-label="Back"
+          aria-label={t("listings.wizard.back")}
         >
           <ArrowLeft className="size-4" />
         </button>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">
-            Step {step + 1} of {STEPS.length} · {STEPS[step]}
+            {t("listings.wizard.stepOf", { step: step + 1, total: STEPS.length, name: STEP_LABELS[STEPS[step]!] })}
           </p>
           <h1 className="text-xl font-extrabold text-navy-900">
-            {editId ? "Edit job" : "Post a job"}
+            {editId ? t("listings.wizard.editJob") : t("listings.wizard.postJob")}
             {draft.title && step > 0 ? ` · ${draft.title}` : ""}
           </h1>
         </div>
@@ -455,12 +463,12 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
       </ol>
 
       {step === 0 ? (
-        <Section title="What job are you hiring for?">
+        <Section title={t("listings.wizard.jobCategoryTitle")}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
             <Input
               className="pl-9"
-              placeholder="Search a job, e.g. cashier, driver, nurse"
+              placeholder={t("listings.wizard.searchPlaceholder")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -487,7 +495,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           {roles.length > 0 ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm font-semibold text-navy-900">
-                {search ? "Matching jobs" : "Common jobs — tap one"}
+                {search ? t("listings.wizard.matchingJobs") : t("listings.wizard.commonJobs")}
               </p>
               <div className="flex flex-wrap gap-2">
                 {roles.map(({ category, role }) => (
@@ -512,9 +520,9 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               </div>
             </div>
           ) : null}
-          <Field label="Not listed? Type the job title" showOptional={false}>
+          <Field label={t("listings.wizard.notListed")} showOptional={false}>
             <Input
-              placeholder="e.g. Gold Smith"
+              placeholder={t("listings.wizard.jobTitlePlaceholder")}
               maxLength={120}
               value={draft.templateId ? "" : draft.title}
               onChange={(event) => set({ title: event.target.value, templateId: null })}
@@ -524,29 +532,29 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
       ) : null}
 
       {step === 1 ? (
-        <Section title="The basics">
-          <Field label="Job title">
+        <Section title={t("listings.wizard.basicsTitle")}>
+          <Field label={t("listings.wizard.jobTitle")}>
             <Input value={draft.title} maxLength={120} onChange={(e) => set({ title: e.target.value })} />
           </Field>
           <QuantityStepper
-            label="How many people do you need?"
+            label={t("listings.wizard.howManyPeople")}
             value={draft.vacancies}
             min={1}
             max={500}
             onChange={(vacancies) => set({ vacancies })}
-            decrementLabel="One person fewer"
-            incrementLabel="One more person"
-            unit="people"
+            decrementLabel={t("listings.wizard.onePersonFewer")}
+            incrementLabel={t("listings.wizard.oneMorePerson")}
+            unit={t("listings.wizard.peopleUnit")}
           />
-          <Chips label="Job type" options={opts.job_types} value={draft.jobType} onChange={(v) => set({ jobType: v as string })} />
+          <Chips label={t("listings.wizard.jobType")} options={opts.job_types} value={draft.jobType} onChange={(v) => set({ jobType: v as string })} />
           <Chips
-            label="Experience needed"
+            label={t("listings.wizard.experienceNeeded")}
             options={opts.experience_bands}
             value={draft.experience}
             onChange={(v) => set({ experience: v as string })}
           />
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-semibold text-navy-900">Monthly salary</legend>
+            <legend className="mb-1 text-sm font-semibold text-navy-900">{t("listings.wizard.monthlySalary")}</legend>
             <div className="flex flex-wrap gap-2">
               {opts.salary_bands.map((band) => (
                 <button
@@ -573,37 +581,37 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               ))}
             </div>
             <div className="mt-1 grid grid-cols-2 gap-3">
-              <Field label="Minimum ₹" showOptional={false}>
+              <Field label={t("listings.wizard.minimumRupees")} showOptional={false}>
                 <Input inputMode="numeric" value={draft.salaryMin} onChange={(e) => set({ salaryMin: e.target.value })} />
               </Field>
-              <Field label="Maximum ₹" showOptional={false}>
+              <Field label={t("listings.wizard.maximumRupees")} showOptional={false}>
                 <Input inputMode="numeric" value={draft.salaryMax} onChange={(e) => set({ salaryMax: e.target.value })} />
               </Field>
             </div>
           </fieldset>
-          <Chips label="Paid" options={opts.salary_periods} value={draft.period} onChange={(v) => set({ period: (v as string) || "MONTHLY" })} />
-          <Chips label="How soon?" options={opts.urgencies} value={draft.urgency} onChange={(v) => set({ urgency: (v as string) || "NORMAL" })} />
+          <Chips label={t("listings.wizard.paid")} options={opts.salary_periods} value={draft.period} onChange={(v) => set({ period: (v as string) || "MONTHLY" })} />
+          <Chips label={t("listings.wizard.howSoon")} options={opts.urgencies} value={draft.urgency} onChange={(v) => set({ urgency: (v as string) || "NORMAL" })} />
         </Section>
       ) : null}
 
       {step === 2 ? (
-        <Section title="Skills">
+        <Section title={t("listings.wizard.skillsTitle")}>
           <TagPicker
-            label="Must have"
-            hint="Candidates are matched on these first."
+            label={t("listings.wizard.mustHave")}
+            hint={t("listings.wizard.mustHaveHint")}
             ideas={draft.skillIdeas}
             value={draft.required}
             exclude={draft.preferred}
             onChange={(required) => set({ required })}
-            addLabel="Add a skill"
+            addLabel={t("listings.wizard.addSkill")}
           />
           <TagPicker
-            label="Good to have"
+            label={t("listings.wizard.goodToHave")}
             ideas={draft.skillIdeas}
             value={draft.preferred}
             exclude={draft.required}
             onChange={(preferred) => set({ preferred })}
-            addLabel="Add a skill"
+            addLabel={t("listings.wizard.addSkill")}
           />
           <button
             type="button"
@@ -612,41 +620,41 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             className="inline-flex items-center gap-1.5 self-start text-sm font-bold text-text-link"
           >
             <ChevronDown className={`size-4 transition ${moreOpen ? "rotate-180" : ""}`} />
-            More options (timings, benefits, languages, duties)
+            {t("listings.wizard.moreOptions")}
           </button>
           {moreOpen ? (
             <div className="flex flex-col gap-5 border-t border-line pt-5">
-              <Chips label="Shift" options={opts.shifts} value={draft.shift} onChange={(v) => set({ shift: v as string })} />
+              <Chips label={t("listings.wizard.shift")} options={opts.shifts} value={draft.shift} onChange={(v) => set({ shift: v as string })} />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Starts at" showOptional={false}>
+                <Field label={t("listings.wizard.startsAt")} showOptional={false}>
                   <Input type="time" value={draft.timingStart} onChange={(e) => set({ timingStart: e.target.value })} />
                 </Field>
-                <Field label="Ends at" showOptional={false}>
+                <Field label={t("listings.wizard.endsAt")} showOptional={false}>
                   <Input type="time" value={draft.timingEnd} onChange={(e) => set({ timingEnd: e.target.value })} />
                 </Field>
               </div>
-              <Chips label="Weekly off" options={opts.weekly_offs} value={draft.weeklyOff} onChange={(v) => set({ weeklyOff: v as string })} />
-              <Chips label="Work place" options={opts.work_modes} value={draft.workMode} onChange={(v) => set({ workMode: v as string })} />
+              <Chips label={t("listings.wizard.weeklyOff")} options={opts.weekly_offs} value={draft.weeklyOff} onChange={(v) => set({ weeklyOff: v as string })} />
+              <Chips label={t("listings.wizard.workPlace")} options={opts.work_modes} value={draft.workMode} onChange={(v) => set({ workMode: v as string })} />
               <TagPicker
-                label="Benefits"
+                label={t("listings.wizard.benefits")}
                 ideas={opts.benefits}
                 value={draft.benefits}
                 onChange={(benefits) => set({ benefits })}
-                addLabel="Add a benefit"
+                addLabel={t("listings.wizard.addBenefit")}
               />
-              <Chips multi label="Languages they should speak" options={opts.languages} value={draft.languages} onChange={(v) => set({ languages: v as string[] })} />
+              <Chips multi label={t("listings.wizard.languagesSpoken")} options={opts.languages} value={draft.languages} onChange={(v) => set({ languages: v as string[] })} />
               <Chips
-                label="Minimum qualification"
+                label={t("listings.wizard.minQualification")}
                 options={opts.qualifications}
                 value={draft.qualification}
                 onChange={(v) => set({ qualification: v as string })}
               />
               <TagPicker
-                label="Duties"
+                label={t("listings.wizard.duties")}
                 ideas={draft.dutyIdeas}
                 value={draft.duties}
                 onChange={(duties) => set({ duties })}
-                addLabel="Add a duty"
+                addLabel={t("listings.wizard.addDuty")}
               />
             </div>
           ) : null}
@@ -655,32 +663,32 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
 
       {step === 3 ? (
         <>
-          <Section title="Where is the job?">
+          <Section title={t("listings.wizard.locationTitle")}>
             <Chips
-              label="City"
+              label={t("listings.wizard.city")}
               options={opts.cities.map((city) => ({ value: city, label: city }))}
               value={draft.city}
               onChange={(v) => set({ city: v as string })}
             />
-            <Field label="Other city" showOptional={false}>
+            <Field label={t("listings.wizard.otherCity")} showOptional={false}>
               <Input
-                placeholder="Type if not listed"
+                placeholder={t("listings.wizard.typeIfNotListed")}
                 value={opts.cities.includes(draft.city) ? "" : draft.city}
                 onChange={(e) => set({ city: e.target.value })}
               />
             </Field>
-            <Field label="Area / locality">
-              <Input placeholder="e.g. Kukatpally" maxLength={120} value={draft.area} onChange={(e) => set({ area: e.target.value })} />
+            <Field label={t("listings.wizard.areaLocality")}>
+              <Input placeholder={t("listings.wizard.areaPlaceholder")} maxLength={120} value={draft.area} onChange={(e) => set({ area: e.target.value })} />
             </Field>
             {!preview ? (
               <Button
                 loading={save.isPending}
-                loadingLabel="Preparing preview…"
+                loadingLabel={t("listings.wizard.preparingPreview")}
                 disabled={!draft.city.trim()}
                 onClick={() => save.mutate(draft)}
               >
                 <Sparkles className="size-4" aria-hidden />
-                See preview
+                {t("listings.wizard.seePreview")}
               </Button>
             ) : null}
           </Section>
@@ -704,7 +712,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                   {draft.salaryMax ? ` – ${rupeesLabel(Number(draft.salaryMax))}` : "+"}{" "}
                   {optionLabel(opts.salary_periods, draft.period)}
                 </li>
-                <li>👥 {draft.vacancies} needed</li>
+                <li>{t("listings.wizard.vacanciesNeeded", { count: draft.vacancies })}</li>
                 <li>{optionLabel(opts.job_types, draft.jobType)}</li>
                 {draft.experience ? <li>{optionLabel(opts.experience_bands, draft.experience)}</li> : null}
               </ul>
@@ -730,10 +738,10 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                         save.mutate(next);
                       }}
                     >
-                      Save text
+                      {t("listings.wizard.saveText")}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditingText(false)}>
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                   </div>
                 </div>
@@ -741,13 +749,12 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 <div className="rounded-control bg-surface-sunken p-3">
                   <p className="whitespace-pre-line text-sm leading-relaxed text-text">{draft.description}</p>
                   <button type="button" onClick={() => setEditingText(true)} className="mt-2 text-xs font-bold text-text-link">
-                    Edit description
+                    {t("listings.wizard.editDescription")}
                   </button>
                 </div>
               )}
               <p className="text-xs text-text-secondary">
-                Candidates are matched on the information they give. Please interview them to check their skills
-                and experience — the final choice is yours.
+                {t("listings.wizard.matchNote")}
               </p>
             </Card>
           ) : null}
@@ -764,20 +771,20 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
         <div className="mx-auto flex max-w-3xl gap-2">
           {step < 3 ? (
             <Button className="flex-1" onClick={next}>
-              Next
+              {t("listings.wizard.next")}
             </Button>
           ) : preview ? (
             <>
               <Button variant="secondary" onClick={() => router.push("/listings")} disabled={publish.isPending}>
-                {draft.status === "PUBLISHED" ? "Close" : "Save draft"}
+                {draft.status === "PUBLISHED" ? t("listings.wizard.close") : t("listings.wizard.saveDraft")}
               </Button>
-              <Button className="flex-1" loading={publish.isPending} loadingLabel="Publishing…" onClick={() => publish.mutate()}>
-                {draft.status === "PUBLISHED" ? "Done" : "Publish job"}
+              <Button className="flex-1" loading={publish.isPending} loadingLabel={t("listings.wizard.publishing")} onClick={() => publish.mutate()}>
+                {draft.status === "PUBLISHED" ? t("listings.wizard.done") : t("listings.wizard.publishJob")}
               </Button>
             </>
           ) : (
             <Button className="flex-1" disabled={!draft.city.trim()} loading={save.isPending} onClick={() => save.mutate(draft)}>
-              See preview
+              {t("listings.wizard.seePreview")}
             </Button>
           )}
         </div>

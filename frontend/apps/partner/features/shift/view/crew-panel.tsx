@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ChoiceChips, ErrorState, Skeleton, cn } from "@vsolve/ui";
+import { Button, ChoiceChips, ErrorState, Skeleton, cn, useT } from "@vsolve/ui";
 import {
   CREW_RELEASE_REASONS,
   assignableCrew,
@@ -66,6 +66,7 @@ const ROW =
   "flex min-h-14 w-full items-center gap-3 rounded-control border px-3 py-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
 
 export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onSaved }: CrewPanelProps) {
+  const t = useT();
   const roster = usePartnerCrew();
   const assign = useAssignShiftCrew(scope);
   const copy = useAssignCrewToDays(scope.engagementId);
@@ -107,7 +108,7 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
      is a draft the server has never seen, the server's numbers describe a different crew. The
      **wanted** side stays the server's, because that is a fact about the booking; only the
      **named** side is local, because only this screen knows what is ticked. */
-  const shortRoles = previewFulfilment(roleOptions, roles, ticked, split.eligible).filter(
+  const shortRoles = previewFulfilment(roleOptions, roles, ticked, split.eligible, t).filter(
     (row) => !row.is_met,
   );
 
@@ -116,17 +117,17 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
       <header className="flex items-center justify-between gap-2">
         <h2 id="crew-heading" className="flex items-center gap-2 text-base font-semibold text-text">
           <Pictogram name="crew" size="sm" />
-          Who is going
+          {t("work.crewPanel.heading")}
         </h2>
         <span className="text-sm font-semibold tabular-nums text-text-secondary">{counter}</span>
       </header>
 
       {closed ? (
-        <p className="text-sm text-text-secondary">This day is settled; the crew is fixed.</p>
+        <p className="text-sm text-text-secondary">{t("work.crewPanel.closed")}</p>
       ) : !canAssign ? (
-        <p className="text-sm text-text-secondary">Your account cannot name crew right now.</p>
+        <p className="text-sm text-text-secondary">{t("work.crewPanel.cannotAssign")}</p>
       ) : day.scheduled_on === null ? (
-        <p className="text-sm text-text-secondary">This day has no date yet.</p>
+        <p className="text-sm text-text-secondary">{t("work.crewPanel.noDate")}</p>
       ) : null}
 
       {roster.isPending ? (
@@ -135,9 +136,9 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
         <RosterFailure error={roster.error} onRetry={() => void roster.refetch()} />
       ) : split.eligible.length === 0 && split.blocked.length === 0 ? (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-text-secondary">Your roster is empty.</p>
+          <p className="text-sm text-text-secondary">{t("work.crewPanel.rosterEmpty")}</p>
           <Link href="/me/crew" className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-action">
-            Add your crew
+            {t("work.crewPanel.addCrew")}
           </Link>
         </div>
       ) : (
@@ -175,14 +176,14 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                     <span className="truncate text-sm font-semibold text-text">{member.display_name}</span>
                     <span className="text-xs text-text-muted">
                       {member.phone_masked}
-                      {member.is_supervisor ? " · Supervisor" : ""}
+                      {member.is_supervisor ? ` · ${t("work.crewPanel.supervisor")}` : ""}
                       {/* The gate this screen submits into counts men and women, and a name is
                           not a reliable signal of either -- which is the whole reason the field
                           exists. Without it here a supervisor picks blind and meets the refusal
                           by chance rather than by mistake. Shown only when recorded: a blank is
                           chased on the roster screen, which has the count and the control, and
                           nagging about it on a job that asks for no mix is noise. */}
-                      {member.gender === "" ? "" : ` · ${crewGenderLabel(member.gender)}`}
+                      {member.gender === "" ? "" : ` · ${crewGenderLabel(member.gender, t)}`}
                     </span>
                   </span>
                 </button>
@@ -192,7 +193,7 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                     record, and the warning below that reads from it. */}
                 {on && roleOptions.length > 0 ? (
                   <label className="mt-1 flex items-center gap-2 pl-10 text-xs text-text-secondary">
-                    Working as
+                    {t("work.crewPanel.workingAs")}
                     <select
                       value={roles[member.membership_id] ?? ""}
                       disabled={locked}
@@ -204,7 +205,7 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                       }
                       className="min-h-9 rounded-control border border-line bg-surface px-2 text-xs text-text disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                     >
-                      <option value="">Not set</option>
+                      <option value="">{t("work.crewPanel.roleNotSet")}</option>
                       {roleOptions.map((row) => (
                         <option key={row.role_code} value={row.role_code}>
                           {row.role_label}
@@ -224,8 +225,8 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-semibold text-text-secondary">{member.display_name}</span>
                 <span className="text-xs text-text-muted">
-                  {INELIGIBILITY_WORDING[why]}
-                  {member.gender === "" ? "" : ` · ${crewGenderLabel(member.gender)}`}
+                  {t(INELIGIBILITY_WORDING[why])}
+                  {member.gender === "" ? "" : ` · ${crewGenderLabel(member.gender, t)}`}
                 </span>
               </span>
             </li>
@@ -237,11 +238,11 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
         <>
           {removing.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Why are they off?</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("work.crewPanel.whyOff")}</p>
               <ChoiceChips
-                label="Why are they coming off this day?"
+                label={t("work.crewPanel.whyOffLabel")}
                 name="release-reason"
-                options={CREW_RELEASE_REASONS.map((code) => ({ value: code, label: RELEASE_REASON_LABEL[code] }))}
+                options={CREW_RELEASE_REASONS.map((code) => ({ value: code, label: t(RELEASE_REASON_LABEL[code]) }))}
                 value={reason}
                 onChange={(value) => setReason(value as CrewReleaseReason)}
               />
@@ -249,7 +250,7 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
           ) : null}
 
           {problem === null ? null : (
-            <p className="text-sm text-danger-text">{describeSelectionProblem(problem, headcount)}</p>
+            <p className="text-sm text-danger-text">{describeSelectionProblem(problem, headcount, t)}</p>
           )}
 
           <div className="flex flex-col gap-2">
@@ -272,10 +273,10 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                 )
               }
               loading={assign.isPending}
-              loadingLabel="Saving"
+              loadingLabel={t("common.saving")}
               disabled={problem !== null || unchanged || busy}
             >
-              Save crew ({counter})
+              {t("work.crewPanel.saveCrew", { counter })}
             </Button>
 
             {remainingDays.length === 0 ? null : (
@@ -288,7 +289,7 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                     {
                       days: unchanged
                         ? remainingDays
-                        : [{ stageId: scope.stageId, label: day.day_label || `Day ${day.position}` }, ...remainingDays],
+                        : [{ stageId: scope.stageId, label: day.day_label || t("work.crewPanel.dayPosition", { position: day.position }) }, ...remainingDays],
                       membershipIds: ticked,
                       ...reasonInput,
                     },
@@ -301,10 +302,10 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                   )
                 }
                 loading={copy.isPending}
-                loadingLabel="Copying"
+                loadingLabel={t("work.crewPanel.copying")}
                 disabled={problem !== null || busy}
               >
-                Copy to all {remainingDays.length + (unchanged ? 0 : 1)} days
+                {t("work.crewPanel.copyToAll", { count: remainingDays.length + (unchanged ? 0 : 1) })}
               </Button>
             )}
           </div>
@@ -318,13 +319,14 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
 }
 
 function RosterFailure({ error, onRetry }: { readonly error: unknown; readonly onRetry: () => void }) {
+  const t = useT();
   const presentation = describeError(error, "read");
   return (
     <ErrorState
       title={presentation.title}
       message={presentation.message}
       severity={presentation.severity}
-      actionLabel="Try again"
+      actionLabel={t("common.tryAgain")}
       onAction={onRetry}
       reference={presentation.reference}
     />
@@ -336,19 +338,20 @@ function RosterFailure({ error, onRetry }: { readonly error: unknown; readonly o
  * the server's own sentence, which names the person and the date.
  */
 function AssignFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
 
   if (isCrewRosterRequired(error)) {
     return (
       <div className="flex flex-col gap-2">
         <ErrorState
-          title="Add somebody to your roster first"
-          message="Vsolve asks for your crew the first time you name anybody."
+          title={t("work.crewPanel.rosterRequired.title")}
+          message={t("work.crewPanel.rosterRequired.message")}
           severity="warning"
           reference={presentation.reference}
         />
         <Link href="/me/crew" className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-action">
-          Go to your crew
+          {t("work.crewPanel.rosterRequired.action")}
         </Link>
       </div>
     );
@@ -357,7 +360,7 @@ function AssignFailure({ error }: { readonly error: unknown }) {
   if (isCrewConflict(error)) {
     return (
       <ErrorState
-        title="Somebody on that list cannot work this day"
+        title={t("work.crewPanel.conflictTitle")}
         message={presentation.message}
         severity="warning"
         reference={presentation.reference}
@@ -376,13 +379,18 @@ function AssignFailure({ error }: { readonly error: unknown }) {
 }
 
 function CopyFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   if (!isCrewCopyFailure(error)) return <AssignFailure error={error} />;
   const presentation = describeError(error.cause, "mutation");
   const done = error.completed.map((day) => day.label).join(", ");
   return (
     <ErrorState
-      title={`${error.failedDay.label} refused`}
-      message={done === "" ? presentation.message : `${presentation.message} Saved: ${done}.`}
+      title={t("work.crewPanel.copyRefused", { day: error.failedDay.label })}
+      message={
+        done === ""
+          ? presentation.message
+          : `${presentation.message} ${t("work.crewPanel.copySaved", { days: done })}`
+      }
       severity="warning"
       reference={presentation.reference}
     />
@@ -418,22 +426,28 @@ function assignedRoles(day: ShiftDay): Readonly<Record<string, string>> {
  * shortfall differently.
  */
 function RoleGapNotice({ rows }: { readonly rows: readonly ShiftDay["role_fulfilment"][number][] }) {
+  const t = useT();
   if (rows.length === 0) return null;
 
   return (
     <div className="rounded-card border border-warning-line bg-warning-surface px-3.5 py-3">
-      <p className="text-sm font-bold text-warning-text">Not what the customer asked for</p>
+      <p className="text-sm font-bold text-warning-text">{t("work.crewPanel.roleGap.title")}</p>
       <ul className="mt-1.5 flex list-none flex-col gap-1 p-0">
         {rows.map((row) => (
           <li key={row.role_code} className="text-sm leading-5 text-warning-text">
-            <span className="font-semibold">{row.role_label}</span> — asked for{" "}
-            {people(row.wanted_men, "man")} and {people(row.wanted_women, "woman")}, named{" "}
-            {row.named_men} and {row.named_women}. {row.gap}.
+            <span className="font-semibold">{row.role_label}</span>{" "}
+            {t("work.crewPanel.roleGap.row", {
+              wantedMen: people(row.wanted_men, "man", t),
+              wantedWomen: people(row.wanted_women, "woman", t),
+              namedMen: row.named_men,
+              namedWomen: row.named_women,
+              gap: row.gap,
+            })}
           </li>
         ))}
       </ul>
       <p className="mt-1.5 text-xs leading-5 text-warning-text">
-        You can still save. Vsolve only holds you to the totals.
+        {t("work.crewPanel.roleGap.footer")}
       </p>
     </div>
   );
@@ -441,9 +455,10 @@ function RoleGapNotice({ rows }: { readonly rows: readonly ShiftDay["role_fulfil
 
 
 /** "1 man", "2 men", "0 women". Plurals the customer's own numbers earn. */
-function people(count: number, noun: "man" | "woman"): string {
-  if (count === 1) return `1 ${noun}`;
-  return `${count} ${noun === "man" ? "men" : "women"}`;
+function people(count: number, noun: "man" | "woman", t: ReturnType<typeof useT>): string {
+  return noun === "man"
+    ? t("work.crewPanel.menCount", { count })
+    : t("work.crewPanel.womenCount", { count });
 }
 
 
@@ -460,6 +475,7 @@ function previewFulfilment(
   roles: Readonly<Record<string, string>>,
   ticked: readonly string[],
   roster: readonly CrewMemberRecord[],
+  t: ReturnType<typeof useT>,
 ): readonly ShiftDay["role_fulfilment"][number][] {
   const genderOf = new Map(roster.map((member) => [member.membership_id, member.gender]));
 
@@ -475,8 +491,8 @@ function previewFulfilment(
     const shortMen = Math.max(0, row.wanted_men - namedMen);
     const shortWomen = Math.max(0, row.wanted_women - namedWomen);
     const gap = [
-      shortMen > 0 ? people(shortMen, "man") : null,
-      shortWomen > 0 ? people(shortWomen, "woman") : null,
+      shortMen > 0 ? people(shortMen, "man", t) : null,
+      shortWomen > 0 ? people(shortWomen, "woman", t) : null,
     ].filter((part): part is string => part !== null);
 
     return {
@@ -484,7 +500,12 @@ function previewFulfilment(
       named_men: namedMen,
       named_women: namedWomen,
       is_met: gap.length === 0,
-      gap: gap.length === 0 ? "" : `${gap.join(" and ")} short`,
+      gap:
+        gap.length === 0
+          ? ""
+          : gap.length === 2
+            ? t("work.crewPanel.gapShortBoth", { first: gap[0]!, second: gap[1]! })
+            : t("work.crewPanel.gapShort", { people: gap[0]! }),
     };
   });
 }

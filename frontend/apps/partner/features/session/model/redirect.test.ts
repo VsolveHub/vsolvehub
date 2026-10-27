@@ -64,21 +64,18 @@ describe("safeNextPath", () => {
 });
 
 describe("homeForApplication", () => {
-  it("sends a Partner with work left to the application", () => {
+  it("sends an applicant with work left or waiting for review to the registration flow", () => {
     expect(homeForApplication(null)).toBe("/apply");
     expect(homeForApplication("DRAFT")).toBe("/apply");
     expect(homeForApplication("CHANGES_REQUIRED")).toBe("/apply");
+    expect(homeForApplication("SUBMITTED")).toBe("/apply");
+    expect(homeForApplication("UNDER_REVIEW")).toBe("/apply");
   });
 
-  it("sends everyone else to the signed-in home", () => {
-    // Waiting states included: there is nothing for them to do on `/apply`, and
-    // the home says so plainly rather than reopening a form they cannot change.
-    expect(homeForApplication("SUBMITTED")).toBe("/home");
-    expect(homeForApplication("UNDER_REVIEW")).toBe("/home");
+  it("sends approved and terminal accounts to the signed-in home", () => {
     expect(homeForApplication("APPROVED")).toBe("/home");
     expect(homeForApplication("SUSPENDED")).toBe("/home");
     expect(homeForApplication("OFFBOARDED")).toBe("/home");
-    // Final, and not editable: the home says it was not approved.
     expect(homeForApplication("DECLINED")).toBe("/home");
   });
 });

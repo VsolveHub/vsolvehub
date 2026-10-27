@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock } from "lucide-react";
+import { useT } from "@vsolve/ui";
 import { useEffect, useId, useRef, useState } from "react";
 
 const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -16,8 +17,9 @@ function toValue(hour12: number, minute: number, pm: boolean): string {
   return `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-export function clockText(value: string): string {
-  if (!value) return "Set time";
+/** `t` is optional so callers outside the React tree keep the English fallback. */
+export function clockText(value: string, t?: ReturnType<typeof useT>): string {
+  if (!value) return t ? t("common.timePicker.setTime") : "Set time";
   const { hour12, minute, pm } = parts(value);
   return `${hour12}:${String(minute).padStart(2, "0")} ${pm ? "PM" : "AM"}`;
 }
@@ -40,6 +42,7 @@ export function TimePicker({
   label: string;
   minutes?: readonly number[];
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -70,7 +73,7 @@ export function TimePicker({
     <div ref={box} className="relative">
       <button
         type="button"
-        aria-label={`${label}: ${clockText(value)}`}
+        aria-label={`${label}: ${clockText(value, t)}`}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
@@ -80,7 +83,7 @@ export function TimePicker({
             : "border-line bg-surface text-navy-900 hover:border-navy-700"
         }`}
       >
-        {clockText(value)}
+        {clockText(value, t)}
         <Clock className="size-4 text-text-muted" aria-hidden />
       </button>
 
@@ -91,7 +94,7 @@ export function TimePicker({
           aria-label={label}
           className="absolute left-0 top-full z-30 mt-2 w-72 rounded-card border border-line bg-surface p-3 shadow-overlay"
         >
-          <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Hour</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">{t("common.timePicker.hour")}</p>
           <div className="mt-1.5 grid grid-cols-6 gap-1.5">
             {HOURS.map((h) => (
               <button key={h} type="button" className={cell(h === hour12)} onClick={() => onChange(toValue(h, minute, pm))}>
@@ -100,7 +103,7 @@ export function TimePicker({
             ))}
           </div>
 
-          <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">Minutes</p>
+          <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">{t("common.timePicker.minutes")}</p>
           <div
             className="mt-1.5 grid gap-1.5"
             style={{ gridTemplateColumns: `repeat(${minutes.length}, minmax(0, 1fr))` }}
@@ -136,7 +139,7 @@ export function TimePicker({
             onClick={() => setOpen(false)}
             className="mt-3 h-9 w-full rounded-control bg-action text-sm font-bold text-action-text hover:bg-action-hover"
           >
-            Done · {clockText(value || "10:00")}
+            {t("common.timePicker.done", { time: clockText(value || "10:00", t) })}
           </button>
         </div>
       ) : null}
