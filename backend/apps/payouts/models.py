@@ -414,6 +414,16 @@ class PayoutBatchItem(models.Model):
     failure_code = models.SlugField(max_length=80, blank=True)
     #: Sent to the provider so a retried submission cannot pay twice.
     idempotency_key = models.CharField(max_length=128)
+    #: The provider's own last-known status (`queued`, `processing`, `processed`, …) and what it
+    #: reported alongside. Tracking only — `status` above is the decision; these are the evidence
+    #: Finance reconciles against, and a `payout.updated` webhook may change them without
+    #: changing the decision.
+    provider_status = models.CharField(max_length=24, blank=True)
+    utr = models.CharField(max_length=64, blank=True)
+    mode = models.CharField(max_length=8, blank=True)
+    fees_paise = models.BigIntegerField(null=True, blank=True)
+    tax_paise = models.BigIntegerField(null=True, blank=True)
+    status_reason = models.CharField(max_length=240, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

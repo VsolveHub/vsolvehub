@@ -87,6 +87,13 @@ class ProviderPayout:
     #: adapter that interpreted status would be a second place the state machine lives.
     status: str
     failure_reason: str = ""
+    #: Tracking data, recorded but never decided on. RazorpayX fills fees and tax only once a
+    #: payout reaches `processing`, and the UTR once the bank has it.
+    utr: str = ""
+    mode: str = ""
+    fees_paise: int | None = None
+    tax_paise: int | None = None
+    status_reason: str = ""
 
 
 class PayoutAccountProvider(Protocol):
@@ -169,6 +176,10 @@ class FakePayoutProvider:
             status="processed",
         )
 
+    def find_payout_by_reference(self, *, reference: str) -> ProviderPayout | None:  # noqa: ARG002
+        # The fake keeps no record, so it has never received anything a lookup could find.
+        return None
+
     def verify_webhook(self, *, body: bytes, signature: str) -> bool:  # noqa: ARG002
         # No signing key to check against; the fixed token is what a test asserts with.
         return signature == "fake-signature"
@@ -215,6 +226,7 @@ class RazorpayXPayoutProvider:
         *,
         payload: dict[str, object] | None = None,
         headers: dict[str, str] | None = None,
+        params: dict[str, str] | None = None,
     ) -> dict[str, object]:
         try:
             response = requests.request(
@@ -269,7 +281,7 @@ class RazorpayXPayoutProvider:
         return cast(dict[str, object], data)
 
     @staticmethod
-    def _payout(data: dict[str, object]) -> ProviderPayout:
+    def parse_payout(data: dict[str, object]) -> ProviderPayout:
         identifier = data.get("id")
         amount = data.get("amount")
         if (
@@ -278,12 +290,21 @@ class RazorpayXPayoutProvider:
             or not isinstance(amount, int)
         ):
             raise PayoutProviderAmbiguousError("RazorpayX omitted a payout identifier or amount.")
+        raw_details = data.get("status_details")
+        details: dict[str, object] = (
+            cast(dict[str, object], raw_details) if isinstance(raw_details, dict) else {}
+        )
         return ProviderPayout(
             provider_payout_id=identifier,
             amount_paise=amount,
             currency=str(data.get("currency", "INR")),
             status=str(data.get("status", "")),
-            failure_reason=str(data.get("failure_reason") or ""),
+            failure_reason=str(data.get("failure_reason") or details.get("reason") or ""),
+            utr=_text(data.get("utr"), 64),
+            mode=_text(data.get("mode"), 8),
+            fees_paise=_paise(data.get("fees")),
+            tax_paise=_paise(data.get("tax")),
+            status_reason=_text(details.get("description"), _DETAIL_MAX_LENGTH),
         )
 
     def create_payout(

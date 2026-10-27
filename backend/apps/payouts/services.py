@@ -885,19 +885,90 @@ def reject_payout_account(*, account_id: UUID, actor: User, reason: str) -> Part
     return account
 
 
+#: Item statuses that are finished with their entries: the money is back in the Partner's pool.
+_RELEASING_STATUSES = (
+    PayoutBatchItem.Status.FAILED,
+    PayoutBatchItem.Status.RELEASED,
+    PayoutBatchItem.Status.REVERSED,
+)
+#: Item statuses whose provider outcome is still open.
+_OPEN_STATUSES = (
+    PayoutBatchItem.Status.RESERVED,
+    PayoutBatchItem.Status.SUBMITTED,
+    PayoutBatchItem.Status.UNDER_REVIEW,
+)
+
+
+def _live_entry_ids(item: PayoutBatchItem) -> list[UUID]:
+    return list(item.entries.filter(is_live=True).values_list("ledger_entry_id", flat=True))
+
+
+def _close_item(item: PayoutBatchItem, *, status: str, failure_code: str) -> None:
+    """Finish a transfer whose money did not stay out, returning every entry to the pool once.
+
+    For a transfer never sent (refused at the last check, batch cancelled), one the provider
+    refused, and one paid and then reversed by the bank. The caller holds the item's lock and has
+    checked the transition, and the lines stop being live in the same step, which is what makes
+    the return happen exactly once however often the provider repeats itself.
+    """
+
+    item.status = status
+    item.failure_code = failure_code
+    item.completed_at = timezone.now()
+    item.save(update_fields=("status", "failure_code", "completed_at", "updated_at"))
+    entry_ids = _live_entry_ids(item)
+    item.entries.filter(is_live=True).update(is_live=False)
+    for entry in PartnerLedgerEntry.objects.select_for_update().filter(
+        id__in=entry_ids,
+        status__in=(PartnerLedgerEntry.Status.RESERVED, PartnerLedgerEntry.Status.PAID),
+    ):
+        entry.status = PartnerLedgerEntry.Status.RELEASED
+        entry.save(update_fields=("status", "updated_at"))
+
+
+def _pre_send_refusal(item: PayoutBatchItem) -> str:
+    """Why this transfer must not be sent right now, checked at the last moment; empty if it may.
+
+    Approval can come hours before payment. In between, payouts can be switched off, the Partner
+    suspended, their bank account replaced or rejected, or a dispute opened on a visit inside the
+    transfer. Each is a reason the money must not leave, and each is far cheaper to catch here
+    than to recover from a bank afterwards.
+    """
+
+    if is_engaged(KillSwitch.Scope.PAYOUTS):
+        return "payouts_paused"
+    if PartnerApplication.objects.filter(
+        partner_id=item.partner_id,
+        status__in=(PartnerApplication.Status.SUSPENDED, PartnerApplication.Status.OFFBOARDED),
+    ).exists():
+        return "partner_suspended"
+    account = item.payout_account
+    if (
+        account.status != PartnerPayoutAccount.Status.VERIFIED
+        or account.effective_from > timezone.now()
+    ):
+        return "account_not_payable"
+    held = with_hold_flags(PartnerLedgerEntry.objects.filter(id__in=_live_entry_ids(item)))
+    if held.filter(ON_HOLD).exists():
+        return "earning_on_hold"
+    return ""
+
+
 @transaction.atomic
 def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
-    """Send one reserved item to the provider, exactly once.
+    """Send one reserved transfer to the provider, exactly once.
 
-    The three outcomes are not symmetrical, and the asymmetry is the whole point:
+    Re-checked first (`_pre_send_refusal`): a transfer that may no longer be sent is released
+    unsent, its money back in the pool. Then the three provider outcomes, which are not
+    symmetrical, and the asymmetry is the whole point:
 
-    * **Accepted** — the item is `SUBMITTED` and the ledger entry stays reserved.
-    * **Rejected** — the provider explicitly refused, so no money moved. The item fails and the
-      entry is released back to the pool, where a later batch can pick it up.
+    * **Accepted** — the item is `SUBMITTED` and its entries stay reserved.
+    * **Rejected** — the provider explicitly refused, so no money moved. The item fails and its
+      entries go back to the pool, where a later batch can pick them up.
     * **Ambiguous** — a timeout, a reset, a 5xx. The payout *may* have gone out. The item parks
-      at `UNDER_REVIEW` and the entry stays reserved, because releasing it here is precisely how
-      a Partner gets paid twice: the first attempt lands late, the entry is already in a second
-      batch, and both settle. Slower and correct beats faster and wrong when the money has left.
+      at `UNDER_REVIEW` and its entries stay reserved, because releasing them here is precisely
+      how a Partner gets paid twice. `reconcile_payouts` settles it by asking the provider what
+      it has under the item's reference — never by sending it again.
     """
 
     item = (
@@ -927,65 +998,186 @@ def submit_payout_item(*, item_id: UUID) -> PayoutBatchItem:
         item.submitted_at = timezone.now()
         item.save(update_fields=("status", "failure_code", "submitted_at", "updated_at"))
         return item
-    except PayoutProviderRejectedError:
-        item.status = PayoutBatchItem.Status.FAILED
-        item.failure_code = "provider_rejected"
-        item.completed_at = timezone.now()
-        item.save(update_fields=("status", "failure_code", "completed_at", "updated_at"))
-        entry = PartnerLedgerEntry.objects.select_for_update().get(id=item.ledger_entry_id)
-        entry.status = PartnerLedgerEntry.Status.RELEASED
-        entry.save(update_fields=("status", "updated_at"))
+    except PayoutProviderRejectedError as exc:
+        _close_item(item, status=PayoutBatchItem.Status.FAILED, failure_code=_rejection_code(exc))
+        _settle_batch_if_complete(item.batch_id)
         return item
 
+    tracked = _record_tracking(item, result)
     item.status = PayoutBatchItem.Status.SUBMITTED
     item.provider_payout_id = result.provider_payout_id
     item.submitted_at = timezone.now()
-    item.save(update_fields=("status", "provider_payout_id", "submitted_at", "updated_at"))
+    item.save(
+        update_fields=("status", "provider_payout_id", "submitted_at", *tracked, "updated_at")
+    )
     return item
 
 
-#: Provider vocabulary reduced to ours. Reduction lives here rather than in the adapter so there
-#: is one place the payout state machine is decided.
-_PROVIDER_TERMINAL_STATES: dict[str, str] = {
+#: Provider outcomes reduced to ours. Reduction lives here rather than in the adapter so there is
+#: one place the payout state machine is decided. Anything not listed — `queued`, `pending`,
+#: `processing` — is still in flight: tracked, never decided on.
+_PROVIDER_OUTCOMES: dict[str, str] = {
     "processed": PayoutBatchItem.Status.PAID,
-    "reversed": PayoutBatchItem.Status.FAILED,
+    "reversed": PayoutBatchItem.Status.REVERSED,
     "cancelled": PayoutBatchItem.Status.FAILED,
     "rejected": PayoutBatchItem.Status.FAILED,
     "failed": PayoutBatchItem.Status.FAILED,
 }
 
+#: Where each provider status sits in RazorpayX's lifecycle, so tracking only moves forward: a
+#: `processing` delivered late after `processed` leaves `provider_status` saying `processed`.
+_PROVIDER_STATUS_RANK: dict[str, int] = {
+    "queued": 1,
+    "pending": 1,
+    "scheduled": 1,
+    "processing": 2,
+    "processed": 3,
+    "reversed": 4,
+    "failed": 4,
+    "rejected": 4,
+    "cancelled": 4,
+}
+
+
+def _next_status(current: str, provider_status: str) -> str | None:
+    """The one place a payout's decided status moves, and it only ever moves forward.
+
+    An open item takes any final outcome. A paid item can still be reversed — RazorpayX allows a
+    bank to return a processed payout up to T+3 working days later — and nothing else. Failed,
+    reversed and released are final: a `processed` arriving after a `reversed` is a late
+    out-of-order delivery of an earlier state, and must not pay out money that came back.
+    """
+
+    outcome = _PROVIDER_OUTCOMES.get(provider_status)
+    if outcome is None:
+        return None
+    if current in _OPEN_STATUSES:
+        return outcome
+    if current == PayoutBatchItem.Status.PAID and outcome == PayoutBatchItem.Status.REVERSED:
+        return outcome
+    return None
+
+
+def _record_tracking(item: PayoutBatchItem, payout: ProviderPayout) -> list[str]:
+    """Copy the provider's tracking data onto the item; return the fields that changed.
+
+    Never decides anything, and never moves backwards: an older status does not overwrite a newer
+    one, and an empty UTR does not erase a known one.
+    """
+
+    changed: list[str] = []
+    rank = _PROVIDER_STATUS_RANK.get(payout.status, 0)
+    if (
+        payout.status
+        and rank >= _PROVIDER_STATUS_RANK.get(item.provider_status, 0)
+        and item.provider_status != payout.status[:24]
+    ):
+        item.provider_status = payout.status[:24]
+        changed.append("provider_status")
+    text_fields = (
+        ("utr", payout.utr),
+        ("mode", payout.mode),
+        ("status_reason", payout.status_reason),
+    )
+    for name, text in text_fields:
+        if text and getattr(item, name) != text:
+            setattr(item, name, text)
+            changed.append(name)
+    amount_fields = (("fees_paise", payout.fees_paise), ("tax_paise", payout.tax_paise))
+    for name, amount in amount_fields:
+        if amount is not None and getattr(item, name) != amount:
+            setattr(item, name, amount)
+            changed.append(name)
+    return changed
+
 
 @transaction.atomic
-def apply_payout_result(*, item_id: UUID, status: str, failure_reason: str = "") -> PayoutBatchItem:
-    """Settle one item from a webhook or a reconciliation poll.
+def apply_payout_result(
+    *,
+    item_id: UUID,
+    status: str,
+    failure_reason: str = "",
+    tracking: ProviderPayout | None = None,
+) -> PayoutBatchItem:
+    """Settle one transfer from a webhook or a reconciliation poll.
 
-    Monotonic: a `PAID` item never moves again, however many duplicate or out-of-order webhooks
-    arrive. A provider that reports `processed` twice, or reports `queued` after `processed`,
-    must not be able to un-pay somebody.
+    Only final outcomes decide anything, and only forward (`_next_status`). Paid moves the
+    entries to `PAID`. Failed, cancelled or rejected — and reversed after being paid — return
+    them to the pool exactly once (`_close_item`). Duplicates and late deliveries change nothing
+    but tracking data.
     """
 
     item = PayoutBatchItem.objects.select_for_update().get(id=item_id)
-    if item.status in (PayoutBatchItem.Status.PAID, PayoutBatchItem.Status.RELEASED):
-        return item
-    target = _PROVIDER_TERMINAL_STATES.get(status)
+    tracked = _record_tracking(
+        item,
+        tracking
+        or ProviderPayout(
+            provider_payout_id=item.provider_payout_id,
+            amount_paise=item.amount_paise,
+            currency=item.currency,
+            status=status,
+        ),
+    )
+    if tracked:
+        item.save(update_fields=(*tracked, "updated_at"))
+    target = _next_status(item.status, status)
     if target is None:
-        # Still in flight ("queued", "processing"). Nothing to settle, and nothing to guess.
+        if (
+            _PROVIDER_OUTCOMES.get(status) == PayoutBatchItem.Status.PAID
+            and item.status in _RELEASING_STATUSES
+        ):
+            # Money the ledger already put back says it went out after all. Never applied
+            # automatically — that is how a Partner gets paid twice — but loud enough to chase.
+            logger.warning(
+                "Payout reported processed after it was closed",
+                extra={"payout_item_id": str(item.id), "item_status": item.status},
+            )
         return item
 
-    entry = PartnerLedgerEntry.objects.select_for_update().get(id=item.ledger_entry_id)
-    item.status = target
-    item.failure_code = (
-        "" if target == PayoutBatchItem.Status.PAID else _failure_code(failure_reason or status)
-    )
-    item.completed_at = timezone.now()
-    item.save(update_fields=("status", "failure_code", "completed_at", "updated_at"))
+    if target == PayoutBatchItem.Status.PAID:
+        item.status = target
+        item.failure_code = ""
+        item.completed_at = timezone.now()
+        item.save(update_fields=("status", "failure_code", "completed_at", "updated_at"))
+        for entry in PartnerLedgerEntry.objects.select_for_update().filter(
+            id__in=_live_entry_ids(item), status=PartnerLedgerEntry.Status.RESERVED
+        ):
+            entry.status = PartnerLedgerEntry.Status.PAID
+            entry.save(update_fields=("status", "updated_at"))
+    else:
+        _close_item(item, status=target, failure_code=_failure_code(failure_reason or status))
+    _settle_batch_if_complete(item.batch_id)
+    return item
 
-    entry.status = (
-        PartnerLedgerEntry.Status.PAID
-        if target == PayoutBatchItem.Status.PAID
-        else PartnerLedgerEntry.Status.RELEASED
-    )
-    entry.save(update_fields=("status", "updated_at"))
+
+@transaction.atomic
+def settle_unconfirmed_payout(*, item_id: UUID, found: ProviderPayout | None) -> PayoutBatchItem:
+    """Resolve a transfer whose submission got no clear answer, from what the provider holds.
+
+    `found` is the provider's payout under the item's reference, or None if it has none. Found:
+    record its id and apply its status like any other result. Not found, and the submission is
+    older than `PAYOUT_AMBIGUOUS_RELEASE_HOURS`: the provider never received it, so no money
+    moved, and the entries go back to the pool. Not found but recent: leave it — a lookup is
+    allowed to be early, and nothing is ever sent a second time.
+    """
+
+    item = PayoutBatchItem.objects.select_for_update().get(id=item_id)
+    if item.status not in (PayoutBatchItem.Status.SUBMITTED, PayoutBatchItem.Status.UNDER_REVIEW):
+        return item
+    if found is not None:
+        if not item.provider_payout_id:
+            item.provider_payout_id = found.provider_payout_id
+            item.save(update_fields=("provider_payout_id", "updated_at"))
+        return apply_payout_result(
+            item_id=item.id,
+            status=found.status,
+            failure_reason=found.failure_reason,
+            tracking=found,
+        )
+    sent_at = item.submitted_at or item.created_at
+    if timezone.now() - sent_at < timedelta(hours=settings.PAYOUT_AMBIGUOUS_RELEASE_HOURS):
+        return item
+    _close_item(item, status=PayoutBatchItem.Status.FAILED, failure_code="provider_never_received")
     _settle_batch_if_complete(item.batch_id)
     return item
 
