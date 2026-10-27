@@ -36,7 +36,8 @@ from apps.fulfilment.services import (
     locked_booking_context,
 )
 from apps.identity.models import User
-from apps.payouts.services import settle_booking_earning
+from apps.payouts.models import PartnerEarningHold
+from apps.payouts.services import place_earning_hold, settle_booking_earning
 
 REFUND_REASON_PARTIAL_COMPLETION = "partial_completion"
 
@@ -260,6 +261,8 @@ def _settle_submission(
         context={"submission_id": str(submission.id)},
         extra_booking_fields=extra_fields,
     )
+    if to_status == Booking.Status.DISPUTED:
+        _hold_disputed_earning(booking=booking, actor=actor)
     if to_status == Booking.Status.COMPLETED:
         history = (
             BookingStatusHistory.objects.filter(
@@ -409,12 +412,29 @@ def dispute_completion(
         context={"submission_id": str(submission.id)},
         extra_booking_fields={"payout_hold": True},
     )
+    _hold_disputed_earning(booking=booking, actor=booking.customer)
     # A disputed visit still earns. The Partner did the work and reported it; whether the
     # Customer is right is what the dispute decides, and refusing to record the earning would
     # pre-judge that. `settle_booking_earning` reads the hold and files it `PENDING`, so the
     # money is visible to the Partner as owed-but-not-payable rather than missing.
     settle_booking_earning(booking_id=booking.id, actor=booking.customer)
     return booking
+
+
+def _hold_disputed_earning(*, booking: Booking, actor: User | None) -> None:
+    """Freeze the visit's earning with an explicit hold while the dispute runs.
+
+    `payout_hold` on the Booking files an earning written afterwards as `PENDING`; the hold is
+    what the payout run and the Partner's balance read, so the freeze is visible on the ledger and
+    holds whichever order the earning and the dispute arrive in. Lifted by `release_payout_hold`.
+    """
+
+    place_earning_hold(
+        reason=PartnerEarningHold.Reason.COMPLETION_DISPUTE,
+        source_id=str(booking.id),
+        booking_id=booking.id,
+        actor=actor,
+    )
 
 
 def _has_completion_evidence(booking: Booking) -> bool:

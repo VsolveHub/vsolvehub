@@ -311,22 +311,153 @@ def settle_rental_earning(
         },
         created_by=actor,
         idempotency_key=f"rental-earning:{rb.id}",
+        clears_at=clearing_deadline(),
+    )
+
+
+def clearing_deadline() -> datetime:
+    """When an earning settled now becomes payable: the end of the Customer's dispute window."""
+
+    return timezone.now() + timedelta(hours=settings.PAYOUT_CLEARING_HOURS)
+
+
+@transaction.atomic
+def place_earning_hold(
+    *,
+    reason: str,
+    source_id: str,
+    booking_id: UUID | None = None,
+    rental_booking_id: UUID | None = None,
+    actor: User | None = None,
+) -> PartnerEarningHold | None:
+    """Freeze one booking's earning until whatever placed the hold is decided.
+
+    Idempotent per cause (`payouts_one_active_hold_per_cause`): a replayed dispute finds the hold
+    it already placed. Works whether or not the earning has been written yet — selection reads
+    holds by booking, so an earning settled after the hold is born frozen.
+
+    Returns None for a booking with no Partner, which has no earning to freeze.
+    """
+
+    existing = PartnerEarningHold.objects.filter(
+        reason=reason, source_id=source_id, status=PartnerEarningHold.Status.ACTIVE
+    ).first()
+    if existing is not None:
+        return existing
+    if booking_id is not None:
+        partner_id = Booking.objects.filter(id=booking_id).values_list("partner_id", flat=True)[0]
+    elif rental_booking_id is not None:
+        partner_id = RentalBooking.objects.filter(id=rental_booking_id).values_list(
+            "asset__partner_id", flat=True
+        )[0]
+    else:  # pragma: no cover - every caller names exactly one booking
+        raise ValueError("A hold names a booking or a rental booking.")
+    if partner_id is None:
+        return None
+    hold = PartnerEarningHold.objects.create(
+        partner_id=partner_id,
+        booking_id=booking_id,
+        rental_booking_id=rental_booking_id,
+        reason=reason,
+        source_id=source_id,
+        placed_by=actor,
+    )
+    _freeze_unpaid_earning(booking_id=booking_id, rental_booking_id=rental_booking_id)
+    return hold
+
+
+def _freeze_unpaid_earning(*, booking_id: UUID | None, rental_booking_id: UUID | None) -> None:
+    """Move the booking's unpaid earning to `PENDING`, the status every reader treats as held.
+
+    Only unpaid money: a status cannot freeze money that has left, and a transfer already
+    reserved is stopped by the last-moment check instead. `release_payout_hold` moves it back.
+    """
+
+    entries = PartnerLedgerEntry.objects.select_for_update().filter(
+        kind=PartnerLedgerEntry.Kind.EARNING, status__in=RESERVABLE_STATUSES
+    )
+    entries = (
+        entries.filter(booking_id=booking_id)
+        if booking_id is not None
+        else entries.filter(rental_booking_id=rental_booking_id)
+    )
+    for entry in entries:
+        entry.status = PartnerLedgerEntry.Status.PENDING
+        entry.save(update_fields=("status", "updated_at"))
+
+
+@transaction.atomic
+def release_hold_for_source(
+    *, reason: str, source_id: str, actor: User | None = None, note: str = ""
+) -> int:
+    """Lift the one hold a particular cause placed — a case closing — and nothing else.
+
+    Another cause on the same booking keeps its own hold, so the money stays frozen until the last
+    of them is decided.
+    """
+
+    return (
+        PartnerEarningHold.objects.select_for_update()
+        .filter(reason=reason, source_id=source_id, status=PartnerEarningHold.Status.ACTIVE)
+        .update(
+            status=PartnerEarningHold.Status.RELEASED,
+            released_at=timezone.now(),
+            released_by=actor,
+            release_note=note[:240],
+        )
+    )
+
+
+def _release_earning_holds(
+    *,
+    booking_id: UUID | None,
+    rental_booking_id: UUID | None,
+    actor: User | None,
+    note: str,
+) -> int:
+    holds = PartnerEarningHold.objects.select_for_update().filter(
+        status=PartnerEarningHold.Status.ACTIVE
+    )
+    holds = (
+        holds.filter(booking_id=booking_id)
+        if booking_id is not None
+        else holds.filter(rental_booking_id=rental_booking_id)
+    )
+    return holds.update(
+        status=PartnerEarningHold.Status.RELEASED,
+        released_at=timezone.now(),
+        released_by=actor,
+        release_note=note[:240],
     )
 
 
 @transaction.atomic
 def release_payout_hold(
-    *, booking_id: UUID | None = None, rental_booking_id: UUID | None = None
+    *,
+    booking_id: UUID | None = None,
+    rental_booking_id: UUID | None = None,
+    actor: User | None = None,
+    note: str = "",
 ) -> PartnerLedgerEntry | None:
-    """Move a held earning to `AVAILABLE` once the case that held it closes."""
+    """Unfreeze a booking's earning once whatever held it has been decided.
 
-    qs = PartnerLedgerEntry.objects.select_for_update().filter(kind=PartnerLedgerEntry.Kind.EARNING)
-    if booking_id is not None:
-        qs = qs.filter(booking_id=booking_id)
-    elif rental_booking_id is not None:
-        qs = qs.filter(rental_booking_id=rental_booking_id)
-    else:
+    Lifts every active `PartnerEarningHold` on the booking and moves an earning written `PENDING`
+    to `AVAILABLE`. Callers only reach here once nothing else is holding the booking — a case
+    checks `_subject_has_other_holds` first — so lifting all of its holds is the decision, not a
+    shortcut. The earning still waits out its own clearing window.
+    """
+
+    if booking_id is None and rental_booking_id is None:
         return None
+    _release_earning_holds(
+        booking_id=booking_id, rental_booking_id=rental_booking_id, actor=actor, note=note
+    )
+    qs = PartnerLedgerEntry.objects.select_for_update().filter(kind=PartnerLedgerEntry.Kind.EARNING)
+    qs = (
+        qs.filter(booking_id=booking_id)
+        if booking_id is not None
+        else qs.filter(rental_booking_id=rental_booking_id)
+    )
 
     entry = qs.first()
     if entry is None or entry.status != PartnerLedgerEntry.Status.PENDING:

@@ -231,6 +231,81 @@ class PartnerLedgerEntry(models.Model):
         super().save(*args, **kwargs)
 
 
+class PartnerEarningHold(models.Model):
+    """Money that must not leave until somebody decides: a dispute or a case on one booking.
+
+    Explicit rather than read off a booking flag, so the rule can be inspected: a hold names the
+    booking it freezes, why, who placed it and when it was lifted. While any hold on a booking is
+    `ACTIVE`, that booking's earning is left out of every payout and counted as held in the
+    Partner's balance, whether the earning was written before the hold or after it. That is what
+    stops a dispute opened after the money became available from being paid straight past.
+    """
+
+    class Reason(models.TextChoices):
+        COMPLETION_DISPUTE = "COMPLETION_DISPUTE", "Customer disputed the completion"
+        QUALITY_DISPUTE = "QUALITY_DISPUTE", "Customer opened a quality dispute"
+        OPERATIONS_CASE = "OPERATIONS_CASE", "Operations case holding payouts"
+        RENTAL_DEPOSIT_DISPUTE = "RENTAL_DEPOSIT_DISPUTE", "Rental deposit dispute"
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        RELEASED = "RELEASED", "Released"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile, on_delete=models.PROTECT, related_name="earning_holds"
+    )
+    booking = models.ForeignKey(
+        Booking, null=True, blank=True, on_delete=models.PROTECT, related_name="earning_holds"
+    )
+    rental_booking = models.ForeignKey(
+        RentalBooking,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="earning_holds",
+    )
+    reason = models.CharField(max_length=32, choices=Reason.choices)
+    #: What placed it: the case id for a case, the booking id for a dispute. Two causes on one
+    #: booking are two holds, and the money stays frozen until both are lifted.
+    source_id = models.CharField(max_length=64)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    placed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    release_note = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        indexes = [
+            models.Index(fields=("booking", "status")),
+            models.Index(fields=("rental_booking", "status")),
+            models.Index(fields=("partner", "status")),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(booking__isnull=False, rental_booking__isnull=True)
+                    | models.Q(booking__isnull=True, rental_booking__isnull=False)
+                ),
+                name="payouts_hold_names_one_booking",
+            ),
+            models.UniqueConstraint(
+                fields=("reason", "source_id"),
+                condition=models.Q(status="ACTIVE"),
+                name="payouts_one_active_hold_per_cause",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reason}:{self.source_id}:{self.status}"
+
+
 class PayoutBatch(models.Model):
     """A reviewed set of reservations, paid once.
 

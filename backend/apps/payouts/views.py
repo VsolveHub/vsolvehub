@@ -47,6 +47,7 @@ from apps.partners.permissions import (
 from apps.payouts.models import PartnerLedgerEntry, PartnerPayoutAccount, PayoutBatch
 from apps.payouts.performance import partner_performance
 from apps.payouts.providers import verify_razorpayx_signature
+from apps.payouts.selectors import with_hold_flags
 from apps.payouts.serializers import (
     LedgerAdjustmentRequestSerializer,
     OperationsPayoutAccountPageSerializer,
@@ -200,7 +201,7 @@ class PartnerLedgerView(APIView):
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(cast(User, request.user))
-        queryset = PartnerLedgerEntry.objects.filter(partner=profile)
+        queryset = with_hold_flags(PartnerLedgerEntry.objects.filter(partner=profile))
         paginator = LedgerCursorPagination()
         page = paginator.paginate_queryset(queryset, request, self)
         return paginator.get_paginated_response(
