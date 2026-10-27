@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 from http import HTTPStatus
 from zoneinfo import ZoneInfo
 
@@ -295,9 +295,7 @@ def test_approval_seeds_default_rules_only_for_service_areas_with_zero_active_ru
         assert rule.ends_at == time(19, 0)
 
 
-def test_approval_seeding_is_idempotent(
-    partner_setup: PartnerSetup, operations_user: User
-) -> None:
+def test_approval_seeding_is_idempotent(partner_setup: PartnerSetup, operations_user: User) -> None:
     _create_application(partner_setup)
     app = PartnerApplication.objects.get(partner__user=partner_setup.user)
     _approve_required_document(app)
@@ -361,7 +359,9 @@ def test_booking_engine_returns_capacity_for_approved_partner_with_valid_rules(
 
     zone = ZoneInfo(partner_setup.service_area.timezone or "Asia/Kolkata")
     now_local = timezone.now().astimezone(zone)
-    target_start = (now_local + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    target_start = (now_local + timedelta(days=1)).replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
 
     snapshot = load_snapshot(
         variant_ids=(partner_setup.variant.id,),
@@ -385,7 +385,9 @@ def test_booking_engine_returns_no_capacity_for_approved_partner_with_zero_activ
 
     zone = ZoneInfo(partner_setup.service_area.timezone or "Asia/Kolkata")
     now_local = timezone.now().astimezone(zone)
-    target_start = (now_local + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    target_start = (now_local + timedelta(days=1)).replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
 
     snapshot = load_snapshot(
         variant_ids=(partner_setup.variant.id,),
@@ -394,4 +396,3 @@ def test_booking_engine_returns_no_capacity_for_approved_partner_with_zero_activ
         horizon_end=target_start + timedelta(days=2),
     )
     assert snapshot.capacity(starts_at=target_start, duration_minutes=60) == 0
-

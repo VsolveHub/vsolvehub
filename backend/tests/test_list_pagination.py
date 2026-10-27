@@ -250,7 +250,7 @@ def test_rental_browse_honours_limit_and_newest_first(rental_world):  # noqa: F8
     client = APIClient()
 
     two = client.get("/api/v1/rentals", {"limit": 2}).json()
-    assert len(two) == 2  # noqa: PLR2004
+    assert len(two) == 2
     created = [row["created_at"] for row in client.get("/api/v1/rentals").json()]
     assert created == sorted(created, reverse=True)
 

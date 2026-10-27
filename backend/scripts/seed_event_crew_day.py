@@ -41,25 +41,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 django.setup()
 
-from django.db import transaction  # noqa: E402
-from django.utils import timezone  # noqa: E402
+from django.db import transaction
+from django.utils import timezone
 
-from apps.catalog.models import ServiceVariant  # noqa: E402
-from apps.commerce.providers import FakePaymentProvider  # noqa: E402
-from apps.commerce.services.capture import apply_provider_payment  # noqa: E402
-from apps.commerce.services.payments import create_provider_order  # noqa: E402
-from apps.identity.models import User  # noqa: E402
-from apps.locations.models import Address  # noqa: E402
-from apps.locations.services import check_serviceability  # noqa: E402
-from apps.partners.models import PartnerProfile  # noqa: E402
-from apps.requirements import (  # noqa: E402
+from apps.catalog.models import ServiceVariant
+from apps.commerce.providers import FakePaymentProvider
+from apps.commerce.services.capture import apply_provider_payment
+from apps.commerce.services.payments import create_provider_order
+from apps.identity.models import User
+from apps.locations.models import Address
+from apps.locations.services import check_serviceability
+from apps.partners.models import PartnerProfile
+from apps.requirements import (
     booking_fees,
     crew_dispatch,
     crew_mix,
     matching,
     services,
 )
-from apps.requirements.models import (  # noqa: E402
+from apps.requirements.models import (
     CustomerRequirement,
     Engagement,
     EngagementStage,

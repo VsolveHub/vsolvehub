@@ -201,4 +201,3 @@ def set_partner_schedule(
         },
         format="json",
     )
-

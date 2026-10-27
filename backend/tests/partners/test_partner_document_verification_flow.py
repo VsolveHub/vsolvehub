@@ -1,9 +1,6 @@
 from http import HTTPStatus
-from typing import Any
-import uuid
 
 import pytest
-from django.conf import settings
 
 from apps.identity.models import User
 from apps.partners.models import PartnerApplication, PartnerDocument

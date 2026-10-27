@@ -1,7 +1,5 @@
 """Production settings. Every secret and origin must be provided explicitly."""
 
-import os
-
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *

@@ -7,15 +7,9 @@
    is empty, the serializer accepted that, and the service then received no ``reason`` at all.
 """
 
-from collections.abc import Callable
 from http import HTTPStatus
-from io import StringIO
-from types import ModuleType
-from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
-from django.core.management import call_command
 
 from apps.identity.models import User
 from apps.partners.models import PartnerApplication, PartnerDocument
@@ -23,7 +17,6 @@ from apps.partners.scanning import ScanVerdict
 from apps.partners.services import (
     record_partner_document_scan_result,
     scan_partner_document,
-    scan_pending_partner_documents,
 )
 from tests.helpers import force_role_client
 from tests.partners.conftest import PartnerSetup, application_payload, upload_partner_document
@@ -77,7 +70,6 @@ def test_a_recorded_verdict_is_never_overwritten(
 
     assert rescanned.scan_status == PartnerDocument.ScanStatus.REJECTED
     assert rescanned.scan_failure_code == "malware_found"
-
 
 
 # --------------------------------------------------------------------------------------------

@@ -58,6 +58,10 @@ ignore = [
 # contract is stdout. T201 exists to stop `print` leaking into request paths, and there is no
 # request path here -- so the rule fires on every line that is doing its job correctly.
 "scripts/*.py" = ["T201"]
+# The seed scripts are the CLI twin of the seed commands above, and get the same allowances for the
+# same reasons: `random` spreads demo data and is no security property, and long literal strings are
+# demo copy. E402 is the price of a standalone script: Django must be set up before models import.
+"scripts/seed_*.py" = ["T201", "S311", "E501", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"

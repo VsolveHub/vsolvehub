@@ -162,11 +162,13 @@ class PartnerDocumentReviewAccessSerializer(serializers.Serializer[dict[str, obj
 
 
 class PartnerDocumentDetailMetadataSerializer(serializers.ModelSerializer[PartnerDocument]):
-    label = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)  # type: ignore[assignment]
     file_name = serializers.CharField(read_only=True)
     mime_type = serializers.CharField(source="content_type", read_only=True)
     file_size = serializers.IntegerField(source="size_bytes", read_only=True)
-    rejection_reason = serializers.CharField(source="review_reason", read_only=True, allow_null=True)
+    rejection_reason = serializers.CharField(
+        source="review_reason", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = PartnerDocument

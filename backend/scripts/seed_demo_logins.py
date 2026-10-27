@@ -10,7 +10,6 @@ spendable V Coins (500), and an active referral code.
 import os
 import sys
 from datetime import time
-from decimal import Decimal
 
 import django
 
@@ -19,14 +18,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 django.setup()
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
 from apps.identity.models import CustomerProfile, Role, User, UserRole
 from apps.locations.models import ServiceArea
-from apps.loyalty.models import CoinGrant, LoyaltySettings, ReferralCode
+from apps.loyalty.models import CoinGrant, ReferralCode
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityRule,
@@ -66,6 +64,7 @@ def ensure_partner_prerequisites():
 
 
 def setup_partner(
+    *,
     phone: str,
     display_name: str,
     track: str,
@@ -73,7 +72,7 @@ def setup_partner(
     areas: list,
     skills: list,
     consents: list,
-    variants: list = None,
+    variants: list | None = None,
 ):
     """Ensure a partner is 100% approved, unblocked, and has complete documentation."""
     now = timezone.now()
@@ -198,7 +197,7 @@ def setup_customer(phone: str, full_name: str, wallet_balance_inr: int = 5000, c
     )
     UserRole.objects.update_or_create(user=user, role=cust_role, defaults={"revoked_at": None})
 
-    customer, _ = CustomerProfile.objects.get_or_create(user=user)
+    CustomerProfile.objects.get_or_create(user=user)
 
     # Wallet & Funds
     wallet, _ = WalletAccount.objects.get_or_create(customer=user)
@@ -241,7 +240,6 @@ def setup_customer(phone: str, full_name: str, wallet_balance_inr: int = 5000, c
 @transaction.atomic
 def main():
     print("Preparing all demo credentials for instant, zero-restriction access...")
-    now = timezone.now()
     role, areas, skills, consents, variants = ensure_partner_prerequisites()
 
     # 1. Partner: Rentals (Hyderabad Tool Rentals)

@@ -6,9 +6,9 @@ uploads, the weekly schedule, and the going-online presence session. The Operati
 live in `operations`; the M2 registration surface lives in `m2_registration` and `m2_crew`.
 """
 
+import uuid
 from http import HTTPStatus
 from typing import cast
-import uuid
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status

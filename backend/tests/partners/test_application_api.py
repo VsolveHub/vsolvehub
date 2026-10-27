@@ -120,7 +120,12 @@ def test_applicant_reference_data_is_bounded_and_publishes_canonical_values(
     ]
     assert skills.status_code == HTTPStatus.OK
     assert skills.json() == [
-        {"id": str(partner_setup.skill.id), "code": "electrician", "name": "Electrician", "description": ""},
+        {
+            "id": str(partner_setup.skill.id),
+            "code": "electrician",
+            "name": "Electrician",
+            "description": "",
+        },
     ]
     assert consents.status_code == HTTPStatus.OK
     assert [item["purpose"] for item in consents.json()] == [

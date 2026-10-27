@@ -28,7 +28,7 @@ ALLOWED_VIDEO_CONTENT_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
 STORY_LIFETIME = timedelta(hours=24)
 
 
-def safety_story_upload_to(instance: "SafetyStory", filename: str) -> str:
+def safety_story_upload_to(_instance: SafetyStory, filename: str) -> str:
     ext = Path(filename).suffix.lower() or ".bin"
     return f"safety-stories/{uuid.uuid4().hex}{ext}"
 

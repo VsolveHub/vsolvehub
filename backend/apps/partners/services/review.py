@@ -250,6 +250,21 @@ def _seed_default_availability_if_missing(
     return seeded
 
 
+#: Decisions the Partner is told about with a reason, and the refusal when it is missing.
+_REASON_REQUIRED: dict[str, str] = {
+    PartnerApplication.Status.CHANGES_REQUIRED: "Explain which changes the Partner must make.",
+    PartnerApplication.Status.SUSPENDED: "A reason is required for this action.",
+    PartnerApplication.Status.OFFBOARDED: "A reason is required for this action.",
+    PartnerApplication.Status.DECLINED: "A reason is required for this action.",
+}
+
+
+def _assert_transition_reason(*, target_status: str, reason: str) -> None:
+    message = _REASON_REQUIRED.get(target_status)
+    if message is not None and not reason.strip():
+        raise PartnerTransitionError(message)
+
+
 @transaction.atomic
 def transition_partner_application(
     *,
@@ -308,18 +323,7 @@ def transition_partner_application(
         raise PartnerReviewOwnershipError(
             "Claim this Partner application before completing its review.",
         )
-    if target_status == PartnerApplication.Status.CHANGES_REQUIRED and not reason.strip():
-        raise PartnerTransitionError("Explain which changes the Partner must make.")
-    if (
-        target_status
-        in {
-            PartnerApplication.Status.SUSPENDED,
-            PartnerApplication.Status.OFFBOARDED,
-            PartnerApplication.Status.DECLINED,
-        }
-        and not reason.strip()
-    ):
-        raise PartnerTransitionError("A reason is required for this action.")
+    _assert_transition_reason(target_status=target_status, reason=reason)
     if target_status == PartnerApplication.Status.APPROVED:
         if not _base_application_is_complete(application):
             raise PartnerApplicationIncompleteError("The application is not complete.")

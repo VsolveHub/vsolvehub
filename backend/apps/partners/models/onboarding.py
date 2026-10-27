@@ -486,7 +486,15 @@ class PartnerDocument(models.Model):
         base = self.object_key.split("/")[-1] if "/" in self.object_key else self.object_key
         if "." in base:
             return base
-        ext = "pdf" if "pdf" in self.content_type else "jpg" if "jpeg" in self.content_type or "jpg" in self.content_type else "png" if "png" in self.content_type else "bin"
+        ext = (
+            "pdf"
+            if "pdf" in self.content_type
+            else "jpg"
+            if "jpeg" in self.content_type or "jpg" in self.content_type
+            else "png"
+            if "png" in self.content_type
+            else "bin"
+        )
         return f"{self.kind.lower()}_v{self.version}.{ext}"
 
     def is_expired_on(self, day: date) -> bool:
