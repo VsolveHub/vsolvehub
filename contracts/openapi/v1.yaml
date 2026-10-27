@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.85.1
+  version: 1.86.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -26384,6 +26384,16 @@ components:
           type: string
           minLength: 1
           maxLength: 20
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
       required:
       - city
       - contact_phone
@@ -31909,6 +31919,9 @@ components:
           type: string
           nullable: true
           readOnly: true
+        delivery_directions_url:
+          type: string
+          readOnly: true
         partner_id:
           type: string
           format: uuid
@@ -31922,6 +31935,7 @@ components:
       - created_at
       - customer_name
       - customer_phone
+      - delivery_directions_url
       - deposit
       - end_date
       - handover_pin
@@ -34744,12 +34758,16 @@ components:
           type: string
           nullable: true
           readOnly: true
+        delivery_directions_url:
+          type: string
+          readOnly: true
       required:
       - amount_due_paise
       - asset
       - created_at
       - customer_name
       - customer_phone
+      - delivery_directions_url
       - deposit
       - end_date
       - handover_pin

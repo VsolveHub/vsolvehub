@@ -1,5 +1,17 @@
 # API Contract Changelog
 
+## 1.86.0 - The owner can route to a rental delivery
+
+Additive.
+
+- `DeliveryAddressRequest` (inside `POST /rentals/book`) takes optional `latitude` and
+  `longitude` — the customer's saved-address pin. Both or neither (`pin_incomplete`); an
+  out-of-range pin is refused with `delivery_address_invalid`. They are kept on the booking's
+  `delivery_address`.
+- `PartnerRentalBooking` (and `OpsRentalBooking`) add `delivery_directions_url`: a Google Maps
+  route to that pin. Empty for self pickup, and for a delivery address with no pin.
+- Removed: none. Renamed: none.
+
 ## 1.85.1 - "No payout account" follows the error envelope
 
 **Partners**

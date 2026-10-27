@@ -1,10 +1,11 @@
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.locations.pins import combine_pin, latitude_field, longitude_field
+from apps.locations.pins import combine_pin, directions_url, latitude_field, longitude_field
 from apps.rental.models import (
     RentalAsset,
     RentalAssetMedia,
@@ -242,6 +243,19 @@ class DeliveryAddressSerializer(serializers.Serializer[dict[str, Any]]):
     city = serializers.CharField(max_length=120)
     pincode = serializers.CharField(max_length=6)
     contact_phone = serializers.CharField(max_length=20)
+    #: The saved address's map pin, sent together or not at all. The owner's directions link
+    #: routes to it.
+    latitude = latitude_field()
+    longitude = longitude_field()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        if (attrs.get("latitude") is None) != (attrs.get("longitude") is None):
+            raise serializers.ValidationError(
+                {"latitude": "Send the pin's latitude and longitude together."},
+                code="pin_incomplete",
+            )
+        return attrs
 
 
 class CreateBookingSerializer(serializers.Serializer[dict[str, Any]]):
@@ -437,13 +451,26 @@ class PartnerRentalBookingSerializer(RentalBookingSerializer):
 
     customer_name = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
+    #: A route to the customer's delivery pin, for the owner on the way. Empty for pickup, and
+    #: for a delivery address that has no pin.
+    delivery_directions_url = serializers.SerializerMethodField()
 
     class Meta(RentalBookingSerializer.Meta):
         fields = (
             *RentalBookingSerializer.Meta.fields,
             "customer_name",
             "customer_phone",
+            "delivery_directions_url",
         )
+
+    def get_delivery_directions_url(self, booking: RentalBooking) -> str:
+        address = booking.delivery_address or {}
+        try:
+            latitude = Decimal(str(address["latitude"]))
+            longitude = Decimal(str(address["longitude"]))
+        except (KeyError, InvalidOperation):
+            return ""
+        return directions_url(latitude, longitude)
 
     def get_customer_name(self, booking: RentalBooking) -> str:
         customer = booking.customer

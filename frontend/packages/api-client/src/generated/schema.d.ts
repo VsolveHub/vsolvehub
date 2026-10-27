@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.85.1)
- * Checksum: bb1f740cb8892685
+ * Source:   contracts/openapi/v1.yaml (version 1.86.0)
+ * Checksum: 6319ab0fd137cbd6
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -10756,6 +10756,10 @@ export interface components {
             city: string;
             pincode: string;
             contact_phone: string;
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
         };
         DemandPreview: {
             readonly summaries: components["schemas"]["DemandSummary"][];
@@ -12914,6 +12918,7 @@ export interface components {
             readonly created_at: string;
             readonly customer_name: string;
             readonly customer_phone: string | null;
+            readonly delivery_directions_url: string;
             /** Format: uuid */
             readonly partner_id: string;
             readonly partner_name: string;
@@ -13961,6 +13966,7 @@ export interface components {
             readonly created_at: string;
             readonly customer_name: string;
             readonly customer_phone: string | null;
+            readonly delivery_directions_url: string;
         };
         PartnerRentalBookingPage: {
             /** Format: uri */

@@ -22,6 +22,7 @@ Commission on transport is 0% today. It is snapshotted on the booking at accept 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.db import transaction
@@ -57,9 +58,30 @@ def _error(message: str, code: str) -> Exception:
     return RentalStateError(message, code=code)
 
 
+def _clean_pin(raw: dict[str, Any]) -> dict[str, str]:
+    """The customer's map pin for the address, both halves or neither, as six-decimal text.
+
+    Optional: an address typed before pins existed has none. When present it is what the owner's
+    directions link routes to, so a half pin or an out-of-range one is refused, not guessed at.
+    """
+    lat, lng = raw.get("latitude"), raw.get("longitude")
+    if lat in (None, "") and lng in (None, ""):
+        return {}
+    try:
+        latitude, longitude = Decimal(str(lat)), Decimal(str(lng))
+    except InvalidOperation as exc:
+        raise _error(
+            "The delivery pin is not a valid location.", "delivery_address_invalid"
+        ) from exc
+    if not (Decimal(-90) <= latitude <= Decimal(90) and Decimal(-180) <= longitude <= Decimal(180)):
+        raise _error("The delivery pin is not a valid location.", "delivery_address_invalid")
+    return {"latitude": f"{latitude:.6f}", "longitude": f"{longitude:.6f}"}
+
+
 def clean_delivery_address(raw: dict[str, Any]) -> dict[str, str]:
-    """``{line, area, city, pincode, contact_phone}``, trimmed. Line, city, pincode and phone are
-    required; the owner needs them to find the door and call on the way."""
+    """``{line, area, city, pincode, contact_phone}``, trimmed, plus ``latitude``/``longitude``
+    when the address has a pin. Line, city, pincode and phone are required; the owner needs them
+    to find the door and call on the way."""
     line = str(raw.get("line") or "").strip()
     area = str(raw.get("area") or "").strip()
     city = str(raw.get("city") or "").strip()
@@ -83,6 +105,7 @@ def clean_delivery_address(raw: dict[str, Any]) -> dict[str, str]:
         "city": city[:120],
         "pincode": pincode,
         "contact_phone": phone[-_PHONE_DIGITS:],
+        **_clean_pin(raw),
     }
 
 

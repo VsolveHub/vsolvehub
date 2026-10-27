@@ -285,40 +285,26 @@ describe("RentalBookPanel", () => {
     expect(screen.getByText("This owner offers self pickup only.")).toBeInTheDocument();
   });
 
-  it("sends a delivery request without opening payment", async () => {
-    client.POST.mockResolvedValue(
-      ok(mockBooking({ status: "AWAITING_TRANSPORT_QUOTE", pickup_or_delivery_mode: "DELIVERY" }), 201),
-    );
+  it("asks for a saved address instead of typed address fields", () => {
     render(<RentalBookPanel asset={mockAsset({ delivery_available: true })} />, { wrapper });
 
     fireEvent.click(screen.getByRole("radio", { name: "Request Delivery" }));
+
     expect(screen.queryByTestId("pickup-location")).not.toBeInTheDocument();
     expect(screen.getByText("Quoted by the owner")).toBeInTheDocument();
-
-    fireEvent.change(document.getElementById("delivery-line")!, { target: { value: "Flat 302" } });
-    fireEvent.change(document.getElementById("delivery-city")!, { target: { value: "Hyderabad" } });
-    fireEvent.change(document.getElementById("delivery-pincode")!, { target: { value: "500032" } });
-    fireEvent.change(document.getElementById("delivery-phone")!, { target: { value: "9876543210" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send delivery request" }));
-
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/rentals/mine"));
-    const body = client.POST.mock.calls[0]![1].body;
-    expect(body.pickup_or_delivery_mode).toBe("DELIVERY");
-    expect(body.delivery_address).toEqual({
-      line: "Flat 302",
-      area: "",
-      city: "Hyderabad",
-      pincode: "500032",
-      contact_phone: "9876543210",
-    });
+    expect(screen.getByRole("button", { name: "Choose delivery address" })).toBeInTheDocument();
+    // No street, city or pincode to type: the address comes from the picker.
+    expect(document.getElementById("delivery-line")).toBeNull();
+    expect(document.getElementById("delivery-city")).toBeNull();
+    expect(document.getElementById("delivery-pincode")).toBeNull();
   });
 
-  it("refuses an incomplete delivery address before calling the server", async () => {
+  it("refuses a delivery with no address chosen, before calling the server", async () => {
     render(<RentalBookPanel asset={mockAsset({ delivery_available: true })} />, { wrapper });
     fireEvent.click(screen.getByRole("radio", { name: "Request Delivery" }));
     fireEvent.click(screen.getByRole("button", { name: "Send delivery request" }));
 
-    expect(await screen.findByText("Add the delivery address.")).toBeInTheDocument();
+    expect(await screen.findByText("Choose where to deliver.")).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
   });
 
@@ -380,6 +366,46 @@ describe("RentalBookPanel", () => {
       city: "Hyderabad",
       pincode: "500081",
       contact_phone: "9876543210",
+      // The saved pin travels too, so the owner can route to the door.
+      latitude: "17.448500",
+      longitude: "78.375000",
+    });
+  });
+
+  it("sends a different phone when the customer changes it", async () => {
+    queryClient.setQueryData(queryKeys.addresses.list(), [
+      {
+        id: "addr-1",
+        label: "Office",
+        line1: "Plot 9",
+        line2: "",
+        locality: "Gachibowli",
+        city: "Hyderabad",
+        state: "Telangana",
+        postal_code: "500032",
+        country_code: "IN",
+        is_default: true,
+        latitude: "17.440000",
+        longitude: "78.350000",
+        confirmed_at: "2026-08-01T10:00:00Z",
+        created_at: "2026-08-01T10:00:00Z",
+        updated_at: "2026-08-01T10:00:00Z",
+      } as Schemas["Address"],
+    ]);
+    client.POST.mockResolvedValue(
+      ok(mockBooking({ status: "AWAITING_TRANSPORT_QUOTE", pickup_or_delivery_mode: "DELIVERY" }), 201),
+    );
+    render(<RentalBookPanel asset={mockAsset({ delivery_available: true })} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Request Delivery" }));
+    fireEvent.change(document.getElementById("delivery-phone")!, { target: { value: "91234 56789" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send delivery request" }));
+
+    await waitFor(() => expect(client.POST).toHaveBeenCalled());
+    expect(client.POST.mock.calls[0]![1].body.delivery_address).toMatchObject({
+      line: "Plot 9",
+      pincode: "500032",
+      contact_phone: "9123456789",
     });
   });
 });

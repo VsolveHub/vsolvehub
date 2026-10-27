@@ -71,6 +71,7 @@ function booking(
     created_at: "2026-10-08T10:00:00Z",
     customer_name: "Asha",
     customer_phone: "9876543210",
+    delivery_directions_url: "",
     ...overrides,
   };
 }
@@ -103,6 +104,24 @@ describe("DeliverySection", () => {
     expect(panel).toHaveTextContent("Flat 302, Lake View, Gachibowli, Hyderabad 500032");
     expect(panel).toHaveTextContent("Customer’s note: Third floor, lift available");
     expect(screen.getByRole("link", { name: /9876543210/ })).toHaveAttribute("href", "tel:9876543210");
+  });
+
+  it("routes the owner to the customer's pin when the address has one", () => {
+    const route = "https://www.google.com/maps/dir/?api=1&destination=17.440000,78.350000";
+    render(<DeliverySection booking={booking({}, { delivery_directions_url: route })} />, {
+      wrapper,
+    });
+
+    expect(screen.getByRole("link", { name: /open route in maps/i })).toHaveAttribute(
+      "href",
+      route,
+    );
+  });
+
+  it("offers no route for an address without a pin", () => {
+    render(<DeliverySection booking={booking({})} />, { wrapper });
+
+    expect(screen.queryByRole("link", { name: /open route in maps/i })).toBeNull();
   });
 
   it("tells the owner they keep the whole transport price as they type", () => {

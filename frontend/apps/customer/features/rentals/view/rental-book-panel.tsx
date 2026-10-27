@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Calendar, ShieldCheck, Truck, Info, AlertCircle, MapPin, Navigation } from "lucide-react";
+import { Calendar, ShieldCheck, Truck, Info, AlertCircle, MapPin } from "lucide-react";
 import { isApiRequestError, type Schemas } from "@vsolve/api-client";
-import { friendlyErrorMessage } from "@vsolve/query";
+import { describeError, friendlyErrorMessage } from "@vsolve/query";
 import { Button, ChoiceChips, Field, Input, IsoDateField, useToast } from "@vsolve/ui";
 
-import { useAddresses, preferredAddressId, useCreateAddress, useReverseGeocode, useUpdateAddress, type Address } from "@/features/addresses/queries";
+import {
+  preferredAddressId,
+  useAddresses,
+  useCreateAddress,
+  useUpdateAddress,
+  type Address,
+} from "@/features/addresses/queries";
 import { useCustomerProfile } from "@/features/account/queries";
 import { AddressStage, isGeocoded } from "@/features/booking/view/address-stage";
 import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
@@ -25,8 +31,26 @@ interface RentalBookPanelProps {
   asset: RentalAsset & { pickup_hours?: PickupHours };
 }
 
-type DeliveryForm = { line: string; area: string; city: string; pincode: string; phone: string };
-const EMPTY_DELIVERY: DeliveryForm = { line: "", area: "", city: "", pincode: "", phone: "" };
+/**
+ * The delivery address the owner receives, built from a saved address.
+ *
+ * Nothing here is typed: the customer picks a saved address, or adds one through the
+ * same map picker checkout uses (pin, then flat number), and it is kept in their
+ * address book for next time. Exported for tests.
+ */
+export function deliveryAddressFrom(address: Address, phone: string) {
+  return {
+    line: [address.line1, address.line2].filter(Boolean).join(", "),
+    area: address.locality || address.landmark || "",
+    city: address.city,
+    pincode: address.postal_code,
+    contact_phone: extractPhoneDigits(phone),
+    // The saved address's pin, so the owner can route to the door, not search the text.
+    ...(address.latitude && address.longitude
+      ? { latitude: address.latitude, longitude: address.longitude }
+      : {}),
+  };
+}
 
 function extractPhoneDigits(phone: string | null | undefined): string {
   if (!phone) return "";
@@ -34,11 +58,13 @@ function extractPhoneDigits(phone: string | null | undefined): string {
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
-function deliveryProblem(form: DeliveryForm): string | null {
-  if (!form.line.trim()) return "Add the delivery address.";
-  if (!form.city.trim()) return "Add the delivery city.";
-  if (!PINCODE.test(form.pincode.trim())) return "Enter a 6-digit pincode for the delivery.";
-  if (form.phone.replace(/\D/g, "").length < 10) return "Add a 10-digit phone number for the delivery.";
+/** Why this delivery cannot be requested yet, or null. Exported for tests. */
+export function deliveryProblem(address: Address | null, phone: string): string | null {
+  if (address === null) return "Choose where to deliver.";
+  if (!PINCODE.test(address.postal_code.trim())) {
+    return "That address has no valid pincode. Edit it, or choose another.";
+  }
+  if (phone.replace(/\D/g, "").length < 10) return "Add a 10-digit phone number for the delivery.";
   return null;
 }
 
@@ -74,7 +100,8 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [mode, setMode] = useState<RentalMode>("PICKUP");
-  const [delivery, setDelivery] = useState<DeliveryForm>(EMPTY_DELIVERY);
+  /** Pre-filled from the account; the only thing a customer might change for a delivery. */
+  const [deliveryPhone, setDeliveryPhone] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
   const isDelivery = mode === "DELIVERY";
   const pickupDayProblem = closedDayMessage(hours, startDate, "pickup");
@@ -90,10 +117,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
 
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [addressOpenSignal, setAddressOpenSignal] = useState(0);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [showManualAddressFields, setShowManualAddressFields] = useState(false);
 
-  const reverseGeocode = useReverseGeocode();
   const createAddress = useCreateAddress();
   const updateAddress = useUpdateAddress();
 
@@ -102,73 +126,14 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
 
   const handleSelectAddress = (addr: Address) => {
     setSelectedAddressId(addr.id);
-    setDelivery((prev) => ({
-      ...prev,
-      line: [addr.line1, addr.line2].filter(Boolean).join(", "),
-      area: addr.locality || addr.landmark || "",
-      city: addr.city,
-      pincode: addr.postal_code,
-      phone: prev.phone || extractPhoneDigits(profile?.phone_number),
-    }));
-    setShowManualAddressFields(false);
     setError(null);
   };
 
-  // Sync default saved address or user profile phone into the delivery form
+  const accountPhone = extractPhoneDigits(profile?.phone_number);
   useEffect(() => {
-    if (selectedAddress) {
-      setDelivery((prev) => ({
-        line: prev.line || [selectedAddress.line1, selectedAddress.line2].filter(Boolean).join(", "),
-        area: prev.area || selectedAddress.locality || selectedAddress.landmark || "",
-        city: prev.city || selectedAddress.city,
-        pincode: prev.pincode || selectedAddress.postal_code,
-        phone: prev.phone || extractPhoneDigits(profile?.phone_number),
-      }));
-    } else if (profile?.phone_number) {
-      setDelivery((prev) => ({
-        ...prev,
-        phone: prev.phone || extractPhoneDigits(profile.phone_number),
-      }));
-    }
-  }, [selectedAddress, profile?.phone_number]);
-
-  const handleUseCurrentLocation = async () => {
-    setLocationError(null);
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (typeof navigator === "undefined" || !navigator.geolocation) {
-          reject(new Error("Location permission is not available on this device."));
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          maximumAge: 30_000,
-          timeout: 12_000,
-        });
-      });
-      const resolved = await reverseGeocode.mutateAsync({
-        latitude: position.coords.latitude.toFixed(6),
-        longitude: position.coords.longitude.toFixed(6),
-      });
-      const created = await createAddress.mutateAsync({
-        label: addresses.length === 0 ? "Home" : "Current Location",
-        line1: resolved.line1,
-        locality: resolved.locality,
-        city: resolved.city,
-        state: resolved.state,
-        postal_code: resolved.postal_code,
-        country_code: resolved.country_code,
-        latitude: resolved.latitude,
-        longitude: resolved.longitude,
-        source: "REVERSE_GEOCODED",
-        is_default: addresses.length === 0,
-      });
-      handleSelectAddress(created);
-      toast.notify("Location detected and saved to your address book.");
-    } catch {
-      setLocationError("Could not determine your location. Please choose on the map or enter manually.");
-    }
-  };
+    // Filled once the profile arrives, and never over something the customer typed.
+    if (accountPhone) setDeliveryPhone((current) => current || accountPhone);
+  }, [accountPhone]);
 
   const createNewAddress = async (
     req: Schemas["AddressRequest"],
@@ -206,15 +171,10 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         start_date: startDate,
         end_date: endDate,
         pickup_or_delivery_mode: mode,
-        delivery_address: isDelivery
-          ? {
-              line: delivery.line.trim(),
-              area: delivery.area.trim(),
-              city: delivery.city.trim(),
-              pincode: delivery.pincode.trim(),
-              contact_phone: delivery.phone.trim(),
-            }
-          : undefined,
+        delivery_address:
+          isDelivery && selectedAddress
+            ? deliveryAddressFrom(selectedAddress, deliveryPhone)
+            : undefined,
         delivery_note: deliveryNote.trim(),
         notes,
         quantity: clampedQty,
@@ -316,7 +276,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         setError("Delivery needs at least a day to arrange. Choose a later pickup date.");
         return;
       }
-      const problem = deliveryProblem(delivery);
+      const problem = deliveryProblem(selectedAddress, deliveryPhone);
       if (problem) {
         setError(problem);
         return;
@@ -486,113 +446,46 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
             ) : (
               <div className="rounded-control border border-line bg-surface p-3.5">
                 <div className="flex items-start gap-2.5">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-warning-surface text-warning-text mt-0.5">
+                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-control bg-warning-surface text-warning-text">
                     <MapPin className="size-4" />
                   </span>
                   <div>
-                    <p className="text-xs font-bold text-text">Choose delivery destination</p>
-                    <p className="text-[11px] text-text-secondary mt-0.5">
-                      Avoid manual typing: detect your current location or pick from saved addresses.
+                    <p className="text-xs font-bold text-text">Where should it be delivered?</p>
+                    <p className="mt-0.5 text-[11px] text-text-secondary">
+                      Pick a saved address, or use your location on the map. It is saved for next
+                      time.
                     </p>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    loading={reverseGeocode.isPending || createAddress.isPending}
-                    loadingLabel="Locating..."
-                    onClick={() => void handleUseCurrentLocation()}
-                  >
-                    <Navigation className="size-3.5 mr-1" />
-                    Use my current location
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setAddressOpenSignal((s) => s + 1)}
-                  >
-                    Saved addresses / Map
-                  </Button>
-                </div>
-                {locationError ? (
-                  <p role="alert" className="mt-2 text-xs font-medium text-danger-text">
-                    {locationError}
-                  </p>
-                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setAddressOpenSignal((s) => s + 1)}
+                >
+                  Choose delivery address
+                </Button>
               </div>
             )}
 
-            {/* Quick toggle to view or tweak manual address fields if desired */}
-            {selectedAddress ? (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowManualAddressFields((prev) => !prev)}
-                  className="text-[11px] font-medium text-text-secondary hover:text-text underline cursor-pointer"
-                >
-                  {showManualAddressFields ? "Hide address fields" : "Edit address text manually"}
-                </button>
-              </div>
-            ) : null}
-
-            {/* Manual address fields: visible if no address selected, or when user clicks 'Edit address text manually' */}
-            <div className={showManualAddressFields || !selectedAddress ? "flex flex-col gap-3" : "hidden"}>
-              <Field label="Delivery address" required>
-                <Input
-                  id="delivery-line"
-                  value={delivery.line}
-                  maxLength={240}
-                  placeholder="House / flat, street"
-                  onChange={(e) => setDelivery((d) => ({ ...d, line: e.target.value }))}
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Area" showOptional={false}>
-                  <Input
-                    id="delivery-area"
-                    value={delivery.area}
-                    maxLength={120}
-                    placeholder="Locality / Landmark"
-                    onChange={(e) => setDelivery((d) => ({ ...d, area: e.target.value }))}
-                  />
-                </Field>
-                <Field label="City" required>
-                  <Input
-                    id="delivery-city"
-                    value={delivery.city}
-                    maxLength={120}
-                    placeholder="City"
-                    onChange={(e) => setDelivery((d) => ({ ...d, city: e.target.value }))}
-                  />
-                </Field>
-                <Field label="Pincode" required>
-                  <Input
-                    id="delivery-pincode"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={delivery.pincode}
-                    placeholder="6-digit pincode"
-                    onChange={(e) =>
-                      setDelivery((d) => ({ ...d, pincode: e.target.value.replace(/\D/g, "") }))
-                    }
-                  />
-                </Field>
-              </div>
-            </div>
-
-            {/* Phone & Delivery Notes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Phone for delivery" required>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field
+                label="Phone for delivery"
+                required
+                description={
+                  accountPhone && extractPhoneDigits(deliveryPhone) === accountPhone
+                    ? "Your account number. Change it if someone else will receive it."
+                    : undefined
+                }
+              >
                 <Input
                   id="delivery-phone"
                   inputMode="tel"
+                  autoComplete="tel"
                   maxLength={15}
-                  value={delivery.phone}
+                  value={deliveryPhone}
                   placeholder="10-digit mobile number"
-                  onChange={(e) => setDelivery((d) => ({ ...d, phone: e.target.value }))}
+                  onChange={(e) => setDeliveryPhone(e.target.value)}
                 />
               </Field>
               <Field label="Anything the owner should know?" showOptional={false}>
@@ -733,15 +626,16 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         isCheckingServiceability={false}
         selectedAddressId={effectiveAddressId}
         onSelect={handleSelectAddress}
-        onUseCurrentLocation={() => void handleUseCurrentLocation()}
-        isUsingCurrentLocation={reverseGeocode.isPending || createAddress.isPending}
-        locationError={locationError}
+        // Unused with `addNew`: the picker's own "Use my location" opens the map.
+        onUseCurrentLocation={() => setAddressOpenSignal((s) => s + 1)}
+        isUsingCurrentLocation={false}
         onUpdateAddress={(id, patch) => updateAddress.mutate({ addressId: id, patch })}
         isUpdatingAddress={updateAddress.isPending}
         addNew={{
           onCreate: createNewAddress,
           isCreating: createAddress.isPending,
-          createError: null,
+          createError:
+            createAddress.error === null ? null : describeError(createAddress.error, "mutation").message,
           onPostalCodeChange: () => {},
           draftServiceability: null,
           isCheckingDraftServiceability: false,

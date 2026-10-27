@@ -530,3 +530,80 @@ def test_partner_transport_unknown_action_is_refused(rental_world):
         f"/api/v1/partner/rentals/bookings/{booking.id}/transport/teleport", {}, format="json"
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+# --- the delivery pin -----------------------------------------------------------------------
+
+PIN = {"latitude": "17.440000", "longitude": "78.350000"}
+
+
+def _book_with(world, address):
+    asset = _asset(world)
+    start = timezone.localdate() + timedelta(days=3)
+    return create_booking(
+        customer=world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=1),
+        mode="DELIVERY",
+        delivery_address=address,
+    )
+
+
+def test_the_delivery_pin_is_kept_and_routes_the_owner(rental_world):
+    from apps.rental.serializers import PartnerRentalBookingSerializer  # noqa: PLC0415
+
+    booking = _book_with(rental_world, {**ADDRESS, **PIN})
+
+    assert booking.delivery_address["latitude"] == "17.440000"
+    assert booking.delivery_address["longitude"] == "78.350000"
+    data = PartnerRentalBookingSerializer(booking).data
+    assert data["delivery_directions_url"] == (
+        "https://www.google.com/maps/dir/?api=1&destination=17.440000,78.350000"
+    )
+
+
+def test_an_address_without_a_pin_still_books_with_no_route(rental_world):
+    from apps.rental.serializers import PartnerRentalBookingSerializer  # noqa: PLC0415
+
+    booking = _book_with(rental_world, ADDRESS)
+
+    assert "latitude" not in booking.delivery_address
+    assert PartnerRentalBookingSerializer(booking).data["delivery_directions_url"] == ""
+
+
+@pytest.mark.parametrize(
+    "pin",
+    [
+        {"latitude": "17.440000"},
+        {"latitude": "91", "longitude": "78.35"},
+        {"latitude": "not-a-number", "longitude": "78.35"},
+    ],
+)
+def test_a_broken_pin_is_refused_not_half_kept(rental_world, pin):
+    with pytest.raises(RentalStateError) as refused:
+        _book_with(rental_world, {**ADDRESS, **pin})
+
+    assert refused.value.code == "delivery_address_invalid"
+    assert not RentalBooking.objects.exists()
+
+
+def test_the_booking_api_refuses_half_a_pin(rental_world):
+    asset = _asset(rental_world)
+    start = timezone.localdate() + timedelta(days=3)
+    client = role_client(rental_world["customer"], "customer")
+
+    response = client.post(
+        "/api/v1/rentals/book",
+        {
+            "asset_id": str(asset.id),
+            "start_date": start.isoformat(),
+            "end_date": (start + timedelta(days=1)).isoformat(),
+            "pickup_or_delivery_mode": "DELIVERY",
+            "delivery_address": {**ADDRESS, "latitude": "17.44"},
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "pin_incomplete" in str(response.json()["error"]["details"])

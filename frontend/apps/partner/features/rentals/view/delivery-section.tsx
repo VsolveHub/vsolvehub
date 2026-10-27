@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Button, ChoiceChips, Field, Input, formatDateTime, formatMoney, useT } from "@vsolve/ui";
-import { Phone, Truck } from "lucide-react";
+import { Navigation, Phone, Truck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import {
@@ -126,6 +126,19 @@ export function DeliverySection({ booking }: { booking: PartnerRentalBooking }) 
           {[address.line, address.area, address.city].filter(Boolean).join(", ")}
           {address.pincode ? ` ${address.pincode}` : ""}
         </p>
+        {/* The server's route to the customer's pin: the maps app on a phone. Absent when the
+            address has no pin, and then the text above is the destination. */}
+        {booking.delivery_directions_url ? (
+          <a
+            href={booking.delivery_directions_url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1.5 mr-4 inline-flex items-center gap-1 text-xs font-semibold text-text-link"
+          >
+            <Navigation className="size-3.5" aria-hidden />
+            {t("rentals.delivery.openRoute")}
+          </a>
+        ) : null}
         {address.contact_phone ? (
           <a
             href={`tel:${address.contact_phone}`}
