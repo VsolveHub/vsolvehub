@@ -3,9 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Schemas } from "@vsolve/api-client";
+
 import { AvailabilityEditor } from "./availability-editor";
 import { ReviewStep } from "./review-step";
-import type { Schemas } from "@/lib/api/types";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -18,6 +19,7 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
     id: "app-1",
     partner_id: "p-1",
     status: "DRAFT",
+    track: "SERVICES",
     version: 1,
     display_name: "Ravi Kumar",
     biography: "Certified technician",
@@ -26,8 +28,20 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
     service_variant_ids: ["v-1"],
     service_area_ids: ["area-1"],
     consents: [
-      { id: "c-1", purpose: "partner_terms", document_version: "2026-07", signed_at: "2026-01-01" },
-      { id: "c-2", purpose: "privacy_notice", document_version: "2026-07", signed_at: "2026-01-01" },
+      {
+        id: "c-1",
+        purpose: "partner_terms",
+        document_version: "2026-07",
+        accepted_at: "2026-01-01",
+        withdrawn_at: null,
+      },
+      {
+        id: "c-2",
+        purpose: "privacy_notice",
+        document_version: "2026-07",
+        accepted_at: "2026-01-01",
+        withdrawn_at: null,
+      },
     ],
     documents: [
       {
@@ -35,14 +49,21 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
         kind: "GOVERNMENT_ID",
         status: "APPROVED",
         version: 1,
+        content_type: "image/jpeg",
+        size_bytes: 120_000,
+        sha256: "0".repeat(64),
+        scan_status: "CLEAN",
+        scanned_at: "2026-01-01",
         uploaded_at: "2026-01-01",
         reviewed_at: "2026-01-01",
-        review_reason: null,
+        review_reason: "",
       },
     ],
     transitions: [],
-    change_request_message: null,
+    change_request_message: "",
     submitted_at: null,
+    review_assigned_to_id: null,
+    review_assigned_at: null,
     reviewed_at: null,
     created_at: "2026-01-01",
     updated_at: "2026-01-01",
@@ -147,8 +168,9 @@ describe("Schedule auto-save behavior", () => {
     );
 
     // Open set shift modal for Monday
-    const setShiftButtons = screen.getAllByRole("button", { name: /Set Shift/i });
-    fireEvent.click(setShiftButtons[0]);
+    const [mondaySetShift] = screen.getAllByRole("button", { name: /Set Shift/i });
+    expect(mondaySetShift).toBeDefined();
+    fireEvent.click(mondaySetShift as HTMLElement);
 
     // Save shift in modal
     const saveShiftBtn = screen.getByRole("button", { name: /Save Shift/i });

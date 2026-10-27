@@ -12,8 +12,8 @@ from django.db import models
 from django.db.models import Q, QuerySet
 
 from apps.foundation.slugs import slug_base, unique_slug
-from apps.locations.pins import pin_constraints
 from apps.foundation.storage import private_file_storage
+from apps.locations.pins import pin_constraints
 
 
 def rental_ad_upload_to(instance: models.Model, filename: str) -> str:

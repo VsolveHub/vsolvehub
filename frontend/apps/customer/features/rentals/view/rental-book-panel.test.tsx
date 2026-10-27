@@ -44,7 +44,9 @@ function mockAsset(overrides: Partial<Schemas["RentalAsset"]> = {}): Schemas["Re
   return {
     id: "asset-1",
     slug: "demo-mixer",
+    partner_id: "partner-1",
     partner_name: "Tool Master Rentals",
+    partner_phone: "+919876500001",
     variant: "variant-1",
     title: "Heavy Duty Rotary Hammer Drill",
     description: "Ideal for concrete and masonry drilling.",
