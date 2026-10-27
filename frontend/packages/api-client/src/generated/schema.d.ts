@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.82.0)
- * Checksum: cdbc26ddcce1b55b
+ * Checksum: e1169bf67e619670
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -13693,7 +13693,12 @@ export interface components {
             location_text?: string;
             moderation_status?: components["schemas"]["ModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly host_id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly host_name: string;
+            readonly host_phone: string;
             /** Format: uuid */
             variant: string;
             structured_fields?: unknown;
@@ -14933,7 +14938,12 @@ export interface components {
             location_text?: string;
             moderation_status?: components["schemas"]["ModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly host_id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly host_name: string;
+            readonly host_phone: string;
             /** Format: uuid */
             variant: string;
             structured_fields?: unknown;
@@ -16213,7 +16223,10 @@ export interface components {
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
             readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly partner_name: string;
+            readonly partner_phone: string;
             /** Format: uuid */
             readonly variant: string;
             readonly structured_fields: unknown;
@@ -16246,7 +16259,10 @@ export interface components {
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
             readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
+            /** Format: uuid */
+            readonly partner_id: string;
             readonly partner_name: string;
+            readonly partner_phone: string;
             /** Format: uuid */
             readonly variant: string;
             readonly structured_fields: unknown;

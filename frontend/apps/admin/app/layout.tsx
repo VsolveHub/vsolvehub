@@ -29,8 +29,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={appFont.variable}>
-      <body className="antialiased">
+    <html lang="en" className={appFont.variable} suppressHydrationWarning>
+      <body className="antialiased" suppressHydrationWarning>
         <QueryProvider>
           <SessionSync />
           {children}

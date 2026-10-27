@@ -294,8 +294,10 @@ export function useReviewDocument() {
           "/api/v1/operations/partner-documents/{document_id}/review/",
           {
             params: { path: { document_id: input.documentId } },
-            // The server defaults a missing reason to "", so an empty one is the same request.
-            body: { decision: input.decision, reason: input.reason ?? "" },
+            body: {
+              decision: input.decision,
+              reason: input.reason ?? "",
+            },
           },
         ),
       ),

@@ -33949,7 +33949,18 @@ components:
         public_state:
           type: string
           readOnly: true
+        host_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         host_name:
+          type: string
+          readOnly: true
+        host_phone:
           type: string
           readOnly: true
         variant:
@@ -34056,9 +34067,12 @@ components:
       - can_review
       - created_at
       - highlights
+      - host_id
       - host_name
+      - host_phone
       - id
       - media
+      - partner_id
       - price_period
       - public_state
       - reviews
@@ -37033,7 +37047,18 @@ components:
         public_state:
           type: string
           readOnly: true
+        host_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         host_name:
+          type: string
+          readOnly: true
+        host_phone:
           type: string
           readOnly: true
         variant:
@@ -37112,9 +37137,12 @@ components:
       - can_review
       - created_at
       - highlights
+      - host_id
       - host_name
+      - host_phone
       - id
       - media
+      - partner_id
       - price_period
       - public_state
       - reviews
@@ -40312,7 +40340,14 @@ components:
         public_state:
           type: string
           readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         partner_name:
+          type: string
+          readOnly: true
+        partner_phone:
           type: string
           readOnly: true
         variant:
@@ -40373,7 +40408,9 @@ components:
       - location_text
       - media
       - moderation_status
+      - partner_id
       - partner_name
+      - partner_phone
       - pickup_address
       - pickup_address_line
       - pickup_area
@@ -40432,7 +40469,14 @@ components:
         public_state:
           type: string
           readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
         partner_name:
+          type: string
+          readOnly: true
+        partner_phone:
           type: string
           readOnly: true
         variant:
@@ -40497,7 +40541,9 @@ components:
       - location_text
       - media
       - moderation_status
+      - partner_id
       - partner_name
+      - partner_phone
       - pickup_address
       - pickup_address_line
       - pickup_area

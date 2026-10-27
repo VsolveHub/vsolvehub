@@ -277,18 +277,13 @@ export function DocumentReveal({
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-text-muted">
-                {isPendingReview
-                  ? "Action required on this document:"
-                  : isApproved
-                    ? "Verified & approved."
-                    : "Sent back for replacement."}
-              </span>
+            isPendingReview ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-text-muted">
+                  Action required on this document:
+                </span>
 
-              <div className="flex items-center gap-2">
-                {/* Approve Button */}
-                {!isApproved ? (
+                <div className="flex items-center gap-2">
                   <Button
                     variant="primary"
                     size="sm"
@@ -300,10 +295,7 @@ export function DocumentReveal({
                     <Check className="h-3.5 w-3.5" />
                     <span>Approve Document</span>
                   </Button>
-                ) : null}
 
-                {/* Reject Button */}
-                {!isRejected ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -317,16 +309,32 @@ export function DocumentReveal({
                     <X className="h-3.5 w-3.5" />
                     <span>Reject Document</span>
                   </Button>
-                ) : null}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-1.5 font-medium text-text-secondary">
+                  {isApproved ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-success-text" />
+                      <span className="text-success-text font-semibold">Verified & approved</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-3.5 w-3.5 text-danger-text" />
+                      <span className="text-danger-text font-semibold">Rejected — replacement required</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            )
           )
         ) : (
           <p className="text-xs text-text-muted">
             {isPendingReview
               ? "Claim this application to review and approve this document."
               : isApproved
-                ? "Document is approved."
+                ? "Document is verified and approved."
                 : "Document was rejected."}
           </p>
         )}
