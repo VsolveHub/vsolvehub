@@ -1,5 +1,75 @@
 # API Contract Changelog
 
+## 1.84.0 - Payout money correctness: one transfer per Partner, clearing, explicit holds
+
+**Partners**
+
+- `GET /partner/earnings/` adds `clearing_paise` (earned, waiting out the Customer's 72-hour
+  dispute window), `held_paise` (frozen by a dispute or an Operations case) and
+  `withdrawable_paise` (`available_paise`, never below zero). `pending_paise` is now
+  `held_paise + clearing_paise`, and `available_paise` is what can actually be paid now: cleared,
+  not on hold, with refunds already subtracted. It can be negative when refunds exceed what has
+  cleared. Every unpaid rupee is in exactly one of available, clearing, held or reserved.
+- `PartnerLedgerEntry` adds `clears_at` (not payable before this instant; null for lines that
+  count at once, such as corrections and refunds) and `is_on_hold`.
+
+**Operations**
+
+- A payout batch now holds **one transfer per Partner**, covering every cleared, unheld earning
+  in the period plus every unpaid refund. `PayoutBatchItem.ledger_entry_id` is removed;
+  `entry_count` says how many ledger lines a transfer covers. A Partner whose total is below the
+  minimum (₹1), or negative, is carried to a later run.
+- `PayoutBatchItem` adds RazorpayX tracking data: `provider_status`, `utr`, `mode`, `fees_paise`,
+  `tax_paise` and `status_reason`. They never change the decided `status`.
+- `PayoutBatchItem.status` adds `REVERSED`: paid, then returned by the bank. The money is back in
+  the Partner's balance exactly once. `FAILED`, `REVERSED` and `RELEASED` are final; a late
+  `processed` after any of them changes nothing.
+- A transfer is re-checked just before it is sent. It is released unsent (`RELEASED`) with
+  `failure_code` `payouts_paused`, `partner_suspended`, `account_not_payable` or
+  `earning_on_hold` when the case applies.
+- A payout whose submission got no clear answer is looked up at RazorpayX by its reference,
+  never sent again. Still unknown 24 hours later, it is `FAILED` with `provider_never_received`
+  and its money returns to the pool.
+
+**Payout webhooks**
+
+- `POST /payout-webhooks/razorpayx/` reads `X-Razorpay-Event-Id`. A redelivery with an id
+  already recorded changes nothing (`applied: false`). `payout.updated` and in-flight statuses
+  update tracking data only.
+
+**Behind the contract**
+
+- Disputes and cases freeze money with an explicit `PartnerEarningHold` on the booking: a
+  completion dispute, a quality dispute (which previously froze nothing once the earning was
+  available), a payout-holding Operations case, and a rental deposit dispute. Each cause lifts
+  only its own hold; the money stays frozen until the last one is decided.
+- A rental deposit dispute no longer flips an already-paid earning back to `PENDING`, which let
+  the dispute's decision make paid money payable a second time.
+- New settings: `PAYOUT_CLEARING_HOURS` (default 72; production refuses less than the quality
+  dispute window) and `PAYOUT_MINIMUM_PAISE` (default 100, RazorpayX's minimum).
+
+## 1.83.0 - Payout account holder name follows RazorpayX's contact-name rules
+
+**Partners**
+
+- `POST /partner/payout-account/`: `holder_name` is now 3 to 50 characters (was 2 to 140) of
+  letters, numbers, spaces and `’ - _ / ( ) .`, ending in a letter, number or full stop. The name
+  becomes the RazorpayX contact name, and RazorpayX refuses anything else with an error the Partner
+  could only read as "details not accepted"; it is now a `400` on `holder_name` that says what to
+  change. A straight or left apostrophe is stored as `’`, and runs of spaces collapse to one.
+
+**Behind the contract (no shape change)**
+
+- RazorpayX payout requests now fit RazorpayX's limits: `X-Payout-Idempotency` is a 36-character
+  key (it was 80 characters with colons, which RazorpayX refuses), and `reference_id` is the item
+  id as 32 hex characters (it was `<batch reference>:<item id>`, over RazorpayX's 40). The batch
+  reference moves to the payout's `notes`, and `narration` is `VSolveHub payout`.
+- A refused payout records RazorpayX's reason in `PayoutBatchItem.failure_code`, for example
+  `input_validation_failed-fund_account_id` instead of `provider_rejected`.
+- `PAYOUT_ACCOUNT_COOLING_HOURS` (default 24; production refuses less) replaces the hard-coded
+  24-hour cooling period on new and changed payout accounts. Non-production settings refuse
+  `rzp_live_` RazorpayX keys.
+
 ## 1.82.0 - Booked-visit time gates, address disclosure, start code, late-capture refunds
 
 **Partners — booked visits (`/partner/bookings/…`)**

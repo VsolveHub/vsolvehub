@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.82.0)
- * Checksum: e1169bf67e619670
+ * Source:   contracts/openapi/v1.yaml (version 1.84.0)
+ * Checksum: 6a6bee5ac387880a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -13070,8 +13070,17 @@ export interface components {
          *     which part of it is actually coming.
          */
         PartnerBalance: {
+            /** @description Earned but not yet payable: `held_paise` plus `clearing_paise`. */
             pending_paise: number;
+            /** @description Payable now: cleared, not on hold, refunds already subtracted. Negative when refunds exceed what has cleared; that much comes off the next earnings. */
             available_paise: number;
+            /** @description Earned, waiting out the Customer's dispute window before it can be paid. */
+            clearing_paise: number;
+            /** @description Frozen by a dispute or an Operations case until it is decided. */
+            held_paise: number;
+            /** @description What one payout could send right now: `available_paise`, never below zero. */
+            withdrawable_paise: number;
+            /** @description In a payout that has been reserved or sent and has not yet settled. */
             reserved_paise: number;
             paid_paise: number;
             currency: string;
@@ -13460,6 +13469,13 @@ export interface components {
             /** Format: uuid */
             readonly corrects_id: string | null;
             readonly reason: string;
+            /**
+             * Format: date-time
+             * @description Not payable before this instant: the end of the Customer's dispute window. Null when the line counts at once (corrections, refunds).
+             */
+            readonly clears_at: string | null;
+            /** @description A dispute or case on this line's booking is freezing it. Held money is not paid until the hold is lifted. */
+            readonly is_on_hold: boolean;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -13594,6 +13610,7 @@ export interface components {
          *     payout provider and never echoed, stored or logged.
          */
         PartnerPayoutAccountCreateRequest: {
+            /** @description As on the bank account. 3 to 50 characters: letters, numbers, spaces and ’ - _ / ( ) ., ending in a letter, number or full stop. A straight apostrophe is stored as ’. */
             holder_name: string;
             account_number: string;
             confirm_account_number: string;
@@ -14366,17 +14383,24 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /** @description One transfer to one Partner: the sum of its ledger lines, refunds included. */
         PayoutBatchItem: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             readonly partner_id: string;
-            /** Format: uuid */
-            readonly ledger_entry_id: string;
             readonly status: components["schemas"]["PayoutBatchItemStatusEnum"];
             readonly amount_paise: number;
             readonly currency: string;
+            /** @description How many ledger lines this transfer covers, refunds included. */
+            readonly entry_count: number;
             readonly provider_payout_id: string;
+            readonly provider_status: string;
+            readonly utr: string;
+            readonly mode: string;
+            readonly fees_paise: number | null;
+            readonly tax_paise: number | null;
+            readonly status_reason: string;
             readonly failure_code: string;
             /** Format: date-time */
             readonly submitted_at: string | null;
@@ -14390,9 +14414,10 @@ export interface components {
          *     * `FAILED` - Failed
          *     * `UNDER_REVIEW` - Under review
          *     * `RELEASED` - Released
+         *     * `REVERSED` - Reversed
          * @enum {string}
          */
-        PayoutBatchItemStatusEnum: "RESERVED" | "SUBMITTED" | "PAID" | "FAILED" | "UNDER_REVIEW" | "RELEASED";
+        PayoutBatchItemStatusEnum: "RESERVED" | "SUBMITTED" | "PAID" | "FAILED" | "UNDER_REVIEW" | "RELEASED" | "REVERSED";
         /**
          * @description The list row. Items are omitted: a run can hold hundreds, and a list of runs is not where
          *     anybody reads them.
@@ -34860,6 +34885,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description RazorpayX's id for this event. A redelivery with an id already recorded changes nothing. */
+                "X-Razorpay-Event-Id"?: string;
                 /** @description HMAC-SHA256 of the raw body with the RazorpayX webhook secret. */
                 "X-Razorpay-Signature": string;
             };

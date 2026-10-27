@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.82.0
+  version: 1.84.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -16933,6 +16933,12 @@ paths:
         RazorpayX retries, and `reconcile_payouts` still polls anything left in flight.
       parameters:
       - in: header
+        name: X-Razorpay-Event-Id
+        schema:
+          type: string
+        description: RazorpayX's id for this event. A redelivery with an id already
+          recorded changes nothing.
+      - in: header
         name: X-Razorpay-Signature
         schema:
           type: string
@@ -32288,10 +32294,27 @@ components:
       properties:
         pending_paise:
           type: integer
+          description: 'Earned but not yet payable: `held_paise` plus `clearing_paise`.'
         available_paise:
           type: integer
+          description: 'Payable now: cleared, not on hold, refunds already subtracted.
+            Negative when refunds exceed what has cleared; that much comes off the
+            next earnings.'
+        clearing_paise:
+          type: integer
+          description: Earned, waiting out the Customer's dispute window before it
+            can be paid.
+        held_paise:
+          type: integer
+          description: Frozen by a dispute or an Operations case until it is decided.
+        withdrawable_paise:
+          type: integer
+          description: 'What one payout could send right now: `available_paise`, never
+            below zero.'
         reserved_paise:
           type: integer
+          description: In a payout that has been reserved or sent and has not yet
+            settled.
         paid_paise:
           type: integer
         currency:
@@ -32301,11 +32324,14 @@ components:
           format: date-time
       required:
       - available_paise
+      - clearing_paise
       - currency
+      - held_paise
       - paid_paise
       - pending_paise
       - reserved_paise
       - server_now
+      - withdrawable_paise
     PartnerBooking:
       type: object
       description: |-
@@ -33335,6 +33361,18 @@ components:
         reason:
           type: string
           readOnly: true
+        clears_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: 'Not payable before this instant: the end of the Customer''s
+            dispute window. Null when the line counts at once (corrections, refunds).'
+        is_on_hold:
+          type: boolean
+          readOnly: true
+          description: A dispute or case on this line's booking is freezing it. Held
+            money is not paid until the hold is lifted.
         created_at:
           type: string
           format: date-time
@@ -33342,12 +33380,14 @@ components:
       required:
       - booking_id
       - calculation_snapshot
+      - clears_at
       - commission_paise
       - corrects_id
       - created_at
       - currency
       - gross_paise
       - id
+      - is_on_hold
       - kind
       - net_paise
       - reason
@@ -33717,8 +33757,11 @@ components:
       properties:
         holder_name:
           type: string
-          minLength: 2
-          maxLength: 140
+          minLength: 3
+          description: 'As on the bank account. 3 to 50 characters: letters, numbers,
+            spaces and ’ - _ / ( ) ., ending in a letter, number or full stop. A straight
+            apostrophe is stored as ’.'
+          maxLength: 50
         account_number:
           type: string
           writeOnly: true
@@ -35678,16 +35721,14 @@ components:
       - version
     PayoutBatchItem:
       type: object
+      description: 'One transfer to one Partner: the sum of its ledger lines, refunds
+        included.'
       properties:
         id:
           type: string
           format: uuid
           readOnly: true
         partner_id:
-          type: string
-          format: uuid
-          readOnly: true
-        ledger_entry_id:
           type: string
           format: uuid
           readOnly: true
@@ -35701,7 +35742,31 @@ components:
         currency:
           type: string
           readOnly: true
+        entry_count:
+          type: integer
+          readOnly: true
+          description: How many ledger lines this transfer covers, refunds included.
         provider_payout_id:
+          type: string
+          readOnly: true
+        provider_status:
+          type: string
+          readOnly: true
+        utr:
+          type: string
+          readOnly: true
+        mode:
+          type: string
+          readOnly: true
+        fees_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        tax_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        status_reason:
           type: string
           readOnly: true
         failure_code:
@@ -35722,13 +35787,19 @@ components:
       - amount_paise
       - completed_at
       - currency
+      - entry_count
       - failure_code
+      - fees_paise
       - id
-      - ledger_entry_id
+      - mode
       - partner_id
       - provider_payout_id
+      - provider_status
       - status
+      - status_reason
       - submitted_at
+      - tax_paise
+      - utr
     PayoutBatchItemStatusEnum:
       enum:
       - RESERVED
@@ -35737,6 +35808,7 @@ components:
       - FAILED
       - UNDER_REVIEW
       - RELEASED
+      - REVERSED
       type: string
       description: |-
         * `RESERVED` - Reserved
@@ -35745,6 +35817,7 @@ components:
         * `FAILED` - Failed
         * `UNDER_REVIEW` - Under review
         * `RELEASED` - Released
+        * `REVERSED` - Reversed
     PayoutBatchList:
       type: object
       description: |-
