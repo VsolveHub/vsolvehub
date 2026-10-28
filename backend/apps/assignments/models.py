@@ -312,3 +312,57 @@ class DispatchCommandAudit(models.Model):
         if not self._state.adding:
             raise ValueError("Dispatch command audit rows are immutable.")
         super().save(*args, **kwargs)
+
+
+class DispatchOffer(models.Model):
+    """An instant dispatch offer made directly to an online partner for an instant / ASAP booking."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        DECLINED = "DECLINED", "Declined"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    booking = models.ForeignKey(
+        "commerce.Booking",
+        on_delete=models.CASCADE,
+        related_name="dispatch_offers",
+    )
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="dispatch_offers",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    offered_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    responded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [
+            models.Index(fields=["booking", "status"], name="dispatch_offer_booking_status"),
+            models.Index(
+                fields=["partner", "status", "expires_at"],
+                name="dispatch_offer_partner_expires",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking"],
+                condition=Q(status="PENDING"),
+                name="assignments_one_pending_dispatch_offer_per_booking",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.booking_id}:{self.partner_id}:{self.status}"
+

@@ -209,3 +209,70 @@ class FulfilmentUnitDispatchSerializer(serializers.Serializer[dict[str, object]]
     live_offer_status = serializers.CharField(allow_null=True)
     reservation_status = serializers.CharField(allow_null=True)
     server_now = serializers.DateTimeField()
+
+
+class DispatchOfferSerializer(serializers.ModelSerializer):
+    remaining_seconds = serializers.SerializerMethodField()
+    server_now = serializers.SerializerMethodField()
+    booking = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.assignments.models import DispatchOffer
+
+        model = DispatchOffer
+        fields = (
+            "id",
+            "status",
+            "offered_at",
+            "expires_at",
+            "responded_at",
+            "remaining_seconds",
+            "server_now",
+            "booking",
+        )
+        read_only_fields = fields
+
+    def get_remaining_seconds(self, obj: object) -> int:
+        now = timezone.now()
+        expires_at = getattr(obj, "expires_at", None)
+        status = getattr(obj, "status", None)
+        if not expires_at or expires_at <= now or status != "PENDING":
+            return 0
+        return max(0, int((expires_at - now).total_seconds()))
+
+    def get_server_now(self, _obj: object) -> str:
+        return timezone.now().isoformat()
+
+    def get_booking(self, obj: object) -> dict[str, object]:
+        booking = getattr(obj, "booking", None)
+        if not booking:
+            return {}
+
+        unit = getattr(booking, "fulfilment_unit", None)
+        service_title = "Instant Home Service"
+        service_category = "Home Services"
+        location_area = "Hyderabad"
+        booking_mode = "INSTANT"
+
+        if unit:
+            lines = list(unit.lines.all())
+            if lines:
+                service_title = getattr(lines[0], "title", service_title)
+            if getattr(unit, "service_area", None):
+                location_area = unit.service_area.name
+            group = getattr(unit, "booking_group", None)
+            if group and hasattr(group, "booking_mode"):
+                booking_mode = str(group.booking_mode)
+
+        return {
+            "id": str(booking.id),
+            "status": str(booking.status),
+            "booking_mode": booking_mode,
+            "scheduled_start": booking.scheduled_start.isoformat() if getattr(booking, "scheduled_start", None) else None,
+            "estimated_duration_minutes": getattr(booking, "estimated_duration_minutes", 60),
+            "service_title": service_title,
+            "service_category": service_category,
+            "location_area": location_area,
+            "customer_notes": "",
+        }
+

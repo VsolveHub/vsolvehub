@@ -6,7 +6,11 @@ import { DEFAULT_LOCALE, ToastProvider } from "@vsolve/ui";
 
 import { PartnerGlobalPopup } from "@/features/notifications/view/partner-global-popup";
 import { PartnerAudioUnlock } from "@/features/notifications/view/partner-audio-unlock";
+import { OneSignalInit } from "@/features/notifications/view/onesignal-init";
+import { JobAlertsBanner } from "@/features/notifications/view/job-alerts-banner";
+import { OneSignalDebugPanel } from "@/features/notifications/view/onesignal-debug-panel";
 import { PartnerPresenceProvider } from "@/features/presence/view/partner-presence-provider";
+
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { PartnerI18nProvider } from "@/i18n/provider";
 import { LOCALE_COOKIE_NAME, parseLocale } from "@/i18n/locale-cookie";
@@ -71,10 +75,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <ToastProvider>
               <PartnerPresenceProvider>
                 <PartnerAudioUnlock />
+                <JobAlertsBanner />
                 {children}
                 <PartnerGlobalPopup />
+                <OneSignalInit />
+                <OneSignalDebugPanel />
               </PartnerPresenceProvider>
             </ToastProvider>
+
           </QueryProvider>
         </PartnerI18nProvider>
       </body>

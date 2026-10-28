@@ -226,3 +226,41 @@ class NotificationReadView(ThrottledWriteMixin, APIView):
             except NotificationNotFoundError as error:
                 raise NotificationApiException(error) from error
         return Response({"unread": unread_count(recipient)})
+
+
+class DevOneSignalTestPushView(APIView):
+    """Local development & testing endpoint to verify OneSignal push delivery to an external_id."""
+
+    authentication_classes = ()
+    permission_classes = ()
+
+    def post(self, request: Request) -> Response:
+        from django.conf import settings
+        from apps.notifications.onesignal import send_push_to_external_ids
+
+        is_dev_enabled = settings.DEBUG or getattr(settings, "ONESIGNAL_ENV", "") == "local"
+
+        if not is_dev_enabled:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        external_id = request.data.get("external_id")
+        heading = request.data.get("heading", "Test job alert")
+        body = request.data.get("body", "This is a test Instant booking notification.")
+        data = request.data.get("data", {"type": "DEV_TEST"})
+        url = request.data.get("url")
+
+        if not external_id:
+            return Response(
+                {"error": "external_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = send_push_to_external_ids(
+            external_ids=[str(external_id)],
+            heading=heading,
+            body=body,
+            data=data,
+            url=url,
+        )
+        return Response(result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST)
+

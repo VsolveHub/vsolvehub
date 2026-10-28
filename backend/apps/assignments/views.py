@@ -279,3 +279,120 @@ class AdvanceSearchView(APIView):
         checkout = get_object_or_404(CheckoutSession, id=checkout_id, customer=request.user)
         result = advance_search(checkout_id=checkout.id)
         return Response(OfferSerializer(result).data)
+
+
+class BaseDispatchOfferView(APIView):
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    def _get_offer(self, request: Request, offer_id: UUID) -> tuple[Any, PartnerProfile]:
+        from apps.assignments.models import DispatchOffer
+
+        user = cast(User, request.user)
+        profile = partner_profile_for_user(user)
+        if profile is None:
+            profile = PartnerProfile.objects.filter(user=user).first()
+        if profile is None:
+            raise PermissionDenied("User is not associated with an active partner profile.")
+
+        offer = get_object_or_404(
+            DispatchOffer.objects.select_related("booking", "partner"),
+            id=offer_id,
+        )
+        if offer.partner_id != profile.id:
+            raise PermissionDenied("This offer belongs to another partner.")
+
+        return offer, profile
+
+
+class DispatchOfferDetailView(BaseDispatchOfferView):
+    """Retrieve details of an instant booking dispatch offer."""
+
+    def get(self, request: Request, offer_id: UUID) -> Response:
+        from apps.assignments.models import DispatchOffer
+        from apps.assignments.serializers import DispatchOfferSerializer
+
+        offer, _profile = self._get_offer(request, offer_id)
+        now = timezone.now()
+        if offer.status == DispatchOffer.Status.PENDING and offer.expires_at <= now:
+            offer.status = DispatchOffer.Status.EXPIRED
+            offer.save(update_fields=["status", "updated_at"])
+
+        return Response(DispatchOfferSerializer(offer).data)
+
+
+class DispatchOfferAcceptView(BaseDispatchOfferView):
+    """Accept an instant booking dispatch offer."""
+
+    def post(self, request: Request, offer_id: UUID) -> Response:
+        from django.db import transaction
+        from apps.assignments.models import DispatchOffer
+        from apps.assignments.serializers import DispatchOfferSerializer
+        from apps.commerce.models import Booking
+
+        offer, profile = self._get_offer(request, offer_id)
+        now = timezone.now()
+
+        if offer.status != DispatchOffer.Status.PENDING:
+            return Response(
+                {"error": f"Offer is not pending (current status: {offer.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if offer.expires_at <= now:
+            offer.status = DispatchOffer.Status.EXPIRED
+            offer.responded_at = now
+            offer.save(update_fields=["status", "responded_at", "updated_at"])
+            return Response(
+                {"error": "This offer has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            offer.status = DispatchOffer.Status.ACCEPTED
+            offer.responded_at = now
+            offer.save(update_fields=["status", "responded_at", "updated_at"])
+
+            booking = offer.booking
+            booking.partner = profile
+            booking.status = Booking.Status.CONFIRMED
+            booking.save(update_fields=["partner", "status", "updated_at"])
+
+            # Cancel any other competing pending offers for this booking
+            DispatchOffer.objects.filter(
+                booking=booking, status=DispatchOffer.Status.PENDING
+            ).exclude(id=offer.id).update(
+                status=DispatchOffer.Status.CANCELLED,
+                responded_at=now,
+            )
+
+        return Response(DispatchOfferSerializer(offer).data, status=status.HTTP_200_OK)
+
+
+class DispatchOfferDeclineView(BaseDispatchOfferView):
+    """Decline an instant booking dispatch offer."""
+
+    def post(self, request: Request, offer_id: UUID) -> Response:
+        from django.db import transaction
+        from apps.assignments.models import DispatchOffer
+        from apps.assignments.serializers import DispatchOfferSerializer
+        from apps.assignments.tasks import reassignment_or_downgrade_task
+
+        offer, _profile = self._get_offer(request, offer_id)
+        now = timezone.now()
+
+        if offer.status != DispatchOffer.Status.PENDING:
+            return Response(
+                {"error": f"Offer is not pending (current status: {offer.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            offer.status = DispatchOffer.Status.DECLINED
+            offer.responded_at = now
+            offer.save(update_fields=["status", "responded_at", "updated_at"])
+
+        # Trigger reassignment or downgrade in the background
+        reassignment_or_downgrade_task.delay(str(offer.booking_id))
+
+        return Response(DispatchOfferSerializer(offer).data, status=status.HTTP_200_OK)
+

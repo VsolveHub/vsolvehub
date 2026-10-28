@@ -1328,3 +1328,12 @@ LOGGING = {
         },
     },
 }
+
+# OneSignal Push & Instant Dispatch settings
+ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
+ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
+ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
+ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
+DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
+PARTNER_PORTAL_BASE_URL = env("PARTNER_PORTAL_BASE_URL", default="http://localhost:3001")
+
