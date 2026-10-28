@@ -8,6 +8,7 @@ import {
   Building,
   CheckCircle2,
   Clock,
+  CreditCard,
   ExternalLink,
   Eye,
   FileCheck2,

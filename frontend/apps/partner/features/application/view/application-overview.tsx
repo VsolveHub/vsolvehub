@@ -9,6 +9,7 @@ import {
   BedDouble,
   Check,
   ChevronRight,
+  Clock,
   FileText,
   Package,
   ShieldCheck,

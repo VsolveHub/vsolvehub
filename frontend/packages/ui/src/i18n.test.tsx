@@ -109,5 +109,4 @@ describe("useTOrDefault", () => {
       "We will send a 6-digit code.",
     );
   });
-  });
 });
