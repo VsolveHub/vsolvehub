@@ -510,3 +510,202 @@ def test_concurrent_cart_edit_and_checkout_have_one_serialized_truth() -> None:
         assert checkout_outcome == "STALE_REJECTED"
         assert quote.status == Quote.Status.INVALIDATED
         assert not BookingGroup.objects.filter(quote=quote).exists()
+
+
+def test_plan_quote_idempotent_replay_returns_active_quote() -> None:
+    client, _customer, address_id, version = _customer_context()
+    cart_response = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    _partner(suffix="41", variant_slugs=("switch-socket-repair",))
+    plan_set = _plan(
+        client,
+        address_id=address_id,
+        cart_version=int(cart_response["version"]),
+    )
+    plan_id = plan_set["plans"][0]["id"]
+    response1 = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-1",
+    )
+    assert response1.status_code == HTTPStatus.CREATED
+    quote1_id = response1.json()["id"]
+
+    plan_set_obj = FulfilmentPlanSet.objects.get(id=plan_set["id"])
+    assert plan_set_obj.status == FulfilmentPlanSet.Status.SELECTED
+
+    # Replay with same idempotency key
+    response2 = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-1",
+    )
+    assert response2.status_code == HTTPStatus.CREATED
+    assert response2.json()["id"] == quote1_id
+
+    # Call with a new idempotency key for the same plan while quote is ACTIVE
+    response3 = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-2",
+    )
+    assert response3.status_code == HTTPStatus.CREATED
+    assert response3.json()["id"] == quote1_id
+
+
+def test_plan_quote_with_expired_quote_returns_stale_error() -> None:
+    client, _customer, address_id, version = _customer_context()
+    cart_response = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    _partner(suffix="42", variant_slugs=("switch-socket-repair",))
+    plan_set = _plan(
+        client,
+        address_id=address_id,
+        cart_version=int(cart_response["version"]),
+    )
+    plan_id = plan_set["plans"][0]["id"]
+    response = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-expire",
+    )
+    assert response.status_code == HTTPStatus.CREATED
+    quote = Quote.objects.get(id=response.json()["id"])
+    quote.status = Quote.Status.EXPIRED
+    quote.expires_at = timezone.now() - timedelta(minutes=5)
+    quote.save(update_fields=("status", "expires_at"))
+
+    # Re-requesting quote when expired must return 409 conflict
+    stale_response = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-expire-retry",
+    )
+    assert stale_response.status_code == HTTPStatus.CONFLICT
+    assert "fulfilment_plan_stale" in str(stale_response.json())
+
+
+def test_plan_quote_with_cart_version_change_invalidates() -> None:
+    client, customer, address_id, version = _customer_context()
+    cart_response = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    _partner(suffix="43", variant_slugs=("switch-socket-repair", "fan-installation"))
+    plan_set = _plan(
+        client,
+        address_id=address_id,
+        cart_version=int(cart_response["version"]),
+    )
+    plan_id = plan_set["plans"][0]["id"]
+    response = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-cart-change",
+    )
+    assert response.status_code == HTTPStatus.CREATED
+    quote = Quote.objects.get(id=response.json()["id"])
+
+    # Modify cart to bump version
+    _add_item(client, slug="fan-installation", cart_version=int(cart_response["version"]))
+
+    # Calling create quote again must fail with 409 conflict
+    stale_response = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-cart-change-retry",
+    )
+    assert stale_response.status_code == HTTPStatus.CONFLICT
+    assert "fulfilment_plan_stale" in str(stale_response.json())
+
+    # Attempting checkout with stale quote raises QuoteExpiredApiError
+    with pytest.raises(QuoteExpiredApiError):
+        create_checkout(customer=customer, quote=quote)
+
+
+def test_invalidated_plan_set_blocks_checkout() -> None:
+    client, customer, address_id, version = _customer_context()
+    cart_response = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    _partner(suffix="47", variant_slugs=("switch-socket-repair",))
+    plan_set = _plan(
+        client,
+        address_id=address_id,
+        cart_version=int(cart_response["version"]),
+    )
+    plan_id = plan_set["plans"][0]["id"]
+    response = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-key-invalidated",
+    )
+    assert response.status_code == HTTPStatus.CREATED
+    quote = Quote.objects.get(id=response.json()["id"])
+    quote.status = Quote.Status.INVALIDATED
+    quote.save(update_fields=("status",))
+
+    with pytest.raises(QuoteExpiredApiError):
+        create_checkout(customer=customer, quote=quote)
+
+
+def test_plan_quote_cannot_quote_different_plan_when_already_selected() -> None:
+    client, _customer, address_id, version = _customer_context()
+    first = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    second = _add_item(client, slug="fan-installation", cart_version=int(first["version"]))
+    _partner(suffix="44", variant_slugs=("switch-socket-repair", "fan-installation"))
+    _partner(suffix="45", variant_slugs=("switch-socket-repair", "fan-installation"))
+    plan_set = _plan(
+        client,
+        address_id=address_id,
+        cart_version=int(second["version"]),
+    )
+    assert len(plan_set["plans"]) >= 2
+    plan0_id = plan_set["plans"][0]["id"]
+    plan1_id = plan_set["plans"][1]["id"]
+
+    response0 = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan0_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-plan-0",
+    )
+    assert response0.status_code == HTTPStatus.CREATED
+
+    # Attempting to quote plan 1 when plan set is already SELECTED with plan 0 active quote
+    response1 = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan1_id},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-plan-1",
+    )
+    assert response1.status_code == HTTPStatus.CONFLICT
+
+
+def test_selected_plan_set_with_active_quote_allows_checkout() -> None:
+    client, customer, address_id, version = _customer_context()
+    cart_response = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    _partner(suffix="46", variant_slugs=("switch-socket-repair",))
+    plan_set = _plan(
+        client,
+        address_id=address_id,
+        cart_version=int(cart_response["version"]),
+    )
+    quote_response = client.post(
+        "/api/v1/plan-quotes/",
+        {"plan_id": plan_set["plans"][0]["id"]},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="idempotency-checkout-test",
+    )
+    assert quote_response.status_code == HTTPStatus.CREATED
+    quote = Quote.objects.get(id=quote_response.json()["id"])
+
+    plan_set_obj = FulfilmentPlanSet.objects.get(id=plan_set["id"])
+    assert plan_set_obj.status == FulfilmentPlanSet.Status.SELECTED
+    assert quote.status == Quote.Status.ACTIVE
+
+    checkout = create_checkout(customer=customer, quote=quote)
+    assert checkout is not None
+    assert checkout.status == "CREATED"
+

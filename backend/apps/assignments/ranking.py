@@ -27,7 +27,7 @@ from psycopg.types.range import Range
 
 from apps.assignments.models import AssignmentAttempt, Reservation
 from apps.carts.availability import schedule_available_partner_ids
-from apps.carts.models import FulfilmentUnit
+from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.partners.models import PartnerApplication, PartnerOnlineSession, PartnerProfile
 
 RANKING_POLICY: Final[str] = "service_area_stable_uuid"
@@ -110,6 +110,14 @@ def unit_variant_ids(unit: FulfilmentUnit) -> tuple[UUID, ...]:
 
 def is_same_day_unit(*, unit: FulfilmentUnit, now: datetime | None = None) -> bool:
     """Same horizon as reachability (§7): within today's lead-time window from `now`."""
+
+    group = getattr(unit, "booking_group", None)
+    if group is not None:
+        mode = getattr(group, "booking_mode", None)
+        if mode == BookingGroup.BookingMode.INSTANT:
+            return True
+        if mode == BookingGroup.BookingMode.SCHEDULED:
+            return False
 
     clock = timezone.now() if now is None else now
     return unit.requested_start <= clock + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
