@@ -771,8 +771,9 @@ class FulfilmentPlanSetView(APIView):
                     expected_cart_version=serializer.validated_data["expected_cart_version"],
                     preferred_starts={
                         entry["group_key"]: entry["starts_at"]
-                        for entry in serializer.validated_data["preferred_starts"]
+                        for entry in serializer.validated_data.get("preferred_starts") or []
                     },
+                    booking_mode=serializer.validated_data.get("booking_mode", "SCHEDULED"),
                 )
             except PermissionError as exc:
                 raise PermissionDenied(str(exc)) from exc

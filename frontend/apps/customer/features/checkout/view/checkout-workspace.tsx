@@ -5,7 +5,7 @@ import { describeError } from "@vsolve/query";
 import { Button, ErrorState, Skeleton, buttonStyles, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useAddresses,
@@ -39,6 +39,7 @@ import {
   describeQuoteFailure,
 } from "../reasons";
 import {
+  useCandidateStarts,
   useCart,
   useCreateCheckout,
   useCreatePlanQuote,
@@ -67,6 +68,7 @@ import { OrderSummary } from "./order-summary";
 import { CheckoutMobileBottomBar } from "./checkout-mobile-bottom-bar";
 import { QuoteStatusNotice } from "./quote-status-notice";
 import { SlotsModal } from "./slots-modal";
+import { BookingModeToggle, type BookingMode } from "./booking-mode-toggle";
 
 /**
  * Checkout: where, when, what it costs, and one Confirm.
@@ -111,6 +113,10 @@ export function CheckoutWorkspace() {
    * open. See `AddressStage`'s `openSignal`.
    */
   const [addressOpenSignal, setAddressOpenSignal] = useState(0);
+  /**
+   * Booking mode: "INSTANT" (ASAP) or "SCHEDULED" (selected slot).
+   */
+  const [bookingMode, setBookingMode] = useState<BookingMode>("SCHEDULED");
   /**
    * `null` means "nobody has decided" — the modal then follows the derived
    * default below. An explicit `true`/`false` is the customer opening or
@@ -158,20 +164,41 @@ export function CheckoutWorkspace() {
   );
   const groups = groupsQuery.data ?? [];
 
+  /**
+   * Candidate windows query to evaluate instant availability and earliest ETA.
+   */
+  const windowsQuery = useCandidateStarts(
+    cart && effectiveAddressId !== null
+      ? {
+          cartVersion: cart.version,
+          addressId: effectiveAddressId,
+          groupKey: groups[0]?.key ?? null,
+        }
+      : null,
+  );
+  const instant = windowsQuery.data?.instant;
+
+  // Fallback to SCHEDULED if instant becomes unavailable
+  useEffect(() => {
+    if (bookingMode === "INSTANT" && windowsQuery.data && !instant?.isAvailable) {
+      setBookingMode("SCHEDULED");
+    }
+  }, [bookingMode, windowsQuery.data, instant?.isAvailable]);
+
   const isScheduled =
-    groups.length > 0 && groups.every((group) => chosenStarts.has(group.key));
+    bookingMode === "INSTANT"
+      ? Boolean(instant?.isAvailable && chosenStarts.size > 0)
+      : groups.length > 0 && groups.every((group) => chosenStarts.has(group.key));
 
   /**
-   * The picker opens itself as soon as there is something to pick.
+   * The picker opens itself as soon as there is something to pick in SCHEDULED mode.
    *
-   * Derived, not set from an effect. An effect would render the page once with
-   * the modal shut and then again with it open, so the customer sees a flash of
-   * the screen behind it — and the auto-open would have to be re-suppressed
-   * every time the effect's dependencies changed. Reading it as a value means
-   * "there are visits and none are scheduled" simply *is* the open state.
+   * Derived, not set from an effect. Reading it as a value means "there are
+   * visits and none are scheduled" simply *is* the open state in SCHEDULED mode.
    */
   const slotsOpen =
-    slotsOverride ?? (groups.length > 0 && chosenStarts.size === 0);
+    bookingMode === "SCHEDULED" &&
+    (slotsOverride ?? (groups.length > 0 && chosenStarts.size === 0));
 
   const createPlanSet = useCreatePlanSet();
   const createQuote = useCreatePlanQuote();
@@ -187,7 +214,12 @@ export function CheckoutWorkspace() {
    * Derived on render rather than corrected in an effect, so the intermediate
    * state where a withdrawn plan still offers a Confirm button cannot exist.
    */
-  const isPlanSetUsable = planSet !== null && planSet.status === "ACTIVE";
+  const isPlanSetUsable =
+    planSet !== null &&
+    (planSet.status === "ACTIVE" ||
+      (planSet.status === "SELECTED" &&
+        quote !== null &&
+        quote.status === "ACTIVE"));
 
   /** Discards everything derived from a schedule and asks for times again. */
   function rescheduleFromScratch() {
@@ -195,15 +227,71 @@ export function CheckoutWorkspace() {
     setQuoteId(null);
     setPlanFailures(null);
     setChosenStarts(new Map());
-    // Back to the derived default rather than an explicit open: with no chosen
-    // times, "there are visits and none are scheduled" reopens the picker on its
-    // own, and forcing it would re-open a modal the customer had dismissed if
-    // this ever ran while a schedule was already complete.
     setSlotsOverride(null);
     createPlanSet.reset();
     createQuote.reset();
     createCheckout.reset();
     void groupsQuery.refetch();
+    void windowsQuery.refetch();
+  }
+
+  function handleBookingModeChange(nextMode: BookingMode) {
+    if (nextMode === bookingMode) return;
+    setBookingMode(nextMode);
+    setPlanSetId(null);
+    setQuoteId(null);
+    setPlanFailures(null);
+    setChosenStarts(new Map());
+    createPlanSet.reset();
+    createQuote.reset();
+    createCheckout.reset();
+
+    if (nextMode === "INSTANT") {
+      setSlotsOverride(false);
+      if (instant?.isAvailable && instant.earliestStartsAt && cart && effectiveAddressId) {
+        const earliest = instant.earliestStartsAt;
+        const startsMap = new Map<string, string>();
+        groups.forEach((g) => startsMap.set(g.key, earliest));
+        setChosenStarts(startsMap);
+
+        createPlanSet.mutate(
+          {
+            cartVersion: cart.version,
+            addressId: effectiveAddressId,
+            bookingMode: "INSTANT",
+            preferredStarts: groups.map((g) => ({
+              groupKey: g.key,
+              startsAt: earliest,
+            })),
+          },
+          {
+            onSuccess: (result) => {
+              setPlanSetId(result.id);
+              const recommended =
+                result.plans.find((plan) => plan.is_recommended) ?? result.plans[0];
+              if (recommended === undefined) return;
+              createQuote.mutate(recommended.id, {
+                onSuccess: (priced) => setQuoteId(priced.id),
+                onError: (error) => {
+                  if (isPlanStale(error) || cartVersionConflict(error) !== null) {
+                    rescheduleFromScratch();
+                  }
+                },
+              });
+            },
+            onError: (error) => {
+              const failures = planUnavailable(error);
+              if (failures !== null) setPlanFailures(failures);
+              if (isSchedulingGroupsChanged(error)) rescheduleFromScratch();
+              if (cartVersionConflict(error) !== null) router.push("/cart");
+            },
+          },
+        );
+      }
+    } else {
+      // Switched to SCHEDULED: open slots modal
+      setSlotsOverride(true);
+    }
   }
 
   function handleSchedule(starts: ReadonlyMap<string, string>) {
@@ -215,6 +303,7 @@ export function CheckoutWorkspace() {
       {
         cartVersion: cart.version,
         addressId: effectiveAddressId,
+        bookingMode: "SCHEDULED",
         preferredStarts: [...starts].map(([groupKey, startsAt]) => ({
           groupKey,
           startsAt,
@@ -320,6 +409,7 @@ export function CheckoutWorkspace() {
    */
   function handleSelectAddress(address: Schemas["Address"]) {
     setAddressId(address.id);
+    setBookingMode("SCHEDULED");
     setChosenStarts(new Map());
     setPlanSetId(null);
     setQuoteId(null);
@@ -417,66 +507,103 @@ export function CheckoutWorkspace() {
                 )}
               </DetailRow>
 
-              <DetailRow
-                icon={<ClockIcon />}
-                label={groups.length > 1 ? "Slots" : "Slot"}
-                actionLabel={
-                  effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
-                    ? undefined
-                    : isScheduled
-                      ? "Edit"
-                      : "Select slots"
-                }
-                onAction={
-                  effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
-                    ? undefined
-                    : () => setSlotsOverride(true)
-                }
-              >
-                {effectiveAddressId === null ? (
-                  <span>Pick an address first — times depend on the area.</span>
-                ) : groupsQuery.isPending ? (
-                  <Skeleton className="h-5 w-40" />
-                ) : groupsQuery.isError ? (
-                  <div className="mt-1 rounded-xl border border-critical/20 bg-critical-surface/30 p-3 text-xs text-text-secondary">
-                    <p className="font-semibold text-critical">
-                      {describeError(groupsQuery.error, "read").message}
-                    </p>
-                    <p className="mt-1 leading-relaxed">
-                      We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address in Hyderabad.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={openAddressPicker}
-                      className="mt-2.5 inline-flex items-center gap-1 font-bold text-action hover:underline cursor-pointer"
-                    >
-                      Change address &rarr;
-                    </button>
+              <div className="border-t border-line px-5 py-4 bg-surface-muted/30">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Booking Mode
+                </div>
+                <BookingModeToggle
+                  value={bookingMode}
+                  onChange={handleBookingModeChange}
+                  instant={instant}
+                  disabled={effectiveAddressId === null || groups.length === 0}
+                />
+              </div>
+
+              {bookingMode === "INSTANT" ? (
+                <DetailRow
+                  icon={<ClockIcon />}
+                  label="Arrival time"
+                  actionLabel="Schedule for later"
+                  onAction={() => handleBookingModeChange("SCHEDULED")}
+                >
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-text">⚡ Instant / ASAP</span>
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        {instant?.etaMinutes
+                          ? `Expected arrival in ~${instant.etaMinutes} mins`
+                          : "Expected arrival in 30–45 mins"}
+                      </span>
+                    </div>
+                    {instant?.earliestStartsAt ? (
+                      <span className="text-xs text-text-secondary">
+                        Starting around {formatChosen(instant.earliestStartsAt)}
+                      </span>
+                    ) : null}
                   </div>
-                ) : (
-                  <ul className="flex flex-col gap-1">
-                    {groups.map((group) => {
-                      const startsAt = chosenStarts.get(group.key) ?? null;
-                      return (
-                        <li key={group.key}>
-                          {groups.length > 1 ? (
-                            <span className="font-medium text-text">
-                              {group.label}:{" "}
-                            </span>
-                          ) : null}
-                          {startsAt === null ? (
-                            <span>No time chosen</span>
-                          ) : (
-                            <span className="text-text">
-                              {formatChosen(startsAt)}
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </DetailRow>
+                </DetailRow>
+              ) : (
+                <DetailRow
+                  icon={<ClockIcon />}
+                  label={groups.length > 1 ? "Slots" : "Slot"}
+                  actionLabel={
+                    effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
+                      ? undefined
+                      : isScheduled
+                        ? "Edit"
+                        : "Select slots"
+                  }
+                  onAction={
+                    effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
+                      ? undefined
+                      : () => setSlotsOverride(true)
+                  }
+                >
+                  {effectiveAddressId === null ? (
+                    <span>Pick an address first — times depend on the area.</span>
+                  ) : groupsQuery.isPending ? (
+                    <Skeleton className="h-5 w-40" />
+                  ) : groupsQuery.isError ? (
+                    <div className="mt-1 rounded-xl border border-critical/20 bg-critical-surface/30 p-3 text-xs text-text-secondary">
+                      <p className="font-semibold text-critical">
+                        {describeError(groupsQuery.error, "read").message}
+                      </p>
+                      <p className="mt-1 leading-relaxed">
+                        We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address in Hyderabad.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openAddressPicker}
+                        className="mt-2.5 inline-flex items-center gap-1 font-bold text-action hover:underline cursor-pointer"
+                      >
+                        Change address &rarr;
+                      </button>
+                    </div>
+                  ) : (
+                    <ul className="flex flex-col gap-1">
+                      {groups.map((group) => {
+                        const startsAt = chosenStarts.get(group.key) ?? null;
+                        return (
+                          <li key={group.key}>
+                            {groups.length > 1 ? (
+                              <span className="font-medium text-text">
+                                {group.label}:{" "}
+                              </span>
+                            ) : null}
+                            {startsAt === null ? (
+                              <span>No time chosen</span>
+                            ) : (
+                              <span className="text-text">
+                                {formatChosen(startsAt)}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </DetailRow>
+              )}
 
               <div className="hidden border-t border-line px-5 py-3.5 lg:block">
                 <Link href="/cart" className={buttonStyles({ variant: "ghost" })}>

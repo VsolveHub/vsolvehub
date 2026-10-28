@@ -10,6 +10,7 @@ flow in `apps.fulfilment.cancellation` and the A5 visit grid in
 those callers differ on, and the loop itself has exactly one home.
 """
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -20,9 +21,13 @@ from django.conf import settings
 from django.core import signing
 from django.utils import timezone
 
+from apps.partners.models import PartnerOnlineSession
+
 from apps.carts.availability import (
     AvailabilitySnapshot,
+    InstantAvailability,
     arrival_window_for_duration,
+    compute_instant_availability,
     load_snapshot,
     reachability_by_partner,
 )
@@ -77,6 +82,7 @@ class BookingWindows:
     availability_is_preliminary: bool
     timezone: str
     days: tuple[BookingWindowDay, ...]
+    instant: InstantAvailability | None = None
 
 
 def _signed_window_id(
@@ -265,6 +271,13 @@ def build_arrival_window_grid(
     # Reachability depends on the Partner and `now`, not on the slot — resolved once
     # here rather than recomputing the same haversine inside the innermost loop.
     reachable_at = reachability_by_partner(snapshot=snapshot, now=now)
+    instant = compute_instant_availability(
+        area=area,
+        snapshot=snapshot,
+        duration=duration,
+        now=now,
+        reachable_at=reachable_at,
+    )
     # One derived width for the whole grid: the loop step, each window's `ends_at`
     # and the signed id all read this, so the step and the window can never drift
     # apart and leave gaps or overlaps between adjacent slots.
@@ -320,4 +333,5 @@ def build_arrival_window_grid(
         availability_is_preliminary=True,
         timezone=area.timezone,
         days=tuple(days),
+        instant=instant,
     )

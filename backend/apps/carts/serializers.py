@@ -23,7 +23,12 @@ from apps.carts.models import (
     ServiceCompatibilityRule,
 )
 from apps.carts.pricing_preview import cart_price_summary
-from apps.carts.services import BookingWindow, BookingWindowDay, BookingWindows
+from apps.carts.services import (
+    BookingWindow,
+    BookingWindowDay,
+    BookingWindows,
+    InstantAvailability,
+)
 from apps.catalog.serializers import ServiceCardSerializer
 from apps.commerce.models import Booking
 from apps.partners.models import PartnerProfile
@@ -335,16 +340,32 @@ class FulfilmentPlanSetCreateSerializer(serializers.Serializer[dict[str, object]
 
     address_id = serializers.UUIDField()
     expected_cart_version = serializers.IntegerField(min_value=1)
-    preferred_starts = PreferredStartSerializer(many=True, allow_empty=False)
+    booking_mode = serializers.ChoiceField(
+        choices=("INSTANT", "SCHEDULED"),
+        default="SCHEDULED",
+        required=False,
+    )
+    preferred_starts = PreferredStartSerializer(many=True, required=False, allow_empty=True)
 
     @staticmethod
     def validate_preferred_starts(
-        value: list[dict[str, object]],
+        value: list[dict[str, object]] | None,
     ) -> list[dict[str, object]]:
+        if not value:
+            return []
         keys = [entry["group_key"] for entry in value]
         if len(keys) != len(set(keys)):
             raise serializers.ValidationError("Each visit may be given only one start time.")
         return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        mode = attrs.get("booking_mode", "SCHEDULED")
+        starts = attrs.get("preferred_starts")
+        if mode == "SCHEDULED" and not starts:
+            raise serializers.ValidationError(
+                {"preferred_starts": ["This field is required for scheduled bookings."]}
+            )
+        return attrs
 
 
 class PlanUnitItemSerializer(serializers.ModelSerializer[PlanUnitItem]):
@@ -477,6 +498,7 @@ class FulfilmentPlanSerializer(serializers.ModelSerializer[FulfilmentPlan]):
 
 class FulfilmentPlanSetSerializer(serializers.ModelSerializer[FulfilmentPlanSet]):
     server_now = serializers.SerializerMethodField()
+    booking_mode = serializers.SerializerMethodField()
     plans = FulfilmentPlanSerializer(many=True, read_only=True)
 
     class Meta:
@@ -485,6 +507,7 @@ class FulfilmentPlanSetSerializer(serializers.ModelSerializer[FulfilmentPlanSet]
             "id",
             "cart_version",
             "status",
+            "booking_mode",
             "server_now",
             "expires_at",
             "plans",
@@ -496,6 +519,12 @@ class FulfilmentPlanSetSerializer(serializers.ModelSerializer[FulfilmentPlanSet]
     @extend_schema_field(serializers.DateTimeField())
     def get_server_now(_plan_set: FulfilmentPlanSet) -> str:
         return timezone.now().isoformat()
+
+    @staticmethod
+    @extend_schema_field(serializers.CharField())
+    def get_booking_mode(plan_set: FulfilmentPlanSet) -> str:
+        snapshot = plan_set.planning_snapshot or {}
+        return snapshot.get("booking_mode", "SCHEDULED")
 
 
 class PlanQuoteCreateSerializer(serializers.Serializer[dict[str, object]]):
@@ -629,11 +658,19 @@ class BookingWindowDaySerializer(serializers.Serializer[BookingWindowDay]):
     windows = BookingWindowSerializer(many=True, read_only=True)
 
 
+class InstantAvailabilitySerializer(serializers.Serializer[InstantAvailability]):
+    is_available = serializers.BooleanField(read_only=True)
+    earliest_starts_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    eta_minutes = serializers.IntegerField(read_only=True, allow_null=True)
+    unavailable_reason = serializers.CharField(read_only=True, allow_null=True)
+
+
 class BookingWindowsSerializer(serializers.Serializer[BookingWindows]):
     server_now = serializers.DateTimeField(read_only=True)
     estimated_duration_minutes = serializers.IntegerField(read_only=True)
     availability_is_preliminary = serializers.BooleanField(read_only=True)
     timezone = serializers.CharField(read_only=True)
+    instant = InstantAvailabilitySerializer(read_only=True)
     days = BookingWindowDaySerializer(many=True, read_only=True)
 
 
@@ -985,6 +1022,7 @@ class BookingGroupSerializer(serializers.ModelSerializer[BookingGroup]):
         fields = (
             "id",
             "status",
+            "booking_mode",
             "version",
             "confirmation_policy",
             "expires_at",

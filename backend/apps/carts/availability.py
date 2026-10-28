@@ -39,11 +39,13 @@ from psycopg.types.range import Range
 
 from apps.assignments.models import Reservation
 from apps.locations.models import Address, ServiceArea
+from apps.locations.services import operating_ranges_for_date
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerLocation,
+    PartnerOnlineSession,
     PartnerProfile,
 )
 from apps.partners.selectors import availability_window_contains
@@ -498,3 +500,113 @@ def _reserved_by_partner(
     for partner_id, occupied in rows:
         grouped[partner_id].append((occupied.lower, occupied.upper))
     return {partner_id: tuple(spans) for partner_id, spans in grouped.items()}
+
+
+@dataclass(frozen=True, slots=True)
+class InstantAvailability:
+    is_available: bool
+    earliest_starts_at: datetime | None
+    eta_minutes: int | None
+    unavailable_reason: str | None
+
+
+def compute_instant_availability(
+    *,
+    area: ServiceArea,
+    snapshot: AvailabilitySnapshot,
+    duration: int,
+    now: datetime,
+    reachable_at: dict[UUID, datetime] | None = None,
+) -> InstantAvailability:
+    """Evaluate whether an instant (ASAP) booking can be accepted right now.
+
+    Instant booking rules:
+    - At least one eligible partner must be currently online (active PartnerOnlineSession).
+    - The partner's arrival (`reachable_at`) must be within `M1_TODAY_LEAD_TIME_MINUTES` of `now`.
+    - The service area must be open for `[starts_at, starts_at + duration]`.
+    - The partner's published schedule covers `[starts_at, starts_at + duration]`.
+    - The partner has no active reservation conflicting with `[starts_at, starts_at + duration]`.
+    """
+    zone = ZoneInfo(area.timezone)
+    local_now = now.astimezone(zone)
+    local_date = local_now.date()
+    operating_ranges = list(operating_ranges_for_date(area=area, local_date=local_date))
+
+    area_currently_open = any(
+        opens_at <= now and now < closes_at for opens_at, closes_at in operating_ranges
+    )
+
+    if not operating_ranges or not area_currently_open:
+        return InstantAvailability(
+            is_available=False,
+            earliest_starts_at=None,
+            eta_minutes=None,
+            unavailable_reason="OUTSIDE_OPERATING_HOURS",
+        )
+
+    if not snapshot.partner_ids:
+        return InstantAvailability(
+            is_available=False,
+            earliest_starts_at=None,
+            eta_minutes=None,
+            unavailable_reason="NO_CAPACITY",
+        )
+
+    online_partner_ids = set(
+        PartnerOnlineSession.objects.filter(
+            partner_id__in=snapshot.partner_ids,
+            ended_at__isnull=True,
+        ).values_list("partner_id", flat=True)
+    )
+
+    if not online_partner_ids:
+        return InstantAvailability(
+            is_available=False,
+            earliest_starts_at=None,
+            eta_minutes=None,
+            unavailable_reason="NO_ONLINE_PARTNERS",
+        )
+
+    if reachable_at is None:
+        reachable_at = reachability_by_partner(snapshot=snapshot, now=now)
+
+    max_lead_time = now + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
+    qualifying_starts: list[datetime] = []
+
+    for partner_id in online_partner_ids:
+        starts_at = reachable_at.get(partner_id)
+        if starts_at is None:
+            continue
+        for opens_at, closes_at in operating_ranges:
+            effective_start = max(starts_at, opens_at)
+            if effective_start > max_lead_time:
+                continue
+            if effective_start + timedelta(minutes=duration) > closes_at:
+                continue
+            if not snapshot._schedule_allows(
+                partner_id, starts_at=effective_start, duration_minutes=duration
+            ):
+                continue
+            if snapshot._is_reserved(
+                partner_id, starts_at=effective_start, duration_minutes=duration
+            ):
+                continue
+            qualifying_starts.append(effective_start)
+
+    if qualifying_starts:
+        earliest = min(qualifying_starts)
+        eta = max(1, math.ceil((earliest - now).total_seconds() / 60))
+        return InstantAvailability(
+            is_available=True,
+            earliest_starts_at=earliest,
+            eta_minutes=eta,
+            unavailable_reason=None,
+        )
+
+    reason = "OUTSIDE_OPERATING_HOURS" if not area_currently_open else "NO_CAPACITY"
+    return InstantAvailability(
+        is_available=False,
+        earliest_starts_at=None,
+        eta_minutes=None,
+        unavailable_reason=reason,
+    )

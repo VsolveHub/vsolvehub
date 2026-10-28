@@ -293,11 +293,15 @@ def create_checkout(  # noqa: PLR0912
         raise PermissionError("An active Customer assisted-booking consent receipt is required.")
     booking_group: BookingGroup | None = None
     if fulfilment_plan is not None:
+        booking_mode = fulfilment_plan.plan_set.planning_snapshot.get(
+            "booking_mode", BookingGroup.BookingMode.SCHEDULED
+        )
         booking_group = BookingGroup.objects.create(
             customer=customer,
             quote=locked_quote,
             address=locked_quote.address,
             confirmation_policy=fulfilment_plan.confirmation_policy,
+            booking_mode=booking_mode,
             expires_at=now + timedelta(seconds=settings.M1_PARTNER_SEARCH_TIMEOUT_SECONDS),
         )
         for quote_unit in locked_quote.units.order_by("position"):

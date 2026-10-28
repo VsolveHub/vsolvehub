@@ -162,6 +162,7 @@ function CodeStep({
   confirming,
   onConfirm,
   onUseDifferentNumber,
+  developmentCode,
 }: {
   code: string;
   codeLength: number;
@@ -170,12 +171,13 @@ function CodeStep({
   confirming: boolean;
   onConfirm: () => void;
   onUseDifferentNumber: () => void;
+  developmentCode?: string | null;
 }) {
   return (
     <div className="mt-4 max-w-sm">
       <Field
         label="The code we sent you"
-        description={`${codeLength} digits.`}
+        description={`${codeLength} digits.${developmentCode ? ` Dev OTP: ${developmentCode}` : ""}`}
         required
         error={codeError}
       >
@@ -212,6 +214,7 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
 
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [developmentCode, setDevelopmentCode] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [codeLength, setCodeLength] = useState(6);
 
@@ -238,7 +241,8 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
                 onSuccess: (issued) => {
                   setChallengeId(issued.challenge_id);
                   setCodeLength(issued.code_length);
-                  setCode("");
+                  setDevelopmentCode(issued.development_code ?? null);
+                  setCode(issued.development_code ?? "");
                 },
               },
             )
@@ -248,6 +252,7 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
         <CodeStep
           code={code}
           codeLength={codeLength}
+          developmentCode={developmentCode}
           onCodeChange={setCode}
           codeError={
             confirm.isError
@@ -262,6 +267,7 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
                 onSuccess: (stepped) => {
                   // Single-use and now spent.
                   setCode("");
+                  setDevelopmentCode(null);
                   setChallengeId(null);
                   onSteppedUp(stepped);
                 },
@@ -271,6 +277,7 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
           onUseDifferentNumber={() => {
             setChallengeId(null);
             setCode("");
+            setDevelopmentCode(null);
             confirm.reset();
           }}
         />
