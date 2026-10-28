@@ -24,6 +24,7 @@ The three questions a slot's capacity depends on, and where each is answered:
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import defaultdict
 from collections.abc import Collection
@@ -47,8 +48,13 @@ from apps.partners.models import (
     PartnerLocation,
     PartnerOnlineSession,
     PartnerProfile,
+    PartnerPushSubscription,
+    PartnerShift,
 )
 from apps.partners.selectors import availability_window_contains
+from common.observability.context import get_request_id
+
+logger = logging.getLogger(__name__)
 
 #: Reservations occupy the visit plus a turnaround gap, so a Partner is never
 #: offered two jobs with no travel time between them. One global constant rather
@@ -552,20 +558,84 @@ def compute_instant_availability(
             unavailable_reason="NO_CAPACITY",
         )
 
-    online_partner_ids = set(
-        PartnerOnlineSession.objects.filter(
-            partner_id__in=snapshot.partner_ids,
-            ended_at__isnull=True,
-        ).values_list("partner_id", flat=True)
-    )
+    feature_push_gated = getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False)
 
-    if not online_partner_ids:
-        return InstantAvailability(
-            is_available=False,
-            earliest_starts_at=None,
-            eta_minutes=None,
-            unavailable_reason="NO_ONLINE_PARTNERS",
+    if not feature_push_gated:
+        # Standard heartbeat presence model
+        online_partner_ids = set(
+            PartnerOnlineSession.objects.filter(
+                partner_id__in=snapshot.partner_ids,
+                ended_at__isnull=True,
+            ).values_list("partner_id", flat=True)
         )
+
+        if not online_partner_ids:
+            return InstantAvailability(
+                is_available=False,
+                earliest_starts_at=None,
+                eta_minutes=None,
+                unavailable_reason="NO_ONLINE_PARTNERS",
+            )
+        candidate_partner_ids = online_partner_ids
+    else:
+        # Push-gated shift model
+        active_shift_partner_ids = set(
+            PartnerShift.objects.filter(
+                partner_id__in=snapshot.partner_ids,
+                ended_at__isnull=True,
+                scheduled_end_at__gt=now,
+            ).values_list("partner_id", flat=True)
+        )
+
+        push_capable_partner_ids = set(
+            PartnerPushSubscription.objects.filter(
+                partner_id__in=snapshot.partner_ids,
+                is_active=True,
+            ).values_list("partner_id", flat=True)
+        )
+
+        max_loc_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
+        loc_cutoff = now - timedelta(minutes=max_loc_age)
+        fresh_loc_partner_ids = set(
+            PartnerLocation.objects.filter(
+                partner_id__in=snapshot.partner_ids,
+                captured_at__gte=loc_cutoff,
+            ).values_list("partner_id", flat=True)
+        )
+
+        candidate_partner_ids = active_shift_partner_ids & push_capable_partner_ids & fresh_loc_partner_ids
+
+        excluded_reasons: dict[str, list[str]] = defaultdict(list)
+        for pid in snapshot.partner_ids:
+            if pid not in active_shift_partner_ids:
+                excluded_reasons[str(pid)].append("NO_ACTIVE_SHIFT")
+            if pid not in push_capable_partner_ids:
+                excluded_reasons[str(pid)].append("NO_PUSH_SUBSCRIPTION")
+            if pid not in fresh_loc_partner_ids:
+                excluded_reasons[str(pid)].append("STALE_LOCATION")
+
+        logger.info(
+            "instant_availability_evaluated",
+            extra={
+                "feature_push_gated": feature_push_gated,
+                "service_area_id": str(area.id),
+                "candidate_pool_size": len(snapshot.partner_ids),
+                "active_shift_count": len(active_shift_partner_ids),
+                "push_capable_count": len(push_capable_partner_ids),
+                "fresh_location_count": len(fresh_loc_partner_ids),
+                "eligible_candidate_count": len(candidate_partner_ids),
+                "excluded_partners": dict(excluded_reasons),
+                "request_id": get_request_id() or "",
+            },
+        )
+
+        if not candidate_partner_ids:
+            return InstantAvailability(
+                is_available=False,
+                earliest_starts_at=None,
+                eta_minutes=None,
+                unavailable_reason="NO_ONLINE_PARTNERS",
+            )
 
     if reachable_at is None:
         reachable_at = reachability_by_partner(snapshot=snapshot, now=now)
@@ -573,7 +643,7 @@ def compute_instant_availability(
     max_lead_time = now + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
     qualifying_starts: list[datetime] = []
 
-    for partner_id in online_partner_ids:
+    for partner_id in candidate_partner_ids:
         starts_at = reachable_at.get(partner_id)
         if starts_at is None:
             continue

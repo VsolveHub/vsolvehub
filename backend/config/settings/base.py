@@ -1013,6 +1013,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
         "schedule": 60.0,
     },
+    "reconcile-partner-shifts": {
+        "task": "apps.partners.tasks.reconcile_partner_shifts",
+        "schedule": 300.0,
+    },
+    "reconcile-expired-dispatch-offers": {
+        "task": "apps.assignments.tasks.reconcile_expired_dispatch_offers",
+        "schedule": 30.0,
+    },
     "reconcile-payments": {
         "task": "apps.commerce.tasks.reconcile_payments",
         "schedule": 30.0,
@@ -1336,4 +1344,12 @@ ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
 ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
 DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
 PARTNER_PORTAL_BASE_URL = env("PARTNER_PORTAL_BASE_URL", default="http://localhost:3001")
+
+# Shift-Based, Push-Gated Instant Availability feature flags & thresholds
+FEATURE_PUSH_GATED_INSTANT = env.bool("FEATURE_PUSH_GATED_INSTANT", default=False)
+PARTNER_SHIFT_DEFAULT_DURATION_HOURS = env.int("PARTNER_SHIFT_DEFAULT_DURATION_HOURS", default=8)
+PARTNER_SHIFT_MAX_IDLE_MINUTES = env.int("PARTNER_SHIFT_MAX_IDLE_MINUTES", default=30)
+PARTNER_LOCATION_MAX_AGE_MINUTES = env.int("PARTNER_LOCATION_MAX_AGE_MINUTES", default=30)
+MAX_DISPATCH_ATTEMPTS = env.int("MAX_DISPATCH_ATTEMPTS", default=5)
+MAX_CONSECUTIVE_MISSED_OFFERS = env.int("MAX_CONSECUTIVE_MISSED_OFFERS", default=3)
 

@@ -22,6 +22,7 @@ from .availability import (
     PartnerPresenceHeartbeatSerializer,
     PartnerPresenceSerializer,
     PartnerPresenceSessionRequestSerializer,
+    PartnerPushSubscriptionSyncSerializer,
     PartnerScheduleSerializer,
     PartnerScheduleUpdateSerializer,
 )

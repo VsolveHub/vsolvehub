@@ -18,6 +18,7 @@ from apps.partners.models import (
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerOnlineSession,
+    PartnerPushSubscription,
 )
 
 
@@ -164,3 +165,14 @@ class PartnerPresenceSerializer(serializers.ModelSerializer[PartnerOnlineSession
 
     def get_server_now(self, _session: PartnerOnlineSession) -> datetime:
         return timezone.now()
+
+
+class PartnerPushSubscriptionSyncSerializer(serializers.Serializer[dict[str, object]]):
+    onesignal_subscription_id = serializers.CharField(max_length=64)
+    platform = serializers.ChoiceField(
+        choices=PartnerPushSubscription.Platform.choices,
+        default=PartnerPushSubscription.Platform.WEB,
+        required=False,
+    )
+    user_agent = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+    is_active = serializers.BooleanField(default=True)

@@ -46,6 +46,7 @@ from apps.partners.serializers import (
     PartnerPresenceSessionRequestSerializer,
     PartnerProfileSerializer,
     PartnerProfileUpdateSerializer,
+    PartnerPushSubscriptionSyncSerializer,
     PartnerScheduleSerializer,
     PartnerScheduleUpdateSerializer,
     PartnerSkillOptionSerializer,
@@ -61,6 +62,7 @@ from apps.partners.services import (
     issue_partner_document_upload,
     replace_partner_schedule,
     submit_partner_application,
+    sync_partner_push_subscription,
     update_partner_application,
 )
 from common.errors.serializers import ApiErrorSerializer
@@ -480,3 +482,39 @@ class PartnerPresenceOfflineView(APIView):
         except PartnerDomainError as exc:
             _raise_api_error(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PartnerPushSubscriptionSyncView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Partner push subscriptions"],
+        request=PartnerPushSubscriptionSyncSerializer,
+        responses={
+            200: OpenApiResponse(description="The subscription was synced."),
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PartnerPushSubscriptionSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            subscription, instant_eligible = sync_partner_push_subscription(
+                user=cast(User, request.user),
+                **serializer.validated_data,
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            {
+                "id": str(subscription.id),
+                "onesignal_subscription_id": subscription.onesignal_subscription_id,
+                "platform": subscription.platform,
+                "is_active": subscription.is_active,
+                "last_verified_at": subscription.last_verified_at.isoformat(),
+                "instant_eligible": instant_eligible,
+            },
+            status=status.HTTP_200_OK,
+        )

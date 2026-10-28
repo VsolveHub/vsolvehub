@@ -223,6 +223,7 @@ class DispatchOfferSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "status",
+            "attempt_number",
             "offered_at",
             "expires_at",
             "responded_at",

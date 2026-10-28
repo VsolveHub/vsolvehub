@@ -68,10 +68,12 @@ from .presence import (
     _assert_operational_eligibility,
     _presence_payload,
     _publish_presence,
+    expire_expired_shifts,
     expire_missing_presence_sessions,
     go_offline,
     go_online,
     heartbeat_presence,
+    sync_partner_push_subscription,
 )
 from .review import (
     claim_partner_application,
@@ -131,6 +133,7 @@ __all__ = [
     "cleanup_stale_partner_document_uploads",
     "create_partner_document_applicant_access",
     "create_partner_document_review_access",
+    "expire_expired_shifts",
     "expire_missing_presence_sessions",
     "finalize_partner_document_upload",
     "get_document_storage",
@@ -146,6 +149,7 @@ __all__ = [
     "scan_partner_document",
     "scan_pending_partner_documents",
     "submit_partner_application",
+    "sync_partner_push_subscription",
     "transition_partner_application",
     "update_partner_application",
 ]

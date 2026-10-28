@@ -35,6 +35,7 @@ from apps.partners.views import (
     PartnerPresenceHeartbeatView,
     PartnerPresenceOfflineView,
     PartnerPresenceOnlineView,
+    PartnerPushSubscriptionSyncView,
     PartnerScheduleView,
     PartnerSkillListView,
     RequiredPartnerConsentListView,
@@ -86,6 +87,11 @@ urlpatterns = [
         "partner/presence/offline/",
         PartnerPresenceOfflineView.as_view(),
         name="partner-presence-offline",
+    ),
+    path(
+        "partner/push-subscriptions/sync/",
+        PartnerPushSubscriptionSyncView.as_view(),
+        name="partner-push-subscription-sync",
     ),
     # M2 (proposal 0013): the registration surface.
     path(
