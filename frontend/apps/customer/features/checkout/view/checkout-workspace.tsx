@@ -533,7 +533,7 @@ export function CheckoutWorkspace() {
                 )}
               </DetailRow>
 
-              <div className="border-t border-line px-5 py-4 bg-surface-muted/30">
+              <div className="border-t border-line px-4 py-3 sm:px-5 sm:py-4 bg-surface-muted/30">
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Booking Mode
                 </div>
@@ -549,16 +549,16 @@ export function CheckoutWorkspace() {
                 <DetailRow
                   icon={<ClockIcon />}
                   label="Arrival time"
-                  actionLabel="Schedule for later"
-                  onAction={() => handleBookingModeChange("SCHEDULED")}
                 >
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-0.5 sm:gap-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-text">⚡ Instant / ASAP</span>
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                      <span className="font-semibold text-text">
                         {instant?.etaMinutes
-                          ? `Expected arrival in ~${instant.etaMinutes} mins`
-                          : "Expected arrival in 30–45 mins"}
+                          ? `~${instant.etaMinutes} mins`
+                          : "30–45 mins"}
+                      </span>
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] sm:text-xs font-medium text-emerald-700">
+                        Instant
                       </span>
                     </div>
                     {instant?.earliestStartsAt ? (
@@ -577,7 +577,7 @@ export function CheckoutWorkspace() {
                       ? undefined
                       : isScheduled
                         ? "Edit"
-                        : "Select slots"
+                        : "Select slot"
                   }
                   onAction={
                     effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
@@ -692,7 +692,7 @@ export function CheckoutWorkspace() {
 
             {/* Confirm on mobile only — desktop lives in the summary rail. */}
             <div ref={mobileConfirmCardRef} className="lg:hidden">
-              <CheckoutCard className="flex items-start gap-4 p-5">
+              <CheckoutCard className="flex items-start gap-3 sm:gap-4 p-4 sm:p-5">
                 <ConfirmBookingActions
                   quote={quote}
                   isPlanSetUsable={isPlanSetUsable}

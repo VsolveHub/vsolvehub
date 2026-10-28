@@ -48,7 +48,7 @@ export function BookingModeToggle({
           disabled={disabled || !isInstantAvailable}
           onClick={() => onChange("INSTANT")}
           className={cn(
-            "relative flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-150",
+            "relative flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-all duration-150",
             value === "INSTANT"
               ? "bg-surface text-text shadow-sm ring-1 ring-black/5"
               : isInstantAvailable
@@ -56,9 +56,12 @@ export function BookingModeToggle({
                 : "text-text-muted/60 cursor-not-allowed bg-transparent",
           )}
         >
-          <span>⚡ Instant / ASAP</span>
+          <span className="flex items-center gap-1">
+            <span aria-hidden>⚡</span>
+            <span>Instant</span>
+          </span>
           {isInstantAvailable && instant?.etaMinutes ? (
-            <Badge tone="success" className="text-xs">
+            <Badge tone="success" className="text-[11px] sm:text-xs px-1.5 py-0.5 shrink-0">
               ~{instant.etaMinutes}m
             </Badge>
           ) : null}
@@ -71,13 +74,16 @@ export function BookingModeToggle({
           disabled={disabled}
           onClick={() => onChange("SCHEDULED")}
           className={cn(
-            "relative flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 cursor-pointer",
+            "relative flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer",
             value === "SCHEDULED"
               ? "bg-surface text-text shadow-sm ring-1 ring-black/5"
               : "text-text-secondary hover:text-text",
           )}
         >
-          <span>📅 Schedule for later</span>
+          <span className="flex items-center gap-1">
+            <span aria-hidden>📅</span>
+            <span>Schedule</span>
+          </span>
         </button>
       </div>
 

@@ -18,8 +18,8 @@ describe("BookingModeToggle", () => {
       />,
     );
 
-    const instantBtn = screen.getByRole("radio", { name: /instant \/ asap/i });
-    const scheduledBtn = screen.getByRole("radio", { name: /schedule for later/i });
+    const instantBtn = screen.getByRole("radio", { name: /instant/i });
+    const scheduledBtn = screen.getByRole("radio", { name: /schedule/i });
 
     expect(instantBtn).not.toBeDisabled();
     expect(scheduledBtn).not.toBeDisabled();
@@ -41,7 +41,7 @@ describe("BookingModeToggle", () => {
       />,
     );
 
-    const instantBtn = screen.getByRole("radio", { name: /instant \/ asap/i });
+    const instantBtn = screen.getByRole("radio", { name: /instant/i });
     fireEvent.click(instantBtn);
     expect(onChange).toHaveBeenCalledWith("INSTANT");
   });
@@ -61,7 +61,7 @@ describe("BookingModeToggle", () => {
       />,
     );
 
-    const instantBtn = screen.getByRole("radio", { name: /instant \/ asap/i });
+    const instantBtn = screen.getByRole("radio", { name: /instant/i });
     expect(instantBtn).toBeDisabled();
     expect(
       screen.getByText(/no professionals currently online\. schedule for later instead\./i),
@@ -83,7 +83,7 @@ describe("BookingModeToggle", () => {
       />,
     );
 
-    const scheduledBtn = screen.getByRole("radio", { name: /schedule for later/i });
+    const scheduledBtn = screen.getByRole("radio", { name: /schedule/i });
     fireEvent.click(scheduledBtn);
     expect(onChange).toHaveBeenCalledWith("SCHEDULED");
   });
