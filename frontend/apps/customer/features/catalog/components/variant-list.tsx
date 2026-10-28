@@ -93,31 +93,31 @@ export function VariantList({
               </div>
             </div>
 
-            <div className="text-left sm:text-right sm:pl-6 sm:ml-4 sm:border-l sm:border-line/40 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start pt-3 sm:pt-0 border-t border-line/40 sm:border-t-0">
-              <div className="text-left sm:text-right">
+            <div className="text-left sm:text-right sm:pl-6 sm:ml-4 sm:border-l sm:border-line/40 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start pt-3 sm:pt-0 border-t border-line/40 sm:border-t-0 gap-3">
+              <div className="text-left sm:text-right min-w-0">
                 <span className="block text-[0.65rem] uppercase font-bold tracking-wider text-text-muted">
                   Starts at
                 </span>
                 <span data-numeric className="mt-0.5 block text-[1.1rem] font-bold tabular-nums text-navy-900">
                   {formatMoney(variant.starting_price.amount_paise)}
                 </span>
+                {/* The minimum visit charge is the number a customer is actually
+                    held to when they pick one small task, so it is disclosed here
+                    rather than discovered at review. */}
+                {variant.minimum_service_subtotal.amount_paise >
+                variant.starting_price.amount_paise ? (
+                  <Badge tone="neutral" className="mt-1">
+                    Min {formatMoney(variant.minimum_service_subtotal.amount_paise)}
+                  </Badge>
+                ) : null}
               </div>
-              {/* The minimum visit charge is the number a customer is actually
-                  held to when they pick one small task, so it is disclosed here
-                  rather than discovered at review. */}
-              {variant.minimum_service_subtotal.amount_paise >
-              variant.starting_price.amount_paise ? (
-                <Badge tone="neutral" className="mt-1">
-                  Min {formatMoney(variant.minimum_service_subtotal.amount_paise)}
-                </Badge>
-              ) : null}
 
               {isChoice ? (
-                <div className="mt-3 flex w-full flex-col gap-2 sm:mt-2 sm:w-auto sm:items-end">
+                <div className="shrink-0 flex items-center justify-end sm:mt-2">
                   <AddToCartButton
                     variantId={variant.id}
                     size="compact"
-                    className="w-full sm:w-auto"
+                    className="w-auto"
                   />
                 </div>
               ) : null}

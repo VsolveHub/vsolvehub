@@ -125,7 +125,7 @@ export function RegistrationSuccessModal({
       />
 
       {/* Modal Dialog */}
-      <div className="relative z-50 w-full max-w-lg overflow-hidden rounded-3xl border border-white/20 bg-surface shadow-[0_25px_70px_rgba(0,17,46,0.35)] animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative z-50 w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-3xl border border-white/20 bg-surface shadow-[0_25px_70px_rgba(0,17,46,0.35)] animate-in fade-in zoom-in-95 duration-200">
         {/* Top Celebration Accent Bar */}
         <div className="bg-[#00112e] px-6 pt-8 pb-7 text-white text-center relative overflow-hidden">
           {/* Ambient Lighting */}

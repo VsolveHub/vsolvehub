@@ -32,10 +32,10 @@ export function ListingsTable({
   onReinstate,
 }: ListingsTableProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-slate-600">
-          <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <table className="w-full text-left text-sm text-text-secondary">
+          <thead className="bg-surface-muted text-xs font-semibold uppercase tracking-wider text-text-muted">
             <tr>
               <th className="px-4 py-3.5">Listing Info</th>
               <th className="px-4 py-3.5">Role & Compensation</th>
@@ -46,18 +46,18 @@ export function ListingsTable({
               <th className="px-4 py-3.5 text-right">Moderation Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {loading && listings.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-12 text-center text-text-muted">
                   <RefreshCw className="mx-auto mb-2 size-6 animate-spin text-orange-600" />
                   Loading listings from operations catalog...
                 </td>
               </tr>
             ) : listings.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                  <BriefcaseBusiness className="mx-auto mb-2 size-8 text-slate-300" />
+                <td colSpan={7} className="px-4 py-12 text-center text-text-muted">
+                  <BriefcaseBusiness className="mx-auto mb-2 size-8 text-text-muted" />
                   No listings found matching the current filter.
                 </td>
               </tr>
@@ -71,10 +71,10 @@ export function ListingsTable({
                 const fields = listingFields(listing.structured_fields);
 
                 return (
-                  <tr key={listing.id} className="hover:bg-slate-50/75">
+                  <tr key={listing.id} className="hover:bg-surface-hover">
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                        <div className="flex items-center gap-1.5 font-semibold text-text">
                           {listing.is_premium && (
                             <span title="Featured / Premium Listing">
                               <Crown className="size-4 text-amber-500 fill-amber-400" />
@@ -83,8 +83,8 @@ export function ListingsTable({
                           <span>{listing.title}</span>
                         </div>
                         {listing.location_text && (
-                          <div className="flex items-center gap-1 text-xs text-slate-500">
-                            <MapPin className="size-3 text-slate-400" />
+                          <div className="flex items-center gap-1 text-xs text-text-muted">
+                            <MapPin className="size-3 text-text-muted" />
                             <span>{listing.location_text}</span>
                           </div>
                         )}
@@ -94,7 +94,7 @@ export function ListingsTable({
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col gap-1 text-xs">
                         {listing.salary_min_paise && listing.salary_min_paise > 0 ? (
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-text">
                             {formatMoney(listing.salary_min_paise)}
                             {listing.salary_max_paise && listing.salary_max_paise > listing.salary_min_paise
                               ? ` - ${formatMoney(listing.salary_max_paise)}`
@@ -102,18 +102,18 @@ export function ListingsTable({
                             {listing.salary_period ? ` / ${listing.salary_period.toLowerCase()}` : ""}
                           </span>
                         ) : listing.salary_display || fields.salary_range || fields.pay_range ? (
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-text">
                             {formatMoneyText(String(listing.salary_display || fields.salary_range || fields.pay_range))}
                           </span>
                         ) : null}
                         <div className="flex flex-wrap items-center gap-1">
                           {fields.role_type && (
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">
+                            <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-medium text-text-secondary">
                               {String(fields.role_type)}
                             </span>
                           )}
                           {(fields.shift || fields.work_mode) && (
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                            <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-text-secondary">
                               {String((fields.shift || fields.work_mode))}
                             </span>
                           )}
@@ -122,18 +122,18 @@ export function ListingsTable({
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <div className="flex flex-col gap-0.5 text-xs text-slate-600">
+                      <div className="flex flex-col gap-0.5 text-xs text-text-secondary">
                         {listing.contact_phone ? (
                           <div className="flex items-center gap-1">
-                            <Phone className="size-3 text-slate-400" />
+                            <Phone className="size-3 text-text-muted" />
                             <span>{listing.contact_phone}</span>
                           </div>
                         ) : (
-                          <span className="italic text-slate-400">No phone</span>
+                          <span className="italic text-text-muted">No phone</span>
                         )}
                         {listing.contact_email && (
-                          <div className="flex items-center gap-1 text-slate-500">
-                            <Mail className="size-3 text-slate-400" />
+                          <div className="flex items-center gap-1 text-text-muted">
+                            <Mail className="size-3 text-text-muted" />
                             <span className="truncate max-w-[140px]">{listing.contact_email}</span>
                           </div>
                         )}
@@ -161,13 +161,13 @@ export function ListingsTable({
                           </span>
                         )}
                         {!isPending && !isPublished && !isRemoved && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-text-secondary">
                             {listing.status}
                           </span>
                         )}
                         {listing.moderation_reason && (
                           <span
-                            className="text-[11px] text-slate-500 line-clamp-1"
+                            className="text-[11px] text-text-muted line-clamp-1"
                             title={listing.moderation_reason}
                           >
                             Note: {listing.moderation_reason}
@@ -177,13 +177,13 @@ export function ListingsTable({
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <span className="font-semibold text-slate-900">
+                      <span className="font-semibold text-text">
                         {listing.application_count}
                       </span>
-                      <span className="text-xs text-slate-500 ml-1">candidates</span>
+                      <span className="text-xs text-text-muted ml-1">candidates</span>
                     </td>
 
-                    <td className="px-4 py-3.5 text-xs text-slate-500">
+                    <td className="px-4 py-3.5 text-xs text-text-muted">
                       {formatDate(listing.created_at)}
                     </td>
 
@@ -192,7 +192,7 @@ export function ListingsTable({
                         <button
                           type="button"
                           onClick={() => onView(listing)}
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text"
                           title="View full listing details"
                         >
                           <Eye className="size-4" />
@@ -222,7 +222,7 @@ export function ListingsTable({
                           <button
                             type="button"
                             onClick={() => onReinstate(listing)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
                           >
                             Reinstate
                           </button>

@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { formatMoney } from "@vsolve/ui";
+import { ErrorState, formatMoney, Spinner } from "@vsolve/ui";
 
 import { BarList, type BarListRow } from "@/features/charts/bar-list";
 import { DonutChart } from "@/features/charts/donut-chart";
 import { CHART_COLORS, STATUS_COLORS, statusLabel, type Granularity } from "@/features/charts/theme";
 import { TrendChart, type TrendPoint } from "@/features/charts/trend-chart";
 
+import { DASHBOARD_TABS } from "./dashboard-tabs";
 import { useDashboardAggregates } from "./queries";
 
-function humanize(key: string): string {
+export function humanize(key: string): string {
   const noPaise = key.replace(/_paise$/, "");
   return noPaise
     .split("_")
@@ -454,7 +455,7 @@ export function DashboardView({ kind }: { kind: string }) {
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
 
-  const { data, isLoading } = useDashboardAggregates(kind, dateStart, dateEnd);
+  const { data, isLoading, isError, refetch } = useDashboardAggregates(kind, dateStart, dateEnd);
   const entries = data ? Object.entries(data).filter(([key]) => !SERIES_KEYS.has(key)) : [];
   const tiles = entries.filter(([, value]) => typeof value !== "object" || value === null);
   const breakdowns = entries.filter(
@@ -467,34 +468,62 @@ export function DashboardView({ kind }: { kind: string }) {
 
   return (
     <div className="flex flex-col h-full bg-surface gap-6">
-      <header className="flex-none p-6 pb-4 border-b border-line flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-text capitalize">{kind} Dashboard</h1>
-        <div className="flex items-center gap-4">
+      <header className="flex-none py-6 pb-4 sm:px-6 border-b border-line flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-text">
+          {/* The tab's own name, so "vendor" reads as Partners like the tab above it. */}
+          {DASHBOARD_TABS.find((tab) => tab.href.endsWith(`/${kind}`))?.label ?? humanize(kind)} dashboard
+        </h1>
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
           <div className="flex flex-col">
-            <label className="text-[10px] uppercase font-bold text-text-muted mb-0.5">Start (DD/MM/YYYY)</label>
+            <label htmlFor="dashboard-from" className="text-xs font-semibold text-text-muted mb-0.5">From</label>
             <input
+              id="dashboard-from"
               type="date"
-              className="bg-surface border border-line rounded-md px-3 py-1.5 text-sm text-text"
+              className="min-h-10 bg-surface border border-line rounded-md px-3 py-1.5 text-sm text-text"
               value={dateStart}
+              max={dateEnd || undefined}
               onChange={(e) => setDateStart(e.target.value)}
             />
           </div>
-          <span className="text-text-muted self-end pb-2.5">to</span>
           <div className="flex flex-col">
-            <label className="text-[10px] uppercase font-bold text-text-muted mb-0.5">End (DD/MM/YYYY)</label>
+            <label htmlFor="dashboard-to" className="text-xs font-semibold text-text-muted mb-0.5">To</label>
             <input
+              id="dashboard-to"
               type="date"
-              className="bg-surface border border-line rounded-md px-3 py-1.5 text-sm text-text"
+              className="min-h-10 bg-surface border border-line rounded-md px-3 py-1.5 text-sm text-text"
               value={dateEnd}
+              min={dateStart || undefined}
               onChange={(e) => setDateEnd(e.target.value)}
             />
           </div>
+          {dateStart || dateEnd ? (
+            <button
+              type="button"
+              onClick={() => {
+                setDateStart("");
+                setDateEnd("");
+              }}
+              className="min-h-10 px-2 text-sm font-medium text-action hover:underline"
+            >
+              Clear dates
+            </button>
+          ) : null}
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-y-auto pb-6 sm:px-6">
         {isLoading ? (
-          <div className="text-text-muted">Loading...</div>
+          <div className="flex items-center gap-2 text-text-muted" role="status">
+            <Spinner size="sm" />
+            Loading this dashboard…
+          </div>
+        ) : isError ? (
+          <ErrorState
+            title="We could not load this dashboard"
+            message="Nothing has changed. Check your connection and try again."
+            actionLabel="Try again"
+            onAction={() => void refetch()}
+          />
         ) : data ? (
           <div className="flex flex-col gap-6">
             {tiles.length > 0 ? (

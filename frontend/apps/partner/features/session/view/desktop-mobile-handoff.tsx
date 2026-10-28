@@ -11,6 +11,9 @@ import {
   QrCode,
   ShieldCheck,
   Smartphone,
+  Sparkles,
+  User,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import type { Schemas } from "@vsolve/api-client";
@@ -42,7 +45,7 @@ export function DesktopMobileHandoff({
       : "Verified Service Partner";
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-[#020b18] text-white">
+    <div className="flex min-h-screen w-full flex-col bg-[#020b18] text-white overflow-x-clip">
       {/* Top Desktop Navigation */}
       <header className="border-b border-white/10 bg-[#00112e]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6 lg:px-8">
@@ -145,16 +148,26 @@ export function DesktopMobileHandoff({
               </div>
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 pt-2">
-                <Link
-                  href="/me/documents"
-                  className="inline-flex items-center gap-2 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors"
-                >
-                  <FileText size={14} />
-                  <span>Review Registered Documents & Agreements →</span>
-                </Link>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link
+                    href="/me/profile"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-emerald-300 hover:text-emerald-200 transition-colors"
+                  >
+                    <User size={14} />
+                    <span>View Partner Profile →</span>
+                  </Link>
+
+                  <Link
+                    href="/me/documents"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors"
+                  >
+                    <FileText size={14} />
+                    <span>Review Registered Documents & Agreements →</span>
+                  </Link>
+                </div>
 
                 <p className="text-[11px] text-slate-400">
-                  Desktop view is restricted to registration & documents.
+                  Desktop view is restricted to registration, profile & documents.
                 </p>
               </div>
             </div>

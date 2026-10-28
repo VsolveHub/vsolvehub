@@ -61,7 +61,7 @@ export function SectionTabs({
               aria-selected={on}
               onClick={() => select(entry.id)}
               className={cn(
-                "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                "-mb-px inline-flex min-h-11 items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                 on
                   ? "border-action text-text-link"
                   : "border-transparent text-text-secondary hover:border-line-strong hover:text-text",

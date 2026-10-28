@@ -422,37 +422,40 @@ export function AvailabilityEditor({
       ) : null}
 
       {/* Save & Navigation Action Dock */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur px-4 py-3 shadow-lg">
-        <div className="mx-auto max-w-[560px] flex items-center justify-between gap-3">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg">
+        <div className="mx-auto max-w-[560px] flex items-center justify-between gap-2.5">
           <Button
             variant="outline"
             size="lg"
             onClick={() => void handleNavigate("/apply/documents")}
             disabled={isSaving || navigatingTo !== null}
             loading={navigatingTo === "/apply/documents"}
-            className="shrink-0 font-bold text-sm h-12 px-5"
+            className="shrink-0 font-bold text-sm px-4"
           >
             {t("common.back")}
           </Button>
 
-          <div className="flex items-center gap-2.5">
-            <Button
-              size="lg"
-              onClick={() => void onSave(periods)}
-              disabled={hasProblems || isSaving || navigatingTo !== null || !hasChanges}
-              loading={isSaving && navigatingTo === null}
-              loadingLabel={t("common.saving")}
-              className="font-bold text-sm h-12 px-4"
-            >
-              {hasChanges ? t("apply.schedule.saveHours") : t("apply.schedule.savedLabel")}
-            </Button>
+          <div className="flex items-center gap-2 flex-1 justify-end">
+            {hasChanges ? (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => void onSave(periods)}
+                disabled={hasProblems || isSaving || navigatingTo !== null}
+                loading={isSaving && navigatingTo === null}
+                loadingLabel={t("common.saving")}
+                className="hidden sm:inline-flex font-bold text-xs sm:text-sm px-3"
+              >
+                {t("apply.schedule.saveHours")}
+              </Button>
+            ) : null}
             <Button
               size="lg"
               onClick={() => void handleNavigate("/apply/review")}
               disabled={hasProblems || isSaving || navigatingTo !== null}
               loading={navigatingTo === "/apply/review"}
               loadingLabel={hasChanges ? t("apply.schedule.savingAndReviewing") : undefined}
-              className="font-bold text-sm h-12 px-5 shadow-md"
+              className="font-bold text-xs sm:text-sm px-4 sm:px-5 shadow-md flex-1 sm:flex-initial"
             >
               {t("apply.schedule.reviewApplication")}
             </Button>

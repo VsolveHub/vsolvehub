@@ -83,7 +83,7 @@ function ReportSwitcher({
           aria-selected={selectedId === r.id}
           onClick={() => onSelect(r.id)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+            "inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
             selectedId === r.id
               ? "bg-action text-action-text shadow-sm"

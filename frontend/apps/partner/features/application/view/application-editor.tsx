@@ -419,9 +419,16 @@ function EditorDock({
         ) : null}
 
         <div className="flex items-center gap-2.5">
-          <Link href={backHref} className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
-              {t("common.back")}
-            </Link>
+          <Link
+            href={backHref}
+            className={buttonStyles({
+              variant: "outline",
+              size: "lg",
+              className: "justify-center shrink-0 font-bold text-sm px-5",
+            })}
+          >
+            {t("common.back")}
+          </Link>
           <Button
             size="lg"
             block
@@ -429,7 +436,7 @@ function EditorDock({
             loadingLabel={t("common.saving")}
             disabled={proceedDisabled}
             onClick={onCommit}
-            className="font-bold text-base shadow-md h-12 flex-1"
+            className="font-bold text-sm sm:text-base shadow-md flex-1 text-center"
           >
             {label}
           </Button>

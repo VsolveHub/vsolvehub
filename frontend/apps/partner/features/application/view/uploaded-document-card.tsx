@@ -54,6 +54,7 @@ export function UploadedDocumentCard({
   const isPdf = document.content_type?.includes("pdf");
   const ext = isPdf ? "pdf" : "jpg";
   const fileName = `${document.kind.toLowerCase()}_v${document.version}.${ext}`;
+  const isRejected = document.status === "REJECTED" || document.scan_status === "REJECTED";
 
   async function handleViewDocument() {
     setAccessError(null);
@@ -120,7 +121,7 @@ export function UploadedDocumentCard({
             <ExternalLink className="h-3 w-3 opacity-60" />
           </Button>
 
-          {canReplace ? (
+          {canReplace && !isRejected ? (
             <Button
               variant="ghost"
               size="sm"
@@ -135,16 +136,33 @@ export function UploadedDocumentCard({
       </div>
 
       {/* Rejection / Review note banner if document needs replacing */}
-      {document.status === "REJECTED" ? (
-        <div className="mt-3 flex items-start gap-2 rounded-control bg-danger-bg p-3 border border-danger-border text-xs text-danger-text">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold">{t("apply.uploadedCard.reviewerRequested")}</p>
-            <p className="mt-0.5">
-              {document.review_reason ||
-                t("apply.uploadedCard.rejectedFallback")}
-            </p>
+      {isRejected ? (
+        <div className="mt-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 rounded-xl bg-danger-bg p-3.5 border border-danger-border text-xs text-danger-text shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="h-5 w-5 shrink-0 text-danger-text mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-danger-text">
+                {document.scan_status === "REJECTED"
+                  ? "Security scan failed"
+                  : t("apply.uploadedCard.reviewerRequested")}
+              </p>
+              <p className="mt-0.5 text-xs text-danger-text/90 font-medium">
+                {document.review_reason || t("apply.uploadedCard.rejectedFallback")}
+              </p>
+            </div>
           </div>
+
+          {canReplace && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onReplace}
+              className="inline-flex shrink-0 items-center justify-center gap-2 bg-danger hover:bg-danger-hover text-white font-bold px-3.5 py-2 text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>{t("apply.upload.reupload")}</span>
+            </Button>
+          )}
         </div>
       ) : null}
 

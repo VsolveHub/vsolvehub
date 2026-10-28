@@ -2,7 +2,7 @@
 
 import { hasWorkspaceAction, useLogout } from "@vsolve/query";
 import { Button, useT, useTranslator, type Locale } from "@vsolve/ui";
-import { ChevronRight, Globe, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ChevronRight, FileText, Globe, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
@@ -69,6 +69,14 @@ export function MeHome() {
               subtitle={t("me.home.personalProfileSubtitle")}
               colorClass="bg-blue-50 border-blue-100/80"
               iconClass="text-blue-600"
+            />
+            <SettingsRow
+              href="/me/documents"
+              icon={FileText}
+              title="Application & KYC Documents"
+              subtitle="Verified KYC files, agreements & records"
+              colorClass="bg-emerald-50 border-emerald-100/80"
+              iconClass="text-emerald-600"
             />
             <SettingsRow
               href="/me/language"

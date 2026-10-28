@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -177,6 +177,42 @@ describe("DashboardPinStrip KPI tile Links", () => {
 
     const gmvLink = await screen.findByRole("link", { name: /collected gmv/i });
     expect(gmvLink).toHaveAttribute("href", "/operations/reports");
+  });
+});
+
+describe("DashboardPinStrip editing", () => {
+  it("picks pins from named checkboxes instead of typed API keys, and saves them", async () => {
+    client.PATCH.mockResolvedValue({ data: {}, response: new Response(null, { status: 200 }) });
+    render(<DashboardPinStrip />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit pins" }));
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+
+    const stays = screen.getByRole("checkbox", { name: "Active Stays" });
+    expect(stays).toBeChecked();
+    fireEvent.click(stays);
+    fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
+
+    await waitFor(() => expect(client.PATCH).toHaveBeenCalled());
+    expect(client.PATCH.mock.calls[0]?.[1]).toEqual({
+      body: {
+        pinned_tiles: ["open_cases", "active_rentals", "active_partners", "payout_ready", "collected_gmv_paise"],
+      },
+    });
+  });
+
+  it("keeps the editor open with an error when the save is refused", async () => {
+    client.PATCH.mockResolvedValue({
+      error: { detail: "nope" },
+      response: new Response(null, { status: 500 }),
+    });
+    render(<DashboardPinStrip />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit pins" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
+
+    expect(await screen.findByText(/could not save your pins/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save pins" })).toBeInTheDocument();
   });
 });
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { usePagedList } from "@vsolve/query";
-import { LoadMore } from "@vsolve/ui";
+import { LoadMore, useToast } from "@vsolve/ui";
 import { AlertTriangle, RefreshCw, ShieldAlert } from "lucide-react";
 
 import {
@@ -32,6 +32,7 @@ function pageCount(page: { results: unknown[]; next: string | null } | undefined
 
 export default function AdminListingsPage() {
   const queryClient = useQueryClient();
+  const { notify } = useToast();
   const [filter, setFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -54,31 +55,35 @@ export default function AdminListingsPage() {
     })),
   }).map((query) => query.data);
 
-  const invalidate = () => {
+  const onDone = (message: string) => () => {
     closeModal();
+    notify(message);
     void queryClient.invalidateQueries({ queryKey: ["ops-listings"] });
   };
+  // Shown inside the open dialog: a browser alert() blocked the page and lost the typed reason.
+  const failure = (err: unknown, fallback: string) =>
+    err instanceof Error && err.message ? err.message : fallback;
 
   const moderateMutation = useMutation({
     mutationFn: ({ id, approved, reason }: { id: string; approved: boolean; reason: string }) =>
       moderateOpsListing(id, approved, reason),
-    onSuccess: invalidate,
-    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Moderation failed."),
+    onSuccess: onDone("Moderation decision saved."),
   });
 
   const removeMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => removeOpsListing(id, reason),
-    onSuccess: invalidate,
-    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Takedown failed."),
+    onSuccess: onDone("Listing taken down."),
   });
 
   const reinstateMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => reinstateOpsListing(id, reason),
-    onSuccess: invalidate,
-    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Reinstatement failed."),
+    onSuccess: onDone("Listing reinstated."),
   });
 
   function closeModal() {
+    moderateMutation.reset();
+    removeMutation.reset();
+    reinstateMutation.reset();
     setSelectedListing(null);
     setModalAction(null);
     setActionReason("");
@@ -92,7 +97,8 @@ export default function AdminListingsPage() {
   function handleActionSubmit() {
     if (!selectedListing || !modalAction) return;
     if (modalAction === "REMOVE") {
-      if (!actionReason.trim()) return alert("A removal reason is required.");
+      // The submit button stays disabled until a reason is typed.
+      if (!actionReason.trim()) return;
       removeMutation.mutate({ id: selectedListing.id, reason: actionReason });
     } else {
       reinstateMutation.mutate({ id: selectedListing.id, reason: actionReason });
@@ -108,20 +114,20 @@ export default function AdminListingsPage() {
     moderateMutation.isPending || removeMutation.isPending || reinstateMutation.isPending;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <Link href="/" className="hover:text-slate-800">
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <Link href="/" className="hover:text-text">
               Operations
             </Link>
             <span>/</span>
-            <span className="font-semibold text-slate-700">Job & Career Listings</span>
+            <span className="font-semibold text-text-secondary">Job & Career Listings</span>
           </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-text">
             Job & Career Listings Oversight
           </h1>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-text-secondary">
             Audit employer job postings, review moderation queues, and enforce safety standards.
           </p>
         </div>
@@ -137,7 +143,7 @@ export default function AdminListingsPage() {
             type="button"
             onClick={() => void refetch()}
             disabled={isFetching}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-hover active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`size-4 ${isFetching ? "animate-spin text-orange-600" : ""}`} />
             Refresh
@@ -214,6 +220,7 @@ export default function AdminListingsPage() {
         setActionReason={setActionReason}
         submitting={submitting}
         onSubmit={handleModerateSubmit}
+        error={moderateMutation.isError ? failure(moderateMutation.error, "The decision was not saved. Try again.") : null}
       />
 
       <ActionDialog
@@ -224,6 +231,13 @@ export default function AdminListingsPage() {
         onReasonChange={setActionReason}
         submitting={submitting}
         onSubmit={handleActionSubmit}
+        error={
+          removeMutation.isError
+            ? failure(removeMutation.error, "The listing was not taken down. Try again.")
+            : reinstateMutation.isError
+              ? failure(reinstateMutation.error, "The listing was not reinstated. Try again.")
+              : null
+        }
       />
     </div>
   );

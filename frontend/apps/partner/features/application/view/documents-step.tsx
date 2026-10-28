@@ -107,9 +107,12 @@ export function DocumentsStep() {
           const status = document ? statusTone(document.status, t) : null;
           const label = t(required.labelKey);
           const isReplacing = replacingKinds.has(required.kind);
+          const isDocRejected =
+            document?.status === "REJECTED" || document?.scan_status === "REJECTED";
           const canReplace =
-            isEditable &&
-            (document?.status !== "APPROVED" || application?.status === "CHANGES_REQUIRED");
+            (isEditable &&
+              (document?.status !== "APPROVED" || application?.status === "CHANGES_REQUIRED")) ||
+            isDocRejected;
 
           return (
             <div key={required.kind} className="rounded-control border border-line bg-surface p-4">
@@ -121,6 +124,7 @@ export function DocumentsStep() {
                   {status?.label ?? t("apply.documents.notUploaded")}
                 </Badge>
               </div>
+              <p className="mt-1 text-xs text-text-secondary">{t(required.whyKey)}</p>
 
               {document && !isReplacing ? (
                 <UploadedDocumentCard
@@ -131,7 +135,7 @@ export function DocumentsStep() {
                     setReplacingKinds((prev) => new Set(prev).add(required.kind))
                   }
                 />
-              ) : isEditable ? (
+              ) : isEditable || isDocRejected ? (
                 <DocumentUpload
                   kind={required.kind}
                   label={label}

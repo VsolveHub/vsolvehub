@@ -74,11 +74,11 @@ describe("hasOwnFocusedHeader", () => {
   it("suppresses the shell's generic focused header where a route renders its own", () => {
     expect(hasOwnFocusedHeader("/listings/post")).toBe(true);
     expect(hasOwnFocusedHeader("/work/how-day-hire-works")).toBe(true);
+    expect(hasOwnFocusedHeader("/work/jobs/abc")).toBe(true);
   });
 
   it("leaves every other focused route to FocusedHeader", () => {
     expect(hasOwnFocusedHeader("/work/offers")).toBe(false);
-    expect(hasOwnFocusedHeader("/work/jobs/abc")).toBe(false);
     expect(hasOwnFocusedHeader("/listings/abc")).toBe(false);
   });
 });

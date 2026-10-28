@@ -24,7 +24,6 @@ import {
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 import { PartnerHeaderTitleProvider } from "./partner-header-title";
-import { LocaleSwitcher } from "./view/locale-switcher";
 import { DesktopMobileHandoff } from "./view/desktop-mobile-handoff";
 import { translateNavLabel } from "@/features/workspace/nav-labels";
 
@@ -144,11 +143,16 @@ function NoPartnerAccess({ onSignOut }: { onSignOut: () => void }) {
  * Routes whose own content already renders a title and a way back, so the
  * generic `FocusedHeader` only duplicates it under the fallback title
  * "Details": the job-post wizard needs its own step-aware "Back" (step back,
- * not browser-history back) beside its real title, and the day-hire guide has
- * its own "← Work" link and `<h1>`.
+ * not browser-history back) beside its real title, the day-hire guide has
+ * its own "← Work" link and `<h1>`, and every job detail route (`/work/jobs/*`)
+ * renders its own hero banner with back navigation and status badge.
  */
 export function hasOwnFocusedHeader(pathname: string): boolean {
-  return pathname === "/listings/post" || pathname === "/work/how-day-hire-works";
+  return (
+    pathname === "/listings/post" ||
+    pathname === "/work/how-day-hire-works" ||
+    pathname.startsWith("/work/jobs")
+  );
 }
 
 function FocusedHeader({
@@ -390,9 +394,12 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
   const primaryNav = primaryShellNavFor(workspaces);
-  const isDarkHero = (pathname === "/home" || pathname === "/work") && isApprovedPartner;
+  const isDarkHero =
+    (pathname === "/home" || pathname === "/work" || pathname.startsWith("/work/jobs")) &&
+    isApprovedPartner;
   const isRegistrationDocumentsRoute =
-    pathname === "/me/documents" || pathname === "/me/application";
+    pathname.startsWith("/apply") ||
+    pathname.startsWith("/me");
 
   return (
     <PartnerHeaderTitleProvider>
@@ -419,7 +426,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
           {/* MOBILE (< lg) AND REGISTRATION DOCUMENTS ON DESKTOP */}
           <div
             className={cn(
-              "flex min-h-screen flex-col items-center bg-canvas",
+              "flex min-h-screen w-full flex-col items-center bg-canvas overflow-x-clip",
               !isRegistrationDocumentsRoute && "lg:hidden",
             )}
           >
@@ -436,7 +443,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                   <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)] lg:rounded-b-none lg:border-b lg:border-line lg:px-8 lg:py-3 lg:shadow-none">
                     <div className="flex items-center justify-between lg:mx-auto lg:w-full lg:max-w-7xl lg:gap-8">
                       <Link
-                        href="/me/documents"
+                        href="/home"
                         className="flex min-h-11 min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                       >
                         <Logo className="text-base h-7 w-auto" />
@@ -445,13 +452,14 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                       {isApprovedPartner && isRegistrationDocumentsRoute ? (
                         <div className="hidden lg:flex items-center gap-2">
                           <span className="text-sm font-bold text-navy-900">
-                            Partner Application & Documents Hub
+                            {pathname.startsWith("/me/profile") || pathname === "/me"
+                              ? "Partner Profile"
+                              : "Partner Application & Documents Hub"}
                           </span>
                         </div>
                       ) : null}
 
                       <div className="flex items-center gap-2">
-                        <LocaleSwitcher />
                         <Button
                           variant="ghost"
                           onClick={() => logout.mutate()}
@@ -476,7 +484,11 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                 {children}
               </ShellContent>
 
-              {chromeMode === "full" && isApprovedPartner && !isRegistrationDocumentsRoute ? (
+              {chromeMode === "full" &&
+              isApprovedPartner &&
+              pathname !== "/me/documents" &&
+              pathname !== "/me/application" &&
+              !pathname.startsWith("/apply") ? (
                 <BottomTabBar items={primaryNav} workspaceKeys={workspaceKeys} />
               ) : null}
 

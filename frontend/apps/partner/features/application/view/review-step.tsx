@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { Badge, Button, buttonStyles, ErrorState, Spinner, useT } from "@vsolve/ui";
+import { Badge, Button, buttonStyles, cn, ErrorState, Spinner, useT } from "@vsolve/ui";
 import {
   CheckCircle2,
   AlertCircle,
@@ -12,6 +12,7 @@ import {
   MapPin,
   FileCheck,
   FileText,
+  RefreshCw,
   Send,
 } from "lucide-react";
 import Link from "next/link";
@@ -106,6 +107,9 @@ export function ReviewStep() {
   const areaNameMap = new Map(reference.serviceAreas.map((a) => [a.id, a.name]));
 
   const documents = application.documents.filter((d) => d.status !== "SUPERSEDED");
+  const hasRejectedDocs = documents.some(
+    (d) => d.status === "REJECTED" || d.scan_status === "REJECTED",
+  );
 
   return (
     <section className="flex flex-col gap-6 pb-20">
@@ -353,27 +357,77 @@ export function ReviewStep() {
           </div>
           {isEditable(application) ? (
             <SectionEditLink href="/apply/documents" label={t("apply.review.section5.editAria")} />
+          ) : hasRejectedDocs ? (
+            <Link
+              href="/apply/documents"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 text-xs shadow-xs transition active:scale-95"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Re-upload</span>
+            </Link>
           ) : null}
         </div>
 
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-4 flex flex-col gap-2.5">
           {documents.length === 0 ? (
             <p className="text-xs text-danger-text font-semibold">{t("apply.review.noDocuments")}</p>
           ) : (
-            documents.map((doc) => (
-              <div
-                key={doc.id}
-                className="flex items-center justify-between rounded-control bg-surface-sunken p-2.5 border border-line text-xs font-semibold"
-              >
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-success-text" />
-                  <span className="capitalize">{doc.kind.replace(/_/g, " ").toLowerCase()}</span>
+            documents.map((doc) => {
+              const isRejected = doc.status === "REJECTED" || doc.scan_status === "REJECTED";
+              return (
+                <div
+                  key={doc.id}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-control p-3 border text-xs font-semibold transition-colors",
+                    isRejected
+                      ? "bg-rose-50/70 border-rose-200"
+                      : "bg-surface-sunken border border-line"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      {isRejected ? (
+                        <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                      ) : doc.status === "APPROVED" ? (
+                        <CheckCircle2 className="h-4 w-4 text-success-text shrink-0" />
+                      ) : (
+                        <Clock className="h-4 w-4 text-sky-600 shrink-0" />
+                      )}
+                      <span className={cn("capitalize", isRejected ? "text-rose-950 font-bold" : "text-navy-900")}>
+                        {doc.kind.replace(/_/g, " ").toLowerCase()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Badge tone={doc.status === "APPROVED" ? "success" : isRejected ? "danger" : "info"}>
+                        {doc.status === "APPROVED"
+                          ? "Approved"
+                          : isRejected
+                            ? "Rejected"
+                            : "Waiting for review"}
+                      </Badge>
+
+                      {isRejected && (
+                        <Link
+                          href="/apply/documents"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          <span>Re-upload</span>
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  {isRejected && doc.review_reason && (
+                    <div className="flex items-start gap-1.5 rounded-lg bg-white/90 p-2.5 text-[11px] text-rose-800 border border-rose-200/70 font-medium">
+                      <span className="font-bold shrink-0">Reviewer Note:</span>
+                      <span>{doc.review_reason}</span>
+                    </div>
+                  )}
                 </div>
-                <Badge tone={doc.status === "APPROVED" ? "success" : "info"}>
-                  {doc.status}
-                </Badge>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -447,7 +501,11 @@ export function ReviewStep() {
               inline
               className="mb-4"
               title={t("apply.review.submitError.title")}
-              message={t("apply.review.submitError.message")}
+              message={
+                submit.error instanceof ApiRequestError && submit.error.message
+                  ? submit.error.message
+                  : t("apply.review.submitError.message")
+              }
               reference={
                 submit.error instanceof ApiRequestError ? submit.error.requestId : null
               }
@@ -455,22 +513,76 @@ export function ReviewStep() {
           ) : null}
 
           <div className="flex flex-col gap-4">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-                className="mt-0.5 h-5 w-5 rounded border-line-strong text-signal-500 accent-signal-500"
-              />
-              <span className="text-xs text-text-secondary leading-relaxed">
-                {t("apply.review.certify")}
-              </span>
+            {/* Highlighted Certification Box */}
+            <label
+              className={cn(
+                "group relative flex items-start gap-3.5 rounded-2xl p-4 sm:p-5 transition-all duration-200 cursor-pointer select-none border-2",
+                confirmed
+                  ? "border-emerald-400 bg-emerald-50/75 shadow-xs"
+                  : "border-amber-300 bg-gradient-to-r from-amber-50/90 via-amber-50/60 to-orange-50/60 shadow-xs hover:border-amber-400 hover:shadow-sm"
+              )}
+            >
+              <div className="pt-0.5 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  aria-describedby="certification-description"
+                  className={cn(
+                    "h-6 w-6 rounded-lg transition-all cursor-pointer",
+                    confirmed
+                      ? "border-emerald-500 text-emerald-600 accent-emerald-600 focus:ring-emerald-500"
+                      : "border-amber-400 text-amber-600 accent-amber-600 focus:ring-amber-500 ring-2 ring-amber-300/40"
+                  )}
+                />
+              </div>
+
+              <div className="flex flex-1 flex-col gap-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span
+                    className={cn(
+                      "text-sm font-extrabold leading-tight",
+                      confirmed ? "text-emerald-950" : "text-navy-950"
+                    )}
+                  >
+                    Declaration & Accuracy Guarantee
+                  </span>
+
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider transition-colors",
+                      confirmed
+                        ? "bg-emerald-200/90 text-emerald-900 border border-emerald-300"
+                        : "bg-amber-200/90 text-amber-950 border border-amber-300 animate-pulse"
+                    )}
+                  >
+                    {confirmed ? "✓ Confirmed" : "Required to Submit"}
+                  </span>
+                </div>
+
+                <p
+                  id="certification-description"
+                  className={cn(
+                    "text-xs leading-relaxed transition-colors",
+                    confirmed ? "text-emerald-900/90" : "text-slate-700"
+                  )}
+                >
+                  {t("apply.review.certify")}
+                </p>
+              </div>
             </label>
 
-            <div className="flex items-center gap-3">
-              <Link href={listing ? "/apply/documents" : "/apply/schedule"} className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
-                  {t("common.back")}
-                </Link>
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+              <Link
+                href={listing ? "/apply/documents" : "/apply/schedule"}
+                className={buttonStyles({
+                  variant: "outline",
+                  size: "lg",
+                  className: "justify-center shrink-0 font-bold text-sm h-12 px-6",
+                })}
+              >
+                {t("common.back")}
+              </Link>
               <Button
                 size="lg"
                 disabled={!ready || !confirmed}
@@ -483,9 +595,9 @@ export function ReviewStep() {
                     },
                   });
                 }}
-                className="font-bold gap-2 text-base shadow-md flex-1"
+                className="font-bold gap-2 text-sm sm:text-base shadow-md flex-1 whitespace-normal text-center"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4 shrink-0" />
                 <span>{t("apply.review.submit")}</span>
               </Button>
             </div>

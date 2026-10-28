@@ -8,7 +8,8 @@ import {
   Building,
   CheckCircle2,
   Clock,
-  CreditCard,
+  ExternalLink,
+  Eye,
   FileCheck2,
   FileSpreadsheet,
   FileText,
@@ -16,14 +17,16 @@ import {
   Lock,
   MapPin,
   Phone,
+  RefreshCw,
   Shield,
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { usePartnerApplication } from "@/features/application/queries";
+import { usePartnerDocumentAccess } from "@/features/application/upload-queries";
 import {
   PARTNER_SUPPORT_HOURS,
   PARTNER_SUPPORT_PHONE,
@@ -135,6 +138,26 @@ export function PartnerDocumentsView() {
   const t = useT();
   const applicationQuery = usePartnerApplication();
   const profileQuery = usePartnerProfile();
+  const documentAccess = usePartnerDocumentAccess();
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+  const [docError, setDocError] = useState<{ id: string; message: string } | null>(null);
+
+  async function handleViewDocument(docId: string) {
+    setDocError(null);
+    setViewingDocId(docId);
+    try {
+      const response = await documentAccess.mutateAsync(docId);
+      if (response.access_url) {
+        window.open(response.access_url, "_blank", "noopener,noreferrer");
+      } else {
+        setDocError({ id: docId, message: "No preview link available for this document." });
+      }
+    } catch {
+      setDocError({ id: docId, message: "Unable to open document. Please try again." });
+    } finally {
+      setViewingDocId(null);
+    }
+  }
 
   if (applicationQuery.isPending || profileQuery.isPending) {
     return (
@@ -154,7 +177,7 @@ export function PartnerDocumentsView() {
       <Page>
         <div className="flex items-center">
           <Link
-            href="/me/profile"
+            href="/me"
             className="group inline-flex min-h-11 items-center gap-2 rounded-xl px-2 -ml-2 text-sm font-semibold text-text-secondary hover:text-navy-900 transition-colors"
           >
             <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface border border-line">
@@ -183,7 +206,7 @@ export function PartnerDocumentsView() {
       {/* Top Header & Breadcrumb */}
       <div className="flex items-center justify-between">
         <Link
-          href="/me/profile"
+          href="/me"
           className="group inline-flex min-h-11 items-center gap-2 rounded-xl px-2 -ml-2 text-sm font-semibold text-text-secondary hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
         >
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface border border-line group-hover:border-navy-300 transition-colors shadow-2xs">
@@ -372,16 +395,68 @@ export function PartnerDocumentsView() {
                       </div>
                     </div>
 
-                    <div className="shrink-0 self-start sm:self-center">
-                      <span className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary">
-                        <Lock className="h-3 w-3 text-text-muted" />
-                        Verified on Record
-                      </span>
+                    <div className="flex items-center gap-2 shrink-0 self-start sm:self-center flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleViewDocument(doc.id)}
+                        disabled={viewingDocId === doc.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-navy-900 hover:bg-surface-sunken hover:border-navy-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-action transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-60"
+                        aria-label={`View ${meta.title}`}
+                      >
+                        {viewingDocId === doc.id ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin text-navy-700" aria-hidden />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5 text-navy-700" aria-hidden />
+                        )}
+                        <span>{viewingDocId === doc.id ? "Opening..." : "View"}</span>
+                      </button>
+
+                      {isDocRejected ? (
+                        <Link
+                          href="/apply/documents"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 text-xs shadow-xs transition active:scale-95"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          <span>Re-upload</span>
+                        </Link>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary">
+                          <Lock className="h-3 w-3 text-text-muted" />
+                          Verified on Record
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Review reason if any */}
-                  {doc.review_reason && (
+                  {/* Document Access Error Note */}
+                  {docError?.id === doc.id ? (
+                    <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" aria-hidden />
+                      <span>{docError.message}</span>
+                    </div>
+                  ) : null}
+
+                  {/* Rejection / Review note if needed */}
+                  {isDocRejected ? (
+                    <div className="mt-3.5 rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 text-xs text-rose-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" aria-hidden />
+                        <div>
+                          <strong className="font-bold text-rose-950">Action Required: Document Needs Re-upload</strong>
+                          <p className="mt-0.5 text-rose-800 font-medium">
+                            {doc.review_reason || "This document could not be verified by Operations. Please re-upload a clear and valid copy."}
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/apply/documents"
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold px-3.5 py-2 text-xs shadow-xs transition active:scale-95"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>Re-upload Document</span>
+                      </Link>
+                    </div>
+                  ) : doc.review_reason ? (
                     <div className="mt-3.5 rounded-xl border border-line/70 bg-surface-sunken p-3 text-xs text-text-secondary flex items-start gap-2">
                       <Info className="h-4 w-4 text-navy-600 shrink-0 mt-0.5" aria-hidden />
                       <div>
@@ -389,7 +464,7 @@ export function PartnerDocumentsView() {
                         <span>{doc.review_reason}</span>
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </Card>
               );
             })}

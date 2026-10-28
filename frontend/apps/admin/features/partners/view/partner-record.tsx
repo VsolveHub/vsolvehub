@@ -49,7 +49,9 @@ function Chips({ items, empty }: { items: { code: string; name: string }[]; empt
     <div className="flex flex-wrap gap-1.5">
       {items.map((item) => (
         <span
-          key={item.code}
+          // Services share a code across variants ("Face Cleanup - Face" and its siblings), so the
+          // code alone is not unique and React dropped or mixed up chips.
+          key={`${item.code}:${item.name}`}
           className="px-2.5 py-1 rounded-full text-xs font-medium bg-surface-sunken text-text-secondary ring-1 ring-line"
         >
           {item.name}

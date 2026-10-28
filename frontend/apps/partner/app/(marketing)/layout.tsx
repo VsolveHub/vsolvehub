@@ -45,7 +45,7 @@ const FOOTER_COLS = [
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-canvas text-text relative">
+    <div className="min-h-screen bg-canvas text-text relative overflow-x-clip">
       {/* Floating Dynamic-Island Navigation with White Background */}
       <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
         <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">

@@ -15,7 +15,7 @@ export const DASHBOARD_TABS: { href: string; label: string }[] = [
 export function DashboardTabs() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Dashboards" className="mx-auto mt-4 w-full max-w-6xl border-b border-line px-4">
+    <nav aria-label="Dashboards" className="mx-auto mt-4 w-full max-w-6xl border-b border-line sm:px-4">
       <ul className="-mb-px flex list-none flex-wrap gap-1 p-0">
         {DASHBOARD_TABS.map((tab) => {
           const active = pathname === tab.href;
@@ -25,7 +25,7 @@ export function DashboardTabs() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "inline-flex border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                  "inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                   active
                     ? "border-action text-text-link"
                     : "border-transparent text-text-secondary hover:border-line-strong hover:text-text",

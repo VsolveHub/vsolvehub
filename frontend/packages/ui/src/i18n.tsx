@@ -20,14 +20,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
  * error copy flows through here without further work.
  */
 
-import {
-  createTranslator,
-  DEFAULT_LOCALE,
-  interpolate,
-  type Catalog,
-  type Locale,
-  type Translator,
-} from "./i18n-core";
+import { createTranslator, DEFAULT_LOCALE, interpolate, type Catalog, type Locale, type Translator } from "./i18n-core";
 
 export type { Catalog, Locale, Message, Translator } from "./i18n-core";
 

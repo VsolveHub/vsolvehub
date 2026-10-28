@@ -15,7 +15,6 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { getApiClient } from "@/lib/api/browser";
 
-import { LocaleSwitcher } from "./locale-switcher";
 import { homeForApplication, safeNextPath } from "../model/redirect";
 
 /**
@@ -63,7 +62,7 @@ function readableFieldError(t: ReturnType<typeof useT>, message: string | null |
 }
 
 function LoginShell({ children }: { children: ReactNode }) {
-  return <div className="min-h-screen bg-canvas text-text relative">{children}</div>;
+  return <div className="min-h-screen bg-canvas text-text relative overflow-x-clip">{children}</div>;
 }
 
 function LoginWait({ message }: { message: string }) {
@@ -192,7 +191,6 @@ export function LoginScreen() {
 
             {/* Right Action CTA & Mobile Drawer */}
             <div className="flex items-center gap-2">
-              <LocaleSwitcher />
               <MarketingNavCta />
               <MarketingMobileNav items={nav} />
             </div>

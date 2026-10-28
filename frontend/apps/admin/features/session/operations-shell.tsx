@@ -49,65 +49,10 @@ import { getApiClient } from "@/lib/api/browser";
  * screen to show.
  */
 
-import { useState } from "react";
-import { Menu, X } from "lucide-react";
 import { SidebarNavContent } from "./sidebar-nav";
+import { MobileDrawer } from "./mobile-drawer";
 
 const OPERATIONS_ROLE = "operations";
-
-/**
- * Grouped, badge-aware sidebar that covers both desktop and mobile drawer.
- *
- * The desktop sidebar is a sticky aside; the mobile drawer is a full-screen
- * overlay with a backdrop. Both share the same `SidebarNavContent` component
- * so the groups, active highlighting, and badge counts are identical.
- */
-function SidebarNav({
-  isMobileMenuOpen,
-  onCloseMobileMenu,
-}: {
-  isMobileMenuOpen: boolean;
-  onCloseMobileMenu: () => void;
-}) {
-  return (
-    <>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:block w-60 shrink-0 border-r border-line bg-surface sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto">
-        <SidebarNavContent />
-      </aside>
-
-      {/* Mobile drawer overlay */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-40 md:hidden flex">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
-            onClick={onCloseMobileMenu}
-          />
-          <aside className="relative z-50 w-64 max-w-[80vw] bg-surface h-full shadow-xl flex flex-col border-r border-line">
-            <div className="flex items-center justify-between p-4 border-b border-line">
-              <span className="font-semibold text-sm text-text">Navigation</span>
-              <button
-                type="button"
-                onClick={onCloseMobileMenu}
-                className="p-1 text-text-secondary hover:text-text"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {/*
-               * Pass onLinkClick so every nav link closes the mobile drawer.
-               * SidebarNavContent wraps SidebarLink items; we thread the close
-               * handler through so the drawer dismisses on navigation.
-               */}
-              <SidebarNavContent onLinkClick={onCloseMobileMenu} />
-            </div>
-          </aside>
-        </div>
-      )}
-    </>
-  );
-}
 
 function OperationsLogin() {
   // Firebase or Django's own OTP, whichever NEXT_PUBLIC_PHONE_AUTH_PROVIDER names. The role
@@ -203,7 +148,6 @@ function NoOperationsAccess({ onSignOut }: { onSignOut: () => void }) {
 }
 
 export function OperationsShell({ children }: { children: ReactNode }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const guard = useAuthGuard(getApiClient(), {
     requiredRoles: [OPERATIONS_ROLE],
     requireActiveRole: true,
@@ -253,9 +197,10 @@ export function OperationsShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const userDisplayName = guard.user.phone_number === "9999999999" || !guard.user.phone_number
-    ? "Priya Nair (Dispatch)"
-    : `${guard.user.phone_number} (Operations)`;
+  // The account's own name when it has one; the number otherwise. Never a placeholder person —
+  // a made-up name in the header is a name a reviewer will believe.
+  const userDisplayName =
+    guard.user.display_name || guard.user.full_name || guard.user.phone_number || "Your account";
 
   return (
     <div className="min-h-screen bg-canvas flex flex-col">
@@ -263,14 +208,9 @@ export function OperationsShell({ children }: { children: ReactNode }) {
       <header className="border-b border-line bg-surface sticky top-0 z-30 h-14">
         <div className="h-full flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-1 text-text-secondary hover:text-text rounded-md focus:outline-none"
-              aria-label="Toggle navigation menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+            <MobileDrawer>
+              <SidebarNavContent />
+            </MobileDrawer>
             <div className="flex items-center gap-3">
               <Logo className="h-6 w-auto" />
               <span className="text-sm font-bold text-text">Operations</span>
@@ -280,7 +220,8 @@ export function OperationsShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-4 text-sm">
             <Link
               href="/operations/profile"
-              className="text-text-secondary hover:text-text font-medium hidden sm:inline transition-colors hover:underline"
+              className="hidden max-w-[16rem] truncate font-medium text-text-secondary transition-colors hover:text-text hover:underline sm:inline"
+              title={userDisplayName}
             >
               {userDisplayName}
             </Link>
@@ -290,7 +231,7 @@ export function OperationsShell({ children }: { children: ReactNode }) {
               onClick={() => logout.mutate()}
               loading={logout.isPending}
               loadingLabel="Signing out"
-              className="text-text-secondary hover:text-text font-normal px-2"
+              className="whitespace-nowrap text-text-secondary hover:text-text font-normal px-2"
             >
               Sign out
             </Button>
@@ -300,11 +241,11 @@ export function OperationsShell({ children }: { children: ReactNode }) {
 
       {/* Body container with Sidebar and Main Content */}
       <div className="flex flex-1">
-        <SidebarNav
-          isMobileMenuOpen={isMobileMenuOpen}
-          onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
-        />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl">
+        <aside className="hidden md:block w-60 shrink-0 border-r border-line bg-surface sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto">
+          <SidebarNavContent />
+        </aside>
+        {/* min-w-0: a wide table scrolls inside its own region instead of widening the page. */}
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl">
           {children}
         </main>
       </div>
