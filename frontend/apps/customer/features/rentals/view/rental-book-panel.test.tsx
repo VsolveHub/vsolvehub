@@ -251,7 +251,7 @@ describe("RentalBookPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith("/rentals/mine");
+      expect(router.push).toHaveBeenCalledWith("/activity?type=rentals");
     });
     expect(window.alert).not.toHaveBeenCalled();
   });
@@ -423,7 +423,7 @@ describe("RentalBookPanel", () => {
     // The user doesn't have to type anything! Just click "Send delivery request"
     fireEvent.click(screen.getByRole("button", { name: "Send delivery request" }));
 
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/rentals/mine"));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/activity?type=rentals"));
     const body = client.POST.mock.calls[0]![1].body;
     expect(body.pickup_or_delivery_mode).toBe("DELIVERY");
     expect(body.delivery_address).toEqual({

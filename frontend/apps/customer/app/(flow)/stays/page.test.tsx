@@ -3,9 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * "My Enquiries" is the signed-in guest's own list. Before sign-in there is
- * nothing of theirs to show, and the link used to open a page that only said
- * "Authentication credentials were not provided".
+ * "My bookings" opens the signed-in guest's own stays in Your Bookings. Before
+ * sign-in there is nothing of theirs to show, and the link used to open a page
+ * that only said "Authentication credentials were not provided".
  */
 
 const api = vi.hoisted(() => {
@@ -49,20 +49,20 @@ beforeEach(() => {
 });
 
 describe("stays browse", () => {
-  it("does not offer My Enquiries before sign-in", async () => {
+  it("does not offer My bookings before sign-in", async () => {
     renderPage();
 
     await screen.findByRole("heading", { name: /find rooms, pg & hotels/i });
-    await waitFor(() => expect(screen.queryByRole("link", { name: /my enquiries/i })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("link", { name: /my bookings/i })).toBeNull());
   });
 
-  it("offers My Enquiries once signed in", async () => {
+  it("offers My bookings once signed in, opened on stays", async () => {
     api.signIn({ id: "u-1", phone_number: "+919876543210", roles: ["customer"] });
     renderPage();
 
-    expect(await screen.findByRole("link", { name: /my enquiries/i })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: /my bookings/i })).toHaveAttribute(
       "href",
-      "/stays/mine",
+      "/activity?type=stays",
     );
   });
 });

@@ -2,7 +2,9 @@ import type { BookingGroup } from "@/features/bookings/queries";
 import { GROUP_STATUS_LABELS } from "@/features/bookings/view/group-status";
 import type { EngagementRowView } from "@/features/engagement/adapters";
 import { ENGAGEMENT_STATUS } from "@/features/engagement/view/engagement-status";
+import type { RentalBooking } from "@/features/rentals/model";
 import type { RequestRowView } from "@/features/requirement/adapters";
+import type { StayEnquiry, StayReservation, StayVisit } from "@/features/stays/queries";
 
 /**
  * Client-side matching for the Bookings hub search field.
@@ -15,7 +17,11 @@ import type { RequestRowView } from "@/features/requirement/adapters";
 export type SearchableBooking =
   | { kind: "group"; group: BookingGroup }
   | { kind: "request"; row: RequestRowView }
-  | { kind: "engagement"; row: EngagementRowView };
+  | { kind: "engagement"; row: EngagementRowView }
+  | { kind: "rental"; booking: RentalBooking }
+  | { kind: "stay-enquiry"; enquiry: StayEnquiry }
+  | { kind: "stay-visit"; visit: StayVisit }
+  | { kind: "stay-reservation"; reservation: StayReservation };
 
 export function normalizeBookingSearch(query: string): string {
   return query.trim().replace(/\s+/g, " ").toLowerCase();
@@ -87,12 +93,43 @@ export function engagementSearchHaystack(row: EngagementRowView): string {
   );
 }
 
+export function rentalSearchHaystack(booking: RentalBooking): string {
+  return parts(
+    booking.id,
+    booking.asset?.title,
+    booking.asset?.partner_name,
+    booking.asset?.location_text,
+    booking.status,
+    slugAsWords(booking.status ?? ""),
+    "rental",
+  );
+}
+
+function staySearchHaystack(
+  row: { id: string; property_title?: string | null; unit_name?: string | null; status?: string | null },
+  host: string | null | undefined,
+  kind: string,
+): string {
+  return parts(row.id, row.property_title, row.unit_name, host, row.status, "stay", kind);
+}
+
 export function searchableBookingMatches(item: SearchableBooking, query: string): boolean {
-  if (item.kind === "group") return matchesBookingSearch(groupSearchHaystack(item.group), query);
-  if (item.kind === "engagement") {
-    return matchesBookingSearch(engagementSearchHaystack(item.row), query);
+  switch (item.kind) {
+    case "group":
+      return matchesBookingSearch(groupSearchHaystack(item.group), query);
+    case "engagement":
+      return matchesBookingSearch(engagementSearchHaystack(item.row), query);
+    case "request":
+      return matchesBookingSearch(requestSearchHaystack(item.row), query);
+    case "rental":
+      return matchesBookingSearch(rentalSearchHaystack(item.booking), query);
+    case "stay-enquiry":
+      return matchesBookingSearch(staySearchHaystack(item.enquiry, item.enquiry.host_name, "enquiry"), query);
+    case "stay-visit":
+      return matchesBookingSearch(staySearchHaystack(item.visit, item.visit.host_name, "visit"), query);
+    case "stay-reservation":
+      return matchesBookingSearch(staySearchHaystack(item.reservation, null, "reservation"), query);
   }
-  return matchesBookingSearch(requestSearchHaystack(item.row), query);
 }
 
 export function filterBookingsBySearch<T extends SearchableBooking>(

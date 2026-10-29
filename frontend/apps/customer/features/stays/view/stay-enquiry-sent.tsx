@@ -33,7 +33,7 @@ export function StayEnquirySent({
         onViewProperty={onViewProperty}
       />
       <StayPaymentNote compact />
-      <Link href="/stays/mine" className="text-center text-xs font-bold text-text-link hover:underline">
+      <Link href="/activity?type=stays" className="text-center text-xs font-bold text-text-link hover:underline">
         See all my enquiries and visits
       </Link>
     </div>

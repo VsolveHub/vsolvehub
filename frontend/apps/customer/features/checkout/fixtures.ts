@@ -20,6 +20,7 @@ export function cartItem(overrides: Partial<Schemas["CartItemDetail"]> = {}) {
     id: "item-1",
     version: 1,
     variant_id: "variant-1",
+    category_slug: "electrical",
     service_slug: "fan-installation",
     service_name: "Fan installation",
     amount: { amount_paise: 24_900, currency: "INR" },
@@ -108,6 +109,7 @@ export function planSet(overrides: Partial<Schemas["FulfilmentPlanSet"]> = {}) {
     id: "plan-set-1",
     cart_version: 3,
     status: "ACTIVE",
+    booking_mode: "SCHEDULED",
     server_now: "2026-08-02T09:00:00Z",
     expires_at: "2026-08-02T09:15:00Z",
     plans: [plan()],
@@ -207,6 +209,7 @@ export function bookingGroup(overrides: Partial<Schemas["BookingGroup"]> = {}) {
   return {
     id: "group-1",
     status: "MATCHING",
+    booking_mode: "SCHEDULED",
     version: 1,
     confirmation_policy: "ALL_OR_NOTHING",
     expires_at: "2026-08-02T09:30:00Z",

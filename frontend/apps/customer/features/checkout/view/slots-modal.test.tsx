@@ -54,6 +54,7 @@ function windowsResponse(
     estimated_duration_minutes: 30,
     availability_is_preliminary: true,
     timezone: "Asia/Kolkata",
+    instant: { is_available: false, earliest_starts_at: null, eta_minutes: null, unavailable_reason: null },
     days: [
       {
         date: "2026-08-10",

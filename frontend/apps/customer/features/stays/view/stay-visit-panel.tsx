@@ -105,7 +105,7 @@ export function StayVisitPanel({
           </div>
         </div>
         <Link
-          href="/stays/mine?tab=visits"
+          href="/activity?type=stays"
           className="text-center text-xs font-bold text-text-link hover:underline"
         >
           See my visits

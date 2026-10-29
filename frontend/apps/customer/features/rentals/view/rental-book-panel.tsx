@@ -70,6 +70,9 @@ export function deliveryProblem(address: Address | null, phone: string): string 
   return null;
 }
 
+/** Where a customer lands after booking: their bookings, showing rentals. */
+const MY_RENTALS = "/activity?type=rentals";
+
 function todayIso(): string {
   const d = new Date();
   const month = `${d.getMonth() + 1}`.padStart(2, "0");
@@ -191,7 +194,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         toast.notify(
           "Delivery request sent. You pay once you accept the owner's transport price.",
         );
-        router.push("/rentals/mine");
+        router.push(MY_RENTALS);
         return;
       }
       const deposit = booking.deposit as
@@ -202,7 +205,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
 
       if (!attemptId) {
         toast.notify("Rental booking confirmed.");
-        router.push("/rentals/mine");
+        router.push(MY_RENTALS);
         return;
       }
 
@@ -225,7 +228,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         } else {
           toast.notify("Payment submitted. Waiting for Razorpay capture — booking stays Pending until then.");
         }
-        router.push("/rentals/mine");
+        router.push(MY_RENTALS);
       } catch (err) {
         setError(
           friendlyErrorMessage(
@@ -233,7 +236,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
             "The payment provider could not be opened. Booking is Pending until paid.",
           ),
         );
-        router.push("/rentals/mine");
+        router.push(MY_RENTALS);
       } finally {
         setIsHandingOff(false);
       }

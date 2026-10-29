@@ -135,11 +135,11 @@ function StaysBrowseContent() {
           {session.isAuthenticated ? (
           <div className="flex shrink-0 items-center gap-3">
             <Link
-              href="/stays/mine"
+              href="/activity?type=stays"
               className="inline-flex items-center gap-2 rounded-control border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-xs transition hover:bg-white/20"
             >
               <FileCheck2 className="size-4 text-warm-100" />
-              My Enquiries
+              My bookings
             </Link>
           </div>
           ) : null}

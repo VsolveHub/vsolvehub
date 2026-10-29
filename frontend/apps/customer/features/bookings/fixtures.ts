@@ -50,7 +50,7 @@ export function unit(overrides: Partial<Schemas["FulfilmentUnit"]> = {}) {
   } satisfies Schemas["FulfilmentUnit"];
 }
 
-export function group(overrides: Partial<Schemas["BookingGroup"]> = {}) {
+export function group(overrides: Partial<Schemas["BookingGroup"]> = {}): Schemas["BookingGroup"] {
   return {
     id: "group-1",
     status: "MATCHING",
@@ -66,6 +66,8 @@ export function group(overrides: Partial<Schemas["BookingGroup"]> = {}) {
     checkout_version: 1,
     order_id: null,
     units: [unit()],
+    // Contract: an instant booking says so; a fixture is a scheduled one unless a test says not.
+    booking_mode: "SCHEDULED",
     created_at: "2026-08-03T09:00:00Z",
     updated_at: "2026-08-03T09:00:00Z",
     ...overrides,
