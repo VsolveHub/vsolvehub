@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.88.0)
- * Checksum: 1bf1cd1888d295e8
+ * Source:   contracts/openapi/v1.yaml (version 1.89.0)
+ * Checksum: 92df97ca122b727a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4764,8 +4764,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preview operations report data */
+        /**
+         * Preview operations report data
+         * @description One page of the report. Filters are the catalog's filter keys; a `choice` value outside its options is refused (`invalid_filter`).
+         */
         get: operations["ops_reports_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/reports/partner-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Partners for a report's partner filter */
+        get: operations["ops_reports_partner_options_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13193,8 +13213,44 @@ export interface components {
         OpsReportCatalogItem: {
             id: string;
             name: string;
-            filters: string[];
-            columns: string[];
+            group: string;
+            description: string;
+            filters: components["schemas"]["OpsReportFilter"][];
+            columns: components["schemas"]["OpsReportColumn"][];
+        };
+        OpsReportColumn: {
+            key: string;
+            label: string;
+            kind: components["schemas"]["OpsReportColumnKindEnum"];
+            sortable: boolean;
+        };
+        /**
+         * @description * `text` - text
+         *     * `ref` - ref
+         *     * `date` - date
+         *     * `money` - money
+         *     * `number` - number
+         *     * `status` - status
+         * @enum {string}
+         */
+        OpsReportColumnKindEnum: "text" | "ref" | "date" | "money" | "number" | "status";
+        OpsReportFilter: {
+            key: string;
+            label: string;
+            kind: components["schemas"]["OpsReportFilterKindEnum"];
+            options: components["schemas"]["OpsReportOption"][];
+        };
+        /**
+         * @description * `date` - date
+         *     * `choice` - choice
+         *     * `partner` - partner
+         * @enum {string}
+         */
+        OpsReportFilterKindEnum: "date" | "choice" | "partner";
+        OpsReportOption: {
+            value: string;
+            label: string;
+            group: string;
         };
         OpsReportPreset: {
             readonly id: number;
@@ -13218,18 +13274,28 @@ export interface components {
         OpsReportPreviewResponse: {
             report_id: string;
             name: string;
-            filters_applied: {
-                [key: string]: unknown;
-            };
-            columns: string[];
-            totals: {
-                [key: string]: unknown;
-            };
+            columns: components["schemas"]["OpsReportColumn"][];
+            totals: components["schemas"]["OpsReportTotal"][];
             rows: {
                 [key: string]: unknown;
             }[];
             total_rows_count: number;
+            offset: number;
+            limit: number;
+            export_row_limit: number;
         };
+        OpsReportTotal: {
+            key: string;
+            label: string;
+            kind: components["schemas"]["OpsReportTotalKindEnum"];
+            value: number;
+        };
+        /**
+         * @description * `money` - money
+         *     * `number` - number
+         * @enum {string}
+         */
+        OpsReportTotalKindEnum: "money" | "number";
         OpsSafetyStory: {
             /** Format: uuid */
             readonly id: string;
@@ -30222,7 +30288,17 @@ export interface operations {
     };
     ops_reports_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Includes the whole day. */
+                date_end?: string;
+                date_start?: string;
+                limit?: number;
+                offset?: number;
+                /** @description Search names and references. */
+                q?: string;
+                /** @description A sortable column key; prefix `-` for descending. Default newest first. */
+                sort?: string;
+            };
             header?: never;
             path: {
                 report_id: string;
@@ -30237,6 +30313,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpsReportPreviewResponse"];
+                };
+            };
+        };
+    };
+    ops_reports_partner_options_list: {
+        parameters: {
+            query?: {
+                /** @description Name an already chosen partner (from a link or saved filter). */
+                id?: string;
+                /** @description Name or phone. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsReportOption"][];
                 };
             };
         };

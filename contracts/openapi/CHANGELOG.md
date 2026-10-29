@@ -1,5 +1,36 @@
 # API Contract Changelog
 
+## 1.89.0 - Operations reports an admin can use without knowing codes
+
+Operations only. The Reports page is the only consumer and is updated with this change.
+
+- **Changed** `GET /ops/reports/` (`OpsReportCatalogItem`): each report adds `group` and
+  `description`. `filters` is now a list of `{key, label, kind, options}`: `kind` is `date`,
+  `choice` (pick one of `options`, each `{value, label, group}`) or `partner` (search
+  `partner-options`). `columns` is now `{key, label, kind, sortable}`.
+- **Changed** `GET /ops/reports/{report_id}/` (`OpsReportPreviewResponse`):
+  - `columns` uses that shape.
+  - `totals` is a list of `{key, label, kind, value}`, computed over every matching row.
+  - It pages with `limit` (default 50, max 200) and `offset`, and takes `q` (search) and
+    `sort` (a sortable column key, `-` for descending).
+  - Rows are ready to read: names instead of ids, a short `reference`, status labels. Money
+    is in paise and dates are ISO 8601.
+  - It adds `export_row_limit`. `filters_applied` is removed.
+- **Fixed**: `date_end` now includes the whole day. It used to stop at midnight, so a one-day
+  range was empty.
+- A `choice` value outside its options, a malformed partner id or date, or an end before the
+  start is `400` (`invalid_filter`, `invalid_date`).
+- **Added** `GET /ops/reports/partner-options/?q=` (or `?id=`): partners by name or phone, as
+  options.
+- **Removed**: the bookings `archetype` filter and column (an internal code). Use the
+  `service` filter instead.
+- **Replaced**: the stays report's `mode` filter. `stays` is now stay reservations, and
+  `stay_enquiries` is new.
+- **Added** the `stay_subscriptions` report. `subscriptions` is job plans.
+- Exports (`.csv`, `.xlsx`, `.pdf`) use the same columns, write money in rupees, and are named
+  after the report and dates. More than 5,000 rows is refused with `400 export_too_large`
+  instead of being cut short.
+
 ## 1.88.0 - Operations sees each marketplace service's money
 
 Additive. Operations only.

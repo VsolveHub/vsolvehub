@@ -4,6 +4,7 @@ from .views import (
     OpsDashboardPreferenceView,
     OpsDashboardView,
     OpsReportExportView,
+    OpsReportPartnerOptionsView,
     OpsReportPresetDetailView,
     OpsReportPresetListCreateView,
     OpsReportPreviewView,
@@ -19,6 +20,11 @@ urlpatterns = [
         "ops/reports/presets/<int:pk>/",
         OpsReportPresetDetailView.as_view(),
         name="ops_reports_preset_detail",
+    ),
+    path(
+        "ops/reports/partner-options/",
+        OpsReportPartnerOptionsView.as_view(),
+        name="ops_reports_partner_options",
     ),
     path("ops/reports/<str:report_id>/", OpsReportPreviewView.as_view(), name="ops_report_preview"),
     path(
