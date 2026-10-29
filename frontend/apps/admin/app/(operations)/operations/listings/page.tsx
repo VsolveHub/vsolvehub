@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { usePagedList } from "@vsolve/query";
@@ -23,6 +23,15 @@ import {
   ModerationDialog,
 } from "@/features/listings/view";
 import { useDebounced } from "@/features/shared/use-debounced";
+import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
+import { VendorPlansWorkspace } from "@/features/vendor-plans/view/vendor-plans-workspace";
+
+const TABS = [
+  { key: "listings", label: "Listings" },
+  { key: "money", label: "Money" },
+  { key: "plans", label: "Plans" },
+] as const;
 
 /** "50+" when the first page is full and the server has more. */
 function pageCount(page: { results: unknown[]; next: string | null } | undefined): number | string {
@@ -31,6 +40,17 @@ function pageCount(page: { results: unknown[]; next: string | null } | undefined
 }
 
 export default function AdminListingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminListingsContent />
+    </Suspense>
+  );
+}
+
+function AdminListingsContent() {
+  const [tab, setTab] = useServiceTab(TABS);
+  // True totals from the server; the per-status first pages below only say "50+".
+  const serverCounts = useListingCounts("listings");
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const [filter, setFilter] = useState<string>("ALL");
@@ -106,9 +126,9 @@ export default function AdminListingsPage() {
   }
 
   const filteredListings = listings;
-  const pendingCount = pageCount(pendingPage);
-  const activeCount = pageCount(activePage);
-  const removedCount = pageCount(removedPage);
+  const pendingCount = serverCounts?.pending ?? pageCount(pendingPage);
+  const activeCount = serverCounts?.live ?? pageCount(activePage);
+  const removedCount = serverCounts?.removed ?? pageCount(removedPage);
 
   const submitting =
     moderateMutation.isPending || removeMutation.isPending || reinstateMutation.isPending;
@@ -151,6 +171,13 @@ export default function AdminListingsPage() {
         </div>
       </div>
 
+      <ServiceTabs tabs={TABS} active={tab} onChange={setTab} label="Jobs sections" />
+
+      {tab === "money" ? <MoneyTab service="listings" /> : null}
+      {tab === "plans" ? <VendorPlansWorkspace /> : null}
+
+      {tab === "listings" ? (
+      <>
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <AlertTriangle className="size-5 shrink-0 text-amber-600" />
@@ -159,7 +186,7 @@ export default function AdminListingsPage() {
       )}
 
       <MetricsRow
-        totalCount={pageCount(totalPage)}
+        totalCount={serverCounts?.total ?? pageCount(totalPage)}
         pendingCount={pendingCount}
         activeCount={activeCount}
         removedCount={removedCount}
@@ -205,6 +232,8 @@ export default function AdminListingsPage() {
         onLoadMore={listingsPage.loadMore}
         label="Load more listings"
       />
+      </>
+      ) : null}
 
       <ListingDetailDialog
         listing={modalAction === "VIEW" ? selectedListing : null}

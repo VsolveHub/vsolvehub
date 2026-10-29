@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.87.0)
- * Checksum: 7bfeb00b41e2a072
+ * Source:   contracts/openapi/v1.yaml (version 1.88.0)
+ * Checksum: 1bf1cd1888d295e8
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1102,6 +1102,23 @@ export interface paths {
         get: operations["customer_wallet_transactions_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/onesignal/test-push/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Local development & testing endpoint to verify OneSignal push delivery to an external_id. */
+        post: operations["dev_onesignal_test_push_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4376,6 +4393,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/listings/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_listings_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/listings/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_listings_money_payments_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/loyalty/burn-policies/": {
         parameters: {
             query?: never;
@@ -4643,6 +4692,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/rentals/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_rentals_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/rentals/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_rentals_money_payments_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/rentals/platform-fee": {
         parameters: {
             query?: never;
@@ -4797,6 +4878,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["ops_stays_enquiries_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/stays/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_stays_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/stays/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_stays_money_payments_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5636,6 +5749,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/dispatch-offers/{offer_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Retrieve details of an instant booking dispatch offer. */
+        get: operations["partner_dispatch_offers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/dispatch-offers/{offer_id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Accept an instant booking dispatch offer. */
+        post: operations["partner_dispatch_offers_accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/dispatch-offers/{offer_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Decline an instant booking dispatch offer. */
+        post: operations["partner_dispatch_offers_decline_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/earnings/": {
         parameters: {
             query?: never;
@@ -6338,6 +6502,22 @@ export interface paths {
         /** @description Set this Partner's own rate for one catalog item. */
         put: operations["m2_partner_price_book_item_set"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/push-subscriptions/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_push_subscriptions_sync_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9040,6 +9220,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly status: components["schemas"]["BookingGroupStatusEnum"];
+            readonly booking_mode: components["schemas"]["BookingGroupBookingModeEnum"];
             readonly version: number;
             readonly confirmation_policy: components["schemas"]["ConfirmationPolicyEnum"];
             /** Format: date-time */
@@ -9060,6 +9241,12 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `INSTANT` - Instant
+         *     * `SCHEDULED` - Scheduled
+         * @enum {string}
+         */
+        BookingGroupBookingModeEnum: "INSTANT" | "SCHEDULED";
         BookingGroupCancelRequest: {
             expected_version: number;
         };
@@ -9132,6 +9319,7 @@ export interface components {
             readonly estimated_duration_minutes: number;
             readonly availability_is_preliminary: boolean;
             readonly timezone: string;
+            readonly instant: components["schemas"]["InstantAvailability"];
             readonly days: components["schemas"]["BookingWindowDay"][];
         };
         BookingWindowsRequestRequest: {
@@ -9296,6 +9484,8 @@ export interface components {
             readonly version: number;
             /** Format: uuid */
             readonly variant_id: string;
+            /** @default  */
+            readonly category_slug: string;
             readonly service_slug: string;
             readonly service_name: string;
             readonly variant_name: string;
@@ -11363,6 +11553,7 @@ export interface components {
             readonly id: string;
             readonly cart_version: number;
             readonly status: components["schemas"]["FulfilmentPlanSetStatusEnum"];
+            readonly booking_mode: string;
             /** Format: date-time */
             readonly server_now: string;
             /** Format: date-time */
@@ -11371,6 +11562,12 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `INSTANT` - INSTANT
+         *     * `SCHEDULED` - SCHEDULED
+         * @enum {string}
+         */
+        FulfilmentPlanSetCreateBookingModeEnum: "INSTANT" | "SCHEDULED";
         /**
          * @description Plan a cart against one start time **per visit**.
          *
@@ -11386,7 +11583,9 @@ export interface components {
             /** Format: uuid */
             address_id: string;
             expected_cart_version: number;
-            preferred_starts: components["schemas"]["PreferredStartRequest"][];
+            /** @default SCHEDULED */
+            booking_mode: components["schemas"]["FulfilmentPlanSetCreateBookingModeEnum"];
+            preferred_starts?: components["schemas"]["PreferredStartRequest"][];
         };
         /**
          * @description * `ACTIVE` - Active
@@ -11637,6 +11836,13 @@ export interface components {
          * @enum {string}
          */
         IconKeyEnum: "service" | "electrical" | "plumbing" | "carpentry" | "air-conditioning" | "water-purifier" | "internet-wifi" | "gas-stove" | "computer" | "mobile" | "security-camera" | "locksmith" | "home-automation" | "fire-safety" | "face-care" | "beauty-treatment" | "waxing" | "threading" | "hair-care" | "nail-care" | "makeup" | "mehendi" | "body-care" | "skin-care" | "home-cleaning" | "sofa-carpet" | "pest-control" | "water-tank" | "septic-tank" | "laundry" | "gardening" | "swimming-pool" | "chimney-exhaust" | "home-organization" | "home-inspection" | "home-maintenance" | "pet-grooming" | "veterinary" | "pet-walking" | "pet-sitting" | "pet-training" | "pet-photography" | "workforce" | "custom-project";
+        InstantAvailability: {
+            readonly is_available: boolean;
+            /** Format: date-time */
+            readonly earliest_starts_at: string | null;
+            readonly eta_minutes: number | null;
+            readonly unavailable_reason: string | null;
+        };
         /**
          * @description * `customer` - customer
          *     * `partner` - partner
@@ -11903,6 +12109,11 @@ export interface components {
             label: string;
             value: string;
         };
+        ListingCount: {
+            key: string;
+            label: string;
+            count: number;
+        };
         ListingDetail: {
             description: string;
             /** Format: uuid */
@@ -12133,6 +12344,55 @@ export interface components {
             readonly amount_paise: number;
             readonly currency: string;
         };
+        MoneyPayment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            paid_at: string;
+            payer_name: string;
+            payer_phone: string;
+            item: string;
+            amount_paise: number;
+            refunded_paise: number;
+            platform_paise: number;
+            status: string;
+        };
+        MoneyPlan: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            price_paise: number;
+            duration_days: number;
+            is_active: boolean;
+            purchases: number;
+            active_now: number;
+            revenue_paise: number;
+        };
+        MoneySummary: {
+            period: components["schemas"]["PeriodEnum"];
+            /** Format: date-time */
+            starts_at: string | null;
+            /** Format: date-time */
+            ends_at: string | null;
+            model: string;
+            totals: components["schemas"]["MoneyTotal"][];
+            plans: components["schemas"]["MoneyPlan"][];
+            listing_counts: components["schemas"]["ListingCount"][];
+        };
+        MoneyTotal: {
+            key: string;
+            label: string;
+            kind: components["schemas"]["MoneyTotalKindEnum"];
+            value: number;
+            note: string;
+        };
+        /**
+         * @description * `money` - money
+         *     * `count` - count
+         *     * `percent` - percent
+         * @enum {string}
+         */
+        MoneyTotalKindEnum: "money" | "count" | "percent";
         /**
          * @description One in-app notice as a person reads it.
          *
@@ -13921,6 +14181,15 @@ export interface components {
             readonly visit_slots: components["schemas"]["StayVisitSlot"][];
             readonly visit_blocked_dates: string[];
         };
+        PartnerPushSubscriptionSyncRequest: {
+            onesignal_subscription_id: string;
+            /** @default WEB */
+            platform: components["schemas"]["PlatformEnum"];
+            /** @default  */
+            user_agent: string;
+            /** @default true */
+            is_active: boolean;
+        };
         PartnerRateItem: {
             /** Format: uuid */
             readonly id: string;
@@ -14732,6 +15001,13 @@ export interface components {
             accepted: boolean;
             applied: boolean;
         };
+        /**
+         * @description * `this_month` - this_month
+         *     * `last_month` - last_month
+         *     * `all` - all
+         * @enum {string}
+         */
+        PeriodEnum: "this_month" | "last_month" | "all";
         /** @description Where a Self Pickup customer collects the item. ``maps_url`` opens Google Maps. */
         PickupAddress: {
             partner_name: string;
@@ -14822,6 +15098,13 @@ export interface components {
             readonly scope_snapshot: unknown;
             readonly configuration_snapshot: unknown;
         };
+        /**
+         * @description * `WEB` - Web Browser
+         *     * `ANDROID` - Android
+         *     * `IOS` - iOS
+         * @enum {string}
+         */
+        PlatformEnum: "WEB" | "ANDROID" | "IOS";
         /**
          * @description * `NONE` - Not applicable
          *     * `CUSTOMER` - Charged separately to Customer
@@ -21743,6 +22026,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WalletTransactionPage"];
                 };
+            };
+        };
+    };
+    dev_onesignal_test_push_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -29281,6 +29582,52 @@ export interface operations {
             };
         };
     };
+    ops_listings_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_listings_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
+                };
+            };
+        };
+    };
     ops_loyalty_burn_policies_list: {
         parameters: {
             query?: never;
@@ -29764,6 +30111,52 @@ export interface operations {
             };
         };
     };
+    ops_rentals_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_rentals_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
+                };
+            };
+        };
+    };
     ops_rentals_platform_fee_retrieve: {
         parameters: {
             query?: never;
@@ -30168,6 +30561,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpsStayEnquiryPage"];
+                };
+            };
+        };
+    };
+    ops_stays_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_stays_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
                 };
             };
         };
@@ -32408,6 +32847,66 @@ export interface operations {
             };
         };
     };
+    partner_dispatch_offers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_dispatch_offers_accept_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_dispatch_offers_decline_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     partner_earnings_retrieve: {
         parameters: {
             query?: never;
@@ -33916,6 +34415,54 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_push_subscriptions_sync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerPushSubscriptionSyncRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerPushSubscriptionSyncRequest"];
+                "multipart/form-data": components["schemas"]["PartnerPushSubscriptionSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description The subscription was synced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -148,7 +148,6 @@ describe("the workspaces", () => {
       "/operations/partners",
       "/operations/crew-documents",
       "/operations/partner-availability",
-      "/operations/vendor-plans",
       "/operations/partners/import",
       // Customers
       "/operations/stories",

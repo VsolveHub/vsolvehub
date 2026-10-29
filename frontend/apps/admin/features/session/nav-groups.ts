@@ -1,5 +1,4 @@
 import {
-  BadgePercent,
   BarChart3,
   Briefcase,
   BriefcaseBusiness,
@@ -89,7 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/operations/partners", label: "All partners", icon: Users },
       { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
       { href: "/operations/partner-availability", label: "Availability", icon: Calendar },
-      { href: "/operations/vendor-plans", label: "Partner plans", icon: BadgePercent },
+      // Job plans live on Jobs › Plans, next to the jobs they sell; stay plans on Stays › Plans.
       { href: "/operations/partners/import", label: "Import partners", icon: Upload },
     ],
   },

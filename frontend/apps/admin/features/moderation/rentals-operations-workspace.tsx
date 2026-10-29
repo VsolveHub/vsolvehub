@@ -15,11 +15,8 @@ import {
 } from "@vsolve/ui";
 import {
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   Eye,
-  Layers,
   Package,
   PowerOff,
   RefreshCw,
@@ -39,6 +36,17 @@ import { PartnerProfileDrawer } from "./partner-profile-drawer";
 import { RentalPlatformFeeForm } from "./rental-platform-fee";
 import { RentalDisputeQueue } from "./rental-disputes";
 import { useDebounced } from "@/features/shared/use-debounced";
+import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
+import { RentalBookings } from "./rental-bookings";
+
+const TABS = [
+  { key: "listings", label: "Listings" },
+  { key: "bookings", label: "Bookings" },
+  { key: "money", label: "Money" },
+  { key: "disputes", label: "Disputes" },
+  { key: "fee", label: "Fee setting" },
+] as const;
 
 type StatusFilter = "ALL" | "ACTIVE" | "PAUSED" | "REMOVED" | "PENDING";
 
@@ -109,7 +117,9 @@ export function RentalsOperationsWorkspace() {
     action: ModerationAction;
   } | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
-  const [showSecondaryTools, setShowSecondaryTools] = useState(false);
+  const [tab, setTab] = useServiceTab(TABS);
+  // True totals from the server: the list below holds only the pages loaded so far.
+  const serverCounts = useListingCounts("rentals");
 
   // Fetch items from ops endpoint
   const query = usePagedList(["ops-rentals", filter === "PENDING" ? "PENDING" : undefined], (cursor) =>
@@ -178,8 +188,17 @@ export function RentalsOperationsWorkspace() {
       else if (item.moderation_status === "PENDING" || item.public_state === "PENDING_REVIEW") pending++;
       else live++;
     }
-    return { total: query.items.length, live, paused, removed, pending };
-  }, [query.items]);
+    const loaded = { total: query.items.length, live, paused, removed, pending };
+    return serverCounts
+      ? {
+          total: serverCounts.total ?? loaded.total,
+          live: serverCounts.live ?? loaded.live,
+          paused: serverCounts.paused ?? loaded.paused,
+          removed: serverCounts.removed ?? loaded.removed,
+          pending: serverCounts.pending ?? loaded.pending,
+        }
+      : loaded;
+  }, [query.items, serverCounts]);
 
   const openDecision = (item: OpsRentalAsset, action: ModerationAction) => {
     setDecisionReason("");
@@ -203,25 +222,17 @@ export function RentalsOperationsWorkspace() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowSecondaryTools((prev) => !prev)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-text hover:bg-surface-sunken"
-        >
-          <Layers className="size-4 text-text-muted" />
-          {showSecondaryTools ? "Hide Platform Fees & Disputes" : "Platform Fees & Disputes"}
-          {showSecondaryTools ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-        </button>
       </div>
 
-      {/* Collapsible Secondary Tools */}
-      {showSecondaryTools && (
-        <div className="space-y-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
-          <RentalPlatformFeeForm />
-          <RentalDisputeQueue />
-        </div>
-      )}
+      <ServiceTabs tabs={TABS} active={tab} onChange={setTab} label="Rentals sections" />
 
+      {tab === "bookings" ? <RentalBookings /> : null}
+      {tab === "money" ? <MoneyTab service="rentals" /> : null}
+      {tab === "disputes" ? <RentalDisputeQueue /> : null}
+      {tab === "fee" ? <RentalPlatformFeeForm /> : null}
+
+      {tab === "listings" ? (
+      <>
       {/* Metrics Row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <button
@@ -530,6 +541,8 @@ export function RentalsOperationsWorkspace() {
       )}
 
       <LoadMore hasMore={query.hasMore} loading={query.loadingMore} onLoadMore={query.loadMore} />
+      </>
+      ) : null}
 
       {/* Moderation Confirmation Modal */}
       {decision && copy && (

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.rental import views
+from apps.rental import money, views
 
 urlpatterns = [
     path("rentals", views.RentalBrowseView.as_view(), name="rental-browse"),
@@ -68,6 +68,12 @@ urlpatterns = [
         name="partner-rental-booking-action",
     ),
     path("ops/rentals", views.OpsRentalCollectionView.as_view(), name="ops-rentals"),
+    path("ops/rentals/money", money.MoneySummaryView.as_view(), name="ops-rentals-money"),
+    path(
+        "ops/rentals/money/payments",
+        money.MoneyPaymentsView.as_view(),
+        name="ops-rentals-money-payments",
+    ),
     path(
         "ops/rentals/bookings",
         views.OpsRentalBookingCollectionView.as_view(),

@@ -1,5 +1,26 @@
 # API Contract Changelog
 
+## 1.88.0 - Operations sees each marketplace service's money
+
+Additive. Operations only.
+
+- `GET /ops/rentals/money`, `GET /ops/stays/money` and `GET /ops/listings/money`
+  (`MoneySummary`): for one service only, the money it earned in `?period=` (`this_month`,
+  the default, `last_month` or `all`; anything else is `400 invalid_period`). It returns:
+  - `model`: how the service earns.
+  - `totals`: labelled cards (`kind` is `money` in paise, `count` or `percent`).
+  - `plans`: per subscription plan, purchases, partners on it now, and net revenue. Empty for
+    rentals.
+  - `listing_counts`: every listing of that service by state, as true totals.
+- `GET /ops/{rentals,stays,listings}/money/payments` (`MoneyPayment[]`, `limit`/`offset`):
+  who paid in the period, newest first.
+- A purchase counts once its payment was captured, at the amount paid then; successful refunds
+  are subtracted. Rentals count only the platform fee (refunds there are usually the returned
+  deposit, so they are listed but not subtracted), and a booking cancelled after payment earns
+  nothing. A stay guest's reservation payment is the host's money and is reported apart from
+  revenue.
+- Removed: none. Renamed: none.
+
 ## 1.87.0 - Browse stays and rentals near a place
 
 Additive.
