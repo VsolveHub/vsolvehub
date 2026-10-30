@@ -24,8 +24,20 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
   const isHearted = saved.isSaved(property.id);
 
   const period = pricePeriodOf(property.price_period);
-  const minRate = property.min_price_paise ?? 0;
-  const imageUrl = property.image_urls?.[0] || FALLBACK_STAY_IMAGE;
+  const minRate =
+    property.units && property.units.length > 0
+      ? property.units.reduce(
+          (min, u) => (u.nightly_rate_paise < min ? u.nightly_rate_paise : min),
+          property.units[0]?.nightly_rate_paise ?? 0,
+        )
+      : property.min_price_paise ?? 0;
+
+  const rawMedia = (property as { media?: { url?: string }[] }).media;
+  const imageUrl =
+    (Array.isArray(rawMedia) && rawMedia[0]?.url) ||
+    property.image_urls?.[0] ||
+    FALLBACK_STAY_IMAGE;
+
   const hostName =
     property.host_name ||
     property.partner?.company_name ||
@@ -183,7 +195,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </Text>
           </View>
 
-          <View className="flex-row items-center gap-1 rounded-xl bg-brand px-3 py-2 active:bg-brand/90">
+          <View className="flex-row items-center gap-1 rounded-xl bg-brand px-3 py-2">
             <Text className="text-xs font-bold text-white">Check Dates</Text>
             <ArrowRight size={13} color={THEME_COLORS.white} />
           </View>

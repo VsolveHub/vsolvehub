@@ -25,7 +25,7 @@ function formatDate(iso: string | null | undefined): string {
   }
 }
 
-export function SessionsScreen() {
+export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const api = getApiClient();
   const sessionsQuery = useSessionDevices(api);
   const revoke = useRevokeSession(api);
@@ -40,33 +40,40 @@ export function SessionsScreen() {
   };
 
   if (sessionsQuery.isPending) {
+    const loadingView = (
+      <View className="py-12 items-center justify-center">
+        <Spinner size="sm" />
+      </View>
+    );
+    if (embedded) return loadingView;
     return (
       <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
-        <View className="py-12 items-center justify-center">
-          <Spinner size="sm" />
-        </View>
+        {loadingView}
       </AccountPageShell>
     );
   }
 
   if (sessionsQuery.isError) {
+    const errorView = (
+      <ErrorState
+        title="We could not load your sessions"
+        message={describeError(sessionsQuery.error, "read").message}
+        actionLabel="Try again"
+        onAction={() => void sessionsQuery.refetch()}
+      />
+    );
+    if (embedded) return errorView;
     return (
       <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
-        <ErrorState
-          title="We could not load your sessions"
-          message={describeError(sessionsQuery.error, "read").message}
-          actionLabel="Try again"
-          onAction={() => void sessionsQuery.refetch()}
-        />
+        {errorView}
       </AccountPageShell>
     );
   }
 
   const sessions = sessionsQuery.data ?? [];
 
-  return (
-    <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
-      <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
+  const content = (
+    <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
         {/* Section Header matching Image 4 */}
         <Text className="text-xl font-extrabold tracking-tight text-navy-950">
           Signed-in devices
@@ -173,6 +180,15 @@ export function SessionsScreen() {
           }}
         />
       </View>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
+      {content}
     </AccountPageShell>
   );
 }

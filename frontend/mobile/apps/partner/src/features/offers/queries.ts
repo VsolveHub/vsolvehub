@@ -237,7 +237,8 @@ export function useOfferCommand() {
         };
       });
     },
-    onError: () => {
+    onError: (err) => {
+      console.warn("[offers] respond to offer failed:", err);
       // The command may or may not have applied. `offer.status` is the only
       // thing that knows, so ask it. Keep the stable key — clearing it here
       // would mint a new key on replay and defeat idempotency.

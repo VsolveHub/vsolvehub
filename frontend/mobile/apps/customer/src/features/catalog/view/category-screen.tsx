@@ -4,7 +4,7 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { BlurBackdrop, Button, ErrorState, Skeleton, Text, cn, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, ClipboardList, X } from "lucide-react-native";
+import { ArrowLeft, ChevronLeft, ClipboardList, X } from "lucide-react-native";
 
 import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import { useEffect, useState } from "react";
@@ -15,6 +15,8 @@ import { LOCAL_CATEGORY_TILES, resolveImageUrl } from "@/features/catalog/catego
 import { useCategories, useCategoryServices, useServiceDetail, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { serviceHref } from "@/features/catalog/service-href";
 import { AddToCartButton } from "@/features/catalog/view/add-to-cart-button";
+import { useIsDesktop } from "@/lib/responsive";
+import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
@@ -406,6 +408,8 @@ const REDIRECT_TARGETS: Record<string, string> = {
 
 export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
+  const [selectedServiceForDesktopModal, setSelectedServiceForDesktopModal] = useState<ServiceCard | null>(null);
   const redirectTarget = REDIRECT_TARGETS[categorySlug];
 
   useEffect(() => {
@@ -442,12 +446,47 @@ export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
   if (services.isError && isNotFound(services.error)) return <CatalogMissing />;
   if (services.isError) return <CatalogDown onRetry={retry} />;
 
+  if (isDesktop) {
+    if (services.isPending || services.data == null) {
+      return (
+        <View className="flex-1 bg-[#FAF9F7] p-8">
+          <ListSkeleton />
+        </View>
+      );
+    }
+    const tiles = groupByTile(category, services.data);
+    const activeTile =
+      (activeTileSlug !== null ? tiles.find((tile) => tile.slug === activeTileSlug) : undefined) ??
+      tiles[0];
+
+    if (!activeTile) return null;
+
+    return (
+      <View className="flex-1 bg-[#FAF9F7]">
+        <TileDesktopSplitPane
+          category={category}
+          tiles={tiles}
+          activeTile={activeTile}
+          onSelectTile={(slug) => router.setParams({ tile: slug })}
+          onOpenAddModal={(service) => setSelectedServiceForDesktopModal(service)}
+        />
+        {selectedServiceForDesktopModal ? (
+          <WhatYouCanBookModal
+            service={selectedServiceForDesktopModal}
+            onClose={() => setSelectedServiceForDesktopModal(null)}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, width: "100%", paddingHorizontal: 8, paddingTop: 8 }}>
-      <View className="shrink-0 flex-row items-center gap-1 pb-2">
+      <View className="shrink-0 flex-row items-center gap-2 pb-2 px-1">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
+          hitSlop={8}
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
@@ -455,10 +494,10 @@ export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
               router.push("/catalog" as never);
             }
           }}
-          className="min-h-9 flex-row items-center gap-1"
+          className="flex-row items-center gap-1.5 rounded-full border border-line/80 bg-surface px-3 py-1.5 shadow-2xs active:scale-[0.98] active:bg-surface-sunken"
         >
-          <ChevronLeft color="#a94900" size={16} strokeWidth={2.5} />
-          <Text className="text-xs font-bold text-signal-700">Back</Text>
+          <ArrowLeft size={14} color="#0B1B3D" strokeWidth={2.2} />
+          <Text className="text-xs font-bold text-navy-900">Back</Text>
         </Pressable>
         <Text numberOfLines={1} className="min-w-0 flex-1 px-1 text-[19px] font-extrabold tracking-tight text-text">
           {category.name}

@@ -108,7 +108,7 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
             {(booking.platform_fee_paise ?? 0) > 0 ? "Rental and platform fee" : "Total Rental Fee"}
           </div>
           <div className="text-lg font-extrabold text-action">
-            {formatPaise(booking.price_paise + (booking.platform_fee_paise ?? 0))}
+            {formatPaise((booking.price_paise ?? 0) + (booking.platform_fee_paise ?? 0))}
           </div>
           {(booking.platform_fee_paise ?? 0) > 0 ? (
             <div className="mt-0.5 text-[11px] text-text-secondary">

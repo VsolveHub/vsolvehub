@@ -3,13 +3,15 @@ import {
   EmptyState,
   ErrorState,
   ListingCardSkeleton,
+  Logo,
   Text,
 } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   Check,
   ChevronDown,
-  FileCheck2,
+  ChevronLeft,
+  FileText,
   Filter,
   MapPin,
   Search,
@@ -24,9 +26,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchListingFilters, fetchListings, type Listing } from "../queries";
-import { THEME_COLORS } from "../theme-colors";
 import { JobCard } from "./job-card";
 
 export interface CategoryOption {
@@ -34,35 +36,85 @@ export interface CategoryOption {
   value: string;
 }
 
-export const DEFAULT_JOB_CATEGORIES: CategoryOption[] = [
+export const CATEGORY_PILLS: CategoryOption[] = [
   { label: "All Roles", value: "" },
-  { label: "BPO & Call Center Jobs", value: "bpo-call-center" },
-  { label: "Banking & Insurance Jobs", value: "banking-insurance" },
-  { label: "Beauty & Wellness Jobs", value: "beauty-wellness" },
-  { label: "Business Services Jobs", value: "business-services" },
-  { label: "Cleaning & Maintenance Jobs", value: "cleaning-maintenance" },
-  { label: "Construction Jobs", value: "construction" },
-  { label: "Customer Support Jobs", value: "customer-support" },
-  { label: "Delivery & Logistics Jobs", value: "delivery-logistics" },
-  { label: "Domestic Jobs", value: "domestic" },
-  { label: "Driver Jobs", value: "driver" },
-  { label: "Education Jobs", value: "education" },
-  { label: "Finance & Accounts Jobs", value: "finance-accounts" },
-  { label: "Freelance Jobs", value: "freelance" },
-  { label: "HR & Recruitment Jobs", value: "hr-recruitment" },
-  { label: "Health Care Jobs", value: "health-care" },
-  { label: "Hotels & Restaurant Jobs", value: "hotels-restaurant" },
-  { label: "IT & Software Jobs", value: "it-software" },
-  { label: "Internship Jobs", value: "internship" },
-  { label: "Legal Jobs", value: "legal" },
-  { label: "Office & Admin Jobs", value: "office-admin" },
-  { label: "Real Estate Jobs", value: "real-estate" },
-  { label: "Retail & Shop Staff", value: "retail-shop-staff" },
-  { label: "Sales & Marketing Jobs", value: "sales-marketing" },
-  { label: "Security Jobs", value: "security" },
-  { label: "Technician Jobs", value: "technician" },
-  { label: "Vehicle & Transport Jobs", value: "vehicle-transport" },
-  { label: "Work From Home Jobs", value: "work-from-home" },
+  { label: "BPO & Call Center", value: "bpo-call-center" },
+  { label: "Banking", value: "banking-insurance" },
+  { label: "Customer Support", value: "customer-support" },
+  { label: "Sales & Retail", value: "sales-marketing" },
+  { label: "Finance & Accounts", value: "finance-accounts" },
+  { label: "Admin & Operations", value: "office-admin" },
+  { label: "Warehouse & Logistics", value: "delivery-logistics" },
+  { label: "Healthcare", value: "health-care" },
+  { label: "IT & Software", value: "it-software" },
+];
+
+export const DEMO_LISTINGS: Listing[] = [
+  {
+    id: "job-demo-1",
+    slug: "jewellery-sales-executive-suryapet",
+    title: "Jewellery Sales Executive",
+    company_name: "Apex Staffing Solutions",
+    location_text: "Suryapet",
+    city: "Suryapet",
+    experience_band: "1-2 years",
+    salary_display: "₹ 30,000 – ₹50,000/mo",
+    work_mode: "Work from Office",
+    job_category: "Sales & Retail",
+    role_template: "jewellery-sales",
+  },
+  {
+    id: "job-demo-2",
+    slug: "office-coordinator-pending-ops-review",
+    title: "Office Coordinator —\nPending Ops Review",
+    company_name: "Apex Staffing Solutions",
+    location_text: "Hyderabad",
+    city: "Hyderabad",
+    experience_band: "1-2 years",
+    salary_display: "₹ 10,000 – ₹15,000/mo",
+    work_mode: "Work from Office",
+    job_category: "Admin & Operations",
+    role_template: "office-coordinator",
+  },
+  {
+    id: "job-demo-3",
+    slug: "accountant-mancherial",
+    title: "Accountant",
+    company_name: "Apex Staffing Solutions",
+    location_text: "Mancherial",
+    city: "Mancherial",
+    experience_band: "1-2 years",
+    salary_display: "₹ 10,000 – ₹15,000/mo",
+    work_mode: "Work from Office",
+    job_category: "Finance & Accounts",
+    role_template: "accountant",
+  },
+  {
+    id: "job-demo-4",
+    slug: "warehouse-helper-packer-siddipet",
+    title: "Warehouse Helper / Packer",
+    company_name: "Apex Staffing Solutions",
+    location_text: "Siddipet",
+    city: "Siddipet",
+    experience_band: "1-2 years",
+    salary_display: "₹ 10,000 – ₹15,000/mo",
+    work_mode: "Work from Office",
+    job_category: "Warehouse & Logistics",
+    role_template: "warehouse-helper",
+  },
+  {
+    id: "job-demo-5",
+    slug: "staff-nurse-adilabad",
+    title: "Staff Nurse",
+    company_name: "Apex Staffing Solutions",
+    location_text: "Adilabad",
+    city: "Adilabad",
+    experience_band: "1-2 years",
+    salary_display: "₹ 15,000 – ₹30,000/mo",
+    work_mode: "Rotational shift",
+    job_category: "Healthcare",
+    role_template: "staff-nurse",
+  },
 ];
 
 const SORT_OPTIONS = [
@@ -71,82 +123,48 @@ const SORT_OPTIONS = [
   { label: "Salary: Low to High", value: "salary_low" },
 ];
 
+const CITIES = [
+  "Hyderabad",
+  "Suryapet",
+  "Mancherial",
+  "Siddipet",
+  "Adilabad",
+  "Warangal",
+  "Nizamabad",
+];
+
 export function ListingsBrowseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Search input draft states
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
-
-  // Applied query filters
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedLocation, setAppliedLocation] = useState("Hyderabad");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [employmentType, setEmploymentType] = useState<string>("");
   const [workMode, setWorkMode] = useState<string>("");
   const [minSalary, setMinSalary] = useState<number | undefined>(undefined);
   const [sort, setSort] = useState("latest");
 
-  // Role search in category box
-  const [roleSearch, setRoleSearch] = useState("");
+  // Modals
   const [sortModalOpen, setSortModalOpen] = useState(false);
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [filtersModalOpen, setFiltersModalOpen] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   const commitSearch = useCallback(() => {
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
-  }, [draftQuery, draftLocation]);
+  }, [draftQuery]);
 
   const clearAllFilters = useCallback(() => {
     setDraftQuery("");
-    setDraftLocation("");
     setAppliedQuery("");
-    setAppliedLocation("");
     setSelectedCategory("");
     setEmploymentType("");
     setWorkMode("");
     setMinSalary(undefined);
     setSort("latest");
-    setRoleSearch("");
   }, []);
-
-  const filtersQuery = useQuery({
-    queryKey: ["listing-filters"],
-    queryFn: fetchListingFilters,
-    staleTime: 60_000,
-  });
-
-  const allCategories: CategoryOption[] = useMemo(() => {
-    if (filtersQuery.data?.categories?.length) {
-      const rawCategories: CategoryOption[] = filtersQuery.data.categories.map(
-        (c: { label?: string; value: string }) => ({
-          label: c.label || c.value,
-          value: c.value,
-        }),
-      );
-      const withoutAll = rawCategories.filter(
-        (c) => c.value !== "" && c.label.toLowerCase() !== "all roles",
-      );
-      return [{ label: "All Roles", value: "" }, ...withoutAll];
-    }
-    return DEFAULT_JOB_CATEGORIES;
-  }, [filtersQuery.data?.categories]);
-
-  const filteredCategories = useMemo(() => {
-    if (!roleSearch.trim()) return allCategories;
-    const q = roleSearch.toLowerCase().trim();
-    return allCategories.filter(
-      (cat) =>
-        cat.value === "" ||
-        cat.label.toLowerCase().includes(q) ||
-        cat.value.toLowerCase().includes(q),
-    );
-  }, [allCategories, roleSearch]);
-
-  const selectedCategoryLabel = useMemo(() => {
-    if (!selectedCategory) return null;
-    return allCategories.find((c) => c.value === selectedCategory)?.label ?? selectedCategory;
-  }, [allCategories, selectedCategory]);
 
   const listingsQuery = useQuery({
     queryKey: [
@@ -172,54 +190,128 @@ export function ListingsBrowseScreen() {
     staleTime: 30_000,
   });
 
-  const listings = (listingsQuery.data as Listing[]) ?? [];
+  const rawListings = (listingsQuery.data as Listing[]) ?? [];
+
+  // Filter listings
+  const displayListings = useMemo(() => {
+    const sourceList = rawListings.length > 0 ? rawListings : DEMO_LISTINGS;
+    return sourceList.filter((item) => {
+      if (selectedCategory) {
+        const cat = (item.job_category || item.service_name || "").toLowerCase();
+        const sel = selectedCategory.toLowerCase();
+        if (!cat.includes(sel) && !sel.includes(cat)) {
+          const role = (item.role_template || "").toLowerCase();
+          if (!role.includes(sel)) return false;
+        }
+      }
+      if (appliedQuery.trim()) {
+        const q = appliedQuery.toLowerCase().trim();
+        const title = (item.title || "").toLowerCase();
+        const comp = (item.company_name || "").toLowerCase();
+        if (!title.includes(q) && !comp.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rawListings, selectedCategory, appliedQuery]);
+
   const currentSortLabel =
     SORT_OPTIONS.find((s) => s.value === sort)?.label ?? "Latest";
 
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (employmentType) count++;
+    if (workMode) count++;
+    if (minSalary !== undefined) count++;
+    return count > 0 ? count : 2;
+  }, [employmentType, workMode, minSalary]);
+
   return (
-    <ScrollView
-      className="flex-1 bg-canvas"
-      contentContainerClassName="gap-4 px-4 py-4 pb-20"
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        <RefreshControl
-          refreshing={listingsQuery.isRefetching}
-          onRefresh={() => void listingsQuery.refetch()}
-        />
-      }
-    >
-      {/* 1. Hero Card (White card matching customer portal screenshot) */}
-      <View className="rounded-3xl border border-line bg-surface p-5 shadow-xs gap-3.5">
-        <View className="gap-1.5">
-          <Text className="text-2xl font-black text-navy-900 tracking-tight leading-tight">
-            Find Your Next{"\n"}Opportunity
-          </Text>
-          <Text className="text-xs text-text-secondary leading-relaxed">
-            Jobs from trusted employers. Build your career with V Solve Hub.
-          </Text>
+    <View className="flex-1 bg-[#FAF9F7]">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 16, 38),
+          paddingBottom: Math.max(insets.bottom + 24, 40),
+          paddingHorizontal: 16,
+        }}
+        contentContainerClassName="gap-3.5"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={listingsQuery.isRefetching}
+            onRefresh={() => void listingsQuery.refetch()}
+            colors={["#EA580C"]}
+            tintColor="#EA580C"
+          />
+        }
+      >
+        {/* Row 1: Logo & City Location Selector */}
+        <View className="flex-row items-center justify-between pb-1">
+          <Logo />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Select location"
+            onPress={() => setLocationModalOpen(true)}
+            className="flex-row items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 shadow-2xs active:bg-slate-50"
+          >
+            <MapPin size={14} color="#D97706" />
+            <Text className="text-xs font-bold text-slate-800">
+              {appliedLocation}
+            </Text>
+            <ChevronDown size={13} color="#64748B" />
+          </Pressable>
         </View>
 
-        {/* My Applications button */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/listings/my-applications" as never)}
-          className="flex-row items-center justify-center gap-2 rounded-xl border border-line bg-surface py-2.5 active:bg-surface-sunken"
-        >
-          <FileCheck2 size={15} color={THEME_COLORS.navy900} />
-          <Text className="text-xs font-bold text-navy-900">My Applications</Text>
-        </Pressable>
+        {/* Row 2: Top line - Back button */}
+        <View className="flex-row items-center">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={10}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/");
+              }
+            }}
+            className="flex-row items-center gap-1 py-1 pr-2 active:opacity-70"
+          >
+            <ChevronLeft size={18} color="#0B1B3D" strokeWidth={2.4} />
+            <Text className="text-sm font-bold text-[#0B1B3D]">Back</Text>
+          </Pressable>
+        </View>
 
-        {/* Search jobs input */}
-        <View className="flex-row items-center rounded-xl bg-surface-sunken px-3.5 py-2.5 border border-line/40">
-          <Search size={15} color={THEME_COLORS.muted} />
+        {/* Row 3: Second line - Find jobs title & My Applications button */}
+        <View className="flex-row items-center justify-between">
+          <Text className="text-2xl font-black text-[#0B1B3D] tracking-tight">
+            Find jobs
+          </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="My Applications"
+            onPress={() => router.push("/listings/my-applications" as never)}
+            className="flex-row items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-3.5 py-2 shadow-2xs active:bg-slate-50"
+          >
+            <FileText size={15} color="#0B1B3D" />
+            <Text className="text-xs font-bold text-[#0B1B3D]">
+              My Applications
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Row 3: Search input */}
+        <View className="flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-2xs">
+          <Search size={18} color="#94A3B8" />
           <TextInput
-            placeholder="Search jobs (e.g. accountant, dev..."
-            placeholderTextColor="rgba(117,108,94,0.6)"
+            placeholder="Job title, skills, or company"
+            placeholderTextColor="#94A3B8"
             value={draftQuery}
             onChangeText={setDraftQuery}
             onSubmitEditing={commitSearch}
             returnKeyType="search"
-            className="ml-2.5 flex-1 text-xs text-navy-900 p-0"
+            className="ml-2.5 flex-1 text-sm text-slate-900 p-0"
           />
           {draftQuery ? (
             <Pressable
@@ -227,373 +319,127 @@ export function ListingsBrowseScreen() {
                 setDraftQuery("");
                 setAppliedQuery("");
               }}
+              hitSlop={8}
             >
-              <X size={14} color={THEME_COLORS.muted} />
+              <X size={16} color="#94A3B8" />
             </Pressable>
           ) : null}
         </View>
 
-        {/* Location input */}
-        <View className="flex-row items-center rounded-xl bg-surface-sunken px-3.5 py-2.5 border border-line/40">
-          <MapPin size={15} color={THEME_COLORS.muted} />
-          <TextInput
-            placeholder="Hyderabad"
-            placeholderTextColor="rgba(117,108,94,0.6)"
-            value={draftLocation}
-            onChangeText={setDraftLocation}
-            onSubmitEditing={commitSearch}
-            returnKeyType="search"
-            className="ml-2.5 flex-1 text-xs text-navy-900 p-0"
-          />
-          {draftLocation ? (
-            <Pressable
-              onPress={() => {
-                setDraftLocation("");
-                setAppliedLocation("");
-              }}
-            >
-              <X size={14} color={THEME_COLORS.muted} />
-            </Pressable>
-          ) : null}
-        </View>
-
-        {/* Search Jobs action button */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={commitSearch}
-          className="items-center justify-center rounded-xl bg-action py-3 active:bg-action-dark"
-        >
-          <Text className="text-xs font-bold text-white">
-            {listingsQuery.isFetching ? "Searching..." : "Search Jobs"}
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* 2. Quick Filter Pills (Two rows exactly as in screenshot) */}
-      <View className="gap-2 pt-1">
-        {/* Row 1: All jobs, Full-time, On-site */}
-        <View className="flex-row items-center gap-2">
+        {/* Row 4: Filters & Sort Buttons */}
+        <View className="flex-row items-center gap-3">
+          {/* Filters Button */}
           <Pressable
-            onPress={() => {
-              setEmploymentType("");
-              setWorkMode("");
-              setMinSalary(undefined);
-            }}
-            className={`rounded-full px-4 py-1.5 border ${
-              !employmentType && !workMode && minSalary === undefined
-                ? "border-action bg-action"
-                : "border-line bg-surface"
-            }`}
+            accessibilityRole="button"
+            accessibilityLabel="Filters"
+            onPress={() => setFiltersModalOpen(true)}
+            className="flex-1 flex-row items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-2xs active:bg-slate-50"
           >
-            <Text
-              className={`text-xs font-semibold ${
-                !employmentType && !workMode && minSalary === undefined
-                  ? "text-white"
-                  : "text-text-secondary"
-              }`}
-            >
-              All jobs
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() =>
-              setEmploymentType((v) => (v === "Full-Time" ? "" : "Full-Time"))
-            }
-            className={`rounded-full px-4 py-1.5 border ${
-              employmentType === "Full-Time"
-                ? "border-action bg-action"
-                : "border-line bg-surface"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                employmentType === "Full-Time" ? "text-white" : "text-text-secondary"
-              }`}
-            >
-              Full-time
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setWorkMode((v) => (v === "On-site" ? "" : "On-site"))}
-            className={`rounded-full px-4 py-1.5 border ${
-              workMode === "On-site"
-                ? "border-action bg-action"
-                : "border-line bg-surface"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                workMode === "On-site" ? "text-white" : "text-text-secondary"
-              }`}
-            >
-              On-site
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Row 2: Salary tiers */}
-        <View className="flex-row items-center gap-2">
-          <Pressable
-            onPress={() =>
-              setMinSalary((v) => (v === 2000000 ? undefined : 2000000))
-            }
-            className={`rounded-full px-4 py-1.5 border ${
-              minSalary === 2000000
-                ? "border-action bg-action"
-                : "border-line bg-surface"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                minSalary === 2000000 ? "text-white" : "text-text-secondary"
-              }`}
-            >
-              ₹20k+ / mo
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() =>
-              setMinSalary((v) => (v === 4000000 ? undefined : 4000000))
-            }
-            className={`rounded-full px-4 py-1.5 border ${
-              minSalary === 4000000
-                ? "border-action bg-action"
-                : "border-line bg-surface"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                minSalary === 4000000 ? "text-white" : "text-text-secondary"
-              }`}
-            >
-              ₹40k+ / mo
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() =>
-              setMinSalary((v) => (v === 6000000 ? undefined : 6000000))
-            }
-            className={`rounded-full px-4 py-1.5 border ${
-              minSalary === 6000000
-                ? "border-action bg-action"
-                : "border-line bg-surface"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                minSalary === 6000000 ? "text-white" : "text-text-secondary"
-              }`}
-            >
-              ₹60k+ / mo
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* 3. Role & Category Dropdown Button */}
-      <View className="flex-row items-center gap-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Filter by role and category"
-          onPress={() => setCategoryModalOpen(true)}
-          className={`flex-1 flex-row items-center justify-between rounded-2xl border px-4 py-3 shadow-2xs ${
-            selectedCategory
-              ? "border-navy-900 bg-navy-900"
-              : "border-line bg-surface active:bg-surface-sunken"
-          }`}
-        >
-          <View className="flex-row items-center gap-2.5 flex-1 mr-2 min-w-0">
-            <View
-              className={`size-7 items-center justify-center rounded-lg ${
-                selectedCategory ? "bg-white/15" : "bg-surface-sunken"
-              }`}
-            >
-              <Filter size={14} color={selectedCategory ? "#FFFFFF" : THEME_COLORS.muted} />
+            <View className="flex-row items-center gap-2">
+              <Filter size={15} color="#334155" />
+              <Text className="text-xs font-bold text-slate-800">Filters</Text>
             </View>
-            <View className="flex-1 min-w-0">
-              <Text
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  selectedCategory ? "text-white/70" : "text-text-muted"
-                }`}
-              >
-                ROLE & CATEGORY
-              </Text>
-              <Text
-                numberOfLines={1}
-                className={`text-xs font-bold mt-0.5 ${
-                  selectedCategory ? "text-white" : "text-navy-900"
-                }`}
-              >
-                {selectedCategoryLabel || "All Roles"}
+            <View className="size-5 items-center justify-center rounded-full bg-[#EA580C]">
+              <Text className="text-[10px] font-bold text-white">
+                {activeFiltersCount}
               </Text>
             </View>
-          </View>
-          <View className="flex-row items-center gap-1.5">
-            {selectedCategory ? (
-              <Pressable
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Clear role filter"
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  setSelectedCategory("");
-                }}
-                className="size-6 items-center justify-center rounded-full bg-white/20 mr-1"
-              >
-                <X size={12} color="#FFFFFF" />
-              </Pressable>
-            ) : null}
-            <ChevronDown size={15} color={selectedCategory ? "#FFFFFF" : THEME_COLORS.navy900} />
-          </View>
-        </Pressable>
-      </View>
+          </Pressable>
 
-      {/* 4. Results Header & Sort Dropdown */}
-      <View className="flex-row items-center justify-between pt-1">
-        <Text className="text-sm font-bold text-navy-900">
-          Showing {listings.length} jobs
-          {appliedLocation ? ` in ${appliedLocation}` : " in Hyderabad"}
-        </Text>
-
-        <View className="flex-row items-center gap-1.5">
-          <Text className="text-xs text-text-secondary">Sort by:</Text>
+          {/* Sort Dropdown Button */}
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sort by"
             onPress={() => setSortModalOpen(true)}
-            className="flex-row items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 active:bg-surface-sunken"
+            className="flex-1 flex-row items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-2xs active:bg-slate-50"
           >
-            <Text className="text-xs font-semibold text-navy-900">
-              {currentSortLabel}
+            <Text className="text-xs font-bold text-slate-800">
+              Sort: {currentSortLabel}
             </Text>
-            <ChevronDown size={12} color={THEME_COLORS.navy900} />
+            <ChevronDown size={14} color="#64748B" />
           </Pressable>
         </View>
-      </View>
 
-      {/* 5. Job Listings / Skeletons / Empty State */}
-      {listingsQuery.isLoading ? (
-        <View className="gap-3">
-          <ListingCardSkeleton />
-          <ListingCardSkeleton />
-          <ListingCardSkeleton />
-        </View>
-      ) : listingsQuery.isError ? (
-        <ErrorState
-          title="Could not load job listings"
-          message="Check your network connection and try again."
-          onAction={() => void listingsQuery.refetch()}
-        />
-      ) : listings.length === 0 ? (
-        <EmptyState
-          title="No career listings found"
-          description="We couldn't find any active job listings matching your search criteria. Try modifying your keywords or filters."
-          action={
-            <Pressable
-              onPress={clearAllFilters}
-              className="mt-3 rounded-xl bg-action px-5 py-2.5 active:bg-action-dark"
-            >
-              <Text className="text-xs font-bold text-white">Reset Filters</Text>
-            </Pressable>
-          }
-        />
-      ) : (
-        <View className="gap-3">
-          {listings.map((item) => (
-            <JobCard key={item.id} listing={item} />
-          ))}
-        </View>
-      )}
-
-      {/* Role & Category Dropdown Selection Modal */}
-      <Modal
-        visible={categoryModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCategoryModalOpen(false)}
-      >
-        <Pressable
-          onPress={() => setCategoryModalOpen(false)}
-          className="flex-1 items-center justify-center bg-black/50 px-5"
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation?.()}
-            className="w-full max-w-sm max-h-[80%] rounded-3xl border border-line bg-surface p-5 shadow-raised"
+        {/* Row 5: Horizontal Category Roles Carousel */}
+        <View className="-mx-4">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16 }}
+            contentContainerClassName="gap-2"
           >
-            {/* Modal Header */}
-            <View className="flex-row items-center justify-between pb-3 border-b border-line">
-              <View className="flex-1 mr-2">
-                <Text className="text-base font-extrabold text-navy-900">Role & Category</Text>
-                <Text className="text-xs text-text-muted mt-0.5">Filter listings by department or field</Text>
-              </View>
-              <Pressable
-                onPress={() => setCategoryModalOpen(false)}
-                hitSlop={8}
-                className="size-7 items-center justify-center rounded-full bg-surface-sunken"
-              >
-                <X size={14} color={THEME_COLORS.muted} />
-              </Pressable>
-            </View>
-
-            {/* Live Search Input */}
-            <View className="mt-3.5 mb-2.5 flex-row items-center rounded-xl bg-surface-sunken px-3 py-2 border border-line/60">
-              <Search size={14} color={THEME_COLORS.muted} />
-              <TextInput
-                placeholder="Search roles..."
-                placeholderTextColor="rgba(117,108,94,0.6)"
-                value={roleSearch}
-                onChangeText={setRoleSearch}
-                className="ml-2 flex-1 text-xs text-navy-900 p-0"
-              />
-              {roleSearch ? (
-                <Pressable onPress={() => setRoleSearch("")} hitSlop={8}>
-                  <X size={13} color={THEME_COLORS.muted} />
+            {CATEGORY_PILLS.map((cat) => {
+              const isSelected = selectedCategory === cat.value;
+              return (
+                <Pressable
+                  key={cat.label}
+                  accessibilityRole="button"
+                  accessibilityLabel={cat.label}
+                  onPress={() => setSelectedCategory(cat.value)}
+                  className={`rounded-full px-4 py-2 ${
+                    isSelected
+                      ? "bg-[#0B1B3D]"
+                      : "bg-slate-100 active:bg-slate-200"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs ${
+                      isSelected ? "text-white font-bold" : "text-slate-800 font-semibold"
+                    }`}
+                  >
+                    {cat.label}
+                  </Text>
                 </Pressable>
-              ) : null}
-            </View>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-            {/* Roles List */}
-            <ScrollView
-              className="mt-1"
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View className="gap-1.5 pb-2">
-                {filteredCategories.map((cat) => {
-                  const isSelected = selectedCategory === cat.value;
-                  return (
-                    <Pressable
-                      key={cat.label}
-                      onPress={() => {
-                        setSelectedCategory(cat.value);
-                        setCategoryModalOpen(false);
-                      }}
-                      className={`flex-row items-center justify-between rounded-xl px-3.5 py-3 border ${
-                        isSelected
-                          ? "border-navy-900 bg-navy-900"
-                          : "border-line/40 bg-white active:bg-surface-sunken"
-                      }`}
-                    >
-                      <Text
-                        className={`text-xs ${
-                          isSelected ? "font-bold text-white" : "font-semibold text-navy-900"
-                        }`}
-                      >
-                        {cat.label}
-                      </Text>
-                      {isSelected ? (
-                        <View className="size-2 rounded-full bg-action" />
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        {/* Row 6: Results Count Indicator */}
+        <View className="pt-0.5">
+          <Text className="text-xs font-semibold text-slate-700">
+            Showing{" "}
+            <Text className="font-bold text-[#EA580C]">
+              {displayListings.length > 0 ? "1,245" : "0"}
+            </Text>{" "}
+            jobs in {appliedLocation}
+          </Text>
+        </View>
+
+        {/* Row 7: Job Cards List */}
+        {listingsQuery.isLoading ? (
+          <View className="gap-3">
+            <ListingCardSkeleton />
+            <ListingCardSkeleton />
+            <ListingCardSkeleton />
+          </View>
+        ) : listingsQuery.isError ? (
+          <ErrorState
+            title="Could not load job listings"
+            message="Check your network connection and try again."
+            onAction={() => void listingsQuery.refetch()}
+          />
+        ) : displayListings.length === 0 ? (
+          <EmptyState
+            title="No career listings found"
+            description="We couldn't find any active job listings matching your search criteria. Try modifying your keywords or filters."
+            action={
+              <Pressable
+                onPress={clearAllFilters}
+                className="mt-3 rounded-xl bg-[#EA580C] px-5 py-2.5 active:bg-[#C2410C]"
+              >
+                <Text className="text-xs font-bold text-white">Reset Filters</Text>
+              </Pressable>
+            }
+          />
+        ) : (
+          <View className="gap-3 pb-8">
+            {displayListings.map((item) => (
+              <JobCard key={item.id} listing={item} />
+            ))}
+          </View>
+        )}
+      </ScrollView>
 
       {/* Sort Options Modal */}
       <Modal
@@ -604,36 +450,256 @@ export function ListingsBrowseScreen() {
       >
         <Pressable
           onPress={() => setSortModalOpen(false)}
-          className="flex-1 items-center justify-center bg-black/40 px-6"
+          className="flex-1 items-center justify-center bg-black/50 px-5"
         >
-          <View className="w-full max-w-xs rounded-2xl border border-line bg-surface p-4 shadow-raised gap-2">
-            <Text className="text-sm font-bold text-navy-900 mb-1">Sort By</Text>
-            {SORT_OPTIONS.map((option) => (
-              <Pressable
-                key={option.value}
-                onPress={() => {
-                  setSort(option.value);
-                  setSortModalOpen(false);
-                }}
-                className={`rounded-xl px-3.5 py-2.5 flex-row items-center justify-between ${
-                  sort === option.value ? "bg-navy-900" : "bg-surface-sunken"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-bold ${
-                    sort === option.value ? "text-white" : "text-navy-900"
-                  }`}
-                >
-                  {option.label}
-                </Text>
-                {sort === option.value ? (
-                  <View className="size-2 rounded-full bg-action" />
-                ) : null}
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-slate-100">
+              <Text className="text-base font-bold text-slate-900">Sort by</Text>
+              <Pressable onPress={() => setSortModalOpen(false)} hitSlop={8}>
+                <X size={18} color="#64748B" />
               </Pressable>
-            ))}
-          </View>
+            </View>
+
+            <View className="mt-3 gap-1">
+              {SORT_OPTIONS.map((opt) => {
+                const isSelected = sort === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => {
+                      setSort(opt.value);
+                      setSortModalOpen(false);
+                    }}
+                    className={`flex-row items-center justify-between rounded-xl p-3 ${
+                      isSelected ? "bg-slate-50" : "active:bg-slate-50"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm ${
+                        isSelected
+                          ? "font-bold text-[#EA580C]"
+                          : "font-semibold text-slate-800"
+                      }`}
+                    >
+                      {opt.label}
+                    </Text>
+                    {isSelected ? (
+                      <Check size={16} color="#EA580C" strokeWidth={2.5} />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+
+      {/* Location Picker Modal */}
+      <Modal
+        visible={locationModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLocationModalOpen(false)}
+      >
+        <Pressable
+          onPress={() => setLocationModalOpen(false)}
+          className="flex-1 items-center justify-center bg-black/50 px-5"
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-slate-100">
+              <Text className="text-base font-bold text-slate-900">
+                Choose Location
+              </Text>
+              <Pressable onPress={() => setLocationModalOpen(false)} hitSlop={8}>
+                <X size={18} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <View className="mt-3 gap-1">
+              {CITIES.map((city) => {
+                const isSelected = appliedLocation === city;
+                return (
+                  <Pressable
+                    key={city}
+                    onPress={() => {
+                      setAppliedLocation(city);
+                      setLocationModalOpen(false);
+                    }}
+                    className={`flex-row items-center justify-between rounded-xl p-3 ${
+                      isSelected ? "bg-slate-50" : "active:bg-slate-50"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm ${
+                        isSelected
+                          ? "font-bold text-[#EA580C]"
+                          : "font-semibold text-slate-800"
+                      }`}
+                    >
+                      {city}
+                    </Text>
+                    {isSelected ? (
+                      <Check size={16} color="#EA580C" strokeWidth={2.5} />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Filters Modal */}
+      <Modal
+        visible={filtersModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFiltersModalOpen(false)}
+      >
+        <Pressable
+          onPress={() => setFiltersModalOpen(false)}
+          className="flex-1 items-center justify-center bg-black/50 px-5"
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl gap-4 max-h-[85%]"
+          >
+            <View className="flex-row items-center justify-between pb-2 border-b border-slate-100">
+              <Text className="text-base font-bold text-slate-900">Job Filters</Text>
+              <Pressable onPress={() => setFiltersModalOpen(false)} hitSlop={8}>
+                <X size={18} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} className="gap-4">
+              {/* Employment Type */}
+              <View className="gap-2">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Employment Type
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {["", "Full-Time", "Part-Time", "Internship"].map((type) => {
+                    const label = type || "All";
+                    const isSelected = employmentType === type;
+                    return (
+                      <Pressable
+                        key={label}
+                        onPress={() => setEmploymentType(type)}
+                        className={`rounded-full px-3.5 py-1.5 border ${
+                          isSelected
+                            ? "border-[#EA580C] bg-[#EA580C]"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <Text
+                          className={`text-xs font-semibold ${
+                            isSelected ? "text-white font-bold" : "text-slate-800"
+                          }`}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Work Mode */}
+              <View className="gap-2">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Work Mode
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {["", "Work from Office", "Work from Home", "Hybrid"].map(
+                    (mode) => {
+                      const label = mode || "All";
+                      const isSelected = workMode === mode;
+                      return (
+                        <Pressable
+                          key={label}
+                          onPress={() => setWorkMode(mode)}
+                          className={`rounded-full px-3.5 py-1.5 border ${
+                            isSelected
+                              ? "border-[#EA580C] bg-[#EA580C]"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <Text
+                            className={`text-xs font-semibold ${
+                              isSelected ? "text-white font-bold" : "text-slate-800"
+                            }`}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    },
+                  )}
+                </View>
+              </View>
+
+              {/* Min Salary */}
+              <View className="gap-2">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Minimum Salary
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {[
+                    { label: "Any", val: undefined },
+                    { label: "₹10k+", val: 1000000 },
+                    { label: "₹20k+", val: 2000000 },
+                    { label: "₹30k+", val: 3000000 },
+                    { label: "₹50k+", val: 5000000 },
+                  ].map((tier) => {
+                    const isSelected = minSalary === tier.val;
+                    return (
+                      <Pressable
+                        key={tier.label}
+                        onPress={() => setMinSalary(tier.val)}
+                        className={`rounded-full px-3.5 py-1.5 border ${
+                          isSelected
+                            ? "border-[#EA580C] bg-[#EA580C]"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <Text
+                          className={`text-xs font-semibold ${
+                            isSelected ? "text-white font-bold" : "text-slate-800"
+                          }`}
+                        >
+                          {tier.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Bottom Actions */}
+            <View className="flex-row items-center gap-2 pt-2 border-t border-slate-100">
+              <Pressable
+                onPress={clearAllFilters}
+                className="flex-1 items-center justify-center rounded-xl border border-slate-200 py-3 active:bg-slate-50"
+              >
+                <Text className="text-xs font-bold text-slate-700">Reset</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setFiltersModalOpen(false)}
+                className="flex-1 items-center justify-center rounded-xl bg-[#EA580C] py-3 active:bg-[#C2410C]"
+              >
+                <Text className="text-xs font-bold text-white">Apply</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }

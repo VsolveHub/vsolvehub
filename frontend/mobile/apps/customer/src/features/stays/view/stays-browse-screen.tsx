@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
+  ArrowLeft,
   Building2,
   Check,
   ChevronDown,
@@ -24,6 +25,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useIsDesktop } from "@/lib/responsive";
 
 import {
   SORT_OPTIONS,
@@ -32,6 +36,7 @@ import {
 } from "../model";
 import { fetchStays, fetchStayTaxonomy } from "../queries";
 import { THEME_COLORS } from "../theme-colors";
+import { DesktopStaysBrowse } from "./desktop-stays-browse";
 import { StayCard } from "./stay-card";
 
 const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
@@ -44,7 +49,13 @@ const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
 ];
 
 export function StaysBrowseScreen() {
+  const isDesktop = useIsDesktop();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  if (isDesktop) {
+    return <DesktopStaysBrowse />;
+  }
 
   // Search State: Draft vs Applied
   const [draftQuery, setDraftQuery] = useState("");
@@ -167,7 +178,10 @@ export function StaysBrowseScreen() {
       <FlatList
       data={staysQuery.isLoading ? [] : displayedStays}
       keyExtractor={(item) => item.id}
-      contentContainerClassName="gap-4 px-4 py-4 pb-16 bg-canvas"
+      contentContainerClassName="gap-4 px-4 pb-16 bg-canvas"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 10, 16),
+      }}
       refreshControl={
         <RefreshControl
           refreshing={staysQuery.isRefetching}
@@ -175,7 +189,27 @@ export function StaysBrowseScreen() {
         />
       }
       ListHeaderComponent={
-        <View className="gap-5 pb-2">
+        <View className="gap-3.5 pb-2">
+          {/* Back Button */}
+          <View className="flex-row items-center justify-between">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={8}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push("/");
+                }
+              }}
+              className="flex-row items-center gap-1.5 rounded-full border border-line/80 bg-surface px-3 py-1.5 shadow-2xs active:scale-[0.98] active:bg-surface-sunken"
+            >
+              <ArrowLeft size={14} color="#0B1B3D" strokeWidth={2.2} />
+              <Text className="text-xs font-bold text-navy-900">Back</Text>
+            </Pressable>
+          </View>
+
           {/* Hero Section */}
           <View className="overflow-hidden rounded-3xl bg-navy-900 p-6 shadow-md">
             <View className="gap-2.5">
@@ -332,7 +366,7 @@ export function StaysBrowseScreen() {
                 }}
                 className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
                   minPrice !== undefined || maxPrice !== undefined
-                    ? "border-brand bg-brand"
+                    ? "border-navy-900 bg-navy-900"
                     : "border-line bg-surface active:bg-surface-sunken"
                 }`}
               >
@@ -393,9 +427,9 @@ export function StaysBrowseScreen() {
                   setFilterAc((curr) => (curr ? undefined : true));
                   setVisible(6);
                 }}
-                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border ${
+                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border shadow-2xs ${
                   filterAc
-                    ? "border-brand bg-brand"
+                    ? "border-navy-900 bg-navy-900"
                     : "border-line bg-surface active:bg-surface-hover"
                 }`}
               >
@@ -404,7 +438,7 @@ export function StaysBrowseScreen() {
                   color={filterAc ? THEME_COLORS.white : THEME_COLORS.muted}
                 />
                 <Text
-                  className={`text-xs font-bold ${filterAc ? "text-white" : "text-text-secondary"}`}
+                  className={`text-xs font-bold ${filterAc ? "text-white" : "text-navy-900"}`}
                 >
                   AC
                 </Text>
@@ -416,9 +450,9 @@ export function StaysBrowseScreen() {
                   setFilterFood((curr) => (curr ? undefined : true));
                   setVisible(6);
                 }}
-                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border ${
+                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border shadow-2xs ${
                   filterFood
-                    ? "border-brand bg-brand"
+                    ? "border-navy-900 bg-navy-900"
                     : "border-line bg-surface active:bg-surface-hover"
                 }`}
               >
@@ -427,7 +461,7 @@ export function StaysBrowseScreen() {
                   color={filterFood ? THEME_COLORS.white : THEME_COLORS.muted}
                 />
                 <Text
-                  className={`text-xs font-bold ${filterFood ? "text-white" : "text-text-secondary"}`}
+                  className={`text-xs font-bold ${filterFood ? "text-white" : "text-navy-900"}`}
                 >
                   Meals
                 </Text>
@@ -477,7 +511,7 @@ export function StaysBrowseScreen() {
               </Text>
             </Button>
           </View>
-        ) : null
+        ) : undefined
       }
       ListEmptyComponent={
         staysQuery.isLoading ? (
@@ -768,15 +802,15 @@ export function StaysBrowseScreen() {
                       setVisible(6);
                       setPriceModalOpen(false);
                     }}
-                    className={`rounded-full px-3 py-1.5 border ${
+                    className={`rounded-full px-3.5 py-1.5 border ${
                       isSelected
-                        ? "border-brand bg-brand"
+                        ? "border-navy-900 bg-navy-900"
                         : "border-line bg-surface-sunken active:bg-surface-hover"
                     }`}
                   >
                     <Text
                       className={`text-xs font-bold ${
-                        isSelected ? "text-white" : "text-text-secondary"
+                        isSelected ? "text-white" : "text-navy-900"
                       }`}
                     >
                       {preset.label}
@@ -817,7 +851,7 @@ export function StaysBrowseScreen() {
 
             <View className="mt-5 flex-row items-center gap-2">
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 className="flex-1"
                 onPress={() => {

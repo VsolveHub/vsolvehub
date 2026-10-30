@@ -9,7 +9,7 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import { useCustomerReferral, useReferralAttributions } from "../queries";
 
-export function ReferralScreen() {
+export function ReferralScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const referralQuery = useCustomerReferral();
@@ -46,55 +46,20 @@ export function ReferralScreen() {
     }
   };
 
-  return (
-    <ScrollView
-      className="flex-1 bg-[#FAF9F7]"
-      style={{ paddingTop: Math.max(insets.top, 20) }}
-      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
-      }
-    >
-      {/* Header with Back Button */}
-      <View className="flex-row items-center gap-3 py-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Profile"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/account");
-            }
-          }}
-          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
-        >
-          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <Path d="m15 18-6-6 6-6" />
-          </Svg>
-        </Pressable>
-
-        <View className="flex-1 min-w-0">
-          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Refer & Earn</Text>
-          <Text className="text-xs text-[#64748B]">Invite friends to earn rewards</Text>
-        </View>
-      </View>
-
-      {referralQuery.isPending ? (
-        <View className="py-12 items-center justify-center">
-          <Spinner size="sm" />
-          <Text className="mt-2 text-sm text-[#64748B]">Loading your referral program…</Text>
-        </View>
-      ) : referralQuery.isError ? (
-        <ErrorState
-          title="Could not load referral details"
-          message={referralQuery.error ? describeError(referralQuery.error, "read").message : "Please try again"}
-          actionLabel="Try again"
-          onAction={() => void referralQuery.refetch()}
-        />
-      ) : (
-        <>
+  const content = referralQuery.isPending ? (
+    <View className="py-12 items-center justify-center">
+      <Spinner size="sm" />
+      <Text className="mt-2 text-sm text-[#64748B]">Loading your referral program…</Text>
+    </View>
+  ) : referralQuery.isError ? (
+    <ErrorState
+      title="Could not load referral details"
+      message={referralQuery.error ? describeError(referralQuery.error, "read").message : "Please try again"}
+      actionLabel="Try again"
+      onAction={() => void referralQuery.refetch()}
+    />
+  ) : (
+    <>
           {/* Share Hero Card */}
           <View className="overflow-hidden rounded-2xl bg-[#0B162C] p-5 shadow-sm">
             <Text className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">
@@ -137,9 +102,9 @@ export function ReferralScreen() {
           {/* Program Stats */}
           <View className="flex-row gap-3">
             <View className="flex-1 rounded-2xl border border-[#F1EFEB] bg-white p-4 shadow-xs">
-              <Text className="text-xs text-[#64748B]">Total Referrals</Text>
+              <Text className="text-xs text-[#64748B]">Friends Invited</Text>
               <Text className="mt-1 text-2xl font-extrabold text-[#0F172A]">
-                {summary?.total_referrals ?? 0}
+                {summary?.invited_count ?? 0}
               </Text>
             </View>
             <View className="flex-1 rounded-2xl border border-[#F1EFEB] bg-white p-4 shadow-xs">
@@ -163,10 +128,10 @@ export function ReferralScreen() {
                   <View key={item.id} className="flex-row items-center justify-between py-3">
                     <View className="flex-1 min-w-0 pr-2">
                       <Text className="text-sm font-semibold text-[#0F172A]">
-                        {item.referee_name || item.referee_phone_masked || "Invited friend"}
+                        {item.referee_display || "Invited friend"}
                       </Text>
                       <Text className="text-xs text-[#64748B] mt-0.5">
-                        {new Date(item.created_at).toLocaleDateString("en-IN", {
+                        {new Date(item.attributed_at).toLocaleDateString("en-IN", {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
@@ -195,7 +160,48 @@ export function ReferralScreen() {
             )}
           </View>
         </>
-      )}
+      );
+
+  if (embedded) {
+    return <View className="gap-5">{content}</View>;
+  }
+
+  return (
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      {/* Header with Back Button */}
+      <View className="flex-row items-center gap-3 py-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to Profile"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/account");
+            }
+          }}
+          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
+        >
+          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="m15 18-6-6 6-6" />
+          </Svg>
+        </Pressable>
+
+        <View className="flex-1 min-w-0">
+          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Refer & Earn</Text>
+          <Text className="text-xs text-[#64748B]">Invite friends to earn rewards</Text>
+        </View>
+      </View>
+
+      {content}
     </ScrollView>
   );
 }

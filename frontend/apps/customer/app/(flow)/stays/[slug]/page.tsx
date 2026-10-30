@@ -151,7 +151,7 @@ export default function StayDetailPage() {
   const reviews = property.reviews ?? [];
   const averageRating =
     reviews.length > 0
-      ? (reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviews.length).toFixed(1)
+      ? (reviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) / reviews.length).toFixed(1)
       : null;
 
   return (

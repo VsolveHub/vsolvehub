@@ -124,7 +124,8 @@ export function useConfirmVisitArrivalWithCode(invitationId: string) {
         siteVisitId: input.siteVisitId,
       });
     },
-    onError: () => {
+    onError: (err) => {
+      console.warn(`[visit] confirm arrival code failed for invitation ${invitationId}:`, err);
       // A wrong code is the ordinary case here, not an outage, and the challenge
       // it just spent an attempt on lives server-side. Re-reading the enquiry is
       // what keeps the panel honest if the customer confirmed from their side
@@ -170,7 +171,8 @@ export function useCompleteVisit(invitationId: string) {
         siteVisitId: input.siteVisitId,
       });
     },
-    onError: () => {
+    onError: (err) => {
+      console.warn(`[visit] complete visit failed for invitation ${invitationId}:`, err);
       void queryClient.invalidateQueries({
         queryKey: m2QueryKeys.invitations.detail(invitationId),
       });

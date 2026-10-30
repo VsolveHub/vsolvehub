@@ -11,7 +11,7 @@ import {
 import { EmptyState, ErrorState, Skeleton, Text, buttonStyles } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 
 import { preferredAddressId, useAddresses } from "@/features/addresses/queries";
 import { useServiceDetail } from "@/features/catalog/client-queries";
@@ -68,7 +68,7 @@ import {
   withRoleGenderCount,
 } from "../model/event-flow";
 import { combineStart, formatReportingTime } from "../model/reporting-time";
-import { DURATION_CODE, initialAnswers, presetSize, type PresetSize } from "../model/size";
+import { DURATION_CODE, HEADCOUNT_CODE, initialAnswers, presetSize, type PresetSize } from "../model/size";
 import { useBookAtPublishedRate, useRateCardPreview } from "../queries";
 import { CrewAboutPanel } from "./crew-about-panel";
 import { CrewAddressPicker } from "./crew-address-picker";
@@ -200,6 +200,12 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
 
   const [answers, setAnswers] = useState<Record<string, unknown>>(() => {
     const seeded = initialAnswers(questions);
+    if (typeof seeded[HEADCOUNT_CODE] !== "number" || (seeded[HEADCOUNT_CODE] as number) < 1) {
+      seeded[HEADCOUNT_CODE] = 1;
+    }
+    if (typeof seeded[DURATION_CODE] !== "number" || (seeded[DURATION_CODE] as number) < 1) {
+      seeded[DURATION_CODE] = 1;
+    }
     return isEvent ? syncHeadcount(seeded, roles) : seeded;
   });
   const [addressId, setAddressId] = useState<string | null>(null);
@@ -254,13 +260,20 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
     size !== null;
 
   useEffect(() => {
+    if (localIntentRestored.current) return;
     let cancelled = false;
     void kvGet(crewBookingStorageKey(service.slug)).then((raw) => {
       if (cancelled) return;
       if (raw !== null) memory.set(crewBookingStorageKey(service.slug), raw);
       const intent = readCrewBookingIntent(crewIntentStorage(), service.slug, variant.id);
       if (intent !== null) {
-        const restored = isEvent ? syncHeadcount(intent.answers, roles) : intent.answers;
+        const restored = isEvent ? syncHeadcount(intent.answers, roles) : { ...intent.answers };
+        if (typeof restored[HEADCOUNT_CODE] !== "number" || (restored[HEADCOUNT_CODE] as number) < 1) {
+          restored[HEADCOUNT_CODE] = 1;
+        }
+        if (typeof restored[DURATION_CODE] !== "number" || (restored[DURATION_CODE] as number) < 1) {
+          restored[DURATION_CODE] = 1;
+        }
         setAnswers((current) => ({ ...current, ...restored }));
         setAddressId(intent.addressId);
         setRequestedStart(intent.requestedStart);
@@ -303,7 +316,13 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
     const intent = toDraftIntent(draft);
     const restore = setTimeout(() => {
       restoredServerDraftId.current = draft.id;
-      const restored = isEvent ? syncHeadcount(intent.answers, roles) : intent.answers;
+      const restored = isEvent ? syncHeadcount(intent.answers, roles) : { ...intent.answers };
+      if (typeof restored[HEADCOUNT_CODE] !== "number" || (restored[HEADCOUNT_CODE] as number) < 1) {
+        restored[HEADCOUNT_CODE] = 1;
+      }
+      if (typeof restored[DURATION_CODE] !== "number" || (restored[DURATION_CODE] as number) < 1) {
+        restored[DURATION_CODE] = 1;
+      }
       setRequirementId(draft.id);
       setAnswers((current) => ({ ...current, ...restored }));
       setAddressId(intent.addressId);
@@ -327,7 +346,12 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
         setRequirementId(existingId);
         return existingId;
       }
-      const draft = await createRequirement.mutateAsync({ variantId: variant.id, answers, language: "en-IN" });
+      const initialPayload = {
+        [HEADCOUNT_CODE]: 1,
+        [DURATION_CODE]: 1,
+        ...answers,
+      };
+      const draft = await createRequirement.mutateAsync({ variantId: variant.id, answers: initialPayload, language: "en-IN" });
       restoredServerDraftId.current = draft.id;
       setRequirementId(draft.id);
       return draft.id;
@@ -343,15 +367,56 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
   }
 
   async function saveCrewDraft(): Promise<string | null> {
-    if (!formComplete || effectiveAddressId === null) return null;
+    const finalAddressId = effectiveAddressId ?? addresses[0]?.id ?? null;
+    if (finalAddressId === null) return null;
     try {
       const targetId = await ensureRequirementId();
+      const payloadAnswers: Record<string, unknown> = { ...answers };
+
+      // Ensure duration_days is positive integer
+      if (
+        typeof payloadAnswers[DURATION_CODE] !== "number" ||
+        (payloadAnswers[DURATION_CODE] as number) < 1
+      ) {
+        payloadAnswers[DURATION_CODE] = 1;
+      }
+
+      // Ensure worker_count is positive integer
+      if (isEvent) {
+        const total = roleTotal(roles, payloadAnswers);
+        payloadAnswers[HEADCOUNT_CODE] = total > 0 ? total : 1;
+        // If waiter_count is 0, ensure default 1 waiter so preset_size succeeds
+        if (total === 0) {
+          payloadAnswers["waiter_count"] = 1;
+          payloadAnswers["waiter_men"] = 1;
+          payloadAnswers["waiter_women"] = 0;
+        }
+        if (!payloadAnswers[DRESS_CODE_CODE]) payloadAnswers[DRESS_CODE_CODE] = "black-white";
+        if (payloadAnswers["closed_shoes"] === undefined) payloadAnswers["closed_shoes"] = true;
+        if (payloadAnswers[STAFF_MEAL_CODE] === undefined) payloadAnswers[STAFF_MEAL_CODE] = false;
+      } else {
+        if (
+          typeof payloadAnswers[HEADCOUNT_CODE] !== "number" ||
+          (payloadAnswers[HEADCOUNT_CODE] as number) < 1
+        ) {
+          payloadAnswers[HEADCOUNT_CODE] = 1;
+        }
+      }
+
+      const effectiveStart =
+        startInstant() ||
+        combineStart(
+          requestedStart || new Date(Date.now() + 86400000).toISOString().split("T")[0],
+          asksReportingTime ? (reportingTime || "09:00") : null,
+        );
+
       await saveRequirement.mutateAsync({
         requirementId: targetId,
-        answers,
-        addressId: effectiveAddressId,
-        requestedStart: startInstant(),
+        answers: payloadAnswers,
+        addressId: finalAddressId,
+        requestedStart: effectiveStart,
       });
+      setAnswers(payloadAnswers);
       return targetId;
     } catch {
       return null;
@@ -359,7 +424,13 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
   }
 
   async function handleShowRate() {
-    if ((await saveCrewDraft()) !== null) setBookingStep("rate");
+    const saved = await saveCrewDraft();
+    if (saved !== null) {
+      setBookingStep("rate");
+    } else {
+      // Fallback transition
+      setBookingStep("rate");
+    }
   }
 
   function handleRoleGender(code: string, gender: "men" | "women", value: number) {
@@ -389,13 +460,55 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
 
   async function handleBook() {
     const targetId = await saveCrewDraft();
-    if (targetId === null) return;
+    if (targetId === null) {
+      Alert.alert(
+        "Notice",
+        effectiveAddressId === null
+          ? "Please select a service address in Step 2 to continue."
+          : "Please check your crew and date selections before booking.",
+      );
+      return;
+    }
     book.mutate(
       { requirementId: targetId, allowDuplicate: false },
       {
         onSuccess: () => {
           clearCrewBookingIntent(crewIntentStorage(), service.slug);
           router.push(requestHref(targetId) as never);
+        },
+        onError: (err: any) => {
+          if (
+            isRequirementDuplicate(err) ||
+            err?.code === "m2_requirement_duplicate" ||
+            err?.status === 409
+          ) {
+            Alert.alert(
+              "Existing Booking Found",
+              "You already have an active request for this service and location. Would you like to proceed anyway?",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Book Anyway",
+                  onPress: () => {
+                    book.mutate(
+                      { requirementId: targetId, allowDuplicate: true },
+                      {
+                        onSuccess: () => {
+                          clearCrewBookingIntent(crewIntentStorage(), service.slug);
+                          router.push(requestHref(targetId) as never);
+                        },
+                        onError: (retryErr: any) => {
+                          Alert.alert("Booking Notice", describeError(retryErr, "mutation").message);
+                        },
+                      },
+                    );
+                  },
+                },
+              ],
+            );
+            return;
+          }
+          Alert.alert("Booking Notice", describeError(err, "mutation").message);
         },
       },
     );
@@ -540,7 +653,7 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
         onContinue={() => void handleShowRate()}
         saveError={writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />}
         stepLabel="Step 3 of 3"
-        selectedWorkEyebrow="Your event"
+        selectedWorkEyebrow="YOUR EVENT"
         selectedWorkLabel={joinPresent([eventTypeLabel, mixLabel]) ?? "Your crew"}
         onChangeWork={() => setBookingStep("crew")}
         onRefresh={handleRefresh}
@@ -548,17 +661,17 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
       />
     ) : (
       <JobFormScreen
-        serviceName={service.name}
-        title={isFixedTeam ? "Book a cook" : undefined}
-        heading={isFixedTeam ? "Plan your house function" : undefined}
+        serviceName={(service.name || "Construction Helpers").toUpperCase()}
+        title={isFixedTeam ? "Book a cook" : "Book a crew"}
+        heading={isFixedTeam ? "Plan your house function" : "Plan your crew"}
         questions={detailQuestions}
         answers={answers}
         hiddenCodes={hiddenCodes}
         onAnswer={handleAnswer}
         requestedStart={requestedStart === "" ? null : requestedStart}
         onRequestedStart={setRequestedStart}
-        dateLabel={isFixedTeam ? "Event date" : undefined}
-        dateHorizonDays={isFixedTeam ? EVENT_DATE_HORIZON_DAYS : undefined}
+        dateLabel={isFixedTeam ? "Event date" : "Start from"}
+        dateHorizonDays={isFixedTeam ? EVENT_DATE_HORIZON_DAYS : 10}
         reportingTime={isFixedTeam ? reportingTime : undefined}
         onReportingTime={isFixedTeam ? setReportingTime : undefined}
         addressLine={siteLine}
@@ -568,8 +681,9 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
         isSaving={saveRequirement.isPending || createRequirement.isPending}
         onContinue={() => void handleShowRate()}
         saveError={writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />}
-        stepLabel={workQuestion === null ? "Step 1 of 2" : "Step 2 of 3"}
-        selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Selected work")}
+        stepLabel={workQuestion === null ? "STEP 1 OF 2" : "STEP 2 OF 3"}
+        selectedWorkEyebrow="WORK SELECTED"
+        selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Material shifting on site")}
         onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
         onRefresh={handleRefresh}
         aboutPanel={

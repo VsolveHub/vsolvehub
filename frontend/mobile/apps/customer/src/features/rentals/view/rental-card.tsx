@@ -124,7 +124,7 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
             </Text>
           </View>
 
-          <View className="flex-row items-center gap-1.5 rounded-xl bg-action px-3.5 py-2 active:bg-action-active">
+          <View className="flex-row items-center gap-1.5 rounded-xl bg-action px-3.5 py-2">
             <Text className="text-xs font-bold text-action-text">Rent Now</Text>
             <ArrowRight size={13} color={COLOR_TOKENS.actionText} />
           </View>

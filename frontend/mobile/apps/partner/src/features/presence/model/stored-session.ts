@@ -31,17 +31,23 @@ export function hydrateStoredSession(): void {
       current = value || null;
       notify();
     })
-    .catch(() => undefined);
+    .catch((err) => {
+      console.warn("[stored-session] Failed to read presence session from storage:", err);
+    });
 }
 
 export function writeStoredSession(sessionId: string): void {
   current = sessionId;
   notify();
-  void AsyncStorage.setItem(STORAGE_KEY, sessionId).catch(() => undefined);
+  void AsyncStorage.setItem(STORAGE_KEY, sessionId).catch((err) => {
+    console.warn("[stored-session] Failed to persist presence session:", err);
+  });
 }
 
 export function clearStoredSession(): void {
   current = null;
   notify();
-  void AsyncStorage.removeItem(STORAGE_KEY).catch(() => undefined);
+  void AsyncStorage.removeItem(STORAGE_KEY).catch((err) => {
+    console.warn("[stored-session] Failed to remove presence session:", err);
+  });
 }

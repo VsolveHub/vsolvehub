@@ -26,7 +26,9 @@ import type { Schemas } from "@vsolve/api-client";
  * the two is how a screen stops polling and shows a green tick over a hold.
  */
 
-export type PaymentAttempt = Schemas["PaymentAttempt"];
+export type PaymentAttempt = Schemas["PaymentAttempt"] & {
+  razorpay_amount_paise?: number;
+};
 export type PaymentStatus = Schemas["PaymentAttemptStatusEnum"];
 export type ReconciliationState = Schemas["ReconciliationStateEnum"];
 

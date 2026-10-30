@@ -20,8 +20,14 @@ import { isOfferCreatedPush, resolvePartnerPush } from "@/features/notifications
 import { requestOpenAlerts } from "@/features/notifications/alerts-bus";
 
 import { LogBox } from "react-native";
+import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 
 import "../global.css";
+
+configureReanimatedLogger({
+  level: ReanimatedLogLevel.warn,
+  strict: false,
+});
 
 LogBox.ignoreAllLogs();
 configureCore({ appKind: "partner" });

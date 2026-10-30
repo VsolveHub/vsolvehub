@@ -74,7 +74,7 @@ export function OtpForm({
   footer,
   className,
 }: OtpFormProps) {
-  const codeRef = useRef<TextInput>(null);
+  const codeRef = useRef<any>(null);
   useEffect(() => {
     if (phase === "code") codeRef.current?.focus();
   }, [phase]);

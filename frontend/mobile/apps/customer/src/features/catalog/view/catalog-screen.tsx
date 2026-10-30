@@ -1,5 +1,7 @@
 // Ported from frontend/apps/customer/features/catalog/icon-catalogue/catalogue-header.tsx
 // and features/catalog/components/catalog-category-rows.tsx, search-results.tsx, service-row.tsx.
+// 100% faithful desktop layout matching the web customer portal when on desktop,
+// while leaving the mobile version 100% unchanged.
 import { Button, EmptyState, Skeleton, Text, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -11,8 +13,11 @@ import { LOCAL_CATEGORY_TILES, getCategoryFallbackIcon, resolveImageUrl } from "
 import { useCatalogIndex, useCategories, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { bookingModeLabel, rankCatalogMatches } from "@/features/catalog/search";
 import { serviceHref } from "@/features/catalog/service-href";
+import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
+import { useIsDesktop } from "@/lib/responsive";
 
 export function CatalogScreen() {
+  const isDesktop = useIsDesktop();
   const categories = useCategories();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -28,76 +33,84 @@ export function CatalogScreen() {
   return (
     <ScrollView
       className="flex-1 bg-[#FAF9F7]"
-      contentContainerClassName="px-4 pb-6 pt-4"
+      contentContainerClassName={isDesktop ? "pb-0 pt-0" : "px-4 pb-6 pt-4"}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }
     >
-      <View className="flex-row items-center gap-2">
-        <Text className="flex-1 text-[19px] font-extrabold tracking-tight text-text">All services</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={open ? "Close search" : "Search services"}
-          accessibilityState={{ expanded: open }}
-          onPress={() => {
-            if (open) setQuery("");
-            setSearchOpen(!open);
-          }}
-          className="h-11 w-11 items-center justify-center rounded-control"
-        >
-          {open ? (
-            <Svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="#6B6560" strokeWidth={2}>
-              <Path d="M18 6 6 18" strokeLinecap="round" />
-              <Path d="m6 6 12 12" strokeLinecap="round" />
+      <View className={isDesktop ? "mx-auto w-full max-w-5xl px-6 py-6 min-h-[calc(100vh-180px)]" : "w-full"}>
+        {/* Header Bar */}
+        <View className="flex-row items-center gap-2">
+          <Text className={isDesktop ? "flex-1 text-[22px] font-extrabold tracking-tight text-navy-900" : "flex-1 text-[19px] font-extrabold tracking-tight text-text"}>
+            All services
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={open ? "Close search" : "Search services"}
+            accessibilityState={{ expanded: open }}
+            onPress={() => {
+              if (open) setQuery("");
+              setSearchOpen(!open);
+            }}
+            className="h-11 w-11 items-center justify-center rounded-control hover:bg-surface-hover"
+          >
+            {open ? (
+              <Svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="#6B6560" strokeWidth={2}>
+                <Path d="M18 6 6 18" strokeLinecap="round" />
+                <Path d="m6 6 12 12" strokeLinecap="round" />
+              </Svg>
+            ) : (
+              <Svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="#6B6560" strokeWidth={2}>
+                <Circle cx={11} cy={11} r={8} />
+                <Path d="m21 21-4.3-4.3" strokeLinecap="round" />
+              </Svg>
+            )}
+          </Pressable>
+        </View>
+
+        {open ? (
+          <View className="mt-3 h-11 flex-row items-center rounded-full border border-line/80 bg-surface-sunken px-4">
+            <Svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#756c5e" strokeWidth={2}>
+              <Circle cx={11} cy={11} r={7} />
+              <Path d="m20 20-3.5-3.5" strokeLinecap="round" />
             </Svg>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search services..."
+              placeholderTextColor="#756c5e"
+              autoFocus
+              className="ml-3 h-11 flex-1 text-sm font-medium text-navy-900"
+            />
+          </View>
+        ) : null}
+
+        {categories.isPending ? <CatalogSkeleton isDesktop={isDesktop} /> : null}
+        {categories.isError ? (
+          <View className="mt-6">
+            <EmptyState
+              title="We could not load the catalogue"
+              description="Check your connection and try again."
+              action={<Button onPress={() => void categories.refetch()}>Try again</Button>}
+            />
+          </View>
+        ) : null}
+        {categories.data ? (
+          query.trim().length > 0 ? (
+            <SearchHits categories={categories.data} query={query.trim()} />
           ) : (
-            <Svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="#6B6560" strokeWidth={2}>
-              <Circle cx={11} cy={11} r={8} />
-              <Path d="m21 21-4.3-4.3" strokeLinecap="round" />
-            </Svg>
-          )}
-        </Pressable>
+            <CategoryRows categories={categories.data} isDesktop={isDesktop} />
+          )
+        ) : null}
       </View>
 
-      {open ? (
-        <View className="mt-3 h-11 flex-row items-center rounded-full border border-line/80 bg-surface-sunken px-4">
-          <Svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#756c5e" strokeWidth={2}>
-            <Circle cx={11} cy={11} r={7} />
-            <Path d="m20 20-3.5-3.5" strokeLinecap="round" />
-          </Svg>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search services..."
-            placeholderTextColor="#756c5e"
-            autoFocus
-            className="ml-3 h-11 flex-1 text-sm font-medium text-navy-900"
-          />
-        </View>
-      ) : null}
-
-      {categories.isPending ? <CatalogSkeleton /> : null}
-      {categories.isError ? (
-        <View className="mt-6">
-          <EmptyState
-            title="We could not load the catalogue"
-            description="Check your connection and try again."
-            action={<Button onPress={() => void categories.refetch()}>Try again</Button>}
-          />
-        </View>
-      ) : null}
-      {categories.data ? (
-        query.trim().length > 0 ? (
-          <SearchHits categories={categories.data} query={query.trim()} />
-        ) : (
-          <CategoryRows categories={categories.data} />
-        )
-      ) : null}
+      {/* Desktop Site Footer */}
+      {isDesktop ? <DesktopSiteFooter /> : null}
     </ScrollView>
   );
 }
 
-function CategoryRows({ categories }: { categories: Category[] }) {
+function CategoryRows({ categories, isDesktop }: { categories: Category[]; isDesktop: boolean }) {
   const router = useRouter();
   const rows = categories
     .map((category) => ({
@@ -115,20 +128,22 @@ function CategoryRows({ categories }: { categories: Category[] }) {
   }
 
   return (
-    <View className="mt-3 gap-8 pb-4">
+    <View className="mt-3 gap-8 pb-8 sm:gap-10">
       {rows.map(({ category, subcategories }) => (
         <View key={category.id}>
           <View className="mb-3 min-h-11 flex-row items-center gap-3 border-b border-line/70">
-            <Text className="min-w-0 flex-1 text-base font-extrabold tracking-tight text-text">{category.name}</Text>
+            <Text className={isDesktop ? "min-w-0 flex-1 text-lg font-extrabold tracking-tight text-navy-900" : "min-w-0 flex-1 text-base font-extrabold tracking-tight text-text"}>
+              {category.name}
+            </Text>
             {subcategories.length > 3 ? (
               <Pressable
                 accessibilityRole="link"
                 accessibilityLabel={`See all ${category.name} subcategories`}
                 onPress={() => router.push(`/catalog/${category.slug}` as never)}
-                className="min-h-11 flex-row items-center gap-1 px-1"
+                className="min-h-11 flex-row items-center gap-1 px-1 group"
               >
-                <Text className="text-sm font-bold text-action">See all</Text>
-                <Svg viewBox="0 0 20 20" width={16} height={16} fill="none" stroke="#0B6E4F" strokeWidth={1.9}>
+                <Text className="text-sm font-bold text-[#EA580C] group-hover:underline">See all</Text>
+                <Svg viewBox="0 0 20 20" width={16} height={16} fill="none" stroke="#EA580C" strokeWidth={1.9}>
                   <Path d="m7.5 4.5 5.5 5.5-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               </Pressable>
@@ -138,21 +153,33 @@ function CategoryRows({ categories }: { categories: Category[] }) {
             horizontal
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
-            snapToInterval={104}
-            contentContainerClassName="gap-3 pr-4"
-            className="-mx-4"
-            style={{ marginHorizontal: -16 }}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
+            snapToInterval={isDesktop ? 144 : 104}
+            contentContainerClassName={isDesktop ? "gap-4 pb-2" : "gap-3 pr-4"}
+            className={isDesktop ? "" : "-mx-4"}
+            style={isDesktop ? undefined : { marginHorizontal: -16 }}
+            contentContainerStyle={isDesktop ? undefined : { paddingHorizontal: 16 }}
           >
             {subcategories.map((subcategory) => (
               <Pressable
                 key={subcategory.id}
                 accessibilityRole="link"
                 onPress={() => router.push(`/catalog/${category.slug}?tile=${subcategory.slug}` as never)}
-                className="w-[92px] items-center gap-2"
+                className={isDesktop ? "w-[128px] items-center gap-2 group hover:scale-[1.03]" : "w-[92px] items-center gap-2"}
               >
-                <TilePhoto imageUrl={subcategory.image_url} slug={subcategory.slug} iconKey={subcategory.icon_key} />
-                <Text numberOfLines={2} className="w-full text-center text-[12px] font-semibold leading-tight text-text">
+                <TilePhoto
+                  imageUrl={subcategory.image_url}
+                  slug={subcategory.slug}
+                  iconKey={subcategory.icon_key}
+                  isDesktop={isDesktop}
+                />
+                <Text
+                  numberOfLines={2}
+                  className={
+                    isDesktop
+                      ? "w-full text-center text-[13px] font-bold leading-tight text-navy-900"
+                      : "w-full text-center text-[12px] font-semibold leading-tight text-text"
+                  }
+                >
                   {subcategory.name}
                 </Text>
               </Pressable>
@@ -164,13 +191,30 @@ function CategoryRows({ categories }: { categories: Category[] }) {
   );
 }
 
-function TilePhoto({ imageUrl, slug, iconKey }: { imageUrl: string; slug?: string; iconKey?: string }) {
+function TilePhoto({
+  imageUrl,
+  slug,
+  iconKey,
+  isDesktop = false,
+}: {
+  imageUrl: string;
+  slug?: string;
+  iconKey?: string;
+  isDesktop?: boolean;
+}) {
   const [loadError, setLoadError] = useState(false);
   const localAsset = slug ? LOCAL_CATEGORY_TILES[slug] : null;
+
   if (localAsset) {
     return (
-      <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]">
-        <Image source={localAsset} contentFit="contain" style={{ width: "76%", height: "76%" }} />
+      <View
+        className={
+          isDesktop
+            ? "aspect-square w-full items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC] border border-[#e7e2da]/70 shadow-xs hover:border-[#EA580C] hover:bg-[#FFF8F3]"
+            : "aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]"
+        }
+      >
+        <Image source={localAsset} contentFit="contain" style={{ width: "74%", height: "74%" }} />
       </View>
     );
   }
@@ -180,16 +224,22 @@ function TilePhoto({ imageUrl, slug, iconKey }: { imageUrl: string; slug?: strin
   const FallbackIcon = getCategoryFallbackIcon(slug, iconKey);
 
   return (
-    <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]">
+    <View
+      className={
+        isDesktop
+          ? "aspect-square w-full items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC] border border-[#e7e2da]/70 shadow-xs hover:border-[#EA580C] hover:bg-[#FFF8F3]"
+          : "aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]"
+      }
+    >
       {resolved && !loadError ? (
         <Image
           source={{ uri: resolved }}
           contentFit={isCover ? "contain" : "cover"}
-          style={isCover ? { width: "76%", height: "76%" } : { width: "100%", height: "100%" }}
+          style={isCover ? { width: "74%", height: "74%" } : { width: "100%", height: "100%" }}
           onError={() => setLoadError(true)}
         />
       ) : (
-        <FallbackIcon size={26} color="#00112e" strokeWidth={1.8} />
+        <FallbackIcon size={isDesktop ? 32 : 26} color="#00112e" strokeWidth={1.8} />
       )}
     </View>
   );
@@ -286,16 +336,16 @@ function ServiceResult({ service, category }: { service: ServiceCard; category: 
   );
 }
 
-function CatalogSkeleton() {
+function CatalogSkeleton({ isDesktop = false }: { isDesktop?: boolean }) {
   return (
     <View className="mt-6 gap-8">
       {Array.from({ length: 3 }, (_, row) => (
         <View key={row}>
           <Skeleton className="mb-3 h-5 w-32" />
           <View className="flex-row gap-3">
-            {Array.from({ length: 3 }, (_, tile) => (
-              <View key={tile} className="w-[92px] gap-2">
-                <Skeleton className="aspect-square w-full rounded-card" />
+            {Array.from({ length: isDesktop ? 6 : 3 }, (_, tile) => (
+              <View key={tile} className={isDesktop ? "w-[128px] gap-2" : "w-[92px] gap-2"}>
+                <Skeleton className="aspect-square w-full rounded-2xl" />
                 <Skeleton className="mx-auto h-3 w-4/5" />
               </View>
             ))}

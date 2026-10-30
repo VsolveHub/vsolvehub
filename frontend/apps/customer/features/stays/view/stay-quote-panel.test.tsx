@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { Schemas } from "@vsolve/api-client";
+import type { StayProperty } from "../model";
 import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,7 +33,7 @@ function refusal(code: string, message = "Refusal message", status = 400) {
   };
 }
 
-function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Property"] {
+function mockProperty(overrides: Partial<StayProperty> = {}): StayProperty {
   return {
     id: "prop-1",
     slug: "demo-pg",

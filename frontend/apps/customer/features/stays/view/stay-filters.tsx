@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, Coffee, Layers, Wind } from "lucide-react";
 import { cn, Skeleton } from "@vsolve/ui";
 
-import { fetchStayTaxonomy } from "../queries";
+import { fetchStayTaxonomy, type StayTaxonomyCategory, type StayTaxonomyService } from "../queries";
 
 export interface ActiveFilters {
   ac?: boolean;
@@ -291,7 +291,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
         {/* Row 2: Sub-categories within the chosen category */}
         {activeCategory && activeCategory.services && activeCategory.services.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            {activeCategory.services.map((svc) => (
+            {activeCategory.services.map((svc: StayTaxonomyService) => (
               <button
                 key={svc.id}
                 type="button"

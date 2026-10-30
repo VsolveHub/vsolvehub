@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, LayoutGrid, X } from "lucide-react-native";
 import { useEffect, useRef, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   Pressable,
   TextInput,
   View,
@@ -130,7 +131,7 @@ export function CustomerLoginForm({
   verifyLabel?: string;
   onBrowseServices?: () => void;
 }) {
-  const codeInputRef = useRef<TextInput>(null);
+  const codeInputRef = useRef<any>(null);
 
   useEffect(() => {
     if (flow.phase === "code") {
@@ -236,13 +237,12 @@ export function CustomerLoginForm({
               accessibilityLabel={`Fill development code ${flow.developmentCode}`}
               onPress={() => {
                 if (flow.developmentCode) {
+                  Keyboard.dismiss();
                   flow.onCodeChange(flow.developmentCode);
-                  setTimeout(() => {
-                    flow.onVerifyCode();
-                  }, 80);
+                  flow.onVerifyCode(flow.developmentCode);
                 }
               }}
-              hitSlop={6}
+              hitSlop={8}
               className="rounded-xl border border-dashed border-line-strong bg-warm-50 px-3.5 py-2 active:bg-warm-100"
             >
               <Text className="text-xs text-text-secondary">
@@ -278,9 +278,8 @@ export function CustomerLoginForm({
                   flow.onCodeChange(text);
                   const clean = text.replace(/\D/g, "");
                   if (clean.length === flow.codeLength) {
-                    setTimeout(() => {
-                      flow.onVerifyCode();
-                    }, 80);
+                    Keyboard.dismiss();
+                    flow.onVerifyCode(clean);
                   }
                 }}
                 className="w-full text-center text-xl font-bold tracking-[0.3em] text-navy-900 py-2"
@@ -308,7 +307,11 @@ export function CustomerLoginForm({
           <Pressable
             accessibilityRole="button"
             disabled={!flow.canVerify || flow.isVerifying}
-            onPress={flow.onVerifyCode}
+            onPress={() => {
+              Keyboard.dismiss();
+              flow.onVerifyCode();
+            }}
+            hitSlop={8}
             className={cn(
               "h-[50px] w-full flex-row items-center justify-center rounded-2xl shadow-xs",
               !flow.canVerify

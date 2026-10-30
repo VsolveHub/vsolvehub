@@ -10,7 +10,17 @@ jest.mock("expo-image-picker", () => ({
 }));
 
 jest.mock("@/features/addresses/queries", () => ({
-  useAddresses: () => ({ data: [] }),
+  useAddresses: () => ({
+    data: [
+      {
+        id: "addr-1",
+        label: "Home",
+        full_address: "123 Main St",
+        area_name: "Khajaguda",
+        postal_code: "500032",
+      },
+    ],
+  }),
 }));
 
 jest.mock("expo-router", () => ({
@@ -23,6 +33,10 @@ jest.mock("@/features/catalog/client-queries", () => ({
     isPending: false,
     data: { name: "Painting", bookable_variant_id: "variant-1", requirement_variants: [] },
   }),
+}));
+
+jest.mock("@/features/access/queries", () => ({
+  useChooseVisitPlan: () => ({ mutate: jest.fn(), mutateAsync: jest.fn().mockResolvedValue({}), isPending: false }),
 }));
 
 jest.mock("@/features/requirement/queries", () => ({
@@ -47,6 +61,8 @@ test("new request sends the typed details", async () => {
   await act(async () => {
     input.props.onChangeText("Two rooms");
   });
+  tap(await view.findByRole("button", { name: "Continue to Step 2" }));
+  tap(await view.findByRole("button", { name: "Continue to Review" }));
   tap(await view.findByRole("button", { name: "Send request" }));
   expect(mockCreate).toHaveBeenCalledWith(
     { variantId: "variant-1", answers: { details: "Two rooms" }, language: "en" },

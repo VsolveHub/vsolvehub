@@ -10,7 +10,7 @@ import { useInitiateWalletTopUp, useWallet, useWalletTransactions } from "../que
 
 const QUICK_AMOUNTS = [100, 250, 500, 1000, 2000];
 
-export function WalletScreen() {
+export function WalletScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const walletQuery = useWallet();
@@ -43,55 +43,20 @@ export function WalletScreen() {
 
   const amountNumber = Math.max(0, parseInt(customAmount, 10) || 0);
 
-  return (
-    <ScrollView
-      className="flex-1 bg-[#FAF9F7]"
-      style={{ paddingTop: Math.max(insets.top, 20) }}
-      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
-      }
-    >
-      {/* Header with Back Button */}
-      <View className="flex-row items-center gap-3 py-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Profile"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/account");
-            }
-          }}
-          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
-        >
-          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <Path d="m15 18-6-6 6-6" />
-          </Svg>
-        </Pressable>
-
-        <View className="flex-1 min-w-0">
-          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Wallet</Text>
-          <Text className="text-xs text-[#64748B]">Transactions & top-ups</Text>
-        </View>
-      </View>
-
-      {walletQuery.isPending ? (
-        <View className="py-12 items-center justify-center">
-          <Spinner size="sm" />
-          <Text className="mt-2 text-sm text-[#64748B]">Loading your wallet…</Text>
-        </View>
-      ) : walletQuery.isError ? (
-        <ErrorState
-          title="Could not load wallet"
-          message={walletQuery.error ? describeError(walletQuery.error, "read").message : "Please try again"}
-          actionLabel="Try again"
-          onAction={() => void walletQuery.refetch()}
-        />
-      ) : (
-        <>
+  const content = walletQuery.isPending ? (
+    <View className="py-12 items-center justify-center">
+      <Spinner size="sm" />
+      <Text className="mt-2 text-sm text-[#64748B]">Loading your wallet…</Text>
+    </View>
+  ) : walletQuery.isError ? (
+    <ErrorState
+      title="Could not load wallet"
+      message={walletQuery.error ? describeError(walletQuery.error, "read").message : "Please try again"}
+      actionLabel="Try again"
+      onAction={() => void walletQuery.refetch()}
+    />
+  ) : (
+    <>
           {/* Balance Hero Card */}
           <View className="overflow-hidden rounded-2xl bg-[#0B162C] p-5 shadow-sm">
             <View className="flex-row items-center justify-between">
@@ -225,7 +190,48 @@ export function WalletScreen() {
             )}
           </View>
         </>
-      )}
+      );
+
+  if (embedded) {
+    return <View className="gap-5">{content}</View>;
+  }
+
+  return (
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      {/* Header with Back Button */}
+      <View className="flex-row items-center gap-3 py-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to Profile"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/account");
+            }
+          }}
+          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
+        >
+          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="m15 18-6-6 6-6" />
+          </Svg>
+        </Pressable>
+
+        <View className="flex-1 min-w-0">
+          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Wallet</Text>
+          <Text className="text-xs text-[#64748B]">Transactions & top-ups</Text>
+        </View>
+      </View>
+
+      {content}
     </ScrollView>
   );
 }

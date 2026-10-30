@@ -101,7 +101,10 @@ export function PresencePanel({
     async (id: string) => {
       if (AppState.currentState !== "active") return;
       try {
-        const position = await getCurrentPosition().catch(() => null);
+        const position = await getCurrentPosition().catch((err) => {
+          console.warn("[presence] getCurrentPosition failed:", err);
+          return null;
+        });
         await heartbeat.mutateAsync({
           session_id: id,
           ...(position
@@ -143,7 +146,8 @@ export function PresencePanel({
         setLastBeatAt(Date.now());
         announceHeartbeat();
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn("[presence] Stored session check failed:", err);
         if (!cancelled) clearStoredSession();
       })
       .finally(() => {
@@ -202,7 +206,10 @@ export function PresencePanel({
         accuracy_m: position.coords.accuracy === null ? 0 : Math.round(position.coords.accuracy),
         consent_version: consentVersion,
       })
-      .catch(() => null);
+      .catch((err) => {
+        console.warn("[presence] goOnline mutation failed:", err);
+        return null;
+      });
     if (session) {
       setSessionId(session.id);
       setLastBeatAt(Date.now());
@@ -217,7 +224,10 @@ export function PresencePanel({
 
   async function handleGoOffline() {
     if (sessionId === null) return;
-    await goOffline.mutateAsync({ session_id: sessionId }).catch(() => null);
+    await goOffline.mutateAsync({ session_id: sessionId }).catch((err) => {
+      console.warn("[presence] goOffline mutation failed:", err);
+      return null;
+    });
     setSessionId(null);
     setLastBeatAt(null);
     clearStoredSession();

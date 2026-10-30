@@ -328,7 +328,8 @@ export function useAssignCrewToDays(engagementId: string) {
       }
       return completed;
     },
-    onError: () => {
+    onError: (err) => {
+      console.warn(`[shift] copy crew assignment failed for engagement ${engagementId}:`, err);
       void queryClient.invalidateQueries({
         queryKey: m2QueryKeys.engagements.detail(engagementId),
       });

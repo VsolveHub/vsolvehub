@@ -32,6 +32,11 @@
     "production": {
       "android": {
         "track": "internal"
+      },
+      "ios": {
+        "appleId": "ENTER_APPLE_ID",
+        "ascAppId": "ENTER_ASC_APP_ID",
+        "appleTeamId": "ENTER_APPLE_TEAM_ID"
       }
     }
   }

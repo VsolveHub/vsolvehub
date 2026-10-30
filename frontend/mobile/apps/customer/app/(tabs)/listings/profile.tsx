@@ -2,14 +2,19 @@ import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SeekerProfileForm } from "@/features/listings/view/seeker-profile-form";
 
 export default function JobProfilePage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View className="flex-1 bg-canvas p-4 pb-8">
+    <View
+      className="flex-1 bg-canvas px-4 pb-8"
+      style={{ paddingTop: Math.max(insets.top + 16, 38) }}
+    >
       <View className="flex-row items-center justify-between border-b border-line pb-3">
         <Pressable
           accessibilityRole="button"

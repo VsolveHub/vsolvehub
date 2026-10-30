@@ -16,7 +16,7 @@ interface DocumentItem {
   status: "VERIFIED" | "PENDING_REVIEW";
 }
 
-export function DocumentsScreen() {
+export function DocumentsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const profile = useCustomerProfile();
@@ -63,37 +63,8 @@ export function DocumentsScreen() {
     }, 1200);
   };
 
-  return (
-    <ScrollView
-      className="flex-1 bg-[#FAF9F7]"
-      style={{ paddingTop: Math.max(insets.top, 20) }}
-      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header with Back Button */}
-      <View className="flex-row items-center gap-3 py-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Profile"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/account");
-            }
-          }}
-          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
-        >
-          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <Path d="m15 18-6-6 6-6" />
-          </Svg>
-        </Pressable>
-
-        <View className="flex-1 min-w-0">
-          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Your documents</Text>
-          <Text className="text-xs text-[#64748B]">Your verified documents</Text>
-        </View>
-      </View>
+  const content = (
+    <>
 
       {/* Trust & Verification Hero Card */}
       <View className="overflow-hidden rounded-2xl bg-[#0B162C] p-5 shadow-sm">
@@ -178,6 +149,46 @@ export function DocumentsScreen() {
           Upload document
         </Button>
       </View>
+    </>
+  );
+
+  if (embedded) {
+    return <View className="gap-5">{content}</View>;
+  }
+
+  return (
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header with Back Button */}
+      <View className="flex-row items-center gap-3 py-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to Profile"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/account");
+            }
+          }}
+          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
+        >
+          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="m15 18-6-6 6-6" />
+          </Svg>
+        </Pressable>
+
+        <View className="flex-1 min-w-0">
+          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Your documents</Text>
+          <Text className="text-xs text-[#64748B]">Your verified documents</Text>
+        </View>
+      </View>
+
+      {content}
     </ScrollView>
   );
 }

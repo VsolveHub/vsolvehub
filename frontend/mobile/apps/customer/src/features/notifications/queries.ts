@@ -212,7 +212,8 @@ export function useMarkNotificationRead() {
     },
     // A refused mark-read means the world moved — the notice was withdrawn, or
     // this session is not who we thought. Re-read rather than keep the row.
-    onError: () => {
+    onError: (err) => {
+      console.warn("[notifications] Failed to mark as read, re-fetching feed:", err);
       void queryClient.invalidateQueries({ queryKey: m2QueryKeys.notifications.feed() });
     },
     retry: false,

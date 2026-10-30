@@ -37,7 +37,7 @@ export function usePriceBook(serviceAreaId?: string, skill?: string) {
       } catch (err) {
         if (
           isApiClientError(err) &&
-          (err.status === 404 || err.code === "m2_requirement_not_found" || err.code === "not_found")
+          ((err as any)?.status === 404 || (err as any)?.code === "m2_requirement_not_found" || (err as any)?.code === "not_found")
         ) {
           return { items: [] };
         }

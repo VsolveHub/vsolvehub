@@ -8,7 +8,7 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import { useCoinTransactions, useCustomerCoins } from "../queries";
 
-export function CoinsScreen() {
+export function CoinsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const coinsQuery = useCustomerCoins();
@@ -23,64 +23,29 @@ export function CoinsScreen() {
 
   const summary = coinsQuery.data;
 
-  return (
-    <ScrollView
-      className="flex-1 bg-[#FAF9F7]"
-      style={{ paddingTop: Math.max(insets.top, 20) }}
-      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
-      }
-    >
-      {/* Header with Back Button */}
-      <View className="flex-row items-center gap-3 py-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Profile"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/account");
-            }
-          }}
-          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
-        >
-          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <Path d="m15 18-6-6 6-6" />
-          </Svg>
-        </Pressable>
-
-        <View className="flex-1 min-w-0">
-          <Text className="text-2xl font-extrabold text-[#0B1B3D]">V Coins</Text>
-          <Text className="text-xs text-[#64748B]">Earn, redeem & gifting</Text>
-        </View>
-      </View>
-
-      {coinsQuery.isPending ? (
-        <View className="py-12 items-center justify-center">
-          <Spinner size="sm" />
-          <Text className="mt-2 text-sm text-[#64748B]">Loading your V Coins…</Text>
-        </View>
-      ) : coinsQuery.isError ? (
-        <ErrorState
-          title="Could not load V Coins"
-          message={coinsQuery.error ? describeError(coinsQuery.error, "read").message : "Please try again"}
-          actionLabel="Try again"
-          onAction={() => void coinsQuery.refetch()}
-        />
-      ) : (
-        <>
+  const content = coinsQuery.isPending ? (
+    <View className="py-12 items-center justify-center">
+      <Spinner size="sm" />
+      <Text className="mt-2 text-sm text-[#64748B]">Loading your V Coins…</Text>
+    </View>
+  ) : coinsQuery.isError ? (
+    <ErrorState
+      title="Could not load V Coins"
+      message={coinsQuery.error ? describeError(coinsQuery.error, "read").message : "Please try again"}
+      actionLabel="Try again"
+      onAction={() => void coinsQuery.refetch()}
+    />
+  ) : (
+    <>
           {/* Balance Hero Card */}
           <View className="overflow-hidden rounded-2xl bg-[#0B162C] p-5 shadow-sm">
             <View className="flex-row items-center justify-between">
               <View>
                 <Text className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">
-                  TOTAL V COINS BALANCE
+                  SPENDABLE V COINS
                 </Text>
                 <Text className="mt-1 text-3xl font-extrabold text-white">
-                  {(summary?.total_balance ?? 0).toLocaleString("en-IN")} <Text className="text-lg font-bold text-[#EA580C]">Coins</Text>
+                  {(summary?.spendable_coins ?? 0).toLocaleString("en-IN")} <Text className="text-lg font-bold text-[#EA580C]">Coins</Text>
                 </Text>
               </View>
               <View className="size-12 items-center justify-center rounded-xl bg-[#EA580C]/20 border border-[#EA580C]/40">
@@ -93,9 +58,9 @@ export function CoinsScreen() {
 
             <View className="mt-4 grid grid-cols-2 flex-row gap-2 border-t border-white/10 pt-3">
               <View className="flex-1">
-                <Text className="text-[11px] text-[#94A3B8]">Active</Text>
+                <Text className="text-[11px] text-[#94A3B8]">Pending</Text>
                 <Text className="text-sm font-bold text-white">
-                  {(summary?.active_coins ?? 0).toLocaleString("en-IN")}
+                  {(summary?.pending_coins ?? 0).toLocaleString("en-IN")}
                 </Text>
               </View>
               <View className="flex-1">
@@ -158,7 +123,7 @@ export function CoinsScreen() {
             ) : txnsQuery.data && txnsQuery.data.length > 0 ? (
               <View className="mt-3 divide-y divide-[#F4F2EE]">
                 {txnsQuery.data.map((txn) => {
-                  const isEarned = txn.kind === "EARN" || txn.kind === "BONUS" || txn.kind === "REFERRAL";
+                  const isEarned = !["BURN", "RESERVE", "EXPIRE", "CANCEL", "REVERSE"].includes(txn.kind);
                   const formattedDate = new Date(txn.created_at).toLocaleDateString("en-IN", {
                     day: "numeric",
                     month: "short",
@@ -167,11 +132,11 @@ export function CoinsScreen() {
                   return (
                     <View key={txn.id} className="flex-row items-center justify-between py-3">
                       <View className="flex-1 min-w-0 pr-2">
-                        <Text className="text-sm font-semibold text-[#0F172A]">{txn.description || txn.kind}</Text>
+                        <Text className="text-sm font-semibold text-[#0F172A]">{txn.notes || txn.kind.replace("_", " ")}</Text>
                         <Text className="text-xs text-[#64748B] mt-0.5">{formattedDate}</Text>
                       </View>
                       <Text className={`text-base font-bold ${isEarned ? "text-emerald-600" : "text-[#EA580C]"}`}>
-                        {isEarned ? "+" : "-"}{txn.coins_amount} Coins
+                        {isEarned ? "+" : "-"}{txn.amount} Coins
                       </Text>
                     </View>
                   );
@@ -188,7 +153,48 @@ export function CoinsScreen() {
             )}
           </View>
         </>
-      )}
+      );
+
+  if (embedded) {
+    return <View className="gap-5">{content}</View>;
+  }
+
+  return (
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="px-4 pb-24 pt-2 gap-4"
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      {/* Header with Back Button */}
+      <View className="flex-row items-center gap-3 py-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to Profile"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/account");
+            }
+          }}
+          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
+        >
+          <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#0F172A" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="m15 18-6-6 6-6" />
+          </Svg>
+        </Pressable>
+
+        <View className="flex-1 min-w-0">
+          <Text className="text-2xl font-extrabold text-[#0B1B3D]">V Coins</Text>
+          <Text className="text-xs text-[#64748B]">Earn, redeem & gifting</Text>
+        </View>
+      </View>
+
+      {content}
     </ScrollView>
   );
 }

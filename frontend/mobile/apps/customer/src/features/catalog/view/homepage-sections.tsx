@@ -19,6 +19,7 @@ import {
   type Cart,
 } from "@/features/checkout/queries";
 import { ReviewsMarquee } from "@/features/catalog/view/reviews-marquee";
+import { useIsDesktop } from "@/lib/responsive";
 
 type HomepageServiceItem = {
   name: string;
@@ -292,6 +293,8 @@ export function HomepageClientSections() {
     });
   };
 
+  const isDesktop = useIsDesktop();
+
   return (
     <View className="gap-12">
       {cartMerge ? (
@@ -303,13 +306,20 @@ export function HomepageClientSections() {
         </View>
       ) : null}
 
-      <ServiceRail title="Best Sellers" subtitle="Most booked services in your city" items={BEST_SELLERS} renderAction={renderItemAction} />
+      <ServiceRail
+        title="Best Sellers"
+        subtitle="Most booked services in your city"
+        items={BEST_SELLERS}
+        renderAction={renderItemAction}
+        isDesktop={isDesktop}
+      />
       <HeroSplitCarousel
         slide={slide}
         index={slideIndex}
         onPrev={() => setSlideIndex((prev) => (prev - 1 + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length)}
         onNext={() => setSlideIndex((prev) => (prev + 1) % CAROUSEL_SLIDES.length)}
         onSelect={setSlideIndex}
+        isDesktop={isDesktop}
       />
       <ServiceRail
         title="Electrician Services"
@@ -317,29 +327,56 @@ export function HomepageClientSections() {
         seeAll="/catalog/electrician"
         items={ELECTRICIAN_SERVICES}
         renderAction={renderItemAction}
+        isDesktop={isDesktop}
       />
       <View className="gap-5">
         <Text className="text-2xl font-extrabold tracking-tight text-navy-900">Service & Booking Guides</Text>
         <Text className="text-sm text-text-secondary">Read what is included & how to prepare</Text>
-        {GUIDES.map((guide) => (
-          <Pressable
-            key={guide.key}
-            accessibilityRole="button"
-            onPress={() => setActiveGuideKey(guide.key)}
-            className="flex-row items-center justify-between rounded-2xl border border-[#e7e2da] bg-white p-5"
-          >
-            <View className="flex-row items-center gap-4">
-              <View className={`size-10 items-center justify-center rounded-full ${guide.iconBg}`}>
-                <Text className="text-lg">{guide.icon}</Text>
-              </View>
-              <View>
-                <Text className="text-sm font-extrabold text-navy-900">{guide.label}</Text>
-                <Text className="mt-0.5 text-[10px] font-semibold text-text-secondary">Check inclusions & prep</Text>
-              </View>
-            </View>
-            <Chevron />
-          </Pressable>
-        ))}
+        {isDesktop ? (
+          <View className="flex-row gap-6">
+            {GUIDES.map((guide) => (
+              <Pressable
+                key={guide.key}
+                accessibilityRole="button"
+                onPress={() => setActiveGuideKey(guide.key)}
+                className="flex-1 flex-row items-center justify-between rounded-2xl border border-[#e7e2da] bg-white p-5 shadow-2xs hover:border-[#EA580C] hover:shadow-sm"
+              >
+                <View className="flex-row items-center gap-4">
+                  <View className={`size-10 items-center justify-center rounded-full ${guide.iconBg}`}>
+                    <Text className="text-lg">{guide.icon}</Text>
+                  </View>
+                  <View>
+                    <Text className="text-sm font-extrabold text-navy-900">{guide.label}</Text>
+                    <Text className="mt-0.5 text-[10px] font-semibold text-text-secondary">Check inclusions & prep</Text>
+                  </View>
+                </View>
+                <Chevron color="#EA580C" />
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View className="gap-3.5">
+            {GUIDES.map((guide) => (
+              <Pressable
+                key={guide.key}
+                accessibilityRole="button"
+                onPress={() => setActiveGuideKey(guide.key)}
+                className="flex-row items-center justify-between rounded-2xl border border-[#e7e2da] bg-white p-5"
+              >
+                <View className="flex-row items-center gap-4">
+                  <View className={`size-10 items-center justify-center rounded-full ${guide.iconBg}`}>
+                    <Text className="text-lg">{guide.icon}</Text>
+                  </View>
+                  <View>
+                    <Text className="text-sm font-extrabold text-navy-900">{guide.label}</Text>
+                    <Text className="mt-0.5 text-[10px] font-semibold text-text-secondary">Check inclusions & prep</Text>
+                  </View>
+                </View>
+                <Chevron />
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
       <ServiceRail
         title="Plumbing Services"
@@ -347,6 +384,7 @@ export function HomepageClientSections() {
         seeAll="/catalog/plumber"
         items={PLUMBING_SERVICES}
         renderAction={renderItemAction}
+        isDesktop={isDesktop}
       />
       <ServiceRail
         title="Carpenter Services"
@@ -354,6 +392,7 @@ export function HomepageClientSections() {
         seeAll="/catalog/technician"
         items={CARPENTRY_SERVICES}
         renderAction={renderItemAction}
+        isDesktop={isDesktop}
       />
       <ReviewsMarquee />
 
@@ -439,12 +478,14 @@ function ServiceRail({
   seeAll,
   items,
   renderAction,
+  isDesktop = false,
 }: {
   title: string;
   subtitle: string;
   seeAll?: string;
   items: HomepageServiceItem[];
   renderAction: (slug: string) => ReactNode;
+  isDesktop?: boolean;
 }) {
   const router = useRouter();
   return (
@@ -461,11 +502,28 @@ function ServiceRail({
           </Pressable>
         ) : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-5 pb-4">
-        {items.map((item) => (
-          <ServiceCard key={item.slug} item={item} action={renderAction(item.slug)} />
-        ))}
-      </ScrollView>
+      {isDesktop ? (
+        <View className="flex-row gap-6">
+          {items.map((item) => (
+            <View key={item.slug} className="flex-1 justify-between gap-4 rounded-2xl border border-[#e7e2da] bg-white p-5 shadow-2xs">
+              <Pressable accessibilityRole="link" onPress={() => router.push(`/catalog/${item.categorySlug}/${item.slug}` as never)} className="gap-1.5">
+                <Text className="text-base font-extrabold text-navy-900">{item.name}</Text>
+                <Text numberOfLines={2} className="text-xs leading-relaxed text-text-secondary">{item.desc}</Text>
+              </Pressable>
+              <View className="mt-1 flex-row items-center justify-between">
+                <Text className="text-sm font-black text-navy-900">{`₹${item.price}`}</Text>
+                {renderAction(item.slug)}
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-5 pb-4">
+          {items.map((item) => (
+            <ServiceCard key={item.slug} item={item} action={renderAction(item.slug)} />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -492,14 +550,55 @@ function HeroSplitCarousel({
   onPrev,
   onNext,
   onSelect,
+  isDesktop = false,
 }: {
   slide: (typeof CAROUSEL_SLIDES)[number];
   index: number;
   onPrev: () => void;
   onNext: () => void;
   onSelect: (index: number) => void;
+  isDesktop?: boolean;
 }) {
   const router = useRouter();
+
+  if (isDesktop) {
+    return (
+      <View className={`overflow-hidden rounded-3xl border border-[#e7e2da]/40 flex-row min-h-[280px] shadow-sm ${slide.bgClass}`}>
+        {/* Left Content */}
+        <View className="flex-1 justify-between p-10 z-10">
+          <View className="gap-2">
+            <Text className="text-[9px] font-black uppercase tracking-widest text-text-secondary/70">Featured Service</Text>
+            <Text className="text-3xl font-extrabold leading-tight text-navy-900">{slide.title}</Text>
+            <Text className="mt-1 text-xs font-medium leading-relaxed text-text-secondary max-w-sm">{slide.subtitle}</Text>
+          </View>
+          <Pressable accessibilityRole="button" onPress={() => router.push(slide.link as never)} className={`mt-6 self-start rounded-xl px-6 py-2.5 ${slide.btnBg}`}>
+            <Text className="text-xs font-bold text-white">{slide.buttonText}</Text>
+          </Pressable>
+        </View>
+        {/* Right Image */}
+        <View className="w-1/2 h-[280px] overflow-hidden">
+          <Image source={{ uri: slide.image }} contentFit="cover" style={{ width: "100%", height: "100%" }} />
+        </View>
+        {/* Controls */}
+        <View className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
+          <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Previous slide" onPress={onPrev} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
+            <Chevron flip />
+          </Pressable>
+        </View>
+        <View className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
+          <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Next slide" onPress={onNext} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
+            <Chevron />
+          </Pressable>
+        </View>
+        <View className="absolute bottom-4 left-10 flex-row gap-1.5 z-20">
+          {CAROUSEL_SLIDES.map((entry, dot) => (
+            <Pressable hitSlop={8} key={entry.title} accessibilityRole="button" accessibilityLabel={`Go to slide ${dot + 1}`} onPress={() => onSelect(dot)} className={dot === index ? "h-1.5 w-5 rounded-full bg-navy-900" : "size-1.5 rounded-full bg-navy-900/30"} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className={`overflow-hidden rounded-3xl border border-[#e7e2da]/40 ${slide.bgClass}`}>
       <View className="gap-2 p-8">

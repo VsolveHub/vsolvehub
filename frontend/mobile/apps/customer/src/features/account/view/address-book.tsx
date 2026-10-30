@@ -4,13 +4,13 @@ import { describeError } from "@vsolve/query/native";
 import { Badge, Button, ConfirmAction, Dialog, ErrorState, Field, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as Location from "expo-location";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { useAddresses, useArchiveAddress, useCreateAddress, useReverseGeocode, type Address, type AddressInput } from "@/features/addresses/queries";
 import { AccountPageShell } from "./account-page-shell";
 
-export function AddressBook() {
+export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
   const addressesQuery = useAddresses();
   const createAddress = useCreateAddress();
   const archiveAddress = useArchiveAddress();
@@ -92,9 +92,8 @@ export function AddressBook() {
     );
   }
 
-  return (
-    <AccountPageShell activeTab="addresses" onRefresh={onRefresh} refreshing={refreshing}>
-      <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
+  const content = (
+    <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
         {/* Section Header matching Image 2 */}
         <View className="mb-4 flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
@@ -345,8 +344,22 @@ export function AddressBook() {
           onOpenChange={setDialogOpen}
           title="Save an address"
           description="Where we send someone when you book."
+          footer={
+            <View className="flex-row items-center justify-end gap-2 pt-1">
+              <Button variant="ghost" onPress={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onPress={handleSaveAddress} loading={createAddress.isPending}>
+                Save address
+              </Button>
+            </View>
+          }
         >
-          <View className="gap-3 py-2">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerClassName="gap-3.5 py-1"
+          >
             <Button variant="outline" size="sm" onPress={handleLocate}>
               📍 Use my current location
             </Button>
@@ -359,23 +372,30 @@ export function AddressBook() {
             <Field label="Locality / Area" required>
               <Input placeholder="Locality or landmark" value={locality} onChangeText={setLocality} />
             </Field>
-            <Field label="City" required>
-              <Input placeholder="City" value={city} onChangeText={setCity} />
-            </Field>
-            <Field label="Pincode" required>
-              <Input placeholder="6-digit pincode" value={postal} onChangeText={setPostal} keyboardType="number-pad" />
-            </Field>
-            <View className="mt-2 flex-row justify-end gap-2">
-              <Button variant="ghost" onPress={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onPress={handleSaveAddress} loading={createAddress.isPending}>
-                Save address
-              </Button>
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Field label="City" required>
+                  <Input placeholder="City" value={city} onChangeText={setCity} />
+                </Field>
+              </View>
+              <View className="w-32">
+                <Field label="Pincode" required>
+                  <Input placeholder="6-digit pincode" value={postal} onChangeText={setPostal} keyboardType="number-pad" />
+                </Field>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </Dialog>
       </View>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <AccountPageShell activeTab="addresses" onRefresh={onRefresh} refreshing={refreshing}>
+      {content}
     </AccountPageShell>
   );
 }

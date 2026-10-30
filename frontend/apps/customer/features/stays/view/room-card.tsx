@@ -16,7 +16,7 @@ const TENANT_LABELS: Record<string, string> = {
 };
 
 /** "/stays/<slug>?room=<unit id>": the property page opens with this room chosen. */
-export function roomHref(slug: string, unitId: string): string {
+export function roomHref(slug: string | undefined | null, unitId: string): string {
   return `${stayHref(slug)}?room=${encodeURIComponent(unitId)}`;
 }
 

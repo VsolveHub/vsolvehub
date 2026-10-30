@@ -3,11 +3,13 @@ import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBookingGroup } from "@/features/bookings/queries";
 import { RatingForm } from "@/features/ratings/view/rating-form";
 
 export function BookingVisit({ groupId, bookingId }: { groupId: string; bookingId: string }) {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const group = useBookingGroup(groupId);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,7 +27,12 @@ export function BookingVisit({ groupId, bookingId }: { groupId: string; bookingI
   return (
     <ScrollView
       className="flex-1 bg-canvas"
-      contentContainerClassName="gap-3 px-4 py-6"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 14, 32),
+        paddingBottom: Math.max(insets.bottom + 24, 36),
+        paddingHorizontal: 16,
+      }}
+      contentContainerClassName="gap-3"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }

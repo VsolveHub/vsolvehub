@@ -3,8 +3,12 @@ import { useRouter } from "expo-router";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { Text } from "@vsolve/mobile-ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
+import { useIsDesktop } from "@/lib/responsive";
+import { DesktopAccountNav } from "./desktop-account-nav";
+import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 
 export type AccountTabKey =
   | "profile"
@@ -27,7 +31,7 @@ const TABS: TabItem[] = [
   { key: "profile", label: "Profile", href: "/account" },
   { key: "wallet", label: "Wallet", href: "/account/wallet" },
   { key: "coins", label: "V Coins", href: "/account/coins" },
-  { key: "referrals", label: "Refer & Earn", href: "/account/referrals" },
+  { key: "referrals", label: "Refer", href: "/account/referrals" },
   { key: "addresses", label: "Addresses", href: "/account/addresses" },
   { key: "messages", label: "Messages", href: "/account/messages" },
   { key: "documents", label: "Documents", href: "/account/documents" },
@@ -47,11 +51,59 @@ export function AccountPageShell({
   refreshing?: boolean;
 }) {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
+  const insets = useSafeAreaInsets();
+
+  if (isDesktop) {
+    return (
+      <ScrollView
+        className="flex-1 bg-[#FAF9F7]"
+        contentContainerClassName="pb-0"
+        showsVerticalScrollIndicator={true}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={Boolean(refreshing)}
+              onRefresh={onRefresh}
+              colors={["#EA580C"]}
+              tintColor="#EA580C"
+            />
+          ) : undefined
+        }
+      >
+        <View className="mx-auto w-full max-w-[1216px] px-6 lg:px-8 pt-8 pb-16 min-h-[calc(100vh-180px)]">
+          {/* Heading Section */}
+          <View>
+            <Text className="text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-[#0B1B3D]">
+              Your profile
+            </Text>
+            <Text className="mt-2 text-[1.05rem] leading-relaxed text-[#64748B]">
+              Manage your details, preferences and devices.
+            </Text>
+          </View>
+
+          {/* Two-column layout */}
+          <View className="mt-8 flex-row items-start gap-10 lg:gap-12">
+            {/* Left Nav */}
+            <DesktopAccountNav activeKey={activeTab} />
+
+            {/* Right Subpage Content */}
+            <View className="min-w-0 flex-1">{children}</View>
+          </View>
+        </View>
+
+        <DesktopSiteFooter />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
       className="flex-1 bg-[#FAF9F7]"
-      contentContainerClassName="gap-4 px-4 pb-24 pt-5"
+      contentContainerClassName="gap-4 px-4 pb-24"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 16, 36),
+      }}
       showsVerticalScrollIndicator={false}
       refreshControl={
         onRefresh ? (
@@ -64,63 +116,44 @@ export function AccountPageShell({
         ) : undefined
       }
     >
-      {/* Top Header matching customer portal */}
-      <View className="flex-row items-center justify-between gap-3">
-        <View className="flex-row items-center gap-2.5">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.push("/account");
-              }
-            }}
-            className="size-9 items-center justify-center rounded-full border border-[#e7e2da] bg-white shadow-2xs active:bg-surface-hover"
-          >
-            <Svg
-              viewBox="0 0 24 24"
-              width={18}
-              height={18}
-              fill="none"
-              stroke="#071328"
-              strokeWidth={2.2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <Path d="m15 18-6-6 6-6" />
-            </Svg>
-          </Pressable>
-          <Text className="min-w-0 text-[1.875rem] font-extrabold leading-[1.15] tracking-tight text-navy-900">
-            Your profile
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Notifications"
-          onPress={() => requestOpenNotifications()}
-          className="-mr-1.5 -mt-0.5 h-10 w-10 items-center justify-center rounded-full active:bg-surface-hover"
+      {/* Top Back Navigation matching user profile design */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        hitSlop={12}
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.push("/account");
+          }
+        }}
+        className="flex-row items-center gap-1.5 self-start py-1.5 mt-1 active:opacity-70"
+      >
+        <Svg
+          viewBox="0 0 24 24"
+          width={18}
+          height={18}
+          fill="none"
+          stroke="#071328"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          <Svg
-            viewBox="0 0 24 24"
-            width={22}
-            height={22}
-            fill="none"
-            stroke="#071328"
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-            <Path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-          </Svg>
-        </Pressable>
-      </View>
+          <Path d="m15 18-6-6 6-6" />
+        </Svg>
+        <Text className="text-sm font-semibold text-navy-900">Back</Text>
+      </Pressable>
 
-      <Text className="text-[15px] leading-relaxed text-text-secondary">
-        Manage your details, communication preferences, and signed-in devices.
-      </Text>
+      {/* Heading & Subtitle */}
+      <View className="gap-1.5 pt-0.5">
+        <Text className="text-[28px] font-extrabold tracking-tight text-navy-950">
+          Your profile
+        </Text>
+        <Text className="text-[14px] leading-relaxed text-text-secondary">
+          Manage your details, communication preferences, and signed-in devices.
+        </Text>
+      </View>
 
       {/* Account Navigation Pills */}
       <ScrollView

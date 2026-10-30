@@ -14,7 +14,7 @@ import {
 } from "@/features/account/queries";
 import { AccountPageShell } from "./account-page-shell";
 
-export function PrivacyScreen() {
+export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const requests = usePrivacyRequests();
   const create = useCreatePrivacyRequest();
 
@@ -33,30 +33,37 @@ export function PrivacyScreen() {
   const openAccess = requestList.filter((r) => r.kind === "ACCESS").find(isRequestOpen);
 
   if (requests.isPending) {
+    const loadingView = (
+      <View className="py-12 items-center justify-center">
+        <Spinner size="sm" />
+      </View>
+    );
+    if (embedded) return loadingView;
     return (
       <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
-        <View className="py-12 items-center justify-center">
-          <Spinner size="sm" />
-        </View>
+        {loadingView}
       </AccountPageShell>
     );
   }
 
   if (requests.isError) {
+    const errorView = (
+      <ErrorState
+        title="We could not load your privacy requests"
+        message={describeError(requests.error, "read").message}
+        actionLabel="Try again"
+        onAction={() => void requests.refetch()}
+      />
+    );
+    if (embedded) return errorView;
     return (
       <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
-        <ErrorState
-          title="We could not load your privacy requests"
-          message={describeError(requests.error, "read").message}
-          actionLabel="Try again"
-          onAction={() => void requests.refetch()}
-        />
+        {errorView}
       </AccountPageShell>
     );
   }
 
-  return (
-    <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
+  const content = (
       <View className="gap-6">
         {/* Card 1: Consents matching Image 3 */}
         <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
@@ -212,6 +219,15 @@ export function PrivacyScreen() {
           }
         />
       </View>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
+      {content}
     </AccountPageShell>
   );
 }

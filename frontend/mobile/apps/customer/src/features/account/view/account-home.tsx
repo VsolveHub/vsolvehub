@@ -11,15 +11,30 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { useCustomerProfile } from "@/features/account/queries";
 import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
 import { useUnreadNotificationCount } from "@/features/notifications/queries";
+import { useIsDesktop } from "@/lib/responsive";
+import { DesktopAccountNav, type AccountSectionKey } from "./desktop-account-nav";
+import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { LogoutButton } from "./logout-button";
+import { WalletScreen } from "./wallet-screen";
+import { CoinsScreen } from "./coins-screen";
+import { ReferralScreen } from "./referral-screen";
+import { AddressBook } from "./address-book";
+import { MessagesScreen } from "./messages-screen";
+import { DocumentsScreen } from "./documents-screen";
+import { PrivacyScreen } from "./privacy-screen";
+import { SessionsScreen } from "./sessions-screen";
+import { ProfileEditor } from "./profile-editor";
 
-export function AccountHome() {
+export function AccountHome({ initialSection = "profile" }: { initialSection?: AccountSectionKey } = {}) {
+  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const profile = useCustomerProfile();
   const unreadCount = useUnreadNotificationCount(true);
   const unreadTotal = unreadCount.data?.unread ?? 1;
   const [refreshing, setRefreshing] = useState(false);
+  const [activeSection, setActiveSection] = useState<AccountSectionKey>(initialSection);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -60,6 +75,205 @@ export function AccountHome() {
         year: "numeric",
       })}.`
     : "V Solve Hub member since 2 Oct 2025.";
+
+  if (isDesktop) {
+    return (
+      <ScrollView
+        className="flex-1 bg-[#FAF9F7]"
+        contentContainerClassName="pb-0"
+        showsVerticalScrollIndicator={true}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
+        <View className="mx-auto w-full max-w-[1216px] px-6 lg:px-8 pt-8 pb-16 min-h-[calc(100vh-180px)]">
+          {/* Heading Section */}
+          <View>
+            <Text className="text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-[#0B1B3D]">
+              Your profile
+            </Text>
+            <Text className="mt-2 text-[1.05rem] leading-relaxed text-[#64748B]">
+              Manage your details, preferences and devices.
+            </Text>
+          </View>
+
+          {/* Two-column layout */}
+          <View className="mt-8 flex-row items-start gap-10 lg:gap-12">
+            {/* Left Nav with in-place section switching */}
+            <DesktopAccountNav
+              activeKey={activeSection}
+              onSelectSection={(key) => {
+                setIsEditingProfile(false);
+                setActiveSection(key);
+              }}
+            />
+
+            {/* Right Content Area */}
+            {activeSection === "profile" && (
+              isEditingProfile ? (
+                <ProfileEditor embedded onDone={() => setIsEditingProfile(false)} />
+              ) : (
+                <View className="min-w-0 flex-1 gap-5">
+                  {/* 1. Dark Navy Profile Hero Card */}
+                  <View className="overflow-hidden rounded-2xl bg-[#0B162C] p-6 shadow-sm">
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4">
+                        {/* Avatar with initial */}
+                        <View className="size-[4.5rem] shrink-0 items-center justify-center rounded-full bg-white shadow-md">
+                          <Text className="text-3xl font-extrabold text-[#0B162C]">{userInitial}</Text>
+                        </View>
+
+                        {/* User Details */}
+                        <View className="min-w-0">
+                          <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#94A3B8]">
+                            PERSONAL PROFILE
+                          </Text>
+                          <Text className="mt-0.5 text-[1.75rem] font-bold leading-tight text-white" numberOfLines={1}>
+                            {name}
+                          </Text>
+                          <Text className="mt-1 text-sm text-[#94A3B8]" numberOfLines={1}>
+                            {memberSince}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Orange Outline Edit Button */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Edit profile"
+                        onPress={() => setIsEditingProfile(true)}
+                        className="flex-row items-center gap-1.5 rounded-xl border border-[#EA580C] px-4 py-2 active:bg-[#EA580C]/10 hover:bg-[#EA580C]/10"
+                      >
+                        <Svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#EA580C" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                          <Path d="m15 5 4 4" />
+                        </Svg>
+                        <Text className="text-sm font-bold text-[#EA580C]">Edit</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* 2. White Actions / Settings Menu List Card */}
+                  <View className="overflow-hidden rounded-2xl border border-[#F1EFEB] bg-white shadow-xs">
+                    <MenuItemRow
+                      icon={<WalletIcon />}
+                      title="Wallet"
+                      subtitle="Transactions & top-ups"
+                      onPress={() => setActiveSection("wallet")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<VCoinsIcon />}
+                      title="V Coins"
+                      subtitle="Earn, redeem & gifting"
+                      onPress={() => setActiveSection("coins")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<ReferIcon />}
+                      title="Refer & Earn"
+                      subtitle="Invite friends to earn rewards"
+                      onPress={() => setActiveSection("referrals")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<AddressesIcon />}
+                      title="Addresses"
+                      subtitle="View and edit addresses"
+                      onPress={() => setActiveSection("addresses")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<MessagesIcon />}
+                      title="Messages"
+                      subtitle="Inbox and updates"
+                      onPress={() => setActiveSection("messages")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<DocumentsIcon />}
+                      title="Your documents"
+                      subtitle="Your verified documents"
+                      onPress={() => setActiveSection("documents")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<DevicesIcon />}
+                      title="Devices"
+                      subtitle="Where you're signed in"
+                      onPress={() => setActiveSection("devices")}
+                      showDivider={false}
+                    />
+                  </View>
+
+                  {/* 3. Signed in as + Sign Out Row */}
+                  <View className="flex-row items-center justify-between rounded-xl border border-[#F1EFEB] bg-white p-4">
+                    <View className="flex-row items-center gap-2">
+                      <Text className="text-xs font-semibold text-navy-900">Signed in as:</Text>
+                      <Text className="text-xs text-[#64748B]">
+                        {person.phone_number || person.email || "Active User"}
+                      </Text>
+                    </View>
+                    <LogoutButton variant="ghost" />
+                  </View>
+                </View>
+              )
+            )}
+
+            {activeSection === "wallet" && (
+              <View className="min-w-0 flex-1">
+                <WalletScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "coins" && (
+              <View className="min-w-0 flex-1">
+                <CoinsScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "referrals" && (
+              <View className="min-w-0 flex-1">
+                <ReferralScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "addresses" && (
+              <View className="min-w-0 flex-1">
+                <AddressBook embedded />
+              </View>
+            )}
+
+            {activeSection === "messages" && (
+              <View className="min-w-0 flex-1">
+                <MessagesScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "documents" && (
+              <View className="min-w-0 flex-1">
+                <DocumentsScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "privacy" && (
+              <View className="min-w-0 flex-1">
+                <PrivacyScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "devices" && (
+              <View className="min-w-0 flex-1">
+                <SessionsScreen embedded />
+              </View>
+            )}
+          </View>
+        </View>
+
+        <DesktopSiteFooter />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView

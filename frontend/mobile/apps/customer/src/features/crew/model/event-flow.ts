@@ -347,6 +347,7 @@ const GUESTS_PER_SERVER: Readonly<Record<string, number>> = {
   buffet: 30,
   "sit-down": 15,
   passed: 25,
+  "snacks-passed": 25,
 };
 
 /** The most guests one event may be booked for here. Beyond this it is a different sale. */

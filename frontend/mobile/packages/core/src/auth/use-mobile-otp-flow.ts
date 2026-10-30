@@ -21,7 +21,7 @@ export interface MobileOtpFlow {
   code: string;
   onCodeChange: (value: string) => void;
   onRequestCode: () => void;
-  onVerifyCode: () => void;
+  onVerifyCode: (codeOverride?: string) => void;
   onResendCode: () => void;
   onChangeNumber: () => void;
   canRequest: boolean;
@@ -127,41 +127,50 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
     }
   }, [options?.intendedRole, phone]);
 
-  const onVerifyCode = useCallback(() => {
-    if (!challengeId || code.length !== codeLength || isVerifying) return;
-    setVerifying(true);
-    setCodeError(null);
-    void (async () => {
-      try {
-        const device = await installationId();
-        const session = await request(() =>
-          getApiClient().POST("/api/v1/auth/mobile/otp/verify/", {
-            body: {
-              challenge_id: challengeId,
-              phone_number: phone,
-              code,
-              device_identifier: device,
-              device_label: deviceLabel(),
-            },
-          }),
-        );
-        await useAuthStore.getState().signIn(session.session_token);
-        await getMobileQueryClient().invalidateQueries();
-        setPhase("authenticated");
-        setCode("");
-        setChallengeId(null);
-        setDevelopmentCode(null);
-      } catch (error) {
-        if (error instanceof ApiRequestError && error.status === 400) {
-          setCodeError("That code is not right, or it has expired. Check the code, or request a new one.");
-        } else {
-          setFailure(describeOtpFailure(error));
-        }
-      } finally {
-        setVerifying(false);
+  const onVerifyCode = useCallback(
+    (codeOverride?: string) => {
+      const activeCode = sanitizeCodeInput(codeOverride ?? code, codeLength);
+      if (!challengeId || activeCode.length !== codeLength || isVerifying) return;
+      if (codeOverride) {
+        setCode(activeCode);
       }
-    })();
-  }, [challengeId, code, codeLength, isVerifying, phone]);
+      setVerifying(true);
+      setCodeError(null);
+      void (async () => {
+        try {
+          const device = await installationId();
+          const session = await request(() =>
+            getApiClient().POST("/api/v1/auth/mobile/otp/verify/", {
+              body: {
+                challenge_id: challengeId,
+                phone_number: phone,
+                code: activeCode,
+                device_identifier: device,
+                device_label: deviceLabel(),
+              },
+            }),
+          );
+          await useAuthStore.getState().signIn(session.session_token);
+          await getMobileQueryClient().invalidateQueries();
+          setPhase("authenticated");
+          setCode("");
+          setChallengeId(null);
+          setDevelopmentCode(null);
+        } catch (error) {
+          if (error instanceof ApiRequestError && error.status === 400) {
+            setCodeError(
+              "That code is not right, or it has expired. Check the code, or request a new one.",
+            );
+          } else {
+            setFailure(describeOtpFailure(error));
+          }
+        } finally {
+          setVerifying(false);
+        }
+      })();
+    },
+    [challengeId, code, codeLength, isVerifying, phone],
+  );
 
   const resendInSeconds =
     resendUntil === null ? 0 : Math.max(0, Math.ceil((resendUntil - now) / 1000));

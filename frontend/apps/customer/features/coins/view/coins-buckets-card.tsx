@@ -10,8 +10,8 @@ interface CoinsBucketsCardProps {
 
 export function CoinsBucketsCard({ summary }: CoinsBucketsCardProps) {
   const policy = summary.active_burn_policy;
-  const coinValuePaise = policy.coin_value_paise;
-  const maxBurnPercent = policy.max_burn_percent;
+  const coinValuePaise = policy?.coin_value_paise;
+  const maxBurnPercent = policy?.max_burn_percent;
   const spendableRupeeValuePaise =
     typeof coinValuePaise === "number" ? summary.spendable_coins * coinValuePaise : null;
 

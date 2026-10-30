@@ -18,7 +18,13 @@ import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
 import { resolveCustomerPush } from "@/features/notifications/push-routing";
 
 import { LogBox } from "react-native";
+import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import "../global.css";
+
+configureReanimatedLogger({
+  level: ReanimatedLogLevel.warn,
+  strict: false,
+});
 
 LogBox.ignoreAllLogs();
 

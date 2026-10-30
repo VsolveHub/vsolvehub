@@ -4,6 +4,7 @@ import { describeError } from "@vsolve/query/native";
 import { Badge, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
 import { Pressable, Switch, View } from "react-native";
+import Svg, { Path, Rect } from "react-native-svg";
 
 import { useCommunicationPreferences, useSetCommunicationPreference } from "@/features/account/queries";
 import { AccountPageShell } from "./account-page-shell";
@@ -35,7 +36,7 @@ function humanise(slug: string): string {
     .join(" ");
 }
 
-export function MessagesScreen() {
+export function MessagesScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const preferences = useCommunicationPreferences();
   const update = useSetCommunicationPreference();
   const [refreshing, setRefreshing] = useState(false);
@@ -47,47 +48,108 @@ export function MessagesScreen() {
   };
 
   if (preferences.isPending) {
+    const loadingView = (
+      <View className="items-center justify-center py-12">
+        <Spinner size="sm" />
+      </View>
+    );
+    if (embedded) return loadingView;
     return (
       <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
-        <View className="items-center justify-center py-12">
-          <Spinner size="sm" />
-        </View>
+        {loadingView}
       </AccountPageShell>
     );
   }
 
   if (preferences.isError) {
+    const errorView = (
+      <ErrorState
+        title="We could not load your message settings"
+        message={describeError(preferences.error, "read").message}
+        actionLabel="Try again"
+        onAction={() => void preferences.refetch()}
+      />
+    );
+    if (embedded) return errorView;
     return (
       <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
-        <ErrorState
-          title="We could not load your message settings"
-          message={describeError(preferences.error, "read").message}
-          actionLabel="Try again"
-          onAction={() => void preferences.refetch()}
-        />
+        {errorView}
       </AccountPageShell>
     );
   }
 
   const rows = preferences.data ?? [];
 
-  return (
-    <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
-      <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
+  const content = (
+    <View className="overflow-hidden rounded-3xl border border-[#e7e2da]/80 bg-white p-6 shadow-xs">
         {/* Section Header */}
-        <Text className="text-xl font-extrabold tracking-tight text-navy-950">Messages</Text>
+        <Text className="text-xl font-bold tracking-tight text-navy-950">Messages</Text>
         <Text className="mt-1 text-sm text-text-secondary">
           Choose what we send you, and where it goes.
         </Text>
 
         {rows.length === 0 ? (
-          /* Empty State matching Image 1 */
-          <View className="mt-5 items-center justify-center rounded-2xl border border-dashed border-[#d3ccc0] bg-white px-6 py-8">
-            <Text className="text-center text-base font-extrabold text-navy-900">
+          /* Empty State matching Image exactly */
+          <View className="mt-6 items-center justify-center rounded-2xl border border-dashed border-[#d3ccc0] bg-white px-6 py-10">
+            <Svg width={52} height={52} viewBox="0 0 48 48" fill="none">
+              {/* Rays radiating upwards */}
+              <Path
+                d="M24 4V8"
+                stroke="#475569"
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+              <Path
+                d="M16.5 6L18.5 9.5"
+                stroke="#475569"
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+              <Path
+                d="M31.5 6L29.5 9.5"
+                stroke="#475569"
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+              {/* Document */}
+              <Rect
+                x={15}
+                y={13}
+                width={18}
+                height={15}
+                rx={1.5}
+                stroke="#475569"
+                strokeWidth={2}
+              />
+              <Path
+                d="M19 18H29"
+                stroke="#475569"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+              />
+              <Path
+                d="M19 22H26"
+                stroke="#475569"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+              />
+              {/* Inbox Tray */}
+              <Path
+                d="M11 23V33C11 35 12.5 36.5 14.5 36.5H33.5C35.5 36.5 37 35 37 33V23H31L28.5 27.5H19.5L17 23H11Z"
+                stroke="#475569"
+                strokeWidth={2}
+                strokeLinejoin="round"
+              />
+            </Svg>
+
+            <Text className="mt-4 text-center text-[17px] font-bold text-navy-900">
               No message settings yet
             </Text>
-            <Text className="mt-2.5 max-w-xs text-center text-sm leading-relaxed text-text-secondary">
-              Nothing has been set for this account. Messages about a booking in progress — confirmation, who is coming, when they arrive — are part of the service and are always sent.
+            <Text className="mt-2.5 max-w-[290px] text-center text-[13.5px] leading-[21px] text-[#64748B]">
+              Nothing has been set for this account.{"\n"}
+              Messages about a booking in progress —{"\n"}
+              confirmation, who is coming, when they arrive —{"\n"}
+              — are part of the service and are always sent.
             </Text>
           </View>
         ) : (
@@ -131,6 +193,15 @@ export function MessagesScreen() {
           </Text>
         ) : null}
       </View>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
+      {content}
     </AccountPageShell>
   );
 }

@@ -5,6 +5,8 @@
 export const THEME_COLORS = {
   navy900: "#00112e",
   navy700: "#00246b",
+  navy: "#00112e",
+  brand: "#f87000",
   action: "#f87000",
   actionDark: "#d65e00",
   muted: "#756c5e",

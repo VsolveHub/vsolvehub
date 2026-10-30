@@ -28,7 +28,7 @@ export function WorkPickerScreen({
     <PhoneFrame
       title="Choose the work"
       onBack={onBack}
-      step="Step 1 of 3"
+      step="STEP 1 OF 3"
       reassurance="Choosing here creates no request."
       action={
         <Button block onPress={onContinue} disabled={selected === null} className="h-[50px] rounded-[11px]">

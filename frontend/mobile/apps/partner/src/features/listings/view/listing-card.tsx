@@ -235,7 +235,7 @@ export function ListingCard({
           {/* Boost Repost Free */}
           <Pressable
             accessibilityRole="button"
-            onPress={() => {}}
+            onPress={() => (onRepublish ? onRepublish(listing) : undefined)}
             style={{
               backgroundColor: "#ffffff",
               borderColor: "#e5e7eb",

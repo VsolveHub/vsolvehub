@@ -1,10 +1,11 @@
 // Ported from frontend/apps/customer/features/notifications/view/notification-panel.tsx
+import { useAuthStore } from "@vsolve/mobile-core";
 import { BlurBackdrop, Button, cn, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import { Bell, CheckCheck, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Line } from "react-native-svg";
 
 import { isUnread, targetHref } from "@/features/notifications/model/feed";
 import {
@@ -17,13 +18,17 @@ import {
 export interface NotificationSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRequireLogin?: () => void;
 }
 
-export function NotificationSheet({ open, onOpenChange }: NotificationSheetProps) {
+export function NotificationSheet({ open, onOpenChange, onRequireLogin }: NotificationSheetProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const feed = useNotificationFeed(open);
-  const count = useUnreadNotificationCount(open);
+  const status = useAuthStore((state) => state.status);
+  const isAuthenticated = status === "signedIn";
+
+  const feed = useNotificationFeed(open && isAuthenticated);
+  const count = useUnreadNotificationCount(open && isAuthenticated);
   const markRead = useMarkNotificationRead();
 
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
@@ -78,35 +83,37 @@ export function NotificationSheet({ open, onOpenChange }: NotificationSheetProps
         />
 
         <View
-          className="w-full max-h-[86%] rounded-t-[28px] bg-white shadow-2xl overflow-hidden flex-col"
-          style={{ paddingBottom: Math.max(12, insets.bottom) }}
+          className="w-full rounded-t-[28px] bg-white shadow-2xl overflow-hidden flex-col"
+          style={{
+            height: "72%",
+            minHeight: 380,
+            maxHeight: "88%",
+            paddingBottom: Math.max(12, insets.bottom),
+          }}
         >
           {/* Header */}
           <View className="px-5 pt-4 pb-3 bg-white">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[19px] font-bold text-navy-900 tracking-tight">
-                Notifications
-              </Text>
+              <View className="flex-row items-center gap-2">
+                <Text className="text-[19px] font-bold text-navy-900 tracking-tight">
+                  Notifications
+                </Text>
+                {unreadTotal > 0 ? (
+                  <View className="rounded-full bg-[#FF5500] px-2 py-0.5">
+                    <Text className="text-[11px] font-bold text-white">
+                      {unreadTotal > 99 ? "99+" : unreadTotal} new
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close notifications"
                 onPress={() => onOpenChange(false)}
-                hitSlop={10}
-                className="h-8 w-8 items-center justify-center rounded-full active:bg-gray-100"
+                hitSlop={12}
+                className="h-8 w-8 items-center justify-center rounded-full bg-[#F3F4F6] active:bg-[#E5E7EB]"
               >
-                <Svg
-                  width={18}
-                  height={18}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#374151"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <Line x1={18} y1={6} x2={6} y2={18} />
-                  <Line x1={6} y1={6} x2={18} y2={18} />
-                </Svg>
+                <X size={16} color="#475569" strokeWidth={2.2} />
               </Pressable>
             </View>
             <Text className="mt-0.5 text-xs text-[#6B7280]" numberOfLines={1}>
@@ -121,9 +128,29 @@ export function NotificationSheet({ open, onOpenChange }: NotificationSheetProps
           <ScrollView
             className="flex-1 px-4 pt-3.5"
             showsVerticalScrollIndicator={true}
-            contentContainerStyle={{ paddingBottom: 16 }}
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}
           >
-            {feed.isPending ? (
+            {!isAuthenticated ? (
+              <View className="flex-1 py-12 items-center justify-center px-6">
+                <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] mb-3.5">
+                  <Bell size={26} color="#EA580C" />
+                </View>
+                <Text className="text-base font-bold text-navy-900">Sign in for notifications</Text>
+                <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed max-w-[260px]">
+                  Sign in with your mobile number to view updates about your bookings and projects.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    onOpenChange(false);
+                    onRequireLogin?.();
+                  }}
+                  className="mt-5 rounded-2xl bg-[#FF5500] px-6 py-3 active:bg-[#E04B00]"
+                >
+                  <Text className="text-sm font-bold text-white">Log in</Text>
+                </Pressable>
+              </View>
+            ) : feed.isPending ? (
               <View className="gap-3">
                 {[1, 2, 3].map((k) => (
                   <View
@@ -141,7 +168,7 @@ export function NotificationSheet({ open, onOpenChange }: NotificationSheetProps
                 ))}
               </View>
             ) : feed.isError ? (
-              <View className="py-10 items-center justify-center px-4">
+              <View className="flex-1 py-10 items-center justify-center px-4">
                 <Text className="text-sm font-semibold text-danger-text">
                   Could not load notifications
                 </Text>
@@ -156,68 +183,72 @@ export function NotificationSheet({ open, onOpenChange }: NotificationSheetProps
                 </Pressable>
               </View>
             ) : rows.length === 0 ? (
-              <View className="py-16 items-center justify-center px-6">
+              <View className="flex-1 py-16 items-center justify-center px-6">
+                <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] mb-3.5">
+                  <Bell size={26} color="#EA580C" />
+                </View>
                 <Text className="text-base font-bold text-navy-900">Nothing new</Text>
-                <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed">
+                <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed max-w-[260px]">
                   When a professional responds, work needs checking or a booking updates, it appears here.
                 </Text>
               </View>
             ) : (
-              rows.map((notice) => (
-                <Pressable
-                  key={notice.id}
-                  onPress={() => handleOpenNotice(notice)}
-                  className="rounded-2xl border border-[#E5E7EB] bg-white p-4 mb-3 active:bg-gray-50/60"
-                  style={{
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.04,
-                    shadowRadius: 2,
-                    elevation: 1,
-                  }}
-                >
-                  {/* Card Header Row */}
-                  <View className="flex-row items-center justify-between">
-                    <Text className="flex-1 text-[15px] font-bold text-[#1E293B] pr-2">
-                      {notice.title}
-                    </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Dismiss notification: ${notice.title}`}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDismiss(notice.id);
-                      }}
-                      hitSlop={8}
-                      className="h-6 w-6 items-center justify-center rounded-full active:bg-gray-100 -mr-1 -mt-0.5"
-                    >
-                      <Svg
-                        width={14}
-                        height={14}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#6B7280"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+              rows.map((notice) => {
+                const unread = isUnread(notice);
+                return (
+                  <Pressable
+                    key={notice.id}
+                    onPress={() => handleOpenNotice(notice)}
+                    className={cn(
+                      "rounded-2xl border p-4 mb-3 active:bg-gray-50/60",
+                      unread
+                        ? "border-[#FED7AA] bg-[#FFFBF7]"
+                        : "border-[#E5E7EB] bg-white",
+                    )}
+                    style={{
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.04,
+                      shadowRadius: 2,
+                      elevation: 1,
+                    }}
+                  >
+                    {/* Card Header Row */}
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 flex-row items-center gap-2 pr-2">
+                        {unread ? (
+                          <View className="h-2 w-2 rounded-full bg-[#EA580C]" />
+                        ) : null}
+                        <Text className="flex-1 text-[15px] font-bold text-[#1E293B]">
+                          {notice.title}
+                        </Text>
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Dismiss notification: ${notice.title}`}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDismiss(notice.id);
+                        }}
+                        hitSlop={8}
+                        className="h-6 w-6 items-center justify-center rounded-full active:bg-gray-100 -mr-1 -mt-0.5"
                       >
-                        <Line x1={18} y1={6} x2={6} y2={18} />
-                        <Line x1={6} y1={6} x2={18} y2={18} />
-                      </Svg>
-                    </Pressable>
-                  </View>
+                        <X size={14} color="#6B7280" />
+                      </Pressable>
+                    </View>
 
-                  {/* Card Body */}
-                  <Text className="mt-1.5 text-sm text-[#4B5563] leading-[21px]">
-                    {notice.body}
-                  </Text>
+                    {/* Card Body */}
+                    <Text className="mt-1.5 text-sm text-[#4B5563] leading-[21px]">
+                      {notice.body}
+                    </Text>
 
-                  {/* Card Timestamp */}
-                  <Text className="mt-2 text-xs text-[#78716C]">
-                    {relativeWhen(notice.created_at)}
-                  </Text>
-                </Pressable>
-              ))
+                    {/* Card Timestamp */}
+                    <Text className="mt-2 text-xs text-[#78716C]">
+                      {relativeWhen(notice.created_at)}
+                    </Text>
+                  </Pressable>
+                );
+              })
             )}
 
             {feed.hasNextPage ? (
@@ -235,19 +266,33 @@ export function NotificationSheet({ open, onOpenChange }: NotificationSheetProps
           </ScrollView>
 
           {/* Footer */}
-          <View className="flex-row justify-end px-5 py-3 bg-white border-t border-[#F1F3F5]">
+          <View className="flex-row items-center justify-between px-5 py-3 bg-white border-t border-[#F1F3F5]">
+            <View className="flex-row items-center gap-1.5">
+              {unreadTotal > 0 ? (
+                <Text className="text-xs font-medium text-text-secondary">
+                  {unreadTotal} unread {unreadTotal === 1 ? "notice" : "notices"}
+                </Text>
+              ) : (
+                <Text className="text-xs text-text-muted">All caught up</Text>
+              )}
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Mark all as read"
               onPress={handleDismissAll}
               disabled={!canMarkAll}
               hitSlop={8}
-              className="py-1 px-2 active:opacity-70"
+              className="py-1 px-2 active:opacity-70 flex-row items-center gap-1.5"
             >
+              {markRead.isPending ? (
+                <ActivityIndicator size="small" color="#EA580C" />
+              ) : (
+                <CheckCheck size={16} color={canMarkAll ? "#EA580C" : "#9CA3AF"} />
+              )}
               <Text
                 className={cn(
                   "text-sm font-semibold",
-                  canMarkAll ? "text-[#52525B]" : "text-[#9CA3AF]"
+                  canMarkAll ? "text-[#EA580C]" : "text-[#9CA3AF]"
                 )}
               >
                 Mark all read

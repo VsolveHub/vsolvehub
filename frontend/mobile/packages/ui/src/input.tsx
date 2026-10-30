@@ -8,7 +8,7 @@ import { controlChrome, useFieldContext } from "./field";
 export interface InputProps extends Omit<TextInputProps, "id"> {
   id?: string;
   className?: string;
-  ref?: Ref<TextInput>;
+  ref?: any;
 }
 
 export function Input({ className, id, ref, ...props }: InputProps) {

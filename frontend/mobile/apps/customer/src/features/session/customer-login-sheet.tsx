@@ -3,7 +3,16 @@ import { useAuthStore, useMobileOtpFlow } from "@vsolve/mobile-core";
 import { BlurBackdrop } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView } from "react-native";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CustomerLoginExperience } from "./view/customer-login-experience";
@@ -72,7 +81,6 @@ export function CustomerLoginSheet({
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
-        pointerEvents="box-none"
         keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
       >
         <ScrollView
@@ -84,21 +92,37 @@ export function CustomerLoginSheet({
             paddingTop: shouldElevate ? Math.max(insets.top + 12, 36) : 24,
             paddingBottom: isKeyboardVisible ? 16 : 24,
           }}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           bounces={false}
           showsVerticalScrollIndicator={false}
-          pointerEvents="box-none"
         >
-          <CustomerLoginExperience
-            flow={flow}
-            variant="modal"
-            mobileFocused
-            onClose={() => onOpenChange(false)}
-            onBrowseServices={() => {
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Keyboard.dismiss();
               onOpenChange(false);
-              router.push("/catalog" as never);
             }}
+            accessibilityLabel="Close dialog backdrop"
           />
+          <View
+            onStartShouldSetResponder={() => true}
+            className="w-full max-w-[370px]"
+          >
+            <CustomerLoginExperience
+              flow={flow}
+              variant="modal"
+              mobileFocused
+              onClose={() => {
+                Keyboard.dismiss();
+                onOpenChange(false);
+              }}
+              onBrowseServices={() => {
+                Keyboard.dismiss();
+                onOpenChange(false);
+                router.push("/catalog" as never);
+              }}
+            />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>

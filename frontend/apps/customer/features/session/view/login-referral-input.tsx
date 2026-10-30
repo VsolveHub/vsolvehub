@@ -21,11 +21,11 @@ export function LoginReferralInput() {
     setIsValidating(true);
     setValidationError(null);
     try {
-      const data = await request(() =>
-        getApiClient().POST("/api/v1/customer/referral/validate/", {
+      const data = (await request(() =>
+        (getApiClient() as any).POST("/api/v1/customer/referral/validate/", {
           body: { code: clean },
         }),
-      );
+      )) as any;
       if (data?.valid) {
         setValidationSuccess(data.referee_reward_summary || "Referral reward confirmed!");
         savePendingReferral(clean);

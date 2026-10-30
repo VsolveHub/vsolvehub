@@ -84,8 +84,9 @@ export function usePartnerReceivingOffers(): {
         setProbe({ id: storedSessionId, ok: true });
         announceHeartbeat();
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
+        console.warn("[presence] probe heartbeat failed, clearing stored session:", err);
         clearStoredSession();
         setProbe({ id: storedSessionId, ok: false });
       });
@@ -118,7 +119,9 @@ export function usePartnerReceivingOffers(): {
       void heartbeatRef.current
         .mutateAsync({ session_id: sessionId })
         .then(() => announceHeartbeat())
-        .catch(() => undefined);
+        .catch((err) => {
+          console.warn("[presence] recurring heartbeat failed:", err);
+        });
     };
 
     const unsubscribe = onHeartbeat(() => {

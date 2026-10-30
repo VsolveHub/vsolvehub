@@ -118,16 +118,16 @@ export const RENTALS_HREF = "/rentals";
 export const STAYS_HREF = "/stays";
 
 /** A public page's readable address: /stays/sunrise-pg-madhapur. */
-export function stayHref(slug: string): string {
-  return `${STAYS_HREF}/${encodeURIComponent(slug)}`;
+export function stayHref(slug?: string | null): string {
+  return `${STAYS_HREF}/${encodeURIComponent(slug || "")}`;
 }
 
-export function rentalHref(slug: string): string {
-  return `${RENTALS_HREF}/${encodeURIComponent(slug)}`;
+export function rentalHref(slug?: string | null): string {
+  return `${RENTALS_HREF}/${encodeURIComponent(slug || "")}`;
 }
 
-export function listingHref(slug: string): string {
-  return `${LISTINGS_HREF}/${encodeURIComponent(slug)}`;
+export function listingHref(slug?: string | null): string {
+  return `${LISTINGS_HREF}/${encodeURIComponent(slug || "")}`;
 }
 
 /**

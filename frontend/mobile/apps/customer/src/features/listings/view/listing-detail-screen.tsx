@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "@vsolve/mobile-core";
 import { ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import {
@@ -60,6 +61,7 @@ function formatDate(dateStr?: string | null): string {
 
 export function ListingDetailScreen({ slug }: { slug: string }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const authStatus = useAuthStore((s) => s.status);
   const isAuthenticated = authStatus === "signedIn";
@@ -172,7 +174,10 @@ export function ListingDetailScreen({ slug }: { slug: string }) {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-[#fcfbfa] p-4 gap-4">
+      <View
+        className="flex-1 bg-[#fcfbfa] p-4 gap-4"
+        style={{ paddingTop: Math.max(insets.top + 16, 36) }}
+      >
         <Skeleton className="h-6 w-32 rounded-lg" />
         <Skeleton className="h-24 w-full rounded-2xl" />
         <Skeleton className="h-32 w-full rounded-2xl" />
@@ -183,7 +188,10 @@ export function ListingDetailScreen({ slug }: { slug: string }) {
 
   if (error || !listing) {
     return (
-      <View className="flex-1 bg-[#fcfbfa] p-6 justify-center">
+      <View
+        className="flex-1 bg-[#fcfbfa] p-6 justify-center"
+        style={{ paddingTop: Math.max(insets.top + 16, 36) }}
+      >
         <ErrorState
           title="Job listing not found"
           message="This opportunity may have expired, closed, or is temporarily under review."
@@ -310,7 +318,12 @@ function humanize(val: string | undefined, map: Record<string, string>, fallback
       <ScrollView
         className="flex-1"
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />}
-        contentContainerClassName="gap-5 p-4 pb-28 max-w-xl mx-auto w-full"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 16, 38),
+          paddingBottom: Math.max(insets.bottom + 28, 48),
+          paddingHorizontal: 16,
+        }}
+        contentContainerClassName="gap-5 max-w-xl mx-auto w-full"
       >
         {/* 1. Main Job Details Card */}
         <View className="rounded-3xl border border-line bg-surface p-5 shadow-xs gap-5">

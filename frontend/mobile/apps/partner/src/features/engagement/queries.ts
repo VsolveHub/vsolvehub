@@ -599,7 +599,8 @@ export function useProposeAmendment(engagementId: string) {
         queryKey: m2QueryKeys.engagements.agreement(engagementId),
       });
     },
-    onError: () => {
+    onError: (err) => {
+      console.warn(`[engagement] propose amendment failed for engagement ${engagementId}:`, err);
       // `m2_amendment_not_actionable` means one is already open — which this
       // screen believed was not the case. The list is what was wrong.
       void queryClient.invalidateQueries({
@@ -651,7 +652,8 @@ export function useCompleteProjectWithCode(engagementId: string) {
       queryClient.setQueryData(m2QueryKeys.engagements.detail(engagementId), engagement);
       void queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.list("partner") });
     },
-    onError: () => {
+    onError: (err) => {
+      console.warn(`[engagement] completion with code failed for engagement ${engagementId}:`, err);
       void queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.detail(engagementId) });
     },
     retry: false,

@@ -5,6 +5,7 @@ import { Link } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { bookingVisitHref } from "@/lib/routes";
 import { Money } from "@/features/payment/view/money";
@@ -248,6 +249,7 @@ function CancelSupportDialog({
 }
 
 export function GroupDetail({ groupId }: { groupId: string }) {
+  const insets = useSafeAreaInsets();
   const groupQuery = useBookingGroup(groupId);
   const cancelGroup = useCancelBookingGroup();
   const [isCancelOpen, setIsCancelOpen] = useState(false);
@@ -264,7 +266,13 @@ export function GroupDetail({ groupId }: { groupId: string }) {
 
   if (groupQuery.isPending) {
     return (
-      <View className="flex-1 gap-3 bg-canvas px-4 py-6">
+      <View
+        className="flex-1 gap-3 bg-canvas px-4"
+        style={{
+          paddingTop: Math.max(insets.top + 14, 32),
+          paddingBottom: Math.max(insets.bottom + 24, 36),
+        }}
+      >
         <BackToBookingsLink />
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-32 w-full" />
@@ -275,7 +283,13 @@ export function GroupDetail({ groupId }: { groupId: string }) {
 
   if (groupQuery.isError || !group) {
     return (
-      <View className="flex-1 gap-4 bg-canvas px-4 py-6">
+      <View
+        className="flex-1 gap-4 bg-canvas px-4"
+        style={{
+          paddingTop: Math.max(insets.top + 14, 32),
+          paddingBottom: Math.max(insets.bottom + 24, 36),
+        }}
+      >
         <BackToBookingsLink />
         <ErrorState
           title="We could not load this booking"
@@ -316,11 +330,19 @@ export function GroupDetail({ groupId }: { groupId: string }) {
     return describeError(error, "mutation").message;
   }
 
+  if (isSearching) {
+    return <FullScreenPartnerSearch group={group} onDismiss={() => setIsSearchDismissed(true)} />;
+  }
+
   return (
     <View className="flex-1 bg-canvas">
-      {isSearching ? <FullScreenPartnerSearch group={group} onDismiss={() => setIsSearchDismissed(true)} /> : null}
       <ScrollView
-        contentContainerClassName={isAwaitingPayment ? "gap-4 px-4 pb-8 pt-4" : "gap-4 px-4 pb-8 pt-4"}
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 14, 32),
+          paddingBottom: Math.max(insets.bottom + 24, 36),
+          paddingHorizontal: 16,
+        }}
+        contentContainerClassName="gap-4"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
         }

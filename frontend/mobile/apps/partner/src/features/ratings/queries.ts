@@ -51,7 +51,10 @@ export function useSubmitRating(subject: RatingSubject, id: string) {
             }),
           ),
     onSuccess: (summary) => queryClient.setQueryData(ratingKey(subject, id), summary),
-    onError: () => void queryClient.invalidateQueries({ queryKey: ratingKey(subject, id) }),
+    onError: (err) => {
+      console.warn(`[ratings] submit rating failed for ${subject} ${id}:`, err);
+      void queryClient.invalidateQueries({ queryKey: ratingKey(subject, id) });
+    },
     retry: false,
   });
 }

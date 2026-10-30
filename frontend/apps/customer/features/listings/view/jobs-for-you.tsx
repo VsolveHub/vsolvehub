@@ -51,7 +51,7 @@ export function JobsForYou() {
       ) : null}
       <div className="flex gap-3 overflow-x-auto pb-2">
         {rows.slice(0, 10).map(({ listing, match }) => {
-          const look = MATCH_LOOK[match.level] ?? MATCH_LOOK.OTHER!;
+          const look = (match.level ? MATCH_LOOK[match.level] : null) ?? MATCH_LOOK.OTHER!;
           return (
             <Link key={listing.id} href={`/listings/${listing.slug || listing.id}`} className="w-64 shrink-0">
               <Card className="flex h-full flex-col gap-2 p-4 hover:border-action">

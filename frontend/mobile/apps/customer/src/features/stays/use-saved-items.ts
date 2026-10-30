@@ -25,7 +25,9 @@ export function useSavedItems(kind: SavedKind) {
           }
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[useSavedItems] Failed to read saved items from storage:", err);
+      });
 
     return () => {
       cancelled = true;
@@ -36,7 +38,9 @@ export function useSavedItems(kind: SavedKind) {
     (id: string) => {
       setIds((current) => {
         const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
-        void AsyncStorage.setItem(storageKey(kind), JSON.stringify(next)).catch(() => {});
+        void AsyncStorage.setItem(storageKey(kind), JSON.stringify(next)).catch((err) => {
+          console.warn("[useSavedItems] Failed to persist saved items to storage:", err);
+        });
         return next;
       });
     },

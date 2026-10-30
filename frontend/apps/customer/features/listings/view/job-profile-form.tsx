@@ -227,7 +227,7 @@ export function JobProfileForm({ defaultName = "", returnTo }: { defaultName?: s
           ) : null}
           {!roleSearch ? (
             <div className="flex flex-wrap gap-2">
-              {opts.categories.slice(0, 6).flatMap((cat) => cat.roles.slice(0, 1)).filter((r) => !form.roles.includes(r.name)).map((r) => (
+              {(opts?.categories ?? []).slice(0, 6).flatMap((cat) => cat.roles.slice(0, 1)).filter((r) => !form.roles.includes(r.name)).map((r) => (
                 <button key={r.id} type="button" onClick={() => toggleRole(r.name)} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-4 text-sm font-semibold text-text-secondary hover:border-action">
                   <Plus className="size-3.5" aria-hidden /> {r.name}
                 </button>

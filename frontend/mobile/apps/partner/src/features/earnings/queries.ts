@@ -63,7 +63,7 @@ export function usePartnerPayoutAccount() {
       } catch (err) {
         if (
           isApiClientError(err) &&
-          (err.status === 404 || err.code === "not_found")
+          ((err as any)?.status === 404 || (err as any)?.code === "not_found")
         ) {
           return null;
         }

@@ -2,8 +2,8 @@
 // Exact match with Image 2 (Where is the work? Dialog modal, choice card with badges, Use my location, Add a new address, and Use this address)
 import { Badge, Button, Dialog, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as Location from "expo-location";
-import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import {
@@ -28,6 +28,7 @@ export function AddressSheet({
   selectedAddressId,
   onSelect,
 }: AddressSheetProps) {
+  const { height: windowHeight } = useWindowDimensions();
   const createAddress = useCreateAddress();
   const updateAddress = useUpdateAddress();
   const reverseGeocode = useReverseGeocode();
@@ -35,6 +36,14 @@ export function AddressSheet({
   const [pendingAddressId, setPendingAddressId] = useState<string | null>(
     selectedAddressId ?? addresses[0]?.id ?? null,
   );
+
+  // Sync pending selection ONLY when the sheet opens or when selectedAddressId changes externally
+  useEffect(() => {
+    if (open) {
+      setPendingAddressId(selectedAddressId ?? addresses[0]?.id ?? null);
+    }
+  }, [open, selectedAddressId]);
+
   const [mode, setMode] = useState<"list" | "add" | "edit">("list");
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
 
@@ -216,7 +225,7 @@ export function AddressSheet({
       }}
       title={title}
       description={description}
-      className="max-h-[85vh] p-6"
+      className="max-w-lg p-6"
       footer={
         mode === "list" ? (
           <View className="flex-row items-center justify-end gap-3 pt-2">
@@ -230,8 +239,11 @@ export function AddressSheet({
 
             <Pressable
               accessibilityRole="button"
+              disabled={!pendingAddressId}
               onPress={handleConfirmAddress}
-              className="rounded-xl bg-[#EA580C] px-5 py-2.5 active:bg-[#C2410C]"
+              className={`rounded-xl px-5 py-2.5 ${
+                pendingAddressId ? "bg-[#EA580C] active:bg-[#C2410C]" : "bg-warm-300 opacity-60"
+              }`}
             >
               <Text className="text-sm font-bold text-white">Use this address</Text>
             </Pressable>
@@ -270,62 +282,78 @@ export function AddressSheet({
         )
       }
     >
-      <ScrollView className="max-h-[55vh]" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ maxHeight: Math.min(windowHeight * 0.58, 480) }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {mode === "list" ? (
           <View className="gap-3 pb-2">
             {/* List of saved addresses matching Image 2 */}
             <View className="gap-2">
-              {addresses.map((address) => {
-                const isSelected = address.id === pendingAddressId;
-                return (
-                  <Pressable
-                    key={address.id}
-                    onPress={() => setPendingAddressId(address.id)}
-                    className={`flex-row items-start justify-between rounded-2xl border p-4 transition-all ${
-                      isSelected
-                        ? "border-[#EA580C] bg-[#FFF8F3]"
-                        : "border-line bg-surface active:bg-surface-sunken"
-                    }`}
-                  >
-                    <View className="min-w-0 flex-1">
-                      <View className="flex-row items-center gap-2">
-                        <Text className="text-sm font-bold text-navy-950">
-                          {address.label}
-                        </Text>
-                        {address.is_default ? (
-                          <Badge tone="neutral">Default</Badge>
-                        ) : null}
-                      </View>
-                      <Text className="mt-1 text-sm font-normal text-text-secondary">
-                        {address.line1}
-                        {address.locality ? `, ${address.locality}` : ""}
-                      </Text>
-                      <Text className="mt-0.5 text-xs font-semibold text-text-muted">
-                        PIN {address.postal_code}
-                      </Text>
-                    </View>
-
+              {addresses.length === 0 ? (
+                <View className="rounded-2xl border border-dashed border-line bg-surface-sunken p-4 items-center justify-center my-1">
+                  <Text className="text-sm font-semibold text-navy-950">No saved addresses yet</Text>
+                  <Text className="mt-1 text-xs text-text-secondary text-center leading-relaxed">
+                    Use your current location or add a new address below to proceed.
+                  </Text>
+                </View>
+              ) : (
+                // Render list of available customer saved addresses
+                addresses.map((address) => {
+                  const isSelected = address.id === pendingAddressId;
+                  return (
                     <Pressable
+                      key={address.id}
                       accessibilityRole="button"
-                      onPress={() => {
-                        setEditingAddress(address);
-                        setLabel(address.label || "Home");
-                        setLine1(address.line1 || "");
-                        setLocality(address.locality || "");
-                        setCity(address.city || "Hyderabad");
-                        setPostal(address.postal_code || "");
-                        setLatitude(address.latitude ? String(address.latitude) : "");
-                        setLongitude(address.longitude ? String(address.longitude) : "");
-                        setFormError(null);
-                        setMode("edit");
-                      }}
-                      className="px-2 py-1"
+                      accessibilityState={{ selected: isSelected }}
+                      onPress={() => setPendingAddressId(address.id)}
+                      className={`flex-row items-start justify-between rounded-2xl border p-4 ${
+                        isSelected
+                          ? "border-[#EA580C] bg-[#FFF8F3]"
+                          : "border-line bg-surface active:bg-surface-sunken"
+                      }`}
                     >
-                      <Text className="text-sm font-semibold text-navy-900">Edit</Text>
+                      <View className="min-w-0 flex-1">
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-sm font-bold text-navy-950">
+                            {address.label}
+                          </Text>
+                          {address.is_default ? (
+                            <Badge tone="neutral">Default</Badge>
+                          ) : null}
+                        </View>
+                        <Text className="mt-1 text-sm font-normal text-text-secondary">
+                          {address.line1}
+                          {address.locality ? `, ${address.locality}` : ""}
+                        </Text>
+                        <Text className="mt-0.5 text-xs font-semibold text-text-muted">
+                          PIN {address.postal_code}
+                        </Text>
+                      </View>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setEditingAddress(address);
+                          setLabel(address.label || "Home");
+                          setLine1(address.line1 || "");
+                          setLocality(address.locality || "");
+                          setCity(address.city || "Hyderabad");
+                          setPostal(address.postal_code || "");
+                          setLatitude(address.latitude ? String(address.latitude) : "");
+                          setLongitude(address.longitude ? String(address.longitude) : "");
+                          setFormError(null);
+                          setMode("edit");
+                        }}
+                        className="px-2 py-1"
+                      >
+                        <Text className="text-sm font-semibold text-navy-900">Edit</Text>
+                      </Pressable>
                     </Pressable>
-                  </Pressable>
-                );
-              })}
+                  );
+                })
+              )}
             </View>
 
             {/* Action Buttons */}

@@ -1,6 +1,6 @@
 // Ported from frontend/apps/customer/features/session/view/mobile-bottom-nav.tsx
 // and site-header.tsx at phone width.
-import { useAuthStore } from "@vsolve/mobile-core";
+import { useAuthStore, useMobileLogout } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { usePathname, useRouter, Slot } from "expo-router";
@@ -18,6 +18,7 @@ import { NotificationSheet } from "@/features/notifications/view/notification-sh
 import { appChromeLayout } from "@/features/session/app-chrome-layout";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 import { isCustomerTabActive, requiresCustomerSignIn } from "@/features/session/navigation";
+import { useIsDesktop } from "@/lib/responsive";
 
 type TabIconType = "home" | "services" | "bookings" | "login" | "profile";
 
@@ -28,13 +29,17 @@ interface TabItem {
 }
 
 export default function TabsLayout() {
+  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname.replace(/\/\([^)]+\)/g, "");
   const router = useRouter();
   const status = useAuthStore((state) => state.status);
+  const signOut = useMobileLogout();
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const chrome = appChromeLayout(pathname);
   const cart = useCart(status !== "loading");
-  const cartCount = cart.data?.items.length ?? 0;
+  const cartCount = cart.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? cart.data?.items.length ?? 0;
   const unreadCount = useUnreadNotificationCount(status === "signedIn");
   const unreadTotal = unreadCount.data?.unread ?? 0;
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -49,6 +54,23 @@ export default function TabsLayout() {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase() ?? "")
       .join("") || "You";
+  const userInitial =
+    (profile.data?.display_name || profile.data?.full_name || "")
+      .trim()
+      .charAt(0)
+      .toUpperCase() || (initials && initials !== "You" ? initials.charAt(0) : "R");
+
+  const handleSignout = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut();
+      router.replace("/");
+    } catch (err) {
+      console.error("Signout failed:", err);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   useEffect(() => subscribeOpenNotifications(() => setAlertsOpen(true)), []);
 
@@ -89,7 +111,21 @@ export default function TabsLayout() {
     }
   };
 
-  if (chrome.hideMobileChrome) {
+  if (
+    pathname.startsWith("/bookings/") ||
+    pathname.startsWith("/requests") ||
+    pathname.startsWith("/book/")
+  ) {
+    if (!isDesktop || chrome.hideMobileChrome) {
+      return (
+        <View className="flex-1 bg-canvas">
+          <Slot />
+        </View>
+      );
+    }
+  }
+
+  if (!isDesktop && chrome.hideMobileChrome) {
     return (
       <View className="flex-1 bg-canvas">
         <Slot />
@@ -97,11 +133,159 @@ export default function TabsLayout() {
     );
   }
 
-  const hideHeader = pathname.startsWith("/account") || pathname.startsWith("/activity");
+  const hideHeader =
+    !isDesktop &&
+    (pathname.startsWith("/account") ||
+      pathname.startsWith("/activity") ||
+      pathname.startsWith("/listings"));
+
+  const desktopNavLinks = [
+    { label: "Services", href: "/catalog" },
+    { label: "Rentals", href: "/rentals" },
+    { label: "Stays", href: "/stays" },
+    { label: "Careers", href: "/listings" },
+    { label: "Bookings", href: "/activity", requiresAuth: true },
+  ];
 
   return (
     <View className="flex-1 bg-canvas">
-      {!hideHeader ? (
+      {/* Desktop Header */}
+      {isDesktop ? (
+        <View className="sticky top-0 z-20 w-full border-b border-[#EAE8E4] bg-white">
+          <View className="mx-auto min-h-16 w-full max-w-[1216px] flex-row items-center px-4 py-3 sm:px-6 lg:px-8">
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="V Solve Hub home"
+              onPress={() => router.push("/")}
+              className="flex-row items-center gap-2 shrink-0 cursor-pointer mr-6"
+            >
+              <Image source={require("../../assets/logo-mark.png")} style={{ width: 28, height: 28 }} contentFit="contain" />
+              <Text className="text-xl font-extrabold tracking-tight text-navy-900">
+                V Solve <Text className="text-xl font-extrabold text-[#EA580C]">Hub</Text>
+              </Text>
+            </Pressable>
+
+            {/* Desktop Center Links */}
+            <View className="flex-row items-center gap-1">
+              {desktopNavLinks.map((link) => {
+                const active = isCustomerTabActive(link.href, pathname);
+                return (
+                  <Pressable
+                    key={link.href}
+                    accessibilityRole="link"
+                    accessibilityLabel={link.label}
+                    onPress={() => {
+                      if (link.requiresAuth && status !== "signedIn") {
+                        setPendingRedirect(link.href);
+                        setLoginOpen(true);
+                        return;
+                      }
+                      router.push(link.href as never);
+                    }}
+                    className={`rounded-lg px-3.5 py-1.5 cursor-pointer border ${
+                      active
+                        ? "bg-[#FAF8F5] border-[#E5E1DC] shadow-xs"
+                        : "border-transparent hover:bg-slate-50"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm ${
+                        active
+                          ? "font-extrabold text-navy-900"
+                          : "font-semibold text-[#475569] hover:text-navy-900"
+                      }`}
+                    >
+                      {link.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View className="flex-1" />
+
+            {/* Right Side Actions */}
+            <View className="flex-row items-center gap-4">
+              <Pressable
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="View basket"
+                onPress={() => router.push("/cart")}
+                className="relative size-10 items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#1E293B" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                  <Circle cx={8} cy={21} r={1} />
+                  <Circle cx={19} cy={21} r={1} />
+                  <Path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+                </Svg>
+                {cartCount > 0 ? (
+                  <View className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EA580C] px-1 ring-2 ring-white">
+                    <Text className="text-[10px] font-extrabold text-white">{cartCount}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+
+              {status === "loading" ? null : status === "signedIn" ? (
+                <View className="flex-row items-center gap-3">
+                  <Pressable
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={unreadBadgeLabel(unreadTotal)}
+                    onPress={() => setAlertsOpen(true)}
+                    className="relative size-10 items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"
+                  >
+                    <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#1E293B" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                      <Path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                    </Svg>
+                    {unreadTotal > 0 ? (
+                      <View className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EA580C] px-1 ring-2 ring-white">
+                        <Text className="text-[10px] font-extrabold text-white">
+                          {unreadTotal > 99 ? "99+" : unreadTotal}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+
+                  <Pressable
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open profile"
+                    onPress={() => router.push("/account")}
+                    className="size-9 items-center justify-center rounded-full bg-[#EEF2F8] border border-[#EA580C] cursor-pointer hover:opacity-90"
+                  >
+                    <Text className="text-sm font-extrabold text-[#0B1B3D]">{userInitial}</Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign out"
+                    onPress={handleSignout}
+                    disabled={isSigningOut}
+                    className="cursor-pointer px-1 py-1 hover:opacity-80"
+                  >
+                    <Text className="text-sm font-semibold text-[#0B2545]">
+                      {isSigningOut ? "Signing out..." : "Sign out"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Log in"
+                  onPress={() => {
+                    setPendingRedirect("/account");
+                    setLoginOpen(true);
+                  }}
+                  className="rounded-full bg-[#EA580C] px-5 py-2 shadow-xs hover:bg-[#d65e00] cursor-pointer"
+                >
+                  <Text className="text-sm font-bold text-white">Log in</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      ) : !hideHeader ? (
         <View
           style={{ paddingTop: Math.max(insets.top, 24) + 10 }}
           className="min-h-[76px] flex-row items-center justify-between gap-2 border-b border-line bg-[#FAF9F7] px-4 pb-3.5"
@@ -166,41 +350,55 @@ export default function TabsLayout() {
           </View>
         </View>
       ) : null}
+
       <View className="flex-1">
         {status === "signedIn" || !requiresCustomerSignIn(pathname) ? <Slot /> : null}
       </View>
-      <View
-        className="flex-row items-center justify-around border-t border-[#EAE8E4] bg-white px-2 pt-2"
-        style={{ paddingBottom: Math.max(8, insets.bottom) }}
-      >
-        {tabs.map((tab) => {
-          const active = tab.href ? isCustomerTabActive(tab.href, pathname) : false;
-          const iconColor = active ? "#EA580C" : "#6B6560";
-          return (
-            <Pressable
-              key={tab.name}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => handleTabPress(tab)}
-              className="min-w-16 items-center gap-1 px-2 py-0.5"
-            >
-              <View className="h-7 w-7 items-center justify-center">
-                <TabIcon type={tab.icon} color={iconColor} />
-              </View>
-              <Text
-                className={
-                  active
-                    ? "text-[11px] font-bold text-[#EA580C]"
-                    : "text-[11px] font-medium text-[#6B6560]"
-                }
+
+      {/* Bottom Tab Bar (Mobile Only) */}
+      {!isDesktop && !chrome.hideMobileFooter ? (
+        <View
+          className="flex-row items-center justify-around border-t border-[#EAE8E4] bg-white px-2 pt-2"
+          style={{ paddingBottom: Math.max(8, insets.bottom) }}
+        >
+          {tabs.map((tab) => {
+            const active = tab.href ? isCustomerTabActive(tab.href, pathname) : false;
+            const iconColor = active ? "#EA580C" : "#6B6560";
+            return (
+              <Pressable
+                key={tab.name}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => handleTabPress(tab)}
+                className="min-w-16 items-center gap-1 px-2 py-0.5"
               >
-                {tab.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <NotificationSheet open={alertsOpen} onOpenChange={setAlertsOpen} />
+                <View className="h-7 w-7 items-center justify-center">
+                  <TabIcon type={tab.icon} color={iconColor} />
+                </View>
+                <Text
+                  className={
+                    active
+                      ? "text-[11px] font-bold text-[#EA580C]"
+                      : "text-[11px] font-medium text-[#6B6560]"
+                  }
+                >
+                  {tab.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      <NotificationSheet
+        open={alertsOpen}
+        onOpenChange={setAlertsOpen}
+        onRequireLogin={() => {
+          setAlertsOpen(false);
+          setPendingRedirect(null);
+          setLoginOpen(true);
+        }}
+      />
       <CustomerLoginSheet
         open={loginOpen}
         onOpenChange={setLoginOpen}

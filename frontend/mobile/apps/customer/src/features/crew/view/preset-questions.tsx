@@ -1,5 +1,5 @@
-// Ported from frontend/apps/customer/features/crew/view/preset-questions.tsx
 import { ChoiceChips, Field, Input, QuantityStepper, Text, Textarea } from "@vsolve/mobile-ui";
+import { Minus, Plus } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
@@ -12,6 +12,17 @@ export interface PresetQuestionsProps {
   onAnswer: (code: string, value: unknown) => void;
   disabled?: boolean;
   hiddenCodes?: readonly string[];
+}
+
+function formatNoun(label: string, count: number): string {
+  const lower = label.toLowerCase().trim();
+  if (lower.includes("people") || lower.includes("person")) {
+    return count === 1 ? "person" : "people";
+  }
+  if (lower.includes("day")) {
+    return count === 1 ? "day" : "days";
+  }
+  return count === 1 ? lower : `${lower}s`;
 }
 
 function fitsOnChips(question: RequirementQuestionView): boolean {
@@ -35,20 +46,46 @@ export function PresetQuestions({
         if (question.kind === "number") {
           const floor = question.minimum ?? DEFAULT_NUMBER_FLOOR;
           const current = typeof value === "number" ? value : floor;
-          const noun = question.label.toLowerCase();
+          const unitText = formatNoun(question.label, current);
           return (
-            <QuantityStepper
+            <View
               key={question.code}
-              label={question.label}
-              value={current}
-              min={floor}
-              onChange={(next) => onAnswer(question.code, next)}
-              disabled={disabled}
-              hint={question.help}
-              unit={noun}
-              decrementLabel={`Fewer ${noun}`}
-              incrementLabel={`More ${noun}`}
-            />
+              className="flex-row items-center justify-between py-1"
+            >
+              <View className="flex-1 pr-3">
+                <Text className="text-base font-bold text-[#0B1B3D]">
+                  {question.label}
+                </Text>
+                {question.help ? (
+                  <Text className="mt-0.5 text-xs text-slate-500 font-normal">
+                    {question.help}
+                  </Text>
+                ) : null}
+              </View>
+              <View className="flex-row items-center gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Fewer ${question.label}`}
+                  disabled={disabled || current <= floor}
+                  onPress={() => onAnswer(question.code, Math.max(floor, current - 1))}
+                  className="size-9 items-center justify-center rounded-xl border border-slate-300 bg-white active:bg-slate-50 disabled:opacity-40"
+                >
+                  <Minus size={16} color="#0B1B3D" strokeWidth={2.4} />
+                </Pressable>
+                <Text className="min-w-[70px] text-center text-sm font-bold text-[#0B1B3D]">
+                  {current} {unitText}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`More ${question.label}`}
+                  disabled={disabled || current >= 50}
+                  onPress={() => onAnswer(question.code, current + 1)}
+                  className="size-9 items-center justify-center rounded-xl border border-slate-300 bg-white active:bg-slate-50 disabled:opacity-40"
+                >
+                  <Plus size={16} color="#0B1B3D" strokeWidth={2.4} />
+                </Pressable>
+              </View>
+            </View>
           );
         }
         return (

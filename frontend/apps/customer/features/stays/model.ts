@@ -1,10 +1,157 @@
-import type { Schemas } from "@vsolve/api-client";
+export interface StayMediaItem {
+  id: string;
+  url: string;
+  display_order?: number;
+  caption?: string;
+}
 
-export type StayProperty = Schemas["Property"];
-export type StayPropertySummary = Schemas["PropertySummary"];
-export type StayUnit = Schemas["Unit"];
-export type StayEnquiry = Schemas["StayEnquiry"];
-export type StayQuote = Schemas["StayQuoteResponse"];
+export interface StayUnit {
+  id: string;
+  name: string;
+  nightly_rate_paise: number;
+  monthly_rate_paise?: number;
+  sharing_count?: number;
+  max_guests?: number;
+  available_units?: number;
+  available_count?: number;
+  deposit_paise?: number;
+  food_inclusive?: boolean;
+  has_attached_bathroom?: boolean;
+  ac?: boolean;
+  media?: StayMediaItem[];
+  features?: string[];
+  attributes?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface StayReview {
+  id?: string;
+  rating?: number;
+  comment?: string;
+  customer_name?: string;
+  image_urls?: string[];
+  created_at?: string;
+}
+
+export interface StayPropertySummary {
+  id: string;
+  title: string;
+  slug?: string;
+  description?: string;
+  location_text?: string;
+  price_period?: string;
+  room_style?: string;
+  min_price_paise?: number;
+  min_stay_nights?: number;
+  tenant_preference?: string;
+  average_rating?: number;
+  review_count?: number;
+  total_units?: number;
+  image_urls?: string[];
+  media: StayMediaItem[];
+  host_name?: string;
+  amenities?: { key: string; label: string }[];
+  partner?: any;
+  structured_fields?: Record<string, unknown>;
+  units: StayUnit[];
+}
+
+export interface StayProperty extends StayPropertySummary {
+  description?: string;
+  house_rules?: string;
+  structured_fields?: Record<string, unknown>;
+  highlights?: { label: string; value: string }[];
+  can_review?: boolean;
+  reviews?: StayReview[];
+  units: StayUnit[];
+  visits_offered?: boolean;
+  variant?: string;
+  booking_mode?: string;
+  public_state?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface StayEnquiry {
+  id: string;
+  check_in: string;
+  check_out?: string;
+  length?: number;
+  stay_length?: number;
+  nights?: number;
+  price_period?: string;
+  guest_count?: number;
+  message?: string;
+  status: string;
+  property?: StayProperty | string;
+  property_title?: string;
+  property_slug?: string;
+  unit?: StayUnit;
+  unit_name?: string;
+  total_quote_paise?: number;
+  created_at?: string;
+  host_name?: string;
+  host_phone?: string;
+  host_response?: string;
+  responded_at?: string;
+}
+
+export interface StayQuote {
+  property_id: string;
+  unit_id?: string | null;
+  unit_name?: string;
+  check_out?: string;
+  nights?: number;
+  stay_length?: number;
+  price_period?: string;
+  nightly_rate_paise?: number;
+  total_quote_paise?: number;
+  booking_mode?: string;
+  min_stay_nights?: number;
+  max_guests?: number;
+}
+
+export interface StayVisitSlot {
+  id: string;
+  start_time?: string;
+  end_time?: string;
+  label?: string;
+}
+
+export interface StayVisitDay {
+  date: string;
+  slots: StayVisitSlot[];
+}
+
+export interface StayVisit {
+  id: string;
+  visit_date: string;
+  status: string;
+  property?: StayProperty;
+  property_title?: string;
+  property_slug?: string;
+  unit_name?: string;
+  slot?: StayVisitSlot;
+  start_time?: string;
+  end_time?: string;
+  message?: string;
+  host_name?: string;
+  host_phone?: string;
+  reason_text?: string;
+}
+
+export interface StayReservation {
+  id: string;
+  status: string;
+  check_in: string;
+  check_out?: string;
+  nights?: number;
+  total_paise?: number;
+  guest_count?: number;
+  property_title?: string;
+  unit_name?: string;
+  created_at?: string;
+}
 
 export interface StayFilterParams {
   q?: string;
@@ -162,3 +309,17 @@ export function formatPhone(value: string | undefined | null): string {
   const match = /^\+91(\d{5})(\d{5})$/.exec(raw);
   return match ? `+91 ${match[1]} ${match[2]}` : raw;
 }
+
+export interface StayTaxonomyService {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface StayTaxonomyCategory {
+  id: string;
+  name: string;
+  slug: string;
+  services?: StayTaxonomyService[];
+}
+

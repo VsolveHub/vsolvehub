@@ -124,7 +124,14 @@ function OfferSheet({
         confirmLabel="Yes, send them"
         cancelLabel="Back"
         pending={accept.isPending}
-        onConfirm={() => accept.mutate(undefined, { onError: () => setConfirming(false) })}
+        onConfirm={() =>
+          accept.mutate(undefined, {
+            onError: (err) => {
+              console.warn("[LiveOfferSheet] accept offer failed:", err);
+              setConfirming(false);
+            },
+          })
+        }
       />
       <CrewOfferDeclineDialog
         open={declining}

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, COLOR_TOKENS, EmptyState, ErrorState, Text } from "@vsolve/mobile-ui";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   FileCheck2,
@@ -21,6 +22,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchRentals, fetchRentalTaxonomy } from "../queries";
 import { RentalCard } from "./rental-card";
@@ -150,7 +152,7 @@ function PriceRangeSlider({
             left: `${minPct}%`,
             width: `${Math.max(2, maxPct - minPct)}%`,
           }}
-          className="absolute h-1.5 rounded-full bg-brand"
+          className="absolute h-1.5 rounded-full bg-signal-500"
         />
 
         {/* Min Thumb */}
@@ -178,9 +180,9 @@ function PriceRangeSlider({
             left: `${minPct}%`,
             transform: [{ translateX: -11 }],
           }}
-          className="absolute size-6 items-center justify-center rounded-full border-2 border-brand bg-white shadow-md active:scale-110"
+          className="absolute size-6 items-center justify-center rounded-full border-2 border-signal-500 bg-white shadow-md active:scale-110"
         >
-          <View className="size-2 rounded-full bg-brand" />
+          <View className="size-2 rounded-full bg-signal-500" />
         </View>
 
         {/* Max Thumb */}
@@ -208,9 +210,9 @@ function PriceRangeSlider({
             left: `${maxPct}%`,
             transform: [{ translateX: -11 }],
           }}
-          className="absolute size-6 items-center justify-center rounded-full border-2 border-brand bg-white shadow-md active:scale-110"
+          className="absolute size-6 items-center justify-center rounded-full border-2 border-signal-500 bg-white shadow-md active:scale-110"
         >
-          <View className="size-2 rounded-full bg-brand" />
+          <View className="size-2 rounded-full bg-signal-500" />
         </View>
       </View>
 
@@ -218,38 +220,13 @@ function PriceRangeSlider({
         <Text className="text-[10px] text-text-muted">{paiseToDisplay(SLIDER_MIN_PAISE)}</Text>
         <Text className="text-[10px] text-text-muted">{paiseToDisplay(SLIDER_MAX_PAISE)}+</Text>
       </View>
-
-      {/* Quick Presets */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-1.5 pt-1">
-        {PRICE_PRESETS.map((preset) => {
-          const isSelected = minVal === preset.min && maxVal === preset.max;
-          return (
-            <Pressable
-              key={preset.label}
-              onPress={() => onChange(preset.min, preset.max)}
-              className={`rounded-full px-3 py-1 border ${
-                isSelected
-                  ? "border-brand bg-brand"
-                  : "border-line bg-surface-sunken active:bg-surface-hover"
-              }`}
-            >
-              <Text
-                className={`text-[11px] font-bold ${
-                  isSelected ? "text-white" : "text-text-secondary"
-                }`}
-              >
-                {preset.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
     </View>
   );
 }
 
 export function RentalsBrowseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string; service?: string }>();
 
   const [draftQuery, setDraftQuery] = useState("");
@@ -350,15 +327,38 @@ export function RentalsBrowseScreen() {
   return (
     <>
       <ScrollView
-      className="flex-1 bg-canvas"
-      contentContainerClassName="gap-5 px-4 py-4 pb-16"
-      refreshControl={
+        className="flex-1 bg-canvas"
+        contentContainerClassName="gap-3.5 px-4 pb-16"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 10, 16),
+        }}
+        refreshControl={
         <RefreshControl
           refreshing={rentalsQuery.isRefetching}
           onRefresh={() => void rentalsQuery.refetch()}
         />
       }
     >
+      {/* Back Button */}
+      <View className="flex-row items-center justify-between">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={8}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/");
+            }
+          }}
+          className="flex-row items-center gap-1.5 rounded-full border border-line/80 bg-surface px-3 py-1.5 shadow-2xs active:scale-[0.98] active:bg-surface-sunken"
+        >
+          <ArrowLeft size={14} color="#0B1B3D" strokeWidth={2.2} />
+          <Text className="text-xs font-bold text-navy-900">Back</Text>
+        </Pressable>
+      </View>
+
       {/* Hero Header */}
       <View className="overflow-hidden rounded-3xl bg-navy-900 p-6 shadow-md">
         <View className="gap-2">
@@ -479,7 +479,7 @@ export function RentalsBrowseScreen() {
             }}
             className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
               hasPriceFilter
-                ? "border-brand bg-brand"
+                ? "border-navy-900 bg-navy-900"
                 : "border-line bg-surface active:bg-surface-sunken"
             }`}
           >
@@ -624,12 +624,12 @@ export function RentalsBrowseScreen() {
                   }`}
                 >
                   <View className="flex-row items-center gap-2.5">
-                    <Layers size={16} color={selectedSubcategory === null ? COLOR_TOKENS.navy : COLOR_TOKENS.textMuted} />
+                    <Layers size={16} color={selectedSubcategory === null ? "#00112e" : COLOR_TOKENS.textMuted} />
                     <Text className={`text-xs font-bold ${selectedSubcategory === null ? "text-navy-900" : "text-text-secondary"}`}>
                       All Equipment
                     </Text>
                   </View>
-                  {selectedSubcategory === null && <Check size={16} color={COLOR_TOKENS.navy} />}
+                  {selectedSubcategory === null && <Check size={16} color="#00112e" />}
                 </Pressable>
               )}
 
@@ -661,7 +661,7 @@ export function RentalsBrowseScreen() {
                         <Text className={`text-xs font-bold ${isSelected ? "text-navy-900 font-extrabold" : "text-text-secondary"}`}>
                           {cat.name}
                         </Text>
-                        {isSelected && <Check size={16} color={COLOR_TOKENS.navy} />}
+                        {isSelected && <Check size={16} color="#00112e" />}
                       </Pressable>
 
                       {/* If category is selected and has nested sub-services */}
@@ -755,15 +755,15 @@ export function RentalsBrowseScreen() {
                       setDraftMinPrice(preset.min);
                       setDraftMaxPrice(preset.max);
                     }}
-                    className={`rounded-full px-3 py-1.5 border ${
+                    className={`rounded-full px-3.5 py-1.5 border ${
                       isSelected
-                        ? "border-brand bg-brand"
+                        ? "border-navy-900 bg-navy-900"
                         : "border-line bg-surface-sunken active:bg-surface-hover"
                     }`}
                   >
                     <Text
                       className={`text-xs font-bold ${
-                        isSelected ? "text-white" : "text-text-secondary"
+                        isSelected ? "text-white" : "text-navy-900"
                       }`}
                     >
                       {preset.label}
@@ -786,7 +786,7 @@ export function RentalsBrowseScreen() {
 
             <View className="mt-5 flex-row items-center gap-2">
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 className="flex-1"
                 onPress={() => {

@@ -2,7 +2,7 @@
 // Exact match with Image 3 (dialog modal with day chips, choice cards, radio selection, and instant confirm)
 import { Dialog, Spinner, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
 import { useCandidateStarts, type SchedulingGroup } from "../queries";
 
@@ -23,6 +23,7 @@ export function SlotsSheet({
   addressId,
   onConfirm,
 }: SlotsSheetProps) {
+  const { height: windowHeight } = useWindowDimensions();
   const [editingIndex, setEditingIndex] = useState(0);
   const editingGroup = groups[editingIndex] ?? groups[0] ?? null;
 
@@ -34,7 +35,7 @@ export function SlotsSheet({
   const [selectedStarts, setSelectedStarts] = useState<Record<string, string>>({});
   const [activeDayIndex, setActiveDayIndex] = useState(0);
 
-  const fallbackDays = generateFallbackDays(editingGroup?.estimated_duration_minutes ?? 55);
+  const fallbackDays = generateFallbackDays(editingGroup?.estimated_duration_minutes ?? 405);
   const rawDays = windows?.days?.filter((d) => d.hasAvailability) ?? [];
   const days = rawDays.length > 0 ? rawDays : fallbackDays;
 
@@ -54,34 +55,47 @@ export function SlotsSheet({
     }
   }
 
-  const title = editingGroup
+  const title = editingGroup?.label
     ? `When should we do ${editingGroup.label}?`
-    : "Select slots";
+    : "Select arrival time";
 
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
       title={title}
-      className="max-h-[85vh] p-6"
+      className="max-w-xl p-6"
       footer={
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            if (editingIndex > 0) {
-              setEditingIndex((prev) => prev - 1);
-            } else {
-              onOpenChange(false);
-            }
-          }}
-          className="px-3 py-1.5"
-        >
-          <Text className="text-sm font-semibold text-navy-950">Back</Text>
-        </Pressable>
+        <View className="w-full flex-row justify-end">
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              if (editingIndex > 0) {
+                setEditingIndex((prev) => prev - 1);
+              } else {
+                onOpenChange(false);
+              }
+            }}
+            className="px-3 py-1.5"
+          >
+            <Text className="text-sm font-semibold text-[#0B1B3D]">Back</Text>
+          </Pressable>
+        </View>
       }
     >
-      <ScrollView className="max-h-[460px]" showsVerticalScrollIndicator={false}>
-        {startsQuery.isPending && rawDays.length === 0 ? (
+      <ScrollView
+        style={{ maxHeight: Math.min(windowHeight * 0.58, 480) }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {!editingGroup ? (
+          <View className="items-center justify-center py-10">
+            <Text className="text-sm font-semibold text-[#0B1B3D]">No items to schedule</Text>
+            <Text className="mt-1 text-xs text-text-muted text-center">
+              Please choose a service in your cart and a delivery address.
+            </Text>
+          </View>
+        ) : startsQuery.isPending && rawDays.length === 0 ? (
           <View className="items-center justify-center py-12">
             <Spinner size="sm" />
             <Text className="mt-2 text-xs text-text-muted">Loading available arrival times…</Text>
@@ -90,7 +104,7 @@ export function SlotsSheet({
           <View className="gap-5 pb-2">
             {/* Pick a day */}
             <View className="gap-2">
-              <Text className="text-sm font-bold text-navy-950">Pick a day</Text>
+              <Text className="text-sm font-semibold text-[#0B1B3D]">Pick a day</Text>
               <View className="flex-row flex-wrap gap-2">
                 {days.map((day, idx) => {
                   const active = idx === activeDayIndex;
@@ -100,15 +114,15 @@ export function SlotsSheet({
                       onPress={() => setActiveDayIndex(idx)}
                       className={
                         active
-                          ? "rounded-xl bg-[#EA580C] px-4 py-2"
-                          : "rounded-xl border border-line bg-surface px-4 py-2"
+                          ? "rounded-lg bg-[#EA580C] px-3.5 py-1.5 shadow-2xs"
+                          : "rounded-lg border border-[#E5E7EB] bg-white px-3.5 py-1.5 active:bg-[#F2EFE9]"
                       }
                     >
                       <Text
                         className={
                           active
-                            ? "text-xs font-bold text-white"
-                            : "text-xs font-semibold text-text"
+                            ? "text-xs font-semibold text-white"
+                            : "text-xs font-semibold text-[#0F172A]"
                         }
                       >
                         {day.label}
@@ -121,8 +135,8 @@ export function SlotsSheet({
 
             {/* Pick a start time on [Day] */}
             <View className="gap-2.5">
-              <Text className="text-sm font-bold text-navy-950">
-                Pick a start time on {currentDay?.label ?? "Tomorrow"}
+              <Text className="text-sm font-semibold text-[#0B1B3D]">
+                Pick a start time on {currentDay?.label ?? "Today"}
               </Text>
 
               {(!currentDay || currentDay.windows.length === 0) ? (
@@ -130,14 +144,12 @@ export function SlotsSheet({
                   No slots available on this date. Please pick another day.
                 </Text>
               ) : (
-                <View className="gap-2">
+                <View className="gap-2.5">
                   {currentDay.windows.map((window) => {
                     const isPicked =
                       editingGroup && selectedStarts[editingGroup.key] === window.startsAt;
                     const disabled = !window.isAvailable;
-                    const subtitle = [window.durationLabel, window.scarcityLabel]
-                      .filter(Boolean)
-                      .join(" · ");
+                    const subtitle = window.durationLabel || `about ${editingGroup?.estimated_duration_minutes ?? 405} min`;
 
                     return (
                       <Pressable
@@ -146,47 +158,44 @@ export function SlotsSheet({
                         onPress={() => handleChooseSlot(window.startsAt)}
                         className={
                           isPicked
-                            ? "flex-row items-center gap-3.5 rounded-xl border-2 border-action bg-[#FFF8F3] p-3.5"
+                            ? "flex-row items-center gap-3.5 rounded-xl border border-[#EA580C] bg-[#FFF8F3] p-4"
                             : disabled
-                              ? "flex-row items-center gap-3.5 rounded-xl border border-line/40 bg-surface-sunken opacity-40 p-3.5"
-                              : "flex-row items-center gap-3.5 rounded-xl border border-line bg-surface p-3.5 active:bg-surface-sunken"
+                              ? "flex-row items-center gap-3.5 rounded-xl border border-[#E5E7EB] bg-gray-50 opacity-40 p-4"
+                              : "flex-row items-center gap-3.5 rounded-xl border border-[#E5E7EB] bg-white p-4 active:bg-[#F9F8F6]"
                         }
                       >
-                        {/* Radio selection circle */}
+                        {/* Radio selection circle matching Image 2 */}
                         <View
                           className={
                             isPicked
-                              ? "size-5 items-center justify-center rounded-full border-2 border-action"
-                              : "size-5 items-center justify-center rounded-full border-2 border-[#D1CBC3]"
+                              ? "size-5 items-center justify-center rounded-full border border-[#EA580C]"
+                              : "size-5 items-center justify-center rounded-full border border-[#D1D5DB]"
                           }
                         >
                           {isPicked ? (
-                            <View className="size-2.5 rounded-full bg-action" />
+                            <View className="size-2.5 rounded-full bg-[#EA580C]" />
                           ) : null}
                         </View>
 
                         {/* Title and subtitle */}
                         <View className="flex-1 min-w-0">
-                          <Text
-                            className={
-                              isPicked
-                                ? "text-sm font-bold text-action"
-                                : "text-sm font-bold text-navy-950"
-                            }
-                          >
+                          <Text className="text-sm font-bold text-[#0B1B3D]">
                             {window.label}
                           </Text>
-                          {subtitle ? (
-                            <Text className="mt-0.5 text-xs text-text-secondary">
-                              {subtitle}
-                            </Text>
-                          ) : null}
+                          <Text className="mt-0.5 text-xs text-[#64748B]">
+                            {subtitle}
+                          </Text>
                         </View>
                       </Pressable>
                     );
                   })}
                 </View>
               )}
+
+              {/* Explanatory Footnote matching Image 2 */}
+              <Text className="mt-2 text-xs leading-relaxed text-[#64748B]">
+                This is when you would like us to start. We will show you exactly how it can be arranged, and what it costs, before anything is confirmed.
+              </Text>
             </View>
           </View>
         )}
@@ -195,15 +204,17 @@ export function SlotsSheet({
   );
 }
 
-function generateFallbackDays(estimatedDurationMinutes = 55) {
+function generateFallbackDays(estimatedDurationMinutes = 405) {
   const result = [];
   const now = new Date();
 
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 0; i <= 7; i++) {
     const d = new Date(now.getTime() + i * 86_400_000);
     const dateStr = d.toISOString().split("T")[0];
     const dayLabel =
-      i === 1
+      i === 0
+        ? "Today"
+        : i === 1
         ? "Tomorrow"
         : d.toLocaleDateString("en-IN", {
             weekday: "short",
@@ -215,65 +226,29 @@ function generateFallbackDays(estimatedDurationMinutes = 55) {
       {
         id: `w-${dateStr}-0800`,
         startsAt: `${dateStr}T08:00:00+05:30`,
-        label: "8:00 am – 9:00 am",
+        label: "8:00 am – 10:00 am",
         startLabel: "8:00 am",
         isAvailable: true,
         durationLabel: `about ${estimatedDurationMinutes} min`,
-        scarcityLabel: "Only 1 pro left",
-      },
-      {
-        id: `w-${dateStr}-0900`,
-        startsAt: `${dateStr}T09:00:00+05:30`,
-        label: "9:00 am – 10:00 am",
-        startLabel: "9:00 am",
-        isAvailable: true,
-        durationLabel: `about ${estimatedDurationMinutes} min`,
-        scarcityLabel: "Only 1 pro left",
+        scarcityLabel: null,
       },
       {
         id: `w-${dateStr}-1000`,
         startsAt: `${dateStr}T10:00:00+05:30`,
-        label: "10:00 am – 11:00 am",
+        label: "10:00 am – 12:00 pm",
         startLabel: "10:00 am",
         isAvailable: true,
         durationLabel: `about ${estimatedDurationMinutes} min`,
-        scarcityLabel: "Only 1 pro left",
-      },
-      {
-        id: `w-${dateStr}-1100`,
-        startsAt: `${dateStr}T11:00:00+05:30`,
-        label: "11:00 am – 12:00 pm",
-        startLabel: "11:00 am",
-        isAvailable: true,
-        durationLabel: `about ${estimatedDurationMinutes} min`,
         scarcityLabel: null,
       },
       {
-        id: `w-${dateStr}-1300`,
-        startsAt: `${dateStr}T13:00:00+05:30`,
-        label: "1:00 pm – 2:00 pm",
-        startLabel: "1:00 pm",
-        isAvailable: true,
-        durationLabel: `about ${estimatedDurationMinutes} min`,
-        scarcityLabel: "Only 1 pro left",
-      },
-      {
-        id: `w-${dateStr}-1500`,
-        startsAt: `${dateStr}T15:00:00+05:30`,
-        label: "3:00 pm – 4:00 pm",
-        startLabel: "3:00 pm",
+        id: `w-${dateStr}-1200`,
+        startsAt: `${dateStr}T12:00:00+05:30`,
+        label: "12:00 pm – 2:00 pm",
+        startLabel: "12:00 pm",
         isAvailable: true,
         durationLabel: `about ${estimatedDurationMinutes} min`,
         scarcityLabel: null,
-      },
-      {
-        id: `w-${dateStr}-1700`,
-        startsAt: `${dateStr}T17:00:00+05:30`,
-        label: "5:00 pm – 6:00 pm",
-        startLabel: "5:00 pm",
-        isAvailable: true,
-        durationLabel: `about ${estimatedDurationMinutes} min`,
-        scarcityLabel: "Only 1 pro left",
       },
     ];
 

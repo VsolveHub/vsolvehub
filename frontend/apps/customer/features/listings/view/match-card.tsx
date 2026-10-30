@@ -6,7 +6,7 @@ import { MATCH_LOOK, type JobMatch } from "../seeker-queries";
 
 /** "92% match" with what fits (✓) and what doesn't (△). */
 export function MatchCard({ match }: { match: JobMatch }) {
-  const look = MATCH_LOOK[match.level] ?? MATCH_LOOK.OTHER!;
+  const look = (match.level ? MATCH_LOOK[match.level] : null) ?? MATCH_LOOK.OTHER!;
   return (
     <section className="flex flex-col gap-3 rounded-card border border-line bg-surface-sunken p-4">
       <div className="flex items-center justify-between gap-2">
@@ -14,10 +14,10 @@ export function MatchCard({ match }: { match: JobMatch }) {
         <Badge tone={look.tone}>{look.label}</Badge>
       </div>
       <ul className="flex flex-col gap-1 text-sm">
-        {match.matched.map((m) => (
+        {(match.matched ?? []).map((m) => (
           <li key={m} className="text-success-text">✓ {m}</li>
         ))}
-        {match.missing.map((m) => (
+        {(match.missing ?? []).map((m) => (
           <li key={m} className="text-text-secondary">△ {m}</li>
         ))}
       </ul>

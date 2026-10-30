@@ -389,7 +389,7 @@ export default function Index() {
   const [timerLeft, setTimerLeft] = useState(30);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
   const sectionPositions = useRef<Record<string, number>>({});
   const floatAnim = useRef(new Animated.Value(0)).current;
 

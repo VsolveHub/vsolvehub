@@ -20,7 +20,7 @@ interface BaseProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
-  children: ReactNode;
+  children?: ReactNode;
   footer?: ReactNode;
   dismissable?: boolean;
   className?: string;
@@ -105,7 +105,14 @@ export function Dialog({
   const maxDialogHeight = Math.min(windowHeight - 64, Math.floor(windowHeight * 0.85));
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={() => dismissable && onOpenChange(false)}>
+    <Modal
+      visible={open}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (dismissable) onOpenChange(false);
+      }}
+    >
       <View className="flex-1">
         <BlurBackdrop
           onPress={dismissable ? () => onOpenChange(false) : undefined}
@@ -118,18 +125,28 @@ export function Dialog({
           pointerEvents="box-none"
         >
           <View
-            className={cn("w-full max-w-sm rounded-[1.75rem] bg-surface p-6 shadow-2xl flex-col", className)}
+            className={cn(
+              "w-full rounded-[1.75rem] bg-surface p-6 shadow-2xl flex-col",
+              className && className.includes("max-w-") ? undefined : "max-w-md",
+              className
+            )}
             style={{ maxHeight: maxDialogHeight }}
           >
-            <View className="flex-row items-start justify-between gap-3">
-              <View className="min-w-0 flex-1">
-                <Text className="text-xl font-bold text-text">{title}</Text>
-                {description ? <Text className="mt-1 text-sm text-text-secondary leading-snug">{description}</Text> : null}
+            {title || description || dismissable ? (
+              <View className="flex-row items-start justify-between gap-3 shrink-0">
+                <View className="min-w-0 flex-1">
+                  {title ? <Text className="text-xl font-bold text-text">{title}</Text> : null}
+                  {description ? (
+                    <Text className="mt-1.5 text-sm text-text-secondary leading-snug">
+                      {description}
+                    </Text>
+                  ) : null}
+                </View>
+                {dismissable ? <CloseButton onPress={() => onOpenChange(false)} /> : null}
               </View>
-              {dismissable ? <CloseButton onPress={() => onOpenChange(false)} /> : null}
-            </View>
-            <View className="mt-4 flex-1 min-h-0">{children}</View>
-            {footer ? <View className="mt-4 flex-row justify-end gap-2">{footer}</View> : null}
+            ) : null}
+            {children ? <View className="mt-4">{children}</View> : null}
+            {footer ? <View className="mt-5 shrink-0 flex-row justify-end gap-2">{footer}</View> : null}
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -144,7 +161,14 @@ export function Sheet(props: BaseProps) {
   const maxSheetHeight = Math.min(windowHeight - Math.max(insets.top, 24) - 24, Math.floor(windowHeight * 0.85));
 
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={() => dismissable && onOpenChange(false)}>
+    <Modal
+      visible={open}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        if (dismissable) onOpenChange(false);
+      }}
+    >
       <View className="flex-1 justify-end">
         <BlurBackdrop
           onPress={dismissable ? () => onOpenChange(false) : undefined}
@@ -170,7 +194,7 @@ export function Sheet(props: BaseProps) {
               </View>
               {dismissable ? <CloseButton onPress={() => onOpenChange(false)} /> : null}
             </View>
-            <View className="flex-1 min-h-0 mt-3">{children}</View>
+            {children ? <View className="mt-3">{children}</View> : null}
             {footer ? <View className="mt-3 pt-2 border-t border-line/40">{footer}</View> : null}
           </View>
         </KeyboardAvoidingView>

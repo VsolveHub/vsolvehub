@@ -1,4 +1,4 @@
-// Upgraded standalone login screen with full VSolveHub branding, safe-area top padding, and back navigation
+import { useEffect, useState } from "react";
 import { safeNextPath } from "@vsolve/query/native";
 import { useAuthStore, useMobileOtpFlow } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";

@@ -7,6 +7,7 @@ import {
   Text,
 } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   Briefcase,
@@ -57,6 +58,7 @@ function formatDate(dateStr?: string | null): string {
 
 export function MyApplicationsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const authStatus = useAuthStore((s) => s.status);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -104,7 +106,12 @@ export function MyApplicationsScreen() {
   return (
     <ScrollView
       className="flex-1 bg-[#fcfbfa]"
-      contentContainerClassName="gap-4 px-4 py-4 pb-24 max-w-xl mx-auto w-full"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 16, 38),
+        paddingBottom: Math.max(insets.bottom + 24, 40),
+        paddingHorizontal: 16,
+      }}
+      contentContainerClassName="gap-4 max-w-xl mx-auto w-full"
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />}
     >
       {/* 1. Header Section */}
