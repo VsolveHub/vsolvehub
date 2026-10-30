@@ -10,7 +10,7 @@ import {
   BellRing,
 } from "lucide-react";
 import { PARTNER_ROLES, roleBySlug, servicesForRole } from "@vsolve/config";
-import { Button } from "@vsolve/ui";
+import { buttonStyles } from "@vsolve/ui";
 import { Medallion, StepFlow, type Tone } from "@/components/graphics";
 import { roleVisual } from "@/components/role-visuals";
 import { serviceVisual } from "@/components/service-visuals";
@@ -22,16 +22,21 @@ export function generateStaticParams() {
   return PARTNER_ROLES.map((r) => ({ role: r.slug }));
 }
 
+/** "an AC Technician", "an Employer", "an RO Technician"; "a Plumber". */
+function withArticle(name: string): string {
+  return `${/^[aeiou]/i.test(name) || /^RO\b/.test(name) ? "an" : "a"} ${name}`;
+}
+
 export async function generateMetadata(
   { params }: { params: Promise<{ role: string }> },
 ): Promise<Metadata> {
   const { role } = await params;
   const r = roleBySlug(role);
-  if (!r) return {};
-  const title = `Become a ${r.name} Partner`;
+  if (!r) return { title: "Page not found" };
+  const title = `Become ${withArticle(r.name)} Partner`;
   return {
     title,
-    description: `Join V Solve Hub as a ${r.name}. ${r.description} Earn daily across Telangana.`,
+    description: `Join V Solve Hub as ${withArticle(r.name)}. ${r.description} Earn daily across Telangana.`,
     alternates: { canonical: `/become/${r.slug}` },
     openGraph: { title, type: "website" },
   };
@@ -70,16 +75,12 @@ export default async function BecomeRolePage(
             {" "}{r.requirement}.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/contact">
-              <Button size="lg">
+            <Link href="/contact" className={buttonStyles({ size: "lg" })}>
                 <BellRing className="h-4 w-4" /> Notify me
-              </Button>
-            </Link>
-            <Link href="/solutions">
-              <Button variant="outline" size="lg">
+              </Link>
+            <Link href="/solutions" className={buttonStyles({ variant: "outline", size: "lg" })}>
                 View other roles
-              </Button>
-            </Link>
+              </Link>
           </div>
         </div>
       </main>
@@ -101,11 +102,9 @@ export default async function BecomeRolePage(
             Become a {r.name} Partner
           </h1>
           <p className="mx-auto mt-4 max-w-md text-lg text-white/80">{r.description}</p>
-          <Link href="/login" className="mt-8 inline-block">
-            <Button variant="accent" size="lg">
+          <Link href="/login" className={buttonStyles({ variant: "accent", size: "lg", className: "mt-8" })}>
               Start your application <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link>
         </div>
       </section>
 
@@ -162,11 +161,9 @@ export default async function BecomeRolePage(
           <p className="mx-auto mt-2 max-w-md text-white/80">
             Get verified and start receiving jobs in your area this week.
           </p>
-          <Link href="/login" className="mt-6 inline-block">
-            <Button variant="accent" size="lg">
+          <Link href="/login" className={buttonStyles({ variant: "accent", size: "lg", className: "mt-6" })}>
               Become a {r.name} <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link>
         </div>
       </section>
     </main>

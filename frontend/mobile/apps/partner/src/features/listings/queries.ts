@@ -155,7 +155,7 @@ export function purchaseSubscription(planId: string): Promise<VendorSubscription
 }
 
 export function fetchCareerServices(): Promise<any[]> {
-  return request(() => getApiClient().GET("/api/v1/partner/listings/roles")) as Promise<any[]>;
+  return request(() => getApiClient().GET("/api/v1/partner/listings/roles")) as unknown as Promise<any[]>;
 }
 
 export function reportApplicantApplication(

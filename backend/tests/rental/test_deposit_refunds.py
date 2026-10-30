@@ -15,9 +15,10 @@ from apps.catalog.models import (
 )
 from apps.commerce.models import PaymentAttempt, Refund
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.payouts.models import PartnerLedgerEntry
+from apps.payouts.models import PartnerEarningHold, PartnerLedgerEntry
 from apps.rental.models import RentalBooking, RentalDeposit
 from apps.rental.services import (
+    RentalStateError,
     create_asset,
     create_booking,
     decide_deposit_dispute,
@@ -34,7 +35,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-deposit-refund", name="Deposit Refund")
     sub = Subcategory.objects.create(category=category, slug="cameras-refund", name="Cameras")
     service = Service.objects.create(
@@ -143,7 +144,6 @@ def test_release_deposit_idempotent_replay(rental_world):
     release_deposit(booking=booking, partner=rental_world["partner"])
     booking.refresh_from_db()
     # Second release must fail closed on status, without a second refund row.
-    from apps.rental.services import RentalStateError
 
     with pytest.raises(RentalStateError, match="not held"):
         release_deposit(booking=booking, partner=rental_world["partner"])
@@ -299,3 +299,36 @@ def test_ops_reject_returns_the_full_deposit(rental_world):
     assert not PartnerLedgerEntry.objects.filter(
         idempotency_key=f"rental-deposit-consume:{booking.deposit_id}"
     ).exists()
+
+
+@pytest.mark.django_db
+def test_a_dispute_cannot_turn_an_already_paid_earning_back_into_payable_money(rental_world):
+    """The bug this guards: a deposit dispute flipped the owner's earning to `PENDING` whatever it
+    was, and the decision then made a `PAID` earning `AVAILABLE` to be paid a second time."""
+
+    booking = _returned_paid_booking(rental_world)
+    earning = PartnerLedgerEntry.objects.get(
+        rental_booking=booking, kind=PartnerLedgerEntry.Kind.EARNING
+    )
+    # An earlier payout run has already paid it.
+    PartnerLedgerEntry.objects.filter(id=earning.id).update(status=PartnerLedgerEntry.Status.PAID)
+
+    opened = dispute_deposit(
+        booking=booking,
+        partner=rental_world["partner"],
+        reason="Cracked lens hood",
+        consume_paise=0,
+    )
+
+    earning.refresh_from_db()
+    assert earning.status == PartnerLedgerEntry.Status.PAID
+    hold = PartnerEarningHold.objects.get(rental_booking=booking)
+    assert hold.reason == PartnerEarningHold.Reason.RENTAL_DEPOSIT_DISPUTE
+    assert hold.status == PartnerEarningHold.Status.ACTIVE
+
+    decide_deposit_dispute(booking=opened, actor=rental_world["owner"], decision="REJECT")
+
+    earning.refresh_from_db()
+    assert earning.status == PartnerLedgerEntry.Status.PAID, "paid money became payable again"
+    hold.refresh_from_db()
+    assert hold.status == PartnerEarningHold.Status.RELEASED

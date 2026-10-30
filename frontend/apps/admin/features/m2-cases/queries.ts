@@ -336,3 +336,62 @@ export function isVersionConflict(error: unknown): boolean {
   const code = codeOf(error);
   return code === "case_conflict" || code === "version_conflict";
 }
+
+/* ---------------------------------------------------------------------------
+   The row behind the case: a disputed stage or a safety report.
+
+   Resolving a case and deciding its source are two decisions (`open_stage_case`), so the case
+   screen offers the source's own command beside Resolve rather than folding one into the other.
+   --------------------------------------------------------------------------- */
+
+export function useDecideStageDispute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      stageId: string;
+      outcome: Schemas["StageDisputeOutcomeEnum"];
+      note: string;
+    }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/engagement-stages/{stage_id}/dispute/decision/", {
+          params: {
+            path: { stage_id: input.stageId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `stage-dispute:${input.stageId}:${input.outcome}`,
+              ),
+            },
+          },
+          body: { outcome: input.outcome, note: input.note },
+        }),
+      ),
+    onSuccess: () => void queryClient.invalidateQueries(),
+    retry: false,
+  });
+}
+
+export function useDecideSafetyIncident() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      incidentId: string;
+      decision: Schemas["SafetyIncidentDecisionEnum"];
+      resolutionNote: string;
+    }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/safety-incidents/{safety_incident_id}/decision/", {
+          params: {
+            path: { safety_incident_id: input.incidentId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `safety-decision:${input.incidentId}:${input.decision}`,
+              ),
+            },
+          },
+          body: { decision: input.decision, resolution_note: input.resolutionNote },
+        }),
+      ),
+    onSuccess: () => void queryClient.invalidateQueries(),
+    retry: false,
+  });
+}

@@ -3,7 +3,7 @@
 import { describeError } from "@vsolve/query";
 import { EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useCustomerSession } from "@/features/session/queries";
 import {
@@ -26,7 +26,7 @@ import { RemoveCartItemDialog } from "@/features/checkout/view/remove-dialog";
 import { useCartSuggestions } from "../queries";
 import { CartSuggestions } from "./cart-suggestions";
 import { CART_PAGE_FRAME } from "./cart-layout";
-import { CartSummary } from "./cart-summary";
+import { CartStickyBar, CartSummary } from "./cart-summary";
 
 /**
  * The cart.
@@ -103,10 +103,33 @@ export function CartWorkspace() {
       ? null
       : (cart?.items.find((item) => item.id === removalItemId) ?? null);
 
+  const inlineButtonRef = useRef<HTMLDivElement | null>(null);
+  const [isInlineButtonVisible, setIsInlineButtonVisible] = useState(false);
+
+  useEffect(() => {
+    const el = inlineButtonRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry) {
+          setIsInlineButtonVisible(entry.isIntersecting);
+        }
+      },
+      {
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [cart]);
+
   const isEmpty = cart !== undefined && cart.items.length === 0;
 
   return (
-    <div className={`${CART_PAGE_FRAME} pb-8 pt-6 sm:pb-12 lg:pb-16`}>
+    // `pb-28` below `lg` keeps the last summary line clear of the pinned continue bar.
+    <div className={`${CART_PAGE_FRAME} pb-28 pt-6 lg:pb-16`}>
       <h1 className="text-xl font-bold text-text">Your cart</h1>
 
       {cartQuery.isPending ? (
@@ -212,7 +235,16 @@ export function CartWorkspace() {
           ) : null}
             </div>
 
-            <CartSummary cart={cart} isAuthenticated={session.isAuthenticated} />
+            <CartSummary
+              cart={cart}
+              isAuthenticated={session.isAuthenticated}
+              inlineButtonRef={inlineButtonRef}
+            />
+            <CartStickyBar
+              cart={cart}
+              isAuthenticated={session.isAuthenticated}
+              visible={!isInlineButtonVisible}
+            />
           </div>
         </>
       ) : null}

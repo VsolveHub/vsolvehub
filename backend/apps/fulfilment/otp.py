@@ -6,6 +6,7 @@ Operations-assisted path exists for the documented outage case only; it is never
 bypass — every use is audited with a non-empty reason and a named actor.
 """
 
+import logging
 import secrets
 from dataclasses import dataclass
 from datetime import timedelta
@@ -31,6 +32,8 @@ from apps.fulfilment.services import (
 from apps.identity.delivery import get_otp_sender
 from apps.identity.models import User
 
+logger = logging.getLogger(__name__)
+
 
 class OtpRateLimitError(RuntimeError):
     def __init__(self, retry_after_seconds: int) -> None:
@@ -40,8 +43,50 @@ class OtpRateLimitError(RuntimeError):
 
 @dataclass(frozen=True)
 class IssuedStartOtp:
+    """The live challenge and its plaintext, for the one Customer allowed to read it out.
+
+    `code` is returned to the signed-in Customer who owns the Booking and to nobody else: the
+    Customer reads it out to the Partner standing in front of them, which is what proves the
+    Partner is there. Job start never depends on an SMS arriving. `development_code` keeps its
+    original meaning — the same digits, published only where `OTP_DEVELOPMENT_CODE_ENABLED`.
+    """
+
     otp: BookingOtp
-    development_code: str | None
+    code: str
+
+    @property
+    def development_code(self) -> str | None:
+        return self.code if settings.OTP_DEVELOPMENT_CODE_ENABLED else None
+
+
+def _active_code_key(booking_id: UUID) -> str:
+    return f"booking-otp:active-code:{booking_id}"
+
+
+def live_start_code(*, booking_id: UUID, customer_id: UUID) -> IssuedStartOtp | None:
+    """The still-usable code from the Customer's last request, if its plaintext is still held.
+
+    For the resend cooldown: `request_start_otp` refuses a second challenge inside it, and a
+    Customer who refreshed the page would otherwise get a 429 and nothing to read out. This hands
+    back the code they were already given. Same ownership rule as the request — the Booking's own
+    Customer or nobody. The plaintext lives only in the cache, for the challenge's own lifetime,
+    and is dropped the moment work starts.
+    """
+
+    booking = Booking.objects.get(id=booking_id)
+    if booking.customer_id != customer_id:
+        raise PermissionError("This Booking belongs to another Customer.")
+    if booking.status != Booking.Status.ARRIVED:
+        return None
+    code = cache.get(_active_code_key(booking.id))
+    otp = (
+        BookingOtp.objects.filter(booking=booking, consumed_at__isnull=True)
+        .order_by("-created_at")
+        .first()
+    )
+    if not isinstance(code, str) or otp is None or otp.is_expired or otp.is_locked:
+        return None
+    return IssuedStartOtp(otp=otp, code=code)
 
 
 def _ensure_not_started(booking: Booking) -> None:
@@ -79,11 +124,14 @@ def request_start_otp(
         expires_at=timezone.now() + timedelta(seconds=settings.M1_START_OTP_TTL_SECONDS),
         max_attempts=settings.M1_START_OTP_MAX_ATTEMPTS,
     )
-    # A delivery failure here (`OtpDeliveryError`) is the documented "OTP/message outage" —
-    # callers surface it so Customer/Partner can fall back to `operations_assisted_start`.
-    get_otp_sender().send(booking.customer.phone_number, code, "booking_start")
-    development_code = code if settings.OTP_DEVELOPMENT_CODE_ENABLED else None
-    return IssuedStartOtp(otp=otp, development_code=development_code)
+    cache.set(_active_code_key(booking.id), code, timeout=settings.M1_START_OTP_TTL_SECONDS)
+    # The SMS is a courtesy copy. The code is returned to the signed-in Customer on screen, so an
+    # unconfigured or failing SMS provider must never stop a job from starting. Never log the code.
+    try:
+        get_otp_sender().send(booking.customer.phone_number, code, "booking_start")
+    except Exception:
+        logger.warning("Start code SMS was not delivered for booking %s.", booking.id)
+    return IssuedStartOtp(otp=otp, code=code)
 
 
 def verify_start_otp(
@@ -122,6 +170,8 @@ def verify_start_otp(
         else:
             otp.consumed_at = timezone.now()
             otp.save(update_fields=("consumed_at",))
+            cache.delete(_active_code_key(booking.id))
+            cache.delete(f"booking-otp:cooldown:{booking.id}")
             WorkSession.objects.create(
                 booking=booking,
                 started_at=timezone.now(),
@@ -164,6 +214,8 @@ def operations_assisted_start(
             reason="An outage reason is required for an Operations-assisted start."
         )
 
+    cache.delete(_active_code_key(booking.id))
+    cache.delete(f"booking-otp:cooldown:{booking.id}")
     WorkSession.objects.create(
         booking=booking,
         started_at=timezone.now(),

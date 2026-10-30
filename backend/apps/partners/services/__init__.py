@@ -55,22 +55,31 @@ from .documents import (
     _create_document_upload_intent,
     _document_upload_for_finalization,
     cleanup_stale_partner_document_uploads,
+    create_partner_document_applicant_access,
     create_partner_document_review_access,
     finalize_partner_document_upload,
     issue_partner_document_upload,
     record_partner_document_scan_result,
     review_partner_document,
+    scan_partner_document,
+    scan_pending_partner_documents,
 )
 from .presence import (
     _assert_operational_eligibility,
     _presence_payload,
     _publish_presence,
+    expire_expired_shifts,
     expire_missing_presence_sessions,
     go_offline,
     go_online,
     heartbeat_presence,
+    sync_partner_push_subscription,
 )
-from .review import claim_partner_application, transition_partner_application
+from .review import (
+    claim_partner_application,
+    release_partner_application_review,
+    transition_partner_application,
+)
 from .schedule import (
     _minutes,
     _replace_schedule_for_application,
@@ -122,7 +131,9 @@ __all__ = [
     "cache",
     "claim_partner_application",
     "cleanup_stale_partner_document_uploads",
+    "create_partner_document_applicant_access",
     "create_partner_document_review_access",
+    "expire_expired_shifts",
     "expire_missing_presence_sessions",
     "finalize_partner_document_upload",
     "get_document_storage",
@@ -131,10 +142,14 @@ __all__ = [
     "heartbeat_presence",
     "issue_partner_document_upload",
     "record_partner_document_scan_result",
+    "release_partner_application_review",
     "replace_partner_schedule",
     "replace_partner_schedule_for_operations",
     "review_partner_document",
+    "scan_partner_document",
+    "scan_pending_partner_documents",
     "submit_partner_application",
+    "sync_partner_push_subscription",
     "transition_partner_application",
     "update_partner_application",
 ]

@@ -25,8 +25,26 @@ import { getApiClient } from "@/lib/api/browser";
 
 type Application = Schemas["PartnerApplication"];
 
+/**
+ * Two reviewers acted on the same version: the only refusal a refetch fixes.
+ *
+ * By code, not by status. Every domain refusal on this endpoint is a 409 —
+ * documents not yet approved, an incomplete application, a review claimed by
+ * someone else — and reading them all as "someone else acted first" told a
+ * reviewer to wait out a problem only they could fix.
+ */
 export function isVersionConflict(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status === 409;
+  return (
+    error instanceof ApiRequestError && error.code === "partner_application_version_conflict"
+  );
+}
+
+/** Someone else holds the review. Shown as "claimed first", like a version conflict. */
+export function isClaimedElsewhere(error: unknown): boolean {
+  return (
+    isVersionConflict(error) ||
+    (error instanceof ApiRequestError && error.code === "partner_review_ownership_conflict")
+  );
 }
 
 /** A reviewer's decision has been refused because they lack the permission. */
@@ -147,6 +165,38 @@ export function useClaimApplication() {
 }
 
 /**
+ * Hands a claimed application back to the queue so another reviewer can claim it.
+ *
+ * Any Operations user may release, not only the holder: it exists for the
+ * reviewer who is away, whose applications nobody else could otherwise touch.
+ */
+export function useReleaseApplication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ClaimInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/operations/partner-applications/{application_id}/release/",
+          {
+            params: { path: { application_id: input.applicationId } },
+            body: { expected_version: input.expectedVersion },
+          },
+        ),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerApplication(input.applicationId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "partner-application-queue"],
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
  * Requests a short-lived URL for one KYC document.
  *
  * A **mutation**, not a query, and deliberately so. Every call is an audited
@@ -191,7 +241,9 @@ export function useTransitionApplication() {
             body: {
               expected_version: input.expectedVersion,
               target_status: input.targetStatus,
-              ...(input.reason ? { reason: input.reason } : {}),
+              // Always sent: an empty string is "no reason", which the decisions
+              // that need one refuse on the server with a message to read.
+              reason: input.reason ?? "",
             },
           },
         ),
@@ -244,7 +296,7 @@ export function useReviewDocument() {
             params: { path: { document_id: input.documentId } },
             body: {
               decision: input.decision,
-              ...(input.reason ? { reason: input.reason } : {}),
+              reason: input.reason ?? "",
             },
           },
         ),

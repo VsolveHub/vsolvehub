@@ -16,7 +16,7 @@ import { Faq, faqJsonLd } from "@/components/faq";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "How It Works - Partner Journey & Onboarding",
+  title: "How It Works: Partner Journey & Onboarding",
   description:
     "Learn how skilled technicians register, verify documents, set working hours, and receive weekly payouts on V Solve Hub.",
   alternates: { canonical: "/how-it-works" },
@@ -144,23 +144,13 @@ export default function HowItWorksPage() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/apply">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
+          <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
               <span>Start Partner Application</span>
               <ArrowRight className="h-4 w-4" />
-            </button>
-          </Link>
-          <Link href="/pricing">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-surface border border-line-strong px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors shadow-xs"
-            >
+            </Link>
+          <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full bg-surface border border-line-strong px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors shadow-xs">
               <span>View Payout Rates</span>
-            </button>
-          </Link>
+            </Link>
         </div>
       </section>
 
@@ -264,18 +254,13 @@ export default function HowItWorksPage() {
         <div className="rounded-3xl bg-[#00112e] p-8 sm:p-12 text-white text-center shadow-2xl border border-white/10 relative overflow-hidden">
           <h2 className="text-2xl sm:text-3xl font-black">Ready to Take Control of Your Earnings?</h2>
           <p className="mt-2 text-sm sm:text-base text-navy-200 max-w-xl mx-auto leading-relaxed">
-            Join 5,000+ certified technicians and professionals earning reliable income on V Solve Hub.
+            Apply today to become a verified service partner in Hyderabad with weekly direct bank payouts.
           </p>
           <div className="mt-8">
-            <Link href="/apply">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
+            <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
                 <span>Apply as a Partner Now</span>
                 <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>

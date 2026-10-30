@@ -78,6 +78,13 @@ function SubjectRow({ item }: { item: OperationsCase }) {
               >
                 {maskId(subject.id)}
               </Link>
+            ) : subject.key === "booking_id" ? (
+              <Link
+                href={`/operations/visits?id=${subject.id}`}
+                className="text-text-link hover:underline"
+              >
+                {maskId(subject.id)}
+              </Link>
             ) : (
               maskId(subject.id)
             )}

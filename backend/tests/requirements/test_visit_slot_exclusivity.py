@@ -177,4 +177,6 @@ def test_project_enquiry_reveals_only_locality_until_the_paid_visit_is_scheduled
         "city": "Hyderabad",
         "state": "Telangana",
         "postal_code": "500072",
+        # The pin travels only inside the route, under the same gate as the text.
+        "directions_url": "https://www.google.com/maps/dir/?api=1&destination=17.494500,78.399200",
     }

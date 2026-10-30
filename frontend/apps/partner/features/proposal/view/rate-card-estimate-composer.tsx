@@ -15,6 +15,7 @@ import {
   SkeletonRegion,
   cn,
   formatMoney,
+  useT,
 } from "@vsolve/ui";
 import {
   ArrowLeft,
@@ -145,13 +146,16 @@ export interface RateCardEstimateComposerProps {
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
-const STEP_TITLES: Record<Step, string> = {
-  1: "How are you pricing this?",
-  2: "Add work",
-  3: "What the customer should buy",
-  4: "Terms & payment",
-  5: "Review & send",
+/** Catalogue keys, resolved with `t` where the header renders. */
+const STEP_TITLE_KEYS: Record<Step, string> = {
+  1: "proposal.ratecard.step.mode",
+  2: "proposal.ratecard.step.work",
+  3: "proposal.ratecard.step.materials",
+  4: "proposal.ratecard.step.terms",
+  5: "proposal.ratecard.step.review",
 };
+
+const TURNKEY_MATERIALS_TITLE_KEY = "proposal.ratecard.step.materialsTurnkey";
 
 type SheetState =
   | { readonly kind: "rate"; readonly entry: PriceBookEntry }
@@ -185,6 +189,7 @@ export function RateCardEstimateComposer({
   onSend,
   notice,
 }: RateCardEstimateComposerProps) {
+  const t = useT();
   const partnerTurnkey = materialFulfilmentMode === "PARTNER_TURNKEY";
   const [draft, setDraft] = useState<CommercialEstimateDraft>(() =>
     withTemplateInstallments(
@@ -213,7 +218,7 @@ export function RateCardEstimateComposer({
   const priceBook = usePriceBook(undefined, pricingSkillCode);
   const entries = useMemo(() => priceBook.data?.items ?? [], [priceBook.data]);
 
-  const errors = useMemo(() => validateCommercialEstimate(draft), [draft]);
+  const errors = useMemo(() => validateCommercialEstimate(draft, t), [draft, t]);
   const previewBody = useMemo(() => {
     if (hasCommercialEstimateErrors(errors)) return null;
     return toCommercialPreviewRequest({ invitationId, siteVisitId, draft });
@@ -277,6 +282,7 @@ export function RateCardEstimateComposer({
   // no timeline, no guarantee and no validity — every one of which the Customer's screen
   // then rendered as "Not stated". The composer was not asking; it was offering.
   const blockers = stepBlockers({
+    t,
     step,
     draft,
     linesReady,
@@ -433,7 +439,7 @@ export function RateCardEstimateComposer({
         onClose={() => setPreviewing(false)}
         draft={withAutoText(draft)}
         preview={previewIsCurrent ? preview.data : undefined}
-        vendorName="Your estimate"
+        vendorName={t("proposal.ratecard.yourEstimate")}
         materialList={materialList}
         partnerTurnkey={partnerTurnkey}
       />
@@ -467,7 +473,7 @@ export function RateCardEstimateComposer({
 
       {sheet?.kind === "custom-item-rate" ? (
         <RateSheet
-          title={draft.itemLines.find((line) => line.id === sheet.lineId)?.title ?? "Custom item"}
+          title={draft.itemLines.find((line) => line.id === sheet.lineId)?.title ?? t("proposal.ratecard.customItem")}
           unit={draft.itemLines.find((line) => line.id === sheet.lineId)?.unit ?? "each"}
           floorPaise={null}
           ceilingPaise={null}
@@ -487,7 +493,7 @@ export function RateCardEstimateComposer({
 
       {sheet?.kind === "labour-rate" ? (
         <RateSheet
-          title={draft.labourLines.find((line) => line.id === sheet.lineId)?.role ?? "Role"}
+          title={draft.labourLines.find((line) => line.id === sheet.lineId)?.role ?? t("proposal.ratecard.role")}
           unit="day"
           floorPaise={draft.labourLines.find((line) => line.id === sheet.lineId)?.floorPaise ?? null}
           ceilingPaise={draft.labourLines.find((line) => line.id === sheet.lineId)?.ceilingPaise ?? null}
@@ -539,7 +545,10 @@ export function RateCardEstimateComposer({
 
       {sheet?.kind === "charge" ? (
         <RateSheet
-          title={CHARGE_OPTIONS.find((option) => option.value === sheet.code)?.label ?? "Charge"}
+          title={t(
+            CHARGE_OPTIONS.find((option) => option.value === sheet.code)?.labelKey ??
+              "proposal.ratecard.charge",
+          )}
           unit=""
           floorPaise={null}
           ceilingPaise={null}
@@ -634,14 +643,17 @@ function StepHeader({
   partnerTurnkey: boolean;
   onBack: (() => void) | null;
 }) {
-  const title = step === 3 && partnerTurnkey ? "Included materials & finish" : STEP_TITLES[step];
+  const t = useT();
+  const titleFor = (index: Step) =>
+    t(index === 3 && partnerTurnkey ? TURNKEY_MATERIALS_TITLE_KEY : STEP_TITLE_KEYS[index]);
+  const title = titleFor(step);
   const context = [
     ...brief.filter((line) => line.value.trim() !== "").map((line) => line.value.trim()),
-    ...(visitCompleted ? ["visit done ✓"] : []),
+    ...(visitCompleted ? [t("proposal.ratecard.visitDone")] : []),
   ].join(" · ");
   return (
     <header className="flex flex-col gap-2">
-      <ol aria-label="Estimate steps" className="flex items-center gap-1.5">
+      <ol aria-label={t("proposal.ratecard.estimateSteps")} className="flex items-center gap-1.5">
         {([1, 2, 3, 4, 5] as const).map((index) => (
           <li
             key={index}
@@ -652,7 +664,7 @@ function StepHeader({
             )}
           >
             <span className="sr-only">
-              Step {index}: {index === 3 && partnerTurnkey ? "Included materials & finish" : STEP_TITLES[index]}
+              {t("proposal.ratecard.stepLabel", { n: index, title: titleFor(index) })}
             </span>
           </li>
         ))}
@@ -661,7 +673,7 @@ function StepHeader({
         {onBack ? (
           <button
             type="button"
-            aria-label="Previous estimate step"
+            aria-label={t("proposal.ratecard.previousStep")}
             onClick={onBack}
             className="grid size-11 shrink-0 place-items-center rounded-control border border-line bg-surface text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
@@ -704,6 +716,7 @@ function StepDock({
   onPreview: () => void;
   onSend: () => void;
 }) {
+  const t = useT();
   const lineCount = draft.mode === "LABOUR_WISE" ? draft.labourLines.length : draft.itemLines.length;
   const labour = selectedLineSubtotal(draft);
   return (
@@ -712,17 +725,17 @@ function StepDock({
         {step === 5 ? (
           <div className="grid grid-cols-[auto_1fr] gap-2">
             <Button size="lg" variant="outline" onClick={onPreview}>
-              Preview as customer
+              {t("proposal.ratecard.previewAsCustomer")}
             </Button>
             <Button
               block
               size="lg"
               disabled={blocked || !previewIsCurrent}
               loading={isSubmitting}
-              loadingLabel="Sending estimate"
+              loadingLabel={t("proposal.ratecard.sendingEstimate")}
               onClick={onSend}
             >
-              Send estimate
+              {t("proposal.ratecard.sendEstimate")}
             </Button>
           </div>
         ) : (
@@ -734,19 +747,22 @@ function StepDock({
               <p className="text-[13px] font-semibold leading-5 text-warning-text" role="status">
                 {blockers.length === 1
                   ? blockers[0]
-                  : `Still needed: ${blockers.join(" · ")}`}
+                  : t("proposal.ratecard.stillNeeded", { items: blockers.join(" · ") })}
               </p>
             ) : null}
             <div className="flex items-center gap-3">
               {step === 2 || step === 3 || step === 4 ? (
                 <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-text-secondary">
-                  {lineCount} {lineCount === 1 ? "item" : "items"} · Labour {labour === null ? "—" : formatMoney(labour)}
+                  {t("proposal.ratecard.dockSummary", {
+                    count: lineCount,
+                    amount: labour === null ? "—" : formatMoney(labour),
+                  })}
                 </span>
               ) : (
                 <span className="flex-1" />
               )}
               <Button size="lg" disabled={!canContinue} onClick={onContinue}>
-                Continue
+                {t("common.continue")}
               </Button>
             </div>
           </div>
@@ -769,24 +785,37 @@ function ModeStep({
   partnerTurnkey: boolean;
   onChange: (mode: EstimateMode) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-3">
       {partnerTurnkey ? (
         <div className="flex gap-3 rounded-card border border-success-line bg-success-surface p-3 text-success-text">
           <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
           <div>
-            <p className="text-sm font-bold">Quote the complete decoration outcome</p>
-            <p className="mt-0.5 text-xs leading-5">
-              Your rates include sourcing, delivery, setup and removal. The customer only approves and pays the estimate.
-            </p>
+            <p className="text-sm font-bold">{t("proposal.ratecard.mode.turnkeyTitle")}</p>
+            <p className="mt-0.5 text-xs leading-5">{t("proposal.ratecard.mode.turnkeyMessage")}</p>
           </div>
         </div>
       ) : null}
-      <div role="radiogroup" aria-label="How are you pricing this?" className="grid grid-cols-2 gap-3">
+      <div role="radiogroup" aria-label={t(STEP_TITLE_KEYS[1])} className="grid grid-cols-2 gap-3">
       {(
         [
-          ["ITEM_WISE", "Item-wise", partnerTurnkey ? "per installed element" : "per point / per unit", Zap],
-          ["LABOUR_WISE", "Labour-wise", partnerTurnkey ? "team × days" : "trade team × days", Users],
+          [
+            "ITEM_WISE",
+            "proposal.ratecard.mode.itemWise",
+            partnerTurnkey
+              ? "proposal.ratecard.mode.itemWiseTurnkey"
+              : "proposal.ratecard.mode.itemWiseDetail",
+            Zap,
+          ],
+          [
+            "LABOUR_WISE",
+            "proposal.ratecard.mode.labourWise",
+            partnerTurnkey
+              ? "proposal.ratecard.mode.labourWiseTurnkey"
+              : "proposal.ratecard.mode.labourWiseDetail",
+            Users,
+          ],
         ] as const
       ).map(([mode, label, detail, Icon]) => {
         const selected = value === mode;
@@ -804,8 +833,8 @@ function ModeStep({
             )}
           >
             <Icon className={cn("size-8", selected ? "text-action-active" : "text-action-secondary")} aria-hidden />
-            <span className="text-base font-extrabold text-text">{label}</span>
-            <span className="text-xs leading-4 text-text-muted">{detail}</span>
+            <span className="text-base font-extrabold text-text">{t(label)}</span>
+            <span className="text-xs leading-4 text-text-muted">{t(detail)}</span>
           </button>
         );
       })}
@@ -831,22 +860,27 @@ function iconForGroup(group: string | undefined): LucideIcon {
   return GROUP_ICONS[(group ?? "").trim().toLowerCase()] ?? Wrench;
 }
 
-const UNIT_SHORT: Record<string, string> = {
-  each: "nos",
-  job: "job",
-  day: "day",
-  hour: "hr",
-  sq_ft: "sq ft",
-  running_ft: "rft",
-  metre: "m",
-  kg: "kg",
-  litre: "L",
-  set: "set",
+/** Short unit captions, as catalogue keys. A unit not listed renders as sent. */
+const UNIT_SHORT_KEYS: Record<string, string> = {
+  each: "proposal.ratecard.unitShort.each",
+  job: "proposal.ratecard.unitShort.job",
+  day: "proposal.ratecard.unitShort.day",
+  hour: "proposal.ratecard.unitShort.hour",
+  sq_ft: "proposal.ratecard.unitShort.sqFt",
+  running_ft: "proposal.ratecard.unitShort.runningFt",
+  metre: "proposal.ratecard.unitShort.metre",
+  kg: "proposal.ratecard.unitShort.kg",
+  litre: "proposal.ratecard.unitShort.litre",
+  set: "proposal.ratecard.unitShort.set",
 };
 
-function unitShort(unit: string): string {
-  return UNIT_SHORT[unit] ?? unit;
+function unitShort(unit: string, t: ReturnType<typeof useT>): string {
+  const key = UNIT_SHORT_KEYS[unit];
+  return key === undefined ? unit : t(key);
 }
+
+/** The group a catalogue row without one is filed under. An id, not copy. */
+const OTHER_GROUP = "Other";
 
 function ItemsStep({
   draft,
@@ -877,11 +911,12 @@ function ItemsStep({
   onCustomRate: (lineId: string) => void;
   onAddCustom: () => void;
 }) {
+  const t = useT();
   const items = useMemo(() => entries.filter((entry) => !isLabourEntry(entry)), [entries]);
   const groups = useMemo(() => {
     const names: string[] = [];
     for (const entry of items) {
-      const name = entry.work_item.group?.trim() || "Other";
+      const name = entry.work_item.group?.trim() || OTHER_GROUP;
       if (!names.includes(name)) names.push(name);
     }
     return names;
@@ -894,7 +929,7 @@ function ItemsStep({
 
   if (loading) {
     return (
-      <SkeletonRegion loading label="Loading your rate card">
+      <SkeletonRegion loading label={t("proposal.ratecard.loadingRateCard")}>
         <div className="flex flex-col gap-2">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-16 w-full" />
@@ -908,10 +943,10 @@ function ItemsStep({
     const presentation = describeError(loadError, "read");
     return (
       <ErrorState
-        title="Your rate card did not load"
+        title={t("proposal.ratecard.rateCardFailed")}
         message={presentation.message}
         severity={presentation.severity}
-        actionLabel="Try again"
+        actionLabel={t("common.tryAgain")}
         onAction={onRetry}
         reference={presentation.reference}
       />
@@ -924,13 +959,13 @@ function ItemsStep({
         <ErrorState
           inline
           severity="warning"
-          title="Rates for your city are not published yet"
-          message="Vsolve cannot check catalogue rates here today. Name the work as custom items to send this estimate."
+          title={t("proposal.ratecard.ratesUnpublished")}
+          message={t("proposal.ratecard.ratesUnpublishedItems")}
         />
       ) : null}
 
       {bundles.length > 0 ? (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Quick sets">
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t("proposal.ratecard.quickSets")}>
           {bundles.map((key) => {
             const selected = activeBundle === key;
             return (
@@ -962,7 +997,7 @@ function ItemsStep({
       ) : null}
 
       {groups.length > 1 ? (
-        <div role="tablist" aria-label="Work groups" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        <div role="tablist" aria-label={t("proposal.ratecard.workGroups")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
           {groups.map((name) => {
             const on = name === activeTab;
             return (
@@ -978,7 +1013,7 @@ function ItemsStep({
                   on ? "border-action-secondary bg-selected-surface text-text" : "border-line bg-surface text-text-secondary",
                 )}
               >
-                {name}
+                {name === OTHER_GROUP ? t("proposal.ratecard.groupOther") : name}
               </button>
             );
           })}
@@ -987,13 +1022,13 @@ function ItemsStep({
 
       {items.length === 0 ? (
         <p className="text-sm leading-6 text-text-secondary">
-          No catalogue items for your trade yet. Add what you found as custom items below.
+          {t("proposal.ratecard.noCatalogueItems")}
         </p>
       ) : null}
 
       <ul className="flex list-none flex-col gap-2 p-0">
         {items
-          .filter((entry) => (entry.work_item.group?.trim() || "Other") === activeTab)
+          .filter((entry) => (entry.work_item.group?.trim() || OTHER_GROUP) === activeTab)
           .map((entry) => {
             const line = draft.itemLines.find((row) => row.id === catalogueLineId(entry.work_item.id));
             const rate = line?.ratePaise ?? entry.partner_rate_paise ?? entry.reference_rate_paise;
@@ -1006,8 +1041,14 @@ function ItemsStep({
                 <ItemRow
                   icon={Icon}
                   name={entry.work_item.name}
-                  rateLabel={rate === null ? "Set rate" : `${formatMoney(rate)}/${unitShort(entry.work_item.unit)}`}
-                  rateWarning={band === "below" || band === "above" ? "Outside the allowed range" : null}
+                  rateLabel={
+                    rate === null
+                      ? t("proposal.ratecard.setRate")
+                      : `${formatMoney(rate)}/${unitShort(entry.work_item.unit, t)}`
+                  }
+                  rateWarning={
+                    band === "below" || band === "above" ? t("proposal.ratecard.outsideRange") : null
+                  }
                   quantity={quantity}
                   selected={quantity > 0}
                   amount={line === undefined ? null : itemLineAmount(line)}
@@ -1033,7 +1074,9 @@ function ItemsStep({
 
       {custom.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h3 className="text-xs font-extrabold uppercase tracking-[0.06em] text-text-muted">Not in the catalogue</h3>
+          <h3 className="text-xs font-extrabold uppercase tracking-[0.06em] text-text-muted">
+            {t("proposal.ratecard.notInCatalogue")}
+          </h3>
           <ul className="flex list-none flex-col gap-2 p-0">
             {custom.map((line) => {
               const refusal = lineErrors?.itemLineIds.includes(line.id) ? lineErrors : null;
@@ -1042,8 +1085,12 @@ function ItemsStep({
                   <ItemRow
                     icon={Wrench}
                     name={line.title}
-                    chip="Custom"
-                    rateLabel={line.ratePaise === null ? "Set rate" : `${formatMoney(line.ratePaise)}/${unitShort(line.unit)}`}
+                    chip={t("proposal.ratecard.custom")}
+                    rateLabel={
+                      line.ratePaise === null
+                        ? t("proposal.ratecard.setRate")
+                        : `${formatMoney(line.ratePaise)}/${unitShort(line.unit, t)}`
+                    }
                     rateWarning={null}
                     quantity={Number(line.quantity) || 0}
                     selected
@@ -1060,7 +1107,7 @@ function ItemsStep({
         </section>
       ) : null}
 
-      <AddRow label="Something not listed" onClick={onAddCustom} />
+      <AddRow label={t("proposal.ratecard.somethingNotListed")} onClick={onAddCustom} />
     </div>
   );
 }
@@ -1092,6 +1139,7 @@ function ItemRow({
   onQuantity: (quantity: number) => void;
   onRate: () => void;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -1127,15 +1175,15 @@ function ItemRow({
             )}
           >
             {rateLabel}
-            <span className="sr-only"> — change the rate for {name}</span>
+            <span className="sr-only"> {t("proposal.ratecard.changeRateFor", { name })}</span>
           </button>
         </span>
         <InlineQuantityControl
-          label={`Quantity for ${name}`}
+          label={t("proposal.ratecard.quantityFor", { name })}
           value={quantity}
           onChange={onQuantity}
-          decrementLabel={`One fewer ${name}`}
-          incrementLabel={`One more ${name}`}
+          decrementLabel={t("proposal.ratecard.oneFewer", { name })}
+          incrementLabel={t("proposal.ratecard.oneMore", { name })}
         />
       </div>
       {bundleHint || amount !== null ? (
@@ -1196,12 +1244,13 @@ function LabourStep({
   onRate: (lineId: string) => void;
   onAddRole: () => void;
 }) {
+  const t = useT();
   const roles = useMemo(() => entries.filter(isLabourEntry), [entries]);
   const custom = draft.labourLines.filter((line) => !line.workItemId);
 
   if (loading) {
     return (
-      <SkeletonRegion loading label="Loading your rate card">
+      <SkeletonRegion loading label={t("proposal.ratecard.loadingRateCard")}>
         <div className="flex flex-col gap-2">
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
@@ -1213,10 +1262,10 @@ function LabourStep({
     const presentation = describeError(loadError, "read");
     return (
       <ErrorState
-        title="Your rate card did not load"
+        title={t("proposal.ratecard.rateCardFailed")}
         message={presentation.message}
         severity={presentation.severity}
-        actionLabel="Try again"
+        actionLabel={t("common.tryAgain")}
         onAction={onRetry}
         reference={presentation.reference}
       />
@@ -1229,12 +1278,14 @@ function LabourStep({
         <ErrorState
           inline
           severity="warning"
-          title="Rates for your city are not published yet"
-          message="Vsolve cannot check day rates here today. Add the roles you need and set each rate yourself."
+          title={t("proposal.ratecard.ratesUnpublished")}
+          message={t("proposal.ratecard.ratesUnpublishedLabour")}
         />
       ) : null}
       {roles.length === 0 && custom.length === 0 ? (
-        <p className="text-sm leading-6 text-text-secondary">No labour roles in your rate card yet. Add a role below.</p>
+        <p className="text-sm leading-6 text-text-secondary">
+          {t("proposal.ratecard.noLabourRoles")}
+        </p>
       ) : null}
       <ul className="flex list-none flex-col gap-2 p-0">
         {roles.map((entry) => {
@@ -1246,8 +1297,14 @@ function LabourStep({
                 line={line ?? null}
                 rateLabel={
                   (line?.ratePaisePerDay ?? entry.partner_rate_paise ?? entry.reference_rate_paise) === null
-                    ? "Set rate"
-                    : `${formatMoney((line?.ratePaisePerDay ?? entry.partner_rate_paise ?? entry.reference_rate_paise) as number)}/day`
+                    ? t("proposal.ratecard.setRate")
+                    : t("proposal.ratecard.perDayRate", {
+                        amount: formatMoney(
+                          (line?.ratePaisePerDay ??
+                            entry.partner_rate_paise ??
+                            entry.reference_rate_paise) as number,
+                        ),
+                      })
                 }
                 onToggle={() => onToggle(entry)}
                 onChange={(patch) => line && onChange(line.id, patch)}
@@ -1263,9 +1320,13 @@ function LabourStep({
           <li key={line.id}>
             <LabourRow
               name={line.role}
-              chip="Custom"
+              chip={t("proposal.ratecard.custom")}
               line={line}
-              rateLabel={line.ratePaisePerDay === null ? "Set rate" : `${formatMoney(line.ratePaisePerDay)}/day`}
+              rateLabel={
+                line.ratePaisePerDay === null
+                  ? t("proposal.ratecard.setRate")
+                  : t("proposal.ratecard.perDayRate", { amount: formatMoney(line.ratePaisePerDay) })
+              }
               onToggle={() => onRemove(line.id)}
               onChange={(patch) => onChange(line.id, patch)}
               onRate={() => onRate(line.id)}
@@ -1273,7 +1334,7 @@ function LabourStep({
           </li>
         ))}
       </ul>
-      <AddRow label="Add a role" onClick={onAddRole} />
+      <AddRow label={t("proposal.ratecard.addRole")} onClick={onAddRole} />
     </div>
   );
 }
@@ -1295,6 +1356,7 @@ function LabourRow({
   onChange: (patch: Partial<LabourLineDraft>) => void;
   onRate: () => void;
 }) {
+  const t = useT();
   const selected = line !== null;
   const amount = line === null ? null : labourLineAmount(line);
   const band = line === null ? "ok" : checkBand(line, line.ratePaisePerDay);
@@ -1311,7 +1373,11 @@ function LabourRow({
           )}
         >
           {selected ? <Check className="size-5" aria-hidden /> : <Users className="size-5" aria-hidden />}
-          <span className="sr-only">{selected ? `Remove ${name}` : `Add ${name}`}</span>
+          <span className="sr-only">
+            {selected
+              ? t("proposal.ratecard.removeNamed", { name })
+              : t("proposal.ratecard.addNamed", { name })}
+          </span>
         </button>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-1.5">
@@ -1331,7 +1397,7 @@ function LabourRow({
             )}
           >
             {rateLabel}
-            <span className="sr-only"> — change the day rate for {name}</span>
+            <span className="sr-only"> {t("proposal.ratecard.changeDayRateFor", { name })}</span>
           </button>
         </span>
         {amount !== null ? <span className="shrink-0 text-base font-extrabold tabular-nums text-text">{formatMoney(amount)}</span> : null}
@@ -1339,24 +1405,24 @@ function LabourRow({
       {line !== null ? (
         <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
           <QuantityStepper
-            label="People"
+            label={t("proposal.ratecard.people")}
             value={line.memberCount}
             onChange={(memberCount) => onChange({ memberCount })}
             min={1}
-            decrementLabel={`One fewer ${name}`}
-            incrementLabel={`One more ${name}`}
+            decrementLabel={t("proposal.ratecard.oneFewer", { name })}
+            incrementLabel={t("proposal.ratecard.oneMore", { name })}
           />
           <QuantityStepper
-            label="Days"
+            label={t("proposal.ratecard.days")}
             value={line.dayCount}
             onChange={(dayCount) => onChange({ dayCount })}
             min={1}
-            decrementLabel={`One day fewer for ${name}`}
-            incrementLabel={`One more day for ${name}`}
+            decrementLabel={t("proposal.ratecard.dayFewerFor", { name })}
+            incrementLabel={t("proposal.ratecard.dayMoreFor", { name })}
           />
         </div>
       ) : null}
-      {band === "below" || band === "above" ? <p className="text-xs text-danger-text">Outside the allowed range</p> : null}
+      {band === "below" || band === "above" ? <p className="text-xs text-danger-text">{t("proposal.ratecard.outsideRange")}</p> : null}
     </div>
   );
 }
@@ -1386,31 +1452,32 @@ function MaterialsStep({
   onRemove: (row: MaterialListLineDraft) => void;
   onAdd: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm leading-6 text-text-secondary">
         {partnerTurnkey
           ? labourWise
-            ? "List the materials and finish you will supply for this project. Keep their cost inside your quoted rates."
-            : "Auto-built from your installed items. Confirm what you will source, set up and remove. Their cost is already inside your rates."
+            ? t("proposal.ratecard.materials.turnkeyLabour")
+            : t("proposal.ratecard.materials.turnkeyItems")
           : labourWise
-            ? "List what the customer should buy before you start."
-            : "Auto-built from your points. Fix any quantity — you saw the site."}
+            ? t("proposal.ratecard.materials.customerLabour")
+            : t("proposal.ratecard.materials.customerItems")}
       </p>
 
       {partnerTurnkey ? (
         <div className="flex gap-2 rounded-card border border-info-line bg-info-surface p-3 text-info-text">
           <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
           <p className="text-xs leading-5">
-            The customer sees this full schedule, but has nothing to purchase or arrange.
+            {t("proposal.ratecard.materials.turnkeyNote")}
           </p>
         </div>
       ) : (
-        <div role="radiogroup" aria-label="Brand tier" className="grid grid-cols-2 gap-2">
+        <div role="radiogroup" aria-label={t("proposal.ratecard.materials.brandTier")} className="grid grid-cols-2 gap-2">
         {(
           [
-            ["STANDARD", "Standard"],
-            ["PREMIUM", "Premium"],
+            ["STANDARD", "proposal.ratecard.materials.standard"],
+            ["PREMIUM", "proposal.ratecard.materials.premium"],
           ] as const
         ).map(([value, label]) => {
           const on = tier === value;
@@ -1427,7 +1494,7 @@ function MaterialsStep({
                 on ? "border-2 border-action bg-action-surface text-action-active" : "border-line bg-surface text-text-secondary",
               )}
             >
-              {label}
+              {t(label)}
             </button>
           );
         })}
@@ -1435,7 +1502,14 @@ function MaterialsStep({
       )}
 
       {waiting && rows.length === 0 ? (
-        <SkeletonRegion loading label={partnerTurnkey ? "Building the included material schedule" : "Working out what to buy"}>
+        <SkeletonRegion
+          loading
+          label={
+            partnerTurnkey
+              ? t("proposal.ratecard.materials.buildingSchedule")
+              : t("proposal.ratecard.materials.workingOut")
+          }
+        >
           <div className="flex flex-col gap-2">
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
@@ -1445,7 +1519,9 @@ function MaterialsStep({
 
       {!waiting && rows.length === 0 ? (
         <p className="text-sm leading-6 text-text-muted">
-          {partnerTurnkey ? "No included materials listed yet." : "Nothing to buy yet."}
+          {partnerTurnkey
+            ? t("proposal.ratecard.materials.noneIncluded")
+            : t("proposal.ratecard.materials.nothingToBuy")}
         </p>
       ) : null}
 
@@ -1464,7 +1540,7 @@ function MaterialsStep({
             />
             <button
               type="button"
-              aria-label={`Remove ${row.title}`}
+              aria-label={t("proposal.ratecard.removeNamed", { name: row.title })}
               onClick={() => onRemove(row)}
               className="grid size-11 shrink-0 place-items-center rounded-control text-danger-text hover:bg-danger-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
@@ -1474,7 +1550,14 @@ function MaterialsStep({
         ))}
       </ul>
 
-      <AddRow label={partnerTurnkey ? "Add an included material" : "Add a material"} onClick={onAdd} />
+      <AddRow
+        label={
+          partnerTurnkey
+            ? t("proposal.ratecard.materials.addIncluded")
+            : t("proposal.ratecard.materials.add")
+        }
+        onClick={onAdd}
+      />
     </div>
   );
 }
@@ -1517,6 +1600,7 @@ function DecimalStepper({
   unit: string;
   onChange: (value: string) => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState(value);
   const editing = useRef(false);
 
@@ -1550,10 +1634,14 @@ function DecimalStepper({
   }
 
   return (
-    <div role="group" aria-label={`How many ${name}`} className="flex items-center gap-1">
+    <div
+      role="group"
+      aria-label={t("proposal.ratecard.howMany", { name })}
+      className="flex items-center gap-1"
+    >
       <button
         type="button"
-        aria-label={`One fewer ${name}`}
+        aria-label={t("proposal.ratecard.oneFewer", { name })}
         disabled={numeric <= 1}
         onClick={() => step(-1)}
         className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text disabled:border-line disabled:text-warm-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
@@ -1567,7 +1655,11 @@ function DecimalStepper({
           inputMode="decimal"
           enterKeyHint="done"
           autoComplete="off"
-          aria-label={`How many ${name}${unit ? ` in ${unit}` : ""} — type a number`}
+          aria-label={
+            unit
+              ? t("proposal.ratecard.howManyInTypeNumber", { name, unit })
+              : t("proposal.ratecard.howManyTypeNumber", { name })
+          }
           value={draft}
           onFocus={(event) => {
             editing.current = true;
@@ -1607,7 +1699,7 @@ function DecimalStepper({
 
       <button
         type="button"
-        aria-label={`One more ${name}`}
+        aria-label={t("proposal.ratecard.oneMore", { name })}
         onClick={() => step(1)}
         className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
@@ -1645,22 +1737,24 @@ function DecimalStepper({
  * and forcing an exclusion would produce invented ones. Payment always has a template.
  */
 function stepBlockers({
+  t,
   step,
   draft,
   linesReady,
   materialList,
 }: {
+  t: ReturnType<typeof useT>;
   step: Step;
   draft: CommercialEstimateDraft;
   linesReady: boolean;
   materialList: readonly MaterialListLineDraft[];
 }): readonly string[] {
   if (step === 1) {
-    return draft.mode === null ? ["Choose how you are pricing this."] : [];
+    return draft.mode === null ? [t("proposal.ratecard.blocked.mode")] : [];
   }
 
   if (step === 2) {
-    return linesReady ? [] : ["Add at least one line of work, with a rate."];
+    return linesReady ? [] : [t("proposal.ratecard.blocked.lines")];
   }
 
   if (step === 3) {
@@ -1674,16 +1768,18 @@ function stepBlockers({
       .join(", ");
     return [
       blank.length === 1
-        ? `Give ${named} a quantity, or remove it.`
-        : `Give ${named}${blank.length > 2 ? " and others" : ""} a quantity, or remove them.`,
+        ? t("proposal.ratecard.blocked.quantityOne", { name: named })
+        : blank.length > 2
+          ? t("proposal.ratecard.blocked.quantityManyOthers", { names: named })
+          : t("proposal.ratecard.blocked.quantityMany", { names: named }),
     ];
   }
 
   if (step === 4) {
     const missing: string[] = [];
-    if ((draft.completionDays ?? null) === null) missing.push("how long the work takes");
-    if (draft.warrantyTerms.trim() === "") missing.push("a guarantee");
-    if (draft.validUntil === null) missing.push("how long this price holds");
+    if ((draft.completionDays ?? null) === null) missing.push(t("proposal.ratecard.blocked.duration"));
+    if (draft.warrantyTerms.trim() === "") missing.push(t("proposal.ratecard.blocked.guarantee"));
+    if (draft.validUntil === null) missing.push(t("proposal.ratecard.blocked.validity"));
     return missing.length === 0 ? [] : missing;
   }
 
@@ -1703,9 +1799,9 @@ const VALIDITY_DAYS = [7, 15, 30] as const;
  * the presets look like suggestions to be overridden rather than the answer.
  */
 const COMPLETION_DAY_CHOICES = [
-  { days: 3, label: "2-3 days" },
-  { days: 7, label: "1 week" },
-  { days: 14, label: "2 weeks" },
+  { days: 3, labelKey: "proposal.ratecard.terms.days2to3" },
+  { days: 7, labelKey: "proposal.ratecard.terms.oneWeek" },
+  { days: 14, labelKey: "proposal.ratecard.terms.twoWeeks" },
 ] as const;
 
 /** True when the figure is real but not one of the presets — the Custom tile's state. */
@@ -1732,15 +1828,15 @@ function validityDaysOf(validUntil: string | null): number | null {
   return VALIDITY_DAYS.find((option) => Math.abs(option - days) <= 1) ?? null;
 }
 
-const TEMPLATES: readonly { value: PaymentTemplate; label: string }[] = [
-  { value: "HALF", label: "50% start · 50% finish" },
-  { value: "THIRDS", label: "3 parts" },
-  { value: "COMPLETION", label: "On completion" },
+const TEMPLATES: readonly { value: PaymentTemplate; labelKey: string }[] = [
+  { value: "HALF", labelKey: "proposal.ratecard.terms.templateHalf" },
+  { value: "THIRDS", labelKey: "proposal.ratecard.terms.templateThirds" },
+  { value: "COMPLETION", labelKey: "proposal.ratecard.terms.templateCompletion" },
 ];
 
-const CHARGE_CHIPS: readonly { code: ChargeCode; label: string }[] = [
-  { code: "TRANSPORT", label: "Transport" },
-  { code: "DISPOSAL", label: "Debris" },
+const CHARGE_CHIPS: readonly { code: ChargeCode; labelKey: string }[] = [
+  { code: "TRANSPORT", labelKey: "proposal.ratecard.terms.chargeTransport" },
+  { code: "DISPOSAL", labelKey: "proposal.ratecard.terms.chargeDebris" },
 ];
 
 function TermsStep({
@@ -1754,6 +1850,7 @@ function TermsStep({
   onCharge: (code: ChargeCode) => void;
   newId: (kind: string) => string;
 }) {
+  const t = useT();
   const validity = validityDaysOf(draft.validUntil);
   const composed = composeScopeSummary(draft);
   // `?? null` because a draft restored from `localStorage` — or held across a hot reload —
@@ -1765,7 +1862,7 @@ function TermsStep({
 
   return (
     <div className="flex flex-col gap-5">
-      <TermGroup title="Not included">
+      <TermGroup title={t("proposal.ratecard.terms.notIncluded")}>
         <div className="flex flex-wrap gap-2">
           {EXCLUSION_CHOICES.map((choice) => {
             const on = draft.exclusions.includes(choice.sentence);
@@ -1782,7 +1879,7 @@ function TermsStep({
                   }))
                 }
               >
-                {choice.label}
+                {t(choice.labelKey)}
               </Chip>
             );
           })}
@@ -1793,8 +1890,8 @@ function TermsStep({
           an estimate could not answer: every quote read "Not dated", because nothing in
           this composer ever collected a date. Days rather than a date — a vendor does not
           know when they will start, since that waits on the Customer choosing and paying. */}
-      <TermGroup title="How long the work takes">
-        <div role="radiogroup" aria-label="How long the work takes" className="grid grid-cols-4 gap-2">
+      <TermGroup title={t("proposal.ratecard.terms.duration")}>
+        <div role="radiogroup" aria-label={t("proposal.ratecard.terms.duration")} className="grid grid-cols-4 gap-2">
           {COMPLETION_DAY_CHOICES.map((choice) => (
             <Tile
               key={choice.days}
@@ -1804,7 +1901,7 @@ function TermsStep({
                 onChange((current) => ({ ...current, completionDays: choice.days }));
               }}
             >
-              {choice.label}
+              {t(choice.labelKey)}
             </Tile>
           ))}
           <Tile
@@ -1822,7 +1919,7 @@ function TermsStep({
               }));
             }}
           >
-            Custom
+            {t("proposal.ratecard.custom")}
           </Tile>
         </div>
         {custom ? (
@@ -1831,7 +1928,7 @@ function TermsStep({
               type="text"
               inputMode="numeric"
               autoFocus
-              aria-label="Working days to complete"
+              aria-label={t("proposal.ratecard.terms.workingDaysToComplete")}
               value={completionDays === null ? "" : String(completionDays)}
               onChange={(event) => {
                 const next = event.currentTarget.value;
@@ -1845,7 +1942,7 @@ function TermsStep({
               }}
               className="h-10 w-16 rounded-control border border-line-strong bg-surface px-2 text-center text-base font-bold tabular-nums text-text focus:border-action focus:bg-action-surface focus:outline-none focus:ring-2 focus:ring-focus-ring"
             />
-            <span>working days</span>
+            <span>{t("proposal.ratecard.terms.workingDays")}</span>
           </label>
         ) : null}
         {completionDays !== null ? (
@@ -1853,49 +1950,47 @@ function TermsStep({
           // not new policy — `submit_proposal` already refuses once the Customer has chosen,
           // so the total has never been movable after acceptance. It has just never been said.
           <p className="mt-2 rounded-control bg-surface-sunken px-3 py-2 text-[13px] leading-5 text-text-secondary">
-            The customer sees “about {completionDays} working{" "}
-            {completionDays === 1 ? "day" : "days"}”. Your price is fixed once they
-            accept — if it runs over, that is yours to absorb, not theirs to pay.
+            {t("proposal.ratecard.terms.durationPromise", { count: completionDays })}
           </p>
         ) : null}
       </TermGroup>
 
-      <TermGroup title="Guarantee">
-        <div role="radiogroup" aria-label="Guarantee" className="grid grid-cols-4 gap-2">
+      <TermGroup title={t("proposal.ratecard.terms.guarantee")}>
+        <div role="radiogroup" aria-label={t("proposal.ratecard.terms.guarantee")} className="grid grid-cols-4 gap-2">
           {WARRANTY_CHOICES.map((choice) => {
             const on = draft.warrantyTerms === choice.terms;
             return (
               <Tile key={choice.code} on={on} onClick={() => onChange((current) => ({ ...current, warrantyTerms: choice.terms }))}>
-                {choice.label}
+                {t(choice.labelKey)}
               </Tile>
             );
           })}
         </div>
       </TermGroup>
 
-      <TermGroup title="Valid for">
-        <div role="radiogroup" aria-label="Valid for" className="grid grid-cols-3 gap-2">
+      <TermGroup title={t("proposal.ratecard.terms.validFor")}>
+        <div role="radiogroup" aria-label={t("proposal.ratecard.terms.validFor")} className="grid grid-cols-3 gap-2">
           {VALIDITY_DAYS.map((days) => (
             <Tile
               key={days}
               on={validity === days}
               onClick={() => onChange((current) => ({ ...current, validUntil: validUntilFor(days) }))}
             >
-              {days} days
+              {t("proposal.ratecard.terms.validityDays", { count: days })}
             </Tile>
           ))}
         </div>
       </TermGroup>
 
-      <TermGroup title="Payment">
-        <div role="radiogroup" aria-label="Payment" className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
+      <TermGroup title={t("proposal.ratecard.terms.payment")}>
+        <div role="radiogroup" aria-label={t("proposal.ratecard.terms.payment")} className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
           {TEMPLATES.map((template) => (
             <Tile
               key={template.value}
               on={draft.paymentTemplate === template.value}
               onClick={() => onChange((current) => ({ ...current, paymentTemplate: template.value }))}
             >
-              {template.label}
+              {t(template.labelKey)}
             </Tile>
           ))}
         </div>
@@ -1903,7 +1998,7 @@ function TermsStep({
           {draft.installments.map((row, index) => (
             <li key={row.id} className="flex justify-between gap-3 px-3 py-2">
               <span className="text-text">
-                {index + 1}. {row.title || `Part ${index + 1}`}
+                {index + 1}. {row.title || t("proposal.status.partN", { n: index + 1 })}
               </span>
               <span className="font-bold tabular-nums text-text">
                 {row.amountPaise === null ? "—" : formatMoney(row.amountPaise)}
@@ -1920,18 +2015,18 @@ function TermsStep({
             className="mt-1 w-fit"
             onClick={() => onChange((current) => ({ ...current, paymentTemplate: "CUSTOM" }))}
           >
-            Customise
+            {t("proposal.ratecard.terms.customise")}
           </Button>
         )}
       </TermGroup>
 
-      <TermGroup title="Extra charges">
+      <TermGroup title={t("proposal.ratecard.terms.extraCharges")}>
         <div className="flex flex-wrap gap-2">
           {CHARGE_CHIPS.map((chip) => {
             const charge = draft.otherCharges.find((row) => row.code === chip.code);
             return (
               <Chip key={chip.code} on={charge !== undefined} onClick={() => onCharge(chip.code)}>
-                {chip.label}
+                {t(chip.labelKey)}
                 {charge?.amountPaise ? ` · ${formatMoney(charge.amountPaise)}` : ""}
               </Chip>
             );
@@ -1939,13 +2034,20 @@ function TermsStep({
         </div>
       </TermGroup>
 
-      <Disclosure summary="What you will do" hint={draft.scopeSummary.trim() === "" ? "Auto" : "Edited"}>
+      <Disclosure
+        summary={t("proposal.ratecard.terms.scope")}
+        hint={
+          draft.scopeSummary.trim() === ""
+            ? t("proposal.ratecard.terms.scopeAuto")
+            : t("proposal.ratecard.terms.scopeEdited")
+        }
+      >
         <div className="pt-2">
           <Input
             value={draft.scopeSummary}
             maxLength={2000}
-            placeholder={composed || "Composed from what you tapped"}
-            aria-label="What you will do"
+            placeholder={composed || t("proposal.ratecard.terms.scopePlaceholder")}
+            aria-label={t("proposal.ratecard.terms.scope")}
             onChange={(event) => onChange((current) => ({ ...current, scopeSummary: event.target.value }))}
           />
         </div>
@@ -1963,6 +2065,7 @@ function CustomInstallments({
   onChange: (change: (current: CommercialEstimateDraft) => CommercialEstimateDraft) => void;
   newId: (kind: string) => string;
 }) {
+  const t = useT();
   const patch = (index: number, next: Partial<CommercialEstimateDraft["installments"][number]>) =>
     onChange((current) => ({
       ...current,
@@ -1972,7 +2075,7 @@ function CustomInstallments({
     <div className="mt-2 flex flex-col gap-2">
       {draft.installments.map((row, index) => (
         <div key={row.id} className="grid grid-cols-[1fr_7rem_auto] items-end gap-2">
-          <Field label={`Part ${index + 1}`}>
+          <Field label={t("proposal.status.partN", { n: index + 1 })}>
             <Input value={row.title} onChange={(event) => patch(index, { title: event.target.value })} />
           </Field>
           <Field label="₹">
@@ -1984,7 +2087,7 @@ function CustomInstallments({
           </Field>
           <button
             type="button"
-            aria-label={`Remove part ${index + 1}`}
+            aria-label={t("proposal.ratecard.terms.removePart", { n: index + 1 })}
             disabled={draft.installments.length <= 1}
             onClick={() =>
               onChange((current) => ({
@@ -2013,7 +2116,7 @@ function CustomInstallments({
           }))
         }
       >
-        Add a part
+        {t("proposal.ratecard.terms.addPart")}
       </Button>
     </div>
   );
@@ -2091,12 +2194,16 @@ function ReviewStep({
   partnerTurnkey: boolean;
   onFix: (step: Step) => void;
 }) {
+  const t = useT();
   const lines =
     draft.mode === "LABOUR_WISE"
       ? draft.labourLines.map((line) => ({
           id: line.id,
           title: line.role,
-          detail: `${line.memberCount} × ${line.dayCount} ${line.dayCount === 1 ? "day" : "days"}`,
+          detail: t("proposal.ratecard.review.labourDetail", {
+            members: line.memberCount,
+            count: line.dayCount,
+          }),
           amount: labourLineAmount(line),
           error: null as string | null,
         }))
@@ -2130,7 +2237,7 @@ function ReviewStep({
         ))}
         {draft.otherCharges.map((charge) => (
           <li key={charge.id} className="flex justify-between gap-3 px-3 py-2">
-            <span className="text-text">{charge.label}</span>
+            <span className="text-text">{chargeLabel(charge.code, charge.label, t)}</span>
             <span className="font-bold tabular-nums text-text">{charge.amountPaise === null ? "—" : formatMoney(charge.amountPaise)}</span>
           </li>
         ))}
@@ -2138,35 +2245,37 @@ function ReviewStep({
 
       {lineErrors ? (
         <Button variant="outline" size="sm" className="w-fit" onClick={() => onFix(2)}>
-          Fix on the work step
+          {t("proposal.ratecard.review.fixOnWorkStep")}
         </Button>
       ) : null}
 
       {preview ? (
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-card border border-line bg-surface p-3 text-sm">
-          <dt className="text-text-muted">{draft.mode === "LABOUR_WISE" ? "Labour subtotal" : "Item subtotal"}</dt>
+          <dt className="text-text-muted">{draft.mode === "LABOUR_WISE"
+              ? t("proposal.ratecard.review.labourSubtotal")
+              : t("proposal.ratecard.review.itemSubtotal")}</dt>
           <dd className="text-right tabular-nums text-text">{formatMoney(preview.line_subtotal_paise)}</dd>
-          <dt className="text-text-muted">Charges</dt>
+          <dt className="text-text-muted">{t("proposal.ratecard.review.charges")}</dt>
           <dd className="text-right tabular-nums text-text">{formatMoney(preview.authorized_charges_paise)}</dd>
-          <dt className="text-text-muted">Tax</dt>
+          <dt className="text-text-muted">{t("proposal.ratecard.review.tax")}</dt>
           <dd className="text-right tabular-nums text-text">{formatMoney(preview.partner_service_tax_paise)}</dd>
-          <dt className="font-bold text-text">Customer total</dt>
+          <dt className="font-bold text-text">{t("proposal.ratecard.review.customerTotal")}</dt>
           <dd className="text-right font-bold tabular-nums text-text">{formatMoney(preview.customer_total_paise)}</dd>
-          <dt className="font-bold text-success-text">You receive</dt>
+          <dt className="font-bold text-success-text">{t("proposal.ratecard.review.youReceive")}</dt>
           <dd className="text-right font-bold tabular-nums text-success-text">{formatMoney(preview.partner_net_paise)}</dd>
         </dl>
       ) : isChecking ? (
         <p role="status" className="text-sm text-text-muted">
-          Checking tax, fees and totals with Vsolve…
+          {t("proposal.ratecard.review.checking")}
         </p>
       ) : blocked && firstError ? (
-        <ErrorState inline severity="warning" title="Not ready to send" message={firstError} />
+        <ErrorState inline severity="warning" title={t("proposal.ratecard.review.notReady")} message={firstError} />
       ) : null}
 
       {previewError && !lineErrors ? (
         <ErrorState
           inline
-          title="We could not check this estimate"
+          title={t("proposal.ratecard.review.couldNotCheck")}
           message={describeError(previewError, "read").message}
           severity="error"
         />
@@ -2174,11 +2283,22 @@ function ReviewStep({
 
       <p className="text-sm text-text-secondary">
         {partnerTurnkey
-          ? `Included materials: ${materialCount} ${materialCount === 1 ? "item" : "items"} · customer buys nothing`
-          : `Materials to buy: ${materialCount} ${materialCount === 1 ? "item" : "items"}`}
+          ? t("proposal.ratecard.review.includedMaterials", { count: materialCount })
+          : t("proposal.ratecard.review.materialsToBuy", { count: materialCount })}
       </p>
     </div>
   );
+}
+
+/**
+ * A named charge as the vendor reads it. A standard code shows its translated
+ * caption; a custom charge shows the label the vendor typed. The stored label
+ * itself is the English wire value and is not changed.
+ */
+function chargeLabel(code: ChargeCode, label: string, t: ReturnType<typeof useT>): string {
+  if (code === "CUSTOM") return label;
+  const option = CHARGE_OPTIONS.find((entry) => entry.value === code);
+  return option === undefined ? label : t(option.labelKey);
 }
 
 /* --------------------------------------------------------------------------
@@ -2206,6 +2326,7 @@ function RateSheet({
   onDone: (amountPaise: number | null) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [amount, setAmount] = useState<number | null>(amountPaise);
   const [tried, setTried] = useState(false);
   const banded = floorPaise !== null && ceilingPaise !== null;
@@ -2217,7 +2338,7 @@ function RateSheet({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title={unit ? `${title} · per ${unitShort(unit)}` : title}
+      title={unit ? t("proposal.ratecard.ratePerUnitTitle", { title, unit: unitShort(unit, t) }) : title}
     >
       <MoneyPad
         title={title}
@@ -2233,12 +2354,15 @@ function RateSheet({
       >
         {banded ? (
           <p className={cn("text-center text-xs font-semibold", outside ? "text-danger-text" : "text-text-secondary")}>
-            Allowed {formatMoney(floorPaise)} – {formatMoney(ceilingPaise)}
+            {t("proposal.ratecard.allowedRange", {
+              floor: formatMoney(floorPaise),
+              ceiling: formatMoney(ceilingPaise),
+            })}
           </p>
         ) : null}
         {tried && outside ? (
           <p role="alert" className="text-center text-xs font-semibold text-danger-text">
-            Keep the rate inside the range to continue.
+            {t("proposal.ratecard.keepInRange")}
           </p>
         ) : null}
       </MoneyPad>
@@ -2255,6 +2379,7 @@ function CustomItemSheet({
   onClose: () => void;
   newId: () => string;
 }) {
+  const t = useT();
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState<EstimateUnit>("each");
   const [quantity, setQuantity] = useState(1);
@@ -2268,10 +2393,10 @@ function CustomItemSheet({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Something not listed"
+      title={t("proposal.ratecard.somethingNotListed")}
     >
       <MoneyPad
-        title={title.trim() === "" ? "Custom item" : title.trim()}
+        title={title.trim() === "" ? t("proposal.ratecard.customItem") : title.trim()}
         icon="price"
         amountPaise={rate}
         onChange={setRate}
@@ -2291,29 +2416,34 @@ function CustomItemSheet({
         }}
       >
         <div className="flex flex-col gap-1.5">
-          <Field label="What is it" error={tried && title.trim() === "" ? "Name the item." : undefined}>
+          <Field
+            label={t("proposal.ratecard.sheet.whatIsIt")}
+            error={tried && title.trim() === "" ? t("proposal.ratecard.sheet.nameItem") : undefined}
+          >
             <Input className="h-9 text-sm" value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
           </Field>
-          <Field label="Unit">
+          <Field label={t("proposal.ratecard.sheet.unit")}>
             <Select className="h-9 text-sm" value={unit} onChange={(event) => setUnit(event.target.value as EstimateUnit)}>
               {ESTIMATE_UNITS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </option>
               ))}
             </Select>
           </Field>
           <div className="rounded-control border border-line/60 bg-surface-sunken/40 px-3 py-2">
             <QuantityStepper
-              label="How many"
+              label={t("proposal.ratecard.sheet.howMany")}
               value={quantity}
               onChange={setQuantity}
               min={1}
-              decrementLabel="One fewer"
-              incrementLabel="One more"
+              decrementLabel={t("proposal.ratecard.sheet.oneFewer")}
+              incrementLabel={t("proposal.ratecard.sheet.oneMore")}
             />
           </div>
-          <p className="text-[11px] text-text-muted">Rate per {unitShort(unit)}, below.</p>
+          <p className="text-[11px] text-text-muted">
+            {t("proposal.ratecard.sheet.ratePerBelow", { unit: unitShort(unit, t) })}
+          </p>
         </div>
       </MoneyPad>
     </Sheet>
@@ -2329,6 +2459,7 @@ function CustomLabourSheet({
   onClose: () => void;
   newId: () => string;
 }) {
+  const t = useT();
   const [role, setRole] = useState("");
   const [people, setPeople] = useState(1);
   const [days, setDays] = useState(1);
@@ -2342,10 +2473,14 @@ function CustomLabourSheet({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Add a role"
+      title={t("proposal.ratecard.addRole")}
     >
       <MoneyPad
-        title={role.trim() === "" ? "Rate per day" : `${role.trim()} · per day`}
+        title={
+          role.trim() === ""
+            ? t("proposal.ratecard.sheet.ratePerDay")
+            : t("proposal.ratecard.sheet.rolePerDay", { role: role.trim() })
+        }
         icon="crew"
         amountPaise={rate}
         onChange={setRate}
@@ -2364,13 +2499,36 @@ function CustomLabourSheet({
         }}
       >
         <div className="flex flex-col gap-1">
-          <Field label="Role" error={tried && role.trim() === "" ? "Name the role." : undefined}>
-            <Input className="h-8 text-xs" value={role} maxLength={80} placeholder="e.g. Electrician, Helper" onChange={(event) => setRole(event.target.value)} />
+          <Field
+            label={t("proposal.ratecard.role")}
+            error={tried && role.trim() === "" ? t("proposal.ratecard.sheet.nameRole") : undefined}
+          >
+            <Input
+              className="h-8 text-xs"
+              value={role}
+              maxLength={80}
+              placeholder={t("proposal.ratecard.sheet.rolePlaceholder")}
+              onChange={(event) => setRole(event.target.value)}
+            />
           </Field>
           <div className="flex flex-col gap-1 rounded-control border border-line/60 bg-surface-sunken/40 px-2.5 py-1">
-            <QuantityStepper label="People" value={people} onChange={setPeople} min={1} decrementLabel="One fewer person" incrementLabel="One more person" />
+            <QuantityStepper
+              label={t("proposal.ratecard.people")}
+              value={people}
+              onChange={setPeople}
+              min={1}
+              decrementLabel={t("proposal.ratecard.sheet.oneFewerPerson")}
+              incrementLabel={t("proposal.ratecard.sheet.oneMorePerson")}
+            />
             <div className="border-t border-line/40" />
-            <QuantityStepper label="Days" value={days} onChange={setDays} min={1} decrementLabel="One day fewer" incrementLabel="One more day" />
+            <QuantityStepper
+              label={t("proposal.ratecard.days")}
+              value={days}
+              onChange={setDays}
+              min={1}
+              decrementLabel={t("proposal.ratecard.sheet.oneDayFewer")}
+              incrementLabel={t("proposal.ratecard.sheet.oneMoreDay")}
+            />
           </div>
         </div>
       </MoneyPad>
@@ -2385,6 +2543,7 @@ function MaterialSheet({
   onAdd: (row: MaterialListLineDraft) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -2396,11 +2555,11 @@ function MaterialSheet({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Add a material"
+      title={t("proposal.ratecard.materials.add")}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={() => {
@@ -2409,19 +2568,32 @@ function MaterialSheet({
               onAdd({ title: title.trim(), spec: "", unit: unit.trim(), quantity: String(quantity), note: "" });
             }}
           >
-            Add
+            {t("proposal.ratecard.sheet.add")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Material" error={tried && title.trim() === "" ? "Name the material." : undefined}>
+        <Field
+          label={t("proposal.ratecard.sheet.material")}
+          error={tried && title.trim() === "" ? t("proposal.ratecard.sheet.nameMaterial") : undefined}
+        >
           <Input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
         </Field>
-        <Field label="Unit" description="Coils, boxes, bags — as the shop sells it.">
+        <Field
+          label={t("proposal.ratecard.sheet.unit")}
+          description={t("proposal.ratecard.sheet.unitDescription")}
+        >
           <Input value={unit} maxLength={32} onChange={(event) => setUnit(event.target.value)} />
         </Field>
-        <QuantityStepper label="How many" value={quantity} onChange={setQuantity} min={1} decrementLabel="One fewer" incrementLabel="One more" />
+        <QuantityStepper
+          label={t("proposal.ratecard.sheet.howMany")}
+          value={quantity}
+          onChange={setQuantity}
+          min={1}
+          decrementLabel={t("proposal.ratecard.sheet.oneFewer")}
+          incrementLabel={t("proposal.ratecard.sheet.oneMore")}
+        />
       </div>
     </Sheet>
   );

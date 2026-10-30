@@ -1,72 +1,7 @@
-export interface RentalAssetMedia {
-  id: string;
-  url: string;
-}
+import type { Schemas } from "@vsolve/api-client";
 
-export interface RentalPartner {
-  id?: string;
-  full_name?: string;
-  company_name?: string;
-  phone_number?: string;
-}
-
-export interface RentalAsset {
-  id: string;
-  title: string;
-  slug?: string;
-  description?: string;
-  location_text?: string;
-  daily_rate_paise: number;
-  deposit_paise: number;
-  quantity_available?: number;
-  thumbnail_url?: string;
-  partner_name?: string;
-  variant?: string;
-  condition_grade?: string;
-  current_status?: string;
-  moderation_status?: string;
-  public_state?: string;
-  media?: RentalAssetMedia[];
-  structured_fields?: Record<string, string | number | boolean>;
-  partner?: RentalPartner;
-  reserved_ranges?: Array<{ start_date: string; end_date: string }>;
-  created_at?: string;
-}
-
-export interface RentalDeposit {
-  id?: string;
-  amount_paise: number;
-  status: string;
-  consumed_paise?: number;
-  requested_consume_paise?: number;
-  provider_note?: string;
-  payment_attempt_id?: string | null;
-  simulated_capture_available?: boolean;
-}
-
-export interface RentalBooking {
-  id: string;
-  asset_id: string;
-  start_date: string;
-  end_date: string;
-  quantity?: number;
-  pickup_or_delivery_mode?: string;
-  status: string;
-  price_paise?: number;
-  platform_fee_paise?: number;
-  platform_fee_percent?: number;
-  total_charge_paise?: number;
-  deposit_paise?: number;
-  handover_pin?: string;
-  notes?: string;
-  created_at?: string;
-  asset?: RentalAsset;
-  deposit?: RentalDeposit;
-}
-
-export interface RentalPlatformFee {
-  percent: number;
-}
+export type RentalAsset = Schemas["RentalAsset"];
+export type RentalBooking = Schemas["RentalBooking"];
 
 export interface RentalFilterParams {
   q?: string;
@@ -78,9 +13,21 @@ export interface RentalFilterParams {
   max_deposit?: number;
   start_date?: string;
   end_date?: string;
+  /** A searched point: results within 25 km, nearest first. Both or neither. */
+  lat?: number;
+  lng?: number;
 }
 
 export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED" | "INACTIVE";
+
+/** Each tab as the booking states the server filters on. `ALL` asks for every state. */
+export const RENTAL_TAB_STATUSES: Record<RentalMineTab, string> = {
+  ALL: "",
+  UPCOMING: "AWAITING_TRANSPORT_QUOTE,PENDING_PAYMENT,CONFIRMED",
+  ONGOING: "HANDOVER",
+  RETURNED: "RETURNED",
+  INACTIVE: "CANCELLED,DISPUTED",
+};
 
 export function rentalMineBucket(status?: string): Exclude<RentalMineTab, "ALL"> {
   const value = (status ?? "").toUpperCase();
@@ -109,6 +56,8 @@ export function getRentalStatusBadge(status?: string): {
   tone: "success" | "warning" | "neutral" | "brand" | "danger";
 } {
   switch ((status ?? "").toUpperCase()) {
+    case "AWAITING_TRANSPORT_QUOTE":
+      return { label: "Delivery requested", tone: "warning" };
     case "PENDING_PAYMENT":
     case "REQUESTED":
       return { label: "Requested / Pending", tone: "warning" };

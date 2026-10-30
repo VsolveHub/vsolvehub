@@ -46,6 +46,15 @@
  * the accessibility sense — the caption is still the accessible name — so a
  * pictogram that fails to render loses nothing but decoration, same as an
  * emoji box would have.
+ *
+ * ## Why the English stays here when the screen is in Telugu
+ *
+ * `label`, `unit`, `deliverable`, `terms` and `sentence` are wire values: they
+ * are what the customer, the comparison table and a dispute read, and other
+ * screens match a stored line back to its chip by them. So they stay exactly
+ * as written. Each entry also carries a `labelKey` (and a material a `unitKey`)
+ * into the `proposal.presets.*` catalogue, which is what the vendor's screen
+ * renders through `t()` — the translation is display-only and never sent.
  */
 
 import type { PictogramName } from "@/components/pictogram";
@@ -55,8 +64,10 @@ export interface WorkPreset {
   /** Stable across renders and stored in the draft. Never shown. */
   readonly code: string;
   readonly icon: PictogramName;
-  /** The caption, and the `title` that goes on the wire. */
+  /** The caption, and the `title` that goes on the wire. Always English — the wire value. */
   readonly label: string;
+  /** Catalogue key for the caption as shown on screen. Display only; never sent. */
+  readonly labelKey: string;
   /** Sent as the stage's `deliverable`. See the note above on why it is here. */
   readonly deliverable: string;
 }
@@ -65,10 +76,14 @@ export interface WorkPreset {
 export interface MaterialPreset {
   readonly code: string;
   readonly icon: PictogramName;
-  /** The caption, and the material line's `title`. */
+  /** The caption, and the material line's `title`. Always English — the wire value. */
   readonly label: string;
+  /** Catalogue key for the caption as shown on screen. Display only; never sent. */
+  readonly labelKey: string;
   /** Bags, sheets, metres. Sent as `unit`, so the customer can compare quantities. */
   readonly unit: string;
+  /** Catalogue key for the unit as shown on screen. Display only; never sent. */
+  readonly unitKey: string;
 }
 
 const FIT_OUT_WORK: readonly WorkPreset[] = [
@@ -76,65 +91,117 @@ const FIT_OUT_WORK: readonly WorkPreset[] = [
     code: "strip_out",
     icon: "clean",
     label: "Strip out",
-    deliverable: "Existing fittings removed and the space cleared for new work.",
+    labelKey: "proposal.presets.work.stripOut",
+    deliverable:
+      "Existing fittings removed and the space cleared for new work.",
   },
   {
     code: "civil",
     icon: "walls",
     label: "Walls",
+    labelKey: "proposal.presets.work.civil",
     deliverable: "Walls built, moved or made good as agreed on site.",
   },
   {
     code: "wiring",
     icon: "wiring",
     label: "Wiring",
+    labelKey: "proposal.presets.work.wiring",
     deliverable: "Power and lighting circuits run, tested and working.",
   },
   {
     code: "plumbing",
     icon: "water",
     label: "Plumbing",
+    labelKey: "proposal.presets.work.plumbing",
     deliverable: "Water and drainage lines run, connected and tested.",
   },
   {
     code: "plaster",
     icon: "clean",
     label: "Plaster",
+    labelKey: "proposal.presets.work.plaster",
     deliverable: "Surfaces plastered and left smooth and ready to finish.",
   },
   {
     code: "flooring",
     icon: "floor",
     label: "Flooring",
+    labelKey: "proposal.presets.work.flooring",
     deliverable: "Floor laid, levelled and finished.",
   },
   {
     code: "paint",
     icon: "paint",
     label: "Paint",
+    labelKey: "proposal.presets.work.paint",
     deliverable: "Surfaces prepared and painted to the agreed finish.",
   },
   {
     code: "fit_out",
     icon: "fit-out",
     label: "Fit out",
+    labelKey: "proposal.presets.work.fitOut",
     deliverable: "Counters, shelving and fixtures installed and secured.",
   },
   {
     code: "snagging",
     icon: "done",
     label: "Finishing",
+    labelKey: "proposal.presets.work.snagging",
     deliverable: "Snags corrected, site cleaned and the space handed over.",
   },
 ];
 
 const FIT_OUT_MATERIALS: readonly MaterialPreset[] = [
-  { code: "cement", icon: "walls", label: "Cement", unit: "bags" },
-  { code: "tiles", icon: "floor", label: "Tiles", unit: "boxes" },
-  { code: "paint", icon: "paint", label: "Paint", unit: "cans" },
-  { code: "wiring", icon: "wiring", label: "Cable", unit: "coils" },
-  { code: "timber", icon: "wood", label: "Timber", unit: "sheets" },
-  { code: "fittings", icon: "machine", label: "Fittings", unit: "sets" },
+  {
+    code: "cement",
+    icon: "walls",
+    label: "Cement",
+    unit: "bags",
+    labelKey: "proposal.presets.material.cement",
+    unitKey: "proposal.presets.unit.bags",
+  },
+  {
+    code: "tiles",
+    icon: "floor",
+    label: "Tiles",
+    unit: "boxes",
+    labelKey: "proposal.presets.material.tiles",
+    unitKey: "proposal.presets.unit.boxes",
+  },
+  {
+    code: "paint",
+    icon: "paint",
+    label: "Paint",
+    unit: "cans",
+    labelKey: "proposal.presets.material.paint",
+    unitKey: "proposal.presets.unit.cans",
+  },
+  {
+    code: "wiring",
+    icon: "wiring",
+    label: "Cable",
+    unit: "coils",
+    labelKey: "proposal.presets.material.wiring",
+    unitKey: "proposal.presets.unit.coils",
+  },
+  {
+    code: "timber",
+    icon: "wood",
+    label: "Timber",
+    unit: "sheets",
+    labelKey: "proposal.presets.material.timber",
+    unitKey: "proposal.presets.unit.sheets",
+  },
+  {
+    code: "fittings",
+    icon: "machine",
+    label: "Fittings",
+    unit: "sets",
+    labelKey: "proposal.presets.material.fittings",
+    unitKey: "proposal.presets.unit.sets",
+  },
 ];
 
 /**
@@ -152,6 +219,8 @@ export interface WarrantyChoice {
   readonly code: string;
   readonly icon: PictogramName;
   readonly label: string;
+  /** Catalogue key for `label` on screen. `label` itself stays the English wire value. */
+  readonly labelKey: string;
   readonly terms: string;
 }
 
@@ -164,24 +233,28 @@ export const WARRANTY_CHOICES: readonly WarrantyChoice[] = [
     code: "none",
     icon: "no",
     label: "None",
+    labelKey: "proposal.presets.warranty.none",
     terms: "No guarantee on this work.",
   },
   {
     code: "3m",
     icon: "date",
     label: "3 months",
+    labelKey: "proposal.presets.warranty.threeMonths",
     terms: "Three months on workmanship from handover.",
   },
   {
     code: "6m",
     icon: "date",
     label: "6 months",
+    labelKey: "proposal.presets.warranty.sixMonths",
     terms: "Six months on workmanship from handover.",
   },
   {
     code: "12m",
     icon: "warranty",
     label: "12 months",
+    labelKey: "proposal.presets.warranty.twelveMonths",
     terms: "Twelve months on workmanship from handover.",
   },
 ];
@@ -199,6 +272,8 @@ export interface ExclusionChoice {
   readonly code: string;
   readonly icon: PictogramName;
   readonly label: string;
+  /** Catalogue key for `label` on screen. `label` itself stays the English wire value. */
+  readonly labelKey: string;
   readonly sentence: string;
 }
 
@@ -207,30 +282,35 @@ export const EXCLUSION_CHOICES: readonly ExclusionChoice[] = [
     code: "permits",
     icon: "papers",
     label: "Permits",
+    labelKey: "proposal.presets.exclusion.permits",
     sentence: "Statutory permits and society approvals are not included.",
   },
   {
     code: "debris",
     icon: "clean",
     label: "Debris removal",
+    labelKey: "proposal.presets.exclusion.debris",
     sentence: "Removing debris from the building is not included.",
   },
   {
     code: "furniture",
     icon: "home",
     label: "Furniture",
+    labelKey: "proposal.presets.exclusion.furniture",
     sentence: "Loose furniture and equipment are not included.",
   },
   {
     code: "structural",
     icon: "walls",
     label: "Structural work",
+    labelKey: "proposal.presets.exclusion.structural",
     sentence: "Structural or load-bearing changes are not included.",
   },
   {
     code: "after_hours",
     icon: "time",
     label: "Night work",
+    labelKey: "proposal.presets.exclusion.afterHours",
     sentence: "Work outside normal site hours is not included.",
   },
 ];
@@ -247,19 +327,71 @@ export interface InclusionChoice {
   readonly code: string;
   readonly icon: PictogramName;
   readonly label: string;
+  /** Catalogue key for `label` on screen. `label` itself stays the English wire value. */
+  readonly labelKey: string;
 }
 
 export const INCLUSION_CHOICES: readonly InclusionChoice[] = [
-  { code: "demolition", icon: "walls", label: "Demolition and debris" },
-  { code: "waterproofing", icon: "water", label: "Waterproofing" },
-  { code: "plumbing", icon: "water", label: "Plumbing rework" },
-  { code: "wiring", icon: "wiring", label: "Electrical points" },
-  { code: "tiling", icon: "floor", label: "Tiling labour" },
-  { code: "painting", icon: "paint", label: "Painting and finishing" },
-  { code: "false_ceiling", icon: "fit-out", label: "False ceiling" },
-  { code: "carpentry", icon: "wood", label: "Carpentry" },
-  { code: "cleanup", icon: "clean", label: "Site cleanup" },
-  { code: "supervision", icon: "crew", label: "Supervisor on site" },
+  {
+    code: "demolition",
+    icon: "walls",
+    label: "Demolition and debris",
+    labelKey: "proposal.presets.inclusion.demolition",
+  },
+  {
+    code: "waterproofing",
+    icon: "water",
+    label: "Waterproofing",
+    labelKey: "proposal.presets.inclusion.waterproofing",
+  },
+  {
+    code: "plumbing",
+    icon: "water",
+    label: "Plumbing rework",
+    labelKey: "proposal.presets.inclusion.plumbing",
+  },
+  {
+    code: "wiring",
+    icon: "wiring",
+    label: "Electrical points",
+    labelKey: "proposal.presets.inclusion.wiring",
+  },
+  {
+    code: "tiling",
+    icon: "floor",
+    label: "Tiling labour",
+    labelKey: "proposal.presets.inclusion.tiling",
+  },
+  {
+    code: "painting",
+    icon: "paint",
+    label: "Painting and finishing",
+    labelKey: "proposal.presets.inclusion.painting",
+  },
+  {
+    code: "false_ceiling",
+    icon: "fit-out",
+    label: "False ceiling",
+    labelKey: "proposal.presets.inclusion.falseCeiling",
+  },
+  {
+    code: "carpentry",
+    icon: "wood",
+    label: "Carpentry",
+    labelKey: "proposal.presets.inclusion.carpentry",
+  },
+  {
+    code: "cleanup",
+    icon: "clean",
+    label: "Site cleanup",
+    labelKey: "proposal.presets.inclusion.cleanup",
+  },
+  {
+    code: "supervision",
+    icon: "crew",
+    label: "Supervisor on site",
+    labelKey: "proposal.presets.inclusion.supervision",
+  },
 ];
 
 /**
@@ -273,7 +405,9 @@ export function workPresetsFor(_archetype: string): readonly WorkPreset[] {
   return FIT_OUT_WORK;
 }
 
-export function materialPresetsFor(_archetype: string): readonly MaterialPreset[] {
+export function materialPresetsFor(
+  _archetype: string,
+): readonly MaterialPreset[] {
   return FIT_OUT_MATERIALS;
 }
 

@@ -8,17 +8,24 @@ Two guards run through the whole slice: a reviewer may not act on their own reco
 of a named person is recorded.
 """
 
+import csv
+import hashlib
+import io
 import uuid
-from typing import cast
+from typing import Any, cast
 
+from django.db import transaction
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from rest_framework import permissions, status
 from rest_framework.exceptions import NotFound
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.identity.models import AccessAuditEvent, User
+from apps.identity.models import AccessAuditEvent, Role, User, UserRole
+from apps.identity.phone import normalize_phone_number
 from apps.identity.services import record_access_event
 from apps.partners.capabilities import verify_business_tax_profile
 from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
@@ -55,6 +62,7 @@ from apps.partners.services import (
     ScheduleRuleInput,
     claim_partner_application,
     create_partner_document_review_access,
+    release_partner_application_review,
     replace_partner_schedule_for_operations,
     review_partner_document,
     transition_partner_application,
@@ -298,6 +306,43 @@ class OperationsPartnerApplicationClaimView(APIView):
         return Response(PartnerApplicationSerializer(refreshed).data)
 
 
+class OperationsPartnerApplicationReleaseView(APIView):
+    """Give a claimed application back to the queue, so another reviewer can take it."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        tags=["Operations"],
+        request=ExpectedVersionSerializer,
+        responses={
+            200: PartnerApplicationSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                examples=[PARTNER_VERSION_CONFLICT_EXAMPLE],
+            ),
+        },
+    )
+    def post(self, request: Request, application_id: uuid.UUID) -> Response:
+        serializer = ExpectedVersionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        try:
+            application = release_partner_application_review(
+                actor=actor,
+                application_id=application_id,
+                **serializer.validated_data,
+            )
+        except PartnerSelfReviewError as exc:
+            _audit_self_review_denial(actor=actor, error=exc)
+            _raise_api_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        refreshed = operations_partner_application_detail(application.id)
+        return Response(PartnerApplicationSerializer(refreshed).data)
+
+
 class OperationsPartnerDocumentAccessView(APIView):
     permission_classes = (IsOperationsUser,)
 
@@ -458,14 +503,6 @@ class OperationsPartnerScheduleView(APIView):
         return Response(PartnerScheduleSerializer({"rules": rules, "exceptions": exceptions}).data)
 
 
-import csv
-import hashlib
-import io
-
-from rest_framework import permissions, status
-from rest_framework.parsers import MultiPartParser
-
-
 class PartnerImportView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
     parser_classes = (MultiPartParser,)
@@ -487,13 +524,12 @@ class PartnerImportView(APIView):
         except Exception:
             return Response({"detail": "Invalid CSV file"}, status=status.HTTP_400_BAD_REQUEST)
 
-        results = {"created": 0, "skipped": 0, "errors": 0, "rows": []}
+        created = 0
+        skipped = 0
+        errors = 0
+        rows: list[dict[str, Any]] = []
 
         # We need to import User and PartnerProfile to create them
-        from django.db import transaction
-
-        from apps.identity.models import Role, User, UserRole
-        from apps.partners.models import PartnerProfile
 
         try:
             with transaction.atomic():
@@ -503,31 +539,26 @@ class PartnerImportView(APIView):
                 for i, row in enumerate(reader, start=2):
                     phone = row.get("phone", "").strip()
                     full_name = row.get("full_name", "").strip()
-                    city = row.get("city", "").strip()
 
                     if not phone or not full_name:
-                        results["errors"] += 1
-                        results["rows"].append(
+                        errors += 1
+                        rows.append(
                             {"row": i, "status": "error", "message": "Phone and full_name required"}
                         )
                         continue
 
                     try:
-                        from apps.identity.phone import normalize_phone_number
-
                         phone = normalize_phone_number(phone)
                     except Exception:
-                        results["errors"] += 1
-                        results["rows"].append(
+                        errors += 1
+                        rows.append(
                             {"row": i, "status": "error", "message": "Invalid phone number format"}
                         )
                         continue
 
                     if User.objects.filter(phone_number=phone).exists():
-                        results["skipped"] += 1
-                        results["rows"].append(
-                            {"row": i, "status": "skipped", "message": "Phone exists"}
-                        )
+                        skipped += 1
+                        rows.append({"row": i, "status": "skipped", "message": "Phone exists"})
                         continue
 
                     if not dry_run:
@@ -538,8 +569,8 @@ class PartnerImportView(APIView):
                             display_name=full_name,
                         )
 
-                    results["created"] += 1
-                    results["rows"].append({"row": i, "status": "created", "phone": phone})
+                    created += 1
+                    rows.append({"row": i, "status": "created", "phone": phone})
 
                 if dry_run:
                     transaction.set_rollback(True)
@@ -548,4 +579,15 @@ class PartnerImportView(APIView):
                 {"detail": f"Import failed: {e!s}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        return Response({"dry_run": dry_run, "file_hash": file_hash, "results": results})
+        return Response(
+            {
+                "dry_run": dry_run,
+                "file_hash": file_hash,
+                "results": {
+                    "created": created,
+                    "skipped": skipped,
+                    "errors": errors,
+                    "rows": rows,
+                },
+            }
+        )

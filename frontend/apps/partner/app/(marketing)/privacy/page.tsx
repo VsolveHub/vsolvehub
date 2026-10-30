@@ -3,7 +3,10 @@ import { ShieldCheck } from "lucide-react";
 import { LegalPage } from "@/components/legal-page";
 
 export const dynamic = "force-static";
-export const metadata: Metadata = { title: "Privacy Policy" };
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "How V Solve Hub collects, uses and protects the personal data of its service partners.",
+};
 
 export default function PrivacyPage() {
   return (
@@ -147,9 +150,9 @@ export default function PrivacyPage() {
             <>
               <p>
                 For privacy questions or grievances, contact our grievance officer at{" "}
-                <a href="mailto:privacy@vsolvehub.com">privacy@vsolvehub.com</a>. We aim to
-                acknowledge and address requests within the timelines prescribed by applicable
-                law.
+                <a href="mailto:support@vsolvehub.com?subject=Grievance">support@vsolvehub.com</a>{" "}
+                with &ldquo;Grievance&rdquo; in the subject. We aim to acknowledge and address
+                requests within the timelines prescribed by applicable law.
               </p>
             </>
           ),

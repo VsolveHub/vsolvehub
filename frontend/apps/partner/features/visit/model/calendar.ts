@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import type { SiteVisit } from "./visit-state";
 
 /**
@@ -55,13 +57,15 @@ export interface VisitCalendarEvent {
 export function visitCalendarFile(
   visit: SiteVisit,
   event: VisitCalendarEvent,
+  t: Translator["t"],
 ): string | null {
   if (visit.scheduled_for === null || visit.scheduled_for === "") return null;
   const startMs = Date.parse(visit.scheduled_for);
   if (!Number.isFinite(startMs)) return null;
 
   const minutes = visit.duration_minutes ?? 60;
-  const title = event.serviceName.trim() === "" ? "Vsolve site visit" : event.serviceName.trim();
+  const title =
+    event.serviceName.trim() === "" ? t("visit.calendar.defaultTitle") : event.serviceName.trim();
 
   // CRLF line endings, not "\n": RFC 5545 requires them, and iOS is the strict
   // reader that rejects the file rather than repairing it.
@@ -74,10 +78,10 @@ export function visitCalendarFile(
     `DTSTAMP:${icsStamp(Date.now())}`,
     `DTSTART:${icsStamp(startMs)}`,
     `DTEND:${icsStamp(startMs + minutes * 60_000)}`,
-    `SUMMARY:${icsText(`Vsolve visit — ${title}`)}`,
+    `SUMMARY:${icsText(t("visit.calendar.summary", { title }))}`,
     ...(event.destination.trim() === "" ? [] : [`LOCATION:${icsText(event.destination)}`]),
     "DESCRIPTION:" +
-      icsText("Confirm your arrival in the Vsolve Partner app and write the estimate on site."),
+      icsText(t("visit.calendar.description")),
     "END:VEVENT",
     "END:VCALENDAR",
   ].join("\r\n");

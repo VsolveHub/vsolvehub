@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 
-import { Button, StepDock } from "@vsolve/ui";
+import { Button, StepDock, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 
@@ -44,14 +46,15 @@ export interface EstimateSummaryScreenProps {
 
 export function EstimateSummaryScreen({ estimate }: EstimateSummaryScreenProps) {
   const { totals } = estimate;
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col bg-canvas">
       <FocusedHeader
-        title="Estimate summary"
+        title={t("proposal.screens.summary.title")}
         backSlot={
           <HeaderTile>
-            <BackGlyph label="Back" />
+            <BackGlyph label={t("common.back")} />
           </HeaderTile>
         }
       />
@@ -64,12 +67,12 @@ export function EstimateSummaryScreen({ estimate }: EstimateSummaryScreenProps) 
             written directly. Same border, surface, radius and shadow tokens. */}
         <section className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
           <div className="flex flex-col gap-2.5 p-3.5">
-            <SummaryRow label="Item wise total (labour)" amount={totals.linesTotal} />
-            <SummaryRow label="Other charges" amount={totals.chargesTotal} />
+            <SummaryRow label={t("proposal.screens.shared.itemWiseTotal")} amount={totals.linesTotal} />
+            <SummaryRow label={t("proposal.screens.shared.otherCharges")} amount={totals.chargesTotal} />
 
             <div aria-hidden className="h-px bg-line" />
 
-            <SummaryRow label="Taxable value" amount={totals.taxableValue} emphasis />
+            <SummaryRow label={t("proposal.screens.summary.taxableValue")} amount={totals.taxableValue} emphasis />
 
             {/* The padlock is the whole argument of this screen in one glyph:
                 the rate and the basis are policy, so the row reports rather
@@ -87,7 +90,7 @@ export function EstimateSummaryScreen({ estimate }: EstimateSummaryScreenProps) 
 
           <div className="flex items-center justify-between gap-3 bg-action-secondary p-3.5">
             <span className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-navy-200">
-              Customer pays
+              {t("proposal.screens.shared.customerPays")}
             </span>
             <span className="text-[1.625rem] font-extrabold leading-none tracking-[-0.025em] tabular-nums text-surface">
               {totals.customerTotal}
@@ -99,7 +102,7 @@ export function EstimateSummaryScreen({ estimate }: EstimateSummaryScreenProps) 
             carries the amount twice, and the two must never be produced by two
             different pieces of code. */}
         <p className="text-xs leading-[17px] text-text-muted">
-          In words:{" "}
+          {t("proposal.screens.summary.inWords")}{" "}
           <span className="font-semibold text-text-link">{totals.customerTotalInWords}</span>
         </p>
 
@@ -114,7 +117,7 @@ export function EstimateSummaryScreen({ estimate }: EstimateSummaryScreenProps) 
           <div aria-hidden className="my-2.5 h-px bg-success-line" />
 
           <p className="text-xs font-bold uppercase tracking-[0.06em] text-success-text">
-            You will receive
+            {t("proposal.screens.summary.youReceive")}
           </p>
           <p className="mt-1 text-[1.875rem] font-extrabold leading-none tracking-[-0.025em] tabular-nums text-success-text">
             {totals.partnerReceives}
@@ -124,16 +127,14 @@ export function EstimateSummaryScreen({ estimate }: EstimateSummaryScreenProps) 
         <div className="flex gap-2.5 rounded-card border border-info-line bg-info-surface px-3.5 py-3">
           <Pictogram name="held" size="sm" className="mt-px shrink-0 text-text-link" />
           <p className="text-[12.5px] leading-[18px] text-navy-800">
-            GST and the V Solve Hub commission are set by policy and calculated by V Solve Hub.
-            There is no profit percentage to add — your margin is already inside the rates you
-            quoted.
+            {t("proposal.screens.summary.policyNote")}
           </p>
         </div>
       </main>
 
       <StepDock>
         <Button variant="secondary" size="lg" block>
-          Add payment installments
+          {t("proposal.screens.summary.addInstallments")}
         </Button>
       </StepDock>
     </div>

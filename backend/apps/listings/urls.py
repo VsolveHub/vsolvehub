@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.listings import views
+from apps.listings import money, views
 
 urlpatterns = [
     path("jobs/options", views.JobOptionsView.as_view(), name="job-options"),
@@ -148,6 +148,12 @@ urlpatterns = [
         name="listing-subscription-purchase",
     ),
     path("ops/listings", views.OpsListingCollectionView.as_view(), name="ops-listings"),
+    path("ops/listings/money", money.MoneySummaryView.as_view(), name="ops-listings-money"),
+    path(
+        "ops/listings/money/payments",
+        money.MoneyPaymentsView.as_view(),
+        name="ops-listings-money-payments",
+    ),
     path(
         "ops/listings/<uuid:listing_id>/moderate",
         views.OpsListingModerateView.as_view(),

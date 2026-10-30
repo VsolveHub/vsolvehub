@@ -14,6 +14,7 @@ import {
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import type { WorkspaceGrant } from "@vsolve/query";
+import { withI18n } from "@/i18n/test-utils";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/home",
@@ -29,7 +30,7 @@ vi.mock("@/features/notifications/view/booking-alert-audio", () => ({
   prepareBookingAlertsFromGesture: () => undefined,
 }));
 
-const { BottomTabBar, DesktopPrimaryNav, getPartnerChromeMode } = await import(
+const { BottomTabBar, DesktopPrimaryNav, getPartnerChromeMode, hasOwnFocusedHeader } = await import(
   "./partner-shell"
 );
 
@@ -69,12 +70,25 @@ describe("getPartnerChromeMode", () => {
   });
 });
 
+describe("hasOwnFocusedHeader", () => {
+  it("suppresses the shell's generic focused header where a route renders its own", () => {
+    expect(hasOwnFocusedHeader("/listings/post")).toBe(true);
+    expect(hasOwnFocusedHeader("/work/how-day-hire-works")).toBe(true);
+    expect(hasOwnFocusedHeader("/work/jobs/abc")).toBe(true);
+  });
+
+  it("leaves every other focused route to FocusedHeader", () => {
+    expect(hasOwnFocusedHeader("/work/offers")).toBe(false);
+    expect(hasOwnFocusedHeader("/listings/abc")).toBe(false);
+  });
+});
+
 describe("PartnerShell primary nav chrome", () => {
   it("BottomTabBar for A10-only grants does not offer /work/all or /jobs", () => {
     const workspaces = resolveWorkspaces([grant(LISTING_WORKSPACE)]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     const nav = screen.getByRole("navigation", { name: "Partner navigation" });
     const hrefs = within(nav)
@@ -91,7 +105,7 @@ describe("PartnerShell primary nav chrome", () => {
     const workspaces = resolveWorkspaces([grant(LISTING_WORKSPACE)]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     expect(screen.getByRole("link", { name: /Listings/i })).toHaveAttribute("href", "/listings");
     expect(screen.queryByRole("link", { name: /^Work$/i })).toBeNull();
@@ -104,7 +118,7 @@ describe("PartnerShell primary nav chrome", () => {
     ]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<BottomTabBar items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     const nav = screen.getByRole("navigation", { name: "Partner navigation" });
     const hrefs = within(nav)
@@ -120,7 +134,7 @@ describe("PartnerShell primary nav chrome", () => {
     const items = primaryShellNavFor(workspaces);
     const workspaceKeys = workspaces.map((w) => w.key);
 
-    render(<BottomTabBar items={items} workspaceKeys={workspaceKeys} />);
+    render(withI18n(<BottomTabBar items={items} workspaceKeys={workspaceKeys} />));
 
     const dock = screen.getByRole("navigation", { name: "Partner navigation" });
     const dockHrefs = within(dock)
@@ -131,23 +145,20 @@ describe("PartnerShell primary nav chrome", () => {
     expect(dockHrefs).not.toContain("/stays/enquiries");
     expect(dockHrefs).not.toContain("/stays/bookings");
 
-    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaceKeys} />);
+    render(withI18n(<DesktopPrimaryNav items={items} workspaceKeys={workspaceKeys} />));
 
     expect(screen.getByRole("link", { name: /Enquiries/i })).toHaveAttribute(
       "href",
       "/stays/enquiries",
     );
-    expect(screen.getByRole("link", { name: /Bookings/i })).toHaveAttribute(
-      "href",
-      "/stays/bookings",
-    );
+    expect(screen.queryByRole("link", { name: /Bookings/i })).not.toBeInTheDocument();
   });
 
   it("rental host: Bookings is offered and Enquiries never is", () => {
     const workspaces = resolveWorkspaces([grant(RENTAL_WORKSPACE)]);
     const items = primaryShellNavFor(workspaces);
 
-    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+    render(withI18n(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />));
 
     expect(screen.getByRole("link", { name: /Bookings/i })).toHaveAttribute(
       "href",

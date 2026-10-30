@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import type { Schemas } from "@vsolve/api-client";
 import { queryKeys } from "@vsolve/query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,8 +27,10 @@ vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 
 const {
   cancelIntentKey,
+  hasLiveVisit,
   isSettled,
   isTerminal,
+  newestBookingStatus,
   useBookingGroup,
   useBookingGroups,
   useCancelBookingGroup,
@@ -57,8 +60,10 @@ afterEach(() => {
 
 describe("when polling stops", () => {
   it("treats a finished group as settled", () => {
-    for (const status of ["BOOKED", "CANCELLED", "EXPIRED", "FAILED"] as const) {
+    for (const status of ["COMPLETED", "CANCELLED", "EXPIRED", "FAILED"] as const) {
       expect(isSettled(group({ status }))).toBe(true);
+    }
+    for (const status of ["BOOKED", "CANCELLED", "EXPIRED", "FAILED"] as const) {
       expect(isTerminal(group({ status }))).toBe(true);
     }
   });
@@ -83,6 +88,117 @@ describe("when polling stops", () => {
     // The one that matters: under ALL_OR_NOTHING a partially held group has
     // booked nothing, so stopping here would freeze the screen mid-search.
     expect(isSettled(group({ status: "PARTIALLY_HELD" }))).toBe(false);
+  });
+});
+
+/** A paid group whose visits are at the given Booking statuses, one unit each. */
+function bookedGroup(...bookingStatuses: Schemas["BookingStatusEnum"][]) {
+  return group({
+    status: "BOOKED",
+    recovery_action: "NONE",
+    order_id: "order-1",
+    units: bookingStatuses.map((bookingStatus, position) =>
+      unit({
+        id: `fu-${position + 1}`,
+        position,
+        status: "BOOKED",
+        booking_id: `booking-${position + 1}`,
+        booking_status: bookingStatus,
+      }),
+    ),
+  });
+}
+
+describe("a booked group is watched while its visits are moving", () => {
+  it("keeps watching while somebody other than the customer will move a visit", () => {
+    // The regression: payment made the group BOOKED, BOOKED stopped the poll, and
+    // a Partner starting work never reached the customer standing at the door.
+    for (const status of [
+      "CONFIRMED",
+      "EN_ROUTE",
+      "ARRIVED",
+      "IN_PROGRESS",
+      "RECOVERY_REQUIRED",
+    ] as const) {
+      expect(hasLiveVisit(bookedGroup(status))).toBe(true);
+      expect(isSettled(bookedGroup(status))).toBe(false);
+    }
+  });
+
+  it("stops once every visit is finished or waiting on a person", () => {
+    for (const status of [
+      "COMPLETION_SUBMITTED",
+      "COMPLETED",
+      "PARTIALLY_COMPLETED",
+      "DISPUTED",
+      "ABORTED",
+      "CANCELLED",
+    ] as const) {
+      expect(hasLiveVisit(bookedGroup(status))).toBe(false);
+      expect(isSettled(bookedGroup(status))).toBe(true);
+    }
+  });
+
+  it("keeps watching while any one visit is still live", () => {
+    expect(isSettled(bookedGroup("COMPLETED", "IN_PROGRESS"))).toBe(false);
+  });
+
+  it("does not watch a booked group with no visit under it", () => {
+    expect(isSettled(group({ status: "BOOKED" }))).toBe(true);
+  });
+
+  it("re-reads a live group every ten seconds and stops when its last visit finishes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      client.GET.mockResolvedValueOnce(ok(bookedGroup("ARRIVED"))).mockResolvedValue(
+        ok(bookedGroup("COMPLETED")),
+      );
+
+      const { result } = renderHook(() => useBookingGroup("group-1"), { wrapper });
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      // Read `data` now: TanStack re-renders only for result fields that have been read.
+      expect(result.current.data?.units[0]?.booking_status).toBe("ARRIVED");
+      expect(client.GET).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(client.GET).toHaveBeenCalledTimes(2);
+
+      // That second read says the visit finished, so nothing asks again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(result.current.data?.units[0]?.booking_status).toBe("COMPLETED");
+      expect(client.GET).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("which read a visit's status comes from", () => {
+  it("takes the visit read when it is newer", () => {
+    expect(
+      newestBookingStatus(
+        { status: "ARRIVED", readAt: 1_000 },
+        { status: "IN_PROGRESS", readAt: 2_000 },
+      ),
+    ).toBe("IN_PROGRESS");
+  });
+
+  it("keeps the group read when it is newer", () => {
+    expect(
+      newestBookingStatus(
+        { status: "IN_PROGRESS", readAt: 2_000 },
+        { status: "ARRIVED", readAt: 1_000 },
+      ),
+    ).toBe("IN_PROGRESS");
+  });
+
+  it("uses the group read while there is no visit read", () => {
+    expect(newestBookingStatus({ status: "ARRIVED", readAt: 1_000 }, null)).toBe("ARRIVED");
+    expect(newestBookingStatus({ status: null, readAt: 1_000 }, null)).toBeNull();
   });
 });
 

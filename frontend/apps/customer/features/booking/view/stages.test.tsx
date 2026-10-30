@@ -201,31 +201,46 @@ describe("address stage", () => {
 /**
  * The add-new mode, which exists only when a caller supplies `addNew`.
  *
- * Locating lives on the picker: **Use my location** fills the form, **Add a new
- * address** opens it blank. The form itself has no pin control.
+ * Both entry points open the map picker; **Use my location** also asks the
+ * device. The confirmed pin fills the form. The picker itself is replaced here
+ * by a stand-in with one Confirm button — it needs the Google Maps script, and
+ * its own behaviour is covered in `location-picker.test.tsx`.
  */
+const LOCATED = {
+  formatted_address: "Flat 402, Kukatpally, Hyderabad",
+  line1: "Flat 402",
+  locality: "Kukatpally",
+  city: "Hyderabad",
+  state: "Telangana",
+  postal_code: "500072",
+  country_code: "IN",
+  latitude: "17.494700",
+  longitude: "78.399500",
+  provider: "test",
+} as Schemas["ReverseGeocodeResponse"];
+
+vi.mock("@/features/addresses/view/location-picker", () => ({
+  LocationPicker: ({
+    autoLocate,
+    onConfirm,
+  }: {
+    autoLocate?: boolean;
+    onConfirm: (location: Schemas["ReverseGeocodeResponse"]) => void;
+  }) => (
+    <div data-testid="location-picker" data-auto-locate={String(Boolean(autoLocate))}>
+      <button type="button" onClick={() => onConfirm(LOCATED)}>
+        Confirm location
+      </button>
+    </div>
+  ),
+}));
+
 function AddNewHarness({
   onCreate = () => Promise.resolve(ADDRESS),
-  onLocate = () =>
-    Promise.resolve({
-      formatted_address: "Flat 402, Kukatpally, Hyderabad",
-      line1: "Flat 402",
-      locality: "Kukatpally",
-      city: "Hyderabad",
-      state: "Telangana",
-      postal_code: "500072",
-      country_code: "IN",
-      latitude: "17.494700",
-      longitude: "78.399500",
-      provider: "test",
-    } as Schemas["ReverseGeocodeResponse"]),
   createError = null,
-  locateError = null,
 }: {
   onCreate?: (draft: Schemas["AddressRequest"]) => Promise<Schemas["Address"] | null>;
-  onLocate?: () => Promise<Schemas["ReverseGeocodeResponse"] | null>;
   createError?: string | null;
-  locateError?: string | null;
 }) {
   const { state, dispatch } = useWorkspace();
 
@@ -252,9 +267,6 @@ function AddNewHarness({
       onUpdateAddress={() => undefined}
       isUpdatingAddress={false}
       addNew={{
-        onLocate,
-        isLocating: false,
-        locateError,
         onCreate,
         isCreating: false,
         createError,
@@ -267,43 +279,36 @@ function AddNewHarness({
 }
 
 describe("address stage — adding a new address", () => {
-  it("will not save until the location is pinned", () => {
-    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
-    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
-    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
-
-    // `latitude`/`longitude` are required on `AddressRequest` and there is no
-    // forward geocoder. The pin is taken on the picker, so a blank form cannot
-    // save — and the message says to go back rather than pretending typing is
-    // enough.
-    fireEvent.submit(screen.getByRole("dialog").querySelector("#address-add-form")!);
-    expect(onCreate).not.toHaveBeenCalled();
-    expect(screen.getByText(/go back and tap use my location/i)).toBeInTheDocument();
-  });
-
-  it("opens a blank form from add a new address, without the location banner", () => {
+  it("opens the map from add a new address without asking the device", () => {
     renderInWorkspace(<AddNewHarness />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add address" }));
     fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
 
-    expect(screen.queryByText(/location pinned/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/pin the location first/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/flat, plot or building/i)).toHaveValue("");
+    expect(screen.getByRole("heading", { name: /set the location/i })).toBeInTheDocument();
+    expect(screen.getByTestId("location-picker")).toHaveAttribute("data-auto-locate", "false");
   });
 
-  it("fills the form from the device and lets the customer correct it", async () => {
-    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
-    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
+  it("opens the map from use my location and asks the device", () => {
+    renderInWorkspace(<AddNewHarness />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add address" }));
     fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
-    expect(await screen.findByText(/location pinned/i)).toBeInTheDocument();
+    expect(screen.getByTestId("location-picker")).toHaveAttribute("data-auto-locate", "true");
+  });
+
+  it("fills the form from the confirmed pin and lets the customer correct it", async () => {
+    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
+    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
+    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm location/i }));
+
+    expect(screen.getByText(/location pinned/i)).toBeInTheDocument();
     expect(screen.getByText(/add your flat or building number/i)).toBeInTheDocument();
-    // GPS cannot resolve a unit number, so the flat is left for them.
+    // A pin cannot resolve a unit number, so the flat is left for them.
     expect(screen.getByLabelText(/flat, plot or building/i)).toHaveValue("");
     expect(screen.getByLabelText(/street, area/i)).toHaveValue("Kukatpally");
 
@@ -324,28 +329,43 @@ describe("address stage — adding a new address", () => {
     );
   });
 
+  it("goes back from the map to the saved list without saving anything", () => {
+    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
+    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
+    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /back to saved addresses/i }));
+
+    expect(screen.queryByTestId("location-picker")).toBeNull();
+    expect(screen.getByRole("button", { name: /add a new address/i })).toBeVisible();
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it("will not save a form that has no pin", () => {
+    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
+    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
+
+    // The form is only opened from a confirmed pin; this is the guard behind
+    // that, because `latitude`/`longitude` are required on `AddressRequest`.
+    fireEvent.submit(screen.getByRole("dialog").querySelector("#address-add-form")!);
+    expect(onCreate).not.toHaveBeenCalled();
+    expect(screen.getByText(/go back, set the pin/i)).toBeInTheDocument();
+  });
+
   it("keeps a failed save inside the dialog", () => {
     renderInWorkspace(<AddNewHarness createError="That pincode is not valid." />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add address" }));
     fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm location/i }));
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/that pincode is not valid/i)).toBeInTheDocument();
     // And the close affordance is never taken away, including mid-request.
     expect(within(dialog).getByRole("button", { name: /close/i })).toBeEnabled();
-  });
-
-  it("shows a locate failure on the picker so the customer can retry or type", () => {
-    renderInWorkspace(
-      <AddNewHarness locateError="Couldn't get your location. Add the address manually instead." />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
-
-    expect(screen.getByText(/couldn't get your location/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /use my location/i })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /add a new address/i })).toBeEnabled();
   });
 });
 

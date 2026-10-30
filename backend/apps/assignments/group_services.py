@@ -17,7 +17,7 @@ from apps.assignments.ranking import (
 )
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
-from apps.commerce.models import Booking
+from apps.commerce.models import Booking, PaymentAttempt
 from apps.notifications.services import request_notification
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
@@ -466,14 +466,21 @@ def directly_assign(*, unit: FulfilmentUnit) -> Reservation | None:
             },
             ranking_snapshot=ranking.provenance(unit=unit, selected=candidate),
         )
+        # A savepoint, not a bare try: the caller's transaction is still open, and an
+        # `IntegrityError` from the exclusion constraint aborts it outright unless the insert
+        # ran in its own savepoint. Without one, falling through to the next candidate raised
+        # `TransactionManagementError` on its first query and rolled the whole dispatch back.
+        # Ranking already skips Partners holding the slot; this covers the race where one
+        # takes it between ranking and insert.
         try:
-            reservation = Reservation.objects.create(
-                fulfilment_unit=unit,
-                partner=candidate,
-                occupied_range=occupied,
-                expires_at=now + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS),
-                status=Reservation.Status.TENTATIVE,
-            )
+            with transaction.atomic():
+                reservation = Reservation.objects.create(
+                    fulfilment_unit=unit,
+                    partner=candidate,
+                    occupied_range=occupied,
+                    expires_at=now + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS),
+                    status=Reservation.Status.TENTATIVE,
+                )
         except IntegrityError:
             continue
         _set_unit_status(unit, FulfilmentUnit.Status.HELD)
@@ -711,10 +718,60 @@ def reconcile_group_dispatch(*, group_id: UUID) -> BookingGroup:
     return group
 
 
+#: A payment attempt the Customer may still complete at the gateway.
+_OPEN_PAYMENT_STATUSES = (
+    PaymentAttempt.Status.PROVIDER_PENDING,
+    PaymentAttempt.Status.CREATED,
+    PaymentAttempt.Status.AUTHORIZED,
+)
+
+
+def _void_open_payment_attempts(
+    *, group: BookingGroup, already_locked: list[PaymentAttempt]
+) -> None:
+    """Expire every payment attempt still open on a group being cancelled, releasing its funding.
+
+    The gateway cannot be told to stop a Customer who already has Checkout open, so this does not
+    pretend to. What it guarantees is the local side: the attempt stops being payable, the wallet
+    and coins it reserved go back, and a capture that still lands is refunded by
+    `commerce.services.capture._refund_capture_after_terminal` rather than booking the visit.
+    """
+
+    from apps.commerce.services.loyalty_funding import (  # noqa: PLC0415 - import cycle
+        release_checkout_funding,
+    )
+
+    locked_ids = {attempt.id for attempt in already_locked}
+    # Anything created between the first read and the group lock: `initiate_payment_attempt`
+    # holds the group lock while it inserts, so by now such a row is committed and visible.
+    late = list(
+        PaymentAttempt.objects.select_for_update()
+        .filter(booking_group=group, status__in=_OPEN_PAYMENT_STATUSES)
+        .exclude(id__in=locked_ids)
+    )
+    for attempt in [*already_locked, *late]:
+        if attempt.status not in _OPEN_PAYMENT_STATUSES:
+            continue
+        release_checkout_funding(attempt=attempt)
+        attempt.status = PaymentAttempt.Status.EXPIRED
+        attempt.failure_code = "booking_group_cancelled"
+        attempt.version += 1
+        attempt.save(update_fields=("status", "failure_code", "version", "updated_at"))
+
+
 @transaction.atomic
 def cancel_booking_group(
     *, customer_id: UUID, group_id: UUID, expected_version: int
 ) -> BookingGroup:
+    # Payment attempts first, then the group — the order capture takes them in
+    # (`apply_provider_payment` locks the attempt, then `_materialize_captured_group` the group),
+    # so a cancel racing a capture waits instead of deadlocking. Filtered on the group id alone,
+    # with no join, so this locks attempt rows only.
+    open_attempts = list(
+        PaymentAttempt.objects.select_for_update()
+        .filter(booking_group_id=group_id, status__in=_OPEN_PAYMENT_STATUSES)
+        .order_by("id")
+    )
     group = BookingGroup.objects.select_for_update().get(id=group_id, customer_id=customer_id)
     if group.version != expected_version:
         raise BookingGroupConflictApiError(reason="version_changed", current_version=group.version)
@@ -727,6 +784,7 @@ def cancel_booking_group(
         raise BookingGroupConflictApiError(
             reason="status_not_cancellable", current_version=group.version
         )
+    _void_open_payment_attempts(group=group, already_locked=open_attempts)
     _compensate_group(group, terminal_status=BookingGroup.Status.CANCELLED)
     group.refresh_from_db()
     return group

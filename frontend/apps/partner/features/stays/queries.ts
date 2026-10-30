@@ -1,4 +1,6 @@
 import { request, type Schemas } from "@vsolve/api-client";
+import type { Page } from "@vsolve/query";
+import type { useT } from "@vsolve/ui";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -113,6 +115,15 @@ export async function fetchPartnerStayEnquiries(): Promise<StayEnquiry[]> {
   return Array.isArray(data) ? data : [];
 }
 
+/** `statuses` may name several, comma-separated; the server keeps rows in any of them. */
+export function fetchPartnerStayEnquiriesPage(cursor?: string, statuses?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/partner/stays/enquiries", {
+      params: { query: { cursor, status: statuses } },
+    }),
+  );
+}
+
 export async function uploadPartnerStayPhoto(file: File): Promise<StayPhotoUpload> {
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/stays/photos", {
@@ -141,6 +152,8 @@ export async function createPartnerStayProperty(input: {
   cancellation_policy_text?: string;
   house_rules?: string;
   image_urls: string[];
+  /** The host's map pin. Guests only ever see it rounded to an area. */
+  pin?: { latitude: string; longitude: string } | null;
 }): Promise<StayProperty> {
   const body: Schemas["CreatePropertyRequest"] = {
     variant_id: input.variant_id,
@@ -154,6 +167,7 @@ export async function createPartnerStayProperty(input: {
     house_rules: input.house_rules ?? "",
     image_urls: input.image_urls,
     min_stay_nights: input.min_stay_nights ?? 1,
+    ...(input.pin ? { latitude: input.pin.latitude, longitude: input.pin.longitude } : {}),
   };
   // Property-first: only attach a unit when an explicit rate is provided.
   if (input.nightly_rate_paise != null) {
@@ -280,14 +294,22 @@ export async function confirmPartnerStayEnquiry(
 }
 
 /** "3 months", "1 night" — how long the guest asked to stay. */
-export function stayLengthLabel(length: number, period: string | undefined | null): string {
-  const unit = period === "NIGHT" ? "night" : "month";
-  return `${length} ${unit}${length === 1 ? "" : "s"}`;
+export function stayLengthLabel(
+  length: number,
+  period: string | undefined | null,
+  t: ReturnType<typeof useT>,
+): string {
+  return period === "NIGHT"
+    ? t("stays.length.nights", { count: length })
+    : t("stays.length.months", { count: length });
 }
 
 /** "₹9,000 / month". */
-export function ratePeriodSuffix(period: string | undefined | null): string {
-  return period === "NIGHT" ? "/ night" : "/ month";
+export function ratePeriodSuffix(
+  period: string | undefined | null,
+  t: ReturnType<typeof useT>,
+): string {
+  return period === "NIGHT" ? t("stays.rate.perNight") : t("stays.rate.perMonth");
 }
 
 export async function cancelPartnerStayEnquiry(enquiryId: string): Promise<StayEnquiry> {
@@ -302,6 +324,21 @@ export async function cancelPartnerStayEnquiry(enquiryId: string): Promise<StayE
 export async function fetchPartnerStayReservations(): Promise<StayReservation[]> {
   const data = await request(() => getApiClient().GET("/api/v1/partner/stays/reservations"));
   return Array.isArray(data) ? (data as StayReservation[]) : [];
+}
+
+/** `statuses` may name several, comma-separated; the server keeps rows in any of them. */
+export async function fetchPartnerStayReservationsPage(
+  cursor?: string,
+  statuses?: string,
+): Promise<Page<StayReservation>> {
+  const page = await request(() =>
+    getApiClient().GET("/api/v1/partner/stays/reservations", {
+      params: { query: { cursor, status: statuses } },
+    }),
+  );
+  // The schema marks `status` optional only because the serializer gives it a default for
+  // writes; every response carries it, which is what the local type records.
+  return { ...page, results: page.results as StayReservation[] };
 }
 
 export type StayReservationAction = "check_in" | "check_out" | "no_show" | "cancel";
@@ -323,24 +360,25 @@ export async function partnerStayReservationAction(
 /** Where a property stands, in the words a host reads. */
 export function stayListingStatus(
   property: Pick<StayProperty, "moderation_status" | "listing_status">,
+  t: ReturnType<typeof useT>,
 ): {
   label: string;
   tone: "neutral" | "success" | "warning" | "danger";
 } {
-  if (property.listing_status === "ARCHIVED") return { label: "Archived", tone: "neutral" };
+  if (property.listing_status === "ARCHIVED") return { label: t("stays.status.archived"), tone: "neutral" };
   switch (property.moderation_status) {
     case "APPROVED":
       return property.listing_status === "PAUSED"
-        ? { label: "Paused — hidden from guests", tone: "neutral" }
-        : { label: "Live", tone: "success" };
+        ? { label: t("stays.status.paused"), tone: "neutral" }
+        : { label: t("stays.status.live"), tone: "success" };
     case "PENDING":
-      return { label: "Under quick review", tone: "warning" };
+      return { label: t("stays.status.pending"), tone: "warning" };
     case "REJECTED":
-      return { label: "Changes needed", tone: "danger" };
+      return { label: t("stays.status.rejected"), tone: "danger" };
     case "REMOVED":
-      return { label: "Removed by VSolve", tone: "danger" };
+      return { label: t("stays.status.removed"), tone: "danger" };
     default:
-      return { label: "Draft", tone: "neutral" };
+      return { label: t("stays.status.draft"), tone: "neutral" };
   }
 }
 
@@ -392,21 +430,35 @@ export async function fetchPartnerStaySummary(): Promise<HostStaySummary> {
 
 // --- numbered rooms -------------------------------------------------------------------------
 
+/**
+ * Add a numbered room. It shares an existing look's photos (`look_id`), or starts a new look
+ * with its own name and photos (`new_look`), which guests see as its own card.
+ */
 export async function addPartnerStayRoom(
   unitId: string,
-  input: { number: string; available?: boolean },
+  input: {
+    number: string;
+    available?: boolean;
+    look_id?: string;
+    new_look?: { name: string; image_urls: string[] };
+  },
 ): Promise<StayRoom> {
   return request(() =>
     getApiClient().POST("/api/v1/partner/stays/units/{unit_id}/rooms", {
       params: { path: { unit_id: unitId } },
-      body: { number: input.number, available: input.available ?? true },
+      body: {
+        number: input.number,
+        available: input.available ?? true,
+        ...(input.new_look ? { new_look: input.new_look } : { look_id: input.look_id ?? null }),
+      },
     }),
   );
 }
 
+/** `look_id` moves the room to another look of its type. */
 export async function updatePartnerStayRoom(
   roomId: string,
-  input: { number?: string; available?: boolean },
+  input: { number?: string; available?: boolean; look_id?: string },
 ): Promise<StayRoom> {
   return request(() =>
     getApiClient().PATCH("/api/v1/partner/stays/rooms/{room_id}", {
@@ -459,13 +511,23 @@ export async function fetchPartnerStayVisits(): Promise<PartnerStayVisit[]> {
   return Array.isArray(data) ? data : [];
 }
 
+/** `statuses` may name several, comma-separated; the server keeps rows in any of them. */
+export function fetchPartnerStayVisitsPage(cursor?: string, statuses?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/partner/stays/visits", {
+      params: { query: { cursor, status: statuses } },
+    }),
+  );
+}
+
 export type VisitDeclineReason = "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
 
-export const VISIT_DECLINE_REASONS: ReadonlyArray<{ value: VisitDeclineReason; label: string }> = [
-  { value: "ROOM_UNAVAILABLE", label: "Room unavailable" },
-  { value: "DATE_MISMATCH", label: "Date doesn't match" },
-  { value: "ALREADY_OCCUPIED", label: "Already occupied" },
-  { value: "OTHER", label: "Other" },
+/** `labelKey` is a `stays.` catalogue key; resolve it with `t` at render time. */
+export const VISIT_DECLINE_REASONS: ReadonlyArray<{ value: VisitDeclineReason; labelKey: string }> = [
+  { value: "ROOM_UNAVAILABLE", labelKey: "stays.visitDecline.roomUnavailable" },
+  { value: "DATE_MISMATCH", labelKey: "stays.visitDecline.dateMismatch" },
+  { value: "ALREADY_OCCUPIED", labelKey: "stays.visitDecline.alreadyOccupied" },
+  { value: "OTHER", labelKey: "stays.visitDecline.other" },
 ];
 
 export async function partnerStayVisitAction(
@@ -489,6 +551,17 @@ export const WEEKDAY_NAMES = [
   "Friday",
   "Saturday",
   "Sunday",
+] as const;
+
+/** Catalogue keys for `WEEKDAY_NAMES`, same order (Monday first). */
+export const WEEKDAY_NAME_KEYS = [
+  "stays.weekday.monday",
+  "stays.weekday.tuesday",
+  "stays.weekday.wednesday",
+  "stays.weekday.thursday",
+  "stays.weekday.friday",
+  "stays.weekday.saturday",
+  "stays.weekday.sunday",
 ] as const;
 
 /** "17:00:00" or "17:00" → "5 PM". */
@@ -542,6 +615,49 @@ export async function deletePartnerStayUnitMedia(unitId: string, mediaId: string
   await request(() =>
     getApiClient().DELETE("/api/v1/partner/stays/units/{unit_id}/media/{media_id}", {
       params: { path: { unit_id: unitId, media_id: mediaId } },
+    }),
+  );
+}
+
+// --- room looks -----------------------------------------------------------------------------
+
+/** One look of a room type: a photo set some of its rooms share. Guests see one card each. */
+export type StayLook = Schemas["RoomLook"];
+
+export async function createPartnerStayLook(
+  unitId: string,
+  input: { name: string; image_urls?: string[] },
+): Promise<StayLook> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/units/{unit_id}/looks", {
+      params: { path: { unit_id: unitId } },
+      body: { name: input.name, image_urls: input.image_urls ?? [] },
+    }),
+  );
+}
+
+export async function renamePartnerStayLook(lookId: string, name: string): Promise<StayLook> {
+  return request(() =>
+    getApiClient().PATCH("/api/v1/partner/stays/looks/{look_id}", {
+      params: { path: { look_id: lookId } },
+      body: { name },
+    }),
+  );
+}
+
+export async function deletePartnerStayLook(lookId: string): Promise<void> {
+  await request(() =>
+    getApiClient().DELETE("/api/v1/partner/stays/looks/{look_id}", {
+      params: { path: { look_id: lookId } },
+    }),
+  );
+}
+
+export async function addPartnerStayLookMedia(lookId: string, url: string): Promise<StayUnitMedia> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/looks/{look_id}/media", {
+      params: { path: { look_id: lookId } },
+      body: { url },
     }),
   );
 }

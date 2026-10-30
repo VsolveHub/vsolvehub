@@ -1,8 +1,9 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@vsolve/ui";
+import { useT, useToast } from "@vsolve/ui";
 
+import { translateProviderError } from "../payment/provider-handoff";
 import { completeOrOpenCheckout } from "../payment/standalone-handoff";
 import {
   serverErrorMessage,
@@ -51,6 +52,7 @@ export function usePartnerListingMutations({
   setActionError,
 }: MutationHandlersProps) {
   const queryClient = useQueryClient();
+  const t = useT();
   const { notify } = useToast();
   /** Tracks whether the Razorpay widget is open (blocks double-launch). */
   const [isHandingOff, setIsHandingOff] = useState(false);
@@ -62,7 +64,7 @@ export function usePartnerListingMutations({
 
   const update = useMutation({
     mutationFn: () => {
-      if (!editingListing) throw new Error("No listing selected for editing");
+      if (!editingListing) throw new Error(t("listings.mutations.noListingSelected"));
 
       const payload: Record<string, unknown> = {
         title: editForm.title,
@@ -88,7 +90,7 @@ export function usePartnerListingMutations({
     },
     onSuccess: () => {
       onUpdateSuccess();
-      notify(SUCCESS_MESSAGES.update);
+      notify(t(SUCCESS_MESSAGES.update));
       invalidateLists();
     },
     onError: (error) => setEditErrors(serverFieldErrors(error)),
@@ -122,7 +124,7 @@ export function usePartnerListingMutations({
     },
     onSuccess: () => {
       onCreateSuccess();
-      notify(SUCCESS_MESSAGES.create);
+      notify(t(SUCCESS_MESSAGES.create));
       invalidateLists();
     },
     onError: (error) => setCreateErrors(serverFieldErrors(error)),
@@ -140,7 +142,7 @@ export function usePartnerListingMutations({
     }) => runListingAction(id, next, reason),
     onSuccess: (_result, { next }) => {
       onActionSuccess(next);
-      notify(SUCCESS_MESSAGES[next]);
+      notify(t(SUCCESS_MESSAGES[next]));
       invalidateLists();
     },
     onError: (error, { next }) => {
@@ -153,13 +155,13 @@ export function usePartnerListingMutations({
         setActionError(
           serverErrorMessage(
             error,
-            "Active listing limit reached for the current plan. Upgrade to publish more.",
+            t("listings.mutations.planCap"),
           ),
         );
         return;
       }
       setActionError(
-        serverErrorMessage(error, `Could not ${next} this opening. Please try again.`),
+        serverErrorMessage(error, t(`listings.mutations.actionFailed.${next}`)),
       );
     },
   });
@@ -170,7 +172,7 @@ export function usePartnerListingMutations({
 
       if (!sub.payment_attempt_id) {
         // No payment needed (free tier or already active)
-        notify(SUCCESS_MESSAGES.subscribe);
+        notify(t(SUCCESS_MESSAGES.subscribe));
         return sub;
       }
 
@@ -179,20 +181,18 @@ export function usePartnerListingMutations({
         const result = await completeOrOpenCheckout(String(sub.payment_attempt_id), {
           businessName: BUSINESS_NAME,
           onAwaitingCapture: () =>
-            notify("Complete payment in Razorpay. Subscription activates when capture is confirmed."),
+            notify(t("listings.mutations.completePayment")),
         });
 
         if (result.mode === "simulated") {
-          notify(SUCCESS_MESSAGES.subscribe);
+          notify(t(SUCCESS_MESSAGES.subscribe));
           return sub;
         }
         if (result.mode === "pending") {
-          notify(
-            "Subscription started. Payment is still preparing — refresh shortly, or open payment again from plans.",
-          );
+          notify(t("listings.mutations.paymentPreparing"));
           return sub;
         }
-        notify("Payment submitted. Waiting for Razorpay capture to activate the plan.");
+        notify(t("listings.mutations.paymentSubmitted"));
         // Brief poll so a fast webhook can light up ACTIVE before we leave.
         for (let i = 0; i < 6; i += 1) {
           await new Promise((r) => setTimeout(r, 800));
@@ -209,7 +209,7 @@ export function usePartnerListingMutations({
     },
     onError: (error) =>
       setActionError(
-        serverErrorMessage(error, "Could not activate the subscription. Please try again."),
+        translateProviderError(t, serverErrorMessage(error, t("listings.mutations.subscribeFailed"))),
       ),
   });
 

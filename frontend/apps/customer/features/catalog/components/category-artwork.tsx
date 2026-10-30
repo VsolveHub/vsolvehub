@@ -1,5 +1,7 @@
 import { createElement } from "react";
 
+import { RemoteImage } from "@/components/remote-image";
+
 import { iconForService } from "../icon-catalogue/service-icon";
 
 /**
@@ -155,13 +157,16 @@ export function ServicePhoto({
   imageUrl,
   iconKey,
   className,
+  sizes = "(min-width: 768px) 160px, 120px",
 }: {
   imageUrl: string;
   iconKey?: string;
   className?: string;
+  /** How wide the tile is drawn, for picking the image width. Pass it where the tile is not ~120–160 px. */
+  sizes?: string;
 }) {
   const CONTAINER =
-    "grid place-items-center overflow-hidden rounded-card shadow-xs";
+    "relative grid place-items-center overflow-hidden rounded-card shadow-xs";
 
   if (imageUrl !== "") {
     const isServiceCover = imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/") || imageUrl.includes("/catalog/tiles/");
@@ -171,17 +176,14 @@ export function ServicePhoto({
           isServiceCover ? "bg-[#F4F1EC]" : "bg-surface-sunken"
         } ${className ?? ""}`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl}
-          alt=""
-          loading="lazy"
-          className={
-            isServiceCover
-              ? "size-[72%] object-contain object-center"
-              : "size-full object-cover object-center"
-          }
-        />
+        {isServiceCover ? (
+          // The 3D cover icons sit at 72% of the tile: a 14% inset on every side.
+          <span className="absolute inset-[14%]">
+            <RemoteImage src={imageUrl} alt="" fill sizes={sizes} className="object-contain object-center" />
+          </span>
+        ) : (
+          <RemoteImage src={imageUrl} alt="" fill sizes={sizes} className="object-cover object-center" />
+        )}
       </span>
     );
   }

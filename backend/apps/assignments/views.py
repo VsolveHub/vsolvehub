@@ -1,8 +1,11 @@
+import logging
 from typing import Any, cast
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -279,3 +282,214 @@ class AdvanceSearchView(APIView):
         checkout = get_object_or_404(CheckoutSession, id=checkout_id, customer=request.user)
         result = advance_search(checkout_id=checkout.id)
         return Response(OfferSerializer(result).data)
+
+
+class BaseDispatchOfferView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def _get_offer(self, request: Request, offer_id: UUID) -> tuple[Any, PartnerProfile]:
+        from apps.assignments.models import DispatchOffer
+
+        user = cast(User, request.user)
+        profile = partner_profile_for_user(user)
+        if profile is None:
+            profile = PartnerProfile.objects.filter(user=user).first()
+        if profile is None:
+            raise PermissionDenied("User is not associated with an active partner profile.")
+
+        offer = get_object_or_404(
+            DispatchOffer.objects.select_related("booking", "partner"),
+            id=offer_id,
+        )
+        if offer.partner_id != profile.id:
+            raise PermissionDenied("This offer belongs to another partner.")
+
+        return offer, profile
+
+
+class DispatchOfferDetailView(BaseDispatchOfferView):
+    """Retrieve details of an instant booking dispatch offer."""
+
+    def get(self, request: Request, offer_id: UUID) -> Response:
+        from django.db import transaction
+        from apps.assignments.models import DispatchOffer
+        from apps.assignments.serializers import DispatchOfferSerializer
+
+        offer, profile = self._get_offer(request, offer_id)
+        now = timezone.now()
+        if offer.status == DispatchOffer.Status.PENDING and offer.expires_at <= now:
+            with transaction.atomic():
+                offer_locked = (
+                    DispatchOffer.objects.select_for_update()
+                    .filter(id=offer_id, status=DispatchOffer.Status.PENDING)
+                    .first()
+                )
+                if offer_locked and offer_locked.expires_at <= now:
+                    offer_locked.status = DispatchOffer.Status.EXPIRED
+                    offer_locked.responded_at = now
+                    offer_locked.save(update_fields=["status", "responded_at", "updated_at"])
+                    offer = offer_locked
+                    logger.info(
+                        "dispatch_offer_expired",
+                        extra={
+                            "offer_id": str(offer.id),
+                            "booking_id": str(offer.booking_id),
+                            "partner_id": str(profile.id),
+                        },
+                    )
+
+        return Response(DispatchOfferSerializer(offer).data)
+
+
+class DispatchOfferAcceptView(BaseDispatchOfferView):
+    """Accept an instant booking dispatch offer."""
+
+    def post(self, request: Request, offer_id: UUID) -> Response:
+        from django.db import transaction
+        from apps.assignments.models import DispatchOffer, Reservation
+        from apps.assignments.serializers import DispatchOfferSerializer
+        from apps.commerce.models import Booking
+
+        user = cast(User, request.user)
+        profile = partner_profile_for_user(user)
+        if profile is None:
+            profile = PartnerProfile.objects.filter(user=user).first()
+        if profile is None:
+            raise PermissionDenied("User is not associated with an active partner profile.")
+
+        now = timezone.now()
+
+        with transaction.atomic():
+            offer = (
+                DispatchOffer.objects.select_for_update()
+                .select_related("booking", "partner")
+                .filter(id=offer_id)
+                .first()
+            )
+            if offer is None:
+                return Response({"error": "Offer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if offer.partner_id != profile.id:
+                raise PermissionDenied("This offer belongs to another partner.")
+
+            if offer.status != DispatchOffer.Status.PENDING:
+                return Response(
+                    {"error": f"Offer is not pending (current status: {offer.status})."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if offer.expires_at <= now:
+                offer.status = DispatchOffer.Status.EXPIRED
+                offer.responded_at = now
+                offer.save(update_fields=["status", "responded_at", "updated_at"])
+                logger.info(
+                    "dispatch_offer_expired",
+                    extra={
+                        "offer_id": str(offer.id),
+                        "booking_id": str(offer.booking_id),
+                        "partner_id": str(profile.id),
+                    },
+                )
+                return Response(
+                    {"error": "This offer has expired."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            offer.status = DispatchOffer.Status.ACCEPTED
+            offer.responded_at = now
+            offer.save(update_fields=["status", "responded_at", "updated_at"])
+
+            booking = (
+                Booking.objects.select_for_update()
+                .filter(id=offer.booking_id)
+                .first()
+            )
+            if booking is not None:
+                booking.partner = profile
+                booking.status = Booking.Status.CONFIRMED
+                booking.save(update_fields=["partner", "status", "updated_at"])
+
+                if booking.reservation_id:
+                    Reservation.objects.filter(id=booking.reservation_id).update(
+                        partner=profile,
+                        status=Reservation.Status.CONFIRMED,
+                    )
+
+            # Cancel any other competing pending offers for this booking
+            DispatchOffer.objects.filter(
+                booking_id=offer.booking_id, status=DispatchOffer.Status.PENDING
+            ).exclude(id=offer.id).update(
+                status=DispatchOffer.Status.CANCELLED,
+                responded_at=now,
+            )
+
+            logger.info(
+                "dispatch_offer_accepted",
+                extra={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "partner_id": str(profile.id),
+                    "attempt_number": offer.attempt_number,
+                },
+            )
+
+        return Response(DispatchOfferSerializer(offer).data, status=status.HTTP_200_OK)
+
+
+class DispatchOfferDeclineView(BaseDispatchOfferView):
+    """Decline an instant booking dispatch offer."""
+
+    def post(self, request: Request, offer_id: UUID) -> Response:
+        from django.db import transaction
+        from apps.assignments.models import DispatchOffer
+        from apps.assignments.serializers import DispatchOfferSerializer
+        from apps.assignments.tasks import reassign_or_downgrade_booking_task
+
+        user = cast(User, request.user)
+        profile = partner_profile_for_user(user)
+        if profile is None:
+            profile = PartnerProfile.objects.filter(user=user).first()
+        if profile is None:
+            raise PermissionDenied("User is not associated with an active partner profile.")
+
+        now = timezone.now()
+
+        with transaction.atomic():
+            offer = (
+                DispatchOffer.objects.select_for_update()
+                .filter(id=offer_id)
+                .first()
+            )
+            if offer is None:
+                return Response({"error": "Offer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if offer.partner_id != profile.id:
+                raise PermissionDenied("This offer belongs to another partner.")
+
+            if offer.status != DispatchOffer.Status.PENDING:
+                return Response(
+                    {"error": f"Offer is not pending (current status: {offer.status})."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            offer.status = DispatchOffer.Status.DECLINED
+            offer.responded_at = now
+            offer.save(update_fields=["status", "responded_at", "updated_at"])
+
+            logger.info(
+                "dispatch_offer_declined",
+                extra={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "partner_id": str(profile.id),
+                    "attempt_number": offer.attempt_number,
+                },
+            )
+
+            # Trigger reassignment or downgrade on transaction commit
+            transaction.on_commit(
+                lambda: reassign_or_downgrade_booking_task.delay(str(offer.booking_id))
+            )
+
+        return Response(DispatchOfferSerializer(offer).data, status=status.HTTP_200_OK)
+

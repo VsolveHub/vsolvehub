@@ -1,6 +1,6 @@
 "use client";
 
-import { describeError } from "@vsolve/query";
+import { describeError, usePagedList } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import { Search } from "lucide-react";
 import Link from "next/link";
@@ -10,12 +10,21 @@ import { useState } from "react";
 import { filterBookingsBySearch } from "@/features/activity/model/booking-search";
 import {
   BOOKING_STATUS_COPY,
+  BOOKING_TYPES,
+  BOOKING_TYPE_LABELS,
+  bookingStatusHref,
   countByStatus,
   engagementSection,
   groupSection,
+  rentalSection,
   requestSection,
+  stayEnquirySection,
+  stayReservationSection,
+  stayVisitSection,
   toBookingStatusTab,
+  toBookingType,
   type BookingStatusTab,
+  type BookingType,
 } from "@/features/activity/model/booking-status";
 import { BookingGroupRow } from "@/features/bookings/view/group-list";
 import { useBookingGroups, type BookingGroup } from "@/features/bookings/queries";
@@ -25,6 +34,18 @@ import { EngagementListRow } from "@/features/engagement/view/engagement-list-sc
 import { toRequestRows, type RequestRowView } from "@/features/requirement/adapters";
 import { useMyRequests, type RequirementSummary } from "@/features/requirement/queries";
 import { RequestRow } from "@/features/requirement/view/requests-list";
+import type { RentalBooking } from "@/features/rentals/model";
+import { fetchMyRentalsPage } from "@/features/rentals/queries";
+import { RentalBookingCard } from "@/features/rentals/view";
+import {
+  fetchMyStayEnquiriesPage,
+  fetchMyStayReservationsPage,
+  fetchMyStayVisitsPage,
+  type StayEnquiry,
+  type StayReservation,
+  type StayVisit,
+} from "@/features/stays/queries";
+import { StayEnquiryCard, StayReservationCard, StayVisitCard } from "@/features/stays/view";
 import { requestHref } from "@/lib/routes";
 
 import { BookingStatusTabs } from "./booking-status-tabs";
@@ -41,10 +62,76 @@ export function requestBelongsInBookings(requirement: RequirementSummary): boole
   return requirement.engagement_id === null;
 }
 
-type BookingItem =
-  | { kind: "request"; key: string; section: BookingStatusTab; sortAt: string; row: RequestRowView }
-  | { kind: "engagement"; key: string; section: BookingStatusTab; sortAt: string; row: EngagementRowView }
-  | { kind: "group"; key: string; section: BookingStatusTab; sortAt: string; group: BookingGroup };
+type ItemBase = { key: string; type: BookingType; section: BookingStatusTab; sortAt: string };
+
+/**
+ * One row of the hub. Services (visits, crew, projects) and, since stays and rentals joined
+ * this page, rental bookings and stay visits, enquiries and reservations. Each keeps the card
+ * it had on its old page, with every action it had there.
+ */
+export type BookingItem = ItemBase &
+  (
+    | { kind: "request"; row: RequestRowView }
+    | { kind: "engagement"; row: EngagementRowView }
+    | { kind: "group"; group: BookingGroup }
+    | { kind: "rental"; booking: RentalBooking }
+    | { kind: "stay-enquiry"; enquiry: StayEnquiry }
+    | { kind: "stay-visit"; visit: StayVisit }
+    | { kind: "stay-reservation"; reservation: StayReservation }
+  );
+
+export interface MarketplaceRows {
+  rentals: readonly RentalBooking[];
+  enquiries: readonly StayEnquiry[];
+  visits: readonly StayVisit[];
+  reservations: readonly StayReservation[];
+}
+
+/** Rentals and stays as hub rows, sorted into the same three tabs as everything else. */
+export function marketplaceItems(rows: MarketplaceRows, now: Date = new Date()): BookingItem[] {
+  return [
+    ...rows.rentals.map(
+      (booking): BookingItem => ({
+        kind: "rental",
+        key: `rental:${booking.id}`,
+        type: "rentals",
+        section: rentalSection(booking),
+        sortAt: booking.created_at,
+        booking,
+      }),
+    ),
+    ...rows.visits.map(
+      (visit): BookingItem => ({
+        kind: "stay-visit",
+        key: `stay-visit:${visit.id}`,
+        type: "stays",
+        section: stayVisitSection(visit, now),
+        sortAt: visit.created_at,
+        visit,
+      }),
+    ),
+    ...rows.enquiries.map(
+      (enquiry): BookingItem => ({
+        kind: "stay-enquiry",
+        key: `stay-enquiry:${enquiry.id}`,
+        type: "stays",
+        section: stayEnquirySection(enquiry, now),
+        sortAt: enquiry.created_at,
+        enquiry,
+      }),
+    ),
+    ...rows.reservations.map(
+      (reservation): BookingItem => ({
+        kind: "stay-reservation",
+        key: `stay-reservation:${reservation.id}`,
+        type: "stays",
+        section: stayReservationSection(reservation),
+        sortAt: reservation.created_at,
+        reservation,
+      }),
+    ),
+  ];
+}
 
 function byNewest(a: BookingItem, b: BookingItem): number {
   return Date.parse(b.sortAt) - Date.parse(a.sortAt);
@@ -70,6 +157,7 @@ function itemsFrom(
         return {
           kind: "request",
           key: `request:${row.id}`,
+          type: "services",
           section: requestSection(row.status),
           sortAt: source?.last_activity_at ?? "",
           row,
@@ -79,6 +167,7 @@ function itemsFrom(
         (row): BookingItem => ({
           kind: "engagement",
           key: `engagement:${row.engagementId}`,
+          type: "services",
           section: engagementSection(row),
           sortAt: engagementById.get(row.engagementId)?.created_at ?? "",
           row,
@@ -88,6 +177,7 @@ function itemsFrom(
         (group): BookingItem => ({
           kind: "group",
           key: `group:${group.id}`,
+          type: "services",
           section: groupSection(group),
           sortAt: group.updated_at,
           group,
@@ -102,25 +192,66 @@ export function ActivityScreen() {
   const requirementsQuery = useMyRequests();
   const engagementsQuery = useEngagements();
   const groupsQuery = useBookingGroups();
+  // The same cache keys as the old My Rentals and My Stays pages, so a card that refreshes
+  // its own list (after paying, accepting a delivery price) refreshes this one.
+  const rentalsList = usePagedList(["my-rentals", ""], (cursor) => fetchMyRentalsPage(undefined, cursor));
+  const enquiriesList = usePagedList(["my-stay-enquiries"], (cursor) => fetchMyStayEnquiriesPage(cursor));
+  const visitsList = usePagedList(["my-stay-visits"], (cursor) => fetchMyStayVisitsPage(cursor));
+  const reservationsList = usePagedList(["my-stay-reservations"], (cursor) =>
+    fetchMyStayReservationsPage(cursor),
+  );
+  const marketplaceLists = [rentalsList, enquiriesList, visitsList, reservationsList];
+
   const searchParams = useSearchParams();
   const selectedTab = toBookingStatusTab(searchParams.get("status"));
+  const selectedType = toBookingType(searchParams.get("type"));
   const [searchQuery, setSearchQuery] = useState("");
 
   const requirements = requirementsQuery.data ?? [];
   const engagements = (engagementsQuery.data?.pages ?? []).flatMap((page) => page.results);
   const groups = (groupsQuery.data?.pages ?? []).flatMap((page) => page.results);
-  const { items, unknownEngagements } = itemsFrom(requirements, engagements, groups);
+  const services = itemsFrom(requirements, engagements, groups);
+  const unknownEngagements = services.unknownEngagements;
+  const allItems = [
+    ...services.items,
+    ...marketplaceItems({
+      rentals: rentalsList.items,
+      enquiries: enquiriesList.items,
+      visits: visitsList.items,
+      reservations: reservationsList.items,
+    }),
+  ].sort(byNewest);
+  const typesPresent = BOOKING_TYPES.filter((type) => allItems.some((item) => item.type === type));
+  const items = selectedType ? allItems.filter((item) => item.type === selectedType) : allItems;
   const counts = countByStatus(items);
   const tabItems = items.filter((item) => item.section === selectedTab);
   const visibleItems = filterBookingsBySearch(tabItems, searchQuery);
   const isSearching = searchQuery.trim().length > 0;
   const copy = BOOKING_STATUS_COPY[selectedTab];
   const isFirstLoad =
-    items.length === 0 &&
-    (requirementsQuery.isPending || engagementsQuery.isPending || groupsQuery.isPending);
-  const errors = [requirementsQuery.error, engagementsQuery.error, groupsQuery.error].filter(
-    (error): error is Error => error instanceof Error,
-  );
+    allItems.length === 0 &&
+    (requirementsQuery.isPending ||
+      engagementsQuery.isPending ||
+      groupsQuery.isPending ||
+      marketplaceLists.some((list) => list.isLoading));
+  const errors = [
+    requirementsQuery.error,
+    engagementsQuery.error,
+    groupsQuery.error,
+    ...marketplaceLists.map((list) => list.error),
+  ].filter((error): error is Error => error instanceof Error);
+  const hasOlder =
+    Boolean(engagementsQuery.hasNextPage || groupsQuery.hasNextPage) ||
+    marketplaceLists.some((list) => list.hasMore);
+  const loadingOlder =
+    engagementsQuery.isFetchingNextPage ||
+    groupsQuery.isFetchingNextPage ||
+    marketplaceLists.some((list) => list.loadingMore);
+  const loadOlder = () => {
+    if (engagementsQuery.hasNextPage) void engagementsQuery.fetchNextPage();
+    if (groupsQuery.hasNextPage) void groupsQuery.fetchNextPage();
+    for (const list of marketplaceLists) if (list.hasMore) list.loadMore();
+  };
   const hasDirectPay = items.some(
     (item) => item.kind === "engagement" && item.row.mode === "lead_only",
   );
@@ -167,12 +298,19 @@ export function ActivityScreen() {
               void requirementsQuery.refetch();
               void engagementsQuery.refetch();
               void groupsQuery.refetch();
+              for (const list of marketplaceLists) void list.refetch();
             }}
           />
         </div>
       ) : null}
 
-      {!isFirstLoad ? <BookingStatusTabs selected={selectedTab} counts={counts} /> : null}
+      {!isFirstLoad && typesPresent.length > 1 ? (
+        <BookingTypeFilter present={typesPresent} selected={selectedType} tab={selectedTab} />
+      ) : null}
+
+      {!isFirstLoad ? (
+        <BookingStatusTabs selected={selectedTab} counts={counts} type={selectedType} />
+      ) : null}
 
       {!isFirstLoad && !isSearching && tabItems.length === 0 && errors.length === 0 ? (
         <div className="mt-8">
@@ -181,8 +319,11 @@ export function ActivityScreen() {
             description={copy.emptyDescription}
             action={
               selectedTab === "active" ? (
-                <Link href="/catalog" className={buttonStyles({ variant: "outline" })}>
-                  Browse services
+                <Link
+                  href={BROWSE[selectedType ?? "services"].href}
+                  className={buttonStyles({ variant: "outline" })}
+                >
+                  {BROWSE[selectedType ?? "services"].label}
                 </Link>
               ) : undefined
             }
@@ -224,40 +365,97 @@ export function ActivityScreen() {
         </p>
       ) : null}
 
-      {engagementsQuery.hasNextPage || groupsQuery.hasNextPage ? (
-        <div className="mt-8 flex flex-wrap gap-3">
-          {engagementsQuery.hasNextPage ? (
-            <Button
-              variant="outline"
-              loading={engagementsQuery.isFetchingNextPage}
-              onClick={() => void engagementsQuery.fetchNextPage()}
-            >
-              Show older work
-            </Button>
-          ) : null}
-          {groupsQuery.hasNextPage ? (
-            <Button
-              variant="outline"
-              loading={groupsQuery.isFetchingNextPage}
-              onClick={() => void groupsQuery.fetchNextPage()}
-            >
-              Show older bookings
-            </Button>
-          ) : null}
+      {hasOlder ? (
+        <div className="mt-8">
+          <Button variant="outline" loading={loadingOlder} onClick={loadOlder}>
+            Show older bookings
+          </Button>
         </div>
       ) : null}
     </div>
   );
 }
 
+/** Where an empty tab sends the customer to book one, by the type they are looking at. */
+const BROWSE: Record<BookingType, { href: string; label: string }> = {
+  services: { href: "/catalog", label: "Browse services" },
+  rentals: { href: "/rentals", label: "Browse rentals" },
+  stays: { href: "/stays", label: "Browse stays" },
+};
+
+const MARKETPLACE_LABEL: Partial<Record<BookingItem["kind"], string>> = {
+  rental: "Rental",
+  "stay-visit": "Stay visit",
+  "stay-enquiry": "Stay enquiry",
+  "stay-reservation": "Stay reservation",
+};
+
 function BookingTimelineRow({ item }: { item: BookingItem }) {
-  if (item.kind === "group") return <BookingGroupRow group={item.group} />;
-  if (item.kind === "engagement") return <EngagementListRow row={item.row} />;
+  switch (item.kind) {
+    case "group":
+      return <BookingGroupRow group={item.group} />;
+    case "engagement":
+      return <EngagementListRow row={item.row} />;
+    case "request":
+      return (
+        <RequestRow
+          request={item.row}
+          href={requestHref(item.row.id)}
+          isClosed={item.section === "past" || item.section === "cancelled"}
+        />
+      );
+    default:
+      return (
+        <li className="flex flex-col gap-1.5" data-testid={`booking-${item.kind}`}>
+          {/* Services rows say what they are already; these name their kind in a mixed list. */}
+          <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+            {MARKETPLACE_LABEL[item.kind]}
+          </span>
+          {item.kind === "rental" ? <RentalBookingCard booking={item.booking} /> : null}
+          {item.kind === "stay-visit" ? <StayVisitCard visit={item.visit} /> : null}
+          {item.kind === "stay-enquiry" ? <StayEnquiryCard enquiry={item.enquiry} /> : null}
+          {item.kind === "stay-reservation" ? (
+            <StayReservationCard reservation={item.reservation} />
+          ) : null}
+        </li>
+      );
+  }
+}
+
+/** All · Services · Rentals · Stays. Only the kinds this customer has are offered. */
+function BookingTypeFilter({
+  present,
+  selected,
+  tab,
+}: {
+  present: readonly BookingType[];
+  selected: BookingType | null;
+  tab: BookingStatusTab;
+}) {
+  const options: Array<{ type: BookingType | null; label: string }> = [
+    { type: null, label: "All" },
+    ...present.map((type) => ({ type, label: BOOKING_TYPE_LABELS[type] })),
+  ];
   return (
-    <RequestRow
-      request={item.row}
-      href={requestHref(item.row.id)}
-      isClosed={item.section === "past" || item.section === "cancelled"}
-    />
+    <nav aria-label="Booking type" className="mt-5 flex flex-wrap gap-2">
+      {options.map(({ type, label }) => {
+        const active = selected === type;
+        return (
+          <Link
+            key={label}
+            href={bookingStatusHref(tab, type)}
+            scroll={false}
+            aria-current={active ? "page" : undefined}
+            className={
+              active
+                ? "inline-flex min-h-9 items-center rounded-full bg-navy-900 px-4 text-sm font-bold text-white"
+                : "inline-flex min-h-9 items-center rounded-full border border-line bg-surface px-4 text-sm font-semibold text-text-secondary hover:border-line-strong hover:text-text"
+            }
+          >
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

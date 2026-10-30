@@ -1,4 +1,6 @@
-import { Button, cn } from "@vsolve/ui";
+"use client";
+
+import { Button, cn, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 
@@ -61,6 +63,7 @@ export interface QuickAddSheetProps {
 
 export function QuickAddSheet({ presets, selectedIds }: QuickAddSheetProps) {
   const count = selectedIds.length;
+  const t = useT();
 
   return (
     <div
@@ -74,10 +77,11 @@ export function QuickAddSheet({ presets, selectedIds }: QuickAddSheetProps) {
       </div>
 
       <div className="shrink-0 px-5 pb-3 pt-2">
-        <h2 className="text-base font-bold text-text">Quick add common items</h2>
+        <h2 className="text-base font-bold text-text">{t("proposal.screens.quickAdd.title")}</h2>
         <p className="mt-1 text-[13px] leading-[19px] text-text-secondary">
-          Tap to add a row. The rate shown is what <strong className="font-bold">you</strong> last
-          charged — set your own price after adding.
+          {t("proposal.screens.quickAdd.hintLead")}{" "}
+          <strong className="font-bold">{t("proposal.screens.quickAdd.hintYou")}</strong>{" "}
+          {t("proposal.screens.quickAdd.hintTail")}
         </p>
       </div>
 
@@ -102,7 +106,7 @@ export function QuickAddSheet({ presets, selectedIds }: QuickAddSheetProps) {
           )}
         >
           <Pictogram name="more" size="sm" />
-          Add a custom item
+          {t("proposal.screens.quickAdd.custom")}
         </button>
       </div>
 
@@ -112,12 +116,12 @@ export function QuickAddSheet({ presets, selectedIds }: QuickAddSheetProps) {
           "pb-[max(1.625rem,env(safe-area-inset-bottom))]",
         )}
       >
-        <Button variant="ghost">Cancel</Button>
+        <Button variant="ghost">{t("common.cancel")}</Button>
         {/* Navy rather than orange: the primary action on this screen is the one
             that ends it, and the sheet sits over a screen whose own orange "+"
             is what opened it. */}
         <Button variant="secondary">
-          Add {count} {count === 1 ? "item" : "items"}
+          {t("proposal.screens.quickAdd.add", { count })}
         </Button>
       </div>
     </div>
@@ -138,6 +142,7 @@ export function QuickAddSheet({ presets, selectedIds }: QuickAddSheetProps) {
  * thumb — the same trick `LedgerRow` uses when a row opens.
  */
 function PresetTile({ preset, selected }: { preset: QuickAddPreset; selected: boolean }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -167,7 +172,7 @@ function PresetTile({ preset, selected }: { preset: QuickAddPreset; selected: bo
         {/* "last" is doing real work here: it says the number is this partner's
             own history, not a price Vsolve is recommending. See FE-6 above. */}
         <span className="mt-0.5 truncate text-[10.5px] font-medium tabular-nums text-text-muted">
-          {preset.unit} · last {preset.lastRate}
+          {t("proposal.screens.quickAdd.last", { unit: preset.unit, rate: preset.lastRate })}
         </span>
       </span>
 

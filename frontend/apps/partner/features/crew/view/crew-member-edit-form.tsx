@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, ErrorState, Field, Input, Sheet } from "@vsolve/ui";
+import { Badge, Button, ErrorState, Field, Input, Sheet, useT } from "@vsolve/ui";
 import { useMemo, useState } from "react";
 
 import type { CrewMemberPatch } from "@/features/capability/adapters/wire";
@@ -55,6 +55,7 @@ export function CrewMemberEditForm({
   submitError = null,
   skillOptions = [],
 }: CrewMemberEditFormProps) {
+  const t = useT();
   /* Seeded once per mount rather than synced by an effect. The container keys this component on
      the membership being edited, so opening a different person remounts it with their values —
      which is also what stops a half-typed name leaking onto the next person the Partner opens. */
@@ -64,7 +65,7 @@ export function CrewMemberEditForm({
   const [gender, setGender] = useState<CrewGender>(row?.gender ?? "");
 
   const trimmedName = displayName.trim();
-  const nameProblem = trimmedName === "" ? "Give them a name your team will recognise." : null;
+  const nameProblem = trimmedName === "" ? t("crew.edit.nameRequired") : null;
 
   const hasChanges = useMemo(
     () =>
@@ -85,8 +86,8 @@ export function CrewMemberEditForm({
       onOpenChange={(next) => {
         if (!pending) onOpenChange(next);
       }}
-      title={`Edit ${row.name}`}
-      description="Update how this person works with your agency"
+      title={t("crew.edit.title", { name: row.name })}
+      description={t("crew.edit.description")}
     >
       <form
         className="flex flex-col gap-5"
@@ -102,8 +103,8 @@ export function CrewMemberEditForm({
         }}
       >
         <Field
-          label="Name"
-          description="What your team calls them. Changing it here does not change any other agency's list."
+          label={t("crew.edit.nameLabel")}
+          description={t("crew.edit.nameDescription")}
           error={nameProblem ?? undefined}
           required
         >
@@ -118,16 +119,14 @@ export function CrewMemberEditForm({
         <div className="rounded-card border border-line bg-surface-sunken p-3">
           <p className="text-sm font-semibold text-text">{row.phoneMasked}</p>
           <p className="mt-1 text-xs leading-5 text-text-secondary">
-            Their mobile number identifies them across agency rosters and stops the same person
-            being booked twice on one day, so it cannot be changed. If the number is wrong, that is
-            a different person — add them instead.
+            {t("crew.edit.phoneNote")}
           </p>
         </div>
 
         {skillOptions.length > 0 ? (
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-sm font-semibold text-text">
-              What they do <span className="font-normal text-text-muted">(optional)</span>
+              {t("crew.form.whatTheyDo")} <span className="font-normal text-text-muted">({t("common.optional")})</span>
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {skillOptions.map((skill) => {
@@ -169,9 +168,9 @@ export function CrewMemberEditForm({
             className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-action)]"
           />
           <span>
-            They can report attendance.
+            {t("crew.edit.supervisorLabel")}
             <span className="mt-0.5 block text-xs leading-5 text-text-muted">
-              Supervisors confirm how many crew members turned up each day.
+              {t("crew.edit.supervisorHelp")}
             </span>
           </span>
         </label>
@@ -179,7 +178,7 @@ export function CrewMemberEditForm({
         {submitError ? (
           <ErrorState
             inline
-            title="We could not save these changes"
+            title={t("crew.edit.errorTitle")}
             message={submitError}
             severity="error"
           />
@@ -190,9 +189,9 @@ export function CrewMemberEditForm({
             type="submit"
             disabled={!hasChanges || nameProblem !== null}
             loading={pending}
-            loadingLabel="Saving"
+            loadingLabel={t("common.saving")}
           >
-            Save changes
+            {t("crew.edit.save")}
           </Button>
           <Button
             type="button"
@@ -200,7 +199,7 @@ export function CrewMemberEditForm({
             disabled={pending}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       </form>
@@ -211,16 +210,15 @@ export function CrewMemberEditForm({
           upload had been cancelled too. It has not; it is already with Operations. */}
       <div className="mt-6 border-t border-line pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-text">Identity documents</h3>
+          <h3 className="text-sm font-semibold text-text">{t("crew.edit.documentsTitle")}</h3>
           {row.documentsVerified ? (
-            <Badge tone="success">Checked by Operations</Badge>
+            <Badge tone="success">{t("crew.edit.documentsChecked")}</Badge>
           ) : (
-            <Badge tone="warning">Not checked yet</Badge>
+            <Badge tone="warning">{t("crew.edit.documentsNotChecked")}</Badge>
           )}
         </div>
         <p className="mt-1 text-xs leading-5 text-text-secondary">
-          Operations checks these before this person can be assigned to customer work. Vsolve staff
-          review them — you cannot mark your own crew as checked.
+          {t("crew.edit.documentsHint")}
         </p>
         <CrewDocumentUploader row={row} className="mt-3" />
       </div>

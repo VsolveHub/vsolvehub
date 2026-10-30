@@ -56,8 +56,12 @@ export function SearchInput() {
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        // Only rendered once someone has asked to search, so the cursor goes straight in.
+        autoFocus
+        enterKeyHint="search"
+        aria-label="Search services"
         placeholder="Search services..."
-        className="block w-full rounded-full border border-line/80 py-2.5 pl-11 pr-4 text-[0.875rem] font-medium text-navy-900 bg-surface-sunken ring-0 placeholder:text-text-muted focus:ring-1 focus:ring-action focus:border-action transition-all shadow-sm hover:border-navy-300"
+        className="block w-full rounded-full border border-line/80 py-2.5 pl-11 pr-4 text-base md:text-[0.875rem] font-medium text-navy-900 bg-surface-sunken ring-0 placeholder:text-text-muted focus:ring-1 focus:ring-action focus:border-action transition-all shadow-sm hover:border-navy-300"
       />
     </div>
   );

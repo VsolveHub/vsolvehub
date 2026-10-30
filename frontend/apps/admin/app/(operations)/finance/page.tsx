@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { FinanceWorkspace } from "@/features/finance/view/finance-workspace";
+
+export const metadata: Metadata = { title: "Refunds" };
 
 /**
  * Refunds: confirm who you are, then move money.

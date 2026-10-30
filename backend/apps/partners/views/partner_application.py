@@ -6,6 +6,7 @@ uploads, the weekly schedule, and the going-online presence session. The Operati
 live in `operations`; the M2 registration surface lives in `m2_registration` and `m2_crew`.
 """
 
+import uuid
 from http import HTTPStatus
 from typing import cast
 
@@ -34,6 +35,7 @@ from apps.partners.serializers import (
     PartnerApplicationSerializer,
     PartnerApplicationUpdateSerializer,
     PartnerConsentDocumentSerializer,
+    PartnerDocumentApplicantAccessSerializer,
     PartnerDocumentFinalizeSerializer,
     PartnerDocumentSerializer,
     PartnerDocumentUploadRequestSerializer,
@@ -44,6 +46,7 @@ from apps.partners.serializers import (
     PartnerPresenceSessionRequestSerializer,
     PartnerProfileSerializer,
     PartnerProfileUpdateSerializer,
+    PartnerPushSubscriptionSyncSerializer,
     PartnerScheduleSerializer,
     PartnerScheduleUpdateSerializer,
     PartnerSkillOptionSerializer,
@@ -51,6 +54,7 @@ from apps.partners.serializers import (
 from apps.partners.services import (
     ScheduleExceptionInput,
     ScheduleRuleInput,
+    create_partner_document_applicant_access,
     finalize_partner_document_upload,
     go_offline,
     go_online,
@@ -58,6 +62,7 @@ from apps.partners.services import (
     issue_partner_document_upload,
     replace_partner_schedule,
     submit_partner_application,
+    sync_partner_push_subscription,
     update_partner_application,
 )
 from common.errors.serializers import ApiErrorSerializer
@@ -328,6 +333,34 @@ class PartnerDocumentCreateView(ThrottledWriteMixin, APIView):
         )
 
 
+class PartnerDocumentAccessView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Partner application"],
+        responses={
+            200: PartnerDocumentApplicantAccessSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, document_id: uuid.UUID) -> Response:
+        try:
+            document, signed = create_partner_document_applicant_access(
+                user=cast(User, request.user),
+                document_id=document_id,
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        payload = {
+            "document": document,
+            "access_url": signed.review_url,
+            "expires_at": signed.expires_at,
+        }
+        return Response(PartnerDocumentApplicantAccessSerializer(payload).data)
+
+
 class PartnerScheduleView(APIView):
     permission_classes = (IsAuthenticated,)
 
@@ -449,3 +482,39 @@ class PartnerPresenceOfflineView(APIView):
         except PartnerDomainError as exc:
             _raise_api_error(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PartnerPushSubscriptionSyncView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Partner push subscriptions"],
+        request=PartnerPushSubscriptionSyncSerializer,
+        responses={
+            200: OpenApiResponse(description="The subscription was synced."),
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PartnerPushSubscriptionSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            subscription, instant_eligible = sync_partner_push_subscription(
+                user=cast(User, request.user),
+                **serializer.validated_data,
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            {
+                "id": str(subscription.id),
+                "onesignal_subscription_id": subscription.onesignal_subscription_id,
+                "platform": subscription.platform,
+                "is_active": subscription.is_active,
+                "last_verified_at": subscription.last_verified_at.isoformat(),
+                "instant_eligible": instant_eligible,
+            },
+            status=status.HTTP_200_OK,
+        )

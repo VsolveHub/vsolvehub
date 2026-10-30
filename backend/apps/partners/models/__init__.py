@@ -19,7 +19,9 @@ from .availability import (
     PartnerAvailabilityRule,
     PartnerLocation,
     PartnerOnlineSession,
+    PartnerPushSubscription,
     PartnerScheduleChangeAudit,
+    PartnerShift,
 )
 from .capabilities import (
     PartnerBusinessProfile,
@@ -81,9 +83,11 @@ __all__ = [
     "PartnerLocation",
     "PartnerOnlineSession",
     "PartnerProfile",
+    "PartnerPushSubscription",
     "PartnerScheduleChangeAudit",
     "PartnerService",
     "PartnerServiceArea",
+    "PartnerShift",
     "PartnerSkill",
     "PartnerStandingEvent",
     "Skill",

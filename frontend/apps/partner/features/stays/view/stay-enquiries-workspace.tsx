@@ -1,45 +1,63 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Card, EmptyState, formatDate } from "@vsolve/ui";
-import { ChevronRight, Phone } from "lucide-react";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  Field,
+  LoadMore,
+  Textarea,
+  formatDate,
+  useT,
+} from "@vsolve/ui";
+import { Check, ChevronRight, Phone, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   cancelPartnerStayEnquiry,
   confirmPartnerStayEnquiry,
-  fetchPartnerStayEnquiries,
+  fetchPartnerStayEnquiriesPage,
   respondPartnerStayEnquiry,
+  type StayEnquiry,
   stayLengthLabel,
 } from "@/features/stays/queries";
-import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
+import { useStaySections } from "@/features/stays/view/stay-sections";
 import {
   StayEnquiryDetailSheet,
+  adultsAndChildren,
   stayEnquiryStatusLabel,
   stayEnquiryTone,
+  RoomChoice,
+  useBookableRooms,
 } from "@/features/stays/view/stay-record-sheets";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const ENQUIRY_FILTERS = ["OPEN", "CONFIRMED", "CLOSED", "ALL"] as const;
 type EnquiryFilter = (typeof ENQUIRY_FILTERS)[number];
 
+/** Catalogue keys, resolved with `t` at render time. */
 const FILTER_LABELS: Record<EnquiryFilter, string> = {
-  OPEN: "To call",
-  CONFIRMED: "Booked",
-  CLOSED: "Closed",
-  ALL: "All",
+  OPEN: "stays.enquiries.filter.open",
+  CONFIRMED: "stays.enquiries.filter.confirmed",
+  CLOSED: "stays.enquiries.filter.closed",
+  ALL: "stays.enquiries.filter.all",
 };
 
+/** Enquiries the host still has to call about. */
 const OPEN = new Set(["SUBMITTED", "RESPONDED"]);
 
-function matches(filter: EnquiryFilter, status: string | undefined): boolean {
-  if (filter === "ALL") return true;
-  if (filter === "OPEN") return OPEN.has(status ?? "");
-  if (filter === "CONFIRMED") return status === "CONFIRMED";
-  return !OPEN.has(status ?? "") && status !== "CONFIRMED";
-}
+/** Each tab as the enquiry states the server filters on. Exported for tests. */
+export const ENQUIRY_FILTER_STATUSES: Record<EnquiryFilter, string> = {
+  OPEN: "SUBMITTED,RESPONDED",
+  CONFIRMED: "CONFIRMED",
+  CLOSED: "DECLINED,WITHDRAWN,EXPIRED,CANCELLED",
+  ALL: "",
+};
 
 /**
  * The host's stay inbox. Every stay starts as an enquiry: the host sees who is asking,
@@ -49,6 +67,8 @@ function matches(filter: EnquiryFilter, status: string | undefined): boolean {
  * looks its record up in the unfiltered list, so changing the filter cannot blank it.
  */
 export function PartnerStayEnquiriesWorkspace() {
+  const t = useT();
+  const sections = useStaySections();
   const qc = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -68,12 +88,35 @@ export function PartnerStayEnquiriesWorkspace() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
-  const enquiries = useQuery({
-    queryKey: ["partner-stays", "enquiries"],
-    queryFn: fetchPartnerStayEnquiries,
+  const statuses = ENQUIRY_FILTER_STATUSES[filter];
+  const enquiries = usePagedList(["partner-stays", "enquiries", statuses], (cursor) =>
+    fetchPartnerStayEnquiriesPage(cursor, statuses || undefined),
+  );
+  // The "To call" count comes from its own first page, so it is right on every tab.
+  const open = useQuery({
+    queryKey: ["partner-stays", "enquiries", "open-count"],
+    queryFn: () => fetchPartnerStayEnquiriesPage(undefined, ENQUIRY_FILTER_STATUSES.OPEN),
   });
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
+
+  // Booked / Not available straight from the card: the host has just hung up and records the
+  // outcome without opening Details. Both still confirm, because both message the guest.
+  const [booking, setBooking] = useState<StayEnquiry | null>(null);
+  const [declining, setDeclining] = useState<StayEnquiry | null>(null);
+  const [roomId, setRoomId] = useState("");
+  const [note, setNote] = useState("");
+  const rooms = useBookableRooms(booking?.property, booking?.unit);
+  useEffect(() => {
+    // The room the guest asked about comes first, so the first free one is the likely answer.
+    if (booking && !rooms.some((room) => room.id === roomId)) setRoomId(rooms[0]?.id ?? "");
+  }, [booking, rooms, roomId]);
+  const closeQuick = () => {
+    setBooking(null);
+    setDeclining(null);
+    setNote("");
+    setRoomId("");
+  };
 
   const act = useMutation({
     mutationFn: ({
@@ -91,38 +134,41 @@ export function PartnerStayEnquiriesWorkspace() {
       if (action === "not_available") return respondPartnerStayEnquiry(id, note ?? "", true);
       return cancelPartnerStayEnquiry(id);
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      closeQuick();
+      invalidate();
+    },
   });
 
-  const rows = useMemo(
-    () => (enquiries.data ?? []).filter((enquiry) => matches(filter, enquiry.status)),
-    [enquiries.data, filter],
-  );
-  const openCount = (enquiries.data ?? []).filter((e) => OPEN.has(e.status ?? "")).length;
+  const rows = enquiries.items;
+  const openCount = open.data
+    ? `${open.data.results.length}${open.data.next ? "+" : ""}`
+    : "";
 
   const selected = selectedId
-    ? (enquiries.data ?? []).find((enquiry) => enquiry.id === selectedId) ?? null
+    ? enquiries.items.find((enquiry) => enquiry.id === selectedId) ?? null
     : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Stays</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Guest enquiries</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("stays.bookings.eyebrow")}</p>
+        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("stays.enquiries.heading")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Call the guest, agree the room and dates, then mark the enquiry Booked (pick the room) or
-          Not available. The guest is told either way.
+          {t("stays.enquiries.intro")}
         </p>
       </div>
 
-      <SectionNav label="Stay sections" items={STAY_SECTIONS} />
+      <SectionNav label={t("stays.sections.ariaLabel")} items={sections} />
 
       <Card>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("stays.enquiries.filterAria")}>
           {ENQUIRY_FILTERS.map((option) => (
             <button
               key={option}
               type="button"
+              role="tab"
+              aria-selected={filter === option}
               onClick={() => setFilter(option)}
               className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                 filter === option
@@ -130,13 +176,13 @@ export function PartnerStayEnquiriesWorkspace() {
                   : "border border-line bg-surface text-text-secondary hover:text-navy-900"
               }`}
             >
-              {FILTER_LABELS[option]}
-              {option === "OPEN" && openCount > 0 ? ` (${openCount})` : ""}
+              {t(FILTER_LABELS[option])}
+              {option === "OPEN" && openCount && openCount !== "0" ? ` (${openCount})` : ""}
             </button>
           ))}
         </div>
 
-        {enquiries.isLoading ? <p className="mt-3 text-sm text-text-secondary">Loading…</p> : null}
+        {enquiries.isLoading ? <p className="mt-3 text-sm text-text-secondary">{t("common.loading")}</p> : null}
         {enquiries.error ? (
           <p className="mt-3 text-sm text-danger-text">{friendlyErrorMessage(enquiries.error)}</p>
         ) : null}
@@ -144,8 +190,10 @@ export function PartnerStayEnquiriesWorkspace() {
           <EmptyState
             compact
             className="mt-3"
-            title={filter === "OPEN" ? "Nobody to call right now" : "Nothing here"}
-            description="New enquiries appear here, with the guest's number."
+            title={
+              filter === "OPEN" ? t("stays.enquiries.emptyOpen") : t("stays.enquiries.emptyOther")
+            }
+            description={t("stays.enquiries.emptyDescription")}
           />
         ) : null}
 
@@ -160,40 +208,75 @@ export function PartnerStayEnquiriesWorkspace() {
                 >
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-navy-900">
-                      {enquiry.customer_name || "Guest"}
+                      {enquiry.customer_name || t("stays.sheet.guest")}
                     </span>
                     <Badge tone={stayEnquiryTone(enquiry.status)}>
-                      {stayEnquiryStatusLabel(enquiry.status)}
+                      {stayEnquiryStatusLabel(enquiry.status, t)}
                     </Badge>
                   </span>
                   <span className="block text-sm text-text-secondary">
-                    {enquiry.property_title} · {enquiry.unit_name ?? "Room"}
+                    {enquiry.property_title} · {enquiry.unit_name ?? t("stays.bookings.fallbackRoom")}
                   </span>
                   <span className="block text-sm text-text-secondary">
-                    From {formatDate(`${enquiry.check_in}T12:00:00`)}
+                    {t("stays.enquiries.from", { date: formatDate(`${enquiry.check_in}T12:00:00`) })}
                     {enquiry.stay_length
-                      ? ` · ${stayLengthLabel(enquiry.stay_length, enquiry.price_period)}`
+                      ? ` · ${stayLengthLabel(enquiry.stay_length, enquiry.price_period, t)}`
                       : ""}
-                    {` · ${(enquiry as { adult_count?: number }).adult_count !== undefined ? `${(enquiry as { adult_count?: number }).adult_count} adult${(enquiry as { adult_count?: number }).adult_count === 1 ? "" : "s"}${(enquiry as { child_count?: number }).child_count ? `, ${(enquiry as { child_count?: number }).child_count} child${(enquiry as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""}` : `${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`}`}
+                    {` · ${
+                      (enquiry as { adult_count?: number }).adult_count !== undefined
+                        ? adultsAndChildren(
+                            (enquiry as { adult_count?: number }).adult_count!,
+                            (enquiry as { child_count?: number }).child_count,
+                            t,
+                          )
+                        : t("stays.guests.count", { count: enquiry.guest_count ?? 1 })
+                    }`}
                   </span>
                   <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
-                    Details
+                    {t("common.details")}
                     <ChevronRight className="size-3.5" aria-hidden />
                   </span>
                 </button>
-                {enquiry.customer_phone && OPEN.has(enquiry.status ?? "") ? (
-                  <a
-                    href={`tel:${enquiry.customer_phone}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover"
-                  >
-                    <Phone className="size-4" aria-hidden />
-                    Call
-                  </a>
+                {OPEN.has(enquiry.status ?? "") ? (
+                  <div className="flex flex-wrap gap-2 sm:flex-col sm:items-stretch lg:flex-row">
+                    {enquiry.customer_phone ? (
+                      <a
+                        href={`tel:${enquiry.customer_phone}`}
+                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover sm:flex-none"
+                      >
+                        <Phone className="size-4" aria-hidden />
+                        {t("stays.enquiries.call")}
+                      </a>
+                    ) : null}
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        act.reset();
+                        setRoomId("");
+                        setBooking(enquiry);
+                      }}
+                    >
+                      <Check className="size-4" aria-hidden />
+                      {t("stays.enquiryStatus.confirmed")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        act.reset();
+                        setNote("");
+                        setDeclining(enquiry);
+                      }}
+                    >
+                      <X className="size-4" aria-hidden />
+                      {t("stays.enquiryStatus.declined")}
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             </li>
           ))}
         </ul>
+        <LoadMore hasMore={enquiries.hasMore} loading={enquiries.loadingMore} onLoadMore={enquiries.loadMore} />
       </Card>
 
       <StayEnquiryDetailSheet
@@ -210,6 +293,86 @@ export function PartnerStayEnquiriesWorkspace() {
         isPending={act.isPending}
         actionError={act.error ? friendlyErrorMessage(act.error) : null}
       />
+
+      <Dialog
+        open={booking !== null}
+        onOpenChange={(next) => !next && closeQuick()}
+        title={t("stays.enquiry.bookingConfirmed")}
+        description={
+          booking
+            ? t("stays.enquiries.bookDialogBody", {
+                name: booking.customer_name || t("stays.enquiries.theGuest"),
+                property: booking.property_title,
+              })
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="ghost" disabled={act.isPending} onClick={closeQuick}>
+              {t("stays.enquiry.notYet")}
+            </Button>
+            <Button
+              loading={act.isPending}
+              loadingLabel={t("stays.visitingHours.saving")}
+              onClick={() => booking && act.mutate({ id: booking.id, action: "booked", roomId: roomId || null })}
+            >
+              {t("stays.enquiry.confirmBooked")}
+            </Button>
+          </>
+        }
+      >
+        <RoomChoice rooms={rooms} value={roomId} onChange={setRoomId} />
+        {act.error ? (
+          <p role="alert" className="mt-2 text-sm text-danger-text">
+            {friendlyErrorMessage(act.error)}
+          </p>
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={declining !== null}
+        onOpenChange={(next) => !next && closeQuick()}
+        title={t("stays.enquiries.declineTitle")}
+        description={
+          declining
+            ? t("stays.enquiries.declineBody", {
+                name: declining.customer_name || t("stays.enquiries.theGuest"),
+              })
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="ghost" disabled={act.isPending} onClick={closeQuick}>
+              {t("common.back")}
+            </Button>
+            <Button
+              variant="danger"
+              loading={act.isPending}
+              loadingLabel={t("stays.enquiries.sending")}
+              onClick={() =>
+                declining && act.mutate({ id: declining.id, action: "not_available", note: note.trim() })
+              }
+            >
+              {t("stays.enquiry.tellGuest")}
+            </Button>
+          </>
+        }
+      >
+        <Field label={t("stays.enquiry.noteLabel")} showOptional>
+          <Textarea
+            value={note}
+            rows={3}
+            maxLength={480}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder={t("stays.enquiries.notePlaceholder")}
+          />
+        </Field>
+        {act.error ? (
+          <p role="alert" className="mt-2 text-sm text-danger-text">
+            {friendlyErrorMessage(act.error)}
+          </p>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

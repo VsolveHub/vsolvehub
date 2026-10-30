@@ -24,6 +24,8 @@ from apps.fulfilment.services import (
     guard_booking_version,
     locked_booking_context,
 )
+from apps.payouts.models import PartnerEarningHold
+from apps.payouts.services import place_earning_hold
 
 
 @transaction.atomic
@@ -80,7 +82,7 @@ def open_quality_dispute(
             )
         )
 
-    return apply_transition(
+    booking = apply_transition(
         group=group,
         unit=unit,
         booking=booking,
@@ -92,3 +94,13 @@ def open_quality_dispute(
         context={"completion_response_id": str(response.id)},
         extra_booking_fields={"payout_hold": True},
     )
+    # The earning of an auto-finalised visit is already written and `AVAILABLE`, so the Booking's
+    # `payout_hold` alone would freeze nothing. The explicit hold keeps it out of every payout,
+    # and its clearing window guarantees none of it has left yet.
+    place_earning_hold(
+        reason=PartnerEarningHold.Reason.QUALITY_DISPUTE,
+        source_id=str(booking.id),
+        booking_id=booking.id,
+        actor=booking.customer,
+    )
+    return booking

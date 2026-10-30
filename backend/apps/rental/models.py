@@ -13,6 +13,7 @@ from django.db.models import Q, QuerySet
 
 from apps.foundation.slugs import slug_base, unique_slug
 from apps.foundation.storage import private_file_storage
+from apps.locations.pins import pin_constraints
 
 
 def rental_ad_upload_to(instance: models.Model, filename: str) -> str:
@@ -64,6 +65,17 @@ class RentalAsset(models.Model):
     daily_rate_paise = models.PositiveIntegerField()
     deposit_paise = models.PositiveIntegerField(default=0)
     location_text = models.CharField(max_length=180, blank=True)
+    #: Where a customer collects the item (Self Pickup).
+    pickup_address_line = models.CharField(max_length=240, blank=True, default="")
+    pickup_area = models.CharField(max_length=120, blank=True, default="")
+    pickup_city = models.CharField(max_length=120, blank=True, default="")
+    pickup_pincode = models.CharField(max_length=6, blank=True, default="")
+    #: The owner's map pin for the pickup address. Both or neither; an ad from before pins
+    #: existed has neither, and its link falls back to a search for the address text.
+    pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    #: The owner can arrange transport on request and quotes a price for each request.
+    delivery_available = models.BooleanField(default=False)
     moderation_status = models.CharField(
         max_length=16,
         choices=ModerationStatus.choices,
@@ -86,6 +98,16 @@ class RentalAsset(models.Model):
             models.CheckConstraint(
                 condition=models.Q(quantity_available__gte=1),
                 name="rental_asset_quantity_available_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(pickup_pincode="")
+                | models.Q(pickup_pincode__regex=r"^[1-9][0-9]{5}$"),
+                name="rental_asset_pickup_pincode_format",
+            ),
+            *pin_constraints(
+                prefix="rental_asset_pickup",
+                latitude="pickup_latitude",
+                longitude="pickup_longitude",
             ),
         ]
 
@@ -140,6 +162,9 @@ class AssetReservation(models.Model):
             models.Index(fields=("asset", "status", "start_date", "end_date")),
         ]
 
+    def __str__(self) -> str:
+        return f"{self.asset_id}:{self.start_date}..{self.end_date}:{self.status}"
+
 
 class RentalDeposit(models.Model):
     class Status(models.TextChoices):
@@ -174,9 +199,14 @@ class RentalDeposit(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self) -> str:
+        return f"deposit:{self.pk}:{self.status}"
+
 
 class RentalBooking(models.Model):
     class Status(models.TextChoices):
+        #: Delivery only: waiting for the owner's transport price. Nothing is charged yet.
+        AWAITING_TRANSPORT_QUOTE = "AWAITING_TRANSPORT_QUOTE", "Awaiting transport quote"
         PENDING_PAYMENT = "PENDING_PAYMENT", "Pending payment"
         CONFIRMED = "CONFIRMED", "Confirmed"
         HANDOVER = "HANDOVER", "Handed over"
@@ -200,7 +230,20 @@ class RentalBooking(models.Model):
     #: Snapshot of the platform fee at booking time. Later rate changes do not rewrite it.
     platform_fee_percent = models.PositiveSmallIntegerField(default=0)
     platform_fee_paise = models.PositiveIntegerField(default=0)
-    pickup_or_delivery_mode = models.CharField(max_length=32, default="PICKUP")
+
+    class Mode(models.TextChoices):
+        PICKUP = "PICKUP", "Self pickup"
+        DELIVERY = "DELIVERY", "Partner-arranged delivery"
+
+    pickup_or_delivery_mode = models.CharField(
+        max_length=32, choices=Mode.choices, default=Mode.PICKUP
+    )
+    #: Delivery only. ``{line, area, city, pincode, contact_phone}``.
+    delivery_address = models.JSONField(default=dict, blank=True)
+    #: The owner's agreed transport price, snapshotted when the customer accepts it.
+    transport_paise = models.PositiveIntegerField(default=0)
+    transport_fee_percent = models.PositiveSmallIntegerField(default=0)
+    transport_fee_paise = models.PositiveIntegerField(default=0)
     notes = models.TextField(blank=True)
     handover_pin_hash = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -208,6 +251,158 @@ class RentalBooking(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(pickup_or_delivery_mode__in=("PICKUP", "DELIVERY")),
+                name="rental_booking_mode_valid",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(pickup_or_delivery_mode="PICKUP")
+                | (models.Q(transport_paise=0) & models.Q(transport_fee_paise=0)),
+                name="rental_booking_pickup_has_no_transport",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(pickup_or_delivery_mode="DELIVERY")
+                | ~models.Q(delivery_address={}),
+                name="rental_booking_delivery_has_address",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(transport_fee_paise__lte=models.F("transport_paise")),
+                name="rental_booking_transport_fee_lte_transport",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"rental-booking:{self.pk}"
+
+
+class RentalTransportRequest(models.Model):
+    """The customer's delivery request and the owner's transport price for one booking.
+
+    The platform never prices transport. The owner checks the request, arranges a vehicle and
+    quotes; the customer accepts or rejects. Nothing is charged until the customer accepts, and
+    then rent, deposit and transport are paid together.
+    """
+
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        QUOTED = "QUOTED", "Quoted"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY", "Out for delivery"
+        DELIVERED = "DELIVERED", "Delivered"
+        DECLINED = "DECLINED", "Declined"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    class Trip(models.TextChoices):
+        ONE_WAY = "ONE_WAY", "Drop only"
+        ROUND_TRIP = "ROUND_TRIP", "Drop and collect"
+
+    MAX_QUOTES = 3
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    booking = models.OneToOneField(
+        RentalBooking, on_delete=models.PROTECT, related_name="transport"
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
+    #: Set with the quote. Null until the owner quotes.
+    trip = models.CharField(
+        max_length=12, choices=Trip.choices, null=True, blank=True, default=None
+    )
+    customer_note = models.CharField(max_length=480, blank=True, default="")
+    reject_note = models.CharField(max_length=480, blank=True, default="")
+    decline_reason = models.CharField(max_length=480, blank=True, default="")
+    quote_paise = models.PositiveIntegerField(null=True, blank=True)
+    quote_note = models.CharField(max_length=480, blank=True, default="")
+    quote_count = models.PositiveSmallIntegerField(default=0)
+    #: The owner's quote deadline while REQUESTED, the customer's answer deadline while QUOTED.
+    respond_by = models.DateTimeField()
+    requested_at = models.DateTimeField(auto_now_add=True)
+    quoted_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=("status", "respond_by"), name="rental_transport_due_idx")]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quote_count__lte=3),
+                name="rental_transport_quote_count_max",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(
+                    status__in=("QUOTED", "ACCEPTED", "OUT_FOR_DELIVERY", "DELIVERED")
+                )
+                | (models.Q(quote_paise__gt=0) & models.Q(trip__isnull=False)),
+                name="rental_transport_quoted_has_price",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.booking_id}:{self.status}"
+
+
+class RentalPickupDay(models.Model):
+    """One weekday the owner is open for pickups and returns. No row for a weekday = closed.
+
+    One schedule per owner, used by all their rental items. There are no time slots: the
+    customer comes any time inside that day's hours.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile", on_delete=models.CASCADE, related_name="rental_pickup_days"
+    )
+    #: Monday = 0 … Sunday = 6, as ``date.weekday()``.
+    weekday = models.PositiveSmallIntegerField()
+    opens_at = models.TimeField()
+    closes_at = models.TimeField()
+
+    class Meta:
+        ordering = ("weekday",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("partner", "weekday"), name="rental_pickup_day_one_per_weekday"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(weekday__lte=6), name="rental_pickup_day_weekday_range"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(closes_at__gt=models.F("opens_at")),
+                name="rental_pickup_day_closes_after_opens",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.weekday}"
+
+
+class RentalPickupClosedDate(models.Model):
+    """A date the owner takes no pickups or returns (a holiday), whatever the weekly hours say.
+
+    The rental twin of ``stay.VisitBlockedDate``: one list per owner, used by all their items.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile",
+        on_delete=models.CASCADE,
+        related_name="rental_pickup_closed_dates",
+    )
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("date",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("partner", "date"), name="rental_pickup_closed_date_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.date}"
 
 
 class RentalPlatformFee(models.Model):
@@ -248,6 +443,9 @@ class RentalBookingLine(models.Model):
     unit_price_paise = models.PositiveIntegerField()
     deposit_paise = models.PositiveIntegerField(default=0)
 
+    def __str__(self) -> str:
+        return f"{self.booking_id}:{self.asset_id}x{self.quantity}"
+
 
 class RentalModerationEvent(models.Model):
     class Action(models.TextChoices):
@@ -267,6 +465,9 @@ class RentalModerationEvent(models.Model):
     action = models.CharField(max_length=20, choices=Action.choices)
     reason = models.CharField(max_length=480, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"rental-moderation:{self.asset_id}:{self.pk}"
 
 
 def overlapping_reservations(
@@ -405,6 +606,9 @@ class RentalAssetMedia(models.Model):
 
     class Meta:
         ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.caption or f"media:{self.pk}"
 
     @property
     def image_url(self) -> str:

@@ -4,7 +4,7 @@
 // and the test runner's JSX transform resolves elements through the `React` binding.
 import * as React from "react";
 import { useState, useEffect } from "react";
-import { useLogout, useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { useLogout, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { Button, Logo, Dialog, OtpForm, cn, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,7 +14,6 @@ import { readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
 import { useCart } from "@/features/checkout/queries";
 
-import { CustomerLoginModal } from "./customer-login-modal";
 import { useCustomerSession } from "../queries";
 import { ProfileMark, profileName } from "./profile-mark";
 import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
@@ -28,14 +27,18 @@ export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
 
+  const hydrated = useHydrated();
   const cartQuery = useCart();
-  const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  // Zero until hydrated: the server has no cart, so a badge on the first client render
+  // would not match the server's HTML.
+  const cartCount = hydrated
+    ? (cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
+    : 0;
 
   // Global login dialog state
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
-  const flow = useOtpFlow(getApiClient(), {
+  const flow = usePhoneAuthFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     onAuthenticated: () => {
       setIsLoginOpen(false);
@@ -70,7 +73,9 @@ export function SiteHeader() {
       "sticky top-0 z-20 transition-colors",
       pathname === "/"
         ? "bg-[#FAF9F7] md:bg-surface md:border-b md:border-line"
-        : "hidden md:block bg-surface border-b border-line"
+        : pathname.match(/^\/catalog\/[^/]+$/)
+          ? "hidden md:block bg-surface border-b border-line"
+          : "bg-surface border-b border-line"
     )}>
       {/* Desktop Header Layout */}
       <div className="hidden md:flex mx-auto min-h-16 w-full max-w-[1216px] items-center gap-x-7 px-4 py-3 sm:px-6 lg:px-0">
@@ -109,6 +114,17 @@ export function SiteHeader() {
 
         {/* Right side actions on desktop */}
         <div className="flex items-center gap-3">
+          {/* Desktop had no way to search from anywhere but the catalogue page itself. */}
+          <Link
+            href="/catalog?search=1"
+            aria-label="Search services"
+            className="flex size-10 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="size-4.5" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </Link>
           {/* Cart Icon Link */}
           <Link
             href="/cart"
@@ -189,7 +205,8 @@ export function SiteHeader() {
           <Link
             href="/cart"
             aria-label="View basket"
-            className="relative flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors"
+            // 44px: the thumb-sized minimum; this is the only way to the cart on a phone.
+            className="relative flex size-11 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="size-4.5">
               <circle cx="8" cy="21" r="1" />
@@ -208,7 +225,7 @@ export function SiteHeader() {
               <Link
                 href="/account"
                 aria-label="Open profile"
-                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="flex size-11 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <ProfileMark identity={session} className="size-8.5 text-xs" />
               </Link>
@@ -216,7 +233,7 @@ export function SiteHeader() {
           ) : (
             <button
               onClick={() => setIsLoginOpen(true)}
-              className="text-xs font-bold text-[#EA580C] hover:text-[#C2410C] cursor-pointer bg-transparent border-none p-0 focus:outline-none"
+              className="inline-flex min-h-11 items-center rounded-full border border-[#EA580C]/40 px-4 text-sm font-bold text-[#EA580C] hover:text-[#C2410C] cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#EA580C]"
             >
               Log in
             </button>
@@ -226,11 +243,29 @@ export function SiteHeader() {
 
       {/* Global Interactive Login Dialog Modal */}
       {hydrated ? (
-        <CustomerLoginModal
-          open={loginDialogOpen}
-          onOpenChange={handleOpenChange}
-          flow={flow}
-        />
+      <Dialog
+        open={loginDialogOpen}
+        onOpenChange={handleOpenChange}
+        title="Log in to V Solve Hub"
+        description="Verify your mobile number to view bookings and checkout"
+        // Firebase phone login can raise a reCAPTCHA picture challenge, which
+        // has to sit above this dialog to be solved.
+        topLayer={false}
+      >
+        <div className="py-2 flex flex-col gap-4">
+          <Logo className="h-8 w-auto self-start" />
+          <p className="text-xs text-text-secondary">
+            Use the mobile number you book with. We will text you a code — there is no password.
+          </p>
+          <OtpForm
+            {...flow}
+            heading="Your mobile number"
+            headingLevel={2}
+            description="We will text you a code. There is no password."
+            verifyLabel="Verify and continue"
+          />
+        </div>
+      </Dialog>
       ) : null}
     </header>
   );
@@ -325,13 +360,14 @@ interface MobileNavTarget {
   href: string;
   label: string;
   shortLabel: string;
-  icon: "home" | "search" | "activity" | "profile";
+  icon: "home" | "search" | "cart" | "activity" | "profile";
   private: boolean;
 }
 
 const MOBILE_TARGETS: readonly MobileNavTarget[] = [
   { href: "/", label: "Home", shortLabel: "Home", icon: "home", private: false },
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "search", private: false },
+  { href: "/cart", label: "Cart", shortLabel: "Cart", icon: "cart", private: false },
   { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: false },
   { href: "/account", label: "Profile", shortLabel: "Profile", icon: "profile", private: true },
 ];
@@ -347,6 +383,12 @@ const MOBILE_PATHS: Record<string, React.ReactNode> = {
     <>
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
+    </>
+  ),
+  cart: (
+    <>
+      <path d="M4 8h16l-1.4 11.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8z" />
+      <path d="M9 8V6a3 3 0 0 1 6 0v2" />
     </>
   ),
   activity: (
@@ -385,6 +427,11 @@ function NavIconMobile({ name, className }: { name: string; className?: string }
 export function BottomNav() {
   const session = useCustomerSession();
   const pathname = usePathname();
+  const hydrated = useHydrated();
+  const cartQuery = useCart();
+  const cartCount = hydrated
+    ? (cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
+    : 0;
 
   const targets = MOBILE_TARGETS.filter(
     (target) => !target.private || session.isAuthenticated,
@@ -424,13 +471,23 @@ export function BottomNav() {
             >
               <span
                 className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
+                  "relative flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
                   current
                     ? "bg-action text-white shadow-sm"
                     : "text-text-secondary group-hover:text-navy-900",
                 )}
               >
                 <NavIconMobile name={target.icon} className="size-[1.125rem]" />
+                {target.icon === "cart" && cartCount > 0 ? (
+                  <span
+                    className={cn(
+                      "absolute -top-1 -right-1 grid min-w-4 h-4 place-items-center rounded-full px-1 text-[9px] font-black leading-none shadow-xs",
+                      current ? "bg-navy-900 text-white" : "bg-action text-white",
+                    )}
+                  >
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </span>
+                ) : null}
               </span>
               <span
                 className={cn(

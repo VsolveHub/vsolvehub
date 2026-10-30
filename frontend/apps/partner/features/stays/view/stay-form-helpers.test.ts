@@ -1,4 +1,7 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import {
   stayListingStatus,
@@ -8,13 +11,15 @@ import {
 
 import {
   MAX_PHOTO_BYTES,
-  PHOTO_TOO_LARGE,
+  PHOTO_TOO_LARGE_KEY,
   amenitiesFrom,
   collectSchemaAnswers,
   rupeesToPaise,
   splitBySize,
   wholeNumber,
 } from "./stay-form-helpers";
+
+const t = createTranslator("en-IN", catalogs["en-IN"]).t;
 
 function variant(id: string) {
   return {
@@ -59,19 +64,19 @@ describe("stayPropertyTypes", () => {
 
 describe("stayListingStatus", () => {
   it("says a paused property is hidden, not live", () => {
-    expect(stayListingStatus({ moderation_status: "APPROVED", listing_status: "PAUSED" }).label).toBe(
+    expect(stayListingStatus({ moderation_status: "APPROVED", listing_status: "PAUSED" }, t).label).toBe(
       "Paused — hidden from guests",
     );
   });
 
   it("shows archived ahead of any review state", () => {
-    expect(stayListingStatus({ moderation_status: "DRAFT", listing_status: "ARCHIVED" }).label).toBe(
+    expect(stayListingStatus({ moderation_status: "DRAFT", listing_status: "ARCHIVED" }, t).label).toBe(
       "Archived",
     );
   });
 
   it("names a pending property as a quick review", () => {
-    expect(stayListingStatus({ moderation_status: "PENDING", listing_status: "LIVE" }).label).toBe(
+    expect(stayListingStatus({ moderation_status: "PENDING", listing_status: "LIVE" }, t).label).toBe(
       "Under quick review",
     );
   });
@@ -102,11 +107,11 @@ describe("collectSchemaAnswers", () => {
   };
 
   it("names the first missing required question", () => {
-    expect(collectSchemaAnswers(schema, {})).toEqual({ missing: "For" });
+    expect(collectSchemaAnswers(schema, {}, t)).toEqual({ missing: "For" });
   });
 
   it("converts answers to the stored types", () => {
-    expect(collectSchemaAnswers(schema, { gender: "Ladies", wifi: "true" })).toEqual({
+    expect(collectSchemaAnswers(schema, { gender: "Ladies", wifi: "true" }, t)).toEqual({
       values: { gender: "Ladies", wifi: true },
     });
   });
@@ -118,8 +123,8 @@ describe("photo size limit", () => {
   it("keeps photos up to 10 MB and says why the rest were skipped", () => {
     const small = photo(MAX_PHOTO_BYTES);
     const big = photo(MAX_PHOTO_BYTES + 1);
-    expect(splitBySize([small, big])).toEqual({ ok: [small], tooLarge: PHOTO_TOO_LARGE });
-    expect(splitBySize([small])).toEqual({ ok: [small], tooLarge: null });
+    expect(splitBySize([small, big], t)).toEqual({ ok: [small], tooLarge: t(PHOTO_TOO_LARGE_KEY) });
+    expect(splitBySize([small], t)).toEqual({ ok: [small], tooLarge: null });
   });
 });
 

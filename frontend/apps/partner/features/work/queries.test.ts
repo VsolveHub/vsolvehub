@@ -8,6 +8,7 @@ import {
   canReportCompletion,
   canStartWork,
   isSettled,
+  waitingGate,
   type PartnerVisit,
   type VisitStatus,
 } from "./queries";
@@ -26,8 +27,30 @@ const ALL_STATUSES: VisitStatus[] = [
   "CANCELLED",
 ];
 
-function visit(status: VisitStatus): PartnerVisit {
-  return { status } as PartnerVisit;
+const EVERY_ACTION: PartnerVisit["allowed_actions"] = [
+  "MARK_EN_ROUTE",
+  "MARK_ARRIVED",
+  "CUSTOMER_UNAVAILABLE_WAIT_STARTED",
+  "START_WORK",
+  "ABORT_WORK",
+  "SUBMIT_COMPLETION",
+  "PARTNER_RELEASE",
+];
+
+const GATES: PartnerVisit["gates"] = {
+  address_unlocks_at: "2026-08-20T07:00:00Z",
+  en_route_opens_at: "2026-08-20T08:00:00Z",
+  en_route_closes_at: "2026-08-20T10:30:00Z",
+  arrival_opens_at: "2026-08-20T08:30:00Z",
+  arrival_closes_at: "2026-08-20T10:30:00Z",
+};
+
+/** Every clock open by default, so the status rules below are tested on their own. */
+function visit(
+  status: VisitStatus,
+  allowed: PartnerVisit["allowed_actions"] = EVERY_ACTION,
+): PartnerVisit {
+  return { status, allowed_actions: allowed, gates: GATES } as PartnerVisit;
 }
 
 describe("the one forward action available at each step", () => {
@@ -93,5 +116,42 @@ describe("polling", () => {
     ] as const) {
       expect(isSettled(visit(status))).toBe(true);
     }
+  });
+});
+
+describe("the clocked steps follow the server, not the device", () => {
+  it("does not offer a step the server has not opened, whatever the status", () => {
+    expect(canGoEnRoute(visit("CONFIRMED", ["PARTNER_RELEASE"]))).toBe(false);
+    expect(canArrive(visit("EN_ROUTE", ["PARTNER_RELEASE"]))).toBe(false);
+  });
+
+  it("names the waiting step and when it opens", () => {
+    const early = Date.parse("2026-08-20T07:59:59Z");
+
+    expect(waitingGate(visit("CONFIRMED", ["PARTNER_RELEASE"]), early)).toEqual({
+      action: "MARK_EN_ROUTE",
+      state: "not_yet",
+      opensAt: GATES.en_route_opens_at,
+      closesAt: GATES.en_route_closes_at,
+    });
+  });
+
+  it("asks for a refetch once the clock reaches a window this read predates", () => {
+    const opened = Date.parse("2026-08-20T08:30:00Z");
+
+    expect(waitingGate(visit("EN_ROUTE", ["PARTNER_RELEASE"]), opened)?.state).toBe("opening");
+  });
+
+  it("reports a window that has closed", () => {
+    const late = Date.parse("2026-08-20T10:30:01Z");
+
+    expect(waitingGate(visit("EN_ROUTE", ["PARTNER_RELEASE"]), late)?.state).toBe("closed");
+  });
+
+  it("waits on nothing once the step is open or past", () => {
+    const now = Date.parse("2026-08-20T08:45:00Z");
+
+    expect(waitingGate(visit("CONFIRMED"), now)).toBeNull();
+    expect(waitingGate(visit("ARRIVED", ["START_WORK"]), now)).toBeNull();
   });
 });

@@ -1,6 +1,11 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
+import { catalogs } from "@/i18n/catalogs";
+
 import { crewGenderLabel, fillsNoGenderedSlot } from "./crew-gender";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 /**
  * The two helpers the roster badge and the shift-day picker share.
@@ -12,14 +17,14 @@ import { crewGenderLabel, fillsNoGenderedSlot } from "./crew-gender";
 
 describe("crewGenderLabel", () => {
   it("names every value the contract publishes", () => {
-    expect(crewGenderLabel("MAN")).toBe("Man");
-    expect(crewGenderLabel("WOMAN")).toBe("Woman");
-    expect(crewGenderLabel("OTHER")).toBe("Other");
-    expect(crewGenderLabel("UNDISCLOSED")).toBe("Prefers not to say");
+    expect(crewGenderLabel("MAN", t)).toBe("Man");
+    expect(crewGenderLabel("WOMAN", t)).toBe("Woman");
+    expect(crewGenderLabel("OTHER", t)).toBe("Other");
+    expect(crewGenderLabel("UNDISCLOSED", t)).toBe("Prefers not to say");
   });
 
   it("calls a blank 'Not recorded' rather than leaving it nameless", () => {
-    expect(crewGenderLabel("")).toBe("Not recorded");
+    expect(crewGenderLabel("", t)).toBe("Not recorded");
   });
 });
 

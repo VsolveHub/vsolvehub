@@ -1,3 +1,4 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { CrewOffer } from "@/features/crew-offer/queries";
@@ -5,8 +6,12 @@ import type { EnquirySummary } from "@/features/enquiry/queries";
 import type { Engagement, EngagementStage } from "@/features/engagement/queries";
 import type { Offer } from "@/features/offers/queries";
 import type { PartnerVisit } from "@/features/work/queries";
+import { catalogs } from "@/i18n/catalogs";
 
-import { toWorkItems } from "./work-item";
+import { toWorkItems as toWorkItemsWith } from "./work-item";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
+const toWorkItems = (sources: Parameters<typeof toWorkItemsWith>[0]) => toWorkItemsWith(sources, t);
 
 /**
  * The merged WORK stack.
@@ -240,6 +245,18 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
       status: "SETTLED",
       calculation_snapshot: null,
     },
+    gates: {
+      address_unlocks_at: "2026-08-19T07:00:00Z",
+      en_route_opens_at: "2026-08-19T08:00:00Z",
+      en_route_closes_at: "2026-08-19T11:30:00Z",
+      arrival_opens_at: "2026-08-19T08:30:00Z",
+      arrival_closes_at: "2026-08-19T11:30:00Z",
+    },
+    allowed_actions: [],
+    site_address: null,
+    directions_url: null,
+    customer_first_name: null,
+    customer_phone: null,
     server_now: NOW,
     ...overrides,
   };

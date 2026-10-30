@@ -5,6 +5,8 @@ import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { offer, offerPage, refusal, serviceLine } from "./fixtures";
 
 /**
@@ -39,10 +41,10 @@ function wrapper({ children }: { children: ReactNode }) {
   // provider fails loudly instead of silently dropping every new-offer toast.
   // The app mounts it at the partner layout root; a test that renders the inbox
   // without it is testing an arrangement that does not ship.
-  return (
+  return withI18n(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>{children}</ToastProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 

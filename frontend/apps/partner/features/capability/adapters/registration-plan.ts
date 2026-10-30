@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { Translator } from "@vsolve/ui";
 
 import { describeGate } from "./gates";
 import {
@@ -197,7 +198,10 @@ function step(
    The plan
    --------------------------------------------------------------------------- */
 
-export function describeRegistrationPlan(input: RegistrationPlanInput): RegistrationPlanView {
+export function describeRegistrationPlan(
+  input: RegistrationPlanInput,
+  t: Translator["t"],
+): RegistrationPlanView {
   const { application, capabilities, options, gates, insurance, schedule, serverNow } = input;
 
   const liveRequests = capabilities.filter(isLiveRequest);
@@ -211,9 +215,9 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "IDENTITY",
       (application?.display_name.trim().length ?? 0) > 0 ? "DONE" : "NOW",
-      "Your name",
-      "Customers see this before they let you into their home.",
-      { href: "/apply/about", label: "Add your name" },
+      t("me.capability.plan.identity.title"),
+      t("me.capability.plan.identity.why"),
+      { href: "/apply/about", label: t("me.capability.plan.identity.action") },
     ),
   );
 
@@ -221,9 +225,9 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "SERVICES",
       (application?.service_variant_ids.length ?? 0) > 0 ? "DONE" : "NOW",
-      "One service",
-      "One thing you do. It is what we match work against — you can add more later.",
-      { href: "/apply/work", label: "Pick a service" },
+      t("me.capability.plan.services.title"),
+      t("me.capability.plan.services.why"),
+      { href: "/apply/work", label: t("me.capability.plan.services.action") },
     ),
   );
 
@@ -231,9 +235,9 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "AREAS",
       (application?.service_area_ids.length ?? 0) > 0 ? "DONE" : "NOW",
-      "One city",
-      "Where you want work. You can add more later.",
-      { href: "/apply/areas", label: "Choose where you work" },
+      t("me.capability.plan.areas.title"),
+      t("me.capability.plan.areas.why"),
+      { href: "/apply/areas", label: t("me.capability.plan.areas.action") },
     ),
   );
 
@@ -245,12 +249,12 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "CAPABILITY",
       hasAsked ? "DONE" : askable.length > 0 ? "LATER" : "DONE",
-      "Workforce or project approval",
+      t("me.capability.plan.capability.title"),
       hasAsked
-        ? "You have asked to be approved. Its progress is below."
-        : "Supplying a crew or quoting for a whole project is reviewed separately from ordinary jobs. Ask when you want it — browsing does not need it.",
+        ? t("me.capability.plan.capability.whyAsked")
+        : t("me.capability.plan.capability.whyDefault"),
       askable.length > 0
-        ? { href: "/apply/capabilities", label: "See what you can apply for" }
+        ? { href: "/apply/capabilities", label: t("me.capability.plan.capability.action") }
         : null,
     ),
   );
@@ -264,11 +268,11 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "BUSINESS_TYPE",
       input.businessProfile !== null ? "DONE" : hasAsked ? "NOW" : "LATER",
-      "How you work",
+      t("me.capability.plan.businessType.title"),
       hasAsked
-        ? "You have asked to be approved for specialist work. Tell us whether that is you on your own, an agency supplying people, or a vendor taking on whole jobs — it decides how tax and payment work."
-        : "Asked for when you apply for workforce or project work. Until then we treat you as working on your own.",
-      { href: "/apply/business", label: "Tell us how you work" },
+        ? t("me.capability.plan.businessType.whyAsked")
+        : t("me.capability.plan.businessType.whyDefault"),
+      { href: "/apply/business", label: t("me.capability.plan.businessType.action") },
     ),
   );
 
@@ -278,11 +282,11 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
       step(
         "CAPACITY",
         "NOW",
-        "How much you can take on",
-        `We do not have a limit recorded for ${capacityGaps
-          .map((record) => record.variant_name)
-          .join(", ")}. Without one we cannot stop sending you work you are not able to staff.`,
-        { href: "/apply/capabilities", label: "Set your limit" },
+        t("me.capability.plan.capacity.title"),
+        t("me.capability.plan.capacity.whyTemplate", {
+          names: capacityGaps.map((record) => record.variant_name).join(", "),
+        }),
+        { href: "/apply/capabilities", label: t("me.capability.plan.capacity.action") },
       ),
     );
   }
@@ -294,11 +298,9 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "SKILLS",
       hasSkills ? "DONE" : hasAsked ? "NOW" : "LATER",
-      "What you can do",
-      hasAsked
-        ? "Skills decide which enquiries you are eligible for. A capability without them is approved for work we will never send you."
-        : "Asked for when you apply for specialist work. A skill on its own never switches a workspace on.",
-      { href: "/apply/work", label: "Add your skills" },
+      t("me.capability.plan.skills.title"),
+      hasAsked ? t("me.capability.plan.skills.whyAsked") : t("me.capability.plan.skills.whyDefault"),
+      { href: "/apply/work", label: t("me.capability.plan.skills.action") },
     ),
   );
 
@@ -308,9 +310,9 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "EXPERIENCE",
       (application?.experience_years ?? 0) > 0 ? "DONE" : "LATER",
-      "How long you have done this",
-      "Customers read this on your profile and it helps when two vendors quote the same price.",
-      { href: "/apply/about", label: "Add your experience" },
+      t("me.capability.plan.experience.title"),
+      t("me.capability.plan.experience.why"),
+      { href: "/apply/about", label: t("me.capability.plan.experience.action") },
     ),
   );
 
@@ -321,11 +323,11 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
     step(
       "AVAILABILITY",
       hasHours ? "DONE" : approved.length > 0 ? "NOW" : "LATER",
-      "Your hours",
+      t("me.capability.plan.availability.title"),
       approved.length > 0
-        ? "You are approved for work. We only send enquiries inside the hours you publish, so an empty week means nothing reaches you."
-        : "Asked for once something you applied for is approved.",
-      { href: "/availability", label: "Set your hours" },
+        ? t("me.capability.plan.availability.whyApproved")
+        : t("me.capability.plan.availability.whyDefault"),
+      { href: "/availability", label: t("me.capability.plan.availability.action") },
     ),
   );
 
@@ -343,16 +345,18 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
       ? step(
           "DOCUMENTS",
           "NOW",
-          "A document has expired",
-          `New enquiries stop reaching you until it is replaced: ${describeExpiredDocuments(expired)}. Work you have already committed to is unaffected.`,
-          { href: "/apply/documents", label: "Replace it" },
+          t("me.capability.plan.documentsExpired.title"),
+          t("me.capability.plan.documentsExpired.whyTemplate", {
+            kinds: describeExpiredDocuments(expired),
+          }),
+          { href: "/apply/documents", label: t("me.capability.plan.documentsExpired.action") },
         )
       : step(
           "DOCUMENTS",
           missingDocuments.length === 0 ? "DONE" : "LATER",
-          "Your ID and address proof",
-          "Asked for before you accept your first job, so customers know who is coming. Not before you look at work.",
-          { href: "/apply/documents", label: "Add your documents" },
+          t("me.capability.plan.documents.title"),
+          t("me.capability.plan.documents.why"),
+          { href: "/apply/documents", label: t("me.capability.plan.documents.action") },
         ),
   );
 
@@ -369,11 +373,12 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
       step(
         "DOCUMENT_EXPIRY",
         "LATER",
-        "A document runs out soon",
-        `One of the documents we need expires in ${expiryWarning.days} ${
-          expiryWarning.days === 1 ? "day" : "days"
-        }. Replacing it before then keeps enquiries coming.`,
-        { href: "/apply/documents", label: "Replace it early" },
+        t("me.capability.plan.documentExpiry.title"),
+        t("me.capability.plan.documentExpiry.why", {
+          days: expiryWarning.days,
+          count: expiryWarning.days,
+        }),
+        { href: "/apply/documents", label: t("me.capability.plan.documentExpiry.action") },
       ),
     );
   }
@@ -390,13 +395,13 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
       step(
         "INSURANCE",
         insuranceUsable ? "DONE" : insuranceRequired ? "NOW" : "LATER",
-        "Worker insurance",
+        t("me.capability.plan.insurance.title"),
         declared?.isExpired === true
-          ? "The cover you declared has ended. Workforce enquiries stop reaching you until it is renewed."
+          ? t("me.capability.plan.insurance.whyExpired")
           : insuranceRequired
-            ? "You are sending people onto someone else's site. We need to know who covers them if they are hurt there before this work can be approved."
-            : "Asked for when you apply for work where you send people to a customer's site.",
-        { href: "/apply/insurance", label: "Declare your cover" },
+            ? t("me.capability.plan.insurance.whyRequired")
+            : t("me.capability.plan.insurance.whyDefault"),
+        { href: "/apply/insurance", label: t("me.capability.plan.insurance.action") },
       ),
     );
   }
@@ -410,13 +415,13 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
   };
 
   const GATE_TITLES: Record<GateStatus["gate"], string> = {
-    KYC: "Identity check",
-    PAYOUT_DETAILS: "Where money goes",
-    CREW_ROSTER: "Who you send",
+    KYC: t("me.capability.plan.gate.kyc.title"),
+    PAYOUT_DETAILS: t("me.capability.plan.gate.payout.title"),
+    CREW_ROSTER: t("me.capability.plan.gate.crew.title"),
   };
 
   for (const gate of gates) {
-    const explanation = describeGate(gate);
+    const explanation = describeGate(gate, t);
     steps.push(
       step(
         GATE_STEPS[gate.gate],
@@ -425,7 +430,7 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
         // how a browsing screen turns back into a wall.
         explanation === null ? "DONE" : "LATER",
         GATE_TITLES[gate.gate],
-        explanation?.reason ?? "Done.",
+        explanation?.reason ?? t("me.capability.plan.done"),
         explanation?.actionHref && explanation.actionLabel
           ? { href: explanation.actionHref, label: explanation.actionLabel }
           : null,

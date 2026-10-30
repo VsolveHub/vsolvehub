@@ -1,0 +1,19 @@
+# Secrets and local state never enter the image.
+.env
+.env.*
+.venv/
+db.sqlite3
+.coverage
+staticfiles/
+media/
+private-media/
+
+# Caches and tooling output.
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Not needed at run time.
+tests/

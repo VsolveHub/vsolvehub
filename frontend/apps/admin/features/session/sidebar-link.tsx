@@ -11,17 +11,26 @@ interface SidebarLinkProps {
   icon: LucideIcon;
   isCollapsed?: boolean;
   badgeCount?: number;
+  /** Decided by the nav, which knows the sibling links; falls back to a prefix match. */
+  active?: boolean;
   /** Called when the link is clicked — e.g. to close a mobile drawer. */
   onClick?: () => void;
 }
 
-export function SidebarLink({ href, label, icon: Icon, isCollapsed, badgeCount, onClick }: SidebarLinkProps) {
+export function SidebarLink({
+  href,
+  label,
+  icon: Icon,
+  isCollapsed,
+  badgeCount,
+  active: activeProp,
+  onClick,
+}: SidebarLinkProps) {
   const pathname = usePathname();
-  
+
   const active =
-    href === "/"
-      ? pathname === "/"
-      : pathname === href || pathname.startsWith(`${href}/`);
+    activeProp ??
+    (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
 
   const link = (
     <Link
@@ -30,7 +39,7 @@ export function SidebarLink({ href, label, icon: Icon, isCollapsed, badgeCount, 
       aria-current={active ? "page" : undefined}
       onClick={onClick}
       className={[
-        "relative flex items-center gap-3 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors",
+        "relative flex items-center gap-3 px-2.5 min-h-11 md:min-h-0 py-2.5 md:py-1.5 rounded-lg text-sm font-medium transition-colors",
         active
           ? "bg-selected-surface text-text-link font-semibold"
           : "text-text-secondary hover:bg-surface-hover hover:text-text",

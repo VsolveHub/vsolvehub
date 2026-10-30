@@ -62,8 +62,8 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
         type="button"
         ref={triggerRef}
         onClick={() => setIsOpen(true)}
-        className="md:hidden p-1 text-text-secondary hover:text-text rounded-md focus:outline-none"
-        aria-label="Toggle navigation menu"
+        className="md:hidden -ml-2 inline-flex h-11 w-11 items-center justify-center rounded-md text-text-secondary hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+        aria-label="Open navigation menu"
         aria-expanded={isOpen}
       >
         <Menu className="h-5 w-5" />
@@ -80,18 +80,18 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
             ref={drawerRef}
             className="relative z-50 w-64 max-w-[80vw] bg-surface h-full shadow-xl flex flex-col border-r border-line animate-in slide-in-from-left-full duration-300 overscroll-contain"
           >
-            <div className="flex items-center justify-between p-4 border-b border-line">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-line">
               <span className="font-semibold text-sm text-text">Navigation</span>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-text-secondary hover:text-text"
+                className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-md text-text-secondary hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
                 aria-label="Close navigation menu"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {/* The child (nav) will need to know when to close the menu. We can use a Context, or cloneElement, or just a click handler wrapper. */}
+            {/* Any link inside closes the drawer, so the nav needs no close callback. */}
             <div className="overflow-y-auto flex-1 overscroll-contain" onClick={(e) => {
               if ((e.target as HTMLElement).closest('a')) {
                 setIsOpen(false);

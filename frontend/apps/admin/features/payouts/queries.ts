@@ -46,7 +46,8 @@ export function isSelfApproval(error: unknown): boolean {
   );
 }
 
-export function usePayoutBatches(filters: { status?: string } = {}) {
+/** `kind: "RUN"` keeps Partner withdrawals out of the run console; they have their own queue. */
+export function usePayoutBatches(filters: { status?: string; kind?: "RUN" | "WITHDRAWAL" } = {}) {
   return useInfiniteQuery({
     queryKey: queryKeys.operations.payoutBatches(filters),
     queryFn: async ({ pageParam }) => {
@@ -55,6 +56,7 @@ export function usePayoutBatches(filters: { status?: string } = {}) {
           params: {
             query: {
               ...(filters.status ? { status: filters.status } : {}),
+              ...(filters.kind ? { kind: filters.kind } : {}),
               ...(pageParam ? { cursor: pageParam } : {}),
             },
           },
@@ -191,4 +193,188 @@ export function useUnpayablePartners(period: { start: string; end: string } | nu
       ),
     enabled: period !== null,
   });
+}
+
+/**
+ * Correct what a Partner is owed by adding a ledger entry — never by editing one.
+ *
+ * `net_paise` is signed: positive pays the Partner more, negative recovers an overpayment.
+ * Step-up, because it changes what the next payout run sends.
+ */
+export function useLedgerAdjustment() {
+  return useMutation({
+    mutationFn: ({
+      idempotencyKey,
+      ...body
+    }: {
+      partner_id: string;
+      net_paise: number;
+      reason: string;
+      /** Minted once per form attempt, so a retry cannot add the correction twice. */
+      idempotencyKey: string;
+    }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/ledger-adjustments/", {
+          params: { header: { "Idempotency-Key": idempotencyKey } },
+          body,
+        }),
+      ),
+    retry: false,
+  });
+}
+
+/* -------------------------------------------------------------------------
+   Partner bank accounts (contract 1.76.0)
+   ------------------------------------------------------------------------- */
+
+export type OperationsPayoutAccount = Schemas["OperationsPayoutAccount"];
+export type PayoutAccountStatus = "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
+
+/** `403 payout_account_self_review`: the reviewer registered this account themselves. */
+export function isSelfReview(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "payout_account_self_review"
+  );
+}
+
+export function usePayoutAccounts(status: PayoutAccountStatus) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.operations.all, "payout-accounts", status],
+    queryFn: async ({ pageParam }) => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/operations/payout-accounts/", {
+          params: { query: { status, ...(pageParam ? { cursor: pageParam } : {}) } },
+        }),
+      );
+      cursorFromNextUrl(page.next);
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
+  });
+}
+
+/**
+ * Verify or reject an account. Both need a fresh step-up: a verified account is where real
+ * money will be sent. Never retried automatically; the list is re-read either way.
+ */
+export function useReviewPayoutAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input: { accountId: string; decision: "verify" } | { accountId: string; decision: "reject"; reason: string },
+    ) =>
+      input.decision === "verify"
+        ? request(() =>
+            getApiClient().POST("/api/v1/operations/payout-accounts/{account_id}/verify/", {
+              params: { path: { account_id: input.accountId } },
+            }),
+          )
+        : request(() =>
+            getApiClient().POST("/api/v1/operations/payout-accounts/{account_id}/reject/", {
+              params: { path: { account_id: input.accountId } },
+              body: { reason: input.reason },
+            }),
+          ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "payout-accounts"],
+      });
+    },
+    retry: false,
+  });
+}
+
+/* -------------------------------------------------------------------------
+   Partner withdrawals (contract 1.85.0)
+   ------------------------------------------------------------------------- */
+
+export type OperationsWithdrawal = Schemas["OperationsWithdrawal"];
+export type WithdrawalQueueStatus = "PENDING_APPROVAL" | "PAYING" | "PAID" | "FAILED" | "CANCELLED";
+
+/**
+ * Partner withdrawals by status. `PENDING_APPROVAL` is the queue: the ones the rules sent to a
+ * person — the first payout to a new bank account, or a balance above the maximum — oldest first.
+ */
+export function useWithdrawals(status: WithdrawalQueueStatus) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.operations.withdrawals(status),
+    queryFn: async ({ pageParam }) => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/operations/withdrawals/", {
+          params: { query: { status, ...(pageParam ? { cursor: pageParam } : {}) } },
+        }),
+      );
+      cursorFromNextUrl(page.next);
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
+    ...EXPIRING_STATE,
+  });
+}
+
+function useWithdrawalQueueRefresh() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: [...queryKeys.operations.all, "withdrawals"] });
+  };
+}
+
+/**
+ * Approve a queued withdrawal; it is queued to send at once. Step-up, because money leaves on
+ * it. The key is per withdrawal and version, so a retried tap replays rather than repeats.
+ */
+export function useApproveWithdrawal() {
+  const refresh = useWithdrawalQueueRefresh();
+  return useMutation({
+    mutationFn: (input: { batchId: string; expectedVersion: number }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/withdrawals/{batch_id}/approve/", {
+          params: {
+            path: { batch_id: input.batchId },
+            header: {
+              "Idempotency-Key": batchKey("withdrawal-approve", input.batchId, input.expectedVersion),
+            },
+          },
+          body: { expected_version: input.expectedVersion },
+        }),
+      ),
+    onSettled: refresh,
+    retry: false,
+  });
+}
+
+/** Decline a queued withdrawal: the money goes back to the Partner's balance, who reads `reason`. */
+export function useDeclineWithdrawal() {
+  const refresh = useWithdrawalQueueRefresh();
+  return useMutation({
+    mutationFn: (input: { batchId: string; expectedVersion: number; reason: string }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/withdrawals/{batch_id}/decline/", {
+          params: {
+            path: { batch_id: input.batchId },
+            header: {
+              "Idempotency-Key": batchKey("withdrawal-decline", input.batchId, input.expectedVersion),
+            },
+          },
+          body: { expected_version: input.expectedVersion, reason: input.reason },
+        }),
+      ),
+    onSettled: refresh,
+    retry: false,
+  });
+}
+
+/** `yyyy-mm-dd` from a date input → the start of that day, local time, as ISO. */
+export function dayStartIso(day: string): string {
+  return new Date(`${day}T00:00:00`).toISOString();
+}
+
+/** `yyyy-mm-dd` → the last millisecond of that day, local time, as ISO. */
+export function dayEndIso(day: string): string {
+  return new Date(`${day}T23:59:59.999`).toISOString();
 }

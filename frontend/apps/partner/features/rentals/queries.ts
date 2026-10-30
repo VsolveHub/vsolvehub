@@ -1,6 +1,7 @@
 "use client";
 
 import { request, type Schemas } from "@vsolve/api-client";
+import type { Page } from "@vsolve/query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -55,13 +56,19 @@ export async function fetchPartnerRentalAssets(): Promise<PartnerRentalAsset[]> 
   return Array.isArray(data) ? data : [];
 }
 
-export async function fetchPartnerRentalBookings(status?: string): Promise<PartnerRentalBooking[]> {
-  const data = await request(() =>
+/**
+ * One page of the owner's rental bookings, newest first. `statuses` is one state or several
+ * separated by commas, filtered on the server so a tab never misses rows on unloaded pages.
+ */
+export function fetchPartnerRentalBookingsPage(
+  statuses?: string,
+  cursor?: string,
+): Promise<Page<PartnerRentalBooking>> {
+  return request(() =>
     getApiClient().GET("/api/v1/partner/rentals/bookings", {
-      params: status ? { query: { status } } : undefined,
+      params: { query: { status: statuses || undefined, cursor } },
     }),
   );
-  return Array.isArray(data) ? data : [];
 }
 
 export type RentalPhotoUpload = {
@@ -188,4 +195,54 @@ export function rentalVariantChoices(
   return capabilities
     .filter((cap) => cap.workspace_key === "A7_RENTAL" && cap.status === "APPROVED")
     .map((cap) => ({ id: cap.variant_id, name: cap.variant_name }));
+}
+
+export type PickupHours = Schemas["PickupHours"];
+export type PickupDayInput = Schemas["PickupDayInputRequest"];
+export type RentalTransport = Schemas["RentalTransport"];
+export type TransportTrip = Schemas["RentalTransportTripEnum"];
+
+/** The owner's open days and hours, used by every rental item they list. */
+export async function fetchPartnerPickupHours(): Promise<PickupHours> {
+  return request(() => getApiClient().GET("/api/v1/partner/rentals/pickup-hours"));
+}
+
+/**
+ * Replace the whole schedule. Days left out are closed; `closed_dates` replaces the
+ * owner's days off (holidays), which no pickup or return can fall on.
+ */
+export async function savePartnerPickupHours(
+  days: PickupDayInput[],
+  closedDates: string[],
+): Promise<PickupHours> {
+  return request(() =>
+    getApiClient().PUT("/api/v1/partner/rentals/pickup-hours", {
+      body: { days, closed_dates: closedDates },
+    }),
+  );
+}
+
+/** Price a delivery request, decline it, or send the item out. */
+export async function partnerRentalTransportAction(
+  bookingId: string,
+  action: "quote" | "decline" | "out-for-delivery",
+  body: { amount_paise?: number; trip?: TransportTrip; note?: string } = {},
+): Promise<PartnerRentalBooking> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/bookings/{booking_id}/transport/{action}", {
+      params: { path: { booking_id: bookingId, action } },
+      // The quote body is the published request shape; decline sends just its note.
+      body: {
+        amount_paise: body.amount_paise ?? 0,
+        trip: body.trip ?? "ONE_WAY",
+        note: body.note ?? "",
+      },
+    }),
+  );
+}
+
+/** Commission on transport, from the server. 0 means the owner keeps the full price. */
+export async function fetchTransportFeePercent(): Promise<number> {
+  const data = await request(() => getApiClient().GET("/api/v1/rentals/platform-fee"));
+  return data.transport_fee_percent ?? 0;
 }

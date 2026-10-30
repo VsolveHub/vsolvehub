@@ -25,6 +25,14 @@ import { useRequestStartOtp, useVisit } from "@/features/visit/queries";
  *
  * Django issues the code on demand and rate-limits it. Asking for one on every
  * render would burn the cooldown before the professional reached the door.
+ * Asking again inside the cooldown returns the same live code, so a refresh at
+ * the door never leaves the customer with nothing to read out.
+ *
+ * ## On screen, not by SMS
+ *
+ * The code comes back in the response (contract 1.82.0) to this customer and
+ * nobody else. A job never waits on a text message arriving; the SMS, when one
+ * is sent, is a copy.
  */
 export function VisitStartCode({
   bookingId,
@@ -40,7 +48,7 @@ export function VisitStartCode({
 
   if (status !== "ARRIVED") return null;
 
-  const code = requestOtp.data?.development_code ?? null;
+  const code = requestOtp.data?.code ?? null;
 
   return (
     <div className="rounded-card bg-navy-900 p-4 text-text-inverse">
@@ -77,14 +85,6 @@ export function VisitStartCode({
           </p>
         )}
       </div>
-
-      {/* A code that went to the phone rather than the screen is the normal
-          case, not a failure — say where it went. */}
-      {requestOtp.isSuccess && code === null ? (
-        <p className="mt-3 text-sm text-warm-100">
-          We have texted the code to your phone.
-        </p>
-      ) : null}
 
       {requestOtp.isError ? (
         <p className="mt-3 text-sm text-warm-100" role="alert">

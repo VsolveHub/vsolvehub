@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { categoryHeadline, earliestSlotLabel } from "./tile-desktop-rating";
+import * as tileDisplay from "./tile-desktop-rating";
+import { categoryHeadline } from "./tile-desktop-rating";
 
 describe("categoryHeadline", () => {
   it("drops a trailing Services suffix so AC Services is not doubled", () => {
@@ -12,14 +13,8 @@ describe("categoryHeadline", () => {
   });
 });
 
-describe("earliestSlotLabel", () => {
-  it("uses today at 8:00 AM IST when that slot is still ahead", () => {
-    const beforeEight = new Date("2026-08-28T01:30:00.000Z"); // 07:00 IST
-    expect(earliestSlotLabel(beforeEight)).toBe("Fri, 8:00 AM");
-  });
-
-  it("rolls to the next morning once 8:00 AM IST has passed", () => {
-    const afterEight = new Date("2026-08-28T03:00:00.000Z"); // 08:30 IST
-    expect(earliestSlotLabel(afterEight)).toBe("Sat, 8:00 AM");
+describe("invented figures", () => {
+  it("exports no rating, booking-count or slot generator", () => {
+    expect(Object.keys(tileDisplay)).toEqual(["categoryHeadline"]);
   });
 });

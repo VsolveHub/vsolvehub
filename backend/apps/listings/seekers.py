@@ -5,6 +5,7 @@ ways ("Jobs for you" for seekers, "Matches" for employers), with in-app notices.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -26,8 +27,9 @@ from apps.notifications.services import request_notification
 
 logger = logging.getLogger(__name__)
 
-MAX_ROLES = 3
-MAX_SKILLS = 20
+#: Applying keeps adding roles and skills, so one person can match several job categories.
+MAX_ROLES = 10
+MAX_SKILLS = 60
 #: Bounds on how many profiles or jobs one request scores, so a page stays fast.
 SCAN_LIMIT = 300
 NOTIFY_LIMIT = 200
@@ -70,6 +72,8 @@ def save_profile(*, user: Any, data: dict[str, Any]) -> JobSeekerProfile:  # noq
         profile.roles = _clean_items(data["roles"], limit=MAX_ROLES, what="job")
     if "skills" in data:
         profile.skills = _clean_items(data["skills"], limit=MAX_SKILLS, what="skill")
+        # A skill the seeker removed leaves its category group too.
+        profile.skill_groups = _prune_groups(profile.skill_groups, profile.skills)
     if "languages" in data:
         langs = [str(v).strip() for v in data["languages"] or []]
         if any(v not in jobs.values(jobs.LANGUAGES) for v in langs):
@@ -97,6 +101,93 @@ def save_profile(*, user: Any, data: dict[str, Any]) -> JobSeekerProfile:  # noq
         profile.expected_salary_rupees = max(int(data["expected_salary_rupees"] or 0), 0)
     profile.save()
     return profile
+
+
+def _key(text: str) -> str:
+    return " ".join(str(text or "").split()).lower()
+
+
+def _prune_groups(groups: list[Any], skills: list[str]) -> list[dict[str, Any]]:
+    keep = {_key(s) for s in skills}
+    out = []
+    for group in groups or []:
+        if not isinstance(group, dict):
+            continue
+        left = [s for s in group.get("skills", []) if _key(s) in keep]
+        if left:
+            out.append({**group, "skills": left})
+    return out
+
+
+def listing_category(listing: Listing) -> str:
+    """The job category a listing belongs to, for grouping a seeker's skills."""
+    template = getattr(listing, "role_template", None)
+    return (
+        (listing.job_category or "").strip()
+        or (getattr(template, "category", "") or "").strip()
+        or listing.title.strip()
+    )[:80]
+
+
+@dataclass(frozen=True)
+class MergeResult:
+    added_skills: list[str]
+    #: Skills that did not fit under ``MAX_SKILLS``. Nothing already on the profile is dropped.
+    skipped_skills: list[str]
+
+
+def merge_into_profile(
+    *, profile: JobSeekerProfile, listing: Listing, skills: list[str]
+) -> MergeResult:
+    """Add what one application taught us to the profile. Never replaces, never drops.
+
+    Skills are compared without case or extra spaces, so "MS Excel" and "ms  excel" are one.
+    The job's title joins ``roles`` the same way. Name, salary, city and visibility stay the
+    seeker's own. The caller holds the profile row lock.
+    """
+    have = {_key(s) for s in profile.skills or []}
+    incoming = [" ".join(str(s or "").split()) for s in skills or []]
+    added: list[str] = []
+    skipped: list[str] = []
+    for skill in incoming:
+        if not skill or len(skill) > jobs.MAX_ITEM_LENGTH or _key(skill) in have:
+            continue
+        if len(profile.skills or []) + len(added) >= MAX_SKILLS:
+            skipped.append(skill)
+            continue
+        have.add(_key(skill))
+        added.append(skill)
+    profile.skills = [*(profile.skills or []), *added]
+
+    role = listing.title.strip()[:80]
+    roles = list(profile.roles or [])
+    if role and _key(role) not in {_key(r) for r in roles} and len(roles) < MAX_ROLES:
+        roles.append(role)
+    profile.roles = roles
+
+    category = listing_category(listing)
+    groups = [g for g in (profile.skill_groups or []) if isinstance(g, dict)]
+    group = next((g for g in groups if _key(g.get("category", "")) == _key(category)), None)
+    claimed = [s for s in incoming if s and _key(s) in {_key(x) for x in profile.skills}]
+    if group is None:
+        if claimed:
+            groups.append(
+                {
+                    "category": category,
+                    "role": role,
+                    "skills": list(dict.fromkeys(claimed)),
+                    "added_at": timezone.now().isoformat(),
+                }
+            )
+    else:
+        known = {_key(x) for x in group.get("skills", [])}
+        group["skills"] = [
+            *group.get("skills", []),
+            *[s for s in dict.fromkeys(claimed) if _key(s) not in known],
+        ]
+    profile.skill_groups = groups
+    profile.save(update_fields=("skills", "roles", "skill_groups", "updated_at"))
+    return MergeResult(added_skills=added, skipped_skills=skipped)
 
 
 def set_profile_resume(*, profile: JobSeekerProfile, upload: Any, content_type: str) -> None:
@@ -128,13 +219,25 @@ def profile_snapshot(profile: JobSeekerProfile, *, phone: str) -> dict[str, str]
     return {key: value for key, value in snapshot.items() if value}
 
 
+@transaction.atomic
 def quick_apply(
-    *, listing: Listing, user: Any, note: str = "", resume_url: str = ""
+    *,
+    listing: Listing,
+    user: Any,
+    note: str = "",
+    resume_url: str = "",
+    skills: list[str] | None = None,
 ) -> Application:
-    """Apply with the saved profile: no form to fill again."""
-    profile = JobSeekerProfile.objects.filter(user=user).first()
+    """Apply with the saved profile: no form to fill again.
+
+    ``skills`` are the job's skills the seeker ticked as their own; they are added to the
+    profile, so the seeker also matches this kind of job from now on.
+    """
+    profile = JobSeekerProfile.objects.select_for_update().filter(user=user).first()
     if profile is None or not profile.full_name:
         raise ListingStateError("Create your job profile first.")
+    if skills:
+        merge_into_profile(profile=profile, listing=listing, skills=skills)
     application = submit_application(
         listing=listing,
         applicant=user,
@@ -247,6 +350,7 @@ def _experience_band(text: str) -> str:
     return next((band for limit, band in _BAND_LIMITS if years < limit), "5_PLUS")
 
 
+@transaction.atomic
 def ensure_profile_from_application(
     *,
     user: Any,
@@ -257,15 +361,22 @@ def ensure_profile_from_application(
     findable: bool,
 ) -> JobSeekerProfile | None:
     """Give a first-time applicant a job profile built from what they just told us, so other
-    employers with matching jobs can find them. An existing profile is never overwritten.
+    employers with matching jobs can find them.
+
+    An existing profile keeps everything the seeker set; this application's skills and job title
+    are *added* to it (``merge_into_profile``), so someone who applied for Accounts and then
+    Sales keeps both sets and matches both kinds of job.
     """
-    if JobSeekerProfile.objects.filter(user=user).exists():
+    existing = JobSeekerProfile.objects.select_for_update().filter(user=user).first()
+    if existing is not None:
+        merge_into_profile(profile=existing, listing=listing, skills=skills)
         return None
-    return JobSeekerProfile.objects.create(
+    clean = _clean_items(skills, limit=MAX_SKILLS, what="skills")
+    profile = JobSeekerProfile.objects.create(
         user=user,
         full_name=name.strip()[:120],
         roles=[listing.title.strip()[:80]],
-        skills=_clean_items(skills, limit=MAX_SKILLS, what="skills"),
+        skills=clean,
         experience_band=_experience_band(experience),
         city=listing_city(listing)[:80],
         area=(listing.area or "")[:120],
@@ -275,6 +386,17 @@ def ensure_profile_from_application(
             else JobSeekerProfile.Visibility.APPLIED_ONLY
         ),
     )
+    if clean:
+        profile.skill_groups = [
+            {
+                "category": listing_category(listing),
+                "role": listing.title.strip()[:80],
+                "skills": clean,
+                "added_at": timezone.now().isoformat(),
+            }
+        ]
+        profile.save(update_fields=("skill_groups", "updated_at"))
+    return profile
 
 
 def invite_to_apply(*, listing: Listing, profile: JobSeekerProfile) -> None:

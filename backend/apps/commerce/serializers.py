@@ -6,6 +6,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.commerce.documents.sources import booking_document_title
 from apps.commerce.models import (
     Booking,
     Order,
@@ -252,6 +253,10 @@ class TaxDocumentLineSerializer(serializers.ModelSerializer[TaxDocumentLine]):
 class TaxDocumentSerializer(serializers.ModelSerializer[TaxDocument]):
     number = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
+    #: What the document is called (contract 1.78.0) — "Payment receipt" until a GSTIN is
+    #: configured, then "Tax invoice"; "Credit note" for a credit note. The same words the PDF
+    #: prints, so a screen can never call a receipt an invoice.
+    title = serializers.SerializerMethodField()
     lines = TaxDocumentLineSerializer(many=True, read_only=True)
 
     class Meta:
@@ -259,6 +264,7 @@ class TaxDocumentSerializer(serializers.ModelSerializer[TaxDocument]):
         fields = (
             "id",
             "kind",
+            "title",
             "number",
             "legal_entity_code",
             "financial_year",
@@ -274,6 +280,11 @@ class TaxDocumentSerializer(serializers.ModelSerializer[TaxDocument]):
     @extend_schema_field(serializers.CharField())
     def get_number(document: TaxDocument) -> str:
         return f"{document.series}-{document.sequence}"
+
+    @staticmethod
+    @extend_schema_field(serializers.CharField())
+    def get_title(document: TaxDocument) -> str:
+        return booking_document_title(document.kind)
 
     @staticmethod
     @extend_schema_field(MoneySerializer)
@@ -318,3 +329,27 @@ class OrderSerializer(serializers.ModelSerializer[Order]):
 class WebhookAcceptedSerializer(serializers.Serializer[dict[str, object]]):
     accepted = serializers.BooleanField(read_only=True)
     duplicate = serializers.BooleanField(read_only=True)
+
+
+class PublishedCancellationBandSerializer(serializers.Serializer[dict[str, object]]):
+    code = serializers.CharField(read_only=True)
+    condition_text = serializers.CharField(read_only=True)
+    fee = MoneySerializer(read_only=True)
+
+
+class PublishedCancellationPolicySerializer(serializers.Serializer[dict[str, object]]):
+    """The cancellation ladder a booking made today is given (contract 1.78.0).
+
+    For the public Refund & Cancellation page, so the page states the live amounts rather than a
+    copy that goes stale. A booking keeps the version frozen onto its quote; this is what new
+    bookings get.
+    """
+
+    code = serializers.CharField(read_only=True)
+    version = serializers.IntegerField(read_only=True)
+    effective_from = serializers.DateTimeField(read_only=True)
+    bands = PublishedCancellationBandSerializer(many=True, read_only=True)
+    #: How many hours before the visit it can still be moved free of charge.
+    reschedule_free_notice_hours = serializers.IntegerField(read_only=True)
+    #: How long after a visit is completed a quality problem can still be reported.
+    quality_dispute_window_hours = serializers.IntegerField(read_only=True)

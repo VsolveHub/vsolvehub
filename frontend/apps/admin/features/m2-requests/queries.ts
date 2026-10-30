@@ -362,3 +362,63 @@ export function useAssistedProposal(requirementId: string) {
     retry: false,
   });
 }
+
+/* ---------------------------------------------------------------------------
+   A5 project recovery: move unfinished milestones to another vendor, or end the project.
+   --------------------------------------------------------------------------- */
+
+const projectKey = (engagementId: string) => ["ops", "project", engagementId] as const;
+
+export function useOperationsProject(engagementId: string | null) {
+  return useQuery({
+    queryKey: projectKey(engagementId ?? ""),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/operations/engagements/{engagement_id}/project/", {
+          params: { path: { engagement_id: engagementId as string } },
+        }),
+      ),
+    enabled: engagementId !== null,
+    retry: false,
+  });
+}
+
+export function useProposeProjectTransfer(engagementId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["ProjectTransferProposeRequest"]) =>
+      request(() =>
+        getApiClient().POST("/api/v1/engagements/{engagement_id}/transfer/", {
+          params: {
+            path: { engagement_id: engagementId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `project-transfer:${engagementId}:${body.to_partner_id}:${JSON.stringify(body.quotes)}`,
+              ),
+            },
+          },
+          body,
+        }),
+      ),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: projectKey(engagementId) }),
+    retry: false,
+  });
+}
+
+export function useTerminateProject(engagementId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["ProjectTerminationRequest"]) =>
+      request(() =>
+        getApiClient().POST("/api/v1/engagements/{engagement_id}/termination/", {
+          params: {
+            path: { engagement_id: engagementId },
+            header: { "Idempotency-Key": getStableIdempotencyKey(`project-terminate:${engagementId}`) },
+          },
+          body,
+        }),
+      ),
+    onSuccess: () => void queryClient.invalidateQueries(),
+    retry: false,
+  });
+}

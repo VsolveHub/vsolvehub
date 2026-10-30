@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@vsolve/ui";
+import { formatMoney, useT } from "@vsolve/ui";
 
 import type { PartnerPerformance } from "../queries";
 
@@ -67,13 +67,14 @@ export function toDailyEarnings(daily: readonly ServerDailyPerformance[]): Daily
 }
 
 export function EarningsChart({ days }: { days: readonly DailyEarning[] }) {
+  const t = useT();
   const peak = Math.max(...days.map((day) => day.netPaise), 0);
   const total = days.reduce((sum, day) => sum + day.netPaise, 0);
 
   if (total === 0) {
     return (
       <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm text-text-secondary">
-        No earnings in the last 7 days yet. Finished jobs show up here.
+        {t("money.chart.empty")}
       </p>
     );
   }
@@ -81,14 +82,10 @@ export function EarningsChart({ days }: { days: readonly DailyEarning[] }) {
   return (
     <figure className="m-0">
       <figcaption className="text-sm text-text-secondary">
-        Last 7 days ·{" "}
-        <span data-numeric className="font-semibold text-text">
-          {formatMoney(total)}
-        </span>{" "}
-        earned
+        {t("money.chart.caption", { amount: formatMoney(total) })}
       </figcaption>
 
-      <div className="mt-4 flex items-end gap-2" role="list" aria-label="Earnings by day">
+      <div className="mt-4 flex items-end gap-2" role="list" aria-label={t("money.chart.ariaLabel")}>
         {days.map((day) => {
           // A zero day still gets a visible sliver so the column reads as
           // "nothing here" rather than as missing data.
@@ -99,7 +96,11 @@ export function EarningsChart({ days }: { days: readonly DailyEarning[] }) {
             <div
               key={day.date}
               role="listitem"
-              aria-label={`${day.label}: ${day.netPaise === 0 ? "nothing" : formatMoney(day.netPaise)}`}
+              aria-label={
+                day.netPaise === 0
+                  ? t("money.chart.bar.nothing", { label: day.label })
+                  : t("money.chart.bar.amount", { label: day.label, amount: formatMoney(day.netPaise) })
+              }
               className="flex flex-1 flex-col items-center gap-2"
             >
               {/* Only the best day carries a number. A value on every column

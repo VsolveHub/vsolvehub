@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import type { CapabilityRecord, CapabilityStatus } from "./wire";
 import { readCapabilityStatus } from "./wire";
 
@@ -116,45 +118,44 @@ interface StaticPresentation {
 
 type SimpleStatus = Exclude<CapabilityStatus, "CHANGES_REQUIRED" | "SUSPENDED" | "REJECTED">;
 
-const BY_STATUS: Record<SimpleStatus, StaticPresentation> = {
-  REQUESTED: {
-    tone: "neutral",
-    label: "Requested",
-    headline: "We have your request",
-    detail:
-      "It joins the review queue shortly. Nothing more is needed from you right now, and you can keep browsing work in the meantime.",
-    isWaiting: true,
-    action: { kind: "WAIT" },
-  },
-  UNDER_REVIEW: {
-    tone: "info",
-    label: "Under review",
-    headline: "Someone is checking your request",
-    detail:
-      "Nothing more is needed from you right now. If anything is unclear we will ask you directly rather than refusing it.",
-    isWaiting: true,
-    action: { kind: "WAIT" },
-  },
-  APPROVED: {
-    tone: "success",
-    label: "Approved",
-    headline: "You can take this work",
-    detail: "Enquiries for this service will start reaching you.",
-    isWaiting: false,
-    action: { kind: "NONE" },
-  },
-  // The Partner's own exit, and nothing else, since 1.22.0. Leads with the undo.
-  WITHDRAWN: {
-    tone: "neutral",
-    label: "Closed by you",
-    headline: "You closed this request",
-    detail:
-      "It is not being reviewed and it does not give you access to this work. Asking again starts a new review — closing it does not count against you.",
-    isWaiting: false,
-    action: { kind: "REQUEST_AGAIN", href: CAPABILITIES_HREF, label: "Ask again" },
-    secondaryAction: { kind: "SUPPORT", label: "I did not close this" },
-  },
-};
+function byStatus(t: Translator["t"]): Record<SimpleStatus, StaticPresentation> {
+  return {
+    REQUESTED: {
+      tone: "neutral",
+      label: t("me.capability.status.requested.label"),
+      headline: t("me.capability.status.requested.headline"),
+      detail: t("me.capability.status.requested.detail"),
+      isWaiting: true,
+      action: { kind: "WAIT" },
+    },
+    UNDER_REVIEW: {
+      tone: "info",
+      label: t("me.capability.status.underReview.label"),
+      headline: t("me.capability.status.underReview.headline"),
+      detail: t("me.capability.status.underReview.detail"),
+      isWaiting: true,
+      action: { kind: "WAIT" },
+    },
+    APPROVED: {
+      tone: "success",
+      label: t("me.capability.status.approved.label"),
+      headline: t("me.capability.status.approved.headline"),
+      detail: t("me.capability.status.approved.detail"),
+      isWaiting: false,
+      action: { kind: "NONE" },
+    },
+    // The Partner's own exit, and nothing else, since 1.22.0. Leads with the undo.
+    WITHDRAWN: {
+      tone: "neutral",
+      label: t("me.capability.status.withdrawn.label"),
+      headline: t("me.capability.status.withdrawn.headline"),
+      detail: t("me.capability.status.withdrawn.detail"),
+      isWaiting: false,
+      action: { kind: "REQUEST_AGAIN", href: CAPABILITIES_HREF, label: t("me.capability.action.askAgain") },
+      secondaryAction: { kind: "SUPPORT", label: t("me.capability.status.withdrawn.secondaryActionLabel") },
+    },
+  };
+}
 
 /**
  * Whether an approved capability's clock has run out.
@@ -238,6 +239,7 @@ function decisionOf(record: CapabilityRecord): {
 export function describeCapability(
   record: CapabilityRecord,
   serverNow: string,
+  t: Translator["t"],
 ): CapabilityPresentation {
   const status = readCapabilityStatus(record.status);
   const decision = decisionOf(record);
@@ -247,13 +249,12 @@ export function describeCapability(
   if (status === null) {
     return {
       tone: "warning",
-      label: "Unknown",
-      headline: "We cannot describe this request",
-      detail:
-        "Your app is older than this part of Vsolve. Update it, or contact support and we will tell you exactly where this stands.",
+      label: t("me.capability.status.unknown.label"),
+      headline: t("me.capability.status.unknown.headline"),
+      detail: t("me.capability.status.unknown.detail"),
       isWaiting: false,
       isActive: false,
-      action: { kind: "SUPPORT", label: "Contact support" },
+      action: { kind: "SUPPORT", label: t("me.capability.action.contactSupport") },
       secondaryAction: null,
       ...decision,
     };
@@ -262,13 +263,12 @@ export function describeCapability(
   if (status === "APPROVED" && isExpired(record, serverNow)) {
     return {
       tone: "warning",
-      label: "Expired",
-      headline: "Your approval for this work has run out",
-      detail:
-        "You will not receive new enquiries for it. Asking again is quick — we keep what you already sent.",
+      label: t("me.capability.status.expired.label"),
+      headline: t("me.capability.status.expired.headline"),
+      detail: t("me.capability.status.expired.detail"),
       isWaiting: false,
       isActive: false,
-      action: { kind: "REQUEST_AGAIN", href: CAPABILITIES_HREF, label: "Ask again" },
+      action: { kind: "REQUEST_AGAIN", href: CAPABILITIES_HREF, label: t("me.capability.action.askAgain") },
       secondaryAction: null,
       ...decision,
     };
@@ -280,12 +280,14 @@ export function describeCapability(
   if (status === "APPROVED" && hasExpiredDocuments(record)) {
     return {
       tone: "warning",
-      label: "Document expired",
-      headline: "A document we need has run out of date",
-      detail: `New enquiries for this work stop reaching you until you replace it: ${describeExpiredDocuments(record)}. Work you have already committed to is unaffected.`,
+      label: t("me.capability.status.documentExpired.label"),
+      headline: t("me.capability.status.documentExpired.headline"),
+      detail: t("me.capability.status.documentExpired.detail", {
+        kinds: describeExpiredDocuments(record),
+      }),
       isWaiting: false,
       isActive: false,
-      action: { kind: "FIX", href: DOCUMENTS_HREF, label: "Replace the document" },
+      action: { kind: "FIX", href: DOCUMENTS_HREF, label: t("me.capability.action.replaceDocument") },
       secondaryAction: null,
       ...decision,
     };
@@ -294,17 +296,15 @@ export function describeCapability(
   if (status === "CHANGES_REQUIRED") {
     return {
       tone: "warning",
-      label: "Changes needed",
-      headline: "We need something corrected",
+      label: t("me.capability.status.changesNeeded.label"),
+      headline: t("me.capability.status.changesNeeded.headline"),
       // The reviewer's own words. 1.22.0 guarantees them non-empty; the fallback
       // names a backend problem plainly rather than inventing a plausible
       // correction the Partner would act on.
-      detail:
-        record.review_notes.trim() ||
-        "A reviewer asked for changes but did not say what. Contact support and we will tell you exactly what is needed.",
+      detail: record.review_notes.trim() || t("me.capability.status.changesNeeded.detailFallback"),
       isWaiting: false,
       isActive: false,
-      action: { kind: "FIX", href: DOCUMENTS_HREF, label: "Fix and resend" },
+      action: { kind: "FIX", href: DOCUMENTS_HREF, label: t("me.capability.action.fixAndResend") },
       secondaryAction: null,
       ...decision,
     };
@@ -313,22 +313,21 @@ export function describeCapability(
   if (status === "REJECTED") {
     return {
       tone: "danger",
-      label: "Not approved",
-      headline: "We could not approve this",
+      label: t("me.capability.status.rejected.label"),
+      headline: t("me.capability.status.rejected.headline"),
       // Operations' own words, and they are required to exist. The sentence
       // after them is the part that matters: a refusal is not a ban, and the
       // Partner has to be told so here rather than discovering it by trying.
       detail: `${
-        record.review_notes.trim() ||
-        "A reviewer turned this down but did not say why. Contact support and we will tell you."
-      } This does not stop you asking again for the same work once it is sorted.`,
+        record.review_notes.trim() || t("me.capability.status.rejected.detailFallback")
+      }${t("me.capability.status.rejected.detailSuffix")}`,
       isWaiting: false,
       isActive: false,
-      action: { kind: "SUPPORT", label: "Ask us why" },
+      action: { kind: "SUPPORT", label: t("me.capability.action.askUsWhy") },
       secondaryAction: {
         kind: "REQUEST_AGAIN",
         href: CAPABILITIES_HREF,
-        label: "Ask again",
+        label: t("me.capability.action.askAgain"),
       },
       ...decision,
     };
@@ -337,23 +336,22 @@ export function describeCapability(
   if (status === "SUSPENDED") {
     return {
       tone: "danger",
-      label: "Suspended",
-      headline: "This work is paused on your account",
+      label: t("me.capability.status.suspended.label"),
+      headline: t("me.capability.status.suspended.headline"),
       // A suspension has an appeal path that runs through support. A banner is
       // the wrong surface for a dispute, so it points at one and says nothing
       // more — but it does say the work already committed is unaffected, which
       // is the question a suspended Partner actually has.
-      detail:
-        "You will not receive new enquiries for it. Work you have already committed to stays visible. Contact support to discuss this.",
+      detail: t("me.capability.status.suspended.detail"),
       isWaiting: false,
       isActive: false,
-      action: { kind: "SUPPORT", label: "Contact support" },
+      action: { kind: "SUPPORT", label: t("me.capability.action.contactSupport") },
       secondaryAction: null,
       ...decision,
     };
   }
 
-  const presentation = BY_STATUS[status];
+  const presentation = byStatus(t)[status];
   return {
     ...presentation,
     isActive: status === "APPROVED",

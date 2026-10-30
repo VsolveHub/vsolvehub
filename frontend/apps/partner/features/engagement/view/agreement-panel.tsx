@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, formatMoney } from "@vsolve/ui";
+import { Card, formatMoney, useT } from "@vsolve/ui";
 import { agreedTotals, orderedStages, type Engagement } from "@vsolve/query";
 import { Lock } from "lucide-react";
 
@@ -57,6 +57,7 @@ export interface AgreementPanelProps {
 }
 
 export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
+  const t = useT();
   const totals = agreedTotals(engagement);
   const stages = orderedStages(engagement);
   const managed = engagement.commercial_mode === "MANAGED_PAYMENT_REQUIRED";
@@ -66,41 +67,47 @@ export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
       <header className="flex items-start gap-2">
         <Lock size={16} aria-hidden className="mt-0.5 shrink-0 text-text-muted" />
         <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold text-text">What you agreed to</h2>
+          <h2 className="text-base font-semibold text-text">{t("work.agreementPanel.title")}</h2>
           <p className="text-sm leading-6 text-text-secondary">
-            These terms were frozen when the customer chose your quote and cannot be edited by anyone —
-            including Vsolve. A change to the work is a separate change request that you propose
-            and the customer accepts.
+            {t("work.agreementPanel.intro")}
           </p>
         </div>
       </header>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-        <Term label="Agreed then" value={formatMoney(totals.agreedPaise)} />
+        <Term label={t("work.agreementPanel.term.agreedThen")} value={formatMoney(totals.agreedPaise)} />
         <Term
-          label="Changed since"
+          label={t("work.agreementPanel.term.changedSince")}
           value={
             totals.changedByPaise === 0
-              ? "Nothing"
+              ? t("work.agreementPanel.term.nothing")
               : `${totals.changedByPaise > 0 ? "+" : "−"}${formatMoney(Math.abs(totals.changedByPaise))}`
           }
         />
-        <Term label="Owed now" value={formatMoney(totals.owedPaise)} />
+        <Term label={t("work.agreementPanel.term.owedNow")} value={formatMoney(totals.owedPaise)} />
         <Term
-          label={totals.taxBasis.trim() === "" ? "Tax" : `Tax (${totals.taxBasis})`}
+          label={
+            totals.taxBasis.trim() === ""
+              ? t("work.agreementPanel.term.tax")
+              : t("work.agreementPanel.term.taxWithBasis", { basis: totals.taxBasis })
+          }
           value={formatMoney(totals.taxPaise)}
         />
         <Term
-          label="Paid by"
-          value={managed ? "Vsolve, one stage at a time" : "The customer, directly to you"}
+          label={t("work.agreementPanel.term.paidBy")}
+          value={
+            managed
+              ? t("work.agreementPanel.term.paidByManaged")
+              : t("work.agreementPanel.term.paidByDirect")
+          }
         />
         <Term
-          label="Commission"
+          label={t("work.agreementPanel.term.commission")}
           value={
             engagement.commission_paise === 0
               ? managed
-                ? "None recorded"
-                : "None — Vsolve collects no service money here"
+                ? t("work.agreementPanel.term.commissionNoneRecorded")
+                : t("work.agreementPanel.term.commissionNoneCollected")
               : formatMoney(engagement.commission_paise)
           }
         />
@@ -108,7 +115,9 @@ export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
 
       {engagement.commission_treatment.trim() === "" ? null : (
         <p className="text-xs leading-5 text-text-muted">
-          Commission treatment: {engagement.commission_treatment}
+          {t("work.agreementPanel.commissionTreatment", {
+            treatment: engagement.commission_treatment,
+          })}
         </p>
       )}
 
@@ -117,13 +126,13 @@ export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
           id="agreement-stages"
           className="text-xs font-semibold uppercase tracking-wide text-text-muted"
         >
-          The {wording.many}
+          {t("work.agreementPanel.stagesHeading", { many: wording.many })}
         </h3>
         <ul className="flex flex-col divide-y divide-line">
           {stages.map((stage) => (
             <li key={stage.id} className="flex items-baseline justify-between gap-3 py-2">
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm text-text">{stageTitle(stage, wording)}</span>
+                <span className="truncate text-sm text-text">{stageTitle(stage, wording, t)}</span>
                 {stage.scheduled_on === null ? null : (
                   <span className="text-xs text-text-muted">
                     {shortDate(stage.scheduled_on)}
@@ -137,9 +146,7 @@ export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
           ))}
         </ul>
         <p className="text-xs leading-5 text-text-muted">
-          The fuller description of each {wording.one} — what it delivers, what is excluded, and
-          your warranty terms — is on the estimate you sent. Vsolve does not republish that wording
-          here, so this table shows the names and the money only.
+          {t("work.agreementPanel.stagesFooter", { one: wording.one })}
         </p>
       </section>
 
@@ -148,12 +155,10 @@ export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
           id="agreement-protections"
           className="text-xs font-semibold uppercase tracking-wide text-text-muted"
         >
-          Retention and warranty
+          {t("work.agreementPanel.protections.heading")}
         </h3>
         <p className="text-sm leading-6 text-text-secondary">
-          No retention is held back on this agreement — Vsolve records none against it, so nothing
-          is withheld from a {wording.one} beyond the payout hold described below. Warranty terms
-          are the ones you wrote on your estimate; they are not restated here.
+          {t("work.agreementPanel.protections.body", { one: wording.one })}
         </p>
       </section>
     </Card>

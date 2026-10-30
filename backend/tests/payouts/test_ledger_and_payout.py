@@ -13,6 +13,7 @@ from datetime import timedelta
 
 import pytest
 from django.db import IntegrityError, connection, transaction
+from django.test import override_settings
 from django.utils import timezone
 
 from apps.commerce.models import Booking
@@ -31,6 +32,7 @@ from apps.payouts.models import (
     PartnerPayoutAccount,
     PayoutBatch,
     PayoutBatchItem,
+    PayoutItemEntry,
 )
 from apps.payouts.services import (
     approve_payout_batch,
@@ -45,7 +47,12 @@ from apps.payouts.services import (
 )
 from tests.fulfilment.conftest import BookedGroup, create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 _operator_sequence = itertools.count(1)
 TWO = 2
@@ -214,6 +221,7 @@ def test_a_held_booking_earns_but_is_not_yet_payable() -> None:
 # --------------------------------------------------------------------------------------------
 
 
+@override_settings(PAYOUT_ACCOUNT_COOLING_HOURS=24)
 def test_a_new_account_is_not_payable_until_the_cooling_period_elapses() -> None:
     """Account takeover is the highest-value attack on a payouts system, and time is the
     cheapest defence: a delay between "the account changed" and "money left" is what gives a
@@ -230,7 +238,25 @@ def test_a_new_account_is_not_payable_until_the_cooling_period_elapses() -> None
     account.save(update_fields=("status",))
 
     assert payable_account(booked.partner) is None
-    assert account.effective_from > timezone.now()
+    assert account.effective_from > timezone.now() + timedelta(hours=23)
+
+
+@override_settings(PAYOUT_ACCOUNT_COOLING_HOURS=0)
+def test_a_zero_cooling_period_makes_a_verified_account_payable_at_once() -> None:
+    """What a RazorpayX test-mode run sets, so a payout can go out the same day. Production
+    refuses to start with less than 24 hours (`config.settings.guards`)."""
+
+    booked = create_booked_group(key_prefix="cooling-zero")
+    account = register_payout_account(
+        partner_id=booked.partner.id,
+        account_last4="8888",
+        ifsc="HDFC0001234",
+        holder_name="Test Partner",
+    )
+    account.status = PartnerPayoutAccount.Status.VERIFIED
+    account.save(update_fields=("status",))
+
+    assert payable_account(booked.partner) == account
 
 
 def test_changing_an_account_replaces_rather_than_deletes_the_old_one() -> None:
@@ -283,7 +309,7 @@ def test_two_batches_cannot_reserve_one_ledger_entry() -> None:
     with pytest.raises(LedgerEntryNotPayableApiError):
         reserve_entry_for_batch(batch=second, entry=entry)
 
-    assert PayoutBatchItem.objects.filter(ledger_entry=entry).count() == 1
+    assert PayoutItemEntry.objects.filter(ledger_entry=entry).count() == 1
 
 
 def test_two_concurrent_reservations_race_and_exactly_one_wins() -> None:
@@ -334,7 +360,7 @@ def test_two_concurrent_reservations_race_and_exactly_one_wins() -> None:
         thread.join(timeout=30)
 
     assert sorted(outcomes) == ["refused", "reserved"], outcomes
-    assert PayoutBatchItem.objects.filter(ledger_entry=entry).count() == 1
+    assert PayoutItemEntry.objects.filter(ledger_entry=entry).count() == 1
 
 
 def test_cancelling_a_batch_frees_its_entries_for_a_later_one() -> None:
@@ -365,8 +391,8 @@ def test_cancelling_a_batch_frees_its_entries_for_a_later_one() -> None:
     )
     reserve_entry_for_batch(batch=second, entry=entry)
     assert (
-        PayoutBatchItem.objects.filter(
-            ledger_entry=entry, status=PayoutBatchItem.Status.RESERVED
+        PayoutItemEntry.objects.filter(
+            ledger_entry=entry, is_live=True, item__status=PayoutBatchItem.Status.RESERVED
         ).count()
         == 1
     )

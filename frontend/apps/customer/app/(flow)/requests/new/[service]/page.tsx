@@ -31,10 +31,19 @@ import { RequirementFlow } from "@/features/requirement/view/requirement-flow";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Describe a job",
-  robots: { index: false, follow: false },
-};
+/** Names the service in the tab; the `cache`d read is shared with the page. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ service: string }>;
+}): Promise<Metadata> {
+  const { service: serviceSlug } = await params;
+  const service = await getServiceConfiguration(serviceSlug).catch(() => null);
+  return {
+    title: service ? `Describe your ${service.name} job` : "Describe a job",
+    robots: { index: false, follow: false },
+  };
+}
 
 /** The two lifecycles this flow can produce. Never rendered — see `WhatScreen`. */
 const M2_ARCHETYPES = ["A3_TIME_BLOCK", "A5_CUSTOM_PROJECT"];

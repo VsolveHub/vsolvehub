@@ -1,10 +1,11 @@
 "use client";
 
-import { ErrorState, Spinner } from "@vsolve/ui";
+import { ErrorState, Spinner, LoadMore } from "@vsolve/ui";
 import { useCustomerReferral, useReferralAttributions } from "../queries";
 import { ReferralAttributionsList } from "./referral-attributions-list";
 import { ReferralShareCard } from "./referral-share-card";
 import { ReferralTiersStepper } from "./referral-tiers-stepper";
+import { WelcomeRewardBanner } from "./welcome-reward-banner";
 
 export function ReferralScreen() {
   const referralQuery = useCustomerReferral();
@@ -31,14 +32,20 @@ export function ReferralScreen() {
   }
 
   const summary = referralQuery.data;
-  // The /attributions/ endpoint returns ReferralAttribution[] directly (not paginated)
-  const attributions = attributionsQuery.data ?? [];
+  const attributions = attributionsQuery.items;
 
   return (
     <div className="space-y-6">
+      <WelcomeRewardBanner />
       <ReferralShareCard summary={summary} />
       <ReferralTiersStepper summary={summary} />
-      <ReferralAttributionsList attributions={attributions} />
+      <ReferralAttributionsList attributions={attributions} holdDays={summary.reward_hold_days} />
+      <LoadMore
+        hasMore={attributionsQuery.hasMore}
+        loading={attributionsQuery.loadingMore}
+        onLoadMore={attributionsQuery.loadMore}
+        label="Show more referrals"
+      />
     </div>
   );
 }

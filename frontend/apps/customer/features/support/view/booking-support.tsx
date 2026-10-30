@@ -4,7 +4,7 @@ import { Card, buttonStyles } from "@vsolve/ui";
 import { Calendar, ChevronDown, CircleHelp, FileText, Headset, Receipt, UserRound } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 
-const PHONE = "+917330764634";
+import { SUPPORT } from "@/lib/support";
 
 const BOOKING_FAQS: readonly {
   id: string;
@@ -132,18 +132,22 @@ export function BookingSupport({
                 issue, payment or invoice help, damage or safety, and post-service support.
               </p>
             )}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className={`grid grid-cols-1 gap-2 ${SUPPORT.phone ? "sm:grid-cols-3" : ""}`}>
+              {SUPPORT.phone ? (
+                <>
+                  <a
+                    href={`${SUPPORT.phone.whatsappHref}?text=${message}`}
+                    className={buttonStyles({ variant: "outline" })}
+                  >
+                    WhatsApp
+                  </a>
+                  <a href={SUPPORT.phone.telHref} className={buttonStyles({ variant: "outline" })}>
+                    Call
+                  </a>
+                </>
+              ) : null}
               <a
-                href={`https://wa.me/${PHONE.slice(1)}?text=${message}`}
-                className={buttonStyles({ variant: "outline" })}
-              >
-                WhatsApp
-              </a>
-              <a href={`tel:${PHONE}`} className={buttonStyles({ variant: "outline" })}>
-                Call
-              </a>
-              <a
-                href={`mailto:support@vsolvehub.com?subject=${subject}`}
+                href={`mailto:${SUPPORT.email}?subject=${subject}`}
                 className={buttonStyles({ variant: "outline" })}
               >
                 Email

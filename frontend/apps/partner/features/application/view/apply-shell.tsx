@@ -1,23 +1,17 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { Logo, Sheet, cn } from "@vsolve/ui";
+import { Logo, Sheet, cn, useT, type Translator } from "@vsolve/ui";
 import { Check, ChevronLeft, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
-import { usePartnerApplication } from "../queries";
-import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
-import { HomeHeroLink } from "@/components/home-hero-link";
-
-const NAV = [
-  { href: "/how-it-works", label: "How It Works" },
-  { href: "/benefits", label: "Earnings & Benefits" },
-  { href: "/trades", label: "Trades & Services" },
-  { href: "/contact", label: "Support" },
-];
+import { usePartnerApplication, usePartnerAvailability } from "../queries";
+import { useCurrentSession, useLogout } from "@vsolve/query";
+import { getApiClient } from "@/lib/api/browser";
+import { LogOut } from "lucide-react";
 
 /**
  * The chrome for `/apply/*`.
@@ -103,12 +97,13 @@ export function ApplyShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const query = usePartnerApplication();
+  const availability = usePartnerAvailability();
   // A 404 is "you have not started yet", which is a state and not a failure.
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = isMissing ? null : (query.data ?? null);
 
-  const steps = stepProgress(application);
-  const summary = progressSummary(application);
+  const steps = stepProgress(application, availability.data);
+  const summary = progressSummary(application, availability.data);
 
   return (
     <DockContext.Provider value={dockTarget}>
@@ -118,9 +113,10 @@ export function ApplyShell({ children }: { children: ReactNode }) {
           summary={summary}
           pathname={pathname}
           isLoading={query.isPending}
+          status={application?.status ?? null}
         />
 
-        <main className="mx-auto w-full max-w-2xl px-4 pt-24 pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] sm:pt-28">
+        <main className="mx-auto w-full max-w-2xl lg:max-w-5xl xl:max-w-6xl px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-32 pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))]">
           {children}
         </main>
 
@@ -136,22 +132,31 @@ function ApplyHeader({
   summary: _summary,
   pathname,
   isLoading: _isLoading,
+  status,
 }: {
   steps: readonly StepProgress[];
   summary: ReturnType<typeof progressSummary>;
   pathname: string;
   isLoading: boolean;
+  status: string | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const back = previousStep(pathname);
+  const session = useCurrentSession(getApiClient());
+  const logout = useLogout(getApiClient());
+  const isAuthenticated = Boolean(session.data?.user);
+
+  const isSubmitted = status === "SUBMITTED" || status === "UNDER_REVIEW";
+  const back = isSubmitted ? null : previousStep(pathname);
+  const currentStepIdx = steps.findIndex((s) => s.href === pathname);
 
   return (
     <>
       {/* Floating Dynamic-Island Navigation Matching Homepage */}
-      <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
-        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
+      <div className="fixed top-2.5 sm:top-3 inset-x-0 z-50 px-2 sm:px-6 pointer-events-none">
+        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-2.5 sm:px-5 py-2 sm:py-2.5 transition-all duration-300">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Brand & Live Demand Tag */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -159,19 +164,16 @@ function ApplyHeader({
                 <button
                   type="button"
                   onClick={() => router.push(back.href)}
-                  aria-label={`Back to ${back.label}`}
-                  // 44px on a phone, the 32px pill from `sm:` up. This is the
-                  // only back affordance in onboarding — the shell draws no
-                  // browser chrome — and 32x32 is well under a thumb.
-                  className="grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full bg-surface-sunken text-navy-900 border border-line-strong hover:bg-surface transition-colors shrink-0"
+                  aria-label={t("apply.shell.backTo", { label: t(back.labelKey) })}
+                  className="grid h-8 w-8 place-items-center rounded-full bg-surface-sunken text-navy-900 border border-line-strong hover:bg-surface transition-colors shrink-0"
                 >
-                  <ChevronLeft size={18} aria-hidden />
+                  <ChevronLeft size={16} aria-hidden />
                 </button>
               )}
 
-              <HomeHeroLink className="flex min-h-11 items-center gap-2 group shrink-0">
+              <Link href="/apply" className="flex min-h-11 items-center gap-2 group shrink-0">
                 <Logo className="h-6 sm:h-7 w-auto shrink-0" />
-              </HomeHeroLink>
+              </Link>
 
               {/* Live Demand Status Badge */}
               <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px] shrink-0">
@@ -179,49 +181,78 @@ function ApplyHeader({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
-                <span className="text-text-secondary font-medium">Daily Bookings:</span>
-                <span className="text-navy-900 font-bold">1,400+ Active</span>
+                <span className="text-text-secondary font-medium">{t("auth.login.nowOnboarding")}</span>
+                <span className="text-navy-900 font-bold">{t("auth.login.city")}</span>
               </div>
             </div>
 
-            {/* Desktop Center Navigation Capsule */}
-            <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
-              {NAV.map((n) => (
-                <Link
-                  key={n.label}
-                  href={n.href}
-                  className="whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-text-secondary transition-colors duration-150 hover:bg-surface hover:text-navy-900"
-                >
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
+            {/* Desktop Center Step Status Capsule */}
+            <div className="hidden lg:flex items-center gap-2 rounded-full bg-surface-sunken/80 border border-line-strong px-4 py-1.5 text-xs">
+              <span className="font-extrabold text-navy-900">
+                {isSubmitted
+                  ? t("apply.shell.desktop.submitted")
+                  : pathname === "/apply"
+                  ? t("apply.shell.desktop.hub")
+                  : currentStepIdx >= 0
+                  ? t("apply.shell.desktop.stepOf", { n: currentStepIdx + 1, total: steps.length })
+                  : t("apply.shell.desktop.application")}
+              </span>
+              <span className="text-text-muted">•</span>
+              <span className="font-medium text-text-secondary">{t("apply.shell.desktop.mode")}</span>
+            </div>
 
-            {/* Right Action: Step indicator pill / Overview CTA (desktop) & Mobile Drawer */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
-              >
-                <ListChecks size={14} aria-hidden />
-                <span>Steps</span>
-              </button>
+            {/* Right Action: Step indicator pill, Overview CTA & Sign Out */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {!isSubmitted && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  aria-label={t("apply.shell.stepsButton")}
+                  className="inline-flex min-h-8 h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs shrink-0"
+                >
+                  <ListChecks size={14} aria-hidden />
+                  <span className="hidden sm:inline">{t("apply.shell.stepsButton")}</span>
+                </button>
+              )}
 
               <Link
                 href="/apply"
                 className="hidden sm:inline-flex text-xs font-bold text-navy-900 hover:text-navy-950 bg-surface-sunken hover:bg-surface px-3.5 py-1.5 rounded-full border border-line-strong transition-colors"
               >
-                Overview
+                {t("apply.steps.overview")}
               </Link>
 
-              <MarketingMobileNav items={NAV} />
+              {isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={() => logout.mutate()}
+                  disabled={logout.isPending}
+                  aria-label={t("common.signOut")}
+                  className="inline-flex min-h-8 h-8 items-center gap-1.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200/90 px-2.5 sm:px-3 text-xs font-bold text-rose-700 transition-colors shadow-xs shrink-0"
+                >
+                  <LogOut size={13} className="shrink-0" aria-hidden />
+                  <span className="text-[11px] sm:text-xs">
+                    {logout.isPending ? t("common.signingOut") : t("common.signOut")}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         </header>
       </div>
 
-      <StepSheet open={open} onOpenChange={setOpen} steps={steps} pathname={pathname} />
+      <StepSheet
+        open={open}
+        onOpenChange={setOpen}
+        steps={steps}
+        pathname={pathname}
+        isAuthenticated={isAuthenticated}
+        onSignOut={() => {
+          setOpen(false);
+          logout.mutate();
+        }}
+        isSigningOut={logout.isPending}
+      />
     </>
   );
 }
@@ -240,20 +271,27 @@ function StepSheet({
   onOpenChange,
   steps,
   pathname,
+  isAuthenticated,
+  onSignOut,
+  isSigningOut,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   steps: readonly StepProgress[];
   pathname: string;
+  isAuthenticated: boolean;
+  onSignOut: () => void;
+  isSigningOut: boolean;
 }) {
+  const t = useT();
   const here = normalise(pathname);
 
   return (
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Your application"
-      description="Fill these in any order. Everything saves as you go."
+      title={t("apply.shell.sheet.title")}
+      description={t("apply.shell.sheet.description")}
     >
       <ul className="flex list-none flex-col gap-1 p-0">
         {steps.map((step) => {
@@ -281,10 +319,10 @@ function StepSheet({
                       isCurrent ? "font-bold text-text" : "font-semibold text-text",
                     )}
                   >
-                    {step.label}
+                    {t(step.labelKey)}
                   </span>
                   <span className="truncate text-[0.8125rem] text-text-secondary">
-                    {describe(step, isCurrent)}
+                    {describe(step, isCurrent, t)}
                   </span>
                 </span>
               </Link>
@@ -292,6 +330,20 @@ function StepSheet({
           );
         })}
       </ul>
+
+      {isAuthenticated && (
+        <div className="mt-6 border-t border-line pt-4">
+          <button
+            type="button"
+            onClick={onSignOut}
+            disabled={isSigningOut}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200/90 px-4 py-3 text-sm font-bold text-rose-700 transition-colors"
+          >
+            <LogOut size={16} aria-hidden />
+            <span>{isSigningOut ? t("common.signingOut") : t("common.signOut")}</span>
+          </button>
+        </div>
+      )}
     </Sheet>
   );
 }
@@ -331,14 +383,14 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
   );
 }
 
-function describe(step: StepProgress, isCurrent: boolean): string {
+function describe(step: StepProgress, isCurrent: boolean, t: Translator["t"]): string {
   if (step.state === "waypoint") {
-    return step.href === "/apply" ? "Where everything stands" : "Check it, then send it";
+    return step.href === "/apply" ? t("apply.shell.describe.overview") : t("apply.shell.describe.review");
   }
-  if (step.state === "optional") return "Optional — you can set this later";
-  if (step.state === "done") return "Done";
-  if (isCurrent) return "You are here";
-  return step.outstanding === 1 ? "1 thing needed" : `${step.outstanding} things needed`;
+  if (step.state === "optional") return t("apply.shell.describe.optional");
+  if (step.state === "done") return t("common.done");
+  if (isCurrent) return t("apply.shell.describe.current");
+  return t("apply.shell.describe.outstanding", { count: step.outstanding });
 }
 
 function normalise(pathname: string): string {

@@ -1,11 +1,12 @@
 "use client";
 
+import { getStableIdempotencyKey } from "@vsolve/api-client";
 import { Button, Card, ErrorState, Field, Input, Spinner } from "@vsolve/ui";
 import { useState } from "react";
 
 import { isStepUpRequired } from "@/features/finance/queries";
 
-import { rupees, useAdjustCoins, useCustomerLedger } from "../queries";
+import { rupees, signedRupeesToPaise, useAdjustCoins, useAdjustWallet, useCustomerLedger } from "../queries";
 
 function when(value?: string | null): string {
   return value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
@@ -20,6 +21,11 @@ export function CustomerLedgerPanel({ onStepUpRequired }: { onStepUpRequired: (r
   const [reason, setReason] = useState("");
 
   const amountValue = /^-?\d+$/.test(amount.trim()) ? Number(amount.trim()) : null;
+  const wallet = useAdjustWallet();
+  const [walletAmount, setWalletAmount] = useState("");
+  const [walletReason, setWalletReason] = useState("");
+  const [walletSaved, setWalletSaved] = useState(0);
+  const walletPaise = signedRupeesToPaise(walletAmount);
   const data = ledger.data;
 
   return (
@@ -61,6 +67,64 @@ export function CustomerLedgerPanel({ onStepUpRequired }: { onStepUpRequired: (r
                 : "Not referred by anyone."}{" "}
               Has referred {data.referrals_made.length} customer(s).
             </p>
+          </Card>
+
+          <Card padding="md">
+            <h2 className="text-sm font-semibold">Credit or debit the wallet</h2>
+            <p className="mt-1 text-xs text-text-secondary">
+              In rupees. Positive adds money the customer can spend (a goodwill credit); negative
+              takes it back and cannot go below the available balance. The reason is saved on the
+              entry.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <Field label="Amount ₹ (e.g. 250 or -250)">
+                <Input inputMode="decimal" value={walletAmount} onChange={(e) => setWalletAmount(e.target.value)} />
+              </Field>
+              <Field label="Reason" className="min-w-64 flex-1">
+                <Input value={walletReason} maxLength={240} onChange={(e) => setWalletReason(e.target.value)} />
+              </Field>
+              <Button
+                loading={wallet.isPending}
+                disabled={walletPaise === null || walletReason.trim() === ""}
+                onClick={() =>
+                  wallet.mutate(
+                    {
+                      customer_id: data.customer_id,
+                      amount_paise: walletPaise ?? 0,
+                      reason: walletReason.trim(),
+                      // One key per distinct request: a double tap is one credit.
+                      idempotency_key: getStableIdempotencyKey(
+                        `wallet-adjustment:${data.customer_id}:${walletPaise}:${walletReason.trim()}:${walletSaved}`,
+                      ),
+                    },
+                    {
+                      onSuccess: () => {
+                        setWalletAmount("");
+                        setWalletReason("");
+                        setWalletSaved((count) => count + 1);
+                      },
+                      onError: (error) => {
+                        if (isStepUpRequired(error)) {
+                          onStepUpRequired("Your confirmation lapsed. The wallet was not changed.");
+                        }
+                      },
+                    },
+                  )
+                }
+              >
+                {walletPaise !== null && walletPaise < 0 ? `Debit ${rupees(-walletPaise)}` : walletPaise ? `Credit ${rupees(walletPaise)}` : "Save"}
+              </Button>
+            </div>
+            {wallet.isSuccess ? <p className="mt-2 text-sm text-success-text">Saved to the wallet ledger.</p> : null}
+            {wallet.isError && !isStepUpRequired(wallet.error) ? (
+              <ErrorState
+                inline
+                className="mt-2"
+                severity="warning"
+                title="Not saved"
+                message="A debit cannot take the wallet below what the customer has available."
+              />
+            ) : null}
           </Card>
 
           <Card padding="md">

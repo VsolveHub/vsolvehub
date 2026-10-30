@@ -53,6 +53,7 @@ from apps.requirements.views import (
     OperationsAssistedProposalView,
     OperationsChargebackView,
     OperationsCommercialPolicyActivateView,
+    OperationsCommercialPolicyListView,
     OperationsCrewDocumentDecisionView,
     OperationsCrewDocumentListView,
     OperationsCrewGenderCorrectionView,
@@ -62,6 +63,7 @@ from apps.requirements.views import (
     OperationsCustomWorkItemReviewResolveView,
     OperationsDeadlineView,
     OperationsDeclineAlarmView,
+    OperationsEngagementProjectView,
     OperationsQueueView,
     OperationsQuoteGuardrailPolicyActivateView,
     OperationsQuoteGuardrailPolicyView,
@@ -634,6 +636,11 @@ urlpatterns = [
         name="m2-engagement-project",
     ),
     path(
+        "operations/engagements/<uuid:engagement_id>/project/",
+        OperationsEngagementProjectView.as_view(),
+        name="m2-operations-engagement-project",
+    ),
+    path(
         "engagement-stages/<uuid:stage_id>/delay-claim/",
         EngagementStageDelayClaimView.as_view(),
         name="m2-engagement-stage-delay-claim",
@@ -724,6 +731,11 @@ urlpatterns = [
         "operations/requests/<uuid:requirement_id>/timeline/",
         OperationsRequestTimelineView.as_view(),
         name="m2-operations-request-timeline",
+    ),
+    path(
+        "operations/commercial-policies/",
+        OperationsCommercialPolicyListView.as_view(),
+        name="m2-operations-commercial-policies",
     ),
     path(
         "operations/commercial-policies/activate/",

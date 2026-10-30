@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from apps.commerce.documents import DocumentLine, DocumentSpec, access_receipt_spec, render_pdf
 from apps.commerce.documents.money import format_money
-from apps.commerce.documents.sources import ISSUER_ADDRESS, ISSUER_CONTACT, ISSUER_NAME
+from apps.commerce.documents.sources import issuer_address, issuer_contact, issuer_name
 from apps.commerce.views import _pdf_response
 from apps.identity.models import User
 from apps.requirements import access
@@ -209,13 +209,13 @@ class RequirementQuoteShoppingListPdfView(APIView):
             title="What to buy",
             number=f"EST-{str(proposal.id)[:8].upper()}-R{proposal.revision}",
             issued_on=proposal.submitted_at,
-            issuer_name=ISSUER_NAME,
+            issuer_name=issuer_name(),
             buyer_name=buyer,
             lines=lines,
             total_label="Items to buy",
             total_amount=str(len(lines)),
-            issuer_address=ISSUER_ADDRESS,
-            issuer_contact=ISSUER_CONTACT,
+            issuer_address=issuer_address(),
+            issuer_contact=issuer_contact(),
             meta=(
                 ("Prepared by", partner_name),
                 ("Service", service_name),

@@ -1,4 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { useT } from "@vsolve/ui";
+
+type T = ReturnType<typeof useT>;
 
 /**
  * What a Partner may do with one enquiry, and what its status means.
@@ -96,37 +99,39 @@ export interface EnquiryStatusCopy {
  * available" would tell a vendor they were too slow when they were not.
  *
  * `WITHDRAWN` alone is not a sentence yet — see `WITHDRAWN_REASON_COPY`.
+ *
+ * `label` and `meaning` hold catalogue keys; `describeStatus` resolves them.
  */
 const STATUS_COPY: Record<EnquiryStatus, EnquiryStatusCopy> = {
   INVITED: {
-    label: "Waiting for you",
+    label: "enquiry.status.invited.label",
     tone: "action",
-    meaning: "Accept to take one of this customer's quote slots, or decline so someone else can.",
+    meaning: "enquiry.status.invited.meaning",
   },
   ACCEPTED: {
-    label: "You accepted",
+    label: "enquiry.status.accepted.label",
     tone: "progress",
-    meaning: "You hold a quote slot and your availability is held for these dates. Send your quote next.",
+    meaning: "enquiry.status.accepted.meaning",
   },
   QUOTED: {
-    label: "You quoted",
+    label: "enquiry.status.quoted.label",
     tone: "progress",
-    meaning: "Your quote is with the customer. You can send a revised quote, which replaces it.",
+    meaning: "enquiry.status.quoted.meaning",
   },
   DECLINED: {
-    label: "You declined",
+    label: "enquiry.status.declined.label",
     tone: "settled",
-    meaning: "Your slot was released for another vendor. Nothing further is expected from you.",
+    meaning: "enquiry.status.declined.meaning",
   },
   EXPIRED: {
-    label: "Time ran out",
+    label: "enquiry.status.expired.label",
     tone: "gone",
-    meaning: "The response window closed before you answered, and the slot went back to the pool.",
+    meaning: "enquiry.status.expired.meaning",
   },
   WITHDRAWN: {
-    label: "Pulled back",
+    label: "enquiry.status.withdrawn.label",
     tone: "gone",
-    meaning: "Vsolve released this enquiry. This does not count against you.",
+    meaning: "enquiry.status.withdrawn.meaning",
   },
 };
 
@@ -156,14 +161,10 @@ const STATUS_COPY: Record<EnquiryStatus, EnquiryStatusCopy> = {
  * than explained wrongly, which is the whole defect being fixed here.
  */
 const WITHDRAWN_REASON_COPY: Record<string, string> = {
-  slot_taken:
-    "Another professional accepted this visit slot first. This does not count against you.",
-  offer_taken:
-    "Another professional took this offer first. This does not count against you.",
-  non_responsive_quote:
-    "The window to send your quote closed, so the customer was offered someone else. This does not count against you.",
-  requirement_changed:
-    "Vsolve withdrew this enquiry because the customer's request changed. This does not count against you.",
+  slot_taken: "enquiry.withdrawnReason.slotTaken",
+  offer_taken: "enquiry.withdrawnReason.offerTaken",
+  non_responsive_quote: "enquiry.withdrawnReason.nonResponsiveQuote",
+  requirement_changed: "enquiry.withdrawnReason.requirementChanged",
 };
 
 /**
@@ -176,12 +177,14 @@ const WITHDRAWN_REASON_COPY: Record<string, string> = {
  */
 export function describeStatus(
   status: EnquiryStatus,
+  t: T,
   declineReasonCode?: string,
 ): EnquiryStatusCopy {
-  const copy = STATUS_COPY[status];
+  const keys = STATUS_COPY[status];
+  const copy = { ...keys, label: t(keys.label), meaning: t(keys.meaning) };
   if (status !== "WITHDRAWN" || declineReasonCode === undefined) return copy;
   const reason = WITHDRAWN_REASON_COPY[declineReasonCode.trim()];
-  return reason === undefined ? copy : { ...copy, meaning: reason };
+  return reason === undefined ? copy : { ...copy, meaning: t(reason) };
 }
 
 /* ---------------------------------------------------------------------------
@@ -210,20 +213,22 @@ export interface BucketCopy {
  * Newest-first inside a bucket comes from the server (`-created_at`); the
  * buckets themselves never reorder, so a Partner who learns where "Waiting for
  * you" sits finds it in the same place tomorrow.
+ *
+ * `title` and `emptyLine` are catalogue keys, resolved with `t` at render time.
  */
 export const BUCKET_ORDER: readonly BucketCopy[] = [
   {
     key: "needs_response",
-    title: "Waiting for you",
-    emptyLine: "Nothing is waiting on an answer right now.",
+    title: "enquiry.bucket.needsResponse.title",
+    emptyLine: "enquiry.bucket.needsResponse.empty",
   },
   {
     key: "accepted",
-    title: "Accepted — quote next",
-    emptyLine: "You have not accepted anything that still needs a quote.",
+    title: "enquiry.bucket.accepted.title",
+    emptyLine: "enquiry.bucket.accepted.empty",
   },
-  { key: "quoted", title: "Quoted", emptyLine: "You have no quotes with a customer yet." },
-  { key: "closed", title: "Closed", emptyLine: "Nothing has closed yet." },
+  { key: "quoted", title: "enquiry.bucket.quoted.title", emptyLine: "enquiry.bucket.quoted.empty" },
+  { key: "closed", title: "enquiry.bucket.closed.title", emptyLine: "enquiry.bucket.closed.empty" },
 ];
 
 export function groupIntoBuckets<T extends { readonly status: EnquiryStatus }>(
@@ -281,15 +286,15 @@ export function deadlineStateFor(input: {
  * countdown tells by itself. The instant is stated; the arithmetic is not
  * re-explained.
  */
-export function describeDeadline(state: DeadlineState): string {
+export function describeDeadline(state: DeadlineState, t: T): string {
   switch (state) {
     case "none":
-      return "This enquiry has no published response deadline. Answer early anyway — slots are taken in order.";
+      return t("enquiry.deadline.none");
     case "open":
-      return "Vsolve counts response time in your area's working hours, so this is later than a straight countdown.";
+      return t("enquiry.deadline.open");
     case "closing":
-      return "This is close to its deadline. Accepting now is the only way to keep the slot.";
+      return t("enquiry.deadline.closing");
     case "passed":
-      return "By our clock the window has closed. Vsolve decides when an enquiry actually expires, so this may still be open — re-read before assuming anything.";
+      return t("enquiry.deadline.passed");
   }
 }

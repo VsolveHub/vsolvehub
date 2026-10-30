@@ -23,7 +23,7 @@ from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsOperationsUser
 from apps.requirements import operations
 from apps.requirements.exceptions import RequirementDomainError
-from apps.requirements.models import CustomerRequirement
+from apps.requirements.models import CustomerRequirement, Engagement
 from apps.requirements.serializers import (
     AssistedClarificationSerializer,
     AssistedProposalSerializer,
@@ -77,6 +77,9 @@ class OperationsRequestTimelineView(APIView):
                     "requirement_id": requirement.id,
                     "archetype": requirement.archetype,
                     "status": requirement.status,
+                    "engagement_id": Engagement.objects.filter(requirement=requirement)
+                    .values_list("id", flat=True)
+                    .first(),
                     "events": operations.request_timeline(requirement),
                     "server_now": timezone.now(),
                 }

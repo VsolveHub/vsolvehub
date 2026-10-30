@@ -54,6 +54,19 @@ describe("phone step", () => {
     expect(screen.getByRole("button", { name: /send code/i })).toBeDisabled();
   });
 
+  it("says how many digits are left while the action is still disabled", () => {
+    renderForm({ phone: "99000", phoneDigits: 10 });
+    expect(screen.getByText("5 more digits to go.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send code/i })).toBeDisabled();
+  });
+
+  it("keeps the SMS sentence when no digit count is given or nothing is typed", () => {
+    renderForm({ phone: "99000" });
+    expect(screen.getByText(/6-digit code by SMS/i)).toBeInTheDocument();
+    renderForm({ phone: "", phoneDigits: 10 });
+    expect(screen.getAllByText(/6-digit code by SMS/i)).toHaveLength(2);
+  });
+
   it("submits on Enter as well as on the button", () => {
     const onRequestCode = vi.fn();
     renderForm({ canRequest: true, phone: "9876543210", onRequestCode });

@@ -97,9 +97,15 @@ was unreachable would leave the Customer's *description* intact as well, which i
 
 | | |
 |---|---|
+| Provider | Google Geocoding API, `GOOGLE_MAPS_SERVER_KEY` (server key, IP-restricted) |
 | Timeout | `GEOCODING_TIMEOUT_SECONDS`, 3s |
 | Cache | `GEOCODING_CACHE_SECONDS`, 7 days, coordinate-rounded |
 | Throttle | `geocoding` 30/min, `serviceability` 60/min |
+
+Each cache miss is a billed Google call. `REQUEST_DENIED` means the key or its API restriction is
+wrong; `OVER_QUERY_LIMIT` means the project quota. Both surface as the same recoverable 503, so the
+provider's status appears only in the exception message, never with the request URL (it carries the
+key).
 
 Fail-closed on serviceability: an area we cannot resolve is not served.
 

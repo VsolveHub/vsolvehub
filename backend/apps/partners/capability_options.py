@@ -63,7 +63,10 @@ BUSINESS_TYPE_OPTIONS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         PartnerBusinessProfile.BusinessType.RENTAL_OWNER,
         "I rent equipment",
-        "You list rental assets. Customers book date ranges. Platform holds deposit (managed payment).",
+        (
+            "You list rental assets. Customers book date ranges. "
+            "Platform holds deposit (managed payment)."
+        ),
     ),
     (
         PartnerBusinessProfile.BusinessType.PROPERTY_HOST,
@@ -227,7 +230,9 @@ def _archetype_capability_options(
     *,
     live: set[uuid.UUID],
     archetype: str,
-    config_model: type,
+    config_model: type[A7VariantConfiguration]
+    | type[A9VariantConfiguration]
+    | type[A10VariantConfiguration],
 ) -> list[CapabilityOption]:
     open_variant_ids = set(
         config_model.objects.filter(

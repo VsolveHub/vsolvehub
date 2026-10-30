@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@vsolve/ui";
+import { cn, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 
@@ -48,6 +48,7 @@ import { Pictogram } from "@/components/pictogram";
  * arbitrary `animate-[…]` utility.)
  */
 export function WaitingRadar({ isOnline }: { readonly isOnline: boolean }) {
+  const t = useT();
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 py-8">
       <div className="relative grid h-36 w-36 place-items-center">
@@ -87,12 +88,12 @@ export function WaitingRadar({ isOnline }: { readonly isOnline: boolean }) {
 
       <div className="flex max-w-[28ch] flex-col items-center gap-1 text-center">
         <p className="text-base font-bold text-text">
-          {isOnline ? "Searching for jobs nearby" : "You are offline"}
+          {isOnline ? t("home.waitingRadar.online.title") : t("home.waitingRadar.offline.title")}
         </p>
         <p className="text-sm leading-relaxed text-text-secondary">
           {isOnline
-            ? "We will notify you the moment a job comes in."
-            : "Go online above to start receiving offers."}
+            ? t("home.waitingRadar.online.body")
+            : t("home.waitingRadar.offline.body")}
         </p>
       </div>
     </div>

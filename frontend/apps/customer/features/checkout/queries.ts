@@ -420,6 +420,7 @@ export type PlanUnit = Schemas["PlanUnit"];
 export interface CreatePlanSetInput {
   cartVersion: number;
   addressId: string;
+  bookingMode?: "INSTANT" | "SCHEDULED";
   /**
    * One chosen start per published visit.
    *
@@ -450,11 +451,12 @@ export function useCreatePlanSet() {
           body: {
             address_id: input.addressId,
             expected_cart_version: input.cartVersion,
+            ...(input.bookingMode ? { booking_mode: input.bookingMode } : {}),
             preferred_starts: input.preferredStarts.map((entry) => ({
               group_key: entry.groupKey,
               starts_at: entry.startsAt,
             })),
-          },
+          } as any,
         }),
       ),
     onSuccess: (planSet) => {

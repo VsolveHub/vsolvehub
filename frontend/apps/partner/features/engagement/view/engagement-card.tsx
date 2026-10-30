@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Card, formatMoney } from "@vsolve/ui";
+import { Badge, Card, formatMoney, useT } from "@vsolve/ui";
 import {
   activeStage,
   agreedTotals,
@@ -69,7 +69,8 @@ export interface EngagementCardProps {
 const JOB_HREF = (id: string) => `/work/jobs/${id}`;
 
 export function EngagementCard({ engagement, wording }: EngagementCardProps) {
-  const status = describeEngagementStatus(engagement, wording);
+  const t = useT();
+  const status = describeEngagementStatus(engagement, wording, t);
   const totals = agreedTotals(engagement);
   const progress = stageProgress(engagement);
   const current = activeStage(engagement);
@@ -97,29 +98,39 @@ export function EngagementCard({ engagement, wording }: EngagementCardProps) {
                 {status.label}
               </Badge>
             ) : (
-              <Badge tone="neutral">State not recognised</Badge>
+              <Badge tone="neutral">{t("work.engagementCard.statusUnknown")}</Badge>
             )}
             {isEngagementDisputed(engagement) && engagement.status !== "DISPUTED" ? (
-              <Badge tone="warning">One {wording.one} disputed</Badge>
+              <Badge tone="warning">
+                {t("work.engagementCard.oneDisputed", { one: wording.one })}
+              </Badge>
             ) : null}
           </span>
 
           <span className="text-xs text-text-secondary">
-            {progress.done} of {progress.total} {wording.many} settled
-            {startsOn === null ? "" : ` · from ${shortDate(startsOn)}`}
+            {t("work.engagementCard.progress", {
+              done: progress.done,
+              total: progress.total,
+              many: wording.many,
+            })}
+            {startsOn === null
+              ? ""
+              : ` · ${t("work.engagementCard.from", { date: shortDate(startsOn) })}`}
           </span>
 
           {current ? (
             <span className="truncate text-xs text-text-muted">
-              Next: {stageTitle(current, wording)}
+              {t("work.engagementCard.next", { title: stageTitle(current, wording, t) })}
             </span>
           ) : null}
 
           {totals.changedByPaise === 0 ? null : (
             <span className="text-xs text-text-muted">
-              Agreed {formatMoney(totals.agreedPaise)}, changed by{" "}
-              {totals.changedByPaise > 0 ? "+" : "−"}
-              {formatMoney(Math.abs(totals.changedByPaise))}
+              {t("work.engagementCard.agreedChanged", {
+                agreed: formatMoney(totals.agreedPaise),
+                sign: totals.changedByPaise > 0 ? "+" : "−",
+                amount: formatMoney(Math.abs(totals.changedByPaise)),
+              })}
             </span>
           )}
         </span>

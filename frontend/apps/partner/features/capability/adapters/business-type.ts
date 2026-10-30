@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import type { BusinessProfileInput, BusinessType } from "./wire";
 
 /**
@@ -154,21 +156,23 @@ export interface BusinessProfileProblem {
  * Deliberately short. Anything not listed goes to the server and comes back as a
  * field error, which is the only place the full rule set lives.
  */
-export function certainRefusals(input: BusinessProfileInput): BusinessProfileProblem[] {
+export function certainRefusals(
+  input: BusinessProfileInput,
+  t: Translator["t"],
+): BusinessProfileProblem[] {
   const problems: BusinessProfileProblem[] = [];
 
   if (input.business_type === "INDIVIDUAL" && input.registration_number.trim() !== "") {
     problems.push({
       field: "registration_number",
-      message:
-        "Working as yourself means there is no company registration to record. Choose a business type if you have one.",
+      message: t("me.capability.business.refusalNoRegistration"),
     });
   }
 
   if (!input.gst_registered && input.gstin.trim() !== "") {
     problems.push({
       field: "gstin",
-      message: "Tick “I am GST registered” before adding a GSTIN, or clear the GSTIN.",
+      message: t("me.capability.business.refusalGstinNeedsFlag"),
     });
   }
 

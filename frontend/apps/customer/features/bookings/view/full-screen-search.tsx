@@ -54,31 +54,31 @@ interface FullScreenPartnerSearchProps {
 const SEARCH_STEPS = [
   {
     title: "Finding your V Solve Hub partner…",
-    desc: "Broadcasting service request to certified technicians nearby",
+    desc: "Matching your service request with verified technicians",
     step: 1,
   },
   {
     title: "Searching nearby professionals…",
-    desc: "Scanning top-rated partners within 5 km of your address",
+    desc: "Scanning verified partners serving your area",
     step: 2,
   },
   {
     title: "Checking schedule & availability…",
-    desc: "Confirming arrival window and verified equipment",
+    desc: "Confirming arrival window and service readiness",
     step: 3,
   },
   {
-    title: "Matching the best professional for you…",
-    desc: "Selecting the highest-rated professional with 100% guarantee",
+    title: "Matching the right professional for you…",
+    desc: "Confirming an available professional for your booking",
     step: 4,
   },
 ];
 
 const VERIFICATION_CHECKS = [
-  { label: "Background & Police Verification", status: "Verified" },
-  { label: "Skill & Quality Certifications", status: "Checked" },
-  { label: "Minimum 4.8★ Rating Filter", status: "Applied" },
-  { label: "Tools & Equipment Readiness", status: "Confirmed" },
+  { label: "ID & document checks", status: "Verified" },
+  { label: "Skills for this service", status: "Matched" },
+  { label: "Serves your area", status: "Checked" },
+  { label: "Free in your time window", status: "Checked" },
 ];
 
 export function FullScreenPartnerSearch({
@@ -339,7 +339,7 @@ export function FullScreenPartnerSearch({
                     Safety & Quality Standards
                   </span>
                   <span className="text-emerald-700 bg-emerald-50 text-[11px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                    100% Guaranteed
+                    Dispatch Checks
                   </span>
                 </div>
 

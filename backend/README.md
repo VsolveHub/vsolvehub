@@ -33,10 +33,12 @@ fallback.
 
 ## Location lookup
 
-Local settings use the Nominatim reverse-geocoding adapter with a three-second timeout and
-seven-day rounded-coordinate cache. Set the production contact in `GEOCODING_USER_AGENT` and review
-the selected provider's production usage terms/capacity before launch. Provider failure returns a
-recoverable manual-entry response and never invents an address.
+Reverse geocoding uses the Google Geocoding API (`GEOCODING_PROVIDER=google`) with a three-second
+timeout and a seven-day rounded-coordinate cache, inside Google's 30-day limit on cached
+coordinates. Set `GOOGLE_MAPS_SERVER_KEY` to a server key restricted to the Geocoding API and the
+servers' IPs; it is never the browser key the frontends load the map with. Production refuses to
+start without it. Provider failure returns a recoverable manual-entry response and never invents an
+address. There is no second provider and no fallback between providers.
 
 ## Asynchronous topology
 

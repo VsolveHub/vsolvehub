@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { Translator } from "@vsolve/ui";
 
 /**
  * The two decisions the notification bell makes without a server round trip:
@@ -68,7 +69,12 @@ export function unreadBadgeDisplay(count: number | null): string | null {
  * or "unread count unavailable": the first is a lie and the second is an error
  * message dressed as a label, on a control that still works.
  */
-export function unreadBadgeLabel(count: number | null): string {
+export function unreadBadgeLabel(count: number | null, t?: Translator["t"]): string {
+  if (t) {
+    if (count === null) return t("notifications.bell.ariaLabel.unknown");
+    if (count <= 0) return t("notifications.bell.ariaLabel.none");
+    return t("notifications.bell.ariaLabel.count", { count });
+  }
   if (count === null) return "Notifications";
   if (count <= 0) return "Notifications, nothing unread";
   return `Notifications, ${count} unread`;

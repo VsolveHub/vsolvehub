@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Field, Input, Select, Spinner } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Field, Input, Select, Spinner, LoadMore } from "@vsolve/ui";
 import { useState } from "react";
 
 import { isStepUpRequired } from "@/features/finance/queries";
@@ -68,18 +68,21 @@ export function ReferralReviewQueue({ onStepUpRequired }: { onStepUpRequired: (r
         </div>
       </Card>
 
-      {rows.isPending ? (
+      {rows.isLoading ? (
         <Spinner />
-      ) : rows.isError ? (
+      ) : rows.error ? (
         <ErrorState severity="warning" title="Referrals could not be loaded" message="Try again." />
-      ) : (rows.data ?? []).length === 0 ? (
+      ) : rows.items.length === 0 ? (
         <Card padding="md">
           <p className="text-sm text-text-secondary">No referrals match.</p>
         </Card>
       ) : (
-        (rows.data ?? []).map((row) => (
-          <ReferralRow key={row.id} row={row} onStepUpRequired={onStepUpRequired} />
-        ))
+        <>
+          {rows.items.map((row) => (
+            <ReferralRow key={row.id} row={row} onStepUpRequired={onStepUpRequired} />
+          ))}
+          <LoadMore hasMore={rows.hasMore} loading={rows.loadingMore} onLoadMore={rows.loadMore} />
+        </>
       )}
     </div>
   );

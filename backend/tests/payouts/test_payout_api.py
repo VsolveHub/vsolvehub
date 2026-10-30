@@ -31,7 +31,12 @@ from tests.fulfilment.conftest import BookedGroup, create_booked_group
 from tests.helpers import force_role_client
 from tests.payouts.test_ledger_and_payout import _deliver
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Reaches en route and arrival through shared helpers for a visit booked for tomorrow; the
+    # clock gates on those steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 
 def _user() -> User:
@@ -108,6 +113,9 @@ def test_a_partner_with_no_payout_account_is_told_so_rather_than_shown_an_error(
     response = client.get("/api/v1/partner/payout-account/")
 
     assert response.status_code == HTTPStatus.NOT_FOUND
+    # The standard envelope with its own code, so the Partner app reads it as "none yet" and
+    # offers to add one. A bare `{"detail"}` body was read as a broken response.
+    assert response.json()["error"]["code"] == "payout_account_not_found"
 
 
 def test_a_payout_account_publishes_when_it_becomes_usable() -> None:
@@ -243,7 +251,8 @@ def test_a_batch_detail_lists_its_items() -> None:
     body = client.get(f"/api/v1/operations/payout-batches/{batch.id}/").json()
 
     assert body["item_count"] == 1
-    assert body["items"][0]["ledger_entry_id"] == str(entry.id)
+    assert body["items"][0]["entry_count"] == 1
+    assert body["items"][0]["amount_paise"] == entry.net_paise
     assert body["items"][0]["status"] == PayoutBatchItem.Status.RESERVED
     assert body["server_now"]
 

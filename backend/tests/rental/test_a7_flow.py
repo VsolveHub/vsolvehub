@@ -5,6 +5,8 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 
@@ -17,13 +19,16 @@ from apps.catalog.models import (
 )
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
+from apps.rental import models as rental_models
 from apps.rental.models import RentalAssetMedia, RentalBooking, RentalDeposit, RentalPhotoUpload
 from apps.rental.services import (
     RentalStateError,
     create_asset,
     create_booking,
     handover_booking,
+    mark_deposit_held,
     moderate_asset,
+    public_assets,
     release_deposit,
     return_booking,
     store_rental_photo,
@@ -35,7 +40,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-test", name="Rental Test")
     sub = Subcategory.objects.create(category=category, slug="tools", name="Tools")
     service = Service.objects.create(
@@ -111,7 +116,6 @@ def test_rental_happy_path_handover_return_release(rental_world):
     assert booking.deposit.payment_attempt_id is not None
     assert booking.deposit.payment_attempt.expires_at is not None
     assert booking.price_paise == 100000
-    from apps.rental.services import mark_deposit_held
 
     mark_deposit_held(payment_attempt_id=booking.deposit.payment_attempt_id)
     booking.refresh_from_db()
@@ -137,10 +141,6 @@ def test_mark_deposit_held_avoids_for_update_on_outer_join(rental_world):
     `FOR UPDATE` and blew up simulate-capture for A7 deposits. Lock rows in separate
     statements instead; assert no single statement mixes FOR UPDATE with a left join.
     """
-    from django.db import connection
-    from django.test.utils import CaptureQueriesContext
-
-    from apps.rental.services import mark_deposit_held
 
     asset = create_asset(
         partner=rental_world["partner"],
@@ -184,8 +184,6 @@ def test_mark_deposit_held_avoids_for_update_on_outer_join(rental_world):
 
 @pytest.mark.django_db
 def test_rental_filters(rental_world):
-    from apps.rental.services import public_assets
-
     asset = create_asset(
         partner=rental_world["partner"],
         variant_id=rental_world["variant"].id,
@@ -221,8 +219,12 @@ def test_rental_filters(rental_world):
 
 
 @pytest.mark.django_db
-def test_create_booking_forces_pickup_even_when_delivery_requested(rental_world):
-    """OLX model: doorstep delivery is not offered; mode is always PICKUP."""
+def test_delivery_is_refused_when_the_owner_does_not_offer_it(rental_world):
+    """Delivery is now a real option, but only on items whose owner offers it.
+
+    Replaces the old "always forced to PICKUP" rule: a DELIVERY request is no longer silently
+    rewritten, it is refused with a reason the customer can act on.
+    """
     asset = create_asset(
         partner=rental_world["partner"],
         variant_id=rental_world["variant"].id,
@@ -233,21 +235,27 @@ def test_create_booking_forces_pickup_even_when_delivery_requested(rental_world)
     submit_asset(asset=asset, partner=rental_world["partner"])
     moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test")
     start = timezone.localdate() + timedelta(days=5)
-    booking = create_booking(
-        customer=rental_world["customer"],
-        asset_id=asset.id,
-        start_date=start,
-        end_date=start + timedelta(days=1),
-        mode="DELIVERY",
-        hold_deposit_for_demo=True,
-    )
-    assert booking.pickup_or_delivery_mode == "PICKUP"
+    with pytest.raises(RentalStateError) as refused:
+        create_booking(
+            customer=rental_world["customer"],
+            asset_id=asset.id,
+            start_date=start,
+            end_date=start + timedelta(days=1),
+            mode="DELIVERY",
+            delivery_address={
+                "line": "4 Lake View",
+                "city": "Hyderabad",
+                "pincode": "500081",
+                "contact_phone": "9876543210",
+            },
+            hold_deposit_for_demo=True,
+        )
+    assert refused.value.code == "delivery_not_offered"
+    assert not RentalBooking.objects.filter(asset=asset).exists()
 
 
 @pytest.mark.django_db
 def test_no_fulfilment_unit_on_rental_models():
-    from apps.rental import models as rental_models
-
     for name in ("RentalAsset", "RentalBooking", "RentalDeposit", "AssetReservation"):
         model = getattr(rental_models, name)
         field_names = {f.name for f in model._meta.get_fields()}

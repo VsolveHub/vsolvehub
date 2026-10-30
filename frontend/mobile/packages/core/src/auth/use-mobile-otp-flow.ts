@@ -139,7 +139,7 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
       void (async () => {
         try {
           const device = await installationId();
-          const session = await request(() =>
+          const session = (await request(() =>
             getApiClient().POST("/api/v1/auth/mobile/otp/verify/", {
               body: {
                 challenge_id: challengeId,
@@ -149,8 +149,10 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
                 device_label: deviceLabel(),
               },
             }),
-          );
-          await useAuthStore.getState().signIn(session.session_token);
+          )) as { session_token?: string } | undefined;
+          if (session?.session_token) {
+            await useAuthStore.getState().signIn(session.session_token);
+          }
           await getMobileQueryClient().invalidateQueries();
           setPhase("authenticated");
           setCode("");

@@ -55,6 +55,7 @@ export function group(overrides: Partial<Schemas["BookingGroup"]> = {}) {
   return {
     id: "group-1",
     status: "MATCHING",
+    booking_mode: "SCHEDULED",
     version: 1,
     confirmation_policy: "ALL_OR_NOTHING",
     expires_at: "2026-08-03T09:30:00Z",

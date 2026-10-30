@@ -37,6 +37,7 @@ from .capture import (
     _try_confirm_group_capacity,
     _validate_payment_amount,
     apply_provider_payment,
+    capture_authorized_payment,
 )
 from .payments import (
     _locked_payment_context,
@@ -87,6 +88,7 @@ __all__ = [
     "allocate_document_number",
     "apply_provider_payment",
     "attempt_belongs_to",
+    "capture_authorized_payment",
     "create_provider_order",
     "initiate_payment_attempt",
     "initiate_standalone_payment_attempt",

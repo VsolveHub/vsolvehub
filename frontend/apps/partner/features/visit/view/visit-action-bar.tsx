@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ConfirmAction, Sheet, buttonStyles } from "@vsolve/ui";
+import { Button, ConfirmAction, Sheet, buttonStyles, useT } from "@vsolve/ui";
 import { MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -77,6 +77,7 @@ export function VisitActionBar({
   estimateSubmitted = false,
   onMessageCustomer,
 }: VisitActionBarProps) {
+  const t = useT();
   const [confirmingComplete, setConfirmingComplete] = useState(false);
   const [reportingNoShow, setReportingNoShow] = useState(false);
   const [showingTrouble, setShowingTrouble] = useState(false);
@@ -97,11 +98,11 @@ export function VisitActionBar({
       */
       return askingForCode ? (
         <Link href={arrivalHref} className={`${buttonStyles()} w-full`}>
-          Start OTP
+          {t("visit.actionBar.startOtp")}
         </Link>
       ) : (
         <Button onClick={() => controls.setAskingForCode(true)} disabled={pending}>
-          I&rsquo;ve arrived
+          {t("visit.actionBar.iveArrived")}
         </Button>
       );
     }
@@ -109,7 +110,7 @@ export function VisitActionBar({
     if (permissions.canComplete) {
       return (
         <Button disabled={pending} onClick={() => setConfirmingComplete(true)}>
-          Finish the visit
+          {t("visit.actionBar.finishVisit")}
         </Button>
       );
     }
@@ -120,7 +121,9 @@ export function VisitActionBar({
       // in the customer's hallway.
       return (
         <Link href={estimateHref} className={`${buttonStyles()} w-full`}>
-          {estimateSubmitted ? "Revise estimate" : "Write the estimate"}
+          {estimateSubmitted
+            ? t("visit.actionBar.reviseEstimate")
+            : t("visit.actionBar.writeEstimate")}
         </Link>
       );
     }
@@ -149,7 +152,7 @@ export function VisitActionBar({
             onClick={() => setShowingTrouble(true)}
             className="mx-auto inline-flex min-h-11 items-center gap-1.5 rounded-control px-3 text-sm font-semibold text-text-secondary underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
-            Something&rsquo;s wrong with this visit
+            {t("visit.actionBar.somethingWrongWithVisit")}
             <span aria-hidden>›</span>
           </button>
         ) : null}
@@ -158,15 +161,15 @@ export function VisitActionBar({
       <Sheet
         open={showingTrouble}
         onOpenChange={setShowingTrouble}
-        title="Something's wrong"
+        title={t("visit.actionBar.trouble.title")}
         description={timing ? timing.fullLabel : undefined}
       >
         <div className="flex flex-col gap-3 px-4 py-4">
           {permissions.canReportCustomerNoShow ? (
             <TroubleChoice
               icon={<Pictogram name="no" size="sm" />}
-              label="Nobody was there"
-              detail="You reached the site and the customer was not there."
+              label={t("visit.actionBar.trouble.nobodyThere")}
+              detail={t("visit.actionBar.trouble.nobodyThereDetail")}
               onClick={() => {
                 setShowingTrouble(false);
                 setReportingNoShow(true);
@@ -177,8 +180,8 @@ export function VisitActionBar({
           {onMessageCustomer === undefined ? null : (
             <TroubleChoice
               icon={<MessageCircle size={18} aria-hidden />}
-              label="Message the customer"
-              detail="Ask a question about access, parking or the work itself."
+              label={t("visit.actionBar.trouble.messageCustomer")}
+              detail={t("visit.actionBar.trouble.messageCustomerDetail")}
               onClick={() => {
                 setShowingTrouble(false);
                 onMessageCustomer();
@@ -194,9 +197,11 @@ export function VisitActionBar({
               <Pictogram name="call" size="sm" />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-bold text-text">Call Vsolve support</span>
+              <span className="block text-sm font-bold text-text">
+                {t("visit.actionBar.trouble.callSupport")}
+              </span>
               <span className="block text-xs leading-5 text-text-secondary">
-                Schedule changes, site access, safety.
+                {t("visit.actionBar.trouble.callSupportDetail")}
               </span>
             </span>
           </a>
@@ -206,9 +211,9 @@ export function VisitActionBar({
       <ConfirmAction
         open={confirmingComplete}
         onOpenChange={setConfirmingComplete}
-        title="Finish this visit"
-        consequence="Finishing the visit starts the estimate timer. Send the estimate before it ends."
-        confirmLabel="Finish the visit"
+        title={t("visit.actionBar.complete.title")}
+        consequence={t("visit.actionBar.complete.consequence")}
+        confirmLabel={t("visit.actionBar.finishVisit")}
         pending={controls.complete.isPending}
         onConfirm={() =>
           controls.complete.mutate(
@@ -221,9 +226,9 @@ export function VisitActionBar({
       <ConfirmAction
         open={reportingNoShow}
         onOpenChange={setReportingNoShow}
-        title="Report that nobody was on site"
-        consequence="Use this only if you reached the site and the customer was not there."
-        confirmLabel="Report it"
+        title={t("visit.actionBar.noShow.title")}
+        consequence={t("visit.actionBar.noShow.consequence")}
+        confirmLabel={t("visit.actionBar.noShow.confirm")}
         destructive
         pending={controls.noShow.isPending}
         onConfirm={() =>
@@ -279,6 +284,7 @@ function AddToCalendar({
   readonly controls: VisitDayControls;
   readonly enquiry: EnquiryRecord;
 }) {
+  const t = useT();
   const address = enquiry.siteAddress;
   const destination =
     address === null
@@ -294,10 +300,14 @@ function AddToCalendar({
           .filter((part) => part.trim() !== "")
           .join(", ");
 
-  const file = visitCalendarFile(controls.visit, {
-    serviceName: enquiry.serviceName,
-    destination,
-  });
+  const file = visitCalendarFile(
+    controls.visit,
+    {
+      serviceName: enquiry.serviceName,
+      destination,
+    },
+    t,
+  );
   if (file === null) return null;
 
   return (
@@ -313,7 +323,7 @@ function AddToCalendar({
       }}
     >
       <Pictogram name="date" size="sm" />
-      Add to my calendar
+      {t("visit.actionBar.addToCalendar")}
     </Button>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ConfirmAction, ErrorState, Sheet, Textarea, cn } from "@vsolve/ui";
+import { Button, ConfirmAction, ErrorState, Sheet, Textarea, cn, useT } from "@vsolve/ui";
 import {
   SHIFT_SAFETY_SEVERITIES,
   describeError,
@@ -78,6 +78,7 @@ export function ProblemSheet({
   onOpenChange,
   onFewerPeople,
 }: ProblemSheetProps) {
+  const t = useT();
   const [view, setView] = useState<View>("menu");
   const engagement = usePartnerEngagement(engagementId, open);
 
@@ -94,11 +95,11 @@ export function ProblemSheet({
   };
 
   const titles: Record<View, string> = {
-    menu: "Problem",
-    fewer: "Fewer people today",
-    cancel: "Can't come at all",
-    safety: "Injury / safety",
-    customer: "Customer issue",
+    menu: t("work.problemSheet.title.menu"),
+    fewer: t("work.problemSheet.title.fewer"),
+    cancel: t("work.problemSheet.title.cancel"),
+    safety: t("work.problemSheet.title.safety"),
+    customer: t("work.problemSheet.title.customer"),
   };
 
   return (
@@ -106,24 +107,24 @@ export function ProblemSheet({
       <div className="flex flex-col gap-3 pb-4">
         {view === "menu" ? (
           <div className="grid grid-cols-2 gap-3">
-            <ProblemTile icon="crew" label="Fewer people today" onClick={() => (onFewerPeople ? (close(), onFewerPeople()) : setView("fewer"))} />
+            <ProblemTile icon="crew" label={titles.fewer} onClick={() => (onFewerPeople ? (close(), onFewerPeople()) : setView("fewer"))} />
             {isDayOne || thisDay === null ? (
-              <ProblemTile icon="stopped" label="Can't come at all" onClick={() => setView("cancel")} />
+              <ProblemTile icon="stopped" label={titles.cancel} onClick={() => setView("cancel")} />
             ) : null}
-            <ProblemTile icon="held" label="Injury / safety" onClick={() => setView("safety")} />
-            <ProblemTile icon="call" label="Customer issue" onClick={() => setView("customer")} />
+            <ProblemTile icon="held" label={titles.safety} onClick={() => setView("safety")} />
+            <ProblemTile icon="call" label={titles.customer} onClick={() => setView("customer")} />
           </div>
         ) : (
           <BackRow onBack={() => setView("menu")} />
         )}
 
         {view === "fewer" ? (
-          <p className="text-sm text-text-secondary">Open today&rsquo;s day and tick who came.</p>
+          <p className="text-sm text-text-secondary">{t("work.problemSheet.fewerHint")}</p>
         ) : null}
 
         {view === "cancel" ? (
           <>
-            <p className="text-sm text-text-secondary">{CALL_SUPPORT_TO_CANCEL}</p>
+            <p className="text-sm text-text-secondary">{t(CALL_SUPPORT_TO_CANCEL)}</p>
             <BookingSupport reference={engagementId} />
           </>
         ) : null}
@@ -163,6 +164,7 @@ function ProblemTile({
 }
 
 function BackRow({ onBack }: { readonly onBack: () => void }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -170,7 +172,7 @@ function BackRow({ onBack }: { readonly onBack: () => void }) {
       className="inline-flex min-h-11 w-fit items-center gap-2 text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
       <ArrowLeft size={16} aria-hidden />
-      All problems
+      {t("work.problemSheet.allProblems")}
     </button>
   );
 }
@@ -219,6 +221,7 @@ function SafetyReport({
   readonly stageId: string | null;
   readonly onDone: () => void;
 }) {
+  const t = useT();
   const report = useReportSafetyIncident(engagementId);
   const [severity, setSeverity] = useState<ShiftSafetySeverity | null>(null);
   const [kind, setKind] = useState<ShiftSafetyCategory>("injury");
@@ -227,24 +230,25 @@ function SafetyReport({
   if (report.isSuccess) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm font-semibold text-text">{SAFETY_LOGGED}</p>
+        <p className="text-sm font-semibold text-text">{t(SAFETY_LOGGED)}</p>
         <Button type="button" onClick={onDone}>
-          Done
+          {t("common.done")}
         </Button>
       </div>
     );
   }
 
-  const severityOptions = SHIFT_SAFETY_SEVERITIES.map((value) => ({ value, label: SEVERITY_LABEL[value] }));
-  const kindLabel = SAFETY_KIND_TILES.find((tile) => tile.value === kind)?.label ?? kind;
+  const severityOptions = SHIFT_SAFETY_SEVERITIES.map((value) => ({ value, label: t(SEVERITY_LABEL[value]) }));
+  const kindOptions = SAFETY_KIND_TILES.map((tile) => ({ value: tile.value, label: t(tile.labelKey) }));
+  const kindLabel = kindOptions.find((tile) => tile.value === kind)?.label ?? kind;
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow label="How bad?" options={severityOptions} value={severity} onChange={setSeverity} disabled={report.isPending} />
-      <TileRow label="What?" options={SAFETY_KIND_TILES} value={kind} onChange={setKind} disabled={report.isPending} />
+      <TileRow label={t("work.problemSheet.safety.howBad")} options={severityOptions} value={severity} onChange={setSeverity} disabled={report.isPending} />
+      <TileRow label={t("work.problemSheet.safety.what")} options={kindOptions} value={kind} onChange={setKind} disabled={report.isPending} />
       <Textarea
-        aria-label="Note (optional)"
-        placeholder="Note (optional)"
+        aria-label={t("work.problemSheet.safety.note")}
+        placeholder={t("work.problemSheet.safety.note")}
         value={note}
         onChange={(event) => setNote(event.target.value)}
         maxLength={8000}
@@ -260,18 +264,18 @@ function SafetyReport({
                 severity,
                 categoryCode: kind,
                 // The record needs a body; with no note it says what was tapped.
-                description: note.trim() === "" ? `${SEVERITY_LABEL[severity]} — ${kindLabel}` : note,
+                description: note.trim() === "" ? `${t(SEVERITY_LABEL[severity])} — ${kindLabel}` : note,
                 occurredAt: null,
                 stageId,
               })
         }
         loading={report.isPending}
-        loadingLabel="Logging"
+        loadingLabel={t("work.problemSheet.safety.logging")}
         disabled={severity === null || report.isPending}
       >
-        Log it
+        {t("work.problemSheet.safety.logIt")}
       </Button>
-      <p className="text-xs text-text-muted">{SAFETY_LOGGED}</p>
+      <p className="text-xs text-text-muted">{t(SAFETY_LOGGED)}</p>
       {report.isError ? <Failure error={report.error} /> : null}
     </div>
   );
@@ -279,12 +283,13 @@ function SafetyReport({
 
 type CustomerIssueKind = PartnerCrewNoShowReason | "pay_less" | "site_not_ready" | "other";
 
-const CUSTOMER_ISSUE_TILES: readonly { readonly value: CustomerIssueKind; readonly label: string }[] = [
-  { value: "gate_locked", label: NO_SHOW_REASON_LABEL.gate_locked },
-  { value: "customer_no_show", label: NO_SHOW_REASON_LABEL.customer_no_show },
-  { value: "pay_less", label: "Asked to pay less" },
-  { value: "site_not_ready", label: "Site not ready" },
-  { value: "other", label: "Other" },
+/** `labelKey` is a catalogue key; resolve with `t` at render time. */
+const CUSTOMER_ISSUE_TILES: readonly { readonly value: CustomerIssueKind; readonly labelKey: string }[] = [
+  { value: "gate_locked", labelKey: NO_SHOW_REASON_LABEL.gate_locked },
+  { value: "customer_no_show", labelKey: NO_SHOW_REASON_LABEL.customer_no_show },
+  { value: "pay_less", labelKey: "work.problemSheet.customer.payLess" },
+  { value: "site_not_ready", labelKey: "work.problemSheet.customer.siteNotReady" },
+  { value: "other", labelKey: "work.problemSheet.customer.other" },
 ];
 
 function isNoShowReason(kind: CustomerIssueKind): kind is PartnerCrewNoShowReason {
@@ -302,6 +307,7 @@ function CustomerIssue({
   readonly noShowAllowed: boolean;
   readonly onDone: () => void;
 }) {
+  const t = useT();
   const noShow = useReportCrewNoShow({ requirementId, engagementId });
   const [kind, setKind] = useState<CustomerIssueKind | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -311,9 +317,9 @@ function CustomerIssue({
   if (noShow.isSuccess) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm font-semibold text-text">Reported. Vsolve settles the booking fee; nothing more to do today.</p>
+        <p className="text-sm font-semibold text-text">{t("work.problemSheet.customer.reported")}</p>
         <Button type="button" onClick={onDone}>
-          Done
+          {t("common.done")}
         </Button>
       </div>
     );
@@ -321,21 +327,23 @@ function CustomerIssue({
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow label="What happened?" options={CUSTOMER_ISSUE_TILES} value={kind} onChange={setKind} disabled={noShow.isPending} />
+      <TileRow
+        label={t("work.problemSheet.customer.whatHappened")}
+        options={CUSTOMER_ISSUE_TILES.map((tile) => ({ value: tile.value, label: t(tile.labelKey) }))} value={kind} onChange={setKind} disabled={noShow.isPending} />
 
       {kind === null ? null : viaNoShow ? (
         <>
           <Button type="button" variant="danger" onClick={() => setConfirming(true)} disabled={noShow.isPending}>
-            Report it
+            {t("work.problemSheet.customer.reportIt")}
           </Button>
           <ConfirmAction
             open={confirming}
             onOpenChange={setConfirming}
-            title="Report the customer was not there?"
+            title={t("work.problemSheet.customer.confirmTitle")}
             destructive
             pending={noShow.isPending}
-            confirmLabel="Report it"
-            consequence="Vsolve keeps the booking fee and pays you a travel share; this cannot be undone."
+            confirmLabel={t("work.problemSheet.customer.reportIt")}
+            consequence={t("work.problemSheet.customer.confirmConsequence")}
             onConfirm={() =>
               kind !== null && isNoShowReason(kind)
                 ? noShow.mutate({ reasonCode: kind }, { onSuccess: () => setConfirming(false) })
@@ -347,8 +355,8 @@ function CustomerIssue({
         <>
           <p className="text-sm text-text-secondary">
             {kind === "gate_locked" || kind === "customer_no_show"
-              ? "After day one starts this goes to support."
-              : "Keep the rate as agreed — support sorts this out with the customer."}
+              ? t("work.problemSheet.customer.afterDayOne")
+              : t("work.problemSheet.customer.keepRate")}
           </p>
           <BookingSupport reference={engagementId} />
         </>
@@ -373,12 +381,13 @@ function Failure({ error }: { readonly error: unknown }) {
 
 /** `m2_policy_unavailable` is Vsolve's gap, not the vendor's: the fee stays untouched. */
 function NoShowFailure({ error }: { readonly error: unknown }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
   if (isPolicyUnavailable(error)) {
     return (
       <ErrorState
-        title="Vsolve cannot settle this yet"
-        message="The fee is untouched; support will settle it by hand."
+        title={t("work.problemSheet.policyUnavailable.title")}
+        message={t("work.problemSheet.policyUnavailable.message")}
         severity="warning"
         reference={presentation.reference}
       />

@@ -94,8 +94,9 @@ export function useStartPayment() {
             expected_checkout_version: input.expectedCheckoutVersion,
           },
         }),
-      ),
+      ) as Promise<PaymentAttempt>,
     onSuccess: (attempt) => {
+      if (!attempt) return;
       // Authoritative: seed both the attempt's own entry and the checkout lookup
       // the recovery path reads, so a return from the provider finds it warm.
       queryClient.setQueryData(queryKeys.payment.attempt(attempt.id), attempt);
@@ -195,7 +196,7 @@ export function useReconcilePayment() {
             },
           },
         }),
-      ),
+      ) as Promise<PaymentAttempt>,
     onSuccess: (attempt) => {
       queryClient.setQueryData(queryKeys.payment.attempt(attempt.id), attempt);
       queryClient.setQueryData(queryKeys.payment.forCheckout(attempt.checkout_id), attempt);

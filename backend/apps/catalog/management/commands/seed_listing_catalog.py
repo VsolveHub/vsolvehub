@@ -13,7 +13,7 @@ Seeds:
 
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -47,6 +47,18 @@ from apps.partners.models import (
 )
 
 User = get_user_model()
+
+
+class _DemoListing(TypedDict):
+    title: str
+    description: str
+    location_text: str
+    is_premium: bool
+    salary_min_paise: int
+    salary_max_paise: int
+    salary_period: str
+    structured_fields: dict[str, str]
+    moderation_reason: str
 
 
 _FALLBACK_CAREER_TAXONOMY: dict[str, list[str]] = {
@@ -88,7 +100,12 @@ def _load_career_taxonomy(csv_path: Path) -> dict[str, list[str]]:
             current_subcat = None
         if subcat:
             current_subcat = subcat
-        if current_cat == "Career Opportunity or Job Opportunities" and svc:
+        # A row before any subcategory has nowhere to go: skip it rather than file it under None.
+        if (
+            current_cat == "Career Opportunity or Job Opportunities"
+            and svc
+            and current_subcat is not None
+        ):
             if current_subcat not in taxonomy:
                 taxonomy[current_subcat] = []
             taxonomy[current_subcat].append(svc)
@@ -421,7 +438,7 @@ class Command(BaseCommand):
 
             # Seed published demo listings (regular + premium/Featured for customer browse)
             now = timezone.now()
-            demo_listings = [
+            demo_listings: list[_DemoListing] = [
                 {
                     "title": "Experienced Full Stack Developer",
                     "description": (

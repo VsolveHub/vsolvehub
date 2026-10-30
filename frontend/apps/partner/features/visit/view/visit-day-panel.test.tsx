@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { enquiryDetail, planVisit } from "@/features/enquiry/fixtures";
 import { readEnquiryRecord } from "@/features/enquiry/model/wire";
+import { withI18n } from "@/i18n/test-utils";
 
 import { VisitDayPanel } from "./visit-day-panel";
 
@@ -34,7 +35,7 @@ function renderVisit(
   );
 
   function Wrapper({ children }: { readonly children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
   }
 
   return render(

@@ -1,4 +1,5 @@
 import { ApiRequestError } from "@vsolve/api-client";
+import type { useT } from "@vsolve/ui";
 import { z } from "zod";
 
 export function rupeesToPaise(input: string): number | null {
@@ -61,8 +62,8 @@ function refinePay(
       path: ["salary_min_rupees"],
       code: "custom",
       message: exact
-        ? "Enter the pay in rupees, for example 25000 or 8,00,000."
-        : "Enter a minimum pay in rupees, for example 25000 or 8,00,000.",
+        ? "listings.validation.payExact"
+        : "listings.validation.payMin",
     });
   }
   if (!exact) {
@@ -71,12 +72,12 @@ function refinePay(
       ctx.addIssue({
         path: ["salary_max_rupees"],
         code: "custom",
-        message: "Enter a maximum pay in rupees that is at least the minimum.",
+        message: "listings.validation.payMax",
       });
     }
   }
   if (!["MONTHLY", "YEARLY", "HOURLY"].includes(data.salary_period)) {
-    ctx.addIssue({ path: ["salary_period"], code: "custom", message: "Select a pay period." });
+    ctx.addIssue({ path: ["salary_period"], code: "custom", message: "listings.validation.payPeriod" });
   }
 }
 
@@ -89,37 +90,37 @@ export const phoneRule = z
   .trim()
   .refine(
     (value) => /^\d{10}$/.test(value.replace(/\D/g, "")),
-    "Enter a 10-digit mobile number.",
+    "listings.validation.phone",
   );
 
 export const emailRule = z
   .string()
   .trim()
-  .max(254, "Email must be 254 characters or fewer.")
+  .max(254, "listings.validation.emailMax")
   .refine(
     (value) => value === "" || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value),
-    "Enter a valid email address.",
+    "listings.validation.email",
   );
 
 export const listingShape = {
   title: z
     .string()
     .trim()
-    .min(5, "Job title must be at least 5 characters.")
-    .max(180, "Job title must be 180 characters or fewer."),
+    .min(5, "listings.validation.titleMin")
+    .max(180, "listings.validation.titleMax"),
   description: z
     .string()
     .trim()
-    .min(20, "Describe the role in at least 20 characters.")
-    .max(5000, "Description must be 5000 characters or fewer."),
+    .min(20, "listings.validation.descriptionMin")
+    .max(5000, "listings.validation.descriptionMax"),
   contact_phone: phoneRule,
   contact_email: emailRule,
   pay_mode: z.enum(["range", "exact"]),
   salary_min_rupees: z.string().trim(),
   salary_max_rupees: z.string().trim(),
   salary_period: z.string().trim(),
-  shift: z.string().trim().max(300, "Keep shift to 300 characters or fewer.").optional(),
-  experience_years: z.string().trim().max(300, "Keep experience to 300 characters or fewer.").optional(),
+  shift: z.string().trim().max(300, "listings.validation.shiftMax").optional(),
+  experience_years: z.string().trim().max(300, "listings.validation.experienceMax").optional(),
   role_type: z.string().trim().optional(),
 };
 
@@ -128,20 +129,30 @@ export const createListingSchema = z.object({
   location_text: z
     .string()
     .trim()
-    .min(3, "Enter a work location, or write 'Remote'.")
-    .max(180, "Location must be 180 characters or fewer."),
+    .min(3, "listings.validation.locationMin")
+    .max(180, "listings.validation.locationMax"),
 }).superRefine(refinePay);
 
 export const editListingSchema = z.object({
   ...listingShape,
-  location_text: z.string().trim().max(180, "Location must be 180 characters or fewer."),
+  location_text: z.string().trim().max(180, "listings.validation.locationMax"),
 }).superRefine(refinePay);
 
-export function issuesToFieldErrors(error: z.ZodError): Record<string, string> {
+/**
+ * Field errors for the form. The schema messages above are catalogue keys
+ * (`listings.validation.*`), resolved here; zod's own built-in messages pass
+ * through unchanged.
+ */
+export function issuesToFieldErrors(
+  error: z.ZodError,
+  t: ReturnType<typeof useT>,
+): Record<string, string> {
   const out: Record<string, string> = {};
   for (const issue of error.issues) {
     const key = String(issue.path[0] ?? "");
-    if (key && !out[key]) out[key] = issue.message;
+    if (key && !out[key]) {
+      out[key] = issue.message.startsWith("listings.") ? t(issue.message) : issue.message;
+    }
   }
   return out;
 }
@@ -162,52 +173,55 @@ export function serverErrorMessage(error: unknown, fallback: string): string {
 
 /**
  * One place for what the user is told after an action succeeds.
+ * Values are catalogue keys — resolve with `t` at the call site.
  */
 export const SUCCESS_MESSAGES = {
-  create: "Opening saved as a draft.",
-  update: "Opening updated.",
-  submit: "Opening is live and visible to applicants.",
-  publish: "Opening is live and visible to applicants.",
-  republish: "Opening is live again.",
-  close: "Opening closed. It no longer accepts applications.",
-  subscribe: "Subscription active.",
+  create: "listings.success.create",
+  update: "listings.success.update",
+  submit: "listings.success.live",
+  publish: "listings.success.live",
+  republish: "listings.success.republish",
+  close: "listings.success.close",
+  subscribe: "listings.success.subscribe",
 } as const;
 
+/** `label` is a catalogue key — resolve with `t` at render time. */
 export const STATUS_BADGES: Record<
   string,
   { label: string; bg: string; text: string; border: string }
 > = {
-  DRAFT: { label: "Draft", bg: "bg-surface-sunken", text: "text-text-secondary", border: "border-line" },
+  DRAFT: { label: "listings.status.draft", bg: "bg-surface-sunken", text: "text-text-secondary", border: "border-line" },
   // Legacy: listings sent for review before instant publishing. "Publish now" puts them live.
   PENDING_REVIEW: {
-    label: "Draft",
+    label: "listings.status.draft",
     bg: "bg-warning-surface",
     text: "text-warning-text",
     border: "border-warning-line",
   },
   REJECTED: {
-    label: "Rejected",
+    label: "listings.status.rejected",
     bg: "bg-danger-surface",
     text: "text-danger-text",
     border: "border-danger-line",
   },
   PUBLISHED: {
-    label: "Live & Active",
+    label: "listings.status.published",
     bg: "bg-success-surface",
     text: "text-success-text",
     border: "border-success-line",
   },
-  CLOSED: { label: "Closed", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
-  REMOVED: { label: "Removed", bg: "bg-danger-surface", text: "text-danger-text", border: "border-danger-line" },
-  EXPIRED: { label: "Expired", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
-  ARCHIVED: { label: "Archived", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
+  CLOSED: { label: "listings.status.closed", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
+  REMOVED: { label: "listings.status.removed", bg: "bg-danger-surface", text: "text-danger-text", border: "border-danger-line" },
+  EXPIRED: { label: "listings.status.expired", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
+  ARCHIVED: { label: "listings.status.archived", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
 };
 
+/** `label` is a catalogue key — resolve with `t` at render time. */
 export const LISTING_TABS = [
-  { key: "ALL", label: "All Listings" },
-  { key: "ACTIVE", label: "Live Active" },
-  { key: "DRAFT", label: "Drafts" },
-  { key: "CLOSED", label: "Closed / Expired" },
+  { key: "ALL", label: "listings.page.tab.all" },
+  { key: "ACTIVE", label: "listings.page.tab.active" },
+  { key: "DRAFT", label: "listings.page.tab.draft" },
+  { key: "CLOSED", label: "listings.page.tab.closed" },
 ] as const;
 
 export type TabKey = (typeof LISTING_TABS)[number]["key"];

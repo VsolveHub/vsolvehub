@@ -33,7 +33,8 @@ export function CatalogueHeader() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasQuery = (searchParams.get("q") ?? "").trim() !== "";
-  const [wantsSearch, setWantsSearch] = useState(hasQuery);
+  // `?search=1` is the header's search button: arrive with the box already open.
+  const [wantsSearch, setWantsSearch] = useState(hasQuery || searchParams.get("search") === "1");
 
   const open = wantsSearch || hasQuery;
 

@@ -700,6 +700,51 @@ class ServiceMedia(models.Model):
         return self.alt_text
 
 
+class PromoBanner(models.Model):
+    """A display-only promotional banner shown on service pages.
+
+    Operations writes the wording in the admin. It is marketing copy, not a price rule:
+    nothing in pricing, checkout or settlement reads this table, so a banner never changes
+    what a customer pays. A banner with no category shows on every service page; one with a
+    category shows only on that category's services.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=80)
+    subtitle = models.CharField(max_length=160, blank=True)
+    #: The small print under the banner, e.g. "Valid on bookings above ₹300".
+    terms = models.CharField(max_length=160, blank=True)
+    #: Blank falls back to the category's own artwork on the client.
+    image_url = models.URLField(max_length=500, blank=True, default="")
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="promo_banners",
+        null=True,
+        blank=True,
+    )
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(starts_at__isnull=True)
+                | models.Q(ends_at__isnull=True)
+                | models.Q(ends_at__gt=models.F("starts_at")),
+                name="catalog_promo_banner_window_valid",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class A10VariantConfiguration(models.Model):
     """Versioned schema configuration for an A10_LISTING variant.
 

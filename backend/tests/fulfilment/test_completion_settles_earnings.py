@@ -19,7 +19,12 @@ from apps.payouts.models import PartnerLedgerEntry
 from apps.payouts.services import partner_balance_paise
 from tests.fulfilment.test_completion import _in_progress_booking
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Reaches en route and arrival through shared helpers for a visit booked for tomorrow; the
+    # clock gates on those steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 
 def _all_outcomes(booking: Booking, outcome: str) -> list[OutcomeInput]:

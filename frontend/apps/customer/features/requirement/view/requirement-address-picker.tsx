@@ -1,5 +1,7 @@
 "use client";
 
+import type { Schemas } from "@vsolve/api-client";
+import { describeError } from "@vsolve/query";
 import { useEffect, useState } from "react";
 
 import {
@@ -70,6 +72,27 @@ export function RequirementAddressPicker({
     serviceVariantId: variantId,
   });
 
+  /** Coverage for the pincode being typed in the add form. See `CrewAddressPicker`. */
+  const [draftPostalCode, setDraftPostalCode] = useState("");
+  const draftServiceabilityQuery = useServiceability({
+    postalCode: draftPostalCode.trim().length === 6 ? draftPostalCode.trim() : null,
+    serviceVariantId: variantId,
+  });
+
+  /** Writes the address the Customer checked on the form. Null keeps the form open. */
+  async function create(
+    request: Schemas["AddressRequest"],
+  ): Promise<Schemas["Address"] | null> {
+    try {
+      return await createAddress.mutateAsync({
+        ...request,
+        is_default: addresses.length === 0,
+      });
+    } catch {
+      return null; // `createError` renders inside the form.
+    }
+  }
+
   /** Turns a device fix into a saved address, then selects it. */
   async function handleUseCurrentLocation() {
     setLocationError(null);
@@ -127,6 +150,17 @@ export function RequirementAddressPicker({
       isUpdatingAddress={updateAddress.isPending}
       presentation={presentation}
       openSignal={openSignal}
+      addNew={{
+        onCreate: create,
+        isCreating: createAddress.isPending,
+        createError:
+          createAddress.error === null
+            ? null
+            : describeError(createAddress.error, "mutation").message,
+        onPostalCodeChange: setDraftPostalCode,
+        draftServiceability: draftServiceabilityQuery.data ?? null,
+        isCheckingDraftServiceability: draftServiceabilityQuery.isFetching,
+      }}
     />
   );
 }

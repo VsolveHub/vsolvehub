@@ -93,7 +93,10 @@ from .enquiries import (
     SiteVisitCompleteView,
     SiteVisitScheduleView,
 )
-from .financial_policy import OperationsCommercialPolicyActivateView
+from .financial_policy import (
+    OperationsCommercialPolicyActivateView,
+    OperationsCommercialPolicyListView,
+)
 from .operations_requests import (
     OperationsAssistedClarificationView,
     OperationsAssistedProposalView,
@@ -134,6 +137,7 @@ from .projects import (
     EngagementProjectView,
     EngagementStageDelayClaimView,
     EngagementTerminationView,
+    OperationsEngagementProjectView,
     ProjectDelayClaimDecisionView,
     ProjectTransferDecisionView,
     _project_engagement_for_participant,
@@ -280,6 +284,7 @@ __all__ = [
     "OperationsAssistedProposalView",
     "OperationsChargebackView",
     "OperationsCommercialPolicyActivateView",
+    "OperationsCommercialPolicyListView",
     "OperationsCrewDocumentDecisionView",
     "OperationsCrewDocumentListView",
     "OperationsCrewGenderCorrectionView",
@@ -290,6 +295,7 @@ __all__ = [
     "OperationsCustomWorkItemReviewResolveView",
     "OperationsDeadlineView",
     "OperationsDeclineAlarmView",
+    "OperationsEngagementProjectView",
     "OperationsQueueView",
     "OperationsQuoteGuardrailPolicyActivateView",
     "OperationsQuoteGuardrailPolicyView",

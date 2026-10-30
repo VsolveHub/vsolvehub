@@ -1,6 +1,16 @@
 "use client";
 
-import { Badge, Card, ErrorState, FactTile, Readout, Spinner, formatMoney } from "@vsolve/ui";
+import {
+  Badge,
+  Card,
+  ErrorState,
+  FactTile,
+  Readout,
+  Spinner,
+  formatMoney,
+  useT,
+  useTranslator,
+} from "@vsolve/ui";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 import type { EnquiryRecord } from "@/features/enquiry/model/wire";
@@ -49,12 +59,13 @@ export function VisitNowCard({
   estimateSubmitted = false,
   isRefreshing = false,
 }: VisitNowCardProps) {
+  const { t, locale } = useTranslator();
   const { visit, status, timing } = controls;
 
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold text-text">Your visit</h2>
+        <h2 className="text-lg font-bold text-text">{t("visit.nowCard.title")}</h2>
         <Badge tone={TONE[status.tone]} dot>
           {status.label}
         </Badge>
@@ -73,7 +84,7 @@ export function VisitNowCard({
       {visit.status === "SCHEDULED" && timing ? (
         <>
           <WhenBlock
-            headline={`${timing.dayLabel}, ${timing.timeLabel}`}
+            headline={t("visit.nowCard.whenHeadline", { day: timing.dayLabel, time: timing.timeLabel })}
             detail={[timing.fullLabel, timing.durationLabel].filter(Boolean).join(" · ")}
             note={timing.relative}
             tone={timing.isVisitDay ? "action" : "neutral"}
@@ -88,8 +99,18 @@ export function VisitNowCard({
                   Vsolve knows where the site is and nothing about where this
                   vendor is starting from. */}
               <span>
-                Set off by <span className="font-bold text-text">{timing.leaveBy}</span> to be
-                there on time.
+                {(() => {
+                  const [before, after = ""] = t("visit.nowCard.setOffBy", {
+                    time: "\u0000",
+                  }).split("\u0000");
+                  return (
+                    <>
+                      {before}
+                      <span className="font-bold text-text">{timing.leaveBy}</span>
+                      {after}
+                    </>
+                  );
+                })()}
               </span>
             </p>
           ) : null}
@@ -97,7 +118,7 @@ export function VisitNowCard({
           {controls.canStartArrival ? null : (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-surface-sunken px-3 py-2.5">
               <p className="text-xs leading-5 text-text-secondary">
-                &ldquo;I&rsquo;ve arrived&rdquo; opens on the day of the visit.
+                {t("visit.nowCard.arrivalOpensOnDay")}
               </p>
               {/* Dev builds only — `overrideArrivalGate` is null in production,
                   so this control does not exist there. It is labelled rather
@@ -110,7 +131,7 @@ export function VisitNowCard({
                   onClick={controls.overrideArrivalGate}
                   className="shrink-0 rounded-control border border-dashed border-line px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-text-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 >
-                  Open anyway · dev
+                  {t("visit.nowCard.openAnywayDev")}
                 </button>
               )}
             </div>
@@ -124,15 +145,17 @@ export function VisitNowCard({
           <WhenBlock
             headline={
               visit.arrival_confirmed_at
-                ? `On site since ${timeOnlyInZone(visit.arrival_confirmed_at, visit.timezone)}`
-                : "On site"
+                ? t("visit.nowCard.onSiteSince", {
+                    time: timeOnlyInZone(visit.arrival_confirmed_at, visit.timezone, locale),
+                  })
+                : t("visit.nowCard.onSite")
             }
             detail={timing?.durationLabel ?? null}
             note={null}
             tone="action"
           />
           <p className="text-sm leading-5 text-text-secondary">
-            When you finish, the estimate timer starts.
+            {t("visit.nowCard.estimateTimerStarts")}
           </p>
         </>
       ) : null}
@@ -147,13 +170,15 @@ export function VisitNowCard({
 
       {timing?.zoneUnsupported ? (
         <p className="text-xs leading-5 text-text-muted">
-          Check this time against the site&rsquo;s timezone ({visit.timezone}).
+          {t("visit.nowCard.checkTimezone", { timezone: visit.timezone })}
         </p>
       ) : null}
 
       {visit.cancellation_reason_code ? (
         <p className="text-sm leading-6 text-text-secondary">
-          Recorded reason: {visit.cancellation_reason_code.replace(/[_-]+/g, " ")}
+          {t("visit.nowCard.recordedReason", {
+            reason: visit.cancellation_reason_code.replace(/[_-]+/g, " "),
+          })}
         </p>
       ) : null}
 
@@ -163,7 +188,7 @@ export function VisitNowCard({
           title={controls.failure.title}
           message={controls.failure.message}
           severity={controls.failure.severity}
-          actionLabel="Try again"
+          actionLabel={t("common.tryAgain")}
           onAction={controls.resetFailure}
           reference={controls.failure.reference}
         />
@@ -238,6 +263,7 @@ function CompletedVisit({
   readonly enquiry: EnquiryRecord;
   readonly estimateSubmitted: boolean;
 }) {
+  const t = useT();
   const { visit, estimateCountdown } = controls;
 
   return (
@@ -247,33 +273,37 @@ function CompletedVisit({
           submitted estimate reads as a demand for something already done. */}
       {estimateSubmitted ? (
         <p className="text-sm font-semibold leading-5 text-success-text">
-          Estimate submitted. The customer can review it now.
+          {t("visit.nowCard.estimateSubmitted")}
         </p>
       ) : visit.estimate_due_at && estimateCountdown ? (
         <Readout
-          label="Estimate due in"
-          value={estimateCountdown.isExpired ? "Past due" : estimateCountdown.display}
+          label={t("visit.nowCard.estimateDueIn")}
+          value={estimateCountdown.isExpired ? t("visit.nowCard.pastDue") : estimateCountdown.display}
           announce={
             estimateCountdown.isExpired
-              ? "The estimate window has passed"
+              ? t("visit.nowCard.estimateWindowPassed")
               : estimateCountdown.announce
           }
           tone={estimateCountdown.isExpired ? "danger" : "warning"}
           size="sm"
-          caption={`Due ${timeAgo(visit.estimate_due_at)}`}
+          caption={t("visit.nowCard.dueAt", { when: timeAgo(visit.estimate_due_at, t) })}
         />
       ) : null}
 
       <p className="text-sm leading-5 text-text-secondary">
-        {visit.completed_at ? `Visit closed ${timeAgo(visit.completed_at)}. ` : ""}
+        {visit.completed_at
+          ? t("visit.nowCard.visitClosedAt", { when: timeAgo(visit.completed_at, t) })
+          : ""}
         {estimateSubmitted
-          ? "You can revise it while the enquiry remains open."
-          : "Send the estimate before the timer ends — it is what the customer paid for."}
+          ? t("visit.nowCard.canRevise")
+          : t("visit.nowCard.sendBeforeTimerEnds")}
       </p>
 
       {enquiry.fixedVisitEarningPaise === null ? null : (
         <p className="text-sm font-semibold text-text">
-          {formatMoney(enquiry.fixedVisitEarningPaise)} visit fee earned
+          {t("visit.nowCard.visitFeeEarned", {
+            amount: formatMoney(enquiry.fixedVisitEarningPaise),
+          })}
         </p>
       )}
     </div>
@@ -304,6 +334,7 @@ function HeldVisit({
   readonly approximateArea: string;
   readonly isRefreshing: boolean;
 }) {
+  const t = useT();
   return (
     <div role="status" className="flex flex-col gap-3">
       <div className="flex flex-col items-center gap-1.5 text-center">
@@ -313,7 +344,9 @@ function HeldVisit({
         >
           <Pictogram name="yes" size="lg" />
         </span>
-        <p className="text-lg font-extrabold tracking-[-0.02em] text-text">This visit is yours</p>
+        <p className="text-lg font-extrabold tracking-[-0.02em] text-text">
+          {t("visit.nowCard.held.visitIsYours")}
+        </p>
       </div>
 
       <div className="flex gap-3 rounded-card border-[1.5px] border-warning-line bg-warning-surface p-3.5">
@@ -322,10 +355,10 @@ function HeldVisit({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-extrabold tracking-[-0.015em] text-warning-text">
-            Do not travel yet
+            {t("visit.nowCard.held.doNotTravel")}
           </p>
           <p className="mt-1 text-[12.5px] leading-[18px] text-warning-text">
-            Waiting for customer payment. This page updates automatically.
+            {t("visit.nowCard.held.waitingForPayment")}
           </p>
         </div>
         {isRefreshing ? <Spinner size="sm" /> : null}
@@ -335,16 +368,18 @@ function HeldVisit({
         <FactTile
           locked
           icon={<Pictogram name="site" size="sm" />}
-          label="Exact address"
+          label={t("visit.nowCard.held.exactAddress")}
           value={
-            approximateArea.trim() === "" ? "After payment" : `${approximateArea} — after payment`
+            approximateArea.trim() === ""
+              ? t("visit.nowCard.held.afterPayment")
+              : t("visit.nowCard.held.areaAfterPayment", { area: approximateArea })
           }
         />
         <FactTile
           locked
           icon={<Pictogram name="call" size="sm" />}
-          label="Customer phone"
-          value="After payment"
+          label={t("visit.nowCard.held.customerPhone")}
+          value={t("visit.nowCard.held.afterPayment")}
         />
       </div>
 
@@ -353,15 +388,17 @@ function HeldVisit({
 }
 
 const PROGRESS_STEPS: readonly {
+  /** A catalogue key, resolved with `t` at render time. */
   readonly label: string;
   readonly icon: PictogramName;
 }[] = [
-  { label: "Visit", icon: "date" },
-  { label: "On site", icon: "site" },
-  { label: "Estimate", icon: "price" },
+  { label: "visit.progress.visit", icon: "date" },
+  { label: "visit.progress.onSite", icon: "site" },
+  { label: "visit.progress.estimate", icon: "price" },
 ];
 
 export function VisitProgress({ status }: { readonly status: SiteVisitStatus }) {
+  const t = useT();
   if (status === "CANCELLED" || status === "VENDOR_NO_SHOW" || status === "CUSTOMER_NO_SHOW") {
     return null;
   }
@@ -369,7 +406,7 @@ export function VisitProgress({ status }: { readonly status: SiteVisitStatus }) 
   const current = status === "COMPLETED" ? 2 : status === "IN_PROGRESS" ? 1 : 0;
 
   return (
-    <ol aria-label="Visit progress" className="grid grid-cols-3 gap-2">
+    <ol aria-label={t("visit.progress.ariaLabel")} className="grid grid-cols-3 gap-2">
       {PROGRESS_STEPS.map((step, index) => {
         const complete = index < current;
         const active = index === current;
@@ -393,7 +430,7 @@ export function VisitProgress({ status }: { readonly status: SiteVisitStatus }) 
             <span
               className={`truncate text-xs font-bold ${active ? "text-text" : "text-text-muted"}`}
             >
-              {step.label}
+              {t(step.label)}
             </span>
           </li>
         );

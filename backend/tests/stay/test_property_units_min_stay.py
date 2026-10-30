@@ -20,11 +20,14 @@ from apps.stay.models import Unit
 from apps.stay.services import (
     StayStateError,
     calculate_stay_quote,
+    cancel_enquiry,
+    confirm_enquiry,
     create_enquiry,
     create_property,
     create_unit,
     moderate_property,
     submit_property,
+    update_unit,
 )
 from tests.helpers import force_role_client
 
@@ -32,7 +35,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def stay_world(db):
+def stay_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="stay-units-test", name="Stay Units Test")
     sub = Subcategory.objects.create(category=category, slug="pg-units", name="PG Units")
     service = Service.objects.create(
@@ -133,8 +136,6 @@ def test_submit_property_requires_active_unit(stay_world):
 
 @pytest.mark.django_db
 def test_update_unit_deactivate(stay_world):
-    from apps.stay.services import update_unit
-
     prop = create_property(
         host=stay_world["host"],
         variant_id=stay_world["variant"].id,
@@ -292,20 +293,6 @@ def test_enquire_http_min_stay_code(stay_world):
 
 @pytest.mark.django_db
 def test_confirm_enquiry_holds_unit_reservation(stay_world):
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from apps.stay.services import (
-        StayStateError,
-        cancel_enquiry,
-        confirm_enquiry,
-        create_enquiry,
-        create_property,
-        moderate_property,
-        submit_property,
-    )
-
     today = timezone.localdate()
     prop = create_property(
         host=stay_world["host"],
@@ -329,7 +316,6 @@ def test_confirm_enquiry_holds_unit_reservation(stay_world):
     assert confirmed.unit_reservation_id is None
 
     # Verify double book fails
-    import pytest
 
     with pytest.raises(StayStateError) as exc:
         create_enquiry(

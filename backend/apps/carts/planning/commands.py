@@ -25,7 +25,11 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from apps.carts.availability import arrival_window_for_duration
+from apps.carts.availability import (
+    arrival_window_for_duration,
+    compute_instant_availability,
+    load_snapshot,
+)
 from apps.carts.exceptions import (
     FulfilmentPlanStaleApiError,
     FulfilmentPlanUnavailableApiError,
@@ -139,7 +143,8 @@ def create_fulfilment_plan_set(
     cart: Cart,
     address: Address,
     expected_cart_version: int,
-    preferred_starts: Mapping[str, datetime],
+    preferred_starts: Mapping[str, datetime] | None = None,
+    booking_mode: str = "SCHEDULED",
 ) -> FulfilmentPlanSet:
     now = timezone.now()
     locked_cart = Cart.objects.select_for_update().get(id=cart.id)
@@ -154,7 +159,38 @@ def create_fulfilment_plan_set(
     # starts are keyed to is itself area-scoped: asking "is this cart serviceable
     # here at all" is what makes the group keys meaningful enough to check.
     service_area = resolve_cart_service_area(cart=locked_cart, address=address, items=items)
-    submitted = dict(preferred_starts)
+    submitted = dict(preferred_starts or {})
+    if booking_mode == "INSTANT":
+        groups = scheduling_groups(cart=locked_cart, area=service_area, at=now)
+        total_duration = sum(g.estimated_duration_minutes for g in groups)
+        variant_ids = {entry.item.variant_id for entry in items}
+        horizon_end = now + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS + 1)
+        snapshot_obj = load_snapshot(
+            variant_ids=variant_ids,
+            area=service_area,
+            horizon_start=now,
+            horizon_end=horizon_end,
+            destination=address,
+        )
+        instant_avail = compute_instant_availability(
+            area=service_area,
+            snapshot=snapshot_obj,
+            duration=total_duration,
+            now=now,
+        )
+        if not instant_avail.is_available or instant_avail.earliest_starts_at is None:
+            raise FulfilmentPlanUnavailableApiError(
+                reasons=[
+                    {
+                        "cart_item_id": None,
+                        "reason": instant_avail.unavailable_reason or "instant_unavailable",
+                    }
+                ]
+            )
+        for group in groups:
+            if group.key not in submitted:
+                submitted[group.key] = instant_avail.earliest_starts_at
+
     starts_by_item = _starts_by_item(
         cart=locked_cart,
         area=service_area,
@@ -213,6 +249,7 @@ def create_fulfilment_plan_set(
         )
     snapshot = {
         "cart_version": locked_cart.version,
+        "booking_mode": booking_mode,
         "items": [
             {
                 "id": str(entry.item.id),
@@ -236,8 +273,12 @@ def create_fulfilment_plan_set(
     }
     FulfilmentPlanSet.objects.filter(
         cart=locked_cart,
-        status=FulfilmentPlanSet.Status.ACTIVE,
+        status__in=(FulfilmentPlanSet.Status.ACTIVE, FulfilmentPlanSet.Status.SELECTED),
     ).update(status=FulfilmentPlanSet.Status.INVALIDATED)
+    Quote.objects.filter(
+        fulfilment_plan__plan_set__cart=locked_cart,
+        status=Quote.Status.ACTIVE,
+    ).update(status=Quote.Status.INVALIDATED)
     plan_set = FulfilmentPlanSet.objects.create(
         cart=locked_cart,
         cart_version=locked_cart.version,
@@ -340,26 +381,62 @@ def create_plan_quote(*, customer: User, plan: FulfilmentPlan) -> Quote:
         .prefetch_related("units__items")
         .get(id=plan.id)
     )
-    plan_set = locked_plan.plan_set
+    plan_set = FulfilmentPlanSet.objects.select_for_update().get(id=locked_plan.plan_set_id)
     cart = Cart.objects.select_for_update().get(id=plan_set.cart_id)
     now = timezone.now()
     if cart.customer_id != customer.id:
         raise PermissionError("The fulfilment plan does not belong to this Customer.")
-    existing_quote = Quote.objects.filter(fulfilment_plan=locked_plan).first()
-    if existing_quote is not None:
-        return existing_quote
-    if (
-        plan_set.status != FulfilmentPlanSet.Status.ACTIVE
-        or plan_set.expires_at <= now
-        or cart.version != plan_set.cart_version
-    ):
-        if plan_set.status == FulfilmentPlanSet.Status.ACTIVE:
-            plan_set.status = (
-                FulfilmentPlanSet.Status.EXPIRED
-                if plan_set.expires_at <= now
-                else FulfilmentPlanSet.Status.INVALIDATED
-            )
+
+    # 1. Cart version mismatch invalidates immediately
+    if cart.version != plan_set.cart_version:
+        if plan_set.status in (FulfilmentPlanSet.Status.ACTIVE, FulfilmentPlanSet.Status.SELECTED):
+            plan_set.status = FulfilmentPlanSet.Status.INVALIDATED
             plan_set.save(update_fields=("status",))
+        Quote.objects.filter(
+            fulfilment_plan__plan_set=plan_set,
+            status=Quote.Status.ACTIVE,
+        ).update(status=Quote.Status.INVALIDATED)
+        raise FulfilmentPlanStaleApiError
+
+    # 2. Plan set expiry
+    if plan_set.expires_at <= now:
+        if plan_set.status in (FulfilmentPlanSet.Status.ACTIVE, FulfilmentPlanSet.Status.SELECTED):
+            plan_set.status = FulfilmentPlanSet.Status.EXPIRED
+            plan_set.save(update_fields=("status",))
+        Quote.objects.filter(
+            fulfilment_plan__plan_set=plan_set,
+            status=Quote.Status.ACTIVE,
+        ).update(status=Quote.Status.EXPIRED)
+        raise FulfilmentPlanStaleApiError
+
+    # 3. Check for existing quote for this plan set
+    existing_quote = (
+        Quote.objects.select_for_update(of=("self",))
+        .filter(fulfilment_plan__plan_set=plan_set)
+        .first()
+    )
+    if existing_quote is not None:
+        if existing_quote.expires_at <= now and existing_quote.status == Quote.Status.ACTIVE:
+            existing_quote.status = Quote.Status.EXPIRED
+            existing_quote.save(update_fields=("status",))
+            if plan_set.status != FulfilmentPlanSet.Status.EXPIRED:
+                plan_set.status = FulfilmentPlanSet.Status.EXPIRED
+                plan_set.save(update_fields=("status",))
+            raise FulfilmentPlanStaleApiError
+
+        if (
+            existing_quote.status == Quote.Status.ACTIVE
+            and existing_quote.fulfilment_plan_id == locked_plan.id
+            and plan_set.status in (FulfilmentPlanSet.Status.ACTIVE, FulfilmentPlanSet.Status.SELECTED)
+        ):
+            # Safely idempotent: return active quote for this plan
+            return existing_quote
+
+        # Quote is EXPIRED, INVALIDATED, CONSUMED, or for a different plan in the set
+        raise FulfilmentPlanStaleApiError
+
+    # 4. If no existing quote, plan set MUST be ACTIVE to create a new quote
+    if plan_set.status != FulfilmentPlanSet.Status.ACTIVE:
         raise FulfilmentPlanStaleApiError
     pricing_data = cast(dict[str, Any], plan_set.planning_snapshot["pricing"])
     cancellation_data = _cancellation_snapshot(plan_set)

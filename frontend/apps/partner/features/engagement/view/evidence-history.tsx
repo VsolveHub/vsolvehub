@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge } from "@vsolve/ui";
+import { Badge, useT } from "@vsolve/ui";
 import {
   evidenceFiles,
   evidenceNotes,
@@ -51,13 +51,14 @@ export interface EvidenceHistoryProps {
 }
 
 export function EvidenceHistory({ stage }: EvidenceHistoryProps) {
+  const t = useT();
   const notes = evidenceNotes(stage);
   const files = evidenceFiles(stage);
 
   if (stage.evidence.length === 0) {
     return (
       <p className="text-sm leading-6 text-text-secondary">
-        Nothing attached yet. What you attach here is what the customer reads when they decide.
+        {t("work.evidenceHistory.empty")}
       </p>
     );
   }
@@ -69,8 +70,11 @@ export function EvidenceHistory({ stage }: EvidenceHistoryProps) {
           {notes.map((note, index) => (
             <li key={note.id} className="flex flex-col gap-1 rounded-control bg-surface-sunken p-3">
               <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                {index === 0 ? "What you sent" : `Resubmission ${index}`} ·{" "}
-                {timeAgo(note.created_at)}
+                {index === 0
+                  ? t("work.evidenceHistory.firstNote")
+                  : t("work.evidenceHistory.resubmission", { index })}{" "}
+                ·{" "}
+                {timeAgo(note.created_at, t)}
               </span>
               <p className="whitespace-pre-wrap text-sm leading-6 text-text">{note.note}</p>
             </li>
@@ -90,6 +94,7 @@ export function EvidenceHistory({ stage }: EvidenceHistoryProps) {
 }
 
 function EvidenceRow({ evidence }: { readonly evidence: StageEvidence }) {
+  const t = useT();
   const Icon = ICONS[evidence.kind] ?? FileText;
 
   return (
@@ -101,8 +106,8 @@ function EvidenceRow({ evidence }: { readonly evidence: StageEvidence }) {
             {evidence.content_type || evidence.kind}
           </span>
           <span className="text-xs text-text-muted">
-            {(evidence.size_bytes / (1024 * 1024)).toFixed(1)} MB ·{" "}
-            {timeAgo(evidence.created_at)}
+            {t("work.evidenceHistory.sizeMb", { size: (evidence.size_bytes / (1024 * 1024)).toFixed(1) })} ·{" "}
+            {timeAgo(evidence.created_at, t)}
           </span>
         </span>
       </span>
@@ -112,13 +117,14 @@ function EvidenceRow({ evidence }: { readonly evidence: StageEvidence }) {
 }
 
 function ScanBadge({ evidence }: { readonly evidence: StageEvidence }) {
+  const t = useT();
   if (isEvidenceReadable(evidence)) {
-    return <Badge tone="success">Checked</Badge>;
+    return <Badge tone="success">{t("work.evidenceHistory.scan.checked")}</Badge>;
   }
   if (isEvidenceRejectedByScan(evidence)) {
     return (
       <span className="flex flex-col items-end gap-0.5">
-        <Badge tone="danger">Not accepted</Badge>
+        <Badge tone="danger">{t("work.evidenceHistory.scan.rejected")}</Badge>
         {evidence.failure_reason.trim() === "" ? null : (
           <span className="text-xs text-text-muted">{evidence.failure_reason}</span>
         )}
@@ -127,5 +133,5 @@ function ScanBadge({ evidence }: { readonly evidence: StageEvidence }) {
   }
   // Anything unrecognised falls here with `PENDING`, which is the fail-closed
   // direction: not yet readable by the customer.
-  return <Badge tone="info">Being checked</Badge>;
+  return <Badge tone="info">{t("work.evidenceHistory.scan.pending")}</Badge>;
 }

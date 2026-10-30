@@ -1,6 +1,6 @@
 "use client";
 
-import { isApiClientError, request } from "@vsolve/api-client";
+import { request } from "@vsolve/api-client";
 import { m2QueryKeys } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -22,31 +22,17 @@ import { getApiClient } from "@/lib/api/browser";
 export function usePriceBook(serviceAreaId?: string, skill?: string) {
   return useQuery({
     queryKey: m2QueryKeys.priceBook.list(serviceAreaId, skill),
-    queryFn: async () => {
-      try {
-        return await request(() =>
-          getApiClient().GET("/api/v1/partner/price-book/", {
-            params: {
-              query: {
-                ...(serviceAreaId ? { service_area_id: serviceAreaId } : {}),
-                ...(skill ? { skill } : {}),
-              },
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/partner/price-book/", {
+          params: {
+            query: {
+              ...(serviceAreaId ? { service_area_id: serviceAreaId } : {}),
+              ...(skill ? { skill } : {}),
             },
-          }),
-        );
-      } catch (err) {
-        if (
-          isApiClientError(err) &&
-          (err.status === 404 || err.code === "m2_requirement_not_found" || err.code === "not_found")
-        ) {
-          return { items: [] };
-        }
-        if ((err as { status?: number })?.status === 404) {
-          return { items: [] };
-        }
-        throw err;
-      }
-    },
+          },
+        }),
+      ),
   });
 }
 

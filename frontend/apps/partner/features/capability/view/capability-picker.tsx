@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, EmptyState, Field, Input, Select, cn } from "@vsolve/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, cn, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { AsyncSection, type AsyncState } from "@/components/async-section";
@@ -70,17 +70,18 @@ export function CapabilityPicker({
   onRetry,
   className,
 }: CapabilityPickerProps) {
+  const t = useT();
   return (
     <AsyncSection
       state={state}
-      label="Loading the work you can apply for"
+      label={t("me.capability.picker.loading")}
       onRetry={onRetry}
       className={className}
       isEmpty={(view) => view.isEmpty}
       empty={
         <EmptyState
-          title="Nothing to apply for yet"
-          description="The services you have chosen are not open to workforce or project vendors. Adding another service on “Your work” may open one."
+          title={t("me.capability.picker.emptyTitle")}
+          description={t("me.capability.picker.emptyDescription")}
         />
       }
     >
@@ -126,6 +127,7 @@ function CapabilityCard({
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const t = useT();
 
   // `Number("")` is 0, so a blank field and a typed zero converge here — which is
   // correct. Every named field must carry a usable number: "0 workers" is not a
@@ -145,7 +147,7 @@ function CapabilityCard({
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="text-sm font-semibold text-text">{choice.variantName}</h4>
-        {choice.alreadyRequested ? <Badge tone="info">Already asked</Badge> : null}
+        {choice.alreadyRequested ? <Badge tone="info">{t("me.capability.picker.alreadyAsked")}</Badge> : null}
       </div>
 
       {/* Server-authored plain language. The only lifecycle wording a human reads. */}
@@ -153,19 +155,19 @@ function CapabilityCard({
 
       <p className="mt-2 text-sm text-text-secondary">
         {choice.isPlatformPaid
-          ? "Vsolve holds each stage of the payment until the customer approves it."
-          : "The customer pays you directly."}
+          ? t("me.capability.picker.platformPaidNote")
+          : t("me.capability.picker.directPaidNote")}
       </p>
 
       {choice.requiresInsurance ? (
         <p className="mt-2 text-sm text-text-secondary">
-          You will be asked for worker insurance before this is approved.
+          {t("me.capability.picker.insuranceNote")}
         </p>
       ) : null}
 
       {choice.alreadyRequested ? (
         <p className="mt-3 text-sm text-text-muted">
-          You have a live request for this. Its progress is on your capabilities list.
+          {t("me.capability.picker.alreadyRequestedNote")}
         </p>
       ) : (
         <>
@@ -219,9 +221,9 @@ function CapabilityCard({
               nothing on screen explains. */}
           {choice.registrationQuestions.unsupported.length > 0 ? (
             <p className="mt-3 rounded-control bg-surface-sunken px-3 py-2 text-sm leading-6 text-text-secondary">
-              This service asks something your app cannot show yet
-              {` (${choice.registrationQuestions.unsupported.join(", ")})`}. Update the app, or ask
-              support to record the answer for you.
+              {t("me.capability.picker.unsupportedPrefix")}
+              {` (${choice.registrationQuestions.unsupported.join(", ")})`}.{" "}
+              {t("me.capability.picker.unsupportedSuffix")}
             </p>
           ) : null}
 
@@ -235,17 +237,16 @@ function CapabilityCard({
             className="mt-4"
             disabled={!isComplete}
             loading={pending}
-            loadingLabel="Sending your request"
+            loadingLabel={t("me.capability.picker.sendingRequest")}
             onClick={() => onRequest(asks, answers)}
           >
-            Ask to be approved
+            {t("me.capability.picker.submitButton")}
           </Button>
 
           {/* The sentence the whole screen exists for. Beside the button, not in
               a footnote — this is where someone decides what they just did. */}
           <p className="mt-2 text-xs leading-5 text-text-muted">
-            We review this before it switches on. Choosing a skill on its own does not open this
-            work.
+            {t("me.capability.picker.reviewNote")}
           </p>
         </>
       )}
@@ -270,13 +271,14 @@ function RegistrationAnswerField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useT();
   if (question.kind === "BOOLEAN") {
     return (
       <Field label={question.label} required={question.isRequired}>
         <Select value={value} onChange={(event) => onChange(event.target.value)}>
-          <option value="">Choose one</option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
+          <option value="">{t("me.capability.picker.chooseOne")}</option>
+          <option value="true">{t("common.yes")}</option>
+          <option value="false">{t("common.no")}</option>
         </Select>
       </Field>
     );

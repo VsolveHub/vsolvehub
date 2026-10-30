@@ -1,0 +1,18 @@
+{
+	# Let's Encrypt sends certificate-expiry warnings here. Use a mailbox someone reads.
+	email ops@vsolvehub.com
+}
+
+api.vsolvehub.com {
+	# The Django admin is not public. Manage staff with `manage.py shell` on the server.
+	respond /admin* 404
+
+	reverse_proxy api:8000 {
+		# The partner offer stream is server-sent events: pass every frame through at once.
+		flush_interval -1
+	}
+
+	log {
+		output stdout
+	}
+}

@@ -1,10 +1,13 @@
 """Rental quantity stock, handover PIN, deposit dispute, and booking status filter."""
 
+import importlib
 from datetime import timedelta
 
 import pytest
+from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, connection
 from django.utils import timezone
 from rest_framework import status
 
@@ -32,6 +35,7 @@ from apps.rental.services import (
     return_booking,
     store_rental_dispute_photo,
     submit_asset,
+    verify_handover_pin,
 )
 from tests.helpers import force_role_client
 
@@ -39,7 +43,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-qty-test", name="Rental Qty Test")
     sub = Subcategory.objects.create(category=category, slug="cameras", name="Cameras")
     service = Service.objects.create(
@@ -287,15 +291,7 @@ def test_ops_lists_dispute_photos_and_approves_the_claim(rental_world):
 @pytest.mark.django_db
 def test_backfill_handover_pin_hash_for_in_flight_bookings(rental_world):
     """0006 blank default left in-flight rows without a PIN; 0007 must restore handover."""
-    import importlib
-
-    from django.apps import apps as django_apps
-
-    from apps.rental.services import verify_handover_pin
-
-    backfill_mod = importlib.import_module(
-        "apps.rental.migrations.0007_backfill_handover_pin_hash"
-    )
+    backfill_mod = importlib.import_module("apps.rental.migrations.0007_backfill_handover_pin_hash")
     backfill_handover_pin_hashes = backfill_mod.backfill_handover_pin_hashes
 
     asset = _publish_asset(rental_world, deposit_paise=50000)
@@ -376,11 +372,11 @@ def test_partner_bookings_status_filter_and_dispute_http(rental_world):
 
     listed = client.get("/api/v1/partner/rentals/bookings", {"status": "CONFIRMED"})
     assert listed.status_code == status.HTTP_200_OK
-    assert any(row["id"] == str(booking.id) for row in listed.data)
+    assert any(row["id"] == str(booking.id) for row in listed.data["results"])
 
     empty = client.get("/api/v1/partner/rentals/bookings", {"status": "DISPUTED"})
     assert empty.status_code == status.HTTP_200_OK
-    assert empty.data == []
+    assert empty.data["results"] == []
 
     hand = client.post(
         f"/api/v1/partner/rentals/bookings/{booking.id}/handover",
@@ -472,7 +468,6 @@ def test_dispute_explicit_zero_consume_paise(rental_world):
 @pytest.mark.django_db
 def test_zero_quantity_available_is_not_bookable(rental_world):
     """Fail closed: create_asset rejects qty < 1; DB CheckConstraint blocks qty=0 rows."""
-    from django.db import IntegrityError, connection
 
     with pytest.raises(RentalStateError, match="at least 1"):
         create_asset(
@@ -510,13 +505,13 @@ def test_customer_handover_pin_visibility(rental_world):
     customer_client = force_role_client(user=rental_world["customer"], role_code="customer")
     mine = customer_client.get("/api/v1/me/rentals")
     assert mine.status_code == status.HTTP_200_OK
-    row = next(r for r in mine.data if r["id"] == str(booking.id))
+    row = next(r for r in mine.data["results"] if r["id"] == str(booking.id))
     assert row["handover_pin"] == pin
 
     partner_client = _partner_client(rental_world["owner"])
     partner_list = partner_client.get("/api/v1/partner/rentals/bookings")
     assert partner_list.status_code == status.HTTP_200_OK
-    partner_row = next(r for r in partner_list.data if r["id"] == str(booking.id))
+    partner_row = next(r for r in partner_list.data["results"] if r["id"] == str(booking.id))
     assert partner_row["handover_pin"] is None
 
 

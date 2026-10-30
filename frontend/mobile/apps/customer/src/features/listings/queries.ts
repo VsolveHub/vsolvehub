@@ -229,8 +229,10 @@ export function fetchListing(key: string): Promise<ListingDetail> {
   ) as Promise<ListingDetail>;
 }
 
-export function fetchMyApplications(): Promise<ListingApplication[]> {
-  return request(() => getApiClient().GET("/api/v1/my/listing-applications")) as Promise<ListingApplication[]>;
+export async function fetchMyApplications(): Promise<ListingApplication[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/my/listing-applications"));
+  if (Array.isArray(data)) return data as ListingApplication[];
+  return ((data as unknown as { results?: ListingApplication[] })?.results ?? []) as ListingApplication[];
 }
 
 export function withdrawApplication(applicationId: string): Promise<ListingApplication> {
@@ -276,13 +278,14 @@ export function uploadListingResume(
   ) as Promise<{ upload_id: string; resume_url: string; original_name: string }>;
 }
 
-export function reportListing(listingId: string, reason: string, detail: string = ""): Promise<{ ok: boolean }> {
-  return request(() =>
+export async function reportListing(listingId: string, reason: string, detail: string = ""): Promise<{ ok: boolean }> {
+  await request(() =>
     getApiClient().POST("/api/v1/listings/{listing_id}/reports", {
       params: { path: { listing_id: listingId } },
       body: { reason, detail },
     }),
-  ) as Promise<{ ok: boolean }>;
+  );
+  return { ok: true };
 }
 
 export function fetchListingFilters(): Promise<any> {

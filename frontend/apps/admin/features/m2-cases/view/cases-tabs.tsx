@@ -36,7 +36,7 @@ export function CasesTabs() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "inline-flex border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                  "inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                   active
                     ? "border-action text-text-link"
                     : "border-transparent text-text-secondary hover:border-line-strong hover:text-text",

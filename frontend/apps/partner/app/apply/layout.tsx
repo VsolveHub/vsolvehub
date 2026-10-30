@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { ApplyGuard } from "@/features/application/view/apply-guard";
 import { ApplyShell } from "@/features/application/view/apply-shell";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * The Partner onboarding tree.
@@ -33,7 +34,9 @@ import { ApplyShell } from "@/features/application/view/apply-shell";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your application",
+  // An object, not a string: a plain string here switches off the root
+  // template for every page below, so their tabs lose the brand.
+  title: { default: "Your application", template: `%s | ${SITE_NAME}` },
   robots: { index: false, follow: false },
 };
 

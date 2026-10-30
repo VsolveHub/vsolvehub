@@ -103,11 +103,33 @@ function hasWordStartingWith(haystack: string, needle: string): boolean {
   return false;
 }
 
-function scoreService(
-  service: ServiceCard,
-  category: Category,
-  query: string,
-): number {
+/**
+ * Each word of a multi-word query, for the fallback below. Empty words are dropped.
+ */
+function queryWords(query: string): string[] {
+  return query.split(" ").filter((word) => word !== "");
+}
+
+/**
+ * A phrase first, then its words.
+ *
+ * "ac repair" is how people type, and no service is *named* "ac repair" — it is
+ * `AC Cooling Issue Repair`. Matching the phrase alone answered "nothing matches"
+ * to a search the catalogue plainly serves. So when the phrase misses, a service
+ * still matches if every word does, scored one below its weakest word: a match
+ * on the whole phrase always outranks one assembled from parts.
+ */
+function scoreService(service: ServiceCard, category: Category, query: string): number {
+  const phrase = scorePhrase(service, category, query);
+  if (phrase > NO_MATCH) return phrase;
+
+  const words = queryWords(query);
+  if (words.length < 2) return NO_MATCH;
+  const scores = words.map((word) => scorePhrase(service, category, word));
+  return scores.every((score) => score > NO_MATCH) ? Math.max(Math.min(...scores) - 1, 1) : NO_MATCH;
+}
+
+function scorePhrase(service: ServiceCard, category: Category, query: string): number {
   const name = service.name.toLowerCase();
 
   if (name === query) return SCORE.exactName;
@@ -132,6 +154,12 @@ function scoreService(
 }
 
 function categoryMatches(category: Category, query: string): boolean {
+  if (categoryMatchesPhrase(category, query)) return true;
+  const words = queryWords(query);
+  return words.length > 1 && words.every((word) => categoryMatchesPhrase(category, word));
+}
+
+function categoryMatchesPhrase(category: Category, query: string): boolean {
   return (
     hasWordStartingWith(category.name.toLowerCase(), query) ||
     hasWordStartingWith(category.description.toLowerCase(), query) ||

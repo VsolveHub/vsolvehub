@@ -136,6 +136,22 @@ describe("rankCatalogMatches", () => {
     expect(results.categories.map((category) => category.slug)).toEqual(["home"]);
   });
 
+  it("matches a multi-word search when every word matches, even if the phrase does not", () => {
+    // Nobody's service is named "geyser fix electrical"; each word still points at one.
+    expect(search("electrical geyser").services.map((match) => match.service.slug)).toEqual([
+      "geyser-repair",
+    ]);
+  });
+
+  it("does not match on only some of the words", () => {
+    expect(search("geyser helicopter").services).toEqual([]);
+  });
+
+  it("ranks a whole-phrase match above one assembled from words", () => {
+    const slugs = search("deep cleaning").services.map((match) => match.service.slug);
+    expect(slugs[0]).toBe("deep-cleaning");
+  });
+
   it("returns nothing for a query the catalogue has no answer to", () => {
     const results = search("helicopter");
     expect(results.services).toEqual([]);

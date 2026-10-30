@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
+import { useTOrDefault } from "./i18n";
+
 export interface DrawerProps {
   /** The content to display inside the drawer */
   children: ReactNode;
@@ -24,7 +26,8 @@ export interface DrawerProps {
  */
 export function Drawer({ children, trigger, title, onOpenChange, side = "right", open }: DrawerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
-  
+  const tf = useTOrDefault();
+
   const isOpen = open !== undefined ? open : internalOpen;
   
   const handleOpenChange = useCallback((newOpen: boolean) => {
@@ -93,7 +96,12 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
       </div>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label={title || "Drawer"}>
+        <div
+          className="fixed inset-0 z-50 flex"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title || tf("ui.drawer.defaultLabel", "Drawer")}
+        >
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300"
             onClick={() => handleOpenChange(false)}
@@ -109,7 +117,7 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
                 type="button"
                 onClick={() => handleOpenChange(false)}
                 className="p-2 -mr-2 text-text-secondary hover:text-text rounded-md focus:outline-none focus:ring-2 focus:ring-signal-500"
-                aria-label="Close drawer"
+                aria-label={tf("ui.drawer.closeDrawer", "Close drawer")}
               >
                 <X className="h-5 w-5" />
               </button>

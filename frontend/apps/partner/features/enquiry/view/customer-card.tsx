@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, buttonStyles } from "@vsolve/ui";
+import { Card, buttonStyles, useT } from "@vsolve/ui";
 import { MessageCircle, Phone, User } from "lucide-react";
 
 import type { EnquiryRecord } from "../model/wire";
@@ -34,6 +34,7 @@ export interface CustomerCardProps {
 }
 
 export function CustomerCard({ enquiry, onMessage }: CustomerCardProps) {
+  const t = useT();
   if (enquiry.customerName === null) return null;
 
   return (
@@ -47,7 +48,7 @@ export function CustomerCard({ enquiry, onMessage }: CustomerCardProps) {
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            Visiting
+            {t("enquiry.customerCard.visiting")}
           </h2>
           <p className="truncate text-base font-bold text-text">{enquiry.customerName}</p>
         </div>
@@ -56,7 +57,7 @@ export function CustomerCard({ enquiry, onMessage }: CustomerCardProps) {
       <div className="grid grid-cols-2 gap-2">
         {enquiry.customerPhone === null ? (
           <p className="flex items-center justify-center rounded-control border border-dashed border-line px-3 py-2 text-center text-xs font-semibold leading-4 text-text-muted">
-            Phone unlocks 2 h before
+            {t("enquiry.customerCard.phoneUnlocks")}
           </p>
         ) : (
           <a
@@ -64,7 +65,7 @@ export function CustomerCard({ enquiry, onMessage }: CustomerCardProps) {
             className={buttonStyles({ variant: "outline", className: "gap-2" })}
           >
             <Phone size={16} aria-hidden />
-            Call
+            {t("enquiry.customerCard.call")}
           </a>
         )}
 
@@ -74,7 +75,7 @@ export function CustomerCard({ enquiry, onMessage }: CustomerCardProps) {
           className={buttonStyles({ variant: "outline", className: "gap-2" })}
         >
           <MessageCircle size={16} aria-hidden />
-          Message
+          {t("enquiry.customerCard.message")}
         </button>
       </div>
     </Card>

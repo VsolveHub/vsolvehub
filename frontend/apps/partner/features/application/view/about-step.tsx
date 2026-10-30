@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@vsolve/api-client";
-import { Field, Input, Textarea } from "@vsolve/ui";
+import { Field, Input, Textarea, useT } from "@vsolve/ui";
 import { useEffect } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -10,6 +10,7 @@ import { getApiClient } from "@/lib/api/browser";
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
+  const t = useT();
   const { draft, update, isReadOnly, application } = useApplicationEditor();
   const isStayHost = application?.track === "STAY_HOST";
   const isRentalOwner = application?.track === "RENTAL_OWNER";
@@ -44,14 +45,14 @@ export function AboutStep() {
         {/* Full Name */}
         <Field
           required
-          label="Full Name"
-          error={isNameInvalid ? "Enter at least 2 characters." : undefined}
+          label={t("apply.about.fullName.label")}
+          error={isNameInvalid ? t("apply.about.fullName.error") : undefined}
         >
           <Input
             name="display_name"
             autoComplete="name"
             maxLength={120}
-            placeholder="e.g. Ramesh Kumar"
+            placeholder={t("apply.about.fullName.placeholder")}
             value={draft.displayName}
             disabled={isReadOnly}
             onChange={(event) => update({ displayName: event.target.value })}
@@ -59,14 +60,14 @@ export function AboutStep() {
         </Field>
 
         {isListing ? null : (
-          <Field required label="Years of Experience">
+          <Field required label={t("apply.about.experience.label")}>
             <Input
               name="experience_years"
               type="number"
               inputMode="numeric"
               min={1}
               max={80}
-              placeholder="e.g. 5"
+              placeholder={t("apply.about.experience.placeholder")}
               value={draft.experienceYears === 0 ? "" : String(draft.experienceYears)}
               disabled={isReadOnly}
               onChange={(event) => {
@@ -81,17 +82,17 @@ export function AboutStep() {
       </div>
 
       {/* Bio / About Your Work */}
-      <Field label={isListing ? "About you (optional)" : "About Your Work (Bio)"}>
+      <Field label={isListing ? t("apply.about.bioListing.label") : t("apply.about.bio.label")}>
         <Textarea
           name="biography"
           maxLength={2000}
           rows={4}
           placeholder={
             isStayHost
-              ? "A line guests will see, e.g. Running this PG for working women since 2018."
+              ? t("apply.about.bio.placeholder.stayHost")
               : isRentalOwner
-                ? "A line customers will see, e.g. Tools and equipment for site work in Hyderabad."
-                : "Briefly describe your skills, specialities, or certifications (e.g. Certified electrician specializing in home wiring and switchboard repair)."
+                ? t("apply.about.bio.placeholder.rentalOwner")
+                : t("apply.about.bio.placeholder.services")
           }
           value={draft.biography}
           disabled={isReadOnly}

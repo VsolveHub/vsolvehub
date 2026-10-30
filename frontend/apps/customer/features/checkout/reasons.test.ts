@@ -100,11 +100,10 @@ describe("an unusable plan set", () => {
     expect(message).toMatch(/nothing has been booked or charged/i);
   });
 
-  it("says nothing extra was charged when the set was already used", () => {
+  it("shows a neutral recovery message when the set is selected without an active quote", () => {
     const message = describePlanSetFailure({ ...planSet(), status: "SELECTED" });
 
-    expect(message).toMatch(/already been used/i);
-    expect(message).toMatch(/nothing extra/i);
+    expect(message).toBe("We couldn’t confirm these options. Please choose a time again.");
   });
 
   it("claims only what is certain when there is no plan set at all", () => {

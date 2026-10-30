@@ -9,6 +9,7 @@ import { WageLine } from "@/features/crew/view/wage-line";
 import { useCustomerSession } from "@/features/session/queries";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 import { engagementHref, receiptHref } from "@/lib/routes";
+import { SUPPORT } from "@/lib/support";
 
 import { toEngagementView, type EngagementView } from "../adapters";
 import { toCrewPaymentRecord } from "../model/booking-record";
@@ -188,10 +189,10 @@ function DocumentReceipt({
 
           <Party label="Received by">
             <p className="text-sm font-semibold text-text">V Solve Hub</p>
-            <p className="mt-1 text-sm text-text-secondary">
-              Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081
-            </p>
-            <p className="mt-1 text-sm text-text-secondary">support@vsolvehub.com</p>
+            <p className="mt-1 text-sm text-text-secondary">{SUPPORT.email}</p>
+            {SUPPORT.phone ? (
+              <p className="mt-1 text-sm text-text-secondary">{SUPPORT.phone.display}</p>
+            ) : null}
           </Party>
         </div>
 

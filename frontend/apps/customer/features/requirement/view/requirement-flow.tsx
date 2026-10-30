@@ -54,6 +54,7 @@ import {
   useRequirement as useRequirementRecord,
   useSaveRequirement,
   useSubmitRequirement,
+  isDraftUnusable,
   isRequirementExpired,
   isSubmitInProgress,
   type SaveRequirementInput,
@@ -460,17 +461,32 @@ function FlowBody({
         const lookup = await requestsQuery.refetch();
         targetId = existingDraftId(lookup.data ?? [], service.slug);
       }
-      const draft =
-        targetId === null
-          ? await createRequirement.mutateAsync({
-              variantId: variant.id,
-              answers,
-              language: "en-IN",
-            })
-          : await saveRequirement.mutateAsync({
-              requirementId: targetId,
-              answers,
-            });
+      let draft;
+      if (targetId === null) {
+        draft = await createRequirement.mutateAsync({
+          variantId: variant.id,
+          answers,
+          language: "en-IN",
+        });
+      } else {
+        try {
+          draft = await saveRequirement.mutateAsync({
+            requirementId: targetId,
+            answers,
+          });
+        } catch (saveError) {
+          // Only a remembered draft that is gone (404) or already sent to vendors (409) is
+          // replaced. A bad answer or a network failure must reach the customer instead of
+          // quietly opening a second request.
+          if (!isDraftUnusable(saveError)) throw saveError;
+          clearPersistedRequirement(service.slug);
+          draft = await createRequirement.mutateAsync({
+            variantId: variant.id,
+            answers,
+            language: "en-IN",
+          });
+        }
+      }
       const verdict = toLifecycleVerdict(draft);
       dispatch({
         type: "APPLY_VERDICT",

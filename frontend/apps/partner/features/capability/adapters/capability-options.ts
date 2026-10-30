@@ -1,3 +1,5 @@
+import type { Translator } from "@vsolve/ui";
+
 import { WORKSPACE_REGISTRY } from "@/features/workspace/registry";
 
 import { expectedFor, fieldsFor, type BusinessField } from "./business-type";
@@ -91,18 +93,20 @@ export interface CapabilityAskField {
   readonly isMoney: boolean;
 }
 
-const ASK_FIELDS: Record<CapabilityAsk, Omit<CapabilityAskField, "name">> = {
-  max_crew_size: {
-    label: "Most workers you can send at once",
-    help: "A realistic number. We use it to stop sending you work you cannot staff.",
-    isMoney: false,
-  },
-  max_project_value_paise: {
-    label: "Largest project you want to quote for",
-    help: "A ceiling, not a commitment. You will not be shown work far above it.",
-    isMoney: true,
-  },
-};
+function askFields(t: Translator["t"]): Record<CapabilityAsk, Omit<CapabilityAskField, "name">> {
+  return {
+    max_crew_size: {
+      label: t("me.capability.ask.maxCrewSize.label"),
+      help: t("me.capability.ask.maxCrewSize.help"),
+      isMoney: false,
+    },
+    max_project_value_paise: {
+      label: t("me.capability.ask.maxProjectValue.label"),
+      help: t("me.capability.ask.maxProjectValue.help"),
+      isMoney: true,
+    },
+  };
+}
 
 export interface CapabilityChoice {
   readonly variantId: string;
@@ -135,7 +139,8 @@ export interface CapabilityChoice {
   readonly isPlatformPaid: boolean;
 }
 
-function toChoice(option: CapabilityOption): CapabilityChoice {
+function toChoice(option: CapabilityOption, t: Translator["t"]): CapabilityChoice {
+  const ASK_FIELDS = askFields(t);
   return {
     variantId: option.variant_id,
     variantName: option.variant_name,
@@ -169,8 +174,11 @@ export interface CapabilityOptionsView {
   readonly isEmpty: boolean;
 }
 
-export function describeCapabilityOptions(options: CapabilityOptions): CapabilityOptionsView {
-  const choices = options.capabilities.map(toChoice);
+export function describeCapabilityOptions(
+  options: CapabilityOptions,
+  t: Translator["t"],
+): CapabilityOptionsView {
+  const choices = options.capabilities.map((option) => toChoice(option, t));
 
   // Insertion-ordered, so the server's ordering survives grouping. Sorting
   // categories alphabetically here would override a deliberate ordering the

@@ -19,27 +19,32 @@ export function ProcessSteps({ steps }: { steps: ServiceDetail["policies"] }) {
 
   if (ordered.length === 0) return null;
 
+  // A vertical timeline at every width: five centred circles stacked down a phone screen
+  // took a full screen of scrolling for five sentences.
   return (
-    <div className="mt-8 flex flex-col md:flex-row gap-8 md:gap-4 justify-center items-start relative max-w-4xl mx-auto">
-      {/* Optional connecting line for desktop */}
-      {ordered.length > 1 && (
-        <div className="hidden md:block absolute top-6 left-[15%] right-[15%] h-[1px] bg-line/60 -z-10" />
-      )}
-      
-      {ordered.map((step, index) => (
-        <div key={step.id} className="flex-1 flex flex-col items-center text-center relative z-10 w-full">
-          <span
-            aria-hidden
-            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-action text-[1.1rem] font-bold text-white shadow-sm mb-5"
-          >
-            {index + 1}
-          </span>
-          {step.title ? <h3 className="font-medium text-navy-900 mb-2.5">{step.title}</h3> : null}
-          <p className="text-[0.875rem] leading-relaxed text-text-secondary max-w-[16rem]">
-            {step.text}
-          </p>
-        </div>
-      ))}
-    </div>
+    <ol className="mt-5">
+      {ordered.map((step, index) => {
+        const last = index === ordered.length - 1;
+        return (
+          <li key={step.id} className="relative flex gap-4 pb-6 last:pb-0">
+            {last ? null : (
+              <span aria-hidden className="absolute left-[0.9375rem] top-9 bottom-1 w-px bg-line" />
+            )}
+            <span
+              aria-hidden
+              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-line bg-white text-[0.85rem] font-bold text-navy-900"
+            >
+              {index + 1}
+            </span>
+            <div className="min-w-0 pt-1">
+              {step.title ? (
+                <h3 className="text-[0.95rem] font-semibold text-navy-900">{step.title}</h3>
+              ) : null}
+              <p className="mt-1 text-[0.9rem] leading-relaxed text-text-secondary">{step.text}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

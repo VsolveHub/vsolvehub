@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, buttonStyles, cn } from "@vsolve/ui";
+import { Card, buttonStyles, cn, useT } from "@vsolve/ui";
 import { Check, Clock } from "lucide-react";
 import Link from "next/link";
 
@@ -46,10 +46,11 @@ export interface RegistrationPlanProps {
 }
 
 export function RegistrationPlan({ state, onRetry, className }: RegistrationPlanProps) {
+  const t = useT();
   return (
     <AsyncSection
       state={state}
-      label="Working out what you still need"
+      label={t("me.capability.plan.loading")}
       onRetry={onRetry}
       className={className}
     >
@@ -58,7 +59,7 @@ export function RegistrationPlan({ state, onRetry, className }: RegistrationPlan
           {plan.now.length > 0 ? (
             <Card aria-live="polite" className="p-5">
               <h2 className="text-base font-semibold text-text">
-                {plan.now.length === 1 ? "One thing to do" : `${plan.now.length} things to do`}
+                {t("me.capability.plan.nowHeading", { count: plan.now.length })}
               </h2>
               <ul className="mt-3 flex list-none flex-col gap-4 p-0">
                 {plan.now.map((entry) => (
@@ -70,11 +71,11 @@ export function RegistrationPlan({ state, onRetry, className }: RegistrationPlan
             </Card>
           ) : (
             <Card className="p-5">
-              <h2 className="text-base font-semibold text-text">Nothing needed from you</h2>
+              <h2 className="text-base font-semibold text-text">{t("me.capability.plan.nothingNeededTitle")}</h2>
               <p className="mt-1 text-sm leading-6 text-text-secondary">
                 {plan.isComplete
-                  ? "Everything we ask for is on file. Enquiries reach you as they arrive."
-                  : "Nothing is waiting on you right now. We will ask for the things below at the moment they matter."}
+                  ? t("me.capability.plan.nothingNeededCompleteBody")
+                  : t("me.capability.plan.nothingNeededPendingBody")}
               </p>
             </Card>
           )}
@@ -82,7 +83,7 @@ export function RegistrationPlan({ state, onRetry, className }: RegistrationPlan
           {plan.later.length > 0 ? (
             <section>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-                We will ask for these later
+                {t("me.capability.plan.laterHeading")}
               </h2>
               <ul className="mt-2 flex list-none flex-col gap-3 p-0">
                 {plan.later.map((entry) => (
@@ -97,7 +98,7 @@ export function RegistrationPlan({ state, onRetry, className }: RegistrationPlan
           {plan.done.length > 0 ? (
             <details className="rounded-card border border-line bg-surface p-4">
               <summary className="cursor-pointer text-sm font-semibold text-text">
-                Already done ({plan.done.length})
+                {t("me.capability.plan.doneHeading", { count: plan.done.length })}
               </summary>
               <ul className="mt-3 flex list-none flex-col gap-2 p-0">
                 {plan.done.map((entry) => (

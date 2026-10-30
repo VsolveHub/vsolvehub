@@ -33,7 +33,7 @@ import {
  * stated rather than summed, which is what lets the numbers above be checked by
  * eye against the rows they sit over.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Quote breakdown — M2", robots: { index: false, follow: false } };
 
 const RUPEE = 100;
 

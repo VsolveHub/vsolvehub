@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@vsolve/ui";
+import { Card, useT } from "@vsolve/ui";
 import { Construction } from "lucide-react";
 
 /**
@@ -54,11 +54,12 @@ export interface NotBuiltYetProps {
 }
 
 export function NotBuiltYet({ what, meanwhile, reference }: NotBuiltYetProps) {
+  const t = useT();
   return (
     <Card className="flex flex-col gap-2 border-dashed p-4">
       <div className="flex items-center gap-2">
         <Construction size={16} aria-hidden className="shrink-0 text-text-muted" />
-        <h3 className="text-sm font-semibold text-text">{what} is not built yet</h3>
+        <h3 className="text-sm font-semibold text-text">{t("work.notBuiltYet.title", { what })}</h3>
       </div>
       <p className="text-sm leading-6 text-text-secondary">{meanwhile}</p>
       <p className="text-xs text-text-muted">{reference}</p>

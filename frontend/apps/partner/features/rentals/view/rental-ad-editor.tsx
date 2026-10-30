@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Field, Input, Select, Sheet, Textarea, useToast } from "@vsolve/ui";
+import { Button, Field, Input, Select, Sheet, Textarea, useT, useToast } from "@vsolve/ui";
 import { Camera, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
@@ -123,6 +123,7 @@ export function RentalAdEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const { notify } = useToast();
   const isEdit = asset !== null;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -138,7 +139,13 @@ export function RentalAdEditor({
     asset ? paiseToRupees(asset.deposit_paise) : null,
   );
   const [quantity, setQuantity] = useState(String(asset?.quantity_available ?? 1));
-  const [location, setLocation] = useState(asset?.location_text ?? defaultLocation);
+  const [addressLine, setAddressLine] = useState(
+    asset?.pickup_address_line || asset?.location_text || defaultLocation,
+  );
+  const [area, setArea] = useState(asset?.pickup_area ?? "");
+  const [city, setCity] = useState(asset?.pickup_city ?? "");
+  const [pincode, setPincode] = useState(asset?.pickup_pincode ?? "");
+  const [deliveryAvailable, setDeliveryAvailable] = useState(asset?.delivery_available ?? false);
   const [fields, setFields] = useState<Record<string, string>>(() =>
     fieldsToStrings(asset?.structured_fields),
   );
@@ -168,7 +175,9 @@ export function RentalAdEditor({
 
   useEffect(() => {
     // A new item opened before the profile address loaded still gets it.
-    if (!isEdit && defaultLocation) setLocation((current) => (current.trim() ? current : defaultLocation));
+    if (!isEdit && defaultLocation) {
+      setAddressLine((current) => (current.trim() ? current : defaultLocation));
+    }
   }, [defaultLocation, isEdit]);
 
   const photosRef = useRef(photos);
@@ -192,7 +201,7 @@ export function RentalAdEditor({
     if (!fileList?.length) return;
     const room = MAX_PHOTOS - photos.length;
     if (room <= 0) {
-      setFormError(`You can add up to ${MAX_PHOTOS} photos.`);
+      setFormError(t("rentals.ads.errorMaxPhotos", { max: MAX_PHOTOS }));
       return;
     }
     const chosen = Array.from(fileList).slice(0, room);
@@ -215,7 +224,7 @@ export function RentalAdEditor({
         } catch (err) {
           patchPhoto(draft.localId, {
             uploading: false,
-            error: friendlyErrorMessage(err, "Could not upload this photo."),
+            error: friendlyErrorMessage(err, t("rentals.ads.errorPhotoUpload")),
           });
         }
       }),
@@ -231,7 +240,11 @@ export function RentalAdEditor({
   type Payload = {
     title: string;
     description: string;
-    location_text: string;
+    addressLine: string;
+    area: string;
+    city: string;
+    pincode: string;
+    deliveryAvailable: boolean;
     daily_rate_paise: number;
     deposit_paise: number;
     quantity_available: number;
@@ -241,16 +254,32 @@ export function RentalAdEditor({
 
   const save = useMutation({
     mutationFn: async (payload: Payload): Promise<"created" | "draft" | "updated"> => {
-      const { newUrls, ...rest } = payload;
+      const { newUrls, addressLine, area, city, pincode, deliveryAvailable, ...rest } = payload;
+      const locationText = [area, city].filter(Boolean).join(", ") || addressLine;
+
       if (asset) {
         for (const mediaId of removedMediaIds) {
           await deletePartnerRentalAssetMedia(asset.id, mediaId);
         }
-        await updatePartnerRentalAsset(asset.id, rest);
+        await updatePartnerRentalAsset(asset.id, {
+          ...rest,
+          location_text: locationText,
+          pickup_address_line: addressLine,
+          pickup_area: area,
+          pickup_city: city,
+          pickup_pincode: pincode,
+          delivery_available: deliveryAvailable,
+        });
         return "updated";
       }
       const created = await createPartnerRentalAsset({
         ...rest,
+        location_text: locationText,
+        pickup_address_line: addressLine,
+        pickup_area: area,
+        pickup_city: city,
+        pickup_pincode: pincode,
+        delivery_available: deliveryAvailable,
         variant_id: variantId,
         asset_identifier: "",
         image_urls: newUrls,
@@ -265,10 +294,10 @@ export function RentalAdEditor({
     onSuccess: (result) => {
       notify(
         result === "updated"
-          ? "Changes saved."
+          ? t("rentals.editor.savedChanges")
           : result === "created"
-            ? "Item sent for review. It goes live once checked."
-            : "Item saved as a draft. Send it for review from your list.",
+            ? t("rentals.editor.sentForReview")
+            : t("rentals.editor.savedDraft"),
         "success",
       );
       onSaved();
@@ -282,22 +311,26 @@ export function RentalAdEditor({
     const dailyPaise = rupeesToPaise(dailyRate);
     const depositPaise = deposit.trim() === "" ? suggestedDeposit ?? null : rupeesToPaise(deposit);
     const qty = Number.parseInt(quantity.trim(), 10);
-    if (!variant) return setFormError("Choose what you are renting.");
-    if (!title.trim()) return setFormError("Give your item a name.");
-    if (!location.trim()) return setFormError("Add the pickup location.");
-    if (dailyPaise == null || dailyPaise < 1) return setFormError("Enter a daily rate in rupees, for example 250.");
-    if (depositPaise == null) return setFormError("Enter the refundable deposit in rupees.");
-    if (!Number.isFinite(qty) || qty < 1) return setFormError("Quantity must be at least 1.");
-    if (photos.some((p) => p.uploading)) return setFormError("Wait for the photos to finish uploading.");
-    if (photos.some((p) => p.error)) return setFormError("Remove the photos that failed to upload.");
-    if (photos.length < 1) return setFormError("Add at least one photo. The first one is the cover.");
+    if (!variant) return setFormError(t("rentals.editor.errorChoose"));
+    if (!title.trim()) return setFormError(t("rentals.editor.errorName"));
+    if (!addressLine.trim()) return setFormError(t("rentals.editor.errorAddressLine"));
+    if (!city.trim()) return setFormError(t("rentals.editor.errorCity"));
+    if (pincode.trim() && !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+      return setFormError(t("rentals.editor.errorPincode"));
+    }
+    if (dailyPaise == null || dailyPaise < 1) return setFormError(t("rentals.editor.errorDailyRate"));
+    if (depositPaise == null) return setFormError(t("rentals.editor.errorDeposit"));
+    if (!Number.isFinite(qty) || qty < 1) return setFormError(t("rentals.ads.errorQuantity"));
+    if (photos.some((p) => p.uploading)) return setFormError(t("rentals.editor.errorUploading"));
+    if (photos.some((p) => p.error)) return setFormError(t("rentals.editor.errorFailed"));
+    if (photos.length < 1) return setFormError(t("rentals.editor.errorNoPhotos"));
 
     const structured: Record<string, string | number | boolean> = {};
     for (const key of fieldKeys) {
       const raw = fields[key]?.trim() ?? "";
       const spec = props[key] ?? {};
       if (!raw) {
-        if (requiredKeys.has(key)) return setFormError(`Fill in ${fieldLabel(key, spec).toLowerCase()}.`);
+        if (requiredKeys.has(key)) return setFormError(t("rentals.ads.errorFillField", { field: fieldLabel(key, spec).toLowerCase() }));
         continue;
       }
       if (spec.type === "boolean") structured[key] = raw === "true";
@@ -309,7 +342,11 @@ export function RentalAdEditor({
     save.mutate({
       title: title.trim(),
       description: description.trim(),
-      location_text: location.trim(),
+      addressLine: addressLine.trim(),
+      area: area.trim(),
+      city: city.trim(),
+      pincode: pincode.trim(),
+      deliveryAvailable,
       daily_rate_paise: dailyPaise,
       deposit_paise: depositPaise,
       quantity_available: qty,
@@ -327,36 +364,36 @@ export function RentalAdEditor({
       onOpenChange={(open) => {
         if (!open && !save.isPending) onClose();
       }}
-      title={isEdit ? "Edit item" : "Add an item"}
+      title={isEdit ? t("rentals.editor.editTitle") : t("rentals.editor.addTitle")}
       description={
         isEdit
-          ? "Changes show to customers as soon as you save."
-          : "We check every item before it goes live, usually within a day."
+          ? t("rentals.editor.editDescription")
+          : t("rentals.editor.addDescription")
       }
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={save.isPending}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="submit" form={FORM_ID} disabled={save.isPending || uploading}>
-            {save.isPending ? "Saving…" : isEdit ? "Save changes" : "Post item"}
+            {save.isPending ? t("rentals.common.saving") : isEdit ? t("rentals.editor.saveChanges") : t("rentals.editor.postItem")}
           </Button>
         </>
       }
     >
       <form id={FORM_ID} className="flex flex-col" onSubmit={onSubmit} noValidate>
-        <Section title="What are you renting?">
+        <Section title={t("rentals.ads.whatRenting")}>
           {isEdit ? (
             <p className="rounded-control bg-surface-sunken px-3 py-2 text-sm text-text">
               {existingPath
                 ? `${existingPath.sub.name} · ${existingPath.serviceName}${
                     existingPath.variant.name !== existingPath.serviceName ? ` · ${existingPath.variant.name}` : ""
                   }`
-                : "Category can’t be changed"}
+                : t("rentals.editor.categoryLocked")}
             </p>
           ) : (
             <>
-              <Field label="Category" required>
+              <Field label={t("rentals.editor.category")} required>
                 <Select
                   id="rental-subcategory"
                   value={subcategorySlug}
@@ -368,7 +405,7 @@ export function RentalAdEditor({
                     setDepositOverride(null);
                   }}
                 >
-                  <option value="">Select a category</option>
+                  <option value="">{t("rentals.editor.selectCategory")}</option>
                   {taxonomy.map((sub) => (
                     <option key={sub.id} value={sub.slug}>
                       {sub.name}
@@ -377,7 +414,7 @@ export function RentalAdEditor({
                 </Select>
               </Field>
               {selectedSub ? (
-                <Field label="Item" required>
+                <Field label={t("rentals.editor.item")} required>
                   <Select
                     id="rental-service"
                     value={serviceId}
@@ -389,7 +426,7 @@ export function RentalAdEditor({
                       setDepositOverride(null);
                     }}
                   >
-                    <option value="">Select an item</option>
+                    <option value="">{t("rentals.ads.selectItem")}</option>
                     {selectedSub.services.map((svc) => (
                       <option key={svc.id} value={svc.id}>
                         {svc.name}
@@ -399,7 +436,7 @@ export function RentalAdEditor({
                 </Field>
               ) : null}
               {(selectedService?.variants.length ?? 0) > 1 ? (
-                <Field label="Type" required>
+                <Field label={t("rentals.ads.type")} required>
                   <Select
                     id="rental-variant"
                     value={variantId}
@@ -421,7 +458,7 @@ export function RentalAdEditor({
           )}
         </Section>
 
-        <Section title="Photos" hint={`The first photo is the cover. Up to ${MAX_PHOTOS}.`}>
+        <Section title={t("rentals.ads.photos")} hint={t("rentals.editor.photosHint", { max: MAX_PHOTOS })}>
           <input
             ref={fileInputRef}
             type="file"
@@ -444,24 +481,24 @@ export function RentalAdEditor({
                 <img src={photo.previewUrl} alt="" className="size-full object-cover" />
                 {index === 0 ? (
                   <span className="absolute left-1.5 top-1.5 rounded-control bg-navy-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Cover
+                    {t("rentals.ads.cover")}
                   </span>
                 ) : null}
                 {photo.uploading ? (
                   <span className="absolute inset-x-0 bottom-0 bg-navy-900/80 px-2 py-1 text-center text-[11px] font-medium text-white">
-                    Uploading…
+                    {t("rentals.ads.uploading")}
                   </span>
                 ) : null}
                 {photo.error ? (
                   <span className="absolute inset-x-0 bottom-0 bg-danger-text px-2 py-1 text-center text-[11px] font-medium text-white">
-                    Failed
+                    {t("rentals.ads.failed")}
                   </span>
                 ) : null}
                 <button
                   type="button"
                   className="absolute right-1.5 top-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-navy-900 shadow-xs"
                   onClick={() => removePhoto(photo)}
-                  aria-label="Remove photo"
+                  aria-label={t("rentals.ads.removePhoto")}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -475,21 +512,21 @@ export function RentalAdEditor({
                   className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-card border-2 border-dashed border-line-strong bg-surface-sunken text-text-secondary transition hover:border-action hover:bg-surface hover:text-navy-900"
                 >
                   <Camera className="size-6" />
-                  <span className="text-xs font-semibold">Add photo</span>
+                  <span className="text-xs font-semibold">{t("rentals.ads.addPhoto")}</span>
                 </button>
               </li>
             ) : null}
           </ul>
         </Section>
 
-        <Section title="Details">
-          <Field label="Item name" required>
+        <Section title={t("rentals.editor.details")}>
+          <Field label={t("rentals.editor.itemName")} required>
             <Input
               id="rental-title"
               value={title}
               maxLength={180}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Teak wood dining chair"
+              placeholder={t("rentals.editor.itemNamePlaceholder")}
             />
           </Field>
           {fieldKeys.length > 0 ? (
@@ -506,26 +543,26 @@ export function RentalAdEditor({
               ))}
             </div>
           ) : null}
-          <Field label="Description" showOptional={false}>
+          <Field label={t("rentals.ads.description")} showOptional={false}>
             <Textarea
               id="rental-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Condition, what is included, any rules."
+              placeholder={t("rentals.editor.descriptionPlaceholder")}
             />
           </Field>
         </Section>
 
-        <Section title="Price and stock">
+        <Section title={t("rentals.editor.priceAndStock")}>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Rent per day" required>
+            <Field label={t("rentals.editor.rentPerDay")} required>
               <RupeeInput id="rental-rate" value={dailyRate} onChange={setDailyRate} placeholder="250" />
             </Field>
-            <Field label="Refundable deposit" required>
+            <Field label={t("rentals.ads.deposit")} required>
               <RupeeInput id="rental-deposit" value={deposit} onChange={(v) => setDepositOverride(v)} />
             </Field>
           </div>
-          <Field label="How many do you have?" required description="Identical pieces you can rent out at once.">
+          <Field label={t("rentals.editor.howMany")} required description={t("rentals.editor.howManyHint")}>
             <Input
               id="rental-quantity"
               inputMode="numeric"
@@ -537,17 +574,62 @@ export function RentalAdEditor({
         </Section>
 
         <Section
-          title="Pickup location"
-          hint="Customers come to this address to collect the item and return it here. There is no delivery."
+          title={t("rentals.editor.pickupDeliveryTitle")}
+          hint={t("rentals.editor.pickupDeliveryHint")}
         >
-          <Field label="Address" required>
+          <Field label={t("rentals.editor.addressLine")} required>
             <Input
-              id="rental-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Area, city"
+              id="rental-address-line"
+              value={addressLine}
+              onChange={(e) => setAddressLine(e.target.value)}
+              placeholder={t("rentals.editor.addressLinePlaceholder")}
             />
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("rentals.editor.areaLocality")}>
+              <Input
+                id="rental-area"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder={t("rentals.editor.areaPlaceholder")}
+              />
+            </Field>
+            <Field label={t("rentals.ads.city")} required>
+              <Input
+                id="rental-city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder={t("rentals.editor.cityPlaceholder")}
+              />
+            </Field>
+          </div>
+          <Field label={t("rentals.ads.pincode")} required>
+            <Input
+              id="rental-pincode"
+              inputMode="numeric"
+              maxLength={6}
+              value={pincode}
+              onChange={(e) => setPincode(e.target.value)}
+              placeholder="560038"
+            />
+          </Field>
+          <div className="pt-1">
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm text-navy-900">
+              <input
+                type="checkbox"
+                id="rental-delivery-available"
+                checked={deliveryAvailable}
+                onChange={(e) => setDeliveryAvailable(e.target.checked)}
+                className="mt-0.5 rounded-xs border-line text-action focus:ring-action"
+              />
+              <div>
+                <span className="font-semibold">{t("rentals.editor.offerDelivery")}</span>
+                <p className="text-xs text-text-secondary">
+                  {t("rentals.editor.offerDeliveryHint")}
+                </p>
+              </div>
+            </label>
+          </div>
         </Section>
 
         {formError ? (

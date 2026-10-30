@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, buttonStyles, cn } from "@vsolve/ui";
+import { Card, buttonStyles, cn, useT } from "@vsolve/ui";
 import { Check } from "lucide-react";
 import Link from "next/link";
 
@@ -44,19 +44,20 @@ export interface ExpressProgressProps {
 
 export function ExpressProgress({ path, className }: ExpressProgressProps) {
   const done = path.steps.filter((step) => step.isComplete).length;
+  const t = useT();
 
   return (
     <Card className={cn("p-5", className)}>
-      <h2 className="text-base font-semibold text-text">Start taking work</h2>
+      <h2 className="text-base font-semibold text-text">{t("me.capability.express.title")}</h2>
       <p className="mt-1 text-sm text-text-secondary">
         {path.canSeeDemand
-          ? "You are set up. Here is what people near you are asking for."
-          : `Four short steps. ${path.remaining} to go.`}
+          ? t("me.capability.express.readyBody")
+          : t("me.capability.express.stepsRemainingTemplate", { remaining: path.remaining })}
       </p>
 
       <ol
         className="mt-4 flex list-none flex-col gap-1 p-0"
-        aria-label={`Setup steps, ${done} of ${path.steps.length} done`}
+        aria-label={t("me.capability.express.ariaStepsProgress", { done, total: path.steps.length })}
       >
         {path.steps.map((step) => (
           <li key={step.key}>
@@ -97,9 +98,9 @@ export function ExpressProgress({ path, className }: ExpressProgressProps) {
               </span>
 
               {step.isComplete ? (
-                <span className="sr-only">Done</span>
+                <span className="sr-only">{t("me.capability.express.srDone")}</span>
               ) : (
-                <span className="sr-only">Not done yet</span>
+                <span className="sr-only">{t("me.capability.express.srNotDone")}</span>
               )}
             </Link>
           </li>
@@ -107,12 +108,12 @@ export function ExpressProgress({ path, className }: ExpressProgressProps) {
       </ol>
 
       <Link href={path.destination} className={buttonStyles({ size: "lg", block: true, className: "mt-5" })}>
-        {path.canSeeDemand ? "See what people need" : "Continue"}
+        {path.canSeeDemand ? t("me.capability.express.seeWhatPeopleNeed") : t("common.continue")}
       </Link>
 
       {path.canSeeDemand ? null : (
         <p className="mt-3 text-xs leading-5 text-text-muted">
-          We ask for documents later, when you accept your first job — not now.
+          {t("me.capability.express.documentsLaterNote")}
         </p>
       )}
     </Card>

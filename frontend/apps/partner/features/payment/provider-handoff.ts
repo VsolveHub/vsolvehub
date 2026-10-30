@@ -1,3 +1,5 @@
+import type { useT } from "@vsolve/ui";
+
 /**
  * Provider checkout handoff — partner edition.
  *
@@ -98,6 +100,23 @@ declare global {
   interface Window {
     Razorpay?: RazorpayConstructor;
   }
+}
+
+/**
+ * The guard errors below stay plain English (this module has no `t`). A
+ * component that shows one of them resolves it with `translateProviderError`.
+ */
+const PROVIDER_ERROR_KEYS: Record<string, string> = {
+  "The payment provider can only be opened in a browser.": "workspaces.payment.browserOnly",
+  "The payment provider could not be reached.": "workspaces.payment.unreachable",
+  "Payment order ID or public key is missing.": "workspaces.payment.missingOrder",
+  "The payment provider did not load correctly.": "workspaces.payment.didNotLoad",
+};
+
+/** Translates one of this module's guard messages; any other text is returned unchanged. */
+export function translateProviderError(t: ReturnType<typeof useT>, message: string): string {
+  const key = PROVIDER_ERROR_KEYS[message];
+  return key ? t(key) : message;
 }
 
 let scriptPromise: Promise<void> | null = null;

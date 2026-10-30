@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, MapPin, Wrench } from "lucide-react";
-import { Badge, Button } from "@vsolve/ui";
+import { Badge, buttonStyles } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
 import { rentalHref } from "@/lib/routes";
@@ -68,6 +68,10 @@ export function RentalCard({ asset }: RentalCardProps) {
           <div className="flex items-center gap-1.5 text-xs text-text-secondary">
             <MapPin className="size-3.5 shrink-0 text-text-secondary" />
             <span className="truncate">{asset.location_text}</span>
+            {/* Only when the customer searched a place. */}
+            {asset.distance_km != null ? (
+              <span className="shrink-0 font-semibold text-text">· {asset.distance_km} km away</span>
+            ) : null}
           </div>
         )}
       </div>
@@ -87,12 +91,10 @@ export function RentalCard({ asset }: RentalCardProps) {
             </p>
           </div>
 
-          <Link href={rentalHref(asset.slug)}>
-            <Button size="sm" className="inline-flex items-center gap-1.5 font-bold">
+          <Link href={rentalHref(asset.slug)} className={buttonStyles({ size: "sm", className: "inline-flex items-center gap-1.5 font-bold" })}>
               Rent Now
               <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
-            </Button>
-          </Link>
+            </Link>
         </div>
       </div>
     </article>

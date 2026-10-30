@@ -1,10 +1,12 @@
 """One-shot repair for CANCELLED/RETURNED bookings with live AssetReservations."""
 
+import uuid
 from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from apps.rental.models import AssetReservation, RentalBooking
 from apps.rental.services import repair_ghost_asset_holds
 
 
@@ -31,8 +33,6 @@ class Command(BaseCommand):
         asset_id = (options.get("asset_id") or "").strip() or None
         commit = bool(options.get("commit"))
         if not commit:
-            from apps.rental.models import AssetReservation, RentalBooking
-
             qs = AssetReservation.objects.filter(
                 status__in=(
                     AssetReservation.Status.TENTATIVE,
@@ -44,7 +44,7 @@ class Command(BaseCommand):
                 ),
             )
             if asset_id:
-                qs = qs.filter(asset_id=asset_id)
+                qs = qs.filter(asset_id=uuid.UUID(asset_id))
             count = qs.count()
             self.stdout.write(f"Would repair {count} ghost hold(s). Re-run with --commit to apply.")
             return

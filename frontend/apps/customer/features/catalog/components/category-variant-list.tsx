@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { EmptyState, formatMoney } from "@vsolve/ui";
 
 import { iconForService } from "../icon-catalogue/service-icon";
@@ -118,7 +118,7 @@ export function CategoryVariantList({ category, services }: CategoryVariantListP
                     <ul className="list-none">
                       {rows.map((row) => (
                         <li key={row.key} className="border-t border-line">
-                          <Link
+                          <IntentLink
                             href={row.href}
                             className={[
                               "flex min-h-11 items-center gap-3 px-3.5 py-2.5",
@@ -170,7 +170,7 @@ export function CategoryVariantList({ category, services }: CategoryVariantListP
                                 strokeLinejoin="round"
                               />
                             </svg>
-                          </Link>
+                          </IntentLink>
                         </li>
                       ))}
                     </ul>

@@ -71,6 +71,13 @@ export interface WindowDayView {
   windows: WindowView[];
 }
 
+export interface InstantView {
+  isAvailable: boolean;
+  earliestStartsAt: string | null;
+  etaMinutes: number | null;
+  unavailableReason: string | null;
+}
+
 export interface WindowsView {
   days: WindowDayView[];
   /** Server-derived from the chosen task lines. Display only (ADR-008). */
@@ -85,6 +92,7 @@ export interface WindowsView {
    * the answer is provisional while it is.
    */
   isPreliminary: boolean;
+  instant?: InstantView;
 }
 
 interface ZoneFormatters {
@@ -220,6 +228,25 @@ export function toWindowsView(response: PublishedWindows): WindowsView {
     toDayView(day, response.server_now, response.estimated_duration_minutes, formatters),
   );
 
+  const rawInstant = (
+    response as {
+      instant?: {
+        is_available?: boolean;
+        earliest_starts_at?: string | null;
+        eta_minutes?: number | null;
+        unavailable_reason?: string | null;
+      };
+    }
+  ).instant;
+  const instant: InstantView | undefined = rawInstant
+    ? {
+        isAvailable: Boolean(rawInstant.is_available),
+        earliestStartsAt: rawInstant.earliest_starts_at ?? null,
+        etaMinutes: rawInstant.eta_minutes ?? null,
+        unavailableReason: rawInstant.unavailable_reason ?? null,
+      }
+    : undefined;
+
   return {
     days,
     estimatedDurationMinutes: response.estimated_duration_minutes,
@@ -227,5 +254,6 @@ export function toWindowsView(response: PublishedWindows): WindowsView {
     // conflated with the endpoint being unreachable, which throws.
     isEmpty: days.every((day) => !day.hasAvailability),
     isPreliminary: response.availability_is_preliminary,
+    instant,
   };
 }

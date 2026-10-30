@@ -51,9 +51,11 @@ from apps.loyalty.services.referral import (
     reject_referral,
     reverse_referral,
 )
+from apps.loyalty.views import OpsReferralPagination
 from apps.partners.permissions import HasRecentOperationsStepUp, IsOperationsUser
 from apps.wallet.models import WalletTransaction
 from apps.wallet.services import get_or_create_wallet
+from common.pagination import CURSOR_PARAMETER, page_serializer, paginated
 
 _IMMUTABLE_WHEN_USED = frozenset(
     {"earn_mode", "coins_amount", "completions_required", "grant_trigger", "tiers"}
@@ -176,8 +178,11 @@ class OpsReferralAttributionListView(APIView):
         parameters=[
             OpenApiParameter("status", str, required=False),
             OpenApiParameter("phone", str, required=False),
+            CURSOR_PARAMETER,
         ],
-        responses={200: OpsReferralAttributionSerializer(many=True)},
+        responses={
+            200: page_serializer(OpsReferralAttributionSerializer, "OpsReferralAttributionPage")
+        },
     )
     def get(self, request: Request) -> Response:
         rows = ReferralAttribution.objects.select_related(
@@ -192,8 +197,9 @@ class OpsReferralAttributionListView(APIView):
                 Q(referrer__phone_number__icontains=phone)
                 | Q(referee__phone_number__icontains=phone)
             )
-        rows = rows.order_by("-attributed_at")[:200]
-        return Response(OpsReferralAttributionSerializer(rows, many=True).data)
+        return paginated(
+            request, self, rows, OpsReferralAttributionSerializer, pagination=OpsReferralPagination
+        )
 
 
 class _OpsReferralReviewView(APIView):

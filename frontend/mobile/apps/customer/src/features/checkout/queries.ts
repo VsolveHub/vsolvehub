@@ -184,7 +184,9 @@ export function useCreatePlanSet() {
         }),
       ),
     onSuccess: (planSet) => {
-      queryClient.setQueryData(queryKeys.booking.planSet(planSet.id), planSet);
+      if (planSet) {
+        queryClient.setQueryData(queryKeys.booking.planSet((planSet as any).id), planSet);
+      }
     },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.status === 409) {

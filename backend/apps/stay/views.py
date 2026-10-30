@@ -1,22 +1,27 @@
+from contextlib import suppress
 from typing import Any
 from uuid import UUID
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.foundation.slugs import lookup_by_slug_or_id
+from apps.locations.nearby import NEARBY_PARAMETERS, point_from
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.stay.exceptions import StayStateApiError
 from apps.stay.models import (
     Property,
     Room,
+    RoomLook,
     StayEnquiry,
     StayReservation,
     StaySubscriptionPlan,
@@ -24,11 +29,13 @@ from apps.stay.models import (
     Unit,
 )
 from apps.stay.serializers import (
+    AddLookMediaSerializer,
     AddPropertyMediaSerializer,
     AddRoomSerializer,
     AddUnitMediaSerializer,
     ConfirmEnquirySerializer,
     CreateEnquirySerializer,
+    CreateLookSerializer,
     CreatePropertySerializer,
     CreateReservationSerializer,
     CreateStayReviewSerializer,
@@ -50,6 +57,7 @@ from apps.stay.serializers import (
     PropertySerializer,
     PropertySummarySerializer,
     RespondEnquirySerializer,
+    RoomLookSerializer,
     RoomSerializer,
     SetVisitingHoursSerializer,
     StartStaySubscriptionPurchaseSerializer,
@@ -66,10 +74,12 @@ from apps.stay.serializers import (
     StayTaxonomySubcategorySerializer,
     StayVisitSerializer,
     UnitMediaSerializer,
+    UpdateLookSerializer,
     UpdatePropertySerializer,
     UpdateRoomSerializer,
     UpdateUnitSerializer,
     VisitAvailabilityDaySerializer,
+    unit_looks,
 )
 from apps.stay.services import (
     StayStateError,
@@ -85,10 +95,12 @@ from apps.stay.services import (
     check_out_reservation,
     confirm_enquiry,
     create_enquiry,
+    create_look,
     create_property,
     create_reservation,
     create_stay_review,
     create_unit,
+    delete_look,
     delete_room,
     get_stay_taxonomy,
     host_cancel_reservation,
@@ -97,11 +109,13 @@ from apps.stay.services import (
     mark_no_show,
     mark_room_booked,
     moderate_property,
+    move_room,
     partner_owns_stay_photo,
     public_properties,
     release_room,
     remove_property_media,
     remove_unit_media,
+    rename_look,
     rename_room,
     respond_enquiry,
     set_property_listing,
@@ -120,6 +134,16 @@ from apps.stay.visits import (
     request_visit,
     set_visiting_hours,
     visit_availability,
+)
+from common.pagination import (
+    CURSOR_PARAMETER,
+    STATUS_PARAMETER,
+    NewestFirstPagination,
+    OperationsNewestFirstPagination,
+    browse_window,
+    filter_statuses,
+    page_serializer,
+    paginated,
 )
 
 
@@ -167,6 +191,7 @@ class StayBrowseView(APIView):
             OpenApiParameter("sort", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("limit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("offset", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            *NEARBY_PARAMETERS,
         ],
         responses=PropertySummarySerializer(many=True),
     )
@@ -178,8 +203,7 @@ class StayBrowseView(APIView):
         max_price = request.query_params.get("max_price")
         tenant_preference = request.query_params.get("tenant_preference", "")
         sort_param = request.query_params.get("sort", "newest")
-        limit_raw = request.query_params.get("limit")
-        offset_raw = request.query_params.get("offset")
+        limit, offset = browse_window(request)
 
         props = public_properties(
             query=request.query_params.get("q", ""),
@@ -198,8 +222,9 @@ class StayBrowseView(APIView):
             variant_code=request.query_params.get("service", ""),
             tenant_preference=tenant_preference,
             sort=sort_param,
-            limit=int(limit_raw) if limit_raw and limit_raw.isdigit() else None,
-            offset=int(offset_raw) if offset_raw and offset_raw.isdigit() else 0,
+            near=point_from(request),
+            limit=limit,
+            offset=offset,
         )
         return Response(PropertySummarySerializer(props, many=True).data)
 
@@ -247,6 +272,7 @@ class StayEnquireView(APIView):
                 customer=request.user,
                 property_id=data["property_id"],
                 unit_id=data.get("unit_id"),
+                look_id=data.get("look_id"),
                 check_in=data["check_in"],
                 check_out=data.get("check_out"),
                 length=data.get("length"),
@@ -261,15 +287,24 @@ class StayEnquireView(APIView):
         return Response(StayEnquirySerializer(enquiry).data, status=status.HTTP_201_CREATED)
 
 
+class VisitSchedulePagination(NewestFirstPagination):
+    """A host's visits in the order they happen, so the next one is at the top of page one."""
+
+    ordering = ("visit_date", "start_time", "id")
+
+
 class MyStayEnquiriesView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
-    @extend_schema(responses=StayEnquirySerializer(many=True))
+    @extend_schema(
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(StayEnquirySerializer, "StayEnquiryPage"),
+    )
     def get(self, request: Any) -> Response:
         rows = StayEnquiry.objects.filter(customer=request.user).select_related(
             "property__host__user", "unit"
         )
-        return Response(StayEnquirySerializer(rows, many=True).data)
+        return paginated(request, self, rows, StayEnquirySerializer)
 
 
 class MyStayEnquiryCancelView(APIView):
@@ -374,6 +409,7 @@ class PartnerPropertyCollectionView(APIView):
             .prefetch_related(
                 "units__rooms",
                 "units__media",
+                "units__looks__media",
                 "media",
                 "reviews",
                 "visit_slots",
@@ -518,16 +554,107 @@ class PartnerUnitMediaDeleteView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _partner_look(partner: Any, look_id: UUID) -> RoomLook:
+    return get_object_or_404(
+        RoomLook.objects.select_related("unit__property"),
+        id=look_id,
+        unit__property__host=partner,
+    )
+
+
+def _look_payload(look: RoomLook) -> dict[str, Any]:
+    unit = Unit.objects.prefetch_related("looks__media", "rooms").get(id=look.unit_id)
+    row = next(x for x in unit_looks(unit) if x["id"] == look.id)
+    return dict(RoomLookSerializer(row).data)
+
+
+class PartnerUnitLookCollectionView(APIView):
+    """Add a look (a named photo set) to a room type. Rooms join it from the room screens."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=CreateLookSerializer, responses={201: RoomLookSerializer})
+    def post(self, request: Any, unit_id: UUID) -> Response:
+        ser = CreateLookSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        unit = get_object_or_404(
+            Unit.objects.select_related("property"), id=unit_id, property__host=partner
+        )
+        try:
+            look = create_look(
+                unit=unit,
+                host=partner,
+                name=ser.validated_data["name"],
+                image_urls=ser.validated_data["image_urls"],
+            )
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(_look_payload(look), status=status.HTTP_201_CREATED)
+
+
+class PartnerLookDetailView(APIView):
+    """Rename a look, or remove an empty one."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=UpdateLookSerializer, responses=RoomLookSerializer)
+    def patch(self, request: Any, look_id: UUID) -> Response:
+        ser = UpdateLookSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        look = _partner_look(partner, look_id)
+        try:
+            look = rename_look(look=look, host=partner, name=ser.validated_data["name"])
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(_look_payload(look))
+
+    @extend_schema(request=None, responses={204: None})
+    def delete(self, request: Any, look_id: UUID) -> Response:
+        partner = _partner(request.user)
+        look = _partner_look(partner, look_id)
+        try:
+            delete_look(look=look, host=partner)
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PartnerLookMediaCreateView(APIView):
+    """Add a photo to one look. Removing uses the room type's photo delete."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=AddLookMediaSerializer, responses={201: UnitMediaSerializer})
+    def post(self, request: Any, look_id: UUID) -> Response:
+        ser = AddLookMediaSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        look = _partner_look(partner, look_id)
+        try:
+            media = add_unit_media(
+                unit=look.unit, host=partner, url=ser.validated_data["url"], look=look
+            )
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(UnitMediaSerializer(media).data, status=status.HTTP_201_CREATED)
+
+
 class PartnerEnquiryCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=PartnerStayEnquirySerializer(many=True))
+    @extend_schema(
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(PartnerStayEnquirySerializer, "PartnerStayEnquiryPage"),
+    )
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
         rows = StayEnquiry.objects.filter(property__host=partner).select_related(
             "property", "unit", "customer"
         )
-        return Response(PartnerStayEnquirySerializer(rows, many=True).data)
+        rows = filter_statuses(rows, request, StayEnquiry.Status.values)
+        return paginated(request, self, rows, PartnerStayEnquirySerializer)
 
 
 class PartnerEnquiryRespondView(APIView):
@@ -554,14 +681,39 @@ class PartnerEnquiryRespondView(APIView):
 class OpsStayCollectionView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=PropertySerializer(many=True))
-    def get(self, _request: Any) -> Response:
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "moderation_status",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="e.g. PENDING for the review queue.",
+            ),
+            CURSOR_PARAMETER,
+        ],
+        responses=page_serializer(PropertySerializer, "PropertyPage"),
+    )
+    def get(self, request: Any) -> Response:
         rows = (
             Property.objects.all()
-            .prefetch_related("units__media", "media", "reviews", "variant__a9_configurations")
-            .select_related("host", "variant")
+            .prefetch_related(
+                "units__media",
+                "units__looks__media",
+                "units__rooms",
+                "media",
+                "reviews",
+                "variant__a9_configurations",
+            )
+            .select_related("host__user", "variant")
         )
-        return Response(PropertySerializer(rows, many=True).data)
+        wanted = (request.query_params.get("moderation_status") or "").strip().upper()
+        if wanted:
+            if wanted not in Property.ModerationStatus.values:
+                raise ValidationError({"moderation_status": ["That is not a listing status."]})
+            rows = rows.filter(moderation_status=wanted)
+        return paginated(
+            request, self, rows, PropertySerializer, pagination=OperationsNewestFirstPagination
+        )
 
 
 class OpsStayModerateView(APIView):
@@ -611,12 +763,15 @@ class StayReserveView(APIView):
 class MyStayReservationsView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
-    @extend_schema(responses=StayReservationSerializer(many=True))
+    @extend_schema(
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(StayReservationSerializer, "StayReservationPage"),
+    )
     def get(self, request: Any) -> Response:
         rows = StayReservation.objects.filter(customer=request.user).select_related(
             "property", "unit", "customer"
         )
-        return Response(StayReservationSerializer(rows, many=True).data)
+        return paginated(request, self, rows, StayReservationSerializer)
 
 
 class MyStayReservationCancelView(APIView):
@@ -647,13 +802,17 @@ class MyStayReservationCancelView(APIView):
 class PartnerReservationCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=StayReservationSerializer(many=True))
+    @extend_schema(
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(StayReservationSerializer, "PartnerStayReservationPage"),
+    )
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
         rows = StayReservation.objects.filter(property__host=partner).select_related(
             "property", "unit", "customer"
         )
-        return Response(StayReservationSerializer(rows, many=True).data)
+        rows = filter_statuses(rows, request, StayReservation.Status.values)
+        return paginated(request, self, rows, StayReservationSerializer)
 
 
 class PartnerReservationActionView(APIView):
@@ -691,19 +850,57 @@ class PartnerReservationActionView(APIView):
 class OpsStayEnquiriesView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=StayEnquirySerializer(many=True))
-    def get(self, _request: Any) -> Response:
+    @extend_schema(
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(StayEnquirySerializer, "OpsStayEnquiryPage"),
+    )
+    def get(self, request: Any) -> Response:
         rows = StayEnquiry.objects.all().select_related("property", "unit")
-        return Response(StayEnquirySerializer(rows, many=True).data)
+        return paginated(
+            request, self, rows, StayEnquirySerializer, pagination=OperationsNewestFirstPagination
+        )
 
 
 class OpsStayReservationsView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=StayReservationSerializer(many=True))
-    def get(self, _request: Any) -> Response:
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter(
+                "q",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Guest name or phone, property title, or a reservation id.",
+            ),
+            CURSOR_PARAMETER,
+        ],
+        responses=page_serializer(StayReservationSerializer, "OpsStayReservationPage"),
+    )
+    def get(self, request: Any) -> Response:
         rows = StayReservation.objects.all().select_related("property", "unit", "customer")
-        return Response(StayReservationSerializer(rows, many=True).data)
+        wanted = (request.query_params.get("status") or "").strip().upper()
+        if wanted:
+            if wanted not in StayReservation.Status.values:
+                raise ValidationError({"status": ["That is not a reservation status."]})
+            rows = rows.filter(status=wanted)
+        query = (request.query_params.get("q") or "").strip()
+        if query:
+            match = (
+                Q(customer__full_name__icontains=query)
+                | Q(customer__phone_number__icontains=query)
+                | Q(property__title__icontains=query)
+            )
+            with suppress(ValueError):
+                match |= Q(id=UUID(query))
+            rows = rows.filter(match)
+        return paginated(
+            request,
+            self,
+            rows,
+            StayReservationSerializer,
+            pagination=OperationsNewestFirstPagination,
+        )
 
 
 class StayReviewCreateView(APIView):
@@ -857,11 +1054,15 @@ class PartnerUnitRoomCollectionView(APIView):
             Unit.objects.select_related("property"), id=unit_id, property__host=partner
         )
         try:
+            new_look = ser.validated_data.get("new_look")
             room = add_room(
                 unit=unit,
                 host=partner,
                 number=ser.validated_data["number"],
                 available=ser.validated_data["available"],
+                look_id=ser.validated_data.get("look_id"),
+                new_look_name=new_look["name"] if new_look else None,
+                new_look_image_urls=new_look.get("image_urls", []) if new_look else None,
             )
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
@@ -886,6 +1087,8 @@ class PartnerRoomDetailView(APIView):
                 room = set_room_available(
                     room=room, host=partner, available=ser.validated_data["available"]
                 )
+            if "look_id" in ser.validated_data:
+                room = move_room(room=room, host=partner, look_id=ser.validated_data["look_id"])
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(RoomSerializer(room).data)
@@ -1002,6 +1205,7 @@ class StayVisitCreateView(APIView):
                 slot_id=data["slot_id"],
                 visit_date=data["visit_date"],
                 unit_id=data.get("unit_id"),
+                look_id=data.get("look_id"),
                 message=data.get("message", ""),
             )
         except (StayStateError, PermissionError, Property.DoesNotExist) as exc:
@@ -1012,12 +1216,15 @@ class StayVisitCreateView(APIView):
 class MyStayVisitsView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
-    @extend_schema(responses=StayVisitSerializer(many=True))
+    @extend_schema(
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(StayVisitSerializer, "StayVisitPage"),
+    )
     def get(self, request: Any) -> Response:
         rows = StayVisit.objects.filter(customer=request.user).select_related(
             "property__host__user", "unit"
         )
-        return Response(StayVisitSerializer(rows, many=True).data)
+        return paginated(request, self, rows, StayVisitSerializer)
 
 
 class MyStayVisitCancelView(APIView):
@@ -1036,15 +1243,19 @@ class MyStayVisitCancelView(APIView):
 class PartnerVisitCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=PartnerStayVisitSerializer(many=True))
+    @extend_schema(
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(PartnerStayVisitSerializer, "PartnerStayVisitPage"),
+    )
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = (
-            StayVisit.objects.filter(property__host=partner)
-            .select_related("property__host__user", "unit", "customer")
-            .order_by("visit_date", "start_time", "created_at")
+        rows = StayVisit.objects.filter(property__host=partner).select_related(
+            "property__host__user", "unit", "customer"
         )
-        return Response(PartnerStayVisitSerializer(rows, many=True).data)
+        rows = filter_statuses(rows, request, StayVisit.Status.values)
+        return paginated(
+            request, self, rows, PartnerStayVisitSerializer, pagination=VisitSchedulePagination
+        )
 
 
 class PartnerVisitActionView(APIView):
@@ -1188,4 +1399,3 @@ class PartnerStaySubscriptionView(APIView):
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(StaySubscriptionSerializer(sub).data, status=status.HTTP_201_CREATED)
-

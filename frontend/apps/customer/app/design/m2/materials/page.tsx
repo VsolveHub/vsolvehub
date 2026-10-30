@@ -22,7 +22,7 @@ import {
  * and ₹2,513 is that screen's total — the one figure this list is *not* part of.
  * Both pages are driven from the same literal numbers so the pair cannot drift.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Materials — M2", robots: { index: false, follow: false } };
 
 const GROUPS: readonly ShoppingGroup[] = [
   {

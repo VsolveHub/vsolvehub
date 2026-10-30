@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useT } from "@vsolve/ui";
 
 import {
   createListingSchema,
@@ -39,6 +40,7 @@ const INITIAL_FORM: CreateListingFormState = {
 };
 
 export function usePartnerListingsWorkspace() {
+  const t = useT();
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -124,7 +126,7 @@ export function usePartnerListingsWorkspace() {
   const validateCreate = () => {
     const parsed = createListingSchema.safeParse(form);
     if (!parsed.success) {
-      setCreateErrors(issuesToFieldErrors(parsed.error));
+      setCreateErrors(issuesToFieldErrors(parsed.error, t));
       return false;
     }
     setCreateErrors({});
@@ -134,7 +136,7 @@ export function usePartnerListingsWorkspace() {
   const validateEdit = () => {
     const parsed = editListingSchema.safeParse(editForm);
     if (!parsed.success) {
-      setEditErrors(issuesToFieldErrors(parsed.error));
+      setEditErrors(issuesToFieldErrors(parsed.error, t));
       return false;
     }
     setEditErrors({});

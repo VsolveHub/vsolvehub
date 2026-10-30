@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from django.utils import timezone
@@ -6,10 +7,13 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import A9VariantConfiguration
+from apps.locations.nearby import DISTANCE_KM, distance_of
+from apps.locations.pins import area_of, combine_pin, latitude_field, longitude_field
 from apps.stay.models import (
     Property,
     PropertyMedia,
     Room,
+    RoomLook,
     StayEnquiry,
     StayReservation,
     StayReview,
@@ -28,15 +32,68 @@ class UnitMediaSerializer(serializers.ModelSerializer[UnitMedia]):
         fields = ("id", "url", "display_order")
 
 
-class UnitSerializer(serializers.ModelSerializer):
+class RoomLookSerializer(serializers.Serializer[dict[str, Any]]):
+    """One look of a room type, as guests see it: its photos and how many of its rooms are
+    available. Never the room numbers."""
+
+    id = serializers.UUIDField()
+    #: The host's label. Blank on a type's first look.
+    name = serializers.CharField(allow_blank=True)
+    #: "1 BHK" or "1 BHK · With balcony": the card's title.
+    display_name = serializers.CharField()
+    display_order = serializers.IntegerField()
+    media = UnitMediaSerializer(many=True)
+    available_count = serializers.IntegerField()
+    room_count = serializers.IntegerField()
+
+
+def _unit_and_look_name(unit: Unit | None, look: RoomLook | None, *, fallback: str) -> str:
+    from apps.stay.services import look_display_name  # noqa: PLC0415
+
+    if unit is None:
+        return fallback
+    return look_display_name(unit=unit, look=look)
+
+
+def unit_looks(unit: Unit) -> list[dict[str, Any]]:
+    """The type's looks with per-look room counts. Reads prefetched ``looks``/``rooms`` when the
+    caller loaded them, so a list of properties costs no query per room type."""
+    from apps.stay.services import look_display_name  # noqa: PLC0415
+
+    rooms = list(unit.rooms.all())
+    out = []
+    for look in sorted(unit.looks.all(), key=lambda lk: (lk.display_order, lk.created_at)):
+        mine = [r for r in rooms if r.look_id == look.id]
+        out.append(
+            {
+                "id": look.id,
+                "name": look.name,
+                "display_name": look_display_name(unit=unit, look=look),
+                "display_order": look.display_order,
+                "media": sorted(look.media.all(), key=lambda m: (m.display_order, m.created_at)),
+                "available_count": sum(1 for r in mine if r.status == Room.Status.AVAILABLE),
+                "room_count": len(mine),
+            }
+        )
+    return out
+
+
+class UnitSerializer(serializers.ModelSerializer[Unit]):
     #: Photos of this room type; the property gallery shows the building.
     media = UnitMediaSerializer(many=True, read_only=True)
+    #: The type's looks: one guest card each. A type made before looks has one.
+    looks = serializers.SerializerMethodField()
+
+    @extend_schema_field(RoomLookSerializer(many=True))
+    def get_looks(self, obj: Unit) -> list[dict[str, Any]]:
+        return [dict(RoomLookSerializer(look).data) for look in unit_looks(obj)]
 
     class Meta:
         model = Unit
         fields: tuple[str, ...] = (
             "id",
             "media",
+            "looks",
             "name",
             "sharing_count",
             "quantity",
@@ -56,6 +113,7 @@ class RoomSerializer(serializers.ModelSerializer[Room]):
         model = Room
         fields = (
             "id",
+            "look",
             "number",
             "status",
             "occupant_name",
@@ -81,13 +139,13 @@ class PartnerUnitSerializer(UnitSerializer):
         return upcoming_booking_count(unit=obj)
 
 
-class PropertyMediaSerializer(serializers.ModelSerializer):
+class PropertyMediaSerializer(serializers.ModelSerializer[PropertyMedia]):
     class Meta:
         model = PropertyMedia
         fields = ("id", "url", "caption", "display_order", "created_at")
 
 
-class StayReviewSerializer(serializers.ModelSerializer):
+class StayReviewSerializer(serializers.ModelSerializer[StayReview]):
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
 
     class Meta:
@@ -151,7 +209,7 @@ def _extract_room_style(obj: Property) -> str:
     return room_style_for_property(obj)
 
 
-class PropertySummarySerializer(serializers.ModelSerializer):
+class PropertySummarySerializer(serializers.ModelSerializer[Property]):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
     media = PropertyMediaSerializer(many=True, read_only=True)
@@ -162,6 +220,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
     amenities = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -185,11 +244,16 @@ class PropertySummarySerializer(serializers.ModelSerializer):
             "amenities",
             "review_count",
             "average_rating",
+            "distance_km",
             "created_at",
         )
 
     def get_booking_mode(self, obj: Property) -> str:
         return _extract_booking_mode(obj)
+
+    @extend_schema_field(DISTANCE_KM)
+    def get_distance_km(self, obj: Property) -> float | None:
+        return distance_of(obj)
 
     def get_price_period(self, obj: Property) -> str:
         return _extract_price_period(obj)
@@ -212,12 +276,24 @@ class PropertySummarySerializer(serializers.ModelSerializer):
         items = list(reviews) if reviews is not None else list(obj.reviews.all())
         if not items:
             return None
-        return round(sum(r.rating for r in items) / len(items), 1)
+        total = sum(int(r.rating) for r in items)
+        return round(total / len(items), 1)
 
 
-class PropertySerializer(serializers.ModelSerializer):
+AREA_COORDINATE = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+
+
+def _area_text(value: Decimal | None) -> str | None:
+    area = area_of(value)
+    return None if area is None else f"{area:.2f}"
+
+
+class PropertySerializer(serializers.ModelSerializer[Property]):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
+    host_id = serializers.UUIDField(source="host.id", read_only=True)
+    partner_id = serializers.UUIDField(source="host.id", read_only=True)
+    host_phone = serializers.CharField(source="host.user.phone_number", read_only=True)
     media = PropertyMediaSerializer(many=True, read_only=True)
     reviews = StayReviewSerializer(many=True, read_only=True)
     units = UnitSerializer(many=True, read_only=True)
@@ -230,6 +306,10 @@ class PropertySerializer(serializers.ModelSerializer):
     can_review = serializers.SerializerMethodField()
     #: Whether guests can "Schedule a visit": the host switched visits on and set slots.
     visits_offered = serializers.SerializerMethodField()
+    #: The host's pin rounded to an area (about 1 km), for a map of where the property is.
+    #: Null when the host has not pinned it. The exact pin is the host's only.
+    area_latitude = serializers.SerializerMethodField()
+    area_longitude = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -241,7 +321,10 @@ class PropertySerializer(serializers.ModelSerializer):
             "location_text",
             "moderation_status",
             "public_state",
+            "host_id",
+            "partner_id",
             "host_name",
+            "host_phone",
             "variant",
             "structured_fields",
             "cancellation_policy_text",
@@ -257,6 +340,8 @@ class PropertySerializer(serializers.ModelSerializer):
             "highlights",
             "can_review",
             "visits_offered",
+            "area_latitude",
+            "area_longitude",
             "created_at",
         )
 
@@ -289,6 +374,14 @@ class PropertySerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return customer_can_review(customer=getattr(request, "user", None), prop=obj)
 
+    @extend_schema_field(AREA_COORDINATE)
+    def get_area_latitude(self, obj: Property) -> str | None:
+        return _area_text(obj.latitude)
+
+    @extend_schema_field(AREA_COORDINATE)
+    def get_area_longitude(self, obj: Property) -> str | None:
+        return _area_text(obj.longitude)
+
     def get_visits_offered(self, obj: Property) -> bool:
         from apps.stay.visits import visits_offered  # noqa: PLC0415
 
@@ -299,6 +392,23 @@ class StayVisitSlotSerializer(serializers.ModelSerializer[VisitSlot]):
     class Meta:
         model = VisitSlot
         fields = ("id", "weekday", "start_time", "end_time")
+
+
+class PropertyPinFields(serializers.Serializer[dict[str, Any]]):
+    """The host's map pin for the property.
+
+    Send ``latitude`` and ``longitude`` together. Two nulls clear the pin; leaving both out of an
+    edit keeps it. One without the other is a 400 (``pin_incomplete``). Guests only ever see it
+    rounded to an area (``area_latitude`` / ``area_longitude``).
+    """
+
+    latitude = latitude_field()
+    longitude = longitude_field()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        combine_pin(attrs, latitude="latitude", longitude="longitude", into="pin")
+        return attrs
 
 
 class PartnerPropertySerializer(PropertySerializer):
@@ -314,6 +424,9 @@ class PartnerPropertySerializer(PropertySerializer):
     class Meta(PropertySerializer.Meta):
         fields = (
             *PropertySerializer.Meta.fields,
+            # The exact pin, for the host only. Guests get `area_latitude`/`area_longitude`.
+            "latitude",
+            "longitude",
             "moderation_reason",
             "listing_status",
             "visits_enabled",
@@ -336,13 +449,13 @@ class StayReviewPhotoUploadSerializer(serializers.Serializer[dict[str, object]])
     url = serializers.URLField()
 
 
-class StayPhotoUploadSerializer(serializers.Serializer):
+class StayPhotoUploadSerializer(serializers.Serializer[dict[str, Any]]):
     upload_id = serializers.UUIDField()
     url = serializers.URLField()
     original_name = serializers.CharField()
 
 
-class StayTaxonomyVariantSerializer(serializers.Serializer):
+class StayTaxonomyVariantSerializer(serializers.Serializer[dict[str, Any]]):
     id = serializers.UUIDField()
     name = serializers.CharField()
     code = serializers.CharField()
@@ -362,21 +475,21 @@ class StayTaxonomyVariantSerializer(serializers.Serializer):
     amenity_options = StayAmenitySerializer(many=True)
 
 
-class StayTaxonomyServiceSerializer(serializers.Serializer):
+class StayTaxonomyServiceSerializer(serializers.Serializer[dict[str, Any]]):
     id = serializers.UUIDField()
     name = serializers.CharField()
     slug = serializers.CharField()
     variants = StayTaxonomyVariantSerializer(many=True)
 
 
-class StayTaxonomySubcategorySerializer(serializers.Serializer):
+class StayTaxonomySubcategorySerializer(serializers.Serializer[dict[str, Any]]):
     id = serializers.UUIDField()
     name = serializers.CharField()
     slug = serializers.CharField()
     services = StayTaxonomyServiceSerializer(many=True)
 
 
-class CreatePropertySerializer(serializers.Serializer):
+class CreatePropertySerializer(PropertyPinFields):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -399,7 +512,7 @@ class CreatePropertySerializer(serializers.Serializer):
     )
 
 
-class UpdatePropertySerializer(serializers.Serializer):
+class UpdatePropertySerializer(PropertyPinFields):
     title = serializers.CharField(max_length=180, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     location_text = serializers.CharField(max_length=180, required=False)
@@ -409,7 +522,7 @@ class UpdatePropertySerializer(serializers.Serializer):
     min_stay_nights = serializers.IntegerField(min_value=1, required=False)
 
 
-class CreateUnitSerializer(serializers.Serializer):
+class CreateUnitSerializer(serializers.Serializer[dict[str, Any]]):
     name = serializers.CharField(max_length=120)
     nightly_rate_paise = serializers.IntegerField(min_value=1)
     sharing_count = serializers.IntegerField(min_value=1, required=False, default=1)
@@ -434,11 +547,27 @@ class CreateUnitSerializer(serializers.Serializer):
     )
 
 
-class AddUnitMediaSerializer(serializers.Serializer):
+class AddUnitMediaSerializer(serializers.Serializer[dict[str, Any]]):
     url = serializers.CharField(max_length=1024)
 
 
-class UpdateUnitSerializer(serializers.Serializer):
+class CreateLookSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Required: a second look needs a name guests can tell apart.
+    name = serializers.CharField(max_length=60)
+    image_urls = serializers.ListField(
+        child=serializers.CharField(max_length=1024), required=False, default=list, max_length=8
+    )
+
+
+class UpdateLookSerializer(serializers.Serializer[dict[str, Any]]):
+    name = serializers.CharField(max_length=60, allow_blank=True)
+
+
+class AddLookMediaSerializer(serializers.Serializer[dict[str, Any]]):
+    url = serializers.CharField(max_length=1024)
+
+
+class UpdateUnitSerializer(serializers.Serializer[dict[str, Any]]):
     name = serializers.CharField(max_length=120, required=False)
     nightly_rate_paise = serializers.IntegerField(min_value=1, required=False)
     sharing_count = serializers.IntegerField(min_value=1, required=False)
@@ -448,14 +577,16 @@ class UpdateUnitSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(required=False)
 
 
-class PartnerReservationActionSerializer(serializers.Serializer):
+class PartnerReservationActionSerializer(serializers.Serializer[dict[str, Any]]):
     #: Required when cancelling: it is the explanation the guest receives.
     reason = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
 
 
-class CreateEnquirySerializer(serializers.Serializer):
+class CreateEnquirySerializer(serializers.Serializer[dict[str, Any]]):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
+    #: The look the guest picked on the room page, when the type has several.
+    look_id = serializers.UUIDField(required=False, allow_null=True)
     check_in = serializers.DateField()
     #: How long, in the property's ``price_period`` (nights or months). Send this or check_out.
     length = serializers.IntegerField(min_value=1, max_value=366, required=False, allow_null=True)
@@ -464,7 +595,7 @@ class CreateEnquirySerializer(serializers.Serializer):
     message = serializers.CharField(required=False, allow_blank=True, default="")
 
 
-class StayQuoteRequestSerializer(serializers.Serializer):
+class StayQuoteRequestSerializer(serializers.Serializer[dict[str, Any]]):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
     check_in = serializers.DateField()
@@ -472,7 +603,7 @@ class StayQuoteRequestSerializer(serializers.Serializer):
     check_out = serializers.DateField(required=False, allow_null=True)
 
 
-class StayQuoteResponseSerializer(serializers.Serializer):
+class StayQuoteResponseSerializer(serializers.Serializer[dict[str, Any]]):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(allow_null=True)
     unit_name = serializers.CharField()
@@ -493,7 +624,7 @@ _HOST_CONTACT_HIDDEN = frozenset(
 )
 
 
-class StayEnquirySerializer(serializers.ModelSerializer):
+class StayEnquirySerializer(serializers.ModelSerializer[StayEnquiry]):
     """The guest's view of their enquiry, with the owner's name and number to call.
 
     The guest's details go to the owner the moment they enquire; the owner's number comes back
@@ -502,7 +633,8 @@ class StayEnquirySerializer(serializers.ModelSerializer):
 
     property_title = serializers.CharField(source="property.title", read_only=True)
     property_slug = serializers.CharField(source="property.slug", read_only=True)
-    unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
+    #: "1 BHK · With balcony" when the guest picked a named look, so the host knows which room.
+    unit_name = serializers.SerializerMethodField()
     nightly_rate_paise = serializers.IntegerField(
         source="unit.nightly_rate_paise", read_only=True, default=0
     )
@@ -516,6 +648,7 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "property",
             "property_title",
             "unit",
+            "look",
             "unit_name",
             "nightly_rate_paise",
             "status",
@@ -534,6 +667,9 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "host_name",
             "host_phone",
         )
+
+    def get_unit_name(self, obj: StayEnquiry) -> str:
+        return _unit_and_look_name(obj.unit, obj.look, fallback="Standard room")
 
     def get_host_phone(self, obj: StayEnquiry) -> str:
         if obj.status in _HOST_CONTACT_HIDDEN:
@@ -559,18 +695,18 @@ class ConfirmEnquirySerializer(serializers.Serializer[dict[str, Any]]):
     room_id = serializers.UUIDField(required=False, allow_null=True)
 
 
-class RespondEnquirySerializer(serializers.Serializer):
+class RespondEnquirySerializer(serializers.Serializer[dict[str, Any]]):
     #: Required for a reply; optional when marking the enquiry "Not available" (decline).
     response = serializers.CharField(max_length=4000, required=False, allow_blank=True, default="")
     decline = serializers.BooleanField(required=False, default=False)
 
 
-class StayModerationSerializer(serializers.Serializer):
+class StayModerationSerializer(serializers.Serializer[dict[str, Any]]):
     action = serializers.ChoiceField(choices=["APPROVE", "REJECT", "REMOVE", "REINSTATE"])
     reason = serializers.CharField(max_length=480)
 
 
-class StayReservationSerializer(serializers.ModelSerializer):
+class StayReservationSerializer(serializers.ModelSerializer[StayReservation]):
     property_title = serializers.CharField(source="property.title", read_only=True)
     unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
@@ -602,7 +738,7 @@ class StayReservationSerializer(serializers.ModelSerializer):
         )
 
 
-class CreateReservationSerializer(serializers.Serializer):
+class CreateReservationSerializer(serializers.Serializer[dict[str, Any]]):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField()
     check_in = serializers.DateField()
@@ -610,7 +746,7 @@ class CreateReservationSerializer(serializers.Serializer):
     guest_count = serializers.IntegerField(min_value=1, required=False, default=1)
 
 
-class CreateStayReviewSerializer(serializers.Serializer):
+class CreateStayReviewSerializer(serializers.Serializer[dict[str, Any]]):
     property_id = serializers.UUIDField()
     rating = serializers.IntegerField(min_value=1, max_value=5)
     comment = serializers.CharField(max_length=2000, required=False, allow_blank=True)
@@ -623,13 +759,13 @@ class CreateStayReviewSerializer(serializers.Serializer):
     )
 
 
-class AddPropertyMediaSerializer(serializers.Serializer):
+class AddPropertyMediaSerializer(serializers.Serializer[dict[str, Any]]):
     url = serializers.URLField()
     caption = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
     display_order = serializers.IntegerField(min_value=0, required=False, default=0)
 
 
-class OpsCancelStayReservationSerializer(serializers.Serializer):
+class OpsCancelStayReservationSerializer(serializers.Serializer[dict[str, Any]]):
     reason = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
 
 
@@ -639,10 +775,16 @@ class OpsCancelStayReservationSerializer(serializers.Serializer):
 class AddRoomSerializer(serializers.Serializer[dict[str, Any]]):
     number = serializers.CharField(max_length=40)
     available = serializers.BooleanField(required=False, default=True)
+    #: Share this existing look's photos. Omit (and omit ``new_look``) for the first look.
+    look_id = serializers.UUIDField(required=False, allow_null=True)
+    #: Or start a new look with its own name and photos.
+    new_look = CreateLookSerializer(required=False)
 
 
 class UpdateRoomSerializer(serializers.Serializer[dict[str, Any]]):
     number = serializers.CharField(max_length=40, required=False)
+    #: Move the room to another look of its type.
+    look_id = serializers.UUIDField(required=False)
     #: The ON / OFF switch. Not for booked rooms: use the "release" action.
     available = serializers.BooleanField(required=False)
 
@@ -703,6 +845,7 @@ class CreateVisitSerializer(serializers.Serializer[dict[str, Any]]):
     slot_id = serializers.UUIDField()
     visit_date = serializers.DateField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
+    look_id = serializers.UUIDField(required=False, allow_null=True)
     message = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
 
 
@@ -721,7 +864,7 @@ class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
 
     property_title = serializers.CharField(source="property.title", read_only=True)
     property_slug = serializers.CharField(source="property.slug", read_only=True)
-    unit_name = serializers.CharField(source="unit.name", read_only=True, default="")
+    unit_name = serializers.SerializerMethodField()
     host_name = serializers.CharField(source="property.host.display_name", read_only=True)
     host_phone = serializers.SerializerMethodField()
     reason_text = serializers.SerializerMethodField()
@@ -734,6 +877,7 @@ class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
             "property_title",
             "property_slug",
             "unit",
+            "look",
             "unit_name",
             "visit_date",
             "start_time",
@@ -746,6 +890,9 @@ class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
             "responded_at",
             "created_at",
         )
+
+    def get_unit_name(self, obj: StayVisit) -> str:
+        return _unit_and_look_name(obj.unit, obj.look, fallback="")
 
     def get_host_phone(self, obj: StayVisit) -> str:
         if obj.status != StayVisit.Status.ACCEPTED:
@@ -846,4 +993,3 @@ class HostSubscriptionStatusSerializer(serializers.Serializer[dict[str, Any]]):
 
 class StartStaySubscriptionPurchaseSerializer(serializers.Serializer[dict[str, Any]]):
     plan_id = serializers.UUIDField()
-

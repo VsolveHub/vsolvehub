@@ -128,7 +128,7 @@ def test_approved_stay_host_can_list_without_a_capability_request(host_user):
     variant = _stay_variant()
 
     assert is_approved_stay_host(partner)
-    assert "A9_STAY" in {grant.workspace_key for grant in workspace_grants(partner)}
+    assert "A9_STAY" in {grant["workspace_key"] for grant in workspace_grants(partner)}
 
     prop = create_property(
         host=partner,

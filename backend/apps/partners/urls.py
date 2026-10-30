@@ -5,6 +5,7 @@ from apps.partners.views import (
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
+    OperationsPartnerApplicationReleaseView,
     OperationsPartnerApplicationTransitionView,
     OperationsPartnerDetailView,
     OperationsPartnerDirectoryView,
@@ -24,6 +25,7 @@ from apps.partners.views import (
     PartnerCrewCollectionView,
     PartnerCrewDetailView,
     PartnerCrewDocumentView,
+    PartnerDocumentAccessView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
     PartnerGateListView,
@@ -33,10 +35,12 @@ from apps.partners.views import (
     PartnerPresenceHeartbeatView,
     PartnerPresenceOfflineView,
     PartnerPresenceOnlineView,
+    PartnerPushSubscriptionSyncView,
     PartnerScheduleView,
     PartnerSkillListView,
     RequiredPartnerConsentListView,
 )
+from apps.partners.views.operations import PartnerImportView
 
 urlpatterns = [
     path("service-areas/", ApplicantServiceAreaListView.as_view(), name="partner-service-areas"),
@@ -59,6 +63,11 @@ urlpatterns = [
         name="partner-application-document",
     ),
     path(
+        "partner/application/documents/<uuid:document_id>/access/",
+        PartnerDocumentAccessView.as_view(),
+        name="partner-application-document-access",
+    ),
+    path(
         "partner/application/submit/",
         PartnerApplicationSubmitView.as_view(),
         name="partner-application-submit",
@@ -78,6 +87,11 @@ urlpatterns = [
         "partner/presence/offline/",
         PartnerPresenceOfflineView.as_view(),
         name="partner-presence-offline",
+    ),
+    path(
+        "partner/push-subscriptions/sync/",
+        PartnerPushSubscriptionSyncView.as_view(),
+        name="partner-push-subscription-sync",
     ),
     # M2 (proposal 0013): the registration surface.
     path(
@@ -145,6 +159,11 @@ urlpatterns = [
         name="operations-partner-application-claim",
     ),
     path(
+        "operations/partner-applications/<uuid:application_id>/release/",
+        OperationsPartnerApplicationReleaseView.as_view(),
+        name="operations-partner-application-release",
+    ),
+    path(
         "operations/partner-applications/<uuid:application_id>/transition/",
         OperationsPartnerApplicationTransitionView.as_view(),
         name="operations-partner-application-transition",
@@ -180,8 +199,6 @@ urlpatterns = [
         name="operations-partner-tax-profile-verify",
     ),
 ]
-
-from apps.partners.views.operations import PartnerImportView
 
 urlpatterns += [
     path(

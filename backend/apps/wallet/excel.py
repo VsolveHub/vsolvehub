@@ -8,10 +8,8 @@ from typing import Sequence
 from xml.sax.saxutils import escape
 
 
-def workbook_bytes(
-    *, sheet_name: str, headers: Sequence[str], rows: Sequence[Sequence[object]]
-) -> bytes:
-    sheet = _sheet_xml([headers, *rows])
+def workbook_bytes(*, sheet_name: str, headers: list[str], rows: list[list[object]]) -> bytes:
+    sheet = _sheet_xml([list[object](headers), *rows])
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         sheet_type = "application/vnd.openxmlformats-officedocument.spreadsheetml"

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
+from freezegun import freeze_time
 
 from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.commerce.models import Booking, PaymentAllocation, Refund
@@ -19,12 +20,23 @@ from apps.fulfilment.exceptions import (
     OutsideServiceableAreaApiError,
     PartnerUnavailableApiError,
 )
-from apps.fulfilment.services import mark_arrived, mark_en_route
+from apps.fulfilment.models import CustomerContactAttempt
+from apps.fulfilment.services import (
+    mark_arrived,
+    mark_customer_unavailable_wait_started,
+    mark_en_route,
+    record_customer_contact_attempt,
+)
 from apps.locations.models import Address
 from tests.carts.test_fulfilment_planning import _address_payload
 from tests.fulfilment.conftest import create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 
 def test_cancel_more_than_24_hours_out_is_fee_free_and_refunds_everything() -> None:
@@ -138,6 +150,8 @@ def test_cancel_after_partner_declared_late_waives_the_fee() -> None:
 
 
 def test_cancel_after_verified_arrival_charges_the_arrival_fee() -> None:
+    """The band needs the wait and both contact attempts, not merely an arrival (P0-1)."""
+
     booked = create_booked_group(key_prefix="cancel-arrival")
     booking = mark_en_route(
         booking_id=booked.booking.id,
@@ -147,14 +161,29 @@ def test_cancel_after_verified_arrival_charges_the_arrival_fee() -> None:
     booking = mark_arrived(
         booking_id=booking.id, partner_id=booked.partner.id, expected_version=booking.version
     )
-
-    _cancelled, refunds = cancel_booking(
-        booking_id=booking.id,
-        customer_id=booked.customer.id,
-        expected_version=booking.version,
-        reason="customer changed mind on-site",
-        idempotency_key="cancel-arrival-key",
+    booking = mark_customer_unavailable_wait_started(
+        booking_id=booking.id, partner_id=booked.partner.id, expected_version=booking.version
     )
+    record_customer_contact_attempt(
+        booking_id=booking.id,
+        partner_id=booked.partner.id,
+        outcome=CustomerContactAttempt.Outcome.NO_ANSWER,
+    )
+    with freeze_time(timezone.now() + timedelta(minutes=5)):
+        record_customer_contact_attempt(
+            booking_id=booking.id,
+            partner_id=booked.partner.id,
+            outcome=CustomerContactAttempt.Outcome.NO_ANSWER,
+        )
+
+    with freeze_time(timezone.now() + timedelta(minutes=11)):
+        _cancelled, refunds = cancel_booking(
+            booking_id=booking.id,
+            customer_id=booked.customer.id,
+            expected_version=booking.version,
+            reason="customer changed mind on-site",
+            idempotency_key="cancel-arrival-key",
+        )
 
     unit_gross = sum(
         PaymentAllocation.objects.filter(fulfilment_unit=booked.unit).values_list(

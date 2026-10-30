@@ -168,8 +168,9 @@ export function CheckoutScreen() {
       },
       {
         onSuccess: (result) => {
-          setPlanSetId(result.id);
-          const recommended = result.plans.find((p) => p.is_recommended) ?? result.plans[0];
+          if (!result) return;
+          setPlanSetId((result as any).id);
+          const recommended = (result as any).plans.find((p: any) => p.is_recommended) ?? (result as any).plans[0];
           if (!recommended) return;
           createQuote.mutate(recommended.id, {
             onSuccess: (priced) => setQuoteId(priced.id),
@@ -218,7 +219,8 @@ export function CheckoutScreen() {
       },
       {
         onSuccess: (result) => {
-          const chosen = result.plans.find((p) => p.is_recommended) ?? result.plans[0];
+          if (!result) return;
+          const chosen = (result as any).plans.find((p: any) => p.is_recommended) ?? (result as any).plans[0];
           if (!chosen) return;
           createQuote.mutate(chosen.id, {
             onSuccess: (priced) => {

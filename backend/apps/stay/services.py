@@ -1,6 +1,7 @@
 import calendar
 import logging
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -17,14 +18,17 @@ from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.locations.nearby import Point, nearest_first
+from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
-from apps.partners.capabilities import is_approved_stay_host
+from apps.partners.capabilities import has_approved_application, is_approved_stay_host
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.stay.models import (
     Property,
     PropertyMedia,
     Room,
+    RoomLook,
     StayEnquiry,
     StayModerationEvent,
     StayPhotoUpload,
@@ -240,7 +244,10 @@ def _stay_period(
 
 
 def _require_stay_capability(partner: Any) -> None:
-    """Approved as a stay host (the short sign-up) or holding an approved A9 capability."""
+    """Approved as a stay host (the short sign-up) or holding an approved A9 capability — and in
+    both cases with the application still approved, so a suspension stops new listings."""
+    if not has_approved_application(partner):
+        raise PermissionError("Your partner account is not active.")
     if is_approved_stay_host(partner):
         return
     if not partner.capabilities.filter(archetype="A9_STAY", status="APPROVED").exists():
@@ -308,7 +315,7 @@ def store_stay_review_photo(*, customer: Any, upload: Any) -> StayReviewPhoto:
     )
 
 
-def _stored_name_from_url(url: str, folder: str) -> str | None:
+def _stored_name_from_url(url: str, folder: str | tuple[str, ...]) -> str | None:
     return public_stored_name(url, folder=folder)
 
 
@@ -324,7 +331,6 @@ def partner_owns_stay_photo(*, partner: Any, url: str) -> bool:
     if stored_name is None:
         return False
     return StayPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
-
 
 
 #: Facts that differ from room to room. The category schemas publish them once per property, which
@@ -601,6 +607,7 @@ def create_property(
     min_stay_nights: int = 1,
     media: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
+    pin: tuple[Decimal, Decimal] | None = None,
 ) -> Property:
     """Create a property. Units are optional — pass ``nightly_rate_paise`` to seed one."""
     _require_stay_capability(host)
@@ -627,6 +634,8 @@ def create_property(
         title=title.strip(),
         description=description,
         location_text=resolved_location,
+        latitude=pin[0] if pin else None,
+        longitude=pin[1] if pin else None,
         moderation_status=Property.ModerationStatus.DRAFT,
         structured_fields=fields,
         cancellation_policy_text=cancellation_policy_text,
@@ -718,13 +727,15 @@ def create_unit(
         attributes=attributes or {},
         is_active=is_active,
     )
+    look = RoomLook.objects.create(unit=unit, name="", display_order=0)
     _create_rooms(
         unit=unit,
         numbers=numbers or _next_room_numbers(prop, quantity),
         status=Room.Status.AVAILABLE if is_active else Room.Status.UNAVAILABLE,
+        look=look,
     )
     for url in image_urls or []:
-        add_unit_media(unit=unit, host=host, url=url)
+        add_unit_media(unit=unit, host=host, url=url, look=look)
     return sync_unit_rooms(unit)
 
 
@@ -819,6 +830,7 @@ def update_property_ad(
     cancellation_policy_text: str | None = None,
     house_rules: str | None = None,
     min_stay_nights: int | None = None,
+    pin: Pin = KeepPin.KEEP,
 ) -> Property:
     """Partner updates the published/draft Ad in place (no live event sync)."""
     _require_stay_capability(host)
@@ -839,6 +851,7 @@ def update_property_ad(
             raise StayStateError("Property location is required.", code="location_required")
         prop.location_text = location_text.strip()
         updates.append("location_text")
+    updates += apply_pin(prop, pin, latitude="latitude", longitude="longitude")
     if structured_fields is not None:
         property_schema, _room_schema, _names = split_stay_schema(config.property_schema)
         _validate_against(property_schema, structured_fields, label="structured fields")
@@ -1342,6 +1355,7 @@ def create_enquiry(
     guest_count: int = 1,
     message: str = "",
     unit_id: UUID | str | None = None,
+    look_id: UUID | str | None = None,
 ) -> StayEnquiry:
     """A guest asks to stay. The host sees their name and number and calls them.
 
@@ -1352,7 +1366,7 @@ def create_enquiry(
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.ENQUIRY:
         raise StayStateError("This property requires a reservation, not an enquiry.")
-    if prop.public_state != "PUBLISHED":
+    if prop.public_state != "PUBLISHED" or not has_approved_application(prop.host):
         raise StayStateError("Property is not open for enquiries.")
     check_out, length = _stay_period(
         prop=prop,
@@ -1377,10 +1391,12 @@ def create_enquiry(
 
     unit = _resolve_bookable_unit(prop=prop, unit_id=unit_id)
     _enforce_guest_count(unit=unit, guest_count=guest_count)
+    look = resolve_look(unit=unit, look_id=look_id)
 
     enquiry = StayEnquiry.objects.create(
         property=prop,
         unit=unit,
+        look=look,
         customer=customer,
         check_in=check_in,
         check_out=check_out,
@@ -1502,6 +1518,7 @@ def public_properties(  # noqa: PLR0912
     variant_code: str = "",
     tenant_preference: str = "",
     sort: str = "newest",
+    near: Point | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> models.QuerySet[Property]:
@@ -1531,7 +1548,15 @@ def public_properties(  # noqa: PLR0912
         status=PartnerApplication.Status.APPROVED,
         track=PartnerApplication.Track.STAY_HOST,
     )
-    host_approved = models.Exists(host_capability) | models.Exists(host_application)
+    # Whichever way the host was allowed to list, their application must still be approved: a
+    # capability is not revoked by a suspension, so it alone would keep a suspended host public.
+    host_active = PartnerApplication.objects.filter(
+        partner=models.OuterRef("host"),
+        status=PartnerApplication.Status.APPROVED,
+    )
+    host_approved = (models.Exists(host_capability) | models.Exists(host_application)) & (
+        models.Exists(host_active)
+    )
     qs = (
         Property.objects.filter(
             moderation_status=Property.ModerationStatus.APPROVED,
@@ -1540,7 +1565,10 @@ def public_properties(  # noqa: PLR0912
         .filter(models.Exists(rooms), host_approved)
         .prefetch_related(
             models.Prefetch(
-                "units", queryset=Unit.objects.filter(is_active=True).prefetch_related("media")
+                "units",
+                queryset=Unit.objects.filter(is_active=True).prefetch_related(
+                    "media", "looks__media", "rooms"
+                ),
             ),
             "media",
             "reviews",
@@ -1557,7 +1585,19 @@ def public_properties(  # noqa: PLR0912
             | models.Q(location_text__icontains=q)
             | models.Q(host__display_name__icontains=q)
         )
-    if location:
+    if near is not None:
+        # A searched place: nearest first. `location` is then the place's name, used only to keep
+        # a listing that has no pin yet. The host's exact pin is private, so distance is measured
+        # from the area pin a guest already sees.
+        qs = nearest_first(
+            qs,
+            near,
+            latitude="latitude",
+            longitude="longitude",
+            place_name=location,
+            area_only=True,
+        )
+    elif location:
         qs = qs.filter(location_text__icontains=location.strip())
     if variant_code:
         qs = qs.filter(
@@ -1598,6 +1638,7 @@ def public_properties(  # noqa: PLR0912
         qs = qs.annotate(sort_price=models.Subquery(cheapest)).order_by(
             price.asc(nulls_last=True) if sort == "price_asc" else price.desc(nulls_last=True),
             "-created_at",
+            "-id",
         )
     elif sort == "rating_desc":
         average = (
@@ -1608,10 +1649,13 @@ def public_properties(  # noqa: PLR0912
             .values("avg")
         )
         qs = qs.annotate(sort_rating=models.Subquery(average)).order_by(
-            models.F("sort_rating").desc(nulls_last=True), "-created_at"
+            models.F("sort_rating").desc(nulls_last=True), "-created_at", "-id"
         )
-    else:
-        qs = qs.order_by("-created_at")
+    elif near is None:
+        qs = qs.order_by("-created_at", "-id")
+    # With a searched place and no price or rating sort, `nearest_first` already ordered it.
+    # Every sort ends in `id`: browse pages by offset, and rows created in the same instant (a
+    # bulk import) would otherwise swap places between requests and repeat or vanish.
 
     if offset:
         qs = qs[offset:]
@@ -1630,11 +1674,11 @@ def create_reservation(
     check_out: date,
     guest_count: int = 1,
 ) -> Any:
-    prop = Property.objects.select_related("variant").get(id=_as_uuid(property_id))
+    prop = Property.objects.select_related("variant", "host").get(id=_as_uuid(property_id))
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.RESERVATION:
         raise StayStateError("Property does not support reservations.")
-    if prop.public_state != "PUBLISHED":
+    if prop.public_state != "PUBLISHED" or not has_approved_application(prop.host):
         raise StayStateError("Property is not published.")
     nights = _enforce_stay_dates(prop=prop, check_in=check_in, check_out=check_out)
 
@@ -1888,6 +1932,16 @@ def check_out_reservation(*, reservation: Any, host: Any) -> Any:
     return reservation
 
 
+#: What Operations may cancel with a full refund: nothing a guest has started staying in.
+OPS_CANCELLABLE_RESERVATION_STATUSES = frozenset(
+    {
+        StayReservation.Status.HELD,
+        StayReservation.Status.PAYMENT_PENDING,
+        StayReservation.Status.CONFIRMED,
+    }
+)
+
+
 @transaction.atomic
 def cancel_reservation_ops(
     *,
@@ -1907,6 +1961,10 @@ def cancel_reservation_ops(
 
     if reservation.status == StayReservation.Status.CANCELLED:
         return reservation
+    # Same rule the guest has: a full refund is only honest before anyone has stayed. After
+    # check-in the money is for nights already given, and that is a refund decision, not a cancel.
+    if reservation.status not in OPS_CANCELLABLE_RESERVATION_STATUSES:
+        raise StayStateError("Reservation cannot be cancelled after check-in. Contact support.")
 
     attempt = reservation.payment_attempt
     if attempt is not None and attempt.status in PAYMENT_FINAL_STATES:
@@ -1988,11 +2046,18 @@ def add_property_media(
 MAX_UNIT_PHOTOS = 8
 
 
-def add_unit_media(*, unit: Unit, host: Any, url: str) -> UnitMedia:
-    """Attach a photo this partner uploaded to one of their room types."""
+def add_unit_media(*, unit: Unit, host: Any, url: str, look: RoomLook | None = None) -> UnitMedia:
+    """Attach a photo this partner uploaded to one look of their room type.
+
+    Without ``look`` the photo goes to the type's first look, which is what the one-look
+    screens (and older clients) mean by "this room type's photos".
+    """
     _require_stay_capability(host)
     if unit.property.host_id != host.id:
         raise PermissionError("Not your property.")
+    look = look or first_look(unit)
+    if look.unit_id != unit.id:
+        raise StayStateError("That look belongs to another room type.", code="look_mismatch")
     cleaned_url = url.strip()
     if not cleaned_url:
         raise StayStateError("Image URL is required.")
@@ -2001,12 +2066,12 @@ def add_unit_media(*, unit: Unit, host: Any, url: str) -> UnitMedia:
             "Upload photos from this form instead of pasting links.",
             code="photo_not_uploaded",
         )
-    count = unit.media.count()
+    count = look.media.count()
     if count >= MAX_UNIT_PHOTOS:
         raise StayStateError(
-            f"A room type can have up to {MAX_UNIT_PHOTOS} photos.", code="too_many_photos"
+            f"A look can have up to {MAX_UNIT_PHOTOS} photos.", code="too_many_photos"
         )
-    return UnitMedia.objects.create(unit=unit, url=cleaned_url, display_order=count)
+    return UnitMedia.objects.create(unit=unit, look=look, url=cleaned_url, display_order=count)
 
 
 def remove_unit_media(*, unit: Unit, host: Any, media_id: UUID | str) -> None:
@@ -2259,11 +2324,16 @@ def _next_room_numbers(prop: Property, count: int) -> list[str]:
 
 
 def _create_rooms(
-    *, unit: Unit, numbers: list[str], status: str = Room.Status.AVAILABLE
+    *,
+    unit: Unit,
+    numbers: list[str],
+    status: str = Room.Status.AVAILABLE,
+    look: RoomLook | None = None,
 ) -> list[Room]:
+    look = look or first_look(unit)
     return Room.objects.bulk_create(
         [
-            Room(property_id=unit.property_id, unit=unit, number=number, status=status)
+            Room(property_id=unit.property_id, unit=unit, look=look, number=number, status=status)
             for number in numbers
         ]
     )
@@ -2377,8 +2447,22 @@ def _free_room(room: Room) -> Room:
 
 
 @transaction.atomic
-def add_room(*, unit: Unit, host: Any, number: str, available: bool = True) -> Room:
-    """The host adds one numbered room to a room type."""
+def add_room(
+    *,
+    unit: Unit,
+    host: Any,
+    number: str,
+    available: bool = True,
+    look_id: UUID | str | None = None,
+    new_look_name: str | None = None,
+    new_look_image_urls: list[str] | None = None,
+) -> Room:
+    """The host adds one numbered room to a room type.
+
+    The room either shares an existing look's photos (``look_id``; the type's first look when
+    neither is given) or starts a new look with new photos (``new_look_name`` and
+    ``new_look_image_urls``), which guests will see as its own card.
+    """
     _require_stay_capability(host)
     if unit.property.host_id != host.id:
         raise PermissionError("Not your property.")
@@ -2387,14 +2471,154 @@ def add_room(*, unit: Unit, host: Any, number: str, available: bool = True) -> R
         raise StayStateError("That is too many rooms for one type.", code="quantity_invalid")
     cleaned = _clean_room_number(number)
     _assert_room_number_free(prop=unit.property, number=cleaned)
+    if new_look_name is not None:
+        look = create_look(
+            unit=unit, host=host, name=new_look_name, image_urls=new_look_image_urls or []
+        )
+    elif look_id is not None:
+        look = _look_of(unit=unit, look_id=look_id)
+    else:
+        look = first_look(unit)
     room = Room.objects.create(
         property_id=unit.property_id,
         unit=unit,
+        look=look,
         number=cleaned,
         status=Room.Status.AVAILABLE if available else Room.Status.UNAVAILABLE,
     )
     sync_unit_rooms(unit)
     return room
+
+
+# --- looks ----------------------------------------------------------------------------------
+
+LOOK_NAME_MAX_LENGTH = 60
+
+
+def first_look(unit: Unit) -> RoomLook:
+    """The type's first look, created when the type has none yet (rows made before looks)."""
+    look = RoomLook.objects.filter(unit=unit).order_by("display_order", "created_at").first()
+    if look is None:
+        look = RoomLook.objects.create(unit=unit, name="", display_order=0)
+    return look
+
+
+def _look_of(*, unit: Unit, look_id: UUID | str) -> RoomLook:
+    look = RoomLook.objects.filter(id=_as_uuid(look_id), unit=unit).first()
+    if look is None:
+        raise StayStateError("That look isn't part of this room type.", code="look_mismatch")
+    return look
+
+
+def _clean_look_name(*, unit: Unit, name: str, exclude_id: UUID | None = None) -> str:
+    cleaned = " ".join((name or "").split())
+    if len(cleaned) > LOOK_NAME_MAX_LENGTH:
+        raise StayStateError(
+            f"Keep the look's name under {LOOK_NAME_MAX_LENGTH} characters.",
+            code="look_name_too_long",
+        )
+    if cleaned:
+        clash = RoomLook.objects.filter(unit=unit, name__iexact=cleaned)
+        if exclude_id is not None:
+            clash = clash.exclude(id=exclude_id)
+        if clash.exists():
+            raise StayStateError(
+                f"This room type already has a look called {cleaned}.", code="look_name_taken"
+            )
+    return cleaned
+
+
+def _own_unit(*, unit: Unit, host: Any) -> None:
+    _require_stay_capability(host)
+    if unit.property.host_id != host.id:
+        raise PermissionError("Not your property.")
+
+
+@transaction.atomic
+def create_look(
+    *, unit: Unit, host: Any, name: str, image_urls: list[str] | None = None
+) -> RoomLook:
+    """A new look for a room type, with its own photos.
+
+    Every look after the first must be named: guests see "1 BHK" and "1 BHK · With balcony",
+    and two cards both called "1 BHK" would leave them guessing.
+    """
+    _own_unit(unit=unit, host=host)
+    Unit.objects.select_for_update().filter(id=unit.id).first()
+    cleaned = _clean_look_name(unit=unit, name=name)
+    existing = RoomLook.objects.filter(unit=unit).count()
+    if existing == 0:
+        # A type made before looks: its rooms and photos form the first look.
+        first_look(unit)
+        existing = 1
+    if not cleaned:
+        raise StayStateError(
+            "Name this look so guests can tell it apart, for example With balcony.",
+            code="look_name_required",
+        )
+    look = RoomLook.objects.create(unit=unit, name=cleaned, display_order=existing)
+    for url in image_urls or []:
+        add_unit_media(unit=unit, host=host, url=url, look=look)
+    return look
+
+
+@transaction.atomic
+def rename_look(*, look: RoomLook, host: Any, name: str) -> RoomLook:
+    unit = look.unit
+    _own_unit(unit=unit, host=host)
+    cleaned = _clean_look_name(unit=unit, name=name, exclude_id=look.id)
+    if not cleaned and first_look(unit).id != look.id:
+        raise StayStateError(
+            "Name this look so guests can tell it apart, for example With balcony.",
+            code="look_name_required",
+        )
+    look.name = cleaned
+    look.save(update_fields=("name",))
+    return look
+
+
+@transaction.atomic
+def delete_look(*, look: RoomLook, host: Any) -> None:
+    """Remove an empty look and its photos. Move its rooms to another look first."""
+    unit = look.unit
+    _own_unit(unit=unit, host=host)
+    Unit.objects.select_for_update().filter(id=unit.id).first()
+    if Room.objects.filter(look=look).exists():
+        raise StayStateError(
+            "Move this look's rooms to another look before removing it.", code="look_has_rooms"
+        )
+    if RoomLook.objects.filter(unit=unit).count() <= 1:
+        raise StayStateError("A room type needs at least one look.", code="last_look_of_type")
+    look.delete()
+    # The new first look may still be named; that is allowed. Renumber to keep order dense.
+    for index, rest in enumerate(RoomLook.objects.filter(unit=unit).order_by("display_order")):
+        if rest.display_order != index:
+            rest.display_order = index
+            rest.save(update_fields=("display_order",))
+
+
+@transaction.atomic
+def move_room(*, room: Room, host: Any, look_id: UUID | str) -> Room:
+    """Give a room another look of its own type. Its status and booking are unchanged."""
+    _own_room(room=room, host=host)
+    room = _locked_room(room)
+    room.look = _look_of(unit=room.unit, look_id=look_id)
+    room.save(update_fields=("look", "updated_at"))
+    return room
+
+
+def look_display_name(*, unit: Unit, look: RoomLook | None) -> str:
+    """ "1 BHK" for the first or only look, "1 BHK · With balcony" for a named other look."""
+    if look is None or not look.name:
+        return unit.name
+    return f"{unit.name} · {look.name}"
+
+
+def resolve_look(*, unit: Unit, look_id: UUID | str | None) -> RoomLook | None:
+    """The guest's chosen look, checked to belong to the room type. ``None`` if not given."""
+    if look_id is None:
+        return None
+    return _look_of(unit=unit, look_id=look_id)
 
 
 @transaction.atomic
@@ -2649,4 +2873,3 @@ def expire_stay_subscriptions() -> int:
             updated_at=now,
         )
     return len(grace_subs) + len(expired_subs)
-

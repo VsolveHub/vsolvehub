@@ -18,8 +18,8 @@ import { getApiClient } from "@/lib/api/browser";
  * front of `/cart` would turn browsing into a signup wall and delete the merge
  * flow's entire reason for existing.
  *
- * So this wraps `/bookings/**` — the tree where every read is one customer's own
- * record — and nothing else.
+ * So this wraps `/bookings/**`, `/checkout` and the other trees where every
+ * read is one customer's own record — and nothing else.
  *
  * ## Why there is no role requirement
  *

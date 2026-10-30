@@ -27,7 +27,12 @@ from apps.fulfilment.services import mark_arrived, mark_en_route
 from apps.identity.models import User
 from tests.fulfilment.conftest import BookedGroup, create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 TWO_UNITS = 2
 _operator_counter = iter(range(1, 10_000))
@@ -118,7 +123,7 @@ def test_group_cancel_refunds_each_unit_separately_under_its_own_fee_band() -> N
 
     by_unit = {outcome.fulfilment_unit_id: outcome for outcome in result.units}
     assert by_unit[free_unit.id].fee_paise == 0
-    assert by_unit[fee_unit.id].fee_paise == 9900  # noqa: PLR2004
+    assert by_unit[fee_unit.id].fee_paise == 9900
     refund_ids = {rid for outcome in result.units for rid in outcome.refund_ids}
     assert len(refund_ids) == TWO_UNITS, "each unit must get its own Refund, not a shared one"
     free_refund = Refund.objects.get(id=by_unit[free_unit.id].refund_ids[0])

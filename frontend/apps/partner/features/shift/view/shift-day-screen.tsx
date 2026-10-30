@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Disclosure, ErrorState, Skeleton, SkeletonRegion } from "@vsolve/ui";
+import { Badge, Button, Disclosure, ErrorState, Skeleton, SkeletonRegion, useT } from "@vsolve/ui";
 import { describeError, isNotAShiftDay, isShiftDayClosed, shiftDayPhase } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -85,6 +85,7 @@ function ShiftDayPanels({
   readonly stageId: string;
   readonly actions: readonly string[];
 }) {
+  const t = useT();
   const day = useShiftDay(engagementId, stageId);
   const booking = usePartnerEngagement(engagementId);
   const [problemOpen, setProblemOpen] = useState(false);
@@ -97,7 +98,7 @@ function ShiftDayPanels({
       className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
       <ArrowLeft size={16} aria-hidden />
-      Job
+      {t("work.shiftDay.backToJob")}
     </Link>
   );
 
@@ -105,7 +106,7 @@ function ShiftDayPanels({
     return (
       <div className="flex flex-col gap-4">
         {back}
-        <SkeletonRegion loading label="Loading this day">
+        <SkeletonRegion loading label={t("work.shiftDay.loading")}>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-48 w-full" />
@@ -124,10 +125,10 @@ function ShiftDayPanels({
       <div className="flex flex-col gap-4">
         {back}
         <ErrorState
-          title={wrongKind ? "This is not a shift-day" : presentation.title}
-          message={wrongKind ? "Open this stage from Projects instead." : presentation.message}
+          title={wrongKind ? t("work.shiftDay.notAShiftDay.title") : presentation.title}
+          message={wrongKind ? t("work.shiftDay.notAShiftDay.message") : presentation.message}
           severity={wrongKind ? "warning" : presentation.severity}
-          actionLabel={wrongKind ? undefined : "Try again"}
+          actionLabel={wrongKind ? undefined : t("common.tryAgain")}
           onAction={wrongKind ? undefined : () => void day.refetch()}
           reference={presentation.reference}
         />
@@ -141,7 +142,7 @@ function ShiftDayPanels({
   const phase = shiftDayPhase(shift);
   const chip = PHASE_LABEL[phase];
   const allows = (action: (typeof SHIFT_DAY_ACTIONS)[number]) => actions.includes(action);
-  const firstName = customerFirstName(engagement?.customer_contact?.name);
+  const firstName = customerFirstName(engagement?.customer_contact?.name, t);
 
   const shiftStages = (engagement?.stages ?? []).filter((stage) => stage.shift_summary !== null);
   const totalDays = engagement?.crew_terms?.days ?? (shiftStages.length > 0 ? shiftStages.length : null);
@@ -155,7 +156,10 @@ function ShiftDayPanels({
     )
     .map((stage) => ({
       stageId: stage.id,
-      label: stage.label.trim() === "" ? `Day ${stage.position}` : stage.label,
+      label:
+        stage.label.trim() === ""
+          ? t("work.shiftDay.dayPosition", { position: stage.position })
+          : stage.label,
     }));
 
   const crewPanel = (
@@ -180,14 +184,17 @@ function ShiftDayPanels({
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold text-text">
             {shift.scheduled_on === null
-              ? shift.day_label.trim() === "" ? `Day ${shift.position}` : shift.day_label
+              ? shift.day_label.trim() === ""
+                ? t("work.shiftDay.dayPosition", { position: shift.position })
+                : shift.day_label
               : dayHeading(shift.scheduled_on)}
             {" · "}
-            Day {shift.position}
-            {totalDays === null ? "" : ` of ${totalDays}`}
+            {totalDays === null
+              ? t("work.shiftDay.dayPosition", { position: shift.position })
+              : t("work.shiftDay.dayOfTotal", { position: shift.position, total: totalDays })}
           </h1>
           <Badge tone={TONE[chip.tone]} dot>
-            {chip.label}
+            {t(chip.labelKey)}
           </Badge>
         </div>
       </header>
@@ -222,7 +229,10 @@ function ShiftDayPanels({
       )}
 
       {!showCrew && !isShiftDayClosed(shift) && allows("crew.assign") && phase !== "settled" ? (
-        <Disclosure summary="Change crew" hint={`${shift.crew.length} named`}>
+        <Disclosure
+          summary={t("work.shiftDay.changeCrew")}
+          hint={t("work.shiftDay.namedCount", { count: shift.crew.length })}
+        >
           <div className="py-2">{crewPanel}</div>
         </Disclosure>
       ) : null}
@@ -234,7 +244,7 @@ function ShiftDayPanels({
         onClick={() => setProblemOpen(true)}
         icon={<Pictogram name="held" size="sm" className="text-warning-text" />}
       >
-        Problem
+        {t("work.shiftDay.problem")}
       </Button>
 
       <ProblemSheet

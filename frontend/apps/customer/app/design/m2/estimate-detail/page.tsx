@@ -12,7 +12,7 @@ import {
  * estimate contract lands with proposal 0015. The chosen estimate is Ravi's,
  * which is the one `SAMPLE_MONEY` and `SAMPLE_INSTALLMENTS` describe.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Estimate detail — M2", robots: { index: false, follow: false } };
 
 export default function EstimateDetailPage() {
   const estimate = SAMPLE_ESTIMATES[0];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePagedList } from "@vsolve/query";
 import { request, type Schemas } from "@vsolve/api-client";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -88,20 +89,19 @@ export function usePublishReferralProgram() {
 }
 
 export function useReferralAttributions(status: string, phone: string) {
-  return useQuery({
-    queryKey: loyaltyKeys.attributions(status, phone),
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/ops/referral/attributions/", {
-          params: {
-            query: {
-              ...(status ? { status } : {}),
-              ...(phone ? { phone } : {}),
-            },
+  return usePagedList(loyaltyKeys.attributions(status, phone), (cursor) =>
+    request(() =>
+      getApiClient().GET("/api/v1/ops/referral/attributions/", {
+        params: {
+          query: {
+            ...(status ? { status } : {}),
+            ...(phone ? { phone } : {}),
+            ...(cursor ? { cursor } : {}),
           },
-        }),
-      ),
-  });
+        },
+      }),
+    ),
+  );
 }
 
 export function useReviewReferral() {
@@ -152,6 +152,31 @@ export function useAdjustCoins() {
       request(() => getApiClient().POST("/api/v1/ops/loyalty/coin-adjustments/", { body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["ops", "customer-ledger"] }),
   });
+}
+
+/**
+ * Credit or debit a customer's wallet. `idempotencyKey` is minted once per attempt by the form,
+ * so a double tap or a retry after a timeout cannot move the money twice.
+ */
+export function useAdjustWallet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      customer_id: string;
+      amount_paise: number;
+      reason: string;
+      idempotency_key: string;
+    }) => request(() => getApiClient().POST("/api/v1/ops/wallet/adjustments/", { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["ops", "customer-ledger"] }),
+  });
+}
+
+/** Signed rupees ("250", "-99.50") → integer paise, or null. Zero is not an adjustment. */
+export function signedRupeesToPaise(raw: string): number | null {
+  const text = raw.trim();
+  if (!/^-?\d+(\.\d{1,2})?$/.test(text)) return null;
+  const paise = Math.round(Number(text) * 100);
+  return paise === 0 ? null : paise;
 }
 
 /** "₹1,234" from integer paise. Display only; the server owns every amount. */

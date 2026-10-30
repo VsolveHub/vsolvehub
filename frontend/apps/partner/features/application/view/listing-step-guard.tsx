@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@vsolve/ui";
+import { Spinner, useT } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -19,6 +19,7 @@ export function ListingStepGuard({
   redirectTo: string;
   children: ReactNode;
 }) {
+  const t = useT();
   const query = usePartnerApplication();
   const router = useRouter();
   const listing = isListingTrack(query.data?.track);
@@ -27,11 +28,15 @@ export function ListingStepGuard({
     if (listing) router.replace(redirectTo);
   }, [listing, redirectTo, router]);
 
-  if (query.isPending || listing) {
+  // Only the first answer is waited for. `isPending` alone is also true during
+  // any later refetch of a 404 (no data to keep), and swapping the children for
+  // a spinner then throws away whatever the applicant had typed.
+  const hasAnswered = query.dataUpdatedAt > 0 || query.errorUpdatedAt > 0;
+  if ((query.isPending && !hasAnswered) || listing) {
     return (
       <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Continuing your application…
+        {t("apply.common.continuingApplication")}
       </p>
     );
   }

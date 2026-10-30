@@ -1,4 +1,6 @@
-import { Button, StepDock } from "@vsolve/ui";
+"use client";
+
+import { Button, StepDock, useT } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 
@@ -47,23 +49,27 @@ export function EstimatePreviewScreen({
   exclusions,
 }: EstimatePreviewScreenProps) {
   const { installments, totals } = estimate;
+  const t = useT();
 
   // "Paid in 2 installments · ₹1,200 then ₹930 plus tax". Every amount here is
   // already a formatted string; this joins them and adds no figure of its own.
   const scheduleLine =
     installments.length === 0
       ? null
-      : `Paid in ${installments.length} installment${installments.length === 1 ? "" : "s"} · ${installments
-          .map((installment) => installment.amount)
-          .join(" then ")} plus tax`;
+      : t("proposal.screens.preview.scheduleLine", {
+          count: installments.length,
+          amounts: installments
+            .map((installment) => installment.amount)
+            .join(t("proposal.screens.preview.then")),
+        });
 
   return (
     <div className="flex h-full flex-col bg-canvas">
       <FocusedHeader
-        title="Estimate preview"
+        title={t("proposal.screens.preview.title")}
         backSlot={
           <HeaderTile>
-            <BackGlyph label="Back" />
+            <BackGlyph label={t("common.back")} />
           </HeaderTile>
         }
       />
@@ -74,7 +80,7 @@ export function EstimatePreviewScreen({
           className="flex h-13 w-full items-center justify-center gap-2 rounded-xl border border-info-line bg-info-surface text-sm font-bold text-text-link"
         >
           <Pictogram name="papers" size="sm" />
-          Preview the PDF
+          {t("proposal.screens.preview.previewPdf")}
         </button>
 
         {/* Panels are written out rather than composed from `Card`, which
@@ -82,18 +88,18 @@ export function EstimatePreviewScreen({
             padding joins the class list instead of replacing it and loses. Same
             radius, border, surface and shadow tokens. */}
         <section className="rounded-card border border-line bg-surface p-3.5 shadow-card">
-          <PanelLabel>What the customer receives</PanelLabel>
+          <PanelLabel>{t("proposal.screens.preview.customerReceives")}</PanelLabel>
 
           <div className="flex flex-col gap-2.5">
-            <DocumentRow label="Item wise total (labour)" amount={totals.linesTotal} />
-            <DocumentRow label="Other charges" amount={totals.chargesTotal} />
+            <DocumentRow label={t("proposal.screens.shared.itemWiseTotal")} amount={totals.linesTotal} />
+            <DocumentRow label={t("proposal.screens.shared.otherCharges")} amount={totals.chargesTotal} />
             <DocumentRow label={totals.taxLabel} amount={totals.taxAmount} />
           </div>
 
           <div aria-hidden className="my-3 border-t border-dashed border-warm-300" />
 
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-sm font-extrabold text-text">Grand total</span>
+            <span className="text-sm font-extrabold text-text">{t("proposal.screens.preview.grandTotal")}</span>
             <span className="text-[1.3125rem] font-extrabold tracking-[-0.02em] tabular-nums text-text">
               {totals.customerTotal}
             </span>
@@ -108,7 +114,7 @@ export function EstimatePreviewScreen({
           <section className="rounded-card border border-line bg-surface p-3.5">
             {inclusions.length === 0 ? null : (
               <>
-                <PanelLabel>What’s included</PanelLabel>
+                <PanelLabel>{t("proposal.screens.preview.included")}</PanelLabel>
                 <ScopeList lines={inclusions} kind="included" />
               </>
             )}
@@ -119,7 +125,7 @@ export function EstimatePreviewScreen({
 
             {exclusions.length === 0 ? null : (
               <>
-                <PanelLabel>Not included</PanelLabel>
+                <PanelLabel>{t("proposal.screens.preview.notIncluded")}</PanelLabel>
                 <ScopeList lines={exclusions} kind="excluded" />
               </>
             )}
@@ -128,10 +134,7 @@ export function EstimatePreviewScreen({
 
         <p className="flex gap-2 text-xs leading-[17px] text-text-muted">
           <Pictogram name="time" size="sm" className="mt-px shrink-0" />
-          <span>
-            Valid for 15 days. This is an estimate — the final amount can change only with the
-            customer’s approval.
-          </span>
+          <span>{t("proposal.screens.preview.validity")}</span>
         </p>
       </main>
 
@@ -142,7 +145,7 @@ export function EstimatePreviewScreen({
       <StepDock>
         <div className="flex gap-2">
           <Button variant="outline" size="lg" className="shrink-0">
-            Save
+            {t("common.save")}
           </Button>
           <Button
             variant="primary"
@@ -150,7 +153,7 @@ export function EstimatePreviewScreen({
             className="flex-1"
             icon={<Pictogram name="go" size="sm" />}
           >
-            Send to customer
+            {t("proposal.screens.preview.send")}
           </Button>
         </div>
       </StepDock>

@@ -27,18 +27,20 @@ export function PartnersWorkspace() {
   }, []);
 
   const handleSelect = (id: string) => {
-    setSelectedId((current) => {
-      if (current === null) {
-        window.history.pushState({ detailOpen: true }, "", window.location.href);
-      }
-      return id;
-    });
+    // Outside the state updater: an updater must be pure. Pushing history from one updated the
+    // Router mid-render ("Cannot update a component while rendering") and, as updaters can run
+    // twice, could stack two entries so Back needed two presses.
+    if (selectedIdRef.current === null) {
+      window.history.pushState({ detailOpen: true }, "", window.location.href);
+    }
+    selectedIdRef.current = id;
+    setSelectedId(id);
   };
 
   return (
     <SplitView
       className="min-h-0 flex-1"
-      listPaneWidth="sm:w-[22rem] lg:w-[28rem]"
+      listPaneWidth="lg:w-[22rem] xl:w-[28rem]"
       listPane={
         <PartnerDirectory
           filters={filters}

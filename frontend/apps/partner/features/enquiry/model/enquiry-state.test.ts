@@ -1,4 +1,7 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import {
   BUCKET_ORDER,
@@ -12,6 +15,8 @@ import {
   permissionsFor,
   type EnquiryStatus,
 } from "./enquiry-state";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 /**
  * What a screen may offer against an enquiry.
@@ -90,7 +95,7 @@ describe("requesting a site visit", () => {
 
 describe("status copy", () => {
   it("gives every status its own sentence", () => {
-    const meanings = new Set(ALL.map((status) => describeStatus(status).meaning));
+    const meanings = new Set(ALL.map((status) => describeStatus(status, t).meaning));
     expect(meanings.size).toBe(ALL.length);
   });
 
@@ -98,8 +103,8 @@ describe("status copy", () => {
     // EXPIRED is the vendor running out of time. WITHDRAWN is the platform
     // releasing the enquiry, which carries no penalty. Collapsing them is a
     // false accusation.
-    expect(describeStatus("EXPIRED").meaning).toMatch(/closed before you answered/i);
-    expect(describeStatus("WITHDRAWN").meaning).toMatch(/does not count against you/i);
+    expect(describeStatus("EXPIRED", t).meaning).toMatch(/closed before you answered/i);
+    expect(describeStatus("WITHDRAWN", t).meaning).toMatch(/does not count against you/i);
   });
 
   describe("why a withdrawal happened", () => {
@@ -110,46 +115,46 @@ describe("status copy", () => {
     // simply came second was told the customer had changed their request.
 
     it("says another professional was first when the slot was taken", () => {
-      const copy = describeStatus("WITHDRAWN", "slot_taken");
+      const copy = describeStatus("WITHDRAWN", t, "slot_taken");
       expect(copy.meaning).toMatch(/another professional/i);
       expect(copy.meaning).not.toMatch(/request changed/i);
     });
 
     it("says the same for a crew offer taken by somebody else", () => {
-      expect(describeStatus("WITHDRAWN", "offer_taken").meaning).toMatch(/another professional/i);
+      expect(describeStatus("WITHDRAWN", t, "offer_taken").meaning).toMatch(/another professional/i);
     });
 
     it("is honest that the vendor did not answer in time on a stale accept", () => {
-      const copy = describeStatus("WITHDRAWN", "non_responsive_quote");
+      const copy = describeStatus("WITHDRAWN", t, "non_responsive_quote");
       expect(copy.meaning).toMatch(/quote/i);
       expect(copy.meaning).not.toMatch(/another professional/i);
     });
 
     it("keeps the request-changed sentence for the reason it describes", () => {
-      expect(describeStatus("WITHDRAWN", "requirement_changed").meaning).toMatch(/request changed/i);
+      expect(describeStatus("WITHDRAWN", t, "requirement_changed").meaning).toMatch(/request changed/i);
     });
 
     it("never blames the vendor, whatever the reason", () => {
       for (const reason of ["slot_taken", "offer_taken", "requirement_changed", ""]) {
-        expect(describeStatus("WITHDRAWN", reason).meaning).toMatch(/does not count against you/i);
+        expect(describeStatus("WITHDRAWN", t, reason).meaning).toMatch(/does not count against you/i);
       }
     });
 
     it("falls back to the generic sentence for an unknown reason code", () => {
-      expect(describeStatus("WITHDRAWN", "something_new").meaning).toBe(
-        describeStatus("WITHDRAWN").meaning,
+      expect(describeStatus("WITHDRAWN", t, "something_new").meaning).toBe(
+        describeStatus("WITHDRAWN", t).meaning,
       );
     });
 
     it("ignores a reason code on any other status", () => {
-      expect(describeStatus("ACCEPTED", "slot_taken")).toEqual(describeStatus("ACCEPTED"));
-      expect(describeStatus("EXPIRED", "slot_taken")).toEqual(describeStatus("EXPIRED"));
+      expect(describeStatus("ACCEPTED", t, "slot_taken")).toEqual(describeStatus("ACCEPTED", t));
+      expect(describeStatus("EXPIRED", t, "slot_taken")).toEqual(describeStatus("EXPIRED", t));
     });
   });
 
   it("never renders an archetype or a database value", () => {
     for (const status of ALL) {
-      const copy = describeStatus(status);
+      const copy = describeStatus(status, t);
       expect(copy.label).not.toMatch(/A3|A5|_/);
       expect(copy.label).not.toBe(status);
     }
@@ -213,15 +218,15 @@ describe("deadlines", () => {
   it("treats zero as passed, and passed as our clock's opinion", () => {
     expect(deadlineStateFor({ respondsBy: "2026-08-14T09:00:00Z", remainingMs: 0 })).toBe("passed");
     // The backend owns expiry. The copy must not announce it.
-    expect(describeDeadline("passed")).toMatch(/Vsolve decides when an enquiry actually expires/i);
-    expect(describeDeadline("passed")).not.toMatch(/has expired|is expired|is gone\./i);
+    expect(describeDeadline("passed", t)).toMatch(/Vsolve decides when an enquiry actually expires/i);
+    expect(describeDeadline("passed", t)).not.toMatch(/has expired|is expired|is gone\./i);
   });
 
   it("says business hours are why the countdown is not a straight duration", () => {
     // `add_business_hours` computes `responds_by` inside the area's operating
     // windows, so "6 hours left" across a Sunday is a lie a bare countdown
     // tells by itself.
-    expect(describeDeadline("open")).toMatch(/working hours/i);
+    expect(describeDeadline("open", t)).toMatch(/working hours/i);
   });
 });
 

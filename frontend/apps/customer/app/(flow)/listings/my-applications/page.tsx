@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BriefcaseBusiness, Clock } from "lucide-react";
-import { EmptyState, ErrorState } from "@vsolve/ui";
+import { usePagedList } from "@vsolve/query";
+import { EmptyState, ErrorState, LoadMore } from "@vsolve/ui";
 
 import {
-  fetchMyApplications,
+  APPLICATION_TAB_STATUSES,
+  fetchMyApplicationsPage,
   withdrawApplication,
   type ListingApplication,
 } from "@/features/listings/queries";
@@ -30,10 +32,11 @@ export default function MyApplicationsPage() {
     { kind: "success" | "error"; message: string } | null
   >(null);
 
-  const { data: applications = [], isLoading, error } = useQuery({
-    queryKey: ["my-listing-applications"],
-    queryFn: fetchMyApplications,
-  });
+  const statuses = APPLICATION_TAB_STATUSES[activeTab] ?? "";
+  const applicationsList = usePagedList(["my-listing-applications", statuses], (cursor) =>
+    fetchMyApplicationsPage(cursor, { status: statuses || undefined }),
+  );
+  const { isLoading, error } = applicationsList;
 
   const withdraw = useMutation({
     mutationFn: (applicationId: string) => withdrawApplication(applicationId),
@@ -57,14 +60,7 @@ export default function MyApplicationsPage() {
     },
   });
 
-  const filteredApplications = applications.filter((app) => {
-    if (activeTab === "ALL") return true;
-    if (activeTab === "ACTIVE")
-      return ["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "CONTACTED"].includes(app.status);
-    if (activeTab === "CLOSED")
-      return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
-    return app.status === activeTab;
-  });
+  const filteredApplications = applicationsList.items;
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
@@ -186,6 +182,12 @@ export default function MyApplicationsPage() {
           />
         ))}
       </div>
+      <LoadMore
+        hasMore={applicationsList.hasMore}
+        loading={applicationsList.loadingMore}
+        onLoadMore={applicationsList.loadMore}
+        label="Show older applications"
+      />
     </main>
   );
 }

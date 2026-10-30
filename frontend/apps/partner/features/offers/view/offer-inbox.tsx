@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError, queryKeys } from "@vsolve/query";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, Skeleton, useT } from "@vsolve/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Clock, RefreshCw } from "lucide-react";
 
@@ -63,23 +63,23 @@ import { OfferCard } from "./offer-card";
  * not this Partner's — and the re-read the mutation triggers removes the row
  * outright. A message about a row that is about to vanish is noise.
  */
-function describeFailure(error: unknown): string | null {
+function describeFailure(error: unknown, t: ReturnType<typeof useT>): string | null {
   if (isOfferForbidden(error)) {
     return null;
   }
   if (isOfferReservationConflict(error)) {
-    return "Another professional already holds this job. It was not assigned to you.";
+    return t("offers.inbox.failure.reservationConflict");
   }
   if (isIdempotencyKeyReused(error)) {
-    return "That request could not be replayed safely. Check the offer status above before trying a different action.";
+    return t("offers.inbox.failure.keyReused");
   }
   if (isIdempotencyInProgress(error)) {
-    return "That request is still being processed. We are re-checking this offer's status — do not assume it failed.";
+    return t("offers.inbox.failure.inProgress");
   }
   if (isOfferUnavailable(error)) {
-    return "We could not confirm that. It may already have gone through — check the status above before trying again, and do not assume you lost it.";
+    return t("offers.inbox.failure.unavailable");
   }
-  return `${describeError(error, "mutation").message} We are re-checking this offer's status.`;
+  return t("offers.inbox.failure.generic", { message: describeError(error, "mutation").message });
 }
 
 /**
@@ -90,6 +90,7 @@ function describeFailure(error: unknown): string | null {
  * once without either one reporting the other's outcome.
  */
 function OfferRow({ offer, index }: { offer: Offer; index: number }) {
+  const t = useT();
   const command = useOfferCommand();
 
   return (
@@ -100,7 +101,7 @@ function OfferRow({ offer, index }: { offer: Offer; index: number }) {
       <OfferCard
         offer={offer}
         isBusy={command.isPending}
-        unconfirmedMessage={command.isError ? describeFailure(command.error) : null}
+        unconfirmedMessage={command.isError ? describeFailure(command.error, t) : null}
         onCommand={(action) => command.mutate({ offerId: offer.id, action })}
       />
     </div>
@@ -118,6 +119,7 @@ function InboxSkeleton() {
 }
 
 export function OfferInbox() {
+  const t = useT();
   const queryClient = useQueryClient();
   const offersQuery = usePartnerOffers();
 
@@ -138,13 +140,15 @@ export function OfferInbox() {
 
     return (
       <ErrorState
-        title={restartable ? "We could not continue this list" : "We could not load your offers"}
+        title={
+          restartable ? t("offers.inbox.error.cannotContinue") : t("offers.inbox.error.cannotLoad")
+        }
         message={
           restartable
-            ? "Start again from the beginning — newer offers keep arriving while you do."
+            ? t("offers.inbox.error.restartMessage")
             : describeError(listError, "read").message
         }
-        actionLabel={restartable ? "Start from the beginning" : "Try again"}
+        actionLabel={restartable ? t("offers.inbox.startFromBeginning") : t("common.tryAgain")}
         onAction={() => {
           if (restartable) {
             restartFromPageOne();
@@ -164,19 +168,19 @@ export function OfferInbox() {
         {offersQuery.isFetching && !offersQuery.isFetchingNextPage ? (
           <>
             <RefreshCw size={12} className="animate-spin" aria-hidden />
-            Checking for new offers…
+            {t("offers.inbox.checking")}
           </>
         ) : livePollPaused ? (
-          "Live updates are paused while you look through older offers."
+          t("offers.inbox.livePaused")
         ) : (
-          "New offers appear here automatically."
+          t("offers.inbox.liveOn")
         )}
       </p>
 
       {livePollPaused ? (
         <div className="mt-3">
           <Button variant="outline" size="sm" onClick={restartFromPageOne}>
-            Back to the latest offers
+            {t("offers.inbox.backToLatest")}
           </Button>
         </div>
       ) : null}
@@ -185,8 +189,8 @@ export function OfferInbox() {
         <div className="mt-4">
           <EmptyState
             icon={<Clock size={32} />}
-            title="No offers right now"
-            description="When a job near you matches your skills and availability, it will appear here. Make sure you are online to receive offers."
+            title={t("offers.inbox.empty.title")}
+            description={t("offers.inbox.empty.description")}
           />
         </div>
       ) : (
@@ -204,10 +208,10 @@ export function OfferInbox() {
             size="sm"
             onClick={() => void offersQuery.fetchNextPage()}
             loading={offersQuery.isFetchingNextPage}
-            loadingLabel="Loading more offers"
+            loadingLabel={t("offers.inbox.loadingMore")}
             disabled={offersQuery.isFetchingNextPage}
           >
-            Load more
+            {t("offers.inbox.loadMore")}
           </Button>
         </div>
       ) : null}
@@ -216,13 +220,13 @@ export function OfferInbox() {
         <>
           <p className="mt-3 text-sm text-critical" role="alert">
             {isCursorInvalid(listError) || isCursorContractFailure(listError)
-              ? "We could not load the next page. Start from the beginning to try again."
+              ? t("offers.inbox.nextPageError")
               : describeError(listError, "read").message}
           </p>
           {isCursorInvalid(listError) || isCursorContractFailure(listError) ? (
             <div className="mt-3">
               <Button variant="outline" size="sm" onClick={restartFromPageOne}>
-                Start from the beginning
+                {t("offers.inbox.startFromBeginning")}
               </Button>
             </div>
           ) : null}
@@ -237,7 +241,7 @@ export function OfferInbox() {
           onClick={() => void offersQuery.refetch()}
           disabled={offersQuery.isFetching}
         >
-          Check now
+          {t("offers.inbox.checkNow")}
         </Button>
       </div>
     </div>

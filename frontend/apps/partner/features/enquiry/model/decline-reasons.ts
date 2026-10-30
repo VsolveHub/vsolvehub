@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { useT } from "@vsolve/ui";
 
 /**
  * Why a vendor is turning an enquiry down.
@@ -47,6 +48,15 @@ export interface DeclineReason {
   readonly consequence: string;
 }
 
+/** A decline reason before translation: the code and its two catalogue keys. */
+export interface DeclineReasonKeys {
+  readonly code: DeclineReasonCode;
+  readonly labelKey: string;
+  readonly consequenceKey: string;
+}
+
+type T = ReturnType<typeof useT>;
+
 /**
  * Every published code, in the order a vendor is most likely to want them.
  *
@@ -54,30 +64,31 @@ export interface DeclineReason {
  * enum on the next regeneration fails the type check here rather than silently
  * disappearing from the dropdown.
  */
-const REASON_COPY: Record<DeclineReasonCode, Omit<DeclineReason, "code">> = {
+/** Catalogue keys; resolved with `t` by `declineReasonsFor` / `findDeclineReason`. */
+const REASON_COPY: Record<DeclineReasonCode, Omit<DeclineReasonKeys, "code">> = {
   NO_CAPACITY: {
-    label: "I am booked for these dates",
-    consequence: "We stop offering you work on these dates and invite someone else.",
+    labelKey: "enquiry.declineReason.noCapacity.label",
+    consequenceKey: "enquiry.declineReason.noCapacity.consequence",
   },
   TOO_FAR: {
-    label: "This is too far from where I work",
-    consequence: "We look at your service areas before inviting you to this area again.",
+    labelKey: "enquiry.declineReason.tooFar.label",
+    consequenceKey: "enquiry.declineReason.tooFar.consequence",
   },
   OUT_OF_SCOPE: {
-    label: "This is not the kind of work I do",
-    consequence: "We check the work against your approved services before inviting you again.",
+    labelKey: "enquiry.declineReason.outOfScope.label",
+    consequenceKey: "enquiry.declineReason.outOfScope.consequence",
   },
   UNCLEAR_SCOPE: {
-    label: "I cannot quote on what is described",
-    consequence: "Operations is told the request needs more detail before it goes out again.",
+    labelKey: "enquiry.declineReason.unclearScope.label",
+    consequenceKey: "enquiry.declineReason.unclearScope.consequence",
   },
   BUDGET_TOO_LOW: {
-    label: "The budget is below what I can work for",
-    consequence: "The customer is told their budget may be short. Your rate is not shared.",
+    labelKey: "enquiry.declineReason.budgetTooLow.label",
+    consequenceKey: "enquiry.declineReason.budgetTooLow.consequence",
   },
   OTHER: {
-    label: "Something else",
-    consequence: "Recorded as a decline with no reason we can act on. Prefer one of the above.",
+    labelKey: "enquiry.declineReason.other.label",
+    consequenceKey: "enquiry.declineReason.other.consequence",
   },
 };
 
@@ -90,22 +101,32 @@ const REASON_ORDER: readonly DeclineReasonCode[] = [
   "OTHER",
 ];
 
-export const DECLINE_REASONS: readonly DeclineReason[] = REASON_ORDER.map((code) => ({
+export const DECLINE_REASONS: readonly DeclineReasonKeys[] = REASON_ORDER.map((code) => ({
   code,
   ...REASON_COPY[code],
 }));
 
-const BY_CODE = new Map<string, DeclineReason>(
+const BY_CODE = new Map<string, DeclineReasonKeys>(
   DECLINE_REASONS.map((reason) => [reason.code, reason]),
 );
 
-export function findDeclineReason(code: string): DeclineReason | null {
-  return BY_CODE.get(code) ?? null;
+function resolve(reason: DeclineReasonKeys, t: T): DeclineReason {
+  return { code: reason.code, label: t(reason.labelKey), consequence: t(reason.consequenceKey) };
+}
+
+/** Every reason, in order, in the active language. */
+export function declineReasonsFor(t: T): readonly DeclineReason[] {
+  return DECLINE_REASONS.map((reason) => resolve(reason, t));
+}
+
+export function findDeclineReason(code: string, t: T): DeclineReason | null {
+  const known = BY_CODE.get(code);
+  return known ? resolve(known, t) : null;
 }
 
 /** Narrows a free string to a published code, or nothing. Used at the form seam. */
 export function asDeclineReasonCode(code: string): DeclineReasonCode | null {
-  return findDeclineReason(code)?.code ?? null;
+  return BY_CODE.get(code)?.code ?? null;
 }
 
 /**
@@ -117,8 +138,8 @@ export function asDeclineReasonCode(code: string): DeclineReasonCode | null {
  * what the server recorded — and it is de-slugged rather than dressed up, so
  * nobody mistakes it for copy somebody wrote.
  */
-export function describeDeclineReason(code: string): string {
-  const known = findDeclineReason(code);
+export function describeDeclineReason(code: string, t: T): string {
+  const known = findDeclineReason(code, t);
   if (known) return known.label;
   if (!code) return "";
   const words = code.replace(/[_-]+/g, " ").trim().toLowerCase();

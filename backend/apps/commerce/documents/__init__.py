@@ -7,7 +7,7 @@ they came from two companies.
 """
 
 from .render import DocumentLine, DocumentSpec, render_pdf
-from .sources import access_receipt_spec, order_invoice_spec
+from .sources import access_receipt_spec, order_invoice_spec, sample_booking_receipt_spec
 
 __all__ = [
     "DocumentLine",
@@ -15,4 +15,5 @@ __all__ = [
     "access_receipt_spec",
     "order_invoice_spec",
     "render_pdf",
+    "sample_booking_receipt_spec",
 ]

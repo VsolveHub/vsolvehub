@@ -16,6 +16,8 @@ import {
   type StayProperty,
 } from "../model";
 import { createStayEnquiry, fetchStayQuote } from "../queries";
+import { useCustomerSession } from "@/features/session/queries";
+import { SignInCard, isSignInError } from "@/features/session/view/sign-in-gate";
 
 interface StayQuotePanelProps {
   property: StayProperty;
@@ -23,6 +25,10 @@ interface StayQuotePanelProps {
   onViewProperty?: () => void;
   embedded?: boolean;
   initialUnitId?: string;
+  /** The look the guest is looking at, sent with the enquiry so the host knows which room. */
+  lookId?: string;
+  /** "1 BHK · With balcony": shown so the guest sees what they are asking about. */
+  lookName?: string;
 }
 
 /** Server limits, in the property's unit: 24 months or 90 nights. */
@@ -66,6 +72,8 @@ export function StayQuotePanel({
   onViewProperty: _onViewProperty,
   embedded = false,
   initialUnitId,
+  lookId,
+  lookName,
 }: StayQuotePanelProps) {
   const router = useRouter();
   const period = pricePeriodOf(property.price_period);
@@ -86,6 +94,9 @@ export function StayQuotePanel({
   const [error, setError] = useState<string | null>(null);
 
   const selectedUnit = property.units.find((u) => u.id === selectedUnitId) ?? property.units[0];
+  // Only a look of the chosen room type travels with the enquiry.
+  const chosenLookId =
+    lookId && (selectedUnit?.looks ?? []).some((look) => look.id === lookId) ? lookId : undefined;
   // Room capacity gates the total headcount.
   const maxGuests = Math.max(selectedUnit?.max_guests ?? 1, 1);
   // Clamp adults to stay within capacity minus children.
@@ -110,11 +121,15 @@ export function StayQuotePanel({
   const estimate = quote.data?.total_quote_paise ?? rate * length;
   const quoteProblem = quote.error ? refusalMessage(quote.error, minimumLabel) : null;
 
+  // The quote is open to everyone; sending an enquiry shares the guest's name and phone, so it
+  // needs an account.
+  const session = useCustomerSession();
   const mutation = useMutation({
     mutationFn: () =>
       createStayEnquiry({
         property_id: property.id,
         unit_id: selectedUnitId || null,
+        look_id: chosenLookId ?? null,
         check_in: checkIn,
         length,
         guest_count: totalGuests,
@@ -122,9 +137,13 @@ export function StayQuotePanel({
         child_count: children,
         message,
       }),
-    onSuccess: () => router.push("/stays/mine"),
-    onError: (err: unknown) => setError(refusalMessage(err, minimumLabel)),
+    onSuccess: () => router.push("/activity?type=stays"),
+    // A 401 shows as the "session ended" card, not as a message.
+    onError: (err: unknown) => {
+      if (!isSignInError(err)) setError(refusalMessage(err, minimumLabel));
+    },
   });
+  const sessionEnded = isSignInError(mutation.error);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +223,12 @@ export function StayQuotePanel({
           </div>
         )}
 
+        {chosenLookId && lookName ? (
+          <p className="rounded-control bg-surface-sunken px-3 py-2 text-xs text-text-secondary" data-testid="enquiry-look">
+            You&apos;re asking about <strong className="text-text">{lookName}</strong>
+          </p>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <span className="flex items-center gap-1.5 text-xs font-bold text-text">
@@ -266,7 +291,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={adultCount <= 1}
                 onClick={() => setAdultCount((n) => Math.max(1, n - 1))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Decrease adults"
               >
                 –
@@ -276,7 +301,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={adultCount + childCount >= maxGuests}
                 onClick={() => setAdultCount((n) => Math.min(n + 1, maxGuests - childCount))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Increase adults"
               >
                 +
@@ -295,7 +320,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={childCount <= 0}
                 onClick={() => setChildCount((n) => Math.max(0, n - 1))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Decrease children"
               >
                 –
@@ -305,7 +330,7 @@ export function StayQuotePanel({
                 type="button"
                 disabled={adultCount + childCount >= maxGuests}
                 onClick={() => setChildCount((n) => Math.min(n + 1, maxGuests - adultCount))}
-                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Increase children"
               >
                 +
@@ -360,15 +385,24 @@ export function StayQuotePanel({
           </div>
         )}
 
-        <Button
-          type="submit"
-          disabled={mutation.isPending || Boolean(quoteProblem)}
-          loading={mutation.isPending}
-          loadingLabel="Sending enquiry…"
-          className="w-full py-3 text-sm font-bold"
-        >
-          Send enquiry
-        </Button>
+        {session.isAnonymous || sessionEnded ? (
+          <SignInCard
+            title="Sign in to send an enquiry"
+            message="The host calls you on your phone number. Your dates stay here while you sign in."
+            expired={sessionEnded && !session.isAnonymous}
+            onSignIn={() => mutation.reset()}
+          />
+        ) : (
+          <Button
+            type="submit"
+            disabled={mutation.isPending || Boolean(quoteProblem)}
+            loading={mutation.isPending}
+            loadingLabel="Sending enquiry…"
+            className="w-full py-3 text-sm font-bold"
+          >
+            Send enquiry
+          </Button>
+        )}
       </form>
     </div>
   );

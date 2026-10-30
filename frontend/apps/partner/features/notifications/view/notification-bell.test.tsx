@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PROJECT_WORKSPACE, WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
+import { withI18n } from "@/i18n/test-utils";
 
 /**
  * The bell and its panel, at the layer a Partner actually sees.
@@ -78,7 +79,7 @@ function serve({
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 }
 
 function renderBell(workspaceKeys: readonly string[] = [WORKFORCE_WORKSPACE]) {

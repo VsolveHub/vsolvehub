@@ -1,12 +1,15 @@
 "use client";
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Badge, Button, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, buttonStyles, ErrorState, Spinner, useT, type Translator } from "@vsolve/ui";
 import Link from "next/link";
+
+import { useState } from "react";
 
 import { isListingTrack } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
+import { UploadedDocumentCard } from "./uploaded-document-card";
 
 /**
  * The documents a reviewer will look at.
@@ -24,28 +27,34 @@ import { DocumentUpload } from "./document-upload";
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
-const REQUIRED: readonly { kind: DocumentKind; label: string; why: string }[] = [
+const REQUIRED: readonly { kind: DocumentKind; labelKey: string; whyKey: string }[] = [
   {
     kind: "GOVERNMENT_ID",
-    label: "Government photo ID",
-    why: "Confirms you are who you say you are before we send you to someone's home.",
+    labelKey: "apply.requirements.governmentId",
+    whyKey: "apply.documents.why.governmentId",
   },
   {
     kind: "ADDRESS_PROOF",
-    label: "Proof of address",
-    why: "Any recent bill or statement showing your name and address.",
+    labelKey: "apply.requirements.addressProof",
+    whyKey: "apply.documents.why.addressProof",
   },
 ];
 
-const STATUS_TONE: Record<
-  Schemas["PartnerDocumentStatusEnum"],
-  { tone: "neutral" | "info" | "success" | "warning" | "danger"; label: string }
-> = {
-  PENDING: { tone: "info", label: "Waiting for review" },
-  APPROVED: { tone: "success", label: "Approved" },
-  REJECTED: { tone: "danger", label: "Needs replacing" },
-  SUPERSEDED: { tone: "neutral", label: "Replaced" },
-};
+function statusTone(
+  status: Schemas["PartnerDocumentStatusEnum"],
+  t: Translator["t"],
+): { tone: "neutral" | "info" | "success" | "warning" | "danger"; label: string } {
+  switch (status) {
+    case "PENDING":
+      return { tone: "info", label: t("apply.documents.status.pending") };
+    case "APPROVED":
+      return { tone: "success", label: t("apply.documents.status.approved") };
+    case "REJECTED":
+      return { tone: "danger", label: t("apply.documents.status.rejected") };
+    case "SUPERSEDED":
+      return { tone: "neutral", label: t("apply.documents.status.superseded") };
+  }
+}
 
 /** The document that currently counts for a kind: the newest non-superseded one. */
 function currentDocument(
@@ -59,14 +68,16 @@ function currentDocument(
 }
 
 export function DocumentsStep() {
+  const t = useT();
   const query = usePartnerApplication();
+  const [replacingKinds, setReplacingKinds] = useState<Set<DocumentKind>>(new Set());
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
     return (
       <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Loading documents…
+        {t("apply.documents.loading")}
       </p>
     );
   }
@@ -74,9 +85,9 @@ export function DocumentsStep() {
   if (query.isError && !isMissing) {
     return (
       <ErrorState
-        title="Could not load documents"
-        message="Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.documents.loadError.title")}
+        message={t("apply.common.checkConnectionAndRetry")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void query.refetch()}
       />
     );
@@ -90,61 +101,69 @@ export function DocumentsStep() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         {REQUIRED.map((required) => {
           const document = application ? currentDocument(application, required.kind) : null;
-          const status = document ? STATUS_TONE[document.status] : null;
+          const status = document ? statusTone(document.status, t) : null;
+          const label = t(required.labelKey);
+          const isReplacing = replacingKinds.has(required.kind);
+          const isDocRejected =
+            document?.status === "REJECTED" || document?.scan_status === "REJECTED";
+          const canReplace =
+            (isEditable &&
+              (document?.status !== "APPROVED" || application?.status === "CHANGES_REQUIRED")) ||
+            isDocRejected;
 
           return (
             <div key={required.kind} className="rounded-control border border-line bg-surface p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-bold text-navy-900">
-                  {required.label} <span className="text-danger-text">*</span>
+                  {label} <span className="text-danger-text">*</span>
                 </p>
                 <Badge tone={status?.tone ?? "neutral"}>
-                  {status?.label ?? "Not uploaded"}
+                  {status?.label ?? t("apply.documents.notUploaded")}
                 </Badge>
               </div>
+              <p className="mt-1 text-xs text-text-secondary">{t(required.whyKey)}</p>
 
-              {document?.status === "REJECTED" ? (
-                <p className="mt-2 text-xs font-semibold text-danger-text">
-                  {document.review_reason || "Document could not be verified. Please upload a clear photo or PDF."}
-                </p>
-              ) : null}
-
-              {document ? (
-                <p className="mt-2 text-xs text-text-muted">
-                  Version {document.version} • Uploaded{" "}
-                  <time dateTime={document.uploaded_at}>
-                    {new Intl.DateTimeFormat("en-IN", {
-                      dateStyle: "medium",
-                      timeZone: "Asia/Kolkata",
-                    }).format(new Date(document.uploaded_at))}
-                  </time>
-                </p>
-              ) : null}
-
-              {isEditable ? (
+              {document && !isReplacing ? (
+                <UploadedDocumentCard
+                  document={document}
+                  label={label}
+                  canReplace={canReplace}
+                  onReplace={() =>
+                    setReplacingKinds((prev) => new Set(prev).add(required.kind))
+                  }
+                />
+              ) : isEditable || isDocRejected ? (
                 <DocumentUpload
                   kind={required.kind}
-                  label={required.label}
+                  label={label}
                   expectedVersion={application?.version ?? null}
-                  replacing={
-                    document?.status === "REJECTED" || document?.scan_status === "REJECTED"
+                  replacing={Boolean(document)}
+                  onSuccess={() =>
+                    setReplacingKinds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(required.kind);
+                      return next;
+                    })
+                  }
+                  onCancel={
+                    document
+                      ? () =>
+                          setReplacingKinds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(required.kind);
+                            return next;
+                          })
+                      : undefined
                   }
                 />
               ) : (
-                /*
-                  A locked application still draws the required marker and, when
-                  a kind was never supplied, the words "Not uploaded" — with no
-                  picker underneath and, until now, nothing saying why. On a
-                  phone that reads as a broken screen: a starred requirement, an
-                  unmet status and no control. Say which of the two it is.
-                */
                 <p className="mt-2 text-xs text-text-muted">
                   {document
-                    ? "Locked while your application is being reviewed."
-                    : "This was not required when your application was approved. Contact support if you need to add it."}
+                    ? t("apply.documents.lockedReviewing")
+                    : t("apply.documents.notRequiredAnymore")}
                 </p>
               )}
             </div>
@@ -154,16 +173,12 @@ export function DocumentsStep() {
 
       {/* Navigation actions */}
       <div className="flex items-center justify-between pt-4 border-t border-line gap-3">
-        <Link href="/apply/consent" className="shrink-0">
-          <Button variant="outline" size="lg" className="font-bold text-sm h-12 px-5">
-            Back
-          </Button>
-        </Link>
-        <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"}>
-          <Button size="lg" className="font-bold text-sm h-12 px-5 shadow-md">
-            {isListingTrack(query.data?.track) ? "Continue to review" : "Continue to Working Hours"}
-          </Button>
-        </Link>
+        <Link href="/apply/consent" className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
+            {t("common.back")}
+          </Link>
+        <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"} className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-5 shadow-md" })}>
+            {isListingTrack(query.data?.track) ? t("apply.documents.continueReview") : t("apply.documents.continueHours")}
+          </Link>
       </div>
     </div>
   );

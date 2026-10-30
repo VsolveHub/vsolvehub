@@ -1,26 +1,42 @@
 "use client";
 
+import type { Schemas } from "@vsolve/api-client";
 import { Badge } from "@vsolve/ui";
 
 /**
- * Mock / Placeholder Professional Card shown BEFORE payment is made.
+ * The professional, as far as the Customer may see them before payment.
  *
- * Never exposes actual partner credentials before payment. Displays generic
- * verified professional badges, masked/blurred details, a 4.9★ rating, and a
- * clear unlock notice.
+ * Never exposes the name before payment — that is what the unlock notice promises.
+ * Everything else comes from Django's `AssignedProfessional`: the headline and the
+ * years of experience. There is no rating and no job count because the platform
+ * publishes neither (see `ProfessionalCard`); this card used to print "★ 4.9" and
+ * "5+ yrs experience · 500+ jobs" for everyone, which a Customer would read as fact
+ * about the person coming to their home.
+ *
+ * With no professional yet (a held slot still being matched) it says so rather
+ * than describing someone who does not exist.
  */
 export function MockProfessionalCard({
-  serviceName,
+  professional,
 }: {
-  serviceName?: string;
+  professional?: Schemas["AssignedProfessional"] | null;
 }) {
+  const facts = professional
+    ? [
+        professional.headline.trim(),
+        professional.experience_years > 0
+          ? `${professional.experience_years} ${professional.experience_years === 1 ? "yr" : "yrs"} experience`
+          : "",
+      ].filter((fact) => fact !== "")
+    : [];
+
   return (
     <div className="rounded-xl border border-line bg-gradient-to-r from-surface to-[#FFFDF9] p-4 shadow-2xs">
       <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-3">
         <div className="flex items-center gap-2">
           <span className="size-2 rounded-full bg-success animate-pulse" />
           <span className="text-xs font-bold uppercase tracking-wider text-text">
-            Professional Held & Assigned
+            {professional ? "Professional Held & Assigned" : "Finding your professional"}
           </span>
         </div>
         <Badge tone="success">Verified Pro</Badge>
@@ -36,18 +52,11 @@ export function MockProfessionalCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-bold text-text text-sm">
-              Verified Professional
-            </p>
-            <span className="inline-flex items-center text-xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-              ★ 4.9
-            </span>
-          </div>
+          <p className="font-bold text-text text-sm">Verified Professional</p>
 
-          <p className="text-xs text-text-secondary mt-0.5">
-            {serviceName ? `${serviceName} Specialist · ` : ""}5+ yrs experience · 500+ jobs
-          </p>
+          {facts.length > 0 ? (
+            <p className="text-xs text-text-secondary mt-0.5">{facts.join(" · ")}</p>
+          ) : null}
 
           <div className="mt-2 flex items-center gap-1.5 rounded-md bg-surface-sunken px-2 py-1 text-[11px] text-text-secondary border border-line/50">
             <span className="text-xs">🔒</span>

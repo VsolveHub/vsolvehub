@@ -14,34 +14,45 @@ import {
  * will refuse after a long transfer, and a retry that cannot possibly succeed.
  */
 
+/**
+ * A stand-in translator: tests check the *data* (code, and that the
+ * interpolated size/format values land in the message), not the catalogue
+ * copy, which is covered by the i18n catalogue's own completeness.
+ */
+const t = (key: string, params?: Record<string, string | number>) => {
+  if (key === "apply.upload.rejection.tooLarge") return `too large: ${params?.size} / ${params?.max}`;
+  if (key === "apply.upload.rejection.unsupportedType") return "JPEG, PNG or PDF only";
+  return key;
+};
+
 describe("file validation", () => {
   it("refuses an empty file rather than uploading nothing", () => {
-    expect(rejectFile({ size: 0, type: "image/jpeg" })?.code).toBe("empty");
+    expect(rejectFile({ size: 0, type: "image/jpeg" }, t)?.code).toBe("empty");
   });
 
   it("refuses a file over Django's ceiling before a byte is sent", () => {
     // The point is not to enforce the rule — Django re-checks the stored object.
     // It is to avoid a two-minute upload on a phone that was always going to be
     // rejected.
-    const problem = rejectFile({ size: MAX_UPLOAD_BYTES + 1, type: "image/jpeg" });
+    const problem = rejectFile({ size: MAX_UPLOAD_BYTES + 1, type: "image/jpeg" }, t);
     expect(problem?.code).toBe("too_large");
     expect(problem?.message).toContain("20.0 MB");
   });
 
   it("accepts exactly the ceiling", () => {
-    expect(rejectFile({ size: MAX_UPLOAD_BYTES, type: "image/png" })).toBeNull();
+    expect(rejectFile({ size: MAX_UPLOAD_BYTES, type: "image/png" }, t)).toBeNull();
   });
 
   it("accepts only the types a reviewer can open", () => {
     for (const type of ACCEPTED_CONTENT_TYPES) {
-      expect(rejectFile({ size: 1_000, type })).toBeNull();
+      expect(rejectFile({ size: 1_000, type }, t)).toBeNull();
     }
-    expect(rejectFile({ size: 1_000, type: "image/heic" })?.code).toBe("unsupported_type");
-    expect(rejectFile({ size: 1_000, type: "" })?.code).toBe("unsupported_type");
+    expect(rejectFile({ size: 1_000, type: "image/heic" }, t)?.code).toBe("unsupported_type");
+    expect(rejectFile({ size: 1_000, type: "" }, t)?.code).toBe("unsupported_type");
   });
 
   it("says what to do, not just what is wrong", () => {
-    const problem = rejectFile({ size: 1_000, type: "image/heic" });
+    const problem = rejectFile({ size: 1_000, type: "image/heic" }, t);
     expect(problem?.message).toMatch(/JPEG|PNG|PDF/);
   });
 });

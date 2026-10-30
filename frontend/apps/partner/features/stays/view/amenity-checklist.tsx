@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@vsolve/ui";
+
 import type { AmenityOption } from "./stay-form-helpers";
 
 /**
@@ -19,11 +21,12 @@ export function AmenityChecklist({
   value: Record<string, boolean>;
   onChange: (next: Record<string, boolean>) => void;
 }) {
+  const t = useT();
   if (!options?.length) return null;
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-text">Amenities</legend>
-      <p className="text-xs text-text-secondary">Tick what guests get. Leave the rest.</p>
+      <legend className="text-sm font-semibold text-text">{t("stays.amenities.legend")}</legend>
+      <p className="text-xs text-text-secondary">{t("stays.amenities.hint")}</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {options.map(({ key, label }) => {
           const id = `${idPrefix}-${key}`;

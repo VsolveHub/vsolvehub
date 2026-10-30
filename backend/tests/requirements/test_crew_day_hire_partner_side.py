@@ -1,4 +1,3 @@
-# ruff: noqa: PLR2004 - the figures are the snapshot the test wrote three lines above.
 """The lead's side of an A3 crew booking, contract 1.49.0.
 
 Before this the crew wave wrote invitation rows and told nobody, a confirmed lead had no field
@@ -100,6 +99,13 @@ def test_a_confirmed_lead_is_told_where_to_go_and_whom_to_ring(world: M2World) -
 
     assert data["site_address"] is not None
     assert data["site_address"]["city"]
+    address = engagement.requirement.address
+    assert data["site_address"]["directions_url"] == (
+        f"https://www.google.com/maps/dir/?api=1&destination={address.latitude},{address.longitude}"
+    )
+    # A route, never a coordinate feed: no bare latitude or longitude alongside it.
+    assert "latitude" not in data["site_address"]
+    assert "longitude" not in data["site_address"]
     assert data["customer_contact"] == {
         "name": world.customer.full_name or "Customer",
         "phone": world.customer.phone_number,
@@ -216,6 +222,9 @@ def test_directly_settled_crew_work_counts_as_earnings_and_one_completed_job(
     assert partner_balance_paise(world.vendor) == {
         "pending_paise": 0,
         "available_paise": 0,
+        "clearing_paise": 0,
+        "held_paise": 0,
+        "withdrawable_paise": 0,
         "reserved_paise": 0,
         "paid_paise": 0,
     }

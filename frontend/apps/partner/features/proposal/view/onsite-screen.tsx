@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, ErrorState, Skeleton, SkeletonRegion, buttonStyles } from "@vsolve/ui";
+import { Card, ErrorState, Skeleton, SkeletonRegion, buttonStyles, useT } from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -65,6 +65,7 @@ function OnsiteEstimate({
   readonly invitationId: string;
   readonly enquiryHref: string;
 }) {
+  const t = useT();
   const [sent, setSent] = useState<Proposal | null>(null);
   const query = usePartnerEnquiry(invitationId);
 
@@ -74,7 +75,7 @@ function OnsiteEstimate({
       className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
     >
       <ArrowLeft size={16} aria-hidden />
-      Back to the enquiry
+      {t("proposal.screens.onsite.backToEnquiry")}
     </Link>
   );
 
@@ -82,7 +83,7 @@ function OnsiteEstimate({
     return (
       <div className="flex flex-col gap-4">
         {back}
-        <SkeletonRegion loading label="Loading this request">
+        <SkeletonRegion loading label={t("proposal.screens.onsite.loading")}>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-64 w-full" />
@@ -95,20 +96,20 @@ function OnsiteEstimate({
   if (query.isError || query.data === undefined) {
     const presentation = query.error
       ? describeError(query.error, "read")
-      : describeError(new Error("This enquiry did not load."), "read");
+      : describeError(new Error(t("proposal.screens.onsite.didNotLoad")), "read");
     const forbidden = isEnquiryForbidden(query.error);
     return (
       <div className="flex flex-col gap-4">
         {back}
         <ErrorState
-          title={forbidden ? "This request is not yours" : presentation.title}
+          title={forbidden ? t("proposal.screens.onsite.forbidden.title") : presentation.title}
           message={
             forbidden
-              ? "Vsolve has no enquiry with this reference on your account."
+              ? t("proposal.screens.onsite.forbidden.message")
               : presentation.message
           }
           severity={presentation.severity}
-          actionLabel={forbidden ? undefined : "Try again"}
+          actionLabel={forbidden ? undefined : t("common.tryAgain")}
           onAction={forbidden ? undefined : () => void query.refetch()}
           reference={presentation.reference}
         />
@@ -164,11 +165,12 @@ function OnsiteComposerWithRevision({
   readonly enquiryHref: string;
   readonly onSubmitted: (proposal: Proposal) => void;
 }) {
+  const t = useT();
   const mine = useMyProposals(enquiry.requirementId);
 
   if (mine.isPending) {
     return (
-      <SkeletonRegion loading label="Checking whether you have already estimated">
+      <SkeletonRegion loading label={t("proposal.screens.onsite.checking")}>
         <Skeleton className="h-64 w-full" />
       </SkeletonRegion>
     );
@@ -178,10 +180,10 @@ function OnsiteComposerWithRevision({
     const presentation = describeError(mine.error, "read");
     return (
       <ErrorState
-        title="Vsolve could not check your earlier estimates"
-        message={`${presentation.message} Sending one now could replay an estimate you already sent, so the form stays closed until this read works.`}
+        title={t("proposal.screens.onsite.checkFailed.title")}
+        message={t("proposal.screens.onsite.checkFailed.message", { message: presentation.message })}
         severity={presentation.severity}
-        actionLabel="Try again"
+        actionLabel={t("common.tryAgain")}
         onAction={() => void mine.refetch()}
         reference={presentation.reference}
       />
@@ -224,18 +226,22 @@ function SentConfirmation({
   readonly proposal: Proposal;
   readonly enquiryHref: string;
 }) {
+  const t = useT();
   return (
     <Card className="flex flex-col gap-3 p-4">
-      <h2 className="text-base font-semibold text-text">Your estimate is with the customer</h2>
-      <p className="text-sm leading-5 text-text-secondary">Waiting for the customer to decide.</p>
+      <h2 className="text-base font-semibold text-text">{t("proposal.screens.onsite.sent.title")}</h2>
+      <p className="text-sm leading-5 text-text-secondary">{t("proposal.screens.onsite.sent.waiting")}</p>
       <p className="text-sm leading-6 text-text-secondary">
-        Revision {proposal.revision} · recorded {new Date(proposal.submitted_at).toLocaleString()}
+        {t("proposal.screens.onsite.sent.revision", {
+          revision: proposal.revision,
+          when: new Date(proposal.submitted_at).toLocaleString(),
+        })}
       </p>
       <Link href="/work/all" className={buttonStyles()}>
-        Go to Work
+        {t("proposal.screens.onsite.sent.goToWork")}
       </Link>
       <Link href={enquiryHref} className={buttonStyles({ variant: "outline" })}>
-        View enquiry
+        {t("proposal.screens.onsite.sent.viewEnquiry")}
       </Link>
     </Card>
   );

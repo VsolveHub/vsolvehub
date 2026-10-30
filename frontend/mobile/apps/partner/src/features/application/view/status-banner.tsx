@@ -57,6 +57,13 @@ const PRESENTATION: Record<Status, Presentation> = {
     detail: "You will not receive job offers. Contact support to discuss this.",
     isWaiting: false,
   },
+  DECLINED: {
+    tone: "danger",
+    label: "Declined",
+    headline: "Your application was declined",
+    detail: "Contact support if you believe this is an error.",
+    isWaiting: false,
+  },
   OFFBOARDED: {
     tone: "neutral",
     label: "Closed",

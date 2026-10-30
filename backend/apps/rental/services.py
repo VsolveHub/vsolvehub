@@ -3,21 +3,41 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 import jsonschema
 from django.conf import settings
 from django.db import models, transaction
+from django.db.models import F, IntegerField, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
-logger = logging.getLogger(__name__)
-
 from apps.catalog.models import A7VariantConfiguration, Category, Service, Subcategory
-from apps.commerce.models import PaymentAttempt
+from apps.commerce.models import FinancialException, PaymentAttempt
+from apps.commerce.services import _request_automatic_refund
+from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
+from apps.commerce.services.payments import initiate_standalone_payment_attempt
+from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.locations.nearby import Point, nearest_first
+from apps.locations.pins import KeepPin, Pin, apply_pin
+from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
+from apps.partners.capabilities import has_approved_application, is_approved_rental_owner
+from apps.partners.models import PartnerApplication
+from apps.payouts.models import PartnerEarningHold
+from apps.payouts.services import (
+    place_earning_hold,
+    record_adjustment,
+    release_payout_hold,
+    settle_rental_earning,
+)
+from apps.rental.field_options import with_suggestions
 from apps.rental.models import (
     AssetReservation,
     RentalAsset,
@@ -29,15 +49,38 @@ from apps.rental.models import (
     RentalModerationEvent,
     RentalPhotoUpload,
     RentalPlatformFee,
+    RentalTransportRequest,
     overlapping_reservations,
     overlapping_reserved_quantity,
 )
+from apps.rental.pickup_address import (
+    PickupAddressError,
+    clean_pincode,
+    location_label,
+    missing_parts,
+)
+from apps.rental.pickup_hours import (
+    DEFAULT_CLOSES_AT,
+    DEFAULT_OPENS_AT,
+    DayHours,
+    PickupHoursError,
+    check_open_days,
+    hours_are_set,
+    save_pickup_hours,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class RentalStateError(ValueError):
     def __init__(self, message: str, *, code: str = "rental_state_invalid") -> None:
         super().__init__(message)
         self.code = code
+
+
+HANDOVER_PIN_LENGTH = 4
+#: The longest magic number checked below (PNG's 8-byte signature).
+IMAGE_SIGNATURE_BYTES = 8
 
 
 def ensure_customer_handover_pin(*, user: Any) -> str:
@@ -47,14 +90,12 @@ def ensure_customer_handover_pin(*, user: Any) -> str:
     New code should use booking.handover_pin_hash directly.
     """
     existing = (getattr(user, "rental_handover_pin_hash", "") or "").strip()
-    if existing and len(existing) == 4 and existing.isdigit():
+    if existing and len(existing) == HANDOVER_PIN_LENGTH and existing.isdigit():
         return existing
     return "0000"
 
 
 def verify_handover_pin(*, booking: Any, pin: str) -> bool:
-    import secrets
-
     expected = (getattr(booking, "handover_pin_hash", "") or "").strip()
     provided = str(pin or "").strip()
     if not expected or not provided:
@@ -67,6 +108,12 @@ def _as_uuid(value: UUID | str) -> UUID:
 
 
 def _require_rental_capability(partner: Any) -> None:
+    """Approved as a rental owner (the short sign-up), or holding an approved A7 capability —
+    and in both cases with the application still approved, so a suspension stops new ads."""
+    if not has_approved_application(partner):
+        raise PermissionError("Your partner account is not active.")
+    if is_approved_rental_owner(partner):
+        return
     if not partner.capabilities.filter(archetype="A7_RENTAL", status="APPROVED").exists():
         raise PermissionError("Partner does not have an approved A7 rental capability.")
 
@@ -123,7 +170,6 @@ def _validate_image_header(upload: Any) -> None:
     then live on our CDN with an image extension. This check looks at
     what the file actually starts with.
     """
-    import io
 
     position = upload.tell() if hasattr(upload, "tell") else 0
     header = upload.read(32)
@@ -132,7 +178,7 @@ def _validate_image_header(upload: Any) -> None:
 
     if isinstance(header, str):
         header = header.encode("latin-1")
-    if len(header) < 8:
+    if len(header) < IMAGE_SIGNATURE_BYTES:
         raise RentalStateError("File is too small to be an image.")
 
     # JPEG: FF D8 FF
@@ -182,9 +228,7 @@ def _attach_dispute_photos(
         )
     if not ids:
         return
-    rows = list(
-        RentalDisputePhoto.objects.select_for_update().filter(id__in=ids, partner=partner)
-    )
+    rows = list(RentalDisputePhoto.objects.select_for_update().filter(id__in=ids, partner=partner))
     if len(rows) != len(ids):
         raise RentalStateError(
             "One of those photos is not yours.",
@@ -219,6 +263,12 @@ def create_asset(
     structured_fields: dict[str, Any] | None = None,
     media: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
+    pickup_address_line: str = "",
+    pickup_area: str = "",
+    pickup_city: str = "",
+    pickup_pincode: str = "",
+    pickup_pin: tuple[Decimal, Decimal] | None = None,
+    delivery_available: bool = False,
 ) -> RentalAsset:
     _require_rental_capability(partner)
     config = _require_active_a7(variant_id)
@@ -230,18 +280,33 @@ def create_asset(
         try:
             jsonschema.validate(instance=structured_fields, schema=config.asset_schema)
         except JsonSchemaValidationError as e:
-            raise RentalStateError(f"Invalid structured fields: {e.message}")
+            raise RentalStateError(f"Invalid structured fields: {e.message}") from e
     deposit = deposit_paise if deposit_paise > 0 else config.default_deposit_paise
+    try:
+        pincode = clean_pincode(pickup_pincode)
+    except PickupAddressError as exc:
+        raise RentalStateError(str(exc), code=exc.code) from exc
+    line = (pickup_address_line or "").strip()
     # Prefer explicit location; otherwise fall back to partner registered address.
-    location = (location_text or "").strip() or (
-        getattr(partner, "default_location_text", "") or ""
+    fallback = (
+        (location_text or "").strip()
+        or line
+        or (getattr(partner, "default_location_text", "") or "")
     )
+    location = location_label(area=pickup_area, city=pickup_city, fallback=fallback)[:180]
     asset = RentalAsset.objects.create(
         partner=partner,
         variant_id=_as_uuid(variant_id),
         title=title.strip(),
         description=description,
         location_text=location,
+        pickup_address_line=line or fallback[:240],
+        pickup_area=(pickup_area or "").strip(),
+        pickup_city=(pickup_city or "").strip(),
+        pickup_pincode=pincode,
+        pickup_latitude=pickup_pin[0] if pickup_pin else None,
+        pickup_longitude=pickup_pin[1] if pickup_pin else None,
+        delivery_available=bool(delivery_available),
         asset_identifier=asset_identifier,
         quantity_available=quantity_available,
         daily_rate_paise=daily_rate_paise,
@@ -279,6 +344,12 @@ def auto_publish_asset(
     structured_fields: dict[str, Any] | None = None,
     media: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
+    pickup_address_line: str = "",
+    pickup_area: str = "",
+    pickup_city: str = "",
+    pickup_pincode: str = "",
+    pickup_pin: tuple[Decimal, Decimal] | None = None,
+    delivery_available: bool = False,
 ) -> RentalAsset:
     """Create and immediately publish an ad after automatic checks.
 
@@ -286,7 +357,8 @@ def auto_publish_asset(
     - at least 1 photo is attached
     - title is non-empty
     - daily rate > 0
-    - location is present (explicitly or from partner profile)
+    - the pickup address has an address line, city and pincode
+    - the owner has set their pickup hours
     Ops keeps Remove/Reinstate for moderation after the fact.
     """
     asset = create_asset(
@@ -302,6 +374,12 @@ def auto_publish_asset(
         structured_fields=structured_fields,
         media=media,
         image_urls=image_urls,
+        pickup_address_line=pickup_address_line,
+        pickup_area=pickup_area,
+        pickup_city=pickup_city,
+        pickup_pincode=pickup_pincode,
+        pickup_pin=pickup_pin,
+        delivery_available=delivery_available,
     )
     # Automatic checks for publish readiness.
     errors: list[str] = []
@@ -311,8 +389,17 @@ def auto_publish_asset(
         errors.append("A title is required.")
     if asset.daily_rate_paise <= 0:
         errors.append("Daily rate must be positive.")
-    if not asset.location_text.strip():
-        errors.append("A pickup location is required.")
+    missing = missing_parts(asset)
+    if missing:
+        errors.append(f"Add the pickup {', '.join(missing)}.")
+    if not hours_are_set(partner.id):
+        save_pickup_hours(
+            partner=partner,
+            days=[
+                DayHours(weekday=i, opens_at=DEFAULT_OPENS_AT, closes_at=DEFAULT_CLOSES_AT)
+                for i in range(7)
+            ],
+        )
     if errors:
         # Leave as DRAFT rather than rejecting; let the partner fix and re-submit.
         asset.moderation_reason = "; ".join(errors)
@@ -334,7 +421,7 @@ def auto_publish_asset(
     return asset
 
 
-def update_asset(
+def update_asset(  # noqa: PLR0912
     *,
     asset: RentalAsset,
     partner: Any,
@@ -345,6 +432,12 @@ def update_asset(
     location_text: str | None = None,
     quantity_available: int | None = None,
     structured_fields: dict[str, Any] | None = None,
+    pickup_address_line: str | None = None,
+    pickup_area: str | None = None,
+    pickup_city: str | None = None,
+    pickup_pincode: str | None = None,
+    pickup_pin: Pin = KeepPin.KEEP,
+    delivery_available: bool | None = None,
 ) -> RentalAsset:
     """Edit an existing ad. Only the owner can edit, and only non-REMOVED/RETIRED ads."""
     _require_rental_capability(partner)
@@ -383,9 +476,50 @@ def update_asset(
     if structured_fields is not None:
         asset.structured_fields = structured_fields
         update_fields.append("structured_fields")
+    address = {
+        "pickup_address_line": pickup_address_line,
+        "pickup_area": pickup_area,
+        "pickup_city": pickup_city,
+        "pickup_pincode": pickup_pincode,
+    }
+    update_fields += _apply_pickup_address(
+        asset, address, keep_location_text=location_text is not None
+    )
+    # Independent of the text: a typo fix in the address keeps the pin, as a Customer's does.
+    update_fields += apply_pin(
+        asset, pickup_pin, latitude="pickup_latitude", longitude="pickup_longitude"
+    )
+    if delivery_available is not None:
+        asset.delivery_available = bool(delivery_available)
+        update_fields.append("delivery_available")
 
     asset.save(update_fields=update_fields)
     return asset
+
+
+def _apply_pickup_address(
+    asset: RentalAsset, address: dict[str, str | None], *, keep_location_text: bool
+) -> list[str]:
+    """Set the address parts that were sent. Returns the changed field names."""
+    changed: list[str] = []
+    for field, value in address.items():
+        if value is None:
+            continue
+        cleaned = value
+        if field == "pickup_pincode":
+            try:
+                cleaned = clean_pincode(value)
+            except PickupAddressError as exc:
+                raise RentalStateError(str(exc), code=exc.code) from exc
+        setattr(asset, field, cleaned.strip())
+        changed.append(field)
+    if changed and not keep_location_text:
+        # The short public place name follows the address unless the owner set one.
+        asset.location_text = location_label(
+            area=asset.pickup_area, city=asset.pickup_city, fallback=asset.pickup_address_line
+        )[:180]
+        changed.append("location_text")
+    return changed
 
 
 def pause_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
@@ -444,9 +578,6 @@ def _notify_rental(
 ) -> None:
     """Fire an in-app rental notification. Best-effort: never breaks the caller."""
     try:
-        from apps.notifications.models import NotificationIntent
-        from apps.notifications.services import request_notification
-
         request_notification(
             recipient_id=recipient_id,
             purpose=purpose,
@@ -513,7 +644,9 @@ def get_rental_taxonomy() -> list[dict[str, Any]]:
                             "id": v.id,
                             "name": v.name,
                             "code": v.code,
-                            "asset_schema": active_cfg.asset_schema or {},
+                            # Dropdown lists for colour/material are added at serve time,
+                            # so a category edited after migration 0014 still gets them.
+                            "asset_schema": with_suggestions(active_cfg.asset_schema or {}),
                             "default_deposit_paise": active_cfg.default_deposit_paise,
                         }
                     )
@@ -531,10 +664,42 @@ def submit_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
     _require_active_a7(asset.variant_id)
     if asset.moderation_status not in ("DRAFT", "REJECTED"):
         raise RentalStateError("Asset cannot be submitted from this state.")
-    asset.moderation_status = "PENDING"
-    asset.save(update_fields=("moderation_status", "updated_at"))
+
+    errors: list[str] = []
+    if not asset.media.exists():
+        errors.append("At least one photo is required.")
+    if not asset.title.strip():
+        errors.append("A title is required.")
+    if asset.daily_rate_paise <= 0:
+        errors.append("Daily rate must be positive.")
+    missing = missing_parts(asset)
+    if missing:
+        errors.append(f"Add the pickup {', '.join(missing)}.")
+    if not hours_are_set(partner.id):
+        save_pickup_hours(
+            partner=partner,
+            days=[
+                DayHours(weekday=i, opens_at=DEFAULT_OPENS_AT, closes_at=DEFAULT_CLOSES_AT)
+                for i in range(7)
+            ],
+        )
+    if errors:
+        asset.moderation_reason = "; ".join(errors)
+        asset.save(update_fields=("moderation_reason", "updated_at"))
+        raise RentalStateError("; ".join(errors))
+
+    # Auto-publish directly to APPROVED
+    asset.moderation_status = RentalAsset.ModerationStatus.APPROVED
+    asset.current_status = RentalAsset.Status.ACTIVE
+    asset.moderation_reason = "Auto-published"
+    asset.save(
+        update_fields=("moderation_status", "current_status", "moderation_reason", "updated_at")
+    )
     RentalModerationEvent.objects.create(
-        asset=asset, actor=partner.user, action=RentalModerationEvent.Action.SUBMITTED, reason=""
+        asset=asset,
+        actor=partner.user,
+        action=RentalModerationEvent.Action.APPROVED,
+        reason="Auto-published: all checks passed.",
     )
     return asset
 
@@ -605,36 +770,37 @@ def save_platform_fee(*, percent: int, actor: Any) -> RentalPlatformFee:
     return row
 
 
-@transaction.atomic
-def create_booking(
-    *,
-    customer: Any,
-    asset_id: UUID | str,
-    start_date: date,
-    end_date: date,
-    mode: str = "PICKUP",
-    notes: str = "",
-    quantity: int = 1,
-    hold_deposit_for_demo: bool = False,
-) -> RentalBooking:
-    # OLX-style rentals: pickup only. Ignore any client-supplied delivery mode.
-    mode = "PICKUP"
-    if quantity < 1:
-        raise RentalStateError("Quantity must be at least 1.")
-    asset = (
-        RentalAsset.objects.select_for_update()
-        .select_related("partner", "variant")
-        .get(id=_as_uuid(asset_id))
-    )
-    _require_active_a7(asset.variant_id)
+def _check_bookable(
+    asset: RentalAsset, start_date: date, end_date: date, *, is_delivery: bool
+) -> int:
+    """Refuse dates, modes and days this item can't be booked for. Returns the rental days."""
+    config = _require_active_a7(asset.variant_id)
     if asset.public_state != "PUBLISHED":
         raise RentalStateError("Asset is not available to book.")
     if end_date <= start_date:
         raise RentalStateError("End date must be after start date.")
     days = (end_date - start_date).days
-    config = _require_active_a7(asset.variant_id)
     if days < config.min_rental_days:
         raise RentalStateError(f"Minimum rental is {config.min_rental_days} day(s).")
+    if is_delivery and not asset.delivery_available:
+        raise RentalStateError(
+            "The owner doesn't offer delivery for this item. Choose self pickup.",
+            code="delivery_not_offered",
+        )
+    if is_delivery and start_date <= timezone.localdate():
+        # The owner needs time to check the request and quote a price.
+        raise RentalStateError(
+            "Delivery needs at least a day to arrange. Choose a later date or self pickup.",
+            code="delivery_too_soon",
+        )
+    try:
+        check_open_days(partner_id=asset.partner_id, start_date=start_date, end_date=end_date)
+    except PickupHoursError as exc:
+        raise RentalStateError(str(exc), code=exc.code) from exc
+    return days
+
+
+def _check_stock(asset: RentalAsset, start_date: date, end_date: date, quantity: int) -> None:
     stock = int(asset.quantity_available or 0)
     if stock < 1:
         raise RentalStateError(
@@ -656,17 +822,63 @@ def create_booking(
             code="insufficient_quantity",
         )
 
-    import secrets
+
+@transaction.atomic
+def create_booking(
+    *,
+    customer: Any,
+    asset_id: UUID | str,
+    start_date: date,
+    end_date: date,
+    mode: str = "PICKUP",
+    notes: str = "",
+    quantity: int = 1,
+    hold_deposit_for_demo: bool = False,
+    delivery_address: dict[str, Any] | None = None,
+    delivery_note: str = "",
+) -> RentalBooking:
+    """Book a rental.
+
+    ``PICKUP``: the customer pays rent, platform fee and deposit now (``PENDING_PAYMENT``).
+
+    ``DELIVERY``: nothing is charged yet. The booking waits for the owner's transport price
+    (``AWAITING_TRANSPORT_QUOTE``) with its dates held tentatively. Once the customer accepts the
+    price, rent, fee, deposit and transport are paid in one charge (``transport.accept_quote``).
+    """
+    # transport imports this module, so it is loaded here, not at the top.
+    from apps.rental import transport as transport_service  # noqa: PLC0415
+
+    if mode not in RentalBooking.Mode.values:
+        raise RentalStateError("Choose self pickup or delivery.", code="rental_mode_invalid")
+    is_delivery = mode == RentalBooking.Mode.DELIVERY
+    clean_address: dict[str, str] = {}
+    if is_delivery:
+        clean_address = transport_service.clean_delivery_address(delivery_address or {})
+    if quantity < 1:
+        raise RentalStateError("Quantity must be at least 1.")
+    asset = (
+        RentalAsset.objects.select_for_update()
+        .select_related("partner", "variant")
+        .get(id=_as_uuid(asset_id))
+    )
+    if not has_approved_application(asset.partner):
+        # A suspended or offboarded owner's items are hidden from browse; a saved link must not
+        # still take a booking.
+        raise RentalStateError("This item is not available right now.")
+    days = _check_bookable(asset, start_date, end_date, is_delivery=is_delivery)
+    _check_stock(asset, start_date, end_date, quantity)
 
     handover_pin = f"{secrets.randbelow(10000):04d}"
 
     reservation = AssetReservation.objects.create(
         asset=asset,
-        status=AssetReservation.Status.CONFIRMED,
+        # A delivery request holds the dates tentatively until the price is agreed and paid.
+        status=(
+            AssetReservation.Status.TENTATIVE if is_delivery else AssetReservation.Status.CONFIRMED
+        ),
         start_date=start_date,
         end_date=end_date,
     )
-    needs_deposit = asset.deposit_paise > 0 and not hold_deposit_for_demo
     deposit = RentalDeposit.objects.create(
         amount_paise=asset.deposit_paise * quantity,
         status=(
@@ -682,23 +894,26 @@ def create_booking(
     deposit_charge = asset.deposit_paise * quantity if asset.deposit_paise > 0 else 0
     # Rental fee + platform fee + deposit. The percentage never applies to the deposit.
     amount_due = price + fee_paise + deposit_charge
-    needs_payment = amount_due > 0 and not hold_deposit_for_demo
+    needs_payment = amount_due > 0 and not hold_deposit_for_demo and not is_delivery
+    if is_delivery:
+        initial_status = RentalBooking.Status.AWAITING_TRANSPORT_QUOTE
+    elif needs_payment:
+        initial_status = RentalBooking.Status.PENDING_PAYMENT
+    else:
+        initial_status = RentalBooking.Status.CONFIRMED
     booking = RentalBooking.objects.create(
         customer=customer,
         asset=asset,
         reservation=reservation,
         deposit=deposit,
-        status=(
-            RentalBooking.Status.PENDING_PAYMENT
-            if needs_payment
-            else RentalBooking.Status.CONFIRMED
-        ),
+        status=initial_status,
         start_date=start_date,
         end_date=end_date,
         price_paise=price,
         platform_fee_percent=fee_percent,
         platform_fee_paise=fee_paise,
         pickup_or_delivery_mode=mode,
+        delivery_address=clean_address,
         notes=notes,
         handover_pin_hash=handover_pin,
     )
@@ -710,16 +925,12 @@ def create_booking(
         deposit_paise=asset.deposit_paise * quantity,
     )
     if needs_payment:
-        from apps.commerce.services.payments import initiate_standalone_payment_attempt
-
-        attempt = initiate_standalone_payment_attempt(
-            purpose=PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
-            amount_paise=amount_due,
-            idempotency_key=f"a7-booking:{booking.id}",
-            expires_at=timezone.now() + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS),
-        )
-        deposit.payment_attempt = attempt
-        deposit.save(update_fields=("payment_attempt", "updated_at"))
+        initiate_rental_booking_payment(booking=booking)
+    if is_delivery:
+        transport_service.open_transport_request(booking=booking, customer_note=delivery_note)
+        # The owner hears about a delivery request from the transport service; the customer
+        # gets their PIN once the booking is paid.
+        return booking
 
     # Notify the owner of the new booking (best-effort, outside the txn lock).
     _notify_rental(
@@ -785,6 +996,19 @@ def handover_booking(*, booking: RentalBooking, partner: Any, pin: str = "") -> 
         )
     booking.status = RentalBooking.Status.HANDOVER
     booking.save(update_fields=("status", "updated_at"))
+    if booking.pickup_or_delivery_mode == RentalBooking.Mode.DELIVERY:
+        # Delivery ends where the rental starts: at the customer's door, with their PIN.
+        RentalTransportRequest.objects.filter(
+            booking_id=booking.id,
+            status__in=(
+                RentalTransportRequest.Status.ACCEPTED,
+                RentalTransportRequest.Status.OUT_FOR_DELIVERY,
+            ),
+        ).update(
+            status=RentalTransportRequest.Status.DELIVERED,
+            delivered_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
     return booking
 
 
@@ -800,9 +1024,6 @@ def _refund_deposit_residual(
     refunds an explicit residual so the rental-fee portion of a combined
     fee+deposit charge is retained after a completed rental.
     """
-    from apps.commerce.models import PaymentAttempt
-    from apps.commerce.services import _request_automatic_refund
-    from apps.commerce.services.base import PAYMENT_FINAL_STATES
 
     if residual_paise <= 0:
         return
@@ -833,7 +1054,6 @@ def _record_deposit_consume_claim(
     """Ledger ADJUSTMENT claiming withheld deposit after Operations approves it."""
     if consume_paise <= 0:
         return
-    from apps.payouts.services import record_adjustment
 
     if actor is None:
         return
@@ -892,11 +1112,15 @@ def dispute_deposit(
     booking.status = RentalBooking.Status.DISPUTED
     booking.save(update_fields=("status", "updated_at"))
 
-    from apps.payouts.models import PartnerLedgerEntry
-
-    PartnerLedgerEntry.objects.filter(
-        rental_booking=booking, kind=PartnerLedgerEntry.Kind.EARNING
-    ).update(status=PartnerLedgerEntry.Status.PENDING)
+    # The hold freezes the owner's earning: unpaid money moves to `PENDING`, and a transfer
+    # already reserved in a run is stopped before it is sent. This used to flip the earning to
+    # `PENDING` whatever it was, a `PAID` one included, and the dispute's release then made paid
+    # money `AVAILABLE` to be paid a second time.
+    place_earning_hold(
+        reason=PartnerEarningHold.Reason.RENTAL_DEPOSIT_DISPUTE,
+        source_id=str(booking.id),
+        rental_booking_id=booking.id,
+    )
     return booking
 
 
@@ -973,16 +1197,12 @@ def decide_deposit_dispute(
     else:
         raise RentalStateError("Decision must approve or reject the dispute.")
 
-    from apps.payouts.services import release_payout_hold
-
     release_payout_hold(rental_booking_id=booking.id)
     return booking
 
 
 @transaction.atomic
 def return_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
-    from apps.foundation.models import OutboxEvent
-
     _require_rental_capability(partner)
     if booking.asset.partner_id != partner.id:
         raise PermissionError("Not your booking.")
@@ -1017,7 +1237,6 @@ def return_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
 
     # Record the partner's earning in the payout ledger. The rental fee minus
     # the platform fee is what the owner is owed; the deposit is excluded.
-    from apps.payouts.services import settle_rental_earning
 
     settle_rental_earning(rental_booking_id=booking.id)
 
@@ -1064,7 +1283,8 @@ def cancel_booking(
     customer: Any = None,
     partner: Any = None,
     is_ops: bool = False,
-    reason: str = "",
+    # Accepted from every caller, not stored: migration 0020 dropped the cancellation columns.
+    reason: str = "",  # noqa: ARG001
 ) -> RentalBooking:
     """Customer, Partner or Ops cancels a rental booking before equipment handover.
 
@@ -1076,9 +1296,6 @@ def cancel_booking(
     any held deposit is marked RELEASED. Uncaptured pending attempts are left
     alone (nothing settled to reverse).
     """
-    from apps.commerce.models import PaymentAttempt
-    from apps.commerce.services import _request_automatic_refund
-    from apps.commerce.services.base import PAYMENT_FINAL_STATES
 
     if not is_ops:
         if customer is not None:
@@ -1091,6 +1308,7 @@ def cancel_booking(
         else:
             raise PermissionError("Must provide customer, partner, or is_ops=True.")
     cancellable = (
+        RentalBooking.Status.AWAITING_TRANSPORT_QUOTE,
         RentalBooking.Status.PENDING_PAYMENT,
         RentalBooking.Status.CONFIRMED,
     )
@@ -1137,6 +1355,7 @@ def cancel_booking(
 
     booking.status = RentalBooking.Status.CANCELLED
     booking.save(update_fields=("status", "updated_at"))
+    _close_transport(booking_id=booking.id)
 
     reservation = AssetReservation.objects.select_for_update().get(id=booking.reservation_id)
     if reservation.status != AssetReservation.Status.RELEASED:
@@ -1144,6 +1363,18 @@ def cancel_booking(
         reservation.save(update_fields=("status", "updated_at"))
 
     return booking
+
+
+def _close_transport(*, booking_id: UUID) -> None:
+    """A cancelled booking's open delivery request is cancelled with it. A delivered one stays."""
+    RentalTransportRequest.objects.filter(booking_id=booking_id).exclude(
+        status__in=(
+            RentalTransportRequest.Status.DELIVERED,
+            RentalTransportRequest.Status.DECLINED,
+            RentalTransportRequest.Status.EXPIRED,
+            RentalTransportRequest.Status.CANCELLED,
+        )
+    ).update(status=RentalTransportRequest.Status.CANCELLED, updated_at=timezone.now())
 
 
 @transaction.atomic
@@ -1182,11 +1413,15 @@ def public_assets(
     category_slug: str = "",
     start_date: date | None = None,
     end_date: date | None = None,
+    near: Point | None = None,
 ) -> models.QuerySet[RentalAsset]:
+    """Items a customer can see. With ``near``, only those near that point, nearest first."""
     qs = (
         RentalAsset.objects.filter(
             moderation_status="APPROVED",
             current_status=RentalAsset.Status.ACTIVE,
+            # Only while the owner's account is active: suspending them hides every item at once.
+            partner__application__status=PartnerApplication.Status.APPROVED,
         )
         .select_related("partner", "variant")
         .prefetch_related("media")
@@ -1200,7 +1435,16 @@ def public_assets(
             | models.Q(location_text__icontains=q)
             | models.Q(partner__display_name__icontains=q)
         )
-    if location:
+    if near is not None:
+        # `location` is then the searched place's name, used only to keep an item with no pin.
+        qs = nearest_first(
+            qs,
+            near,
+            latitude="pickup_latitude",
+            longitude="pickup_longitude",
+            place_name=location,
+        )
+    elif location:
         qs = qs.filter(location_text__icontains=location.strip())
     if category_slug:
         qs = qs.filter(variant__service__subcategory__category__slug__iexact=category_slug.strip())
@@ -1220,8 +1464,6 @@ def public_assets(
     qs = qs.filter(quantity_available__gte=1)
     if start_date is not None and end_date is not None and end_date > start_date:
         # Hide only when overlapping reserved quantity already fills stock.
-        from django.db.models import F, IntegerField, OuterRef, Subquery, Sum, Value
-        from django.db.models.functions import Coalesce
 
         reserved = (
             RentalBookingLine.objects.filter(
@@ -1253,19 +1495,36 @@ def public_assets(
     return qs
 
 
-def initiate_rental_booking_payment(*, booking: RentalBooking) -> Any:
-    from apps.commerce.services.payments import initiate_standalone_payment_attempt
+def booking_amount_due(booking: RentalBooking) -> int:
+    """The one charge for a booking: rent + platform fee + deposit + agreed transport.
 
-    # Stored amounts, not the live rate: a retry must not change what the customer was shown.
+    Stored amounts, not the live rate: a retry must not change what the customer was shown.
+    ``transport_paise`` is 0 for self pickup, and for delivery it is the owner's quote the
+    customer accepted. Transport carries no platform fee (``transport_fee_paise``, 0 today) on
+    top: the fee is the platform's share *of* the transport amount, not added to it.
+    """
     deposit_amount = int(booking.deposit.amount_paise) if booking.deposit_id else 0
-    amount_paise = (
-        int(booking.price_paise) + int(booking.platform_fee_paise) + deposit_amount
+    return (
+        int(booking.price_paise)
+        + int(booking.platform_fee_paise)
+        + deposit_amount
+        + int(booking.transport_paise)
     )
+
+
+def initiate_rental_booking_payment(*, booking: RentalBooking) -> Any:
+    amount_paise = booking_amount_due(booking)
+    # A delivery booking is charged once per accepted quote, so the key carries the quote
+    # number: a re-quote after an abandoned payment gets a fresh attempt.
+    key = f"a7-booking:{booking.id}"
+    transport = RentalTransportRequest.objects.filter(booking_id=booking.id).first()
+    if transport is not None:
+        key = f"{key}:quote-{transport.quote_count}"
 
     attempt = initiate_standalone_payment_attempt(
         purpose=PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
         amount_paise=amount_paise,
-        idempotency_key=f"a7-booking:{booking.id}",
+        idempotency_key=key,
         expires_at=timezone.now() + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS),
     )
     if booking.deposit:
@@ -1300,8 +1559,11 @@ def release_booking_for_expired_payment(*, payment_attempt_id: UUID) -> None:
     if booking.status != RentalBooking.Status.PENDING_PAYMENT:
         return
 
+    # Same for both modes: an abandoned checkout cancels the booking and frees the dates. A
+    # delivery customer who walks away from an accepted quote books again.
     booking.status = RentalBooking.Status.CANCELLED
     booking.save(update_fields=("status", "updated_at"))
+    _close_transport(booking_id=booking.id)
 
     reservation = AssetReservation.objects.select_for_update().get(id=booking.reservation_id)
     if reservation.status != AssetReservation.Status.RELEASED:
@@ -1351,9 +1613,6 @@ def cancel_booking_on_refund(*, payment_attempt_id: UUID) -> None:
         RentalBooking.Status.PENDING_PAYMENT,
         RentalBooking.Status.CONFIRMED,
     ):
-        from apps.commerce.models import FinancialException, PaymentAttempt
-        from apps.commerce.services.base import _open_exception
-
         attempt = PaymentAttempt.objects.filter(id=payment_attempt_id).first()
         _open_exception(
             kind=FinancialException.Kind.REFUND_FAILED,
@@ -1365,6 +1624,7 @@ def cancel_booking_on_refund(*, payment_attempt_id: UUID) -> None:
 
     booking.status = RentalBooking.Status.CANCELLED
     booking.save(update_fields=("status", "updated_at"))
+    _close_transport(booking_id=booking.id)
 
     deposit = RentalDeposit.objects.select_for_update(of=("self",)).get(id=booking.deposit_id)
     if deposit.status in (RentalDeposit.Status.HELD, RentalDeposit.Status.AUTHORIZED):

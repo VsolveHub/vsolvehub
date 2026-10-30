@@ -16,7 +16,7 @@ class PayoutBatchBankExportView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
     export_format = "csv"
 
-    def get(self, request: Request, pk: str) -> HttpResponse:
+    def get(self, _request: Request, pk: str) -> HttpResponse:
         try:
             batch = PayoutBatch.objects.get(pk=pk)
         except PayoutBatch.DoesNotExist:
@@ -28,18 +28,17 @@ class PayoutBatchBankExportView(APIView):
         if not items.exists():
             return HttpResponse("Batch has no valid entries", status=status.HTTP_400_BAD_REQUEST)
 
-        rows = []
-        for item in items:
-            rows.append(
-                {
-                    "account_last4": getattr(item.payout_account, "account_last4", ""),
-                    "ifsc": getattr(item.payout_account, "ifsc", ""),
-                    "amount_paise": item.amount_paise,
-                    "narration": f"Settlement {batch.reference}",
-                    "beneficiary_name": getattr(item.payout_account, "holder_name", "")
-                    or getattr(item.partner, "display_name", ""),
-                }
-            )
+        rows = [
+            {
+                "account_last4": getattr(item.payout_account, "account_last4", ""),
+                "ifsc": getattr(item.payout_account, "ifsc", ""),
+                "amount_paise": item.amount_paise,
+                "narration": f"Settlement {batch.reference}",
+                "beneficiary_name": getattr(item.payout_account, "holder_name", "")
+                or getattr(item.partner, "display_name", ""),
+            }
+            for item in items
+        ]
 
         columns = ["account_last4", "ifsc", "amount_paise", "narration", "beneficiary_name"]
 

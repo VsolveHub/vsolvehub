@@ -1,7 +1,6 @@
 """Checkout wallet and coin funding through payment-attempt creation."""
 
 # Amount assertions are the scenario, not unexplained literals.
-# ruff: noqa: PLR2004
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -308,8 +307,11 @@ def test_parallel_attempts_cannot_reserve_the_same_coins(
 ) -> None:
     monkeypatch.setattr("apps.foundation.services._queue_outbox_event", lambda _event_id: None)
     _client, customer, checkout, _group = _payment_ready_group()
-    from apps.loyalty.models import CoinLedger
-    from apps.loyalty.services.coins import get_customer_coin_balances, issue_coins
+    from apps.loyalty.models import CoinLedger  # noqa: PLC0415
+    from apps.loyalty.services.coins import (  # noqa: PLC0415
+        get_customer_coin_balances,
+        issue_coins,
+    )
 
     issue_coins(
         customer=customer,

@@ -1,14 +1,14 @@
 "use client";
 
 import { useServerCountdown } from "@vsolve/query";
-import { Badge, Card, formatMoney } from "@vsolve/ui";
+import { Badge, Card, formatMoney, useT } from "@vsolve/ui";
 
 import { findCrewOfferDeclineReason } from "../model/decline-reasons";
 import {
-  DONT_TRAVEL_YET,
-  HOLD_LAPSED,
   crewSizeLine,
   describeAccept,
+  dontTravelYet,
+  holdLapsed,
   startDayLabel,
   type CrewOfferAnswer,
 } from "../model/offer-state";
@@ -45,8 +45,9 @@ export function CrewOfferOutcome({ answer }: CrewOfferOutcomeProps) {
 }
 
 function AcceptedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer, { kind: "accepted" }> }) {
+  const t = useT();
   const { booking, offer } = answer;
-  const outcome = describeAccept(booking);
+  const outcome = describeAccept(t, booking);
   // The hold clock. `hold_expires_at` is nullable and a null is a real answer —
   // the window is server configuration — so no countdown is drawn from a guess.
   const hold = useServerCountdown(outcome.isHeld ? booking.hold_expires_at : null, 1000);
@@ -60,11 +61,11 @@ function AcceptedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer,
   return (
     <Card className="flex flex-col gap-2.5 p-4">
       <Badge tone={tone} dot>
-        {lapsed ? "Hold lapsed" : `✓ ${outcome.title}`}
+        {lapsed ? t("work.crewOfferOutcome.holdLapsedBadge") : `✓ ${outcome.title}`}
       </Badge>
 
       {lapsed ? (
-        <p className="text-base font-semibold leading-6 text-text">{HOLD_LAPSED}</p>
+        <p className="text-base font-semibold leading-6 text-text">{holdLapsed(t)}</p>
       ) : (
         <>
           <p className="flex items-center justify-between gap-3 text-base font-semibold leading-6 text-text">
@@ -77,18 +78,19 @@ function AcceptedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer,
             ) : null}
           </p>
           {outcome.isHeld ? (
-            <p className="text-sm font-semibold leading-6 text-warning-text">{DONT_TRAVEL_YET}</p>
+            <p className="text-sm font-semibold leading-6 text-warning-text">{dontTravelYet(t)}</p>
           ) : null}
         </>
       )}
 
       <p className="text-sm leading-6 text-text-secondary">
         {where === "" ? "" : `${where} · `}
-        {booking.headcount} × {booking.days} {booking.days === 1 ? "day" : "days"}
+        {booking.headcount} × {t("work.crewOfferOutcome.dayCount", { count: booking.days })}
       </p>
       {lapsed ? null : (
         <p className="text-sm leading-6 text-text-secondary">
-          {formatMoney(booking.lead_receipt_paise)} to you · paid daily by customer
+          {t("work.crewOfferOutcome.amountToYou", { amount: formatMoney(booking.lead_receipt_paise) })} ·{" "}
+          {t("work.crewOfferState.paidDaily")}
         </p>
       )}
     </Card>
@@ -100,16 +102,18 @@ function AcceptedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer,
  * line, because ADR-0009 makes the decline rate an Operations alarm.
  */
 function DeclinedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer, { kind: "declined" }> }) {
-  const reason = findCrewOfferDeclineReason(answer.reasonCode);
+  const t = useT();
+  const reason = findCrewOfferDeclineReason(answer.reasonCode, t);
 
   return (
     <Card className="flex flex-col gap-2 p-4">
       <Badge tone="neutral" dot>
-        Passed
+        {t("work.crewOfferOutcome.passedBadge")}
       </Badge>
       <p className="text-sm leading-6 text-text-secondary">
-        {crewSizeLine(answer.offer.headcount, answer.offer.days)} — gone to the next lead. Nothing
-        against you.
+        {t("work.crewOfferOutcome.declinedSentence", {
+          crewSize: crewSizeLine(t, answer.offer.headcount, answer.offer.days),
+        })}
       </p>
       {reason ? <p className="text-sm leading-6 text-text-secondary">{reason.consequence}</p> : null}
     </Card>

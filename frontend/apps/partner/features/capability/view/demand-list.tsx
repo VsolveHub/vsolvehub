@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Card, EmptyState, cn } from "@vsolve/ui";
+import { Badge, Card, EmptyState, cn, useT } from "@vsolve/ui";
 import { MapPin } from "lucide-react";
 
 import { AsyncSection, type AsyncState } from "@/components/async-section";
@@ -46,10 +46,11 @@ export interface DemandListProps {
 }
 
 export function DemandList({ state, onRetry, className }: DemandListProps) {
+  const t = useT();
   return (
     <AsyncSection
       state={state}
-      label="Loading work near you"
+      label={t("me.capability.demand.loading")}
       onRetry={onRetry}
       className={className}
       isEmpty={(view) => view.isEmpty}
@@ -59,8 +60,7 @@ export function DemandList({ state, onRetry, className }: DemandListProps) {
         <div className={cn("flex flex-col gap-3", className)}>
           {view.isAllIneligible ? (
             <p className="rounded-card bg-surface-sunken px-4 py-3 text-sm leading-6 text-text-secondary">
-              This is real work being asked for near you. You need approval for these services
-              before you can respond — each card says which.
+              {t("me.capability.demand.ineligibleNotice")}
             </p>
           ) : null}
 
@@ -73,7 +73,7 @@ export function DemandList({ state, onRetry, className }: DemandListProps) {
           </ul>
 
           <p className="text-xs leading-5 text-text-muted">
-            Names, phone numbers and exact addresses stay hidden until a customer invites you.
+            {t("me.capability.demand.privacyNote")}
           </p>
         </div>
       )}
@@ -89,25 +89,27 @@ export function DemandList({ state, onRetry, className }: DemandListProps) {
  */
 function DemandEmpty({ state }: { state: AsyncState<DemandView> }) {
   const matched = state.status === "ready" ? state.data.matchedServiceCount : 0;
+  const t = useT();
 
   if (matched === 0) {
     return (
       <EmptyState
-        title="Nothing matched your services yet"
-        description="You have told us one thing you do and one place you work. Adding another of either widens what reaches you."
+        title={t("me.capability.demand.emptyNoMatchTitle")}
+        description={t("me.capability.demand.emptyNoMatchDescription")}
       />
     );
   }
 
   return (
     <EmptyState
-      title="Nothing in your area right now"
-      description="Work arrives through the day. We will message you when something matches what you do."
+      title={t("me.capability.demand.emptyNoneNearbyTitle")}
+      description={t("me.capability.demand.emptyNoneNearbyDescription")}
     />
   );
 }
 
 function DemandRow({ card }: { card: DemandCard }) {
+  const t = useT();
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -128,10 +130,10 @@ function DemandRow({ card }: { card: DemandCard }) {
           ordinary case, and "Starts Invalid Date" on the first screen a new
           Partner sees would be worse than saying nothing. */}
       {card.startsOn === null ? (
-        <p className="mt-1 text-sm text-text-secondary">No start date given yet</p>
+        <p className="mt-1 text-sm text-text-secondary">{t("me.capability.demand.noStartDate")}</p>
       ) : (
         <p className="mt-1 text-sm text-text-secondary">
-          Starts{" "}
+          {t("me.capability.demand.startsLabel")}{" "}
           <time dateTime={card.startsOn}>
             {new Intl.DateTimeFormat("en-IN", {
               dateStyle: "medium",
@@ -143,11 +145,11 @@ function DemandRow({ card }: { card: DemandCard }) {
 
       {card.isEligible ? (
         <p className="mt-3 text-sm font-medium text-success-text">
-          You can be invited to this.
+          {t("me.capability.demand.eligibleNote")}
         </p>
       ) : (
         <p className="mt-3 rounded-control bg-surface-sunken px-3 py-2 text-sm leading-6 text-text-secondary">
-          {card.hint || "You are not approved for this kind of work yet."}
+          {card.hint || t("me.capability.demand.ineligibleFallbackHint")}
         </p>
       )}
     </Card>

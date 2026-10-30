@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@vsolve/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
@@ -26,10 +27,12 @@ export function PropertyPhotoCarousel({
   label,
   fill = false,
   showThumbs = false,
-  emptyLabel = "No photo",
+  emptyLabel,
   className,
   overlay,
 }: PropertyPhotoCarouselProps) {
+  const t = useT();
+  const emptyText = emptyLabel ?? t("stays.carousel.noPhoto");
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -54,9 +57,9 @@ export function PropertyPhotoCarousel({
           fill ? "size-full min-h-[160px]" : "aspect-[16/10] rounded-card border border-line"
         } ${className ?? ""}`}
         role="img"
-        aria-label={`${label} — ${emptyLabel}`}
+        aria-label={`${label} — ${emptyText}`}
       >
-        {emptyLabel}
+        {emptyText}
         {overlay}
       </div>
     );
@@ -75,7 +78,7 @@ export function PropertyPhotoCarousel({
       }`}
       role="region"
       aria-roledescription="carousel"
-      aria-label={`${label} photos`}
+      aria-label={t("stays.carousel.photosAriaLabel", { label })}
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") {
@@ -95,7 +98,7 @@ export function PropertyPhotoCarousel({
           <button
             type="button"
             onClick={() => go(-1)}
-            aria-label="Previous photo"
+            aria-label={t("stays.carousel.previous")}
             className="absolute left-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full border border-line bg-surface/90 text-navy-900 shadow-xs backdrop-blur-sm transition hover:bg-surface"
           >
             <ChevronLeft className="size-4" aria-hidden />
@@ -103,7 +106,7 @@ export function PropertyPhotoCarousel({
           <button
             type="button"
             onClick={() => go(1)}
-            aria-label="Next photo"
+            aria-label={t("stays.carousel.next")}
             className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full border border-line bg-surface/90 text-navy-900 shadow-xs backdrop-blur-sm transition hover:bg-surface"
           >
             <ChevronRight className="size-4" aria-hidden />
@@ -125,7 +128,7 @@ export function PropertyPhotoCarousel({
   return (
     <div className={`flex flex-col gap-2 ${fill ? "size-full" : ""} ${className ?? ""}`}>
       {stage}
-      <div className="flex gap-2 overflow-x-auto pb-0.5" role="tablist" aria-label="Photo thumbnails">
+      <div className="flex gap-2 overflow-x-auto pb-0.5" role="tablist" aria-label={t("stays.carousel.thumbnails")}>
         {slides.map((slide, i) => {
           const selected = i === safeIndex;
           return (
@@ -134,7 +137,7 @@ export function PropertyPhotoCarousel({
               type="button"
               role="tab"
               aria-selected={selected}
-              aria-label={`Show photo ${i + 1}`}
+              aria-label={t("stays.carousel.showPhoto", { n: i + 1 })}
               onClick={() => setIndex(i)}
               className={`relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-control border transition ${
                 selected

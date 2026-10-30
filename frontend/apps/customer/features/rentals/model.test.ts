@@ -16,3 +16,15 @@ describe("rental mine buckets", () => {
     expect(rentalMineBucket("DISPUTED")).toBe("INACTIVE");
   });
 });
+
+describe("rental tabs ask the server for the same buckets", () => {
+  it("maps every tab status back to its own tab", async () => {
+    const { RENTAL_TAB_STATUSES } = await import("./model");
+    for (const [tab, statuses] of Object.entries(RENTAL_TAB_STATUSES)) {
+      if (tab === "ALL") continue;
+      for (const status of statuses.split(",")) {
+        expect(rentalMineBucket(status)).toBe(tab);
+      }
+    }
+  });
+});

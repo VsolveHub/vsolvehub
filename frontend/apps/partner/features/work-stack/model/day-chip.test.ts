@@ -1,15 +1,21 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { EngagementStage } from "@/features/engagement/queries";
+import { catalogs } from "@/i18n/catalogs";
 
 import {
   collectedDirectlyPaise,
   dayChipDate,
-  describeShiftDay,
-  nextCrewAction,
+  describeShiftDay as describeShiftDayWith,
+  nextCrewAction as nextCrewActionWith,
   settledDayCount,
   type ShiftSummary,
 } from "./day-chip";
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
+const describeShiftDay = (summary: ShiftSummary) => describeShiftDayWith(summary, t);
+const nextCrewAction = (stages: readonly EngagementStage[]) => nextCrewActionWith(stages, t);
 
 /**
  * The day-chip derivation the spec fixes for both apps, from

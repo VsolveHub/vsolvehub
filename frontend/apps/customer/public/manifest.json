@@ -1,0 +1,17 @@
+{
+  "name": "V Solve Hub — Home Services & Stays",
+  "short_name": "V Solve",
+  "description": "Book home services, tool rentals, and stays with verified professionals.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F7",
+  "theme_color": "#00112e",
+  "icons": [
+    {
+      "src": "/logo-mark.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

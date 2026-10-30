@@ -10,29 +10,39 @@ path to a complete application — nobody can submit, nobody can be approved, an
 existed before this, so a fresh database was born in that state.
 """
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from apps.catalog.models import Service, ServiceVariant
 from apps.partners.models import PartnerConsentDocument, Skill
 
-# Non-production text at a reserved `.test` host, deliberately: these stand in
-# for legal documents that Operations publishes, and a seed must never look like
-# the real agreement a receipt would be disputed against.
+# (purpose, title, version, path on the Partner site, placeholder for environments without one).
+# With `PARTNER_LEGAL_BASE_URL` set — production refuses to start without it — the agreement is
+# the real page the Partner site publishes. Without it (local, tests) the URL is a reserved
+# `.test` host, deliberately: a seed must never look like a real agreement a receipt could be
+# disputed against.
 REQUIRED_CONSENT_DOCUMENTS = (
     (
         "partner_terms",
         "Partner terms",
         "2026-07",
+        "/terms",
         "https://legal.vsolvehub.test/partner-terms/2026-07",
     ),
     (
         "privacy_notice",
         "Partner privacy notice",
         "2026-07",
+        "/privacy",
         "https://legal.vsolvehub.test/partner-privacy/2026-07",
     ),
 )
+
+
+def consent_document_url(path: str, placeholder: str) -> str:
+    base = str(getattr(settings, "PARTNER_LEGAL_BASE_URL", "") or "").rstrip("/")
+    return f"{base}{path}" if base else placeholder
 
 
 class Command(BaseCommand):
@@ -90,9 +100,10 @@ class Command(BaseCommand):
         version would invalidate every receipt pointing at it — the one thing the
         consent model exists to keep intact.
         """
-        for purpose, title, version, url in REQUIRED_CONSENT_DOCUMENTS:
+        for purpose, title, version, path, placeholder in REQUIRED_CONSENT_DOCUMENTS:
             if PartnerConsentDocument.objects.filter(purpose=purpose, is_current=True).exists():
                 continue
+            url = consent_document_url(path, placeholder)
             PartnerConsentDocument.objects.update_or_create(
                 purpose=purpose,
                 document_version=version,

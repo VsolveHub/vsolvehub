@@ -1,5 +1,564 @@
 # API Contract Changelog
 
+## 1.89.0 - Operations reports an admin can use without knowing codes
+
+Operations only. The Reports page is the only consumer and is updated with this change.
+
+- **Changed** `GET /ops/reports/` (`OpsReportCatalogItem`): each report adds `group` and
+  `description`. `filters` is now a list of `{key, label, kind, options}`: `kind` is `date`,
+  `choice` (pick one of `options`, each `{value, label, group}`) or `partner` (search
+  `partner-options`). `columns` is now `{key, label, kind, sortable}`.
+- **Changed** `GET /ops/reports/{report_id}/` (`OpsReportPreviewResponse`):
+  - `columns` uses that shape.
+  - `totals` is a list of `{key, label, kind, value}`, computed over every matching row.
+  - It pages with `limit` (default 50, max 200) and `offset`, and takes `q` (search) and
+    `sort` (a sortable column key, `-` for descending).
+  - Rows are ready to read: names instead of ids, a short `reference`, status labels. Money
+    is in paise and dates are ISO 8601.
+  - It adds `export_row_limit`. `filters_applied` is removed.
+- **Fixed**: `date_end` now includes the whole day. It used to stop at midnight, so a one-day
+  range was empty.
+- A `choice` value outside its options, a malformed partner id or date, or an end before the
+  start is `400` (`invalid_filter`, `invalid_date`).
+- **Added** `GET /ops/reports/partner-options/?q=` (or `?id=`): partners by name or phone, as
+  options.
+- **Removed**: the bookings `archetype` filter and column (an internal code). Use the
+  `service` filter instead.
+- **Replaced**: the stays report's `mode` filter. `stays` is now stay reservations, and
+  `stay_enquiries` is new.
+- **Added** the `stay_subscriptions` report. `subscriptions` is job plans.
+- Exports (`.csv`, `.xlsx`, `.pdf`) use the same columns, write money in rupees, and are named
+  after the report and dates. More than 5,000 rows is refused with `400 export_too_large`
+  instead of being cut short.
+
+## 1.88.0 - Operations sees each marketplace service's money
+
+Additive. Operations only.
+
+- `GET /ops/rentals/money`, `GET /ops/stays/money` and `GET /ops/listings/money`
+  (`MoneySummary`): for one service only, the money it earned in `?period=` (`this_month`,
+  the default, `last_month` or `all`; anything else is `400 invalid_period`). It returns:
+  - `model`: how the service earns.
+  - `totals`: labelled cards (`kind` is `money` in paise, `count` or `percent`).
+  - `plans`: per subscription plan, purchases, partners on it now, and net revenue. Empty for
+    rentals.
+  - `listing_counts`: every listing of that service by state, as true totals.
+- `GET /ops/{rentals,stays,listings}/money/payments` (`MoneyPayment[]`, `limit`/`offset`):
+  who paid in the period, newest first.
+- A purchase counts once its payment was captured, at the amount paid then; successful refunds
+  are subtracted. Rentals count only the platform fee (refunds there are usually the returned
+  deposit, so they are listed but not subtracted), and a booking cancelled after payment earns
+  nothing. A stay guest's reservation payment is the host's money and is reported apart from
+  revenue.
+- Removed: none. Renamed: none.
+
+## 1.87.0 - Browse stays and rentals near a place
+
+Additive.
+
+- `GET /stays` and `GET /rentals` take optional `lat` and `lng`: the place the customer searched
+  (or their phone's location). With them, results are only listings within 25 km, nearest first;
+  the default "newest" order is replaced by distance (a stay's price or rating sort still
+  applies). `location` is then the place's name, used only to keep a listing that has no pin
+  yet; those sort last. One without the other, or an out-of-range value, is refused with `400`.
+- `PropertySummary` and `RentalAsset` add `distance_km` (number, one decimal, nullable): km from
+  the searched point. Null when no point was sent and for a listing with no pin. A stay's
+  distance is measured from its area pin, never the host's exact pin.
+- Removed: none. Renamed: none.
+
+## 1.86.0 - The owner can route to a rental delivery
+
+Additive.
+
+- `DeliveryAddressRequest` (inside `POST /rentals/book`) takes optional `latitude` and
+  `longitude` — the customer's saved-address pin. Both or neither (`pin_incomplete`); an
+  out-of-range pin is refused with `delivery_address_invalid`. They are kept on the booking's
+  `delivery_address`.
+- `PartnerRentalBooking` (and `OpsRentalBooking`) add `delivery_directions_url`: a Google Maps
+  route to that pin. Empty for self pickup, and for a delivery address with no pin.
+- Removed: none. Renamed: none.
+
+## 1.85.1 - "No payout account" follows the error envelope
+
+**Partners**
+
+- `GET /partner/payout-account/` now answers a Partner with no bank account with the standard
+  error envelope, code `payout_account_not_found`, as its published `404` always said. It used to
+  send a bare `{"detail": ...}` body, which clients read as a malformed response rather than as
+  "none yet". No shape changes elsewhere.
+
+## 1.85.0 - Partner withdrawals, the lock-free send, entry-level holds
+
+**Partners**
+
+- `GET /partner/withdrawals/preview/` says what tapping Withdraw would do right now:
+  `is_enabled` (false while `PAYOUT_WITHDRAW_ENABLED` is off — draw no button), `can_withdraw`,
+  `refusal_reason` + `refusal_message`, `amount_paise` (the whole available balance), `fee_paise`,
+  `send_paise`, `needs_review` + `review_reasons`, the limits, and `account_payable_from` while a
+  new bank account is cooling. Built by the same rules as the request.
+- `POST /partner/withdrawals/` (no body, `Idempotency-Key` required, rate-limited) withdraws the
+  whole available balance. `409 withdrawal_refused` carries `details.reason`, one of
+  `withdrawals_disabled`, `payouts_paused`, `partner_suspended`, `no_payout_account`,
+  `account_under_review`, `account_rejected`, `account_cooling`, `withdrawal_in_progress`,
+  `daily_limit_reached`, `below_minimum`, `extra_withdrawals_unavailable`, and a message written
+  for the Partner.
+- `GET /partner/withdrawals/` lists them, newest first. `status` is `REQUESTED`, `SENT`, `PAID` or
+  `FAILED` (money back in the balance, with `failure_message`); `is_awaiting_review`,
+  `balance_paise`, `fee_paise`, `amount_paise`, `utr`.
+- `LedgerEntryKindEnum` adds `FEE`: the cost of an extra withdrawal, a negative line of that
+  withdrawal. A failed, declined or reversed withdrawal gives it back as an `ADJUSTMENT`.
+
+**Operations**
+
+- `GET /operations/withdrawals/?status=` — `PENDING_APPROVAL` (default, oldest first) is the
+  queue: the first payout to a bank account (`first_payout_to_account`) and balances above the
+  maximum (`over_maximum`). `POST …/{batch_id}/approve/` (step-up) sends it;
+  `POST …/{batch_id}/decline/` (with a `reason` the Partner reads) returns the money.
+- `PayoutBatch` and its list row add `kind` (`RUN` or `WITHDRAWAL`) and `approval_basis`
+  (`OPERATIONS` or `POLICY`). `GET /operations/payout-batches/` takes `kind`. The run commands
+  (approve, pay, cancel) refuse a withdrawal.
+- `PayoutBatchItem.status` adds `SUBMITTING`: claimed for sending, the provider call in progress
+  with no database lock held. One left there over 10 minutes is looked up by reference, never
+  re-sent. A transfer is also released unsent with `withdrawals_disabled` when withdrawals were
+  switched off before it left.
+
+**Behind the contract**
+
+- An Operations case on an M2 engagement now also holds each of its unpaid entries explicitly,
+  reserved ones included, so a transfer already carrying one is stopped at the moment of sending.
+  Every case lifts only its own holds when it resolves.
+
+## 1.84.0 - Payout money correctness: one transfer per Partner, clearing, explicit holds
+
+**Partners**
+
+- `GET /partner/earnings/` adds `clearing_paise` (earned, waiting out the Customer's 72-hour
+  dispute window), `held_paise` (frozen by a dispute or an Operations case) and
+  `withdrawable_paise` (`available_paise`, never below zero). `pending_paise` is now
+  `held_paise + clearing_paise`, and `available_paise` is what can actually be paid now: cleared,
+  not on hold, with refunds already subtracted. It can be negative when refunds exceed what has
+  cleared. Every unpaid rupee is in exactly one of available, clearing, held or reserved.
+- `PartnerLedgerEntry` adds `clears_at` (not payable before this instant; null for lines that
+  count at once, such as corrections and refunds) and `is_on_hold`.
+
+**Operations**
+
+- A payout batch now holds **one transfer per Partner**, covering every cleared, unheld earning
+  in the period plus every unpaid refund. `PayoutBatchItem.ledger_entry_id` is removed;
+  `entry_count` says how many ledger lines a transfer covers. A Partner whose total is below the
+  minimum (₹1), or negative, is carried to a later run.
+- `PayoutBatchItem` adds RazorpayX tracking data: `provider_status`, `utr`, `mode`, `fees_paise`,
+  `tax_paise` and `status_reason`. They never change the decided `status`.
+- `PayoutBatchItem.status` adds `REVERSED`: paid, then returned by the bank. The money is back in
+  the Partner's balance exactly once. `FAILED`, `REVERSED` and `RELEASED` are final; a late
+  `processed` after any of them changes nothing.
+- A transfer is re-checked just before it is sent. It is released unsent (`RELEASED`) with
+  `failure_code` `payouts_paused`, `partner_suspended`, `account_not_payable` or
+  `earning_on_hold` when the case applies.
+- A payout whose submission got no clear answer is looked up at RazorpayX by its reference,
+  never sent again. Still unknown 24 hours later, it is `FAILED` with `provider_never_received`
+  and its money returns to the pool.
+
+**Payout webhooks**
+
+- `POST /payout-webhooks/razorpayx/` reads `X-Razorpay-Event-Id`. A redelivery with an id
+  already recorded changes nothing (`applied: false`). `payout.updated` and in-flight statuses
+  update tracking data only.
+
+**Behind the contract**
+
+- Disputes and cases freeze money with an explicit `PartnerEarningHold` on the booking: a
+  completion dispute, a quality dispute (which previously froze nothing once the earning was
+  available), a payout-holding Operations case, and a rental deposit dispute. Each cause lifts
+  only its own hold; the money stays frozen until the last one is decided.
+- A rental deposit dispute no longer flips an already-paid earning back to `PENDING`, which let
+  the dispute's decision make paid money payable a second time.
+- New settings: `PAYOUT_CLEARING_HOURS` (default 72; production refuses less than the quality
+  dispute window) and `PAYOUT_MINIMUM_PAISE` (default 100, RazorpayX's minimum).
+
+## 1.83.0 - Payout account holder name follows RazorpayX's contact-name rules
+
+**Partners**
+
+- `POST /partner/payout-account/`: `holder_name` is now 3 to 50 characters (was 2 to 140) of
+  letters, numbers, spaces and `’ - _ / ( ) .`, ending in a letter, number or full stop. The name
+  becomes the RazorpayX contact name, and RazorpayX refuses anything else with an error the Partner
+  could only read as "details not accepted"; it is now a `400` on `holder_name` that says what to
+  change. A straight or left apostrophe is stored as `’`, and runs of spaces collapse to one.
+
+**Behind the contract (no shape change)**
+
+- RazorpayX payout requests now fit RazorpayX's limits: `X-Payout-Idempotency` is a 36-character
+  key (it was 80 characters with colons, which RazorpayX refuses), and `reference_id` is the item
+  id as 32 hex characters (it was `<batch reference>:<item id>`, over RazorpayX's 40). The batch
+  reference moves to the payout's `notes`, and `narration` is `VSolveHub payout`.
+- A refused payout records RazorpayX's reason in `PayoutBatchItem.failure_code`, for example
+  `input_validation_failed-fund_account_id` instead of `provider_rejected`.
+- `PAYOUT_ACCOUNT_COOLING_HOURS` (default 24; production refuses less) replaces the hard-coded
+  24-hour cooling period on new and changed payout accounts. Non-production settings refuse
+  `rzp_live_` RazorpayX keys.
+
+## 1.82.0 - Booked-visit time gates, address disclosure, start code, late-capture refunds
+
+**Partners — booked visits (`/partner/bookings/…`)**
+
+- `POST …/en-route/` and `…/arrived/` are now gated by the server clock, measured from
+  `scheduled_start`. On the way opens 60 minutes before the start; arrived opens 30 minutes
+  before. Both close at the scheduled end (the later of the job's duration and the promised arrival
+  window) plus 30 minutes. Outside the window the command returns `409` with
+  `booking_action_not_yet_allowed` (retryable — the same `Idempotency-Key` runs fresh once it
+  opens) or `booking_action_window_closed` (not retryable). `details` carries `action`,
+  `opens_at`, `closes_at` and `server_now`.
+- `PartnerBooking` adds `gates` (`PartnerBookingGates`: `address_unlocks_at`,
+  `en_route_opens_at`, `en_route_closes_at`, `arrival_opens_at`, `arrival_closes_at`) and
+  `allowed_actions` (`AllowedActionsEnum`) — what the commands would accept right now.
+- `PartnerBooking` adds `site_address` (`PartnerSiteAddress`, the M2 visit's shape),
+  `directions_url` (Google Maps route), `customer_first_name` and `customer_phone`. All four are
+  `null` until 120 minutes before the start, and `null` again once the visit is no longer live
+  (submitted, settled, cancelled, released).
+- `approximate_area` is now the Customer's locality, not the service area's name.
+
+**Customers**
+
+- `CustomerBooking.partner_phone`: the assigned Partner's number, inside the same window.
+- `POST /bookings/{booking_id}/start-otp/` returns the start code in the new `code` field to the
+  Booking's own Customer. Job start no longer depends on an SMS arriving; the SMS is a courtesy
+  copy. Inside the resend cooldown the still-live code is returned again instead of `429`.
+  `development_code` keeps its old meaning (populated only where development codes are enabled).
+- The after-arrival cancellation band (₹149) now applies only after an arrival inside the arrival
+  window **and** the Customer-unavailable wait **and** one contact attempt at each configured offset
+  (0 and 5 minutes). Otherwise the ordinary time band applies.
+- `POST /booking-groups/{group_id}/cancel/` expires any payment attempt still open on the group and
+  releases its wallet and coin funding.
+
+**Operations**
+
+- `OperationsBooking` adds `site_address`, `customer_name`, `customer_phone` and
+  `partner_phone`, without the Partner's time gate.
+
+**Payments (no shape change)**
+
+- A capture on a booking group that is no longer `PAYMENT_PENDING` (cancelled, expired) is refunded
+  in full (`reason_code: capture_after_terminal`) with an open `FinancialException`, instead of
+  re-booking released Partners.
+- `payment.authorized` on a booking payment is now captured through the Razorpay API while the group
+  is payable; otherwise the authorization is left uncaptured for the gateway to release, the attempt
+  is `EXPIRED` (`authorized_after_terminal`) and a `FinancialException`
+  (`authorized_not_captured`) is opened.
+
+- Removed: none. Renamed: none.
+
+## 1.81.0 - Partner review: decline, release, notices; active partners only
+
+**Operations**
+
+- `PartnerApplicationStatusEnum` adds `DECLINED`: final, set by the assigned reviewer from
+  `UNDER_REVIEW` with a required `reason` (`POST /operations/partner-applications/{id}/transition/`,
+  `target_status: "DECLINED"`). A declined application cannot be edited or resubmitted. The reason
+  is kept on the transition; the applicant is told only that it was not approved.
+- `POST /operations/partner-applications/{application_id}/release/` (`{expected_version}`): any
+  Operations user hands a claimed application back to the queue — `UNDER_REVIEW` returns to
+  `SUBMITTED` with no reviewer, so anyone can claim it. `409` when nobody holds it or it is not
+  waiting for review.
+
+**Partners**
+
+- Every decision — approved, changes required, declined, suspended, offboarded, reinstated —
+  writes an in-app notice to the Partner (`partner_application_*` / `partner_account_*`
+  templates). Only the change request includes Operations' words.
+- A Partner approved on the **Rent out items** track can now post rental ads; approval is the
+  permission, as it already was for stays and jobs.
+
+**Suspension now reaches every listing.** Rentals, stays and jobs from a Partner whose application
+is not `APPROVED` (suspended, offboarded) disappear from `GET /rentals`, `/stays`, `/listings` and
+their detail pages, and booking, enquiring, reserving or applying is refused. The Partner cannot
+create new ads, properties or job posts either. Reinstating brings all of it back.
+
+- Removed: none. Renamed: none.
+
+## 1.80.0 - Rental lists page again
+
+**BREAKING for the rental lists below.** 1.71.0 paginated them; a later change returned them
+to unbounded arrays. They page again in the shared envelope `{next, previous, results}`: newest
+first, follow `next` (`?cursor=`) until it is `null`, 20 per page (50 for Operations). A blank or
+stale `cursor` → `400 cursor_invalid`.
+
+| Endpoint | Page component | Filters |
+|---|---|---|
+| `GET /me/rentals` | `RentalBookingPage` | `status` (one or comma list; unknown → 400) |
+| `GET /partner/rentals/bookings` | `PartnerRentalBookingPage` | `status` (one or comma list; unknown → 400) |
+| `GET /ops/rentals` | `RentalAssetPage` | `moderation_status` (one or comma list; unknown → 400) |
+| `GET /ops/rentals/bookings` | `OpsRentalBookingPage` | `status` (one or comma list), `q` — **restored**; it had been removed while the admin screen still called it |
+
+`GET /rentals` (public browse) stays an array and is bounded again like `/stays` and `/listings`:
+`limit` (default 24, max 60) and `offset`, newest first. A full page means there may be more.
+
+## 1.79.0 - Safety stories and promo banners
+
+Additive.
+
+- `GET /safety-stories/` (`PublicSafetyStory`): active, published safety stories for customers.
+- `GET, POST /ops/stories/` and `GET, PATCH, DELETE /ops/stories/{story_id}/` (`OpsSafetyStory`,
+  `OpsSafetyStoryCreateRequest`, `PatchedOpsSafetyStoryUpdateRequest`): Operations endpoints for
+  managing safety stories.
+- `GET /promo-banners/` (`PromoBanner`): display-only promotional banners filtered by `?category=`.
+- Removed: none. Renamed: none.
+
+## 1.78.0 - Contact form, published cancellation policy, honest receipts
+
+Additive.
+
+- `POST /support/contact/` (`ContactMessageRequest`, public, `5/hour` per client):
+  `{name, phone_number?, email?, topic, message}`, where `topic` is `booking | payment | partner |
+  feedback | other` and at least one of phone or email is required. Opens an Operations case of the
+  new kind `CONTACT` (owned by Booking support) and answers `201 {reference}`, e.g. `C-1A2B3C4D`.
+  A signed-in sender is recorded on the case.
+- `OperationsCase.kind` gains `CONTACT`, the one kind with **no subject** (every subject id is
+  `null`); it resolves as `ANSWERED`, `DUPLICATE` or `SPAM`. Every other kind still has exactly one
+  subject.
+- `GET /legal/cancellation-policy/` (`PublishedCancellationPolicy`, public): the cancellation ladder
+  new bookings get today, `{code, version, effective_from, bands[{code, condition_text, fee}],
+  reschedule_free_notice_hours, quality_dispute_window_hours}`. `404` when none is published.
+- `GET /legal/sample-receipt/` (public): the booking receipt PDF filled with invented values and
+  watermarked SAMPLE, served inline.
+- `TaxDocument` adds `title`: `"Payment receipt"` until the issuer's GSTIN is configured, then
+  `"Tax invoice"`; `"Credit note"` for a credit note. The downloaded PDF uses the same title and,
+  without a GSTIN, no longer itemises tax or prints a placeholder address.
+- Removed: none. Renamed: none.
+
+## 1.77.0 - Operations sign in with Firebase
+
+Additive. Operations can sign in and confirm money-moving actions with Firebase phone
+verification, so the console no longer depends on Django's own OTP provider (MSG91).
+
+- `POST /auth/firebase/precheck/` and `POST /auth/firebase/verify/` now accept
+  `intended_role: "operations"`. It behaves like `"partner"`: a number with no active
+  Operations grant gets `404 no_account_for_role`. Nobody gains Operations by signing in;
+  grants are still made on the server. (Before this release `"operations"` was refused with
+  `400 invalid_otp`.)
+- `POST /auth/firebase/step-up/` (`FirebaseStepUp`): `{id_token}` from a phone verification
+  just completed for the signed-in person's own number. Stamps the session's
+  `stepped_up_at` exactly like `POST /auth/finance/step-up/` and returns `StepUpSession`.
+  Errors: `400 invalid_otp` (invalid, stale or already-used token), `403` (the verified
+  number is not the signed-in person's), `404` (Firebase auth disabled), `429`.
+- Removed: none. Renamed: none.
+
+## 1.76.0 - Partner bank accounts and payout webhooks
+
+Additive. Partners can now add the bank account they are paid into, and Operations reviews it
+before any money can be sent there.
+
+- `POST /partner/payout-account/` (`PartnerPayoutAccountCreate`):
+  `{holder_name, account_number, confirm_account_number, ifsc}`. Registers the account with the
+  payout provider and returns `PartnerPayoutAccount` with `status: PENDING`. The full account
+  number is write-only; only `account_last4` is ever returned. A new submission replaces the
+  previous account (`REPLACED`) and restarts the 24-hour cooling period. Errors: `400` field
+  errors or `payout_account_rejected`, `429` (10 per hour), `503 payout_accounts_unavailable`
+  (no provider configured) or `payout_account_provider_unavailable` (retryable; nothing saved).
+- `PartnerPayoutAccount` adds `rejection_reason` (empty unless `REJECTED`).
+- `GET /operations/payout-accounts/?status=` (`OperationsPayoutAccountPage`), default `PENDING`.
+  Items carry the Partner's name and phone, the masked account, and
+  `is_registered_with_provider`.
+- `POST /operations/payout-accounts/{account_id}/verify/` and `.../reject/` (`{reason}`). Both
+  need an Operations step-up (`401`/`403` without one). The person who registered an account
+  cannot review it (`403 payout_account_self_review`); a decided account → `409
+  payout_account_review_invalid`. A verified account is payable once `effective_from` passes.
+- `POST /payout-webhooks/razorpayx/`: RazorpayX `payout.*` events, signed with
+  `X-Razorpay-Signature`. Unsigned or forged → `400`. Responds `{accepted, applied}`.
+
+## 1.75.0 - Closed dates for rental pickups
+
+Additive.
+
+- `PickupHours` adds `closed_dates`: the owner's upcoming dates with no pickups or returns, whatever
+  the weekly hours say (holidays). Past dates are never listed.
+- `PickupHoursUpdateRequest` (`PUT /partner/rentals/pickup-hours`) takes optional `closed_dates`
+  (up to 366). Sent, it replaces the list; past dates in it are dropped. Left out, the existing
+  closed dates are kept.
+- A booking whose pickup or return day is a closed date is refused with `pickup_date_closed` /
+  `return_date_closed`, alongside the existing closed-weekday codes. An item can still be out with
+  the customer across a closed date.
+- Removed: none. Renamed: none.
+
+## 1.74.1 - Approving with no reason
+
+Fix. `OperationsTransitionRequest.reason` now defaults to `""`. Leaving it out of
+`POST /operations/partner-applications/{application_id}/transition/` used to fail with a `500` on
+every decision that does not need a reason (Approve, Start review); it now means "no reason".
+Decisions that require one still refuse a blank reason with `409 partner_transition_not_allowed`.
+
+## 1.74.0 - Directions to the Customer's pin
+
+Additive. Proposal 0028 (B4).
+
+- `PartnerSiteAddress` (enquiry invitations) and `EngagementSiteAddress` add `directions_url`: a
+  Google Maps route to the Customer's pinned address, under the same disclosure gate as the
+  address text. Empty when the address has no pin. The pin is not exposed as separate
+  coordinates.
+- Removed: none. Renamed: none.
+
+## 1.73.0 - Map pins for rental pickup and stay properties
+
+Additive. Proposal 0028 (B1–B3).
+
+- **Rental pickup pin.** `CreateAssetRequest` and `PatchedUpdateAssetRequest` (`POST` / `PATCH`
+  of partner rental assets) take `pickup_latitude` and `pickup_longitude` (six-decimal strings,
+  nullable). Send both or neither: one alone → `400` with `pin_incomplete` on `pickup_latitude`.
+  Two nulls clear the pin; omitting both in a `PATCH` keeps it, including when the address text
+  changes.
+- `RentalAsset` (and every serializer built on it) adds read-only `pickup_latitude` /
+  `pickup_longitude`. `PickupAddress` adds `latitude` / `longitude` (nullable), and its `maps_url`
+  now opens the exact pin when there is one; without a pin it is the address search it was.
+- **Stay property pin.** `CreatePropertyRequest` and `PatchedUpdatePropertyRequest` take
+  `latitude` and `longitude` with the same both-or-neither rule. `PartnerProperty` (the
+  host's own view) returns the exact pin. Guests never see it: `Property` adds read-only
+  `area_latitude` / `area_longitude`, the pin rounded to two decimals (about 1 km), `null` when
+  the host has not pinned the property.
+- **Reverse geocoding** (`POST /geocoding/reverse/`) now answers from Google. The response shape
+  is unchanged; `provider` reads `google`.
+- Removed: none. Renamed: none.
+
+## 1.72.0 - Referral rewards on their way
+
+Additive. Customers can see what a referral will pay and when, before it lands.
+
+- `ReferralAttribution` adds `reward_wallet_paise`, `reward_coins` (nullable) and
+  `reward_is_estimate`. Paid referrals show what was paid; pending and booked ones show what is
+  expected at the tier they are likely to be paid in (`reward_is_estimate: true`). `null` for not
+  eligible and reversed referrals.
+- `CustomerReferralSummary` adds `waiting_booking_count` (joined, no completed booking yet),
+  `reward_on_the_way_count`, `on_the_way_paise`, `on_the_way_coins` (booked, reward held),
+  `reward_hold_days`, and `welcome_reward` (`WelcomeReward`, nullable): the signed-in customer's
+  own reward for joining with a code — `{status, wallet_paise, coins, reward_available_at}` —
+  until it is paid.
+- Payout amounts are unchanged; payouts and these figures now share one calculation.
+- Removed: none. Renamed: none.
+
+## 1.71.0 - Cancellation rules; pagination
+
+**Cancellations.**
+
+- `POST /ops/rentals/bookings/{booking_id}/cancel` now **requires** a body `{reason}` (max 480).
+  A missing or blank reason → `400`.
+- `RentalBooking` (and `OpsRentalBooking`, `PartnerRentalBooking`) add `cancelled_at` and
+  `cancellation_reason`, stamped on every cancel. Customer and partner cancels may leave the
+  reason blank.
+- `POST /ops/stays/reservations/{reservation_id}/cancel` refuses a reservation that is
+  `CHECKED_IN`, `CHECKED_OUT` or `NO_SHOW` (state error). Only `HELD`, `PAYMENT_PENDING` and
+  `CONFIRMED` can be cancelled with a full refund; an already `CANCELLED` one is returned as is.
+
+**Pagination — BREAKING for the lists below.** Lists that grow with use now return one page at a
+time in the envelope the older lists already use: `{next, previous, results}`. Follow `next` (an
+absolute URL carrying `?cursor=`) until it is `null`. Newest first; 20 per page for customers and
+partners, 50 for Operations. A blank or stale `cursor` → `400 cursor_invalid`.
+
+| Endpoint | Page component | New filters |
+|---|---|---|
+| `GET /customer/wallet/transactions/` | `WalletTransactionPage` | — (was limit/offset at runtime while the contract said array) |
+| `GET /customer/coins/transactions/` | `CoinTransactionPage` | — |
+| `GET /customer/referral/attributions/` | `ReferralAttributionPage` | — (was capped at 100) |
+| `GET /me/rentals` | `RentalBookingPage` | `status` (comma list) |
+| `GET /me/stay-reservations` | `StayReservationPage` | — |
+| `GET /me/stay-enquiries` | `StayEnquiryPage` | — |
+| `GET /me/stay-visits` | `StayVisitPage` | — |
+| `GET /my/listing-applications` | `ApplicationPage` | `status`, `listing` |
+| `GET /partner/rentals/bookings` | `PartnerRentalBookingPage` | `status` (comma list; unknown → 400) |
+| `GET /partner/stays/reservations` | `PartnerStayReservationPage` | `status` (comma list) |
+| `GET /partner/stays/enquiries` | `PartnerStayEnquiryPage` | `status` (comma list) |
+| `GET /partner/stays/visits` | `PartnerStayVisitPage` | `status` (comma list); ordered by visit date |
+| `GET /partner/listings/{listing_id}/applications` | `PartnerApplicationPage` | `status` |
+| `GET /ops/rentals` | `RentalAssetPage` | `moderation_status` |
+| `GET /ops/rentals/bookings` | `OpsRentalBookingPage` | `status` (comma list), `q` (was capped at 200) |
+| `GET /ops/stays` | `PropertyPage` | `moderation_status` |
+| `GET /ops/stays/reservations` | `OpsStayReservationPage` | `status`, `q` |
+| `GET /ops/stays/enquiries` | `OpsStayEnquiryPage` | — |
+| `GET /ops/listings` | `OpsListingPage` | `moderation_status`, `status` (comma list), `q` |
+| `GET /ops/referral/attributions/` | `OpsReferralAttributionPage` | — (was capped at 200) |
+
+`status` accepts one state or several separated by commas where noted.
+
+**Public browse stays an array**, now bounded: `GET /rentals`, `GET /listings` and `GET /stays`
+take `limit` (default 24, max 60) and `offset`. A full page means there may be more. `/stays`
+used to return every row when `limit` was omitted.
+
+Indexes on `created_at` for rental bookings, stay reservations, stay enquiries and job
+applications (migrations `rental 0019`, `stay 0023`, `listings 0017`).
+
+- Removed: none. Renamed: none.
+
+## 1.70.0 - Operations: rental booking list, case source
+
+Additive, Operations only.
+
+- New `GET /ops/rentals/bookings` (`?status=` one `RentalBooking.Status`, unknown value → 400):
+  newest 200 bookings as `OpsRentalBooking` — every `RentalBooking` field plus
+  `customer_name`, `customer_phone`, `partner_id`, `partner_name`. `handover_pin` is always
+  `null` here. Gives Operations the delivery requests, payments and cancellations it could not see.
+- `OperationsCase` adds `source_kind` and `source_id` (both nullable): the row that opened an M2
+  case, e.g. `engagement_stage` or `safety_incident`. The console uses them to decide the disputed
+  stage or the safety report from the case. `null` for cases opened by hand or by M1.
+- `OperationsPartnerDetail` adds `business_profile` (`PartnerBusinessProfile`, nullable): the
+  legal name, GSTIN and verification time Operations checks before
+  `POST /operations/partners/{partner_id}/tax-profile/verify/`.
+- `OperationsBooking` adds `replacement_offer_id` (nullable): the committed replacement offer
+  `POST /operations/bookings/{booking_id}/recover/` adopts. Set only while the Booking is
+  `RECOVERY_REQUIRED` and a replacement Partner has committed.
+- New `GET /operations/commercial-policies/` (`m2_operations_commercial_policy_list`): every
+  `CommercialPolicy` version, newest first (at most 50). Read-only; activation is unchanged.
+- New `GET /operations/engagements/{engagement_id}/project/` (`m2_operations_project_read`): the
+  same `ProjectPlan` the parties read, for Operations, so it can price a transfer or end a project.
+- `RequestTimeline` adds `engagement_id` (nullable): the request's engagement once booked.
+- Removed: none. Renamed: none.
+
+## 1.69.0 - Stay room looks; job skills accumulate
+
+**Stays: looks.** A room type can now hold rooms that look different. `RoomLook` is a named photo
+set inside a type; every room belongs to one. Guests see one card per look.
+
+- `Unit` (public and partner) adds `looks[]`: `{id, name, display_name, display_order, media[],
+  available_count, room_count}`. No room numbers. `media` still lists every photo of the type.
+- `Room` (partner) adds `look`.
+- New partner endpoints: `POST /partner/stays/units/{unit_id}/looks` (name required),
+  `PATCH`/`DELETE /partner/stays/looks/{look_id}`, `POST /partner/stays/looks/{look_id}/media`.
+- `POST /partner/stays/units/{unit_id}/rooms` accepts `look_id`, or `new_look {name, image_urls}`.
+  `PATCH /partner/stays/rooms/{room_id}` accepts `look_id` to move a room.
+- `POST /stays/enquire` and `POST /stays/visits` accept `look_id`. Enquiries and visits add
+  `look`, and their `unit_name` reads "1 BHK · With balcony" when a named look was chosen.
+- Errors: `look_name_required`, `look_name_taken`, `look_mismatch`, `look_has_rooms`,
+  `last_look_of_type`.
+
+**Jobs: skills accumulate.** Applying never replaces a seeker's skills; each application's
+skills and job title are added. `JobSeekerProfile` adds read-only `skill_groups[]`
+(`{category, role, skills[], added_at}`), for the seeker only. `POST /listings/{listing_id}/quick-apply`
+accepts `skills` (the job's skills the seeker ticked). Caps rise to 60 skills and 10 roles.
+
+- Removed: none. Renamed: none.
+
+## 1.68.0 - Rentals: self pickup address and hours, partner-arranged delivery
+
+A rental is now received one of two ways, chosen at booking.
+
+**Self pickup.** `RentalAsset` carries the pickup address as text (`pickup_address_line`,
+`pickup_area`, `pickup_city`, `pickup_pincode`) and a server-built `pickup_address` object whose
+`maps_url` is a Google Maps search for that address. The item page (`GET /rentals/{key}`, now
+`RentalAssetDetail`) and every booking carry `pickup_hours`: the owner's open weekdays and hours
+(`days[]` Monday first, `is_set`, `summary`). Owners read and replace their hours with
+`GET`/`PUT /partner/rentals/pickup-hours`. A booking whose pickup or return day falls on a closed
+day is refused (`pickup_day_closed`, `return_day_closed`).
+
+**Partner-arranged delivery.** `POST /rentals/book` accepts `pickup_or_delivery_mode: DELIVERY`
+with `delivery_address` and `delivery_note` on items whose `delivery_available` is true. Nothing
+is charged: the booking is `AWAITING_TRANSPORT_QUOTE` and carries a `transport` object. The owner
+answers with `POST /partner/rentals/bookings/{id}/transport/{quote|decline|out-for-delivery}`; the
+customer with `POST /me/rentals/{id}/transport/{accept|reject|switch-to-pickup}`. `accept` starts
+one payment for rent, platform fee, deposit and transport (`amount_due_paise`). The booking
+snapshots `transport_paise`, `transport_fee_percent` and `transport_fee_paise`;
+`GET /rentals/platform-fee` adds `transport_fee_percent` (0).
+
+- Renamed: the booking status enum `StatusD8aEnum` is now `RentalBookingStatusEnum` (it gained
+  `AWAITING_TRANSPORT_QUOTE`, which changed its generated name). No app referenced it by name.
+- Removed: none. `pickup_or_delivery_mode` was a free string that the server always forced to
+  `PICKUP`; it is now the `RentalBookingModeEnum` choice and `DELIVERY` is honoured.
 ## 1.67.0 - Native apps sign in with a bearer session
 
 The phone apps use the same Django session as the web, carried as `Authorization: Bearer`
@@ -15,6 +574,8 @@ instead of a cookie. Four endpoints publish that:
   and where to get the store update.
 
 - Removed: none.
+
+
 
 ## 1.66.0 - A requested price reduction becomes an overall estimate discount
 

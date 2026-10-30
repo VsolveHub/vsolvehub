@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { InlineQuantityControl } from "./inline-quantity-control";
 
 function Harness({ initialValue = 0 }: { readonly initialValue?: number }) {
@@ -19,7 +21,7 @@ function Harness({ initialValue = 0 }: { readonly initialValue?: number }) {
 
 describe("InlineQuantityControl", () => {
   it("lets a partner type a large quantity directly", () => {
-    render(<Harness />);
+    render(withI18n(<Harness />));
     const input = screen.getByRole("spinbutton", {
       name: "Quantity for Walkway with stands — type a number",
     });
@@ -33,7 +35,7 @@ describe("InlineQuantityControl", () => {
   });
 
   it("keeps the step buttons for quick corrections", () => {
-    render(<Harness initialValue={40} />);
+    render(withI18n(<Harness initialValue={40} />));
 
     fireEvent.click(screen.getByRole("button", { name: "One fewer Walkway with stands" }));
     expect(screen.getByRole("spinbutton")).toHaveValue("39");
@@ -43,7 +45,7 @@ describe("InlineQuantityControl", () => {
   });
 
   it("rejects non-digits and restores an unfinished empty edit", () => {
-    render(<Harness initialValue={20} />);
+    render(withI18n(<Harness initialValue={20} />));
     const input = screen.getByRole("spinbutton");
 
     fireEvent.focus(input);
@@ -59,13 +61,15 @@ describe("InlineQuantityControl", () => {
   it("sends an explicit zero so the existing draft rule can remove the item", () => {
     const onChange = vi.fn<(value: number) => void>();
     render(
-      <InlineQuantityControl
-        label="Quantity for Walkway with stands"
-        value={40}
-        onChange={onChange}
-        decrementLabel="One fewer Walkway with stands"
-        incrementLabel="One more Walkway with stands"
-      />,
+      withI18n(
+        <InlineQuantityControl
+          label="Quantity for Walkway with stands"
+          value={40}
+          onChange={onChange}
+          decrementLabel="One fewer Walkway with stands"
+          incrementLabel="One more Walkway with stands"
+        />,
+      ),
     );
 
     fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "0" } });

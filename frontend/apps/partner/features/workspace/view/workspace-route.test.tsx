@@ -3,6 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 /**
  * The workspaces read, wired to a real endpoint at last.
  *
@@ -38,7 +40,7 @@ function grantsPayload(...rows: { workspace_key: string; actions: string[] }[]) 
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 }
 
 function renderRoute(workspaceKey: string, actions?: string[]) {

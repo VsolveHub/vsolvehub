@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, buttonStyles, ErrorState, Skeleton, useT, type Translator } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -75,6 +75,32 @@ export function useApplicationEditor(): ApplicationEditorRenderProps {
   return value;
 }
 
+/**
+ * A save Django refused for a reason the applicant can act on, in words.
+ *
+ * Its own copy rather than the envelope message: that one names catalogue
+ * codes ("cctv-technician") the applicant has never seen.
+ */
+function describeRefusal(
+  error: unknown,
+  t: Translator["t"],
+): { title: string; message: string } | null {
+  if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "partner_application_incomplete") {
+    return {
+      title: t("apply.editor.refusal.incomplete.title"),
+      message: t("apply.editor.refusal.incomplete.message"),
+    };
+  }
+  if (error.code === "partner_transition_not_allowed") {
+    return {
+      title: t("apply.editor.refusal.notAllowed.title"),
+      message: t("apply.editor.refusal.notAllowed.message"),
+    };
+  }
+  return null;
+}
+
 const ProceedDisabledSetterContext = createContext<((disabled: boolean) => void) | null>(
   null,
 );
@@ -112,12 +138,16 @@ export interface ApplicationEditorProps {
 }
 
 export function ApplicationEditor(props: ApplicationEditorProps) {
+  const t = useT();
   const query = usePartnerApplication();
 
   // A 404 is "you have not started yet", which is a state, not a failure.
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
+  // A refetch of a 404 is `isPending` again (there is no data to keep), and
+  // showing the skeleton then would unmount `Editor` and drop the draft.
+  const hasAnswered = query.dataUpdatedAt > 0 || query.errorUpdatedAt > 0;
 
-  if (query.isPending) {
+  if (query.isPending && !hasAnswered) {
     /*
       The shape of the step, not a spinner on an empty page.
 
@@ -127,7 +157,7 @@ export function ApplicationEditor(props: ApplicationEditorProps) {
       applicant has no reason yet to trust that it works.
     */
     return (
-      <div role="status" aria-label="Loading your application" className="flex flex-col gap-4">
+      <div role="status" aria-label={t("apply.editor.loadingAriaLabel")} className="flex flex-col gap-4">
         <div aria-hidden className="flex flex-col gap-2">
           <Skeleton className="h-7 w-2/3" />
           <Skeleton className="h-4 w-full" />
@@ -144,9 +174,9 @@ export function ApplicationEditor(props: ApplicationEditorProps) {
   if (query.isError && !isMissing) {
     return (
       <ErrorState
-        title="We could not load your application"
-        message="Nothing you have saved is lost. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.editor.loadError.title")}
+        message={t("apply.editor.loadError.message")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void query.refetch()}
       />
     );
@@ -180,6 +210,7 @@ function Editor({
   proceedDisabled = false,
   children,
 }: ApplicationEditorProps & { application: Application | null }) {
+  const t = useT();
   const [draft, setDraft] = useState(() => draftFromApplication(application));
   const [childProceedDisabled, setChildProceedDisabled] = useState(false);
   const save = useUpdateApplication();
@@ -193,8 +224,13 @@ function Editor({
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
 
+  // A domain refusal (incomplete, not allowed now) arrives with `details` of
+  // `{message, code}`, which `fieldErrors` would print as two "fields":
+  // "message: Select the required skills for: cctv-technician." and
+  // "code: partner_application_incomplete". It is one sentence, not field errors.
+  const refusal = describeRefusal(save.error, t);
   const fieldErrors =
-    save.error instanceof ApiRequestError ? save.error.fieldErrors : {};
+    save.error instanceof ApiRequestError && refusal === null ? save.error.fieldErrors : {};
   const fieldMessages = Object.entries(fieldErrors).flatMap(([field, messages]) =>
     messages.map((message) => `${field}: ${message}`),
   );
@@ -232,8 +268,8 @@ function Editor({
     act on. So a clean step navigates without spending a request, and a dirty one
     saves first and moves on success. The label says which is about to happen.
   */
-  const nextStepName = following ? following.label : null;
-  const primaryLabel = saveLabel ?? "Save and Continue";
+  const nextStepName = following ? t(following.labelKey) : null;
+  const primaryLabel = saveLabel ? t(saveLabel) : t("apply.editor.saveAndContinue");
 
   function commit() {
     if (!dirty) {
@@ -252,14 +288,14 @@ function Editor({
   const backHref = previous ? previous.href : "/apply";
 
   return (
-    <section className="flex flex-col gap-5">
-      <div className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm flex flex-col gap-5">
-        <header className="flex flex-col gap-1 border-b border-line pb-4">
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-navy-900">
-            {title}
+    <section className="flex flex-col gap-6">
+      <div className="rounded-3xl border border-line bg-surface p-6 sm:p-8 lg:p-10 shadow-sm flex flex-col gap-6">
+        <header className="flex flex-col gap-1.5 border-b border-line pb-5">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-navy-900">
+            {t(title)}
           </h1>
           {description ? (
-            <p className="text-xs sm:text-sm leading-relaxed text-text-secondary">{description}</p>
+            <p className="text-xs sm:text-sm leading-relaxed text-text-secondary">{t(description)}</p>
           ) : null}
         </header>
 
@@ -268,8 +304,7 @@ function Editor({
             role="status"
             className="rounded-card border border-info-line bg-info-surface p-4 text-[0.9375rem] leading-relaxed text-info-text"
           >
-            Your application is with a reviewer, so it cannot be changed right now.
-            If something needs correcting, we will tell you what and reopen it.
+            {t("apply.editor.readOnlyNotice")}
           </p>
         ) : null}
 
@@ -288,7 +323,13 @@ function Editor({
           proceedDisabled={proceedDisabled || childProceedDisabled}
           saved={save.isSuccess && !dirty}
           conflict={isVersionConflict(save.error)}
-          failed={save.isError && !isVersionConflict(save.error) && fieldMessages.length === 0}
+          refusal={refusal}
+          failed={
+            save.isError &&
+            !isVersionConflict(save.error) &&
+            refusal === null &&
+            fieldMessages.length === 0
+          }
           requestId={save.error instanceof ApiRequestError ? save.error.requestId : null}
           fieldMessages={fieldMessages}
         />
@@ -306,6 +347,7 @@ function EditorDock({
   proceedDisabled,
   saved,
   conflict,
+  refusal,
   failed,
   requestId,
   fieldMessages,
@@ -318,32 +360,44 @@ function EditorDock({
   proceedDisabled: boolean;
   saved: boolean;
   conflict: boolean;
+  refusal: { title: string; message: string } | null;
   failed: boolean;
   requestId: string | null;
   fieldMessages: readonly string[];
 }) {
   const target = useApplyDockTarget();
+  const t = useT();
 
   const dock = (
     <div
       className="shrink-0 border-t border-line bg-surface/95 backdrop-blur-md shadow-lg"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 px-4 py-3 sm:px-5">
+      <div className="mx-auto flex w-full max-w-2xl lg:max-w-5xl xl:max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6 lg:px-8">
         {conflict ? (
           <ErrorState
             inline
             severity="warning"
-            title="Someone else changed this application"
-            message="We have reloaded the latest version so you can see it before saving again. Your last change was not applied."
+            title={t("apply.editor.conflict.title")}
+            message={t("apply.editor.conflict.message")}
+          />
+        ) : null}
+
+        {refusal ? (
+          <ErrorState
+            inline
+            severity="warning"
+            title={refusal.title}
+            message={refusal.message}
+            reference={requestId}
           />
         ) : null}
 
         {failed ? (
           <ErrorState
             inline
-            title="We could not save this"
-            message="Nothing was changed. Check your connection and try again."
+            title={t("apply.editor.saveFailed.title")}
+            message={t("apply.editor.saveFailed.message")}
             reference={requestId}
           />
         ) : null}
@@ -358,30 +412,31 @@ function EditorDock({
           </ul>
         ) : null}
 
-        {saved && !conflict && !failed ? (
+        {saved && !conflict && !failed && refusal === null ? (
           <p role="status" className="text-[0.8125rem] font-bold text-success-text text-center">
-            ✓ Changes saved securely.
+            {t("apply.editor.saved")}
           </p>
         ) : null}
 
         <div className="flex items-center gap-2.5">
-          <Link href={backHref} className="shrink-0">
-            <Button
-              variant="outline"
-              size="lg"
-              className="font-bold text-sm h-12 px-5"
-            >
-              Back
-            </Button>
+          <Link
+            href={backHref}
+            className={buttonStyles({
+              variant: "outline",
+              size: "lg",
+              className: "justify-center shrink-0 font-bold text-sm px-5",
+            })}
+          >
+            {t("common.back")}
           </Link>
           <Button
             size="lg"
             block
             loading={isSaving}
-            loadingLabel="Saving..."
+            loadingLabel={t("common.saving")}
             disabled={proceedDisabled}
             onClick={onCommit}
-            className="font-bold text-base shadow-md h-12 flex-1"
+            className="font-bold text-sm sm:text-base shadow-md flex-1 text-center"
           >
             {label}
           </Button>
@@ -389,7 +444,7 @@ function EditorDock({
 
         {nextStepName && (
           <p className="text-center text-[11px] font-semibold text-text-muted">
-            Auto-saves as you type • Tap to proceed to {nextStepName}
+            {t("apply.editor.autosaveHint", { nextStepName })}
           </p>
         )}
       </div>

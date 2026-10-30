@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, ErrorState, Field, Textarea } from "@vsolve/ui";
+import { Button, Card, ErrorState, Field, Textarea, useT } from "@vsolve/ui";
 import {
   ACCEPTED_EVIDENCE_MEDIA_TYPES,
   EVIDENCE_UPLOAD_KINDS,
@@ -79,6 +79,7 @@ export function EvidenceComposer({
   canAttach,
   canSubmit,
 }: EvidenceComposerProps) {
+  const t = useT();
   const fileInput = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<EvidenceUploadProgress | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
@@ -108,7 +109,7 @@ export function EvidenceComposer({
     if (kind === null) {
       // `rejectEvidenceFile` has already covered this; the guard is here so the
       // kind reaching the request is never widened by a future edit.
-      setRejection("That file cannot be attached. Photos, video and PDFs only.");
+      setRejection(t("work.evidenceComposer.unsupported"));
       return;
     }
 
@@ -122,7 +123,7 @@ export function EvidenceComposer({
   function onSubmit() {
     const trimmed = note.trim();
     if (trimmed === "") {
-      setNoteProblem(`Say what was done on this ${wording.one} before you send it.`);
+      setNoteProblem(t("work.evidenceComposer.noteRequired", { one: wording.one }));
       return;
     }
     setNoteProblem(null);
@@ -135,11 +136,11 @@ export function EvidenceComposer({
   return (
     <Card className="flex flex-col gap-4 p-4">
       <header className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-text">What you did</h2>
+        <h2 className="text-base font-semibold text-text">{t("work.evidenceComposer.heading")}</h2>
         <p className="text-sm leading-6 text-text-secondary">
           {canAttach
-            ? `Attach photos, video or a PDF, then write what was done. Attaching a file on its own does not send this ${wording.one} for review — the customer's clock starts when you press send.`
-            : `This ${wording.one} no longer takes new evidence. What is below is what the customer sees.`}
+            ? t("work.evidenceComposer.intro.canAttach", { one: wording.one })
+            : t("work.evidenceComposer.intro.closed", { one: wording.one })}
         </p>
       </header>
 
@@ -162,12 +163,11 @@ export function EvidenceComposer({
             disabled={upload.isPending || stage.evidence.length >= MAXIMUM_EVIDENCE_PER_STAGE}
             icon={<Paperclip size={16} aria-hidden />}
           >
-            Attach a file
+            {t("work.evidenceComposer.attach")}
           </Button>
 
           <p className="text-xs text-text-muted">
-            Photos up to 12 MB, video up to 80 MB, PDFs up to 20 MB. Up to{" "}
-            {MAXIMUM_EVIDENCE_PER_STAGE} files on one {wording.one}.
+            {t("work.evidenceComposer.limits", { max: MAXIMUM_EVIDENCE_PER_STAGE, one: wording.one })}
           </p>
 
           {progress ? <UploadProgressBar progress={progress} /> : null}
@@ -191,11 +191,15 @@ export function EvidenceComposer({
       {canSubmit ? (
         <div className="flex flex-col gap-2">
           <Field
-            label={alreadySubmitted === 0 ? "What was done" : "What you changed"}
+            label={
+              alreadySubmitted === 0
+                ? t("work.evidenceComposer.note.labelFirst")
+                : t("work.evidenceComposer.note.labelAgain")
+            }
             description={
               alreadySubmitted === 0
-                ? "The customer reads this when they decide. It is kept on the record."
-                : "Your first account stays on the record. This is added beside it, not over it."
+                ? t("work.evidenceComposer.note.descriptionFirst")
+                : t("work.evidenceComposer.note.descriptionAgain")
             }
             error={noteProblem ?? undefined}
           >
@@ -203,25 +207,23 @@ export function EvidenceComposer({
               rows={4}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder={`What you finished on this ${wording.one}`}
+              placeholder={t("work.evidenceComposer.note.placeholder", { one: wording.one })}
             />
           </Field>
 
           <p className="text-xs leading-5 text-text-muted">
-            By sending this you are declaring the work described was completed as agreed.
-            {alreadySubmitted === 0
-              ? ""
-              : " Sending again gives the customer a fresh review window from now, because they are looking at different evidence."}
+            {t("work.evidenceComposer.declaration")}
+            {alreadySubmitted === 0 ? "" : ` ${t("work.evidenceComposer.resubmitNote")}`}
           </p>
 
           <Button
             type="button"
             onClick={onSubmit}
             loading={submit.isPending}
-            loadingLabel="Sending for review"
+            loadingLabel={t("work.evidenceComposer.sending")}
             icon={<Upload size={16} aria-hidden />}
           >
-            Send for review
+            {t("work.evidenceComposer.send")}
           </Button>
 
           {submit.isError ? <SubmitFailure error={submit.error} wording={wording} /> : null}
@@ -232,12 +234,13 @@ export function EvidenceComposer({
 }
 
 function UploadProgressBar({ progress }: { readonly progress: EvidenceUploadProgress }) {
+  const t = useT();
   const label = {
-    hashing: "Checking the file",
-    requesting: "Asking Vsolve for a slot",
-    uploading: "Uploading",
-    finalizing: "Confirming it arrived",
-    done: "Attached",
+    hashing: t("work.evidenceComposer.phase.hashing"),
+    requesting: t("work.evidenceComposer.phase.requesting"),
+    uploading: t("work.evidenceComposer.phase.uploading"),
+    finalizing: t("work.evidenceComposer.phase.finalizing"),
+    done: t("work.evidenceComposer.phase.done"),
   }[progress.phase];
 
   return (
@@ -281,14 +284,15 @@ function UploadFailure({
   readonly onRetry: () => void;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   const failure = error as { reason?: string; message?: string };
   const reason = failure.reason ?? "unknown";
 
   if (reason === "not_accepting") {
     return (
       <ErrorState
-        title={`This ${wording.one} moved`}
-        message={`It no longer accepts evidence — the customer or a clock has acted since this screen loaded. Reload to see where it got to.`}
+        title={t("work.evidenceComposer.moved.title", { one: wording.one })}
+        message={t("work.evidenceComposer.moved.uploadMessage")}
         severity="warning"
       />
     );
@@ -297,8 +301,8 @@ function UploadFailure({
   if (reason === "rejected") {
     return (
       <ErrorState
-        title="Vsolve could not accept that file"
-        message={`${failure.message ?? "The file did not arrive as described."} Sending the same file again will not help — try a different one.`}
+        title={t("work.evidenceComposer.rejected.title")}
+        message={`${failure.message ?? t("work.evidenceComposer.rejected.fallback")} ${t("work.evidenceComposer.rejected.suffix")}`}
         severity="warning"
       />
     );
@@ -307,14 +311,14 @@ function UploadFailure({
   const presentation = describeError(error, "mutation");
   return (
     <ErrorState
-      title={reason === "storage" ? "Vsolve's file storage is not answering" : presentation.title}
+      title={reason === "storage" ? t("work.evidenceComposer.storageDown") : presentation.title}
       message={
         reason === "storage" || reason === "expired" || reason === "network"
-          ? "Nothing was lost. Choose the file again."
+          ? t("work.evidenceComposer.nothingLost")
           : presentation.message
       }
       severity="warning"
-      actionLabel="Choose the file again"
+      actionLabel={t("work.evidenceComposer.chooseAgain")}
       onAction={onRetry}
       reference={presentation.reference}
     />
@@ -329,13 +333,14 @@ function SubmitFailure({
   readonly error: unknown;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   const presentation = describeError(error, "mutation");
 
   if (isStageTransitionNotAllowed(error)) {
     return (
       <ErrorState
-        title={`This ${wording.one} moved`}
-        message={`Somebody — or a review clock — acted on it since this screen loaded, so it is no longer waiting to be sent. Reload to see where it got to. Sending again would send it against the state that just refused.`}
+        title={t("work.evidenceComposer.moved.title", { one: wording.one })}
+        message={t("work.evidenceComposer.moved.submitMessage")}
         severity="warning"
         reference={presentation.reference}
       />

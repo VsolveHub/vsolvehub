@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, EmptyState } from "@vsolve/ui";
+import { Button, EmptyState, useT } from "@vsolve/ui";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -12,7 +12,7 @@ import {
   stayPropertyTypes,
   type StayTaxonomyVariant,
 } from "@/features/stays/queries";
-import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
+import { useStaySections } from "@/features/stays/view/stay-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
 import { PropertyCard } from "./property-card";
@@ -28,6 +28,8 @@ import { StaySummaryCards } from "./stay-summary-cards";
  * anything, and archiving tucks it away — nothing here deletes data.
  */
 export function PartnerStaysWorkspace() {
+  const t = useT();
+  const sections = useStaySections();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
@@ -67,18 +69,17 @@ export function PartnerStaysWorkspace() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">
-            Stay listings
+            {t("stays.workspace.eyebrow")}
           </p>
-          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Your stays dashboard</h1>
+          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("stays.workspace.heading")}</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Add a property, add its rooms and prices, then publish. Pause any time to hide it —
-            existing bookings go ahead.
+            {t("stays.workspace.intro")}
           </p>
         </div>
-        {!showForm ? <Button onClick={() => setCreating(true)}>Add a property</Button> : null}
+        {!showForm ? <Button onClick={() => setCreating(true)}>{t("stays.workspace.addProperty")}</Button> : null}
       </div>
 
-      <SectionNav label="Stay sections" items={STAY_SECTIONS} />
+      <SectionNav label={t("stays.sections.ariaLabel")} items={sections} />
 
       {properties.isSuccess && all.length > 0 ? <StaySummaryCards /> : null}
 
@@ -98,7 +99,7 @@ export function PartnerStaysWorkspace() {
       {taxonomy.error ? (
         <p className="text-sm text-danger-text">{friendlyErrorMessage(taxonomy.error)}</p>
       ) : null}
-      {properties.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
+      {properties.isLoading ? <p className="text-sm text-text-secondary">{t("common.loading")}</p> : null}
       {properties.error ? (
         <p className="text-sm text-danger-text">{friendlyErrorMessage(properties.error)}</p>
       ) : null}
@@ -118,8 +119,8 @@ export function PartnerStaysWorkspace() {
       ) : properties.isSuccess && all.length > 0 ? (
         <EmptyState
           compact
-          title="No active properties"
-          description="Your archived properties are below. Restore one, or add a new property."
+          title={t("stays.workspace.noActiveTitle")}
+          description={t("stays.workspace.noActiveDescription")}
         />
       ) : null}
 
@@ -131,7 +132,9 @@ export function PartnerStaysWorkspace() {
             onClick={() => setShowArchived((open) => !open)}
             aria-expanded={showArchived}
           >
-            {showArchived ? "Hide" : "Show"} archived ({archived.length})
+            {showArchived
+              ? t("stays.workspace.hideArchived", { n: archived.length })
+              : t("stays.workspace.showArchived", { n: archived.length })}
           </button>
           {showArchived ? (
             <ul className="flex flex-col gap-4">

@@ -10,15 +10,24 @@ from django.urls import path
 from apps.payouts.exports import PayoutBatchBankExportView
 from apps.payouts.views import (
     LedgerAdjustmentView,
+    OperationsPayoutAccountListView,
+    OperationsPayoutAccountRejectView,
+    OperationsPayoutAccountVerifyView,
+    OperationsWithdrawalApproveView,
+    OperationsWithdrawalDeclineView,
+    OperationsWithdrawalListView,
     PartnerEarningsView,
     PartnerLedgerView,
     PartnerPayoutAccountView,
     PartnerPerformanceView,
+    PartnerWithdrawalListView,
+    PartnerWithdrawalPreviewView,
     PayoutBatchApproveView,
     PayoutBatchCancelView,
     PayoutBatchDetailView,
     PayoutBatchListView,
     PayoutBatchPayView,
+    RazorpayXPayoutWebhookView,
     UnpayablePartnersView,
 )
 
@@ -34,6 +43,31 @@ urlpatterns = [
         "partner/payout-account/",
         PartnerPayoutAccountView.as_view(),
         name="partner-payout-account",
+    ),
+    path(
+        "partner/withdrawals/",
+        PartnerWithdrawalListView.as_view(),
+        name="partner-withdrawals",
+    ),
+    path(
+        "partner/withdrawals/preview/",
+        PartnerWithdrawalPreviewView.as_view(),
+        name="partner-withdrawal-preview",
+    ),
+    path(
+        "operations/withdrawals/",
+        OperationsWithdrawalListView.as_view(),
+        name="operations-withdrawals",
+    ),
+    path(
+        "operations/withdrawals/<uuid:batch_id>/approve/",
+        OperationsWithdrawalApproveView.as_view(),
+        name="operations-withdrawal-approve",
+    ),
+    path(
+        "operations/withdrawals/<uuid:batch_id>/decline/",
+        OperationsWithdrawalDeclineView.as_view(),
+        name="operations-withdrawal-decline",
     ),
     path(
         "operations/payout-batches/",
@@ -64,6 +98,26 @@ urlpatterns = [
         "operations/unpayable-partners/",
         UnpayablePartnersView.as_view(),
         name="operations-unpayable-partners",
+    ),
+    path(
+        "operations/payout-accounts/",
+        OperationsPayoutAccountListView.as_view(),
+        name="operations-payout-accounts",
+    ),
+    path(
+        "operations/payout-accounts/<uuid:account_id>/verify/",
+        OperationsPayoutAccountVerifyView.as_view(),
+        name="operations-payout-account-verify",
+    ),
+    path(
+        "operations/payout-accounts/<uuid:account_id>/reject/",
+        OperationsPayoutAccountRejectView.as_view(),
+        name="operations-payout-account-reject",
+    ),
+    path(
+        "payout-webhooks/razorpayx/",
+        RazorpayXPayoutWebhookView.as_view(),
+        name="payout-webhook-razorpayx",
     ),
     path(
         "operations/ledger-adjustments/",

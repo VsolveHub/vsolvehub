@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { ArrowLeft, Clock } from "lucide-react";
-import { EmptyState, StatusChip } from "@vsolve/ui";
+import { EmptyState, LoadMore, StatusChip, useT } from "@vsolve/ui";
 
 import {
-  fetchListingApplications,
+  fetchListingApplicationsPage,
   fetchPartnerListingDetail,
   reportApplicantApplication,
   revealApplicationContact,
@@ -16,7 +16,7 @@ import {
   type ApplicationStatus,
   type PartnerApplication,
 } from "@/features/listings/queries";
-import { friendlyErrorMessage } from "@vsolve/query";
+import { friendlyErrorMessage, usePagedList, type Page } from "@vsolve/query";
 import { useToast } from "@vsolve/ui";
 
 import { proposeInterview } from "@/features/listings/jobs-queries";
@@ -27,16 +27,46 @@ import {
   ReportApplicantDialog,
 } from "@/features/listings/view";
 
-const FILTER_TABS = [
-  { key: "ALL", label: "All Applicants" },
-  { key: "NEW", label: "New / In Review" },
-  { key: "SHORTLISTED", label: "Shortlisted" },
-  { key: "INTERVIEW", label: "Interview" },
-  { key: "CONNECTED", label: "Connected" },
-  { key: "CLOSED", label: "Closed / Withdrawn" },
-];
+/** Each tab as the application states the server filters on. */
+const TAB_STATUSES: Record<string, string> = {
+  ALL: "",
+  NEW: "SUBMITTED,UNDER_REVIEW",
+  SHORTLISTED: "SHORTLISTED",
+  INTERVIEW: "INTERVIEW",
+  CONNECTED: "CONNECTED,CONTACTED",
+  CLOSED: "REJECTED,WITHDRAWN,EXPIRED",
+};
+
+type ApplicationPages = InfiniteData<Page<PartnerApplication>>;
+
+/** Change one applicant wherever it sits in the loaded pages (optimistic update). */
+function patchApplication(
+  data: ApplicationPages | undefined,
+  id: string,
+  patch: Partial<PartnerApplication>,
+): ApplicationPages | undefined {
+  if (!data) return data;
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({
+      ...page,
+      results: page.results.map((app) => (app.id === id ? { ...app, ...patch } : app)),
+    })),
+  };
+}
+
+const FILTER_TAB_KEYS: Record<string, string> = {
+  ALL: "listings.detail.filter.all",
+  NEW: "listings.detail.filter.new",
+  SHORTLISTED: "listings.detail.filter.shortlisted",
+  INTERVIEW: "listings.detail.filter.interview",
+  CONNECTED: "listings.detail.filter.connected",
+  CLOSED: "listings.detail.filter.closed",
+};
+const FILTER_TABS = ["ALL", "NEW", "SHORTLISTED", "INTERVIEW", "CONNECTED", "CLOSED"];
 
 export default function PartnerListingLeadsPage() {
+  const t = useT();
   const params = useParams<{ listingId: string }>();
   const queryClient = useQueryClient();
   const listingId = params.listingId;
@@ -55,35 +85,28 @@ export default function PartnerListingLeadsPage() {
     queryFn: () => fetchPartnerListingDetail(listingId),
   });
 
-  const queryKey = ["partner-listing-applications", listingId] as const;
+  const baseKey = ["partner-listing-applications", listingId] as const;
+  const statuses = TAB_STATUSES[activeTab] ?? "";
+  const queryKey = [...baseKey, statuses] as const;
 
-  const { data: applications = [], isLoading } = useQuery({
-    queryKey,
-    queryFn: () => fetchListingApplications(listingId),
-  });
-
-  const tabCounts = {
-    ALL: applications.length,
-    NEW: applications.filter((app) => app.status === "SUBMITTED" || app.status === "UNDER_REVIEW").length,
-    SHORTLISTED: applications.filter((app) => app.status === "SHORTLISTED").length,
-    INTERVIEW: applications.filter((app) => app.status === "INTERVIEW").length,
-    CONNECTED: applications.filter((app) => app.status === "CONNECTED" || app.status === "CONTACTED").length,
-    CLOSED: applications.filter((app) => ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status)).length,
-  };
+  const applicationsList = usePagedList(queryKey, (cursor) =>
+    fetchListingApplicationsPage(listingId, cursor, statuses || undefined),
+  );
+  const applications = applicationsList.items;
+  const { isLoading } = applicationsList;
+  // The job carries its own total; the open tab shows what has loaded, "+" while more remain.
+  const totalApplicants = listing?.application_count ?? applications.length;
+  const loadedCount = `${applications.length}${applicationsList.hasMore ? "+" : ""}`;
 
   const reveal = useMutation({
     mutationFn: revealApplicationContact,
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<PartnerApplication[]>(queryKey);
-      if (previous) {
-        queryClient.setQueryData<PartnerApplication[]>(
-          queryKey,
-          previous.map((app) =>
-            app.id === id ? { ...app, contact_revealed_at: new Date().toISOString() } : app,
-          ),
-        );
-      }
+      const previous = queryClient.getQueryData<ApplicationPages>(queryKey);
+      queryClient.setQueryData<ApplicationPages>(
+        queryKey,
+        patchApplication(previous, id, { contact_revealed_at: new Date().toISOString() }),
+      );
       return { previous };
     },
     onError: (_err, _id, context) => {
@@ -92,7 +115,7 @@ export default function PartnerListingLeadsPage() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: baseKey });
     },
   });
 
@@ -101,13 +124,11 @@ export default function PartnerListingLeadsPage() {
       updateApplicationStatus(id, next),
     onMutate: async ({ id, next }) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<PartnerApplication[]>(queryKey);
-      if (previous) {
-        queryClient.setQueryData<PartnerApplication[]>(
-          queryKey,
-          previous.map((app) => (app.id === id ? { ...app, status: next } : app)),
-        );
-      }
+      const previous = queryClient.getQueryData<ApplicationPages>(queryKey);
+      queryClient.setQueryData<ApplicationPages>(
+        queryKey,
+        patchApplication(previous, id, { status: next }),
+      );
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -116,7 +137,7 @@ export default function PartnerListingLeadsPage() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: baseKey });
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
       queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
     },
@@ -128,13 +149,13 @@ export default function PartnerListingLeadsPage() {
 
   const reportMutation = useMutation({
     mutationFn: () => {
-      if (!reportingApp) throw new Error("No applicant selected for report");
+      if (!reportingApp) throw new Error(t("listings.detail.noApplicantSelected"));
       return reportApplicantApplication(reportingApp.id, reportReason, reportDetail);
     },
     onSuccess: () => {
       setReportingApp(null);
       setReportDetail("");
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: baseKey });
     },
   });
 
@@ -143,20 +164,12 @@ export default function PartnerListingLeadsPage() {
       proposeInterview(interviewing!.id, body),
     onSuccess: () => {
       setInterviewing(null);
-      notify("Interview invitation sent.");
-      queryClient.invalidateQueries({ queryKey });
+      notify(t("listings.detail.interviewInvitationSent"));
+      queryClient.invalidateQueries({ queryKey: baseKey });
     },
   });
 
-  const filteredApplications = applications.filter((app) => {
-    if (activeTab === "ALL") return true;
-    if (activeTab === "NEW") return app.status === "SUBMITTED" || app.status === "UNDER_REVIEW";
-    if (activeTab === "SHORTLISTED") return app.status === "SHORTLISTED";
-    if (activeTab === "INTERVIEW") return app.status === "INTERVIEW";
-    if (activeTab === "CONNECTED") return app.status === "CONNECTED" || app.status === "CONTACTED";
-    if (activeTab === "CLOSED") return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
-    return app.status === activeTab;
-  });
+  const filteredApplications = applications;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
@@ -166,15 +179,18 @@ export default function PartnerListingLeadsPage() {
           href="/listings"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text"
         >
-          <ArrowLeft className="size-4" /> Back to Listings Workspace
+          <ArrowLeft className="size-4" /> {t("listings.detail.backToWorkspace")}
         </Link>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-text">
-              {listing?.title || "Listing Applicant Leads"}
+              {listing?.title || t("listings.detail.titleFallback")}
             </h1>
             <p className="mt-0.5 text-xs text-text-muted">
-              {listing?.service_name || "Role"} • {applications.length} total applicant(s) received
+              {t("listings.detail.applicantsReceived", {
+                service: listing?.service_name || t("listings.detail.roleFallback"),
+                count: totalApplicants,
+              })}
             </p>
           </div>
           {listing?.status && (
@@ -186,8 +202,8 @@ export default function PartnerListingLeadsPage() {
       <div role="tablist" className="grid grid-cols-2 gap-1 rounded-control border border-line bg-surface-sunken p-1 sm:max-w-sm">
         {(
           [
-            ["applicants", `Applications (${applications.length})`],
-            ["matches", "Matching candidates"],
+            ["applicants", t("listings.detail.applicationsTab", { count: totalApplicants })],
+            ["matches", t("listings.detail.matchingCandidatesTab")],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -213,29 +229,32 @@ export default function PartnerListingLeadsPage() {
       <>
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
-        {FILTER_TABS.map((tab) => {
-          const count = tabCounts[tab.key as keyof typeof tabCounts] ?? 0;
+        {FILTER_TABS.map((tabKey) => {
+          const count =
+            tabKey === "ALL" ? totalApplicants : activeTab === tabKey ? loadedCount : null;
           return (
             <button
               type="button"
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              key={tabKey}
+              onClick={() => setActiveTab(tabKey)}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                activeTab === tab.key
+                activeTab === tabKey
                   ? "bg-navy-900 text-warm-0 shadow-xs"
                   : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
               }`}
             >
-              <span>{tab.label}</span>
-              <span
-                className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                  activeTab === tab.key
-                    ? "bg-warm-0/20 text-warm-0"
-                    : "bg-surface-sunken text-text-muted"
-                }`}
-              >
-                {count}
-              </span>
+              <span>{t(FILTER_TAB_KEYS[tabKey]!)}</span>
+              {count === null ? null : (
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                    activeTab === tabKey
+                      ? "bg-warm-0/20 text-warm-0"
+                      : "bg-surface-sunken text-text-muted"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -252,17 +271,17 @@ export default function PartnerListingLeadsPage() {
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-text-muted">
           <Clock className="size-6 animate-spin text-text-muted" />
-          <span className="ml-2 text-sm">Loading applicants...</span>
+          <span className="ml-2 text-sm">{t("listings.detail.loadingApplicants")}</span>
         </div>
       ) : null}
 
       {!isLoading && filteredApplications.length === 0 ? (
         <EmptyState
-          title="No applicants in this view"
+          title={t("listings.detail.emptyTitle")}
           description={
             activeTab === "ALL"
-              ? "Candidates who apply will appear here directly."
-              : "No candidates match the selected filter."
+              ? t("listings.detail.emptyAll")
+              : t("listings.detail.emptyFiltered")
           }
         />
       ) : null}
@@ -289,6 +308,12 @@ export default function PartnerListingLeadsPage() {
           />
         ))}
       </div>
+      <LoadMore
+        hasMore={applicationsList.hasMore}
+        loading={applicationsList.loadingMore}
+        onLoadMore={applicationsList.loadMore}
+        label={t("listings.detail.showMoreApplicants")}
+      />
 
       </>
       )}
@@ -297,7 +322,7 @@ export default function PartnerListingLeadsPage() {
         open={interviewing !== null}
         candidateName={
           interviewing?.applicant_name ||
-          String((interviewing?.applicant_snapshot as Record<string, unknown> | undefined)?.name ?? "the candidate")
+          String((interviewing?.applicant_snapshot as Record<string, unknown> | undefined)?.name ?? t("listings.detail.candidateFallback"))
         }
         defaultLocation={listing?.location_text ?? ""}
         isPending={interviewMutation.isPending}

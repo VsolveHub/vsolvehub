@@ -57,6 +57,21 @@ const COMPLETE = {
   documents: withDocuments(["GOVERNMENT_ID", "ADDRESS_PROOF"]),
 } as unknown as Application;
 
+const COMPLETE_SCHEDULE = {
+  rules: [
+    {
+      id: "rule-1",
+      service_area_id: "area-1",
+      weekday: 0,
+      starts_at: "09:00:00",
+      ends_at: "18:00:00",
+      ends_next_day: false,
+      is_active: true,
+    },
+  ],
+  exceptions: [],
+} as unknown as Schemas["PartnerSchedule"];
+
 describe("what counts as a step", () => {
   it("excludes the overview and the review screen from the denominator", () => {
     /*
@@ -64,29 +79,22 @@ describe("what counts as a step", () => {
       would make "4 of 8" mean something different from "2 things left to do",
       and an applicant would be reading two numbers that never agree.
     */
-    const summary = progressSummary(COMPLETE);
-    const steps = stepProgress(COMPLETE);
+    const summary = progressSummary(COMPLETE, COMPLETE_SCHEDULE);
+    const steps = stepProgress(COMPLETE, COMPLETE_SCHEDULE);
 
     expect(steps.filter((step) => step.state === "waypoint").map((step) => step.href)).toEqual([
       "/apply",
       "/apply/review",
     ]);
-    expect(summary.total).toBe(5);
-    expect(summary.done).toBe(5);
+    expect(summary.total).toBe(6);
+    expect(summary.done).toBe(6);
   });
 
-  it("marks a step that collects nothing required as optional, never as done", () => {
-    /*
-      The headline negative. `/apply/schedule` has no entry in `requirements`,
-      so grouping alone reports zero requirements and zero unmet — which would
-      put a tick against something the applicant has not done. A false tick in
-      onboarding is worse than a missing one: it is the reason somebody submits
-      believing they published hours they never set.
-    */
+  it("marks schedule step as todo until working hours are configured", () => {
     const schedule = stepProgress(EMPTY).find((step) => step.href === "/apply/schedule");
 
-    expect(schedule?.state).toBe("optional");
-    expect(schedule?.state).not.toBe("done");
+    expect(schedule?.state).toBe("todo");
+    expect(schedule?.outstanding).toBe(1);
   });
 });
 
@@ -146,8 +154,8 @@ describe("partial progress", () => {
   });
 
   it("has nothing left to point at once the record is complete", () => {
-    expect(progressSummary(COMPLETE).nextIncomplete).toBeNull();
-    expect(progressSummary(COMPLETE).fraction).toBe(1);
+    expect(progressSummary(COMPLETE, COMPLETE_SCHEDULE).nextIncomplete).toBeNull();
+    expect(progressSummary(COMPLETE, COMPLETE_SCHEDULE).fraction).toBe(1);
   });
 });
 

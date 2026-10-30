@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { usePagedList } from "@vsolve/query";
+import { LoadMore, useToast } from "@vsolve/ui";
 import { AlertTriangle, RefreshCw, ShieldAlert } from "lucide-react";
 
 import {
-  fetchOpsListings,
+  fetchOpsListingsPage,
   moderateOpsListing,
   reinstateOpsListing,
   removeOpsListing,
@@ -20,9 +22,37 @@ import {
   MetricsRow,
   ModerationDialog,
 } from "@/features/listings/view";
+import { useDebounced } from "@/features/shared/use-debounced";
+import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
+import { VendorPlansWorkspace } from "@/features/vendor-plans/view/vendor-plans-workspace";
+
+const TABS = [
+  { key: "listings", label: "Listings" },
+  { key: "money", label: "Money" },
+  { key: "plans", label: "Plans" },
+] as const;
+
+/** "50+" when the first page is full and the server has more. */
+function pageCount(page: { results: unknown[]; next: string | null } | undefined): number | string {
+  if (!page) return 0;
+  return page.next ? `${page.results.length}+` : page.results.length;
+}
 
 export default function AdminListingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminListingsContent />
+    </Suspense>
+  );
+}
+
+function AdminListingsContent() {
+  const [tab, setTab] = useServiceTab(TABS);
+  // True totals from the server; the per-status first pages below only say "50+".
+  const serverCounts = useListingCounts("listings");
   const queryClient = useQueryClient();
+  const { notify } = useToast();
   const [filter, setFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -31,42 +61,49 @@ export default function AdminListingsPage() {
   const [actionReason, setActionReason] = useState("");
   const [isApproving, setIsApproving] = useState(true);
 
-  const {
-    data: listings = [],
-    isLoading: loading,
-    error,
-    refetch,
-    isFetching,
-  } = useQuery({
-    queryKey: ["ops-listings"],
-    queryFn: fetchOpsListings,
-  });
+  const q = useDebounced(searchQuery.trim());
+  const listingsPage = usePagedList(["ops-listings", filter, q], (cursor) =>
+    fetchOpsListingsPage(cursor, filter, q),
+  );
+  const { items: listings, isLoading: loading, error, refetch } = listingsPage;
+  const isFetching = loading || listingsPage.loadingMore;
+  // Counts for the tiles: the first page of each queue, so a full page reads "50+".
+  const [totalPage, pendingPage, activePage, removedPage] = useQueries({
+    queries: ["ALL", "PENDING", "ACTIVE", "REMOVED"].map((name) => ({
+      queryKey: ["ops-listings", name, "", "count"],
+      queryFn: () => fetchOpsListingsPage(undefined, name, ""),
+    })),
+  }).map((query) => query.data);
 
-  const invalidate = () => {
+  const onDone = (message: string) => () => {
     closeModal();
+    notify(message);
     void queryClient.invalidateQueries({ queryKey: ["ops-listings"] });
   };
+  // Shown inside the open dialog: a browser alert() blocked the page and lost the typed reason.
+  const failure = (err: unknown, fallback: string) =>
+    err instanceof Error && err.message ? err.message : fallback;
 
   const moderateMutation = useMutation({
     mutationFn: ({ id, approved, reason }: { id: string; approved: boolean; reason: string }) =>
       moderateOpsListing(id, approved, reason),
-    onSuccess: invalidate,
-    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Moderation failed."),
+    onSuccess: onDone("Moderation decision saved."),
   });
 
   const removeMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => removeOpsListing(id, reason),
-    onSuccess: invalidate,
-    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Takedown failed."),
+    onSuccess: onDone("Listing taken down."),
   });
 
   const reinstateMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => reinstateOpsListing(id, reason),
-    onSuccess: invalidate,
-    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Reinstatement failed."),
+    onSuccess: onDone("Listing reinstated."),
   });
 
   function closeModal() {
+    moderateMutation.reset();
+    removeMutation.reset();
+    reinstateMutation.reset();
     setSelectedListing(null);
     setModalAction(null);
     setActionReason("");
@@ -80,62 +117,37 @@ export default function AdminListingsPage() {
   function handleActionSubmit() {
     if (!selectedListing || !modalAction) return;
     if (modalAction === "REMOVE") {
-      if (!actionReason.trim()) return alert("A removal reason is required.");
+      // The submit button stays disabled until a reason is typed.
+      if (!actionReason.trim()) return;
       removeMutation.mutate({ id: selectedListing.id, reason: actionReason });
     } else {
       reinstateMutation.mutate({ id: selectedListing.id, reason: actionReason });
     }
   }
 
-  const filteredListings = listings.filter((item) => {
-    if (filter === "PENDING") {
-      if (item.moderation_status !== "PENDING" && item.public_state !== "PENDING_REVIEW") return false;
-    } else if (filter === "ACTIVE") {
-      if (item.status !== "PUBLISHED") return false;
-    } else if (filter === "REMOVED") {
-      if (item.status !== "REMOVED" && item.moderation_status !== "REMOVED") return false;
-    } else if (filter === "DRAFT") {
-      if ((item.public_state || item.status) !== "DRAFT") return false;
-    } else if (filter === "CLOSED") {
-      if (!["CLOSED", "EXPIRED"].includes(item.status)) return false;
-    }
-
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      item.title.toLowerCase().includes(q) ||
-      (item.location_text || "").toLowerCase().includes(q) ||
-      (item.contact_phone || "").toLowerCase().includes(q) ||
-      (item.contact_email || "").toLowerCase().includes(q)
-    );
-  });
-
-  const pendingCount = listings.filter(
-    (l) => l.moderation_status === "PENDING" || l.public_state === "PENDING_REVIEW",
-  ).length;
-  const activeCount = listings.filter((l) => l.status === "PUBLISHED").length;
-  const removedCount = listings.filter(
-    (l) => l.status === "REMOVED" || l.moderation_status === "REMOVED",
-  ).length;
+  const filteredListings = listings;
+  const pendingCount = serverCounts?.pending ?? pageCount(pendingPage);
+  const activeCount = serverCounts?.live ?? pageCount(activePage);
+  const removedCount = serverCounts?.removed ?? pageCount(removedPage);
 
   const submitting =
     moderateMutation.isPending || removeMutation.isPending || reinstateMutation.isPending;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <Link href="/" className="hover:text-slate-800">
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <Link href="/" className="hover:text-text">
               Operations
             </Link>
             <span>/</span>
-            <span className="font-semibold text-slate-700">Job & Career Listings</span>
+            <span className="font-semibold text-text-secondary">Job & Career Listings</span>
           </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-text">
             Job & Career Listings Oversight
           </h1>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-text-secondary">
             Audit employer job postings, review moderation queues, and enforce safety standards.
           </p>
         </div>
@@ -151,7 +163,7 @@ export default function AdminListingsPage() {
             type="button"
             onClick={() => void refetch()}
             disabled={isFetching}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-hover active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`size-4 ${isFetching ? "animate-spin text-orange-600" : ""}`} />
             Refresh
@@ -159,6 +171,13 @@ export default function AdminListingsPage() {
         </div>
       </div>
 
+      <ServiceTabs tabs={TABS} active={tab} onChange={setTab} label="Jobs sections" />
+
+      {tab === "money" ? <MoneyTab service="listings" /> : null}
+      {tab === "plans" ? <VendorPlansWorkspace /> : null}
+
+      {tab === "listings" ? (
+      <>
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <AlertTriangle className="size-5 shrink-0 text-amber-600" />
@@ -167,7 +186,7 @@ export default function AdminListingsPage() {
       )}
 
       <MetricsRow
-        totalCount={listings.length}
+        totalCount={serverCounts?.total ?? pageCount(totalPage)}
         pendingCount={pendingCount}
         activeCount={activeCount}
         removedCount={removedCount}
@@ -207,6 +226,14 @@ export default function AdminListingsPage() {
           setModalAction("REINSTATE");
         }}
       />
+      <LoadMore
+        hasMore={listingsPage.hasMore}
+        loading={listingsPage.loadingMore}
+        onLoadMore={listingsPage.loadMore}
+        label="Load more listings"
+      />
+      </>
+      ) : null}
 
       <ListingDetailDialog
         listing={modalAction === "VIEW" ? selectedListing : null}
@@ -222,6 +249,7 @@ export default function AdminListingsPage() {
         setActionReason={setActionReason}
         submitting={submitting}
         onSubmit={handleModerateSubmit}
+        error={moderateMutation.isError ? failure(moderateMutation.error, "The decision was not saved. Try again.") : null}
       />
 
       <ActionDialog
@@ -232,6 +260,13 @@ export default function AdminListingsPage() {
         onReasonChange={setActionReason}
         submitting={submitting}
         onSubmit={handleActionSubmit}
+        error={
+          removeMutation.isError
+            ? failure(removeMutation.error, "The listing was not taken down. Try again.")
+            : reinstateMutation.isError
+              ? failure(reinstateMutation.error, "The listing was not reinstated. Try again.")
+              : null
+        }
       />
     </div>
   );

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.rental import views
+from apps.rental import money, views
 
 urlpatterns = [
     path("rentals", views.RentalBrowseView.as_view(), name="rental-browse"),
@@ -16,6 +16,16 @@ urlpatterns = [
         "me/rentals/<uuid:booking_id>/cancel",
         views.MyRentalCancelView.as_view(),
         name="my-rental-cancel",
+    ),
+    path(
+        "me/rentals/<uuid:booking_id>/transport/<slug:action>",
+        views.MyRentalTransportView.as_view(),
+        name="my-rental-transport",
+    ),
+    path(
+        "partner/rentals/pickup-hours",
+        views.PartnerPickupHoursView.as_view(),
+        name="partner-rental-pickup-hours",
     ),
     path(
         "partner/rentals/photos",
@@ -48,11 +58,27 @@ urlpatterns = [
         name="partner-rental-bookings",
     ),
     path(
+        "partner/rentals/bookings/<uuid:booking_id>/transport/<slug:action>",
+        views.PartnerBookingTransportView.as_view(),
+        name="partner-rental-booking-transport",
+    ),
+    path(
         "partner/rentals/bookings/<uuid:booking_id>/<slug:action>",
         views.PartnerBookingActionView.as_view(),
         name="partner-rental-booking-action",
     ),
     path("ops/rentals", views.OpsRentalCollectionView.as_view(), name="ops-rentals"),
+    path("ops/rentals/money", money.MoneySummaryView.as_view(), name="ops-rentals-money"),
+    path(
+        "ops/rentals/money/payments",
+        money.MoneyPaymentsView.as_view(),
+        name="ops-rentals-money-payments",
+    ),
+    path(
+        "ops/rentals/bookings",
+        views.OpsRentalBookingCollectionView.as_view(),
+        name="ops-rental-bookings",
+    ),
     path(
         "ops/rentals/platform-fee",
         views.OpsRentalPlatformFeeView.as_view(),

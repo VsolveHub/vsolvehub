@@ -2,6 +2,7 @@
 
 import { serverClock } from "@vsolve/api-client";
 import { describeError, useServerCountdown, type Countdown } from "@vsolve/query";
+import { useTranslator } from "@vsolve/ui";
 import { useState } from "react";
 
 import { planVisitOf, type EnquiryRecord } from "@/features/enquiry/model/wire";
@@ -96,6 +97,7 @@ export interface VisitDayControls {
 const ARRIVAL_GATE_IS_OVERRIDABLE = process.env.NODE_ENV !== "production";
 
 export function useVisitDay(enquiry: EnquiryRecord): VisitDayControls | null {
+  const translator = useTranslator();
   const [askingForCode, setAskingForCode] = useState(false);
   const [gateOverridden, setGateOverridden] = useState(false);
 
@@ -108,13 +110,13 @@ export function useVisitDay(enquiry: EnquiryRecord): VisitDayControls | null {
   if (visit === null) return null;
 
   const permissions = visitPermissionsFor(visit);
-  const timing = describeVisitTiming(visit, serverClock.now());
+  const timing = describeVisitTiming(visit, serverClock.now(), translator);
   const error = complete.error ?? noShow.error;
   const dayHasCome = timing?.arrivalWindowOpen ?? false;
 
   return {
     visit,
-    status: describeVisitStatus(visit.status),
+    status: describeVisitStatus(visit.status, translator.t),
     permissions,
     timing,
     estimateCountdown,

@@ -1,4 +1,7 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 import { toOnsiteRequest } from "./onsite-draft";
 import {
@@ -24,6 +27,8 @@ import {
  * this module, so this is where a wrong stage title, a lost amount or a dropped
  * unit would be introduced — and none of those would fail a typecheck.
  */
+
+const { t } = createTranslator("en-IN", catalogs["en-IN"]);
 
 const priced = (): TapEstimate => {
   // Annotated, so `let` widens to the interface rather than narrowing to the
@@ -113,21 +118,21 @@ describe("the running total", () => {
 
 describe("what stops a send", () => {
   it("refuses an estimate with no work at all", () => {
-    expect(tapBlockedReason(EMPTY_TAP_ESTIMATE)).toMatch(/at least one/i);
+    expect(tapBlockedReason(EMPTY_TAP_ESTIMATE, t)).toMatch(/at least one/i);
   });
 
   it("refuses one where something tapped has no price", () => {
     const estimate = toggleWork(priced(), "paint");
 
-    expect(tapBlockedReason(estimate)).toMatch(/price/i);
+    expect(tapBlockedReason(estimate, t)).toMatch(/price/i);
   });
 
   it("refuses one with no answer on tax", () => {
-    expect(tapBlockedReason({ ...priced(), taxBasis: null })).toMatch(/tax/i);
+    expect(tapBlockedReason({ ...priced(), taxBasis: null }, t)).toMatch(/tax/i);
   });
 
   it("allows a complete one", () => {
-    expect(tapBlockedReason(priced())).toBeNull();
+    expect(tapBlockedReason(priced(), t)).toBeNull();
   });
 });
 

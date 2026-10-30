@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.stay import views
+from apps.stay import money, views
 
 urlpatterns = [
     path("stays", views.StayBrowseView.as_view(), name="stay-browse"),
@@ -39,6 +39,21 @@ urlpatterns = [
         "partner/stays/units/<uuid:unit_id>/rooms",
         views.PartnerUnitRoomCollectionView.as_view(),
         name="partner-stay-unit-rooms",
+    ),
+    path(
+        "partner/stays/units/<uuid:unit_id>/looks",
+        views.PartnerUnitLookCollectionView.as_view(),
+        name="partner-stay-unit-looks",
+    ),
+    path(
+        "partner/stays/looks/<uuid:look_id>",
+        views.PartnerLookDetailView.as_view(),
+        name="partner-stay-look-detail",
+    ),
+    path(
+        "partner/stays/looks/<uuid:look_id>/media",
+        views.PartnerLookMediaCreateView.as_view(),
+        name="partner-stay-look-media",
     ),
     path(
         "partner/stays/rooms/<uuid:room_id>",
@@ -122,6 +137,12 @@ urlpatterns = [
         name="partner-stay-enquiry-cancel",
     ),
     path("ops/stays", views.OpsStayCollectionView.as_view(), name="ops-stays"),
+    path("ops/stays/money", money.MoneySummaryView.as_view(), name="ops-stays-money"),
+    path(
+        "ops/stays/money/payments",
+        money.MoneyPaymentsView.as_view(),
+        name="ops-stays-money-payments",
+    ),
     path(
         "ops/stays/<uuid:property_id>/moderate",
         views.OpsStayModerateView.as_view(),

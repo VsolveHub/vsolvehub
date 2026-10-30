@@ -1,15 +1,12 @@
 "use client";
 
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Dialog, Field, Input } from "@vsolve/ui";
+import { Button, Dialog, Field, Input, useT } from "@vsolve/ui";
+import { MapPin } from "lucide-react";
 import { useState } from "react";
 
 import { useUpdatePartnerProfile } from "../queries";
 
-/**
- * Edits the partner's registered pickup / default location used to prefill
- * rental ads. Still editable per asset at create time.
- */
 export interface EditLocationDialogProps {
   open: boolean;
   currentLocation: string;
@@ -22,6 +19,7 @@ export function EditLocationDialog(props: EditLocationDialogProps) {
 }
 
 function EditLocationForm({ currentLocation, onClose }: EditLocationDialogProps) {
+  const t = useT();
   const [location, setLocation] = useState(currentLocation);
   const update = useUpdatePartnerProfile();
 
@@ -39,35 +37,58 @@ function EditLocationForm({ currentLocation, onClose }: EditLocationDialogProps)
       onOpenChange={(next) => {
         if (!next && !update.isPending) onClose();
       }}
-      title="Default pickup location"
-      description="Used to prefill rental ads. You can still change the location on each ad."
+      title={t("me.profile.editLocation.title")}
+      description={t("me.profile.editLocation.description")}
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={update.isPending}>
-            Cancel
+        <div className="flex items-center justify-end gap-2.5 w-full">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            disabled={update.isPending}
+            className="rounded-xl px-4"
+          >
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={save}
             disabled={isUnchanged}
             loading={update.isPending}
-            loadingLabel="Saving"
+            loadingLabel={t("common.saving")}
+            className="rounded-xl px-5 font-semibold"
           >
-            Save
+            {t("common.save")}
           </Button>
-        </>
+        </div>
       }
     >
-      <Field
-        label="Pickup / registered address"
-        error={update.isError ? friendlyErrorMessage(update.error) : undefined}
-      >
-        <Input
-          value={location}
-          onChange={(event) => setLocation(event.target.value)}
-          placeholder="Area, city"
-          maxLength={240}
-        />
-      </Field>
+      <div className="flex flex-col gap-4 py-1">
+        <Field
+          label={t("me.profile.editLocation.addressLabel")}
+          error={update.isError ? friendlyErrorMessage(update.error) : undefined}
+          description="Include your shop/hub address or prominent area & city (e.g. Madhapur, Hyderabad)"
+        >
+          <div className="relative">
+            <Input
+              value={location}
+              autoFocus
+              onChange={(event) => setLocation(event.target.value)}
+              placeholder="e.g. Shop #12, Hitec City Road, Madhapur, Hyderabad"
+              maxLength={240}
+              className="pl-3.5 pr-14 font-medium"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-text-muted select-none">
+              {location.length}/240
+            </span>
+          </div>
+        </Field>
+
+        <div className="flex items-start gap-2.5 rounded-xl bg-surface-sunken border border-line/80 p-3 text-xs text-text-secondary">
+          <MapPin className="h-4 w-4 shrink-0 text-text-muted mt-0.5" />
+          <span>
+            This address is used to estimate transit times and automatically pre-fill your equipment or property listings. You can still customize the pickup address for individual listings.
+          </span>
+        </div>
+      </div>
     </Dialog>
   );
 }

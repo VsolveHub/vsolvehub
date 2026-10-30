@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "./cn";
+import { useTOrDefault } from "./i18n";
+import { useHydrated } from "./use-hydrated";
 
 /**
  * Modal dialog and bottom sheet, built on the native `<dialog>` element.
@@ -53,7 +56,11 @@ interface BaseProps {
   className?: string;
 }
 
-function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
+function useModalDialog(
+  open: boolean,
+  onOpenChange: (open: boolean) => void,
+  topLayer = true,
+) {
   const ref = useRef<HTMLDialogElement>(null);
   /**
    * What had focus before the dialog opened — almost always the trigger.
@@ -77,10 +84,11 @@ function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
     if (open && !dialog.open) {
       trigger.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      dialog.showModal();
+      if (topLayer) dialog.showModal();
+      else dialog.show();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+  }, [open, topLayer]);
 
   useEffect(() => {
     if (open) return;
@@ -107,7 +115,9 @@ function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
     const handleClose = () => onOpenChange(false);
     dialog.addEventListener("close", handleClose);
     return () => dialog.removeEventListener("close", handleClose);
-  }, [onOpenChange]);
+    // `open` because a dialog kept out of the top layer is only mounted while
+    // open, so each opening is a new element to listen on.
+  }, [onOpenChange, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,7 +132,46 @@ function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
   return ref;
 }
 
+/**
+ * What `showModal()` gives for free, for a dialog kept out of the top layer:
+ * the page behind goes inert, and Escape dismisses.
+ *
+ * Only what is already on `<body>` when the dialog opens goes inert. Whatever a
+ * third-party script appends while it is open — reCAPTCHA's picture challenge —
+ * stays reachable, and that is the reason to leave the top layer at all.
+ */
+function usePageLayerModality(
+  active: boolean,
+  layer: RefObject<HTMLElement | null>,
+  dismiss: ((open: boolean) => void) | null,
+) {
+  useEffect(() => {
+    const root = layer.current;
+    if (!active || !root) return;
+
+    const madeInert: Element[] = [];
+    for (const element of Array.from(document.body.children)) {
+      if (element === root || element.hasAttribute("inert")) continue;
+      element.setAttribute("inert", "");
+      madeInert.push(element);
+    }
+    return () => {
+      for (const element of madeInert) element.removeAttribute("inert");
+    };
+  }, [active, layer]);
+
+  useEffect(() => {
+    if (!active || !dismiss) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [active, dismiss]);
+}
+
 function CloseButton({ onClick }: { onClick: () => void }) {
+  const tf = useTOrDefault();
   return (
     <button
       type="button"
@@ -134,7 +183,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
         "hover:bg-surface-hover hover:text-text",
       )}
     >
-      <span className="sr-only">Close</span>
+      <span className="sr-only">{tf("ui.dialog.close", "Close")}</span>
       <svg
         aria-hidden
         viewBox="0 0 20 20"
@@ -159,15 +208,32 @@ export function Dialog({
   footer,
   dismissable = true,
   className,
-}: BaseProps) {
-  const ref = useModalDialog(open, onOpenChange);
+  topLayer = true,
+}: BaseProps & {
+  /**
+   * `false` keeps the dialog out of the browser's top layer: it is portalled to
+   * `<body>` with its own backdrop and opened with `show()`, and the page behind
+   * is made inert by hand.
+   *
+   * For a dialog that hosts a third-party overlay. reCAPTCHA appends its picture
+   * challenge to `<body>`; a top-layer modal paints over it whatever its
+   * z-index, and makes it inert, so the challenge can be neither seen nor
+   * solved and the phone login never sends its code.
+   */
+  topLayer?: boolean;
+}) {
+  const ref = useModalDialog(open, onOpenChange, topLayer);
+  const layer = useRef<HTMLDivElement>(null);
+  const hydrated = useHydrated();
   const id = useId();
+  usePageLayerModality(open && !topLayer, layer, dismissable ? onOpenChange : null);
 
-  return (
+  const dialog = (
     <dialog
       ref={ref}
       aria-labelledby={`${id}-title`}
       aria-describedby={description ? `${id}-description` : undefined}
+      aria-modal={topLayer ? undefined : true}
       onCancel={(event) => {
         // `cancel` fires on Escape. Preventing it is what makes a dialog
         // non-dismissable.
@@ -179,13 +245,13 @@ export function Dialog({
         if (dismissable && event.target === event.currentTarget) onOpenChange(false);
       }}
       className={cn(
-        "m-auto w-[calc(100vw-2rem)] max-w-lg overflow-hidden rounded-card p-0",
+        "fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[85dvh] overflow-hidden rounded-card p-0",
         "bg-surface text-text shadow-overlay border border-line/60",
         "backdrop:bg-navy-900/50 backdrop:backdrop-blur-sm",
         className,
       )}
     >
-      <div className="flex max-h-[85vh] flex-col overflow-hidden">
+      <div className="flex max-h-[calc(100dvh-2rem)] sm:max-h-[85dvh] flex-col overflow-hidden">
         <div className="shrink-0 flex items-start justify-between gap-4 px-5 pb-3 pt-5">
           <div className="min-w-0">
             <h2 id={`${id}-title`} className="text-base font-bold text-text">
@@ -209,6 +275,24 @@ export function Dialog({
         ) : null}
       </div>
     </dialog>
+  );
+
+  if (topLayer) return dialog;
+  if (!hydrated || !open) return null;
+
+  // Below reCAPTCHA's challenge (z-index 2000000000), above the app's own chrome.
+  return createPortal(
+    <div ref={layer} className="fixed inset-0 z-[1000]">
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-navy-900/50 backdrop-blur-sm"
+        onClick={() => {
+          if (dismissable) onOpenChange(false);
+        }}
+      />
+      {dialog}
+    </div>,
+    document.body,
   );
 }
 

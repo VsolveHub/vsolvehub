@@ -1,22 +1,43 @@
 import type { Metadata } from "next";
+import Form from "next/form";
 import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { EmptyState } from "@vsolve/ui";
+
+import { RemoteImage } from "@/components/remote-image";
 
 import {
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
 import { HomepageClientSections } from "@/features/catalog/components/homepage-client-sections";
+import { JsonLd, organizationJsonLd, websiteJsonLd } from "@/features/seo/json-ld";
+import { getActiveSafetyStories } from "@/features/stories/queries";
+import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
+import { catalogCategoryHref } from "@/lib/routes";
+import { DEFAULT_DESCRIPTION, HOME_TITLE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "V Solve Hub — Book a verified technician",
-  description:
-    "Book home services with a real, eligible professional. See the price before you book, and pay only once someone has committed to the job.",
+  // The one page that names the brand itself, so the template must not add it again.
+  title: { absolute: HOME_TITLE },
+  description: DEFAULT_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: { title: HOME_TITLE, description: DEFAULT_DESCRIPTION, url: "/" },
 };
 
 export const revalidate = 300;
+
+/**
+ * The hero photograph, desktop and mobile.
+ *
+ * Drawn with `RemoteImage`, not as a CSS background: a background is found only
+ * once the stylesheet has loaded, and always arrives at the full 2070 px. JPEG
+ * at the source (no `auto=format`) so the optimizer gets a format it decodes;
+ * the phone still receives AVIF or WebP from it.
+ */
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&fit=crop";
 
 const APPROACH = [
   {
@@ -89,67 +110,124 @@ async function CategoryGrid() {
     );
   }
 
+  const firstRow = categories.slice(0, 5);
+  const secondRow = categories.slice(5, 9);
+
   return (
     <>
-      {/* Desktop: clean grid of categories */}
-      <div className="hidden md:grid grid-cols-4 lg:grid-cols-6 gap-5 lg:gap-7">
-        {categories.map((category) => (
-          <Link
-            key={category.id}
-            href={`/catalog/${category.slug}`}
-            className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          >
-            <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
-              {category.image_url !== "" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={category.image_url}
-                  alt=""
-                  loading="lazy"
-                  className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
-                />
-              ) : (
-                <span
-                  aria-hidden
-                  className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="size-6"
+      {/* Desktop: 2 rows (5 in first row, 4 in second row) as clean icons with text below */}
+      <div className="hidden md:flex flex-col gap-6 lg:gap-8">
+        {/* Row 1: 5 categories */}
+        <div className="grid grid-cols-5 gap-5 lg:gap-7">
+          {firstRow.map((category) => (
+            <IntentLink
+              key={category.id}
+              href={catalogCategoryHref(category.slug)}
+              className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+            >
+              <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
+                {category.image_url !== "" ? (
+                  <span className="relative size-full">
+                    <RemoteImage
+                      src={category.image_url}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1280px) 200px, 16vw"
+                      className="object-contain transition-transform duration-300 group-hover:scale-110"
+                    />
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden
+                    className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
                   >
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                  </svg>
-                </span>
-              )}
-            </div>
-            <div className="w-full px-1">
-              <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
-                {category.name}
-              </h3>
-            </div>
-          </Link>
-        ))}
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="size-6"
+                    >
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <div className="w-full px-1">
+                <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
+                  {category.name}
+                </h3>
+              </div>
+            </IntentLink>
+          ))}
+        </div>
+
+        {/* Row 2: 4 categories */}
+        {secondRow.length > 0 ? (
+          <div className="grid grid-cols-4 gap-5 lg:gap-7 max-w-[80%] mx-auto w-full">
+            {secondRow.map((category) => (
+              <IntentLink
+                key={category.id}
+                href={catalogCategoryHref(category.slug)}
+                className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              >
+                <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
+                  {category.image_url !== "" ? (
+                    <span className="relative size-full">
+                      <RemoteImage
+                        src={category.image_url}
+                        alt=""
+                        fill
+                        sizes="(min-width: 1280px) 200px, 16vw"
+                        className="object-contain transition-transform duration-300 group-hover:scale-110"
+                      />
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="size-6"
+                      >
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+                <div className="w-full px-1">
+                  <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
+                    {category.name}
+                  </h3>
+                </div>
+              </IntentLink>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Mobile: the whole catalogue as photo tiles, three across. */}
       <ul className="grid md:hidden list-none grid-cols-3 gap-3 p-0">
         {categories.map((category) => (
           <li key={category.id} className="min-w-0">
-            <Link
-              href={`/catalog/${category.slug}`}
+            <IntentLink
+              href={catalogCategoryHref(category.slug)}
               className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               {category.image_url !== "" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <RemoteImage
                   src={category.image_url}
                   alt=""
-                  loading="lazy"
+                  width={128}
+                  height={128}
                   className="aspect-square w-full rounded-[1.25rem] bg-surface-sunken object-cover shadow-xs"
                 />
               ) : (
@@ -173,7 +251,7 @@ async function CategoryGrid() {
               <span className="line-clamp-2 w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
                 {category.name}
               </span>
-            </Link>
+            </IntentLink>
           </li>
         ))}
       </ul>
@@ -186,10 +264,14 @@ export default async function HomePage() {
   // The whole published catalogue, unfiltered (2026-08-26): the old page kept a
   // three-slug allowlist here, so no new category could ever reach the home
   // screen without a code change.
-  const categories = await getCategories();
+  const [categories, safetyStories] = await Promise.all([
+    getCategories(),
+    getActiveSafetyStories(),
+  ]);
 
   return (
     <main className="bg-[#FAF9F7] md:bg-transparent min-h-screen pb-20 md:pb-0 overflow-x-hidden">
+      <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
       <div className="mx-auto max-w-[1216px] md:pt-8 px-4 sm:px-6 lg:px-0">
         
         {/* ---------------------------------------------------- */}
@@ -205,7 +287,7 @@ export default async function HomePage() {
                   <path fillRule="evenodd" d="M16.403 12.652a3 3 0 0 0 0-5.304 3 3 0 0 0-3.75-3.751 3 3 0 0 0-5.305 0 3 3 0 0 0-3.751 3.75 3 3 0 0 0 0 5.305 3 3 0 0 0 3.75 3.751 3 3 0 0 0 5.305 0 3 3 0 0 0 3.751-3.75Zm-2.546-4.46a.75.75 0 0 0-1.214-.883l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
                 </svg>
               </span>
-              100% Vetted Pros
+              ID-verified pros
             </div>
 
             {/* Main Hero Container */}
@@ -237,11 +319,24 @@ export default async function HomePage() {
               </div>
 
               {/* Right Image */}
-              <div className="absolute inset-0 md:static md:h-[550px] w-full md:w-3/4 md:ml-auto md:rounded-card overflow-hidden bg-navy-100 md:shadow-inner">
-                <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center md:bg-top" />
+              <div className="absolute inset-0 md:relative md:h-[550px] w-full md:w-3/4 md:ml-auto md:rounded-card overflow-hidden bg-navy-100 md:shadow-inner">
+                {/* Lazy on purpose: this tree is `display: none` on phones, and an
+                    eager image downloads even when hidden. */}
+                <RemoteImage
+                  src={HERO_IMAGE}
+                  alt=""
+                  fill
+                  sizes="(min-width: 1280px) 912px, 75vw"
+                  className="object-cover object-center md:object-top"
+                />
               </div>
             </div>
           </section>
+
+          {/* Safety Stories Section (Instagram-style 24h updates) */}
+          <div className="mt-12 mb-2">
+            <SafetyStoriesTray initialStories={safetyStories} />
+          </div>
 
           {/* Curated Services Section */}
           <section aria-labelledby="categories-heading" className="mt-20 pb-12 bg-transparent rounded-none px-0">
@@ -308,8 +403,9 @@ export default async function HomePage() {
         {/* MOBILE LAYOUT (NEW PREMIUM REDESIGN MATCHING MOCKUP) */}
         {/* ---------------------------------------------------- */}
         <div className="block md:hidden flex flex-col gap-8 pt-2">
-          {/* Search Input */}
-          <div className="relative w-full">
+          {/* Search Input — submits to the catalogue's `?q=` search, which works before
+              hydration too, so a slow connection still gets results. */}
+          <Form action="/catalog" role="search" className="relative w-full">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-text-secondary">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-4 opacity-60">
                 <circle cx="9" cy="9" r="6" />
@@ -317,17 +413,26 @@ export default async function HomePage() {
               </svg>
             </div>
             <input
-              type="text"
+              type="search"
+              name="q"
+              enterKeyHint="search"
+              aria-label="Search for a service"
               placeholder="Search for a service..."
-              className="w-full bg-[#f4f1ec] border-0 rounded-xl py-3.5 pl-11 pr-4 text-sm text-navy-900 placeholder:text-text-secondary/70 focus:outline-none focus:ring-2 focus:ring-focus-ring/25 font-medium shadow-2xs"
+              className="w-full bg-[#f4f1ec] border-0 rounded-xl py-3.5 pl-11 pr-4 text-base text-navy-900 placeholder:text-text-secondary/70 focus:outline-none focus:ring-2 focus:ring-focus-ring/25 font-medium shadow-2xs"
             />
-          </div>
+          </Form>
 
           {/* Hero Banner Card */}
           <div className="relative min-h-[190px] rounded-[1.5rem] overflow-hidden shadow-md">
-            <div 
-              className="absolute inset-0 bg-cover bg-center" 
-              style={{ backgroundImage: `url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')` }}
+            {/* The largest thing on a phone's first screen, so it is fetched first. */}
+            <RemoteImage
+              src={HERO_IMAGE}
+              alt=""
+              fill
+              sizes="100vw"
+              loading="eager"
+              fetchPriority="high"
+              className="object-cover object-center"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-navy-900/90 via-navy-900/50 to-transparent" />
             
@@ -343,30 +448,37 @@ export default async function HomePage() {
             </div>
           </div>
 
+          {/* Safety Stories Tray */}
+          <SafetyStoriesTray initialStories={safetyStories} />
+
           {/* Our Services Section */}
           <div className="flex flex-col gap-3.5">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-extrabold text-[#00112e]">Our Services</h2>
-              <Link href="/catalog" className="text-sm font-bold text-[#f87000] hover:text-[#fb8130] transition-colors">
+              <Link href="/catalog" className="-my-3 py-3 text-sm font-bold text-[#f87000] hover:text-[#fb8130] transition-colors">
                 See All
               </Link>
             </div>
             <ul className="grid list-none grid-cols-3 gap-3 sm:gap-4 p-0">
-              {categories.map((category) => (
+              {categories.map((category, index) => (
                 <li key={category.id} className="min-w-0">
-                  <Link
-                    href={`/catalog/${category.slug}`}
+                  <IntentLink
+                    href={catalogCategoryHref(category.slug)}
                     className="group flex flex-col items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                   >
                     <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-2.5 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
                       {category.image_url !== "" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={category.image_url}
-                          alt=""
-                          loading="lazy"
-                          className="size-full object-contain"
-                        />
+                        <span className="relative size-full">
+                          <RemoteImage
+                            src={category.image_url}
+                            alt=""
+                            fill
+                            sizes="33vw"
+                            // The first row is on the first screen; the rest wait for scroll.
+                            loading={index < 3 ? "eager" : "lazy"}
+                            className="object-contain"
+                          />
+                        </span>
                       ) : (
                         <span
                           aria-hidden
@@ -389,7 +501,7 @@ export default async function HomePage() {
                     <span className="line-clamp-2 w-full text-center text-[11px] sm:text-xs font-bold leading-tight text-[#00112e] group-hover:text-[#f87000] transition-colors px-0.5">
                       {category.name}
                     </span>
-                  </Link>
+                  </IntentLink>
                 </li>
               ))}
             </ul>
@@ -463,7 +575,7 @@ export default async function HomePage() {
               Why V Solve Hub?
             </h2>
             
-            {/* Quality Assurance Card */}
+            {/* Upfront Price Card */}
             <div className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-4 flex items-center gap-4 shadow-card hover:shadow-md transition-shadow">
               <div className="flex size-12 items-center justify-center rounded-full bg-[#00112e] text-white shrink-0 shadow-xs">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
@@ -472,14 +584,14 @@ export default async function HomePage() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-extrabold text-[#00112e] text-sm">100% Quality Assurance</h3>
+                <h3 className="font-extrabold text-[#00112e] text-sm">Price before you pay</h3>
                 <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-                  Guaranteed satisfaction on every job.
+                  See the amount for your job before payment; extras only with your approval.
                 </p>
               </div>
             </div>
 
-            {/* Expert Training Card */}
+            {/* Skill Approval Card */}
             <div className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-4 flex items-center gap-4 shadow-card hover:shadow-md transition-shadow">
               <div className="flex size-12 items-center justify-center rounded-full bg-[#00112e] text-white shrink-0 shadow-xs">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
@@ -488,9 +600,9 @@ export default async function HomePage() {
                 </svg>
               </div>
               <div>
-                <h3 className="font-extrabold text-[#00112e] text-sm">Expert Training</h3>
+                <h3 className="font-extrabold text-[#00112e] text-sm">Approved for each skill</h3>
                 <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-                  Professionals vetted and trained to elite standards.
+                  Professionals are ID-verified and approved for each kind of work they take.
                 </p>
               </div>
             </div>

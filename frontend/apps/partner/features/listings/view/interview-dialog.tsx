@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Dialog, Field, Input, Textarea } from "@vsolve/ui";
+import { Button, Dialog, Field, Input, Textarea, useT } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
 import { INTERVIEW_MODES, type InterviewMode } from "../jobs-queries";
@@ -29,6 +29,7 @@ export function InterviewDialog({
   onClose: () => void;
   onSubmit: (body: { scheduled_date: string; start_time: string; mode: InterviewMode; location_text: string; note: string }) => void;
 }) {
+  const t = useT();
   const [day, setDay] = useState(tomorrowIso());
   const [time, setTime] = useState("11:00");
   const [mode, setMode] = useState<InterviewMode>("IN_PERSON");
@@ -49,32 +50,32 @@ export function InterviewDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title={`Interview ${candidateName}`}
-      description="They can accept, ask for another time, or decline. Once accepted you both see each other's number."
+      title={t("listings.interview.title", { name: candidateName })}
+      description={t("listings.interview.description")}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             loading={isPending}
             onClick={() => onSubmit({ scheduled_date: day, start_time: time, mode, location_text: mode === "IN_PERSON" ? place : "", note })}
           >
-            Send invitation
+            {t("listings.interview.sendInvitation")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Day" showOptional={false}>
+          <Field label={t("listings.interview.day")} showOptional={false}>
             <Input type="date" value={day} min={tomorrowIso().slice(0, 8) + "01"} onChange={(e) => setDay(e.target.value)} />
           </Field>
-          <Field label="Time" showOptional={false}>
+          <Field label={t("listings.interview.time")} showOptional={false}>
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </Field>
         </div>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="How">
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("listings.interview.howAriaLabel")}>
           {INTERVIEW_MODES.map((m) => (
             <button
               key={m.value}
@@ -84,17 +85,17 @@ export function InterviewDialog({
               onClick={() => setMode(m.value)}
               className={`min-h-10 rounded-full border px-4 text-sm font-semibold ${mode === m.value ? "border-action bg-action text-action-text" : "border-line bg-surface text-text"}`}
             >
-              {m.label}
+              {t(m.label)}
             </button>
           ))}
         </div>
         {mode === "IN_PERSON" ? (
-          <Field label="Where">
+          <Field label={t("listings.interview.where")}>
             <Input value={place} maxLength={240} onChange={(e) => setPlace(e.target.value)} />
           </Field>
         ) : null}
-        <Field label="Note for the candidate">
-          <Textarea rows={2} maxLength={480} value={note} placeholder="e.g. Bring your ID and resume." onChange={(e) => setNote(e.target.value)} />
+        <Field label={t("listings.interview.noteLabel")}>
+          <Textarea rows={2} maxLength={480} value={note} placeholder={t("listings.interview.notePlaceholder")} onChange={(e) => setNote(e.target.value)} />
         </Field>
         {error ? <p role="alert" className="text-sm text-danger-text">{error}</p> : null}
       </div>

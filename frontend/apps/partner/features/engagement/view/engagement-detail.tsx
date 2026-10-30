@@ -9,6 +9,7 @@ import {
   SkeletonRegion,
   Timeline,
   TimelineEvent,
+  useT,
 } from "@vsolve/ui";
 import {
   describeError,
@@ -86,6 +87,7 @@ export function EngagementDetail({
   workspace,
   focusStageId,
 }: EngagementDetailProps) {
+  const t = useT();
   const query = usePartnerEngagement(engagementId);
 
   // The merged WORK stack is where every engagement is listed now; the old
@@ -96,7 +98,7 @@ export function EngagementDetail({
       className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
     >
       <ArrowLeft size={16} aria-hidden />
-      All {wording.parentMany}
+      {t("work.engagementDetail.allParentMany", { parentMany: wording.parentMany })}
     </Link>
   );
 
@@ -104,7 +106,7 @@ export function EngagementDetail({
     return (
       <div className="flex flex-col gap-4">
         {back}
-        <SkeletonRegion loading label={`Loading this ${wording.parent}`}>
+        <SkeletonRegion loading label={t("work.engagementDetail.loading", { parent: wording.parent })}>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-48 w-full" />
@@ -122,14 +124,18 @@ export function EngagementDetail({
       <div className="flex flex-col gap-4">
         {back}
         <ErrorState
-          title={gone ? `This ${wording.parent} is not yours` : presentation.title}
+          title={
+            gone
+              ? t("work.engagementDetail.notYours.title", { parent: wording.parent })
+              : presentation.title
+          }
           message={
             gone
-              ? `Vsolve has no ${wording.parent} with this reference on your account.`
+              ? t("work.engagementDetail.notYours.message", { parent: wording.parent })
               : presentation.message
           }
           severity={presentation.severity}
-          actionLabel={gone ? undefined : "Try again"}
+          actionLabel={gone ? undefined : t("common.tryAgain")}
           onAction={gone ? undefined : () => void query.refetch()}
           reference={presentation.reference}
         />
@@ -138,7 +144,7 @@ export function EngagementDetail({
   }
 
   const engagement = query.data;
-  const status = describeEngagementStatus(engagement, wording);
+  const status = describeEngagementStatus(engagement, wording, t);
   const stages = orderedStages(engagement);
   const focusedStage =
     focusStageId === undefined ? null : stages.find((stage) => stage.id === focusStageId) ?? null;
@@ -148,8 +154,8 @@ export function EngagementDetail({
       <div className="flex flex-col gap-4">
         {back}
         <ErrorState
-          title="This stage is not part of the job"
-          message="Open the job again to see its current stages."
+          title={t("work.engagementDetail.stageNotPart.title")}
+          message={t("work.engagementDetail.stageNotPart.message")}
           severity="warning"
         />
       </div>
@@ -166,7 +172,7 @@ export function EngagementDetail({
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold text-text">
             {focusedStage !== null
-              ? "Stage workspace"
+              ? t("work.engagementDetail.stageWorkspace")
               : engagement.service_name?.trim()
                 ? engagement.service_name.trim()
                 : wording.parent.charAt(0).toUpperCase() + wording.parent.slice(1)}
@@ -176,16 +182,15 @@ export function EngagementDetail({
               {status.label}
             </Badge>
           ) : (
-            <Badge tone="neutral">State not recognised</Badge>
+            <Badge tone="neutral">{t("work.engagementDetail.statusUnknown")}</Badge>
           )}
         </div>
         {focusedStage === null ? (
           <p className="text-sm leading-6 text-text-secondary">
-            {status?.sentence ??
-              "Vsolve sent a state this version of the app cannot describe. Nothing is wrong with your record; updating the app usually resolves it."}
+            {status?.sentence ?? t("work.engagementDetail.unknownStatusMessage")}
           </p>
         ) : (
-          <p className="text-sm text-text-secondary">Your next action and stage record, in one place.</p>
+          <p className="text-sm text-text-secondary">{t("work.engagementDetail.stageWorkspaceHint")}</p>
         )}
       </header>
 
@@ -194,7 +199,9 @@ export function EngagementDetail({
           id="engagement-stages"
           className="text-xs font-semibold uppercase tracking-wide text-text-muted"
         >
-          {focusedStage === null ? `The ${wording.many}` : "Current stage"}
+          {focusedStage === null
+            ? t("work.engagementDetail.theMany", { many: wording.many })
+            : t("work.engagementDetail.currentStage")}
         </h2>
         {visibleStages.map((stage) => (
           <StagePanel
@@ -226,16 +233,25 @@ export function EngagementDetail({
         </>
       ) : (
         <Card className="flex flex-col gap-3 p-4">
-          <Disclosure summary="Agreement and payment" hint="Job details">
+          <Disclosure
+            summary={t("work.engagementDetail.disclosure.agreementAndPayment")}
+            hint={t("work.engagementDetail.disclosure.jobDetails")}
+          >
             <div className="flex flex-col gap-3">
               <AgreementPanel engagement={engagement} wording={wording} />
               <PayoutPanel engagement={engagement} wording={wording} />
             </div>
           </Disclosure>
-          <Disclosure summary="Change the agreed work" hint="Optional">
+          <Disclosure
+            summary={t("work.engagementDetail.disclosure.changeAgreedWork")}
+            hint={t("common.optional")}
+          >
             <AmendmentPanel engagement={engagement} wording={wording} />
           </Disclosure>
-          <Disclosure summary="Job history" hint="Timeline">
+          <Disclosure
+            summary={t("work.engagementDetail.disclosure.jobHistory")}
+            hint={t("work.engagementDetail.disclosure.timeline")}
+          >
             <EngagementHistory engagement={engagement} wording={wording} />
           </Disclosure>
         </Card>
@@ -261,23 +277,24 @@ export function EngagementDetail({
  * this section.
  */
 function ProjectTails() {
+  const t = useT();
   return (
     <section aria-labelledby="project-tails" className="flex flex-col gap-2">
       <h2
         id="project-tails"
         className="text-xs font-semibold uppercase tracking-wide text-text-muted"
       >
-        Delays and handover
+        {t("work.engagementDetail.projectTails.heading")}
       </h2>
       <NotBuiltYet
-        what="Claiming a delay the customer caused"
-        meanwhile="There is no form yet for claiming time back when the site was not ready or access was refused. A change request below can ask for the schedule to move, but it will not be recorded as the customer's delay. Record what happened as evidence on the stage so there is a dated account of it."
-        reference="M2-FE-605 — the delay-claim endpoint is published; this screen is not built."
+        what={t("work.engagementDetail.projectTails.delayClaim.what")}
+        meanwhile={t("work.engagementDetail.projectTails.delayClaim.meanwhile")}
+        reference={t("work.engagementDetail.projectTails.delayClaim.reference")}
       />
       <NotBuiltYet
-        what="Handing over digital deliverables"
-        meanwhile="Photographs, video and documents attached to a stage go to the customer with your submission, and they accept them by approving that stage. A separate handover with its own acceptance does not exist yet."
-        reference="M2-FE-606 — the handover endpoint is published; this screen is not built."
+        what={t("work.engagementDetail.projectTails.handover.what")}
+        meanwhile={t("work.engagementDetail.projectTails.handover.meanwhile")}
+        reference={t("work.engagementDetail.projectTails.handover.reference")}
       />
     </section>
   );
@@ -298,6 +315,7 @@ function EngagementHistory({
   readonly engagement: Engagement;
   readonly wording: StageWording;
 }) {
+  const t = useT();
   const query = usePartnerEngagementEvents(engagement.id);
 
   if (query.isPending || query.isError) return null;
@@ -307,18 +325,18 @@ function EngagementHistory({
 
   return (
     <Card className="flex flex-col gap-3 p-4">
-      <h2 className="text-base font-semibold text-text">What has happened</h2>
-      <Timeline label={`History of this ${wording.parent}`}>
+      <h2 className="text-base font-semibold text-text">{t("work.engagementDetail.history.heading")}</h2>
+      <Timeline label={t("work.engagementDetail.history.timelineLabel", { parent: wording.parent })}>
         {events.map((event) => (
           <TimelineEvent
             key={event.id}
             title={event.reason.trim() === "" ? event.to_status : event.reason}
-            timestamp={timeAgo(event.occurred_at)}
+            timestamp={timeAgo(event.occurred_at, t)}
             tone={event.to_status === "DISPUTED" ? "warning" : "neutral"}
           >
             {event.actor_is_system
-              ? `Recorded automatically by Vsolve, not by a person.`
-              : `Recorded when somebody acted on this ${wording.parent}.`}
+              ? t("work.engagementDetail.history.byVsolve")
+              : t("work.engagementDetail.history.bySomebody", { parent: wording.parent })}
           </TimelineEvent>
         ))}
       </Timeline>

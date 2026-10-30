@@ -1,12 +1,15 @@
 "use client";
 
+import { serverClock } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { ErrorState, cn, formatMoney } from "@vsolve/ui";
+import { Card, ErrorState, buttonStyles, cn, formatMoney, useT } from "@vsolve/ui";
+import { Phone, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { CompletionRating } from "@/features/ratings/view/completion-rating";
+import { SiteAddress } from "@/features/visit/view/site-address";
 import { STATUS_COPY, type StatusTone } from "@/features/work/model/status";
 import {
   canAbort,
@@ -21,10 +24,14 @@ import {
   useMarkEnRoute,
   useReleaseBooking,
   useSubmitCompletion,
+  useRefreshVisitAtGates,
   useVerifyStartOtp,
+  visitContact,
+  waitingGate,
   type OutcomeInput,
   type PartnerVisit,
   type VisitStatus,
+  type WaitingGate,
 } from "@/features/work/queries";
 
 /**
@@ -45,19 +52,13 @@ import {
  *
  * ## What the canvas draws that is not here
  *
- * 1. **The call-customer button.** `Today.dc.html` ends in a large green call
- *    button and the approved spec lists it as a feature. No phone number is
- *    published to reach it: `Schemas["PartnerBooking"]`
- *    (`schema.d.ts:7926-7948`) carries no contact object at all, and the only
- *    `phone_number` fields in the whole generated schema belong to
- *    `PartnerProfile` and `User` — this Partner's own number, not the
- *    customer's. `VisitVendor`'s docblock (`schema.d.ts:11111`) states the rule
- *    outright: "No phone number and no address. Contact is released by the
- *    engagement, not by a visit." `POST /partner/bookings/{id}/contact-attempts/`
- *    exists but only *records* an attempt; it hands back no number. A `tel:`
- *    link against a field that does not exist would be a dead button, so there
- *    is none. **"Customer is not here"** below is the real, published control
- *    for the situation that button was for.
+ * 1. **The call-customer button is on a clock.** Contract 1.82.0 publishes the
+ *    address, the Maps route, the customer's first name and their number on
+ *    the visit — `null` until two hours before the start and again once the
+ *    visit is no longer live. `VisitLocation` draws the locked card until then
+ *    and the address, route and Call button after; it never invents a number.
+ *    "On the way" and "Arrived" are clocked too (`allowed_actions`), and the
+ *    screen says when each opens rather than hiding the step without a word.
  * 2. **The camera-first evidence capture.** `POST
  *    /partner/bookings/{id}/evidence/uploads/` is published, but no hook in
  *    `features/work/queries.ts` mounts it and wiring the presign/PUT/finalize
@@ -74,6 +75,7 @@ import {
  *    `ReleaseAction` below carries the one textarea on this screen.
  */
 export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
   const router = useRouter();
 
   // Every command is declared unconditionally: the branches below return early,
@@ -81,6 +83,8 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
   const enRoute = useMarkEnRoute();
   const arrived = useMarkArrived();
   const unavailable = useMarkCustomerUnavailable();
+  useRefreshVisitAtGates(visit);
+  const gate = waitingGate(visit, serverClock.now());
 
   const status = STATUS_COPY[visit.status];
   const versioned = { bookingId: visit.id, expectedVersion: visit.version };
@@ -91,7 +95,7 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
   return (
     <>
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
-      <header className="bg-[linear-gradient(150deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-6">
+      <header className="bg-[linear-gradient(150deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-6">
         <div className="flex items-center justify-between gap-3">
         <button
           type="button"
@@ -99,28 +103,28 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
           className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 transition-colors duration-200 hover:bg-surface/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
         >
           <Pictogram name="back" size="md" className="text-surface" />
-          <span className="sr-only">Back</span>
+          <span className="sr-only">{t("common.back")}</span>
         </button>
           <span className="rounded-full border border-surface/25 bg-surface/12 px-3 py-1 text-xs font-bold uppercase tracking-[0.05em] text-surface">
-            {status.label}
+            {t(status.labelKey)}
           </span>
         </div>
 
         <p className="mt-5 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-navy-200">
-          Service visit
+          {t("work.visitJob.eyebrow")}
         </p>
         <JobTitle visit={visit} />
 
         <div className={cn("mt-5 grid gap-2", money ? "grid-cols-2" : "grid-cols-1")}>
           <HeroFact
             icon="time"
-            label="Starts"
-            value={clockTime(visit.scheduled_start) ?? "Time pending"}
+            label={t("work.visitJob.starts")}
+            value={clockTime(visit.scheduled_start) ?? t("work.visitJob.timePending")}
           />
           {money ? (
             <HeroFact
               icon="money"
-              label={visit.earning ? "Final earning" : "Estimated earning"}
+              label={visit.earning ? t("work.visitJob.finalEarning") : t("work.visitJob.estimatedEarning")}
               value={formatMoney(money.net_paise)}
             />
           ) : null}
@@ -136,6 +140,7 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
       <div className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-5">
         <ServiceDetails visit={visit} />
         <VisitDetails visit={visit} />
+        <VisitLocation visit={visit} />
 
         <section
           aria-labelledby="next-step-heading"
@@ -147,20 +152,22 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
             </span>
             <span className="min-w-0">
               <h2 id="next-step-heading" className="text-base font-extrabold text-text">
-                Next step
+                {t("work.visitJob.nextStep")}
               </h2>
               <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-                {STATUS_GUIDANCE[visit.status]}
+                {t(STATUS_GUIDANCE[visit.status])}
               </p>
             </span>
           </div>
 
           <div className="flex flex-col gap-3">
+        {gate !== null ? <GateNotice gate={gate} /> : null}
+
         {canGoEnRoute(visit) ? (
           <BigAction
             tone="secondary"
             icon="go"
-            label="I am on my way"
+            label={t("work.visitJob.onMyWay")}
             disabled={busy}
             onClick={() => enRoute.mutate(versioned)}
           />
@@ -170,7 +177,7 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
           <BigAction
             tone="success"
             icon="yes"
-            label="I have arrived"
+            label={t("work.visitJob.arrived")}
             disabled={busy}
             onClick={() => arrived.mutate(versioned)}
           />
@@ -183,8 +190,8 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
         {visit.status === "ARRIVED" && visit.customer_unavailable_wait_started_at === null ? (
           <SecondaryAction
             icon="later"
-            label="Nobody is here"
-            consequence="Starts a paid wait. You keep the job."
+            label={t("work.visitJob.nobodyHere")}
+            consequence={t("work.visitJob.nobodyHereConsequence")}
             disabled={busy}
             onClick={() => unavailable.mutate(versioned)}
           />
@@ -221,6 +228,118 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
 }
 
 /**
+ * Where the job is and who to ask for, on the server's clock.
+ *
+ * Before the unlock the locality is all there is, and the card says when the
+ * rest arrives — a Partner planning tomorrow knows the area, not the door.
+ * From two hours out the server sends the address, the Maps route and the
+ * customer's first name and number; once the visit ends it withdraws them, and
+ * this card goes with them rather than showing a "do not travel" note under a
+ * finished job.
+ */
+function VisitLocation({ visit }: { readonly visit: PartnerVisit }) {
+  const live = visit.status === "CONFIRMED" || visit.status === "EN_ROUTE" ||
+    visit.status === "ARRIVED" || visit.status === "IN_PROGRESS";
+  const t = useT();
+  if (!live) return null;
+  const contact = visitContact(visit);
+  const unlocksAt = clockTime(visit.gates.address_unlocks_at);
+
+  return (
+    <section aria-label={t("work.visitJob.location.aria")} className="flex flex-col gap-3">
+      <SiteAddress
+        address={visit.site_address}
+        approximateArea={visit.approximate_area ?? ""}
+        lockedNote={
+          unlocksAt === null
+            ? t("work.visitJob.location.lockedNoteSoon")
+            : t("work.visitJob.location.lockedNoteAt", {
+                time: unlocksAt,
+                date: calendarDate(visit.gates.address_unlocks_at) ?? "",
+              })
+        }
+      />
+      {contact === null ? null : (
+        <Card className="flex items-center gap-3 p-4">
+          <span
+            aria-hidden
+            className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-sunken text-action-secondary"
+          >
+            <User size={19} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              {t("work.visitJob.location.visiting")}
+            </h2>
+            <p className="truncate text-base font-bold text-text">{contact.firstName}</p>
+          </div>
+          <a
+            href={`tel:${contact.phone}`}
+            className={buttonStyles({ variant: "outline", className: "gap-2" })}
+          >
+            <Phone size={16} aria-hidden />
+            {t("work.visitJob.location.call")}
+          </a>
+        </Card>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Why the next step is not on the screen yet, and when it will be.
+ *
+ * Drawn from the server's published window. `opening` is the gap between the
+ * clock reaching the window and the refetch landing — a second or two.
+ */
+function GateNotice({ gate }: { readonly gate: WaitingGate }) {
+  const t = useT();
+  const step = gate.action === "MARK_EN_ROUTE"
+    ? t("work.visitJob.gate.stepOnMyWay")
+    : t("work.visitJob.gate.stepArrived");
+  const closesAt = clockTime(gate.closesAt);
+  const opensAt = clockTime(gate.opensAt);
+  const copy =
+    gate.state === "closed"
+      ? closesAt === null
+        ? t("work.visitJob.gate.closedAtEnd", { step })
+        : t("work.visitJob.gate.closedAt", { step, time: closesAt })
+      : gate.state === "opening"
+        ? t("work.visitJob.gate.opening", { step })
+        : opensAt === null
+          ? t("work.visitJob.gate.opensAtVisitTime", { step, date: calendarDate(gate.opensAt) ?? "" })
+          : t("work.visitJob.gate.opensAt", { step, time: opensAt, date: calendarDate(gate.opensAt) ?? "" });
+
+  return (
+    <p
+      role="status"
+      className={cn(
+        "rounded-card border px-3.5 py-3 text-sm font-semibold leading-5",
+        gate.state === "closed"
+          ? "border-danger-line bg-danger-surface text-danger-text"
+          : "border-line bg-surface-sunken text-text-secondary",
+      )}
+    >
+      {copy}
+    </p>
+  );
+}
+
+/**
+ * Parses titles with quantities like "Cupboard / Hinge Repair x 1" or "Tap Replacement × 2"
+ * to cleanly separate the service name from its quantity, preventing awkward orphaned line-wrapping.
+ */
+function parseServiceTitle(raw: string | null | undefined): { title: string; quantity: number | null } {
+  if (!raw) return { title: "", quantity: null };
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(.*?)(?:\s+[x×]\s*(\d+))$/i);
+  if (match && match[1] !== undefined && match[2] !== undefined) {
+    return { title: match[1].trim(), quantity: parseInt(match[2], 10) };
+  }
+  return { title: trimmed, quantity: null };
+}
+
+/**
  * What this job is, from the durable booked scope.
  *
  * `display_title` is derived from immutable fulfilment-unit lines, so it exists
@@ -229,14 +348,25 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
  * neither renders "Your job".
  */
 function JobTitle({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
   const durableTitle = visit.display_title?.trim() || null;
   const [first, ...rest] = visit.work_tasks;
+  const rawTitle = durableTitle ?? (first === undefined ? t("work.visitJob.yourJob") : first.label);
+  const parsed = parseServiceTitle(rawTitle);
 
   return (
-    <h1 className="mt-1 max-w-[28ch] text-[1.75rem] font-extrabold leading-tight tracking-[-0.025em] text-surface">
-      {durableTitle ?? (first === undefined ? "Your job" : first.label)}
+    <h1 className="mt-1 flex flex-wrap items-baseline gap-2 text-2xl font-extrabold leading-tight tracking-[-0.025em] text-surface sm:text-[1.75rem]">
+      <span>{parsed.title}</span>
+      {parsed.quantity ? (
+        <span className="inline-flex shrink-0 items-center rounded-full border border-surface/25 bg-surface/15 px-2.5 py-0.5 text-xs font-bold tracking-wide text-surface">
+          ×{parsed.quantity}
+        </span>
+      ) : null}
       {durableTitle === null && rest.length > 0 ? (
-        <span className="font-semibold text-navy-200"> +{rest.length} more</span>
+        <span className="font-semibold text-navy-200">
+          {" "}
+          {t("work.visitJob.moreTasks", { count: rest.length })}
+        </span>
       ) : null}
     </h1>
   );
@@ -252,7 +382,7 @@ function HeroFact({
   readonly value: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-card border border-surface/15 bg-surface/10 px-3 py-2.5">
+    <div className="flex h-full min-w-0 items-center gap-2.5 rounded-card border border-surface/15 bg-surface/10 px-3 py-2.5">
       <Pictogram name={icon} size="md" className="shrink-0 text-action-hover" />
       <span className="min-w-0">
         <span className="block text-[0.625rem] font-bold uppercase tracking-[0.06em] text-navy-200">
@@ -268,6 +398,9 @@ function HeroFact({
 
 /** The immutable booked scope, available before start-OTP creates work tasks. */
 function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
+  const parsedFallback = parseServiceTitle(visit.display_title);
+
   return (
     <section
       aria-labelledby="service-details-heading"
@@ -279,35 +412,44 @@ function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
         </span>
         <span>
           <p className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-            Booked scope
+            {t("work.visitJob.bookedScope")}
           </p>
           <h2 id="service-details-heading" className="text-base font-extrabold text-text">
-            Service details
+            {t("work.visitJob.serviceDetails")}
           </h2>
         </span>
       </div>
 
       <ul className="mt-4 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface-sunken">
         {visit.service_lines.length > 0 ? (
-          visit.service_lines.map((line) => (
-            <li key={line.line_id} className="flex items-center gap-3 px-3.5 py-3">
-              <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
-              <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
-                {line.service_label}
-              </span>
-              {line.quantity > 1 ? (
-                <span className="shrink-0 rounded-full border border-line bg-surface px-2 py-1 text-xs font-bold text-text-secondary">
-                  Qty {line.quantity}
+          visit.service_lines.map((line) => {
+            const parsedLine = parseServiceTitle(line.service_label);
+            const qty = line.quantity > 1 ? line.quantity : parsedLine.quantity;
+            return (
+              <li key={line.line_id} className="flex items-center gap-3 px-3.5 py-3">
+                <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
+                <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
+                  {parsedLine.title || line.service_label}
                 </span>
-              ) : null}
-            </li>
-          ))
+                {qty ? (
+                  <span className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-bold text-text-secondary">
+                    {t("work.visitJob.qty", { quantity: qty })}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })
         ) : (
           <li className="flex items-center gap-3 px-3.5 py-3">
             <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
-            <span className="text-sm font-semibold leading-5 text-text">
-              {visit.display_title?.trim() || "Your booked service"}
+            <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
+              {parsedFallback.title || t("work.visitJob.yourBookedService")}
             </span>
+            {parsedFallback.quantity ? (
+              <span className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-bold text-text-secondary">
+                {t("work.visitJob.qty", { quantity: parsedFallback.quantity })}
+              </span>
+            ) : null}
           </li>
         )}
       </ul>
@@ -316,7 +458,7 @@ function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
         <div className="mt-4 border-t border-line pt-4">
           <div className="flex items-center gap-2 text-sm font-bold text-text">
             <Pictogram name="doing" size="sm" className="text-action-secondary" />
-            Bring with you
+            {t("work.visitJob.bringWithYou")}
           </div>
           <ul className="mt-2 flex flex-wrap gap-2">
             {visit.requirements.map((requirement) => (
@@ -335,25 +477,26 @@ function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
 }
 
 function VisitDetails({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
   return (
     <section aria-labelledby="visit-details-heading">
       <h2 id="visit-details-heading" className="mb-2 text-sm font-extrabold text-text">
-        Visit details
+        {t("work.visitJob.visitDetails")}
       </h2>
       <dl className="grid grid-cols-2 gap-2">
-        <DetailFact icon="date" label="Date" value={calendarDate(visit.scheduled_start)} />
+        <DetailFact icon="date" label={t("work.visitJob.date")} value={calendarDate(visit.scheduled_start) ?? t("work.visitJob.datePending")} />
         <DetailFact
           icon="time"
-          label="Start time"
-          value={clockTime(visit.scheduled_start) ?? "Time pending"}
+          label={t("work.visitJob.startTime")}
+          value={clockTime(visit.scheduled_start) ?? t("work.visitJob.timePending")}
         />
         <DetailFact
           icon="days"
-          label="Expected work"
-          value={durationLabel(visit.estimated_duration_minutes)}
+          label={t("work.visitJob.expectedWork")}
+          value={durationLabel(visit.estimated_duration_minutes, t)}
         />
         {visit.approximate_area ? (
-          <DetailFact icon="distance" label="Service area" value={visit.approximate_area} />
+          <DetailFact icon="distance" label={t("work.visitJob.serviceArea")} value={visit.approximate_area} />
         ) : null}
       </dl>
     </section>
@@ -380,18 +523,19 @@ function DetailFact({
   );
 }
 
+/** Catalogue keys; resolved with `t` at render time. */
 const STATUS_GUIDANCE: Record<VisitStatus, string> = {
-  CONFIRMED: "Review the scope and tools, then start travelling when you are ready.",
-  EN_ROUTE: "Mark arrival only after you have reached the customer’s site.",
-  ARRIVED: "Ask the customer for the start code before beginning the work.",
-  IN_PROGRESS: "Complete the booked scope, then report the outcome of every task.",
-  ABORTED: "Report what was completed so the job can be settled correctly.",
-  COMPLETION_SUBMITTED: "Your report is with the customer. No action is needed right now.",
-  COMPLETED: "This job is complete and its final earning is shown above.",
-  PARTIALLY_COMPLETED: "The completed portion has been recorded and settled.",
-  DISPUTED: "The customer raised a problem. Vsolve will guide the next action.",
-  RECOVERY_REQUIRED: "Vsolve support needs to resolve this job before it can continue.",
-  CANCELLED: "This visit was cancelled. No travel or work is needed.",
+  CONFIRMED: "work.visitJob.guidance.confirmed",
+  EN_ROUTE: "work.visitJob.guidance.enRoute",
+  ARRIVED: "work.visitJob.guidance.arrived",
+  IN_PROGRESS: "work.visitJob.guidance.inProgress",
+  ABORTED: "work.visitJob.guidance.aborted",
+  COMPLETION_SUBMITTED: "work.visitJob.guidance.completionSubmitted",
+  COMPLETED: "work.visitJob.guidance.completed",
+  PARTIALLY_COMPLETED: "work.visitJob.guidance.partiallyCompleted",
+  DISPUTED: "work.visitJob.guidance.disputed",
+  RECOVERY_REQUIRED: "work.visitJob.guidance.recoveryRequired",
+  CANCELLED: "work.visitJob.guidance.cancelled",
 };
 
 /**
@@ -457,6 +601,7 @@ function isWaiting(visit: PartnerVisit): boolean {
  * keypad, and labelled for a screen reader rather than by visible prose.
  */
 function StartCodePad({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
   const verify = useVerifyStartOtp();
   const [code, setCode] = useState("");
 
@@ -477,7 +622,7 @@ function StartCodePad({ visit }: { readonly visit: PartnerVisit }) {
         htmlFor="visit-start-code"
         className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted"
       >
-        Start code
+        {t("work.visitJob.startCode")}
       </label>
 
       <input
@@ -490,13 +635,13 @@ function StartCodePad({ visit }: { readonly visit: PartnerVisit }) {
       />
 
       <p className="text-[0.8125rem] leading-snug text-text-secondary">
-        Ask the customer to read out their code.
+        {t("work.visitJob.startCodeHint")}
       </p>
 
       <BigAction
         tone="success"
         icon="power"
-        label="Start work"
+        label={t("work.visitJob.startWork")}
         disabled={code.length === 0 || verify.isPending}
         onClick={() =>
           verify.mutate({ bookingId: visit.id, expectedVersion: visit.version, code })
@@ -531,6 +676,7 @@ function StartCodePad({ visit }: { readonly visit: PartnerVisit }) {
  * not silent the way it briefly was on this screen.
  */
 function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
   const submit = useSubmitCompletion();
   const [outcomes, setOutcomes] = useState<Record<string, OutcomeInput["outcome"]>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -573,7 +719,7 @@ function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
                 >
                   <Pictogram name={choice.icon} size="md" />
                   <span className="text-center text-xs font-bold leading-tight">
-                    {choice.caption}
+                    {t(choice.captionKey)}
                   </span>
                 </button>
               );
@@ -582,7 +728,7 @@ function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
 
           {outcomes[task.id] !== undefined && outcomes[task.id] !== "COMPLETED" ? (
             <textarea
-              aria-label={`What happened — ${task.label}`}
+              aria-label={t("work.visitJob.whatHappened", { task: task.label })}
               className="mt-2 min-h-16 w-full rounded-control border border-line bg-surface-sunken p-2 text-sm text-text"
               value={reasons[task.id] ?? ""}
               onChange={(event) =>
@@ -608,9 +754,9 @@ function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
         )}
       >
         <Pictogram name="later" size="lg" />
-        <span className="text-base font-bold">Damage</span>
+        <span className="text-base font-bold">{t("work.visitJob.damage")}</span>
         <span className="sr-only">
-          There was a safety issue or damage at this site
+          {t("work.visitJob.damageSr")}
         </span>
       </button>
 
@@ -624,10 +770,10 @@ function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
             {answered}/{visit.work_tasks.length}
           </span>
           <span aria-hidden className="text-sm font-semibold">
-            answered
+            {t("work.visitJob.answered")}
           </span>
           <span className="sr-only">
-            {answered} of {visit.work_tasks.length} tasks answered
+            {t("work.visitJob.answeredSr", { answered, total: visit.work_tasks.length })}
           </span>
         </p>
       )}
@@ -635,7 +781,7 @@ function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
       <BigAction
         tone="success"
         icon="yes"
-        label="Send this report"
+        label={t("work.visitJob.sendReport")}
         disabled={!ready || submit.isPending}
         onClick={() =>
           submit.mutate({
@@ -674,13 +820,14 @@ function CompletionReport({ visit }: { readonly visit: PartnerVisit }) {
 const OUTCOME_CHOICES: readonly {
   readonly value: OutcomeInput["outcome"];
   readonly icon: PictogramName;
-  readonly caption: string;
+  /** Catalogue key; resolved with `t` at render time. */
+  readonly captionKey: string;
 }[] = [
-  { value: "COMPLETED", icon: "done", caption: "Done" },
-  { value: "PARTIAL", icon: "doing", caption: "Part done" },
-  { value: "NOT_STARTED", icon: "time", caption: "Not started" },
-  { value: "BLOCKED", icon: "stopped", caption: "Blocked" },
-  { value: "NOT_APPLICABLE", icon: "no", caption: "Not needed" },
+  { value: "COMPLETED", icon: "done", captionKey: "work.visitJob.outcome.completed" },
+  { value: "PARTIAL", icon: "doing", captionKey: "work.visitJob.outcome.partial" },
+  { value: "NOT_STARTED", icon: "time", captionKey: "work.visitJob.outcome.notStarted" },
+  { value: "BLOCKED", icon: "stopped", captionKey: "work.visitJob.outcome.blocked" },
+  { value: "NOT_APPLICABLE", icon: "no", captionKey: "work.visitJob.outcome.notApplicable" },
 ];
 
 /* --------------------------------------------------------------------------
@@ -808,6 +955,7 @@ function SecondaryAction({
  * live when this mounts, and the caption/prompt below follow whichever one is.
  */
 function ReleaseAction({ visit }: { readonly visit: PartnerVisit }) {
+  const t = useT();
   const abort = useAbortWork();
   const release = useReleaseBooking();
   const [open, setOpen] = useState(false);
@@ -815,10 +963,10 @@ function ReleaseAction({ visit }: { readonly visit: PartnerVisit }) {
 
   const aborting = canAbort(visit);
   const mutation = aborting ? abort : release;
-  const label = aborting ? "Stop this job" : "Hand this job back";
+  const label = aborting ? t("work.visitJob.release.stop") : t("work.visitJob.release.handBack");
   const prompt = aborting
-    ? "Tell us what happened. Completed work is still settled — you will report it next."
-    : "Tell us why so we can find a replacement quickly. There is no penalty for handing a job back.";
+    ? t("work.visitJob.release.stopPrompt")
+    : t("work.visitJob.release.handBackPrompt");
   const versioned = { bookingId: visit.id, expectedVersion: visit.version };
 
   if (!open) {
@@ -829,8 +977,8 @@ function ReleaseAction({ visit }: { readonly visit: PartnerVisit }) {
         label={label}
         consequence={
           aborting
-            ? "Work stops here. You still report what was done."
-            : "You give up the job. No penalty."
+            ? t("work.visitJob.release.stopConsequence")
+            : t("work.visitJob.release.handBackConsequence")
         }
         disabled={mutation.isPending}
         onClick={() => setOpen(true)}
@@ -865,7 +1013,7 @@ function ReleaseAction({ visit }: { readonly visit: PartnerVisit }) {
           onClick={() => setOpen(false)}
           className="flex h-11 items-center justify-center rounded-2xl border border-line bg-surface-sunken px-4 text-sm font-bold text-text-muted disabled:opacity-60"
         >
-          Back
+          {t("common.back")}
         </button>
       </div>
     </div>
@@ -880,6 +1028,7 @@ function ReleaseAction({ visit }: { readonly visit: PartnerVisit }) {
  * `BookingStatusEnum` member.
  */
 function StatusMedallion({ status }: { readonly status: VisitStatus }) {
+  const t = useT();
   const copy = STATUS_COPY[status];
 
   return (
@@ -895,7 +1044,7 @@ function StatusMedallion({ status }: { readonly status: VisitStatus }) {
       >
         <Pictogram name={STATUS_PICTOGRAM[status]} size="md" />
       </div>
-      <span className="text-sm font-bold">Current status: {copy.label}</span>
+      <span className="text-sm font-bold">{t("work.visitJob.currentStatus", { status: t(copy.labelKey) })}</span>
     </div>
   );
 }
@@ -961,9 +1110,9 @@ function clockTime(iso: string): string | null {
 }
 
 /** "Tuesday, 25 Aug" in the device's own zone. */
-function calendarDate(iso: string): string {
+function calendarDate(iso: string): string | null {
   const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return "Date pending";
+  if (Number.isNaN(at.getTime())) return null;
   return new Intl.DateTimeFormat("en-IN", {
     weekday: "short",
     day: "numeric",
@@ -971,10 +1120,10 @@ function calendarDate(iso: string): string {
   }).format(at);
 }
 
-function durationLabel(minutes: number): string {
+function durationLabel(minutes: number, t: ReturnType<typeof useT>): string {
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
-  if (hours === 0) return `${remaining} min`;
-  if (remaining === 0) return `${hours} hr`;
-  return `${hours} hr ${remaining} min`;
+  if (hours === 0) return t("work.visitJob.duration.minutes", { minutes: remaining });
+  if (remaining === 0) return t("work.visitJob.duration.hours", { hours });
+  return t("work.visitJob.duration.hoursMinutes", { hours, minutes: remaining });
 }

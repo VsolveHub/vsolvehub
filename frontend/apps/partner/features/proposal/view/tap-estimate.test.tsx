@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { toOnsiteDraft, type TapEstimate as TapEstimateDraft } from "../model/tap-estimate";
 import { toOnsiteRequest } from "../model/onsite-draft";
 import { TapEstimate } from "./tap-estimate";
@@ -36,14 +38,16 @@ function tap(name: string | RegExp, scope?: HTMLElement) {
 function setup(overrides: Partial<Parameters<typeof TapEstimate>[0]> = {}) {
   const onSend = vi.fn<(estimate: TapEstimateDraft) => void>();
   render(
-    <TapEstimate
-      archetype="PROJECT"
-      startsOn="2026-09-12"
-      requiredTaxBasis={null}
-      isSubmitting={false}
-      onSend={onSend}
-      {...overrides}
-    />,
+    withI18n(
+      <TapEstimate
+        archetype="PROJECT"
+        startsOn="2026-09-12"
+        requiredTaxBasis={null}
+        isSubmitting={false}
+        onSend={onSend}
+        {...overrides}
+      />,
+    ),
   );
   return { onSend };
 }

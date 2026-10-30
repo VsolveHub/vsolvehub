@@ -1,7 +1,5 @@
 """An overall discount is a new, auditable estimate revision—not a notification."""
 
-# ruff: noqa: PLR2004 - exact basis-point and row-count outcomes are assertions under test
-
 from __future__ import annotations
 
 from datetime import timedelta

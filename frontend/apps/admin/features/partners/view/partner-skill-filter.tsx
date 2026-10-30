@@ -132,8 +132,8 @@ function SkillFilterPanel({ skills, selected, onChange, listId, onClose }: Skill
   }, [clampedActiveIndex]);
 
   return (
-    <div className="flex w-full min-w-[16rem] flex-col gap-2 sm:w-72">
-      <Field label="Filter skills" description="Match any selected skill.">
+    <div className="flex w-full min-w-[16rem] flex-col gap-2">
+      <Field label="Search skills" description="Partners with any selected skill are shown." showOptional={false}>
         <Input
           value={query}
           placeholder="Type to filter…"
@@ -222,7 +222,9 @@ function SkillFilterPopover({
   }, [open]);
 
   const label =
-    selected.length === 0 ? "Skills" : `Skills · ${selected.length}`;
+    selected.length === 0
+      ? "Any skill"
+      : `${selected.length} skill${selected.length === 1 ? "" : "s"} selected`;
 
   return (
     <div ref={rootRef} className="relative">
@@ -235,7 +237,7 @@ function SkillFilterPopover({
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
           onClick={() => setOpen((value) => !value)}
-          className="flex items-center gap-2"
+          className="flex w-full items-center justify-between gap-2 font-normal"
         >
           {label}
           <ChevronDown className="h-4 w-4 text-text-secondary" aria-hidden />
@@ -243,7 +245,7 @@ function SkillFilterPopover({
       </div>
 
       {open ? (
-        <div className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-72 rounded-card border border-line bg-surface p-3 shadow-card">
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-card border border-line bg-surface p-3 shadow-card">
           <SkillFilterPanel
             skills={skills}
             selected={selected}

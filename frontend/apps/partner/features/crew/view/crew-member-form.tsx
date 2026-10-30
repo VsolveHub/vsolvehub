@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, ErrorState, Field, Input, Sheet } from "@vsolve/ui";
+import { Button, Card, ErrorState, Field, Input, Sheet, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { CrewGenderField, type CrewGender } from "./crew-gender";
@@ -69,6 +69,7 @@ export function CrewMemberForm({
   submitError = null,
   skillOptions = [],
 }: CrewMemberFormProps) {
+  const t = useT();
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [isSupervisor, setIsSupervisor] = useState(false);
@@ -82,7 +83,7 @@ export function CrewMemberForm({
     problems.find((problem) => problem.field === field)?.message;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="Add someone to your crew">
+    <Sheet open={open} onOpenChange={onOpenChange} title={t("crew.form.title")}>
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
@@ -100,8 +101,8 @@ export function CrewMemberForm({
         }}
       >
         <Field
-          label="Name"
-          description="What your team calls them. Customers do not see it before a shift."
+          label={t("crew.form.nameLabel")}
+          description={t("crew.form.nameDescription")}
           error={messageFor("display_name")}
           required
         >
@@ -113,8 +114,8 @@ export function CrewMemberForm({
         </Field>
 
         <Field
-          label="Mobile number"
-          description="We use it to make sure nobody is booked twice on the same day."
+          label={t("crew.form.phoneLabel")}
+          description={t("crew.form.phoneDescription")}
           error={messageFor("phone_e164")}
           required
         >
@@ -132,19 +133,18 @@ export function CrewMemberForm({
             aria-live="polite"
             className="bg-surface-sunken p-3 text-sm leading-6 text-text-secondary"
           >
-            This looks like <strong className="font-semibold text-text">
+            {t("crew.form.duplicateHintPrefix")} <strong className="font-semibold text-text">
               {probableDuplicate.name}
             </strong>
-            , who is already on your roster. If it is someone else, carry on — we check the full
-            number.
+            {t("crew.form.duplicateHintSuffix")}
           </Card>
         ) : null}
 
         {skillOptions.length > 0 ? (
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-sm font-semibold text-text">
-              What they do{" "}
-              <span className="font-normal text-text-muted">(optional)</span>
+              {t("crew.form.whatTheyDo")}{" "}
+              <span className="font-normal text-text-muted">({t("common.optional")})</span>
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {skillOptions.map((skill) => {
@@ -184,9 +184,9 @@ export function CrewMemberForm({
             className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-action)]"
           />
           <span>
-            They can report attendance.
+            {t("crew.form.supervisorLabel")}
             <span className="mt-0.5 block text-xs leading-5 text-text-muted">
-              Supervisors confirm how many of the crew turned up each day. You need at least one.
+              {t("crew.form.supervisorHelp")}
             </span>
           </span>
         </label>
@@ -194,18 +194,18 @@ export function CrewMemberForm({
         {submitError ? (
           <ErrorState
             inline
-            title="We could not add them"
+            title={t("crew.form.errorTitle")}
             message={submitError}
             severity="error"
           />
         ) : null}
 
         <div className="flex gap-3">
-          <Button type="submit" loading={pending} loadingLabel="Adding">
-            Add to roster
+          <Button type="submit" loading={pending} loadingLabel={t("crew.form.adding")}>
+            {t("crew.form.submit")}
           </Button>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       </form>

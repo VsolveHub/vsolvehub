@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Sheet, cn, formatMoney } from "@vsolve/ui";
+import { Button, Sheet, cn, formatMoney, useT } from "@vsolve/ui";
 import { PackageCheck } from "lucide-react";
 
 import {
@@ -30,9 +30,9 @@ export function EstimatePreviewSheet({
   vendorName,
   materialList = [],
   partnerTurnkey = false,
-  title = "As the customer sees it",
-  description = "This is the page they compare against the other estimates.",
-  closeLabel = "Back to editing",
+  title: titleProp,
+  description: descriptionProp,
+  closeLabel: closeLabelProp,
 }: {
   open: boolean;
   onClose: () => void;
@@ -51,10 +51,14 @@ export function EstimatePreviewSheet({
   description?: string;
   closeLabel?: string;
 }) {
+  const t = useT();
+  const title = titleProp ?? t("proposal.screens.sheet.title");
+  const description = descriptionProp ?? t("proposal.screens.sheet.description");
+  const closeLabel = closeLabelProp ?? t("proposal.screens.sheet.close");
   const lines =
     draft.mode === "ITEM_WISE"
-      ? draft.itemLines.map((line) => ({ title: line.title || "Untitled", note: `${line.quantity} × ${formatMoney(line.ratePaise ?? 0)}`, amount: itemLineAmount(line) }))
-      : draft.labourLines.map((line) => ({ title: line.team ? `${line.role} — ${line.team}` : line.role || "Untitled", note: `${line.memberCount} people × ${line.dayCount} days × ${formatMoney(line.ratePaisePerDay ?? 0)}/day`, amount: labourLineAmount(line) }));
+      ? draft.itemLines.map((line) => ({ title: line.title || t("proposal.screens.sheet.untitled"), note: `${line.quantity} × ${formatMoney(line.ratePaise ?? 0)}`, amount: itemLineAmount(line) }))
+      : draft.labourLines.map((line) => ({ title: line.team ? `${line.role} — ${line.team}` : line.role || t("proposal.screens.sheet.untitled"), note: t("proposal.screens.sheet.labourNote", { members: line.memberCount, days: line.dayCount, rate: formatMoney(line.ratePaisePerDay ?? 0) }), amount: labourLineAmount(line) }));
   const first = draft.installments[0] ?? null;
   const firstDue = preview?.stages[0]?.total_due_paise ?? first?.amountPaise ?? null;
   const hasDiscount = (preview?.discount_paise ?? 0) > 0;
@@ -80,20 +84,20 @@ export function EstimatePreviewSheet({
               </span>
               <span className="font-bold text-success-200">
                 {preview.discount_bps !== null && preview.discount_bps !== undefined
-                  ? `${preview.discount_bps / 100}% off · `
+                  ? `${t("proposal.status.percentOff", { percent: preview.discount_bps / 100 })} · `
                   : ""}
-                Save {formatMoney(preview.discount_paise ?? 0)}
+                {t("proposal.screens.sheet.save", { amount: formatMoney(preview.discount_paise ?? 0) })}
               </span>
             </div>
           ) : null}
           <div className="mt-3 grid grid-cols-2 gap-3 border-t border-surface/15 pt-3 text-sm">
             <div>
-              <p className="text-[11px] uppercase text-surface/60">Pay to start</p>
-              <p className="font-bold">{firstDue ? formatMoney(firstDue) : "Not stated"}</p>
+              <p className="text-[11px] uppercase text-surface/60">{t("proposal.screens.sheet.payToStart")}</p>
+              <p className="font-bold">{firstDue ? formatMoney(firstDue) : t("proposal.screens.sheet.notStated")}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase text-surface/60">Timeline</p>
-              <p className="font-bold">{draft.installments.at(-1)?.endsOn ? `Ends ${draft.installments.at(-1)!.endsOn}` : "Not dated"}</p>
+              <p className="text-[11px] uppercase text-surface/60">{t("proposal.screens.sheet.timeline")}</p>
+              <p className="font-bold">{draft.installments.at(-1)?.endsOn ? t("proposal.screens.sheet.ends", { date: draft.installments.at(-1)!.endsOn! }) : t("proposal.screens.sheet.notDated")}</p>
             </div>
           </div>
         </div>
@@ -102,17 +106,17 @@ export function EstimatePreviewSheet({
           <div className="flex gap-3 rounded-card border border-success-line bg-success-surface p-3 text-success-text">
             <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
             <div>
-              <p className="text-sm font-bold">Materials, setup and removal included</p>
+              <p className="text-sm font-bold">{t("proposal.screens.sheet.turnkey.title")}</p>
               <p className="mt-0.5 text-xs leading-5">
-                The decorator manages the full supply. You do not need to shop for décor materials.
+                {t("proposal.screens.sheet.turnkey.body")}
               </p>
             </div>
           </div>
         ) : null}
 
-        <Block title="What you get">
+        <Block title={t("proposal.screens.sheet.whatYouGet")}>
           {draft.scopeSummary.trim() === "" ? (
-            <p className="text-sm text-warning-text">You have not said what you will do. This is the first thing they read.</p>
+            <p className="text-sm text-warning-text">{t("proposal.screens.sheet.noScope")}</p>
           ) : (
             <p className="text-sm leading-6">“{draft.scopeSummary.trim()}”</p>
           )}
@@ -121,7 +125,7 @@ export function EstimatePreviewSheet({
               {draft.inclusions.filter(Boolean).map((line) => (
                 <li key={line} className="flex gap-1.5"><span className="text-success-text">✓</span>{line}</li>
               ))}
-              {draft.inclusions.filter(Boolean).length === 0 ? <li className="text-text-muted">Nothing marked as included</li> : null}
+              {draft.inclusions.filter(Boolean).length === 0 ? <li className="text-text-muted">{t("proposal.screens.sheet.noInclusions")}</li> : null}
             </ul>
             <ul className="list-none p-0">
               {draft.exclusions.filter(Boolean).map((line) => (
@@ -131,7 +135,7 @@ export function EstimatePreviewSheet({
           </div>
         </Block>
 
-        <Block title={`How the price is built${draft.mode === "ITEM_WISE" ? " — item-wise" : draft.mode === "LABOUR_WISE" ? " — labour-wise" : ""}`}>
+        <Block title={draft.mode === "ITEM_WISE" ? t("proposal.screens.sheet.priceBuilt.itemWise") : draft.mode === "LABOUR_WISE" ? t("proposal.screens.sheet.priceBuilt.labourWise") : t("proposal.screens.sheet.priceBuilt")}>
           <ul className="list-none divide-y divide-line p-0 text-sm">
             {lines.map((line, index) => (
               <li key={index} className="flex justify-between gap-3 py-1.5">
@@ -140,26 +144,27 @@ export function EstimatePreviewSheet({
               </li>
             ))}
             {draft.otherCharges.map((charge) => (
-              <li key={charge.id} className="flex justify-between gap-3 py-1.5"><span>{charge.label || "Named charge"}</span><span className="font-semibold tabular-nums">{charge.amountPaise === null ? "—" : formatMoney(charge.amountPaise)}</span></li>
+              <li key={charge.id} className="flex justify-between gap-3 py-1.5"><span>{charge.label || t("proposal.screens.sheet.namedCharge")}</span><span className="font-semibold tabular-nums">{charge.amountPaise === null ? "—" : formatMoney(charge.amountPaise)}</span></li>
             ))}
             {draft.materialLines.map((material) => (
-              <li key={material.id} className="flex justify-between gap-3 py-1.5"><span>{material.title || "Material"}<span className="block text-xs text-text-muted">Material, paid as an advance</span></span><span className="font-semibold tabular-nums">{materialLineAmount(material) === null ? "—" : formatMoney(materialLineAmount(material)!)}</span></li>
+              <li key={material.id} className="flex justify-between gap-3 py-1.5"><span>{material.title || t("proposal.screens.sheet.material")}<span className="block text-xs text-text-muted">{t("proposal.screens.sheet.materialAdvance")}</span></span><span className="font-semibold tabular-nums">{materialLineAmount(material) === null ? "—" : formatMoney(materialLineAmount(material)!)}</span></li>
             ))}
           </ul>
         </Block>
 
         {materialList.length > 0 ? (
-          <Block title={partnerTurnkey ? "Materials & finish included" : "What you need to buy"}>
+          <Block title={partnerTurnkey ? t("proposal.screens.sheet.materialsIncluded") : t("proposal.screens.sheet.whatToBuy")}>
             <p className="text-xs text-text-muted">
               {partnerTurnkey
-                ? "Supplied, installed and managed by the decorator · already inside the estimate"
-                : `${
-                    draft.materialBrandTier === "PREMIUM"
-                      ? "Premium brands"
-                      : draft.materialBrandTier === "STANDARD"
-                        ? "Standard brands"
-                        : "Any brand"
-                  } · you buy these, the estimate covers the work`}
+                ? t("proposal.screens.sheet.turnkeySupplied")
+                : t("proposal.screens.sheet.youBuy", {
+                    tier:
+                      draft.materialBrandTier === "PREMIUM"
+                        ? t("proposal.screens.sheet.tier.premium")
+                        : draft.materialBrandTier === "STANDARD"
+                          ? t("proposal.screens.sheet.tier.standard")
+                          : t("proposal.screens.sheet.tier.any"),
+                  })}
             </p>
             <ul className="mt-1 list-none divide-y divide-line p-0 text-sm">
               {materialList.map((row) => (
@@ -177,21 +182,21 @@ export function EstimatePreviewSheet({
           </Block>
         ) : null}
 
-        <Block title="How they pay">
+        <Block title={t("proposal.screens.sheet.howTheyPay")}>
           <ol className="list-none p-0 text-sm">
             {draft.installments.map((row, index) => {
               const due = preview?.stages[index]?.total_due_paise ?? row.amountPaise;
               return (
-                <li key={row.id} className="flex justify-between gap-3 py-1"><span>{index + 1}. {row.title || `Stage ${index + 1}`}{row.deliverable ? <span className="block text-xs text-text-muted">{row.deliverable}</span> : null}</span><span className="font-semibold tabular-nums">{due === null ? "—" : formatMoney(due)}</span></li>
+                <li key={row.id} className="flex justify-between gap-3 py-1"><span>{index + 1}. {row.title || t("proposal.screens.sheet.stage", { n: index + 1 })}{row.deliverable ? <span className="block text-xs text-text-muted">{row.deliverable}</span> : null}</span><span className="font-semibold tabular-nums">{due === null ? "—" : formatMoney(due)}</span></li>
               );
             })}
           </ol>
         </Block>
 
-        <Block title="Terms">
+        <Block title={t("proposal.screens.sheet.terms")}>
           <dl className="grid grid-cols-2 gap-2 text-sm">
-            <div><dt className="text-xs text-text-muted">Warranty</dt><dd className={cn(draft.warrantyTerms.trim() === "" && "text-warning-text")}>{draft.warrantyTerms.trim() || "Not stated"}</dd></div>
-            <div><dt className="text-xs text-text-muted">Valid until</dt><dd className={cn(draft.validUntil === null && "text-warning-text")}>{draft.validUntil ? draft.validUntil.slice(0, 10) : "No validity given"}</dd></div>
+            <div><dt className="text-xs text-text-muted">{t("proposal.screens.sheet.warranty")}</dt><dd className={cn(draft.warrantyTerms.trim() === "" && "text-warning-text")}>{draft.warrantyTerms.trim() || t("proposal.screens.sheet.notStated")}</dd></div>
+            <div><dt className="text-xs text-text-muted">{t("proposal.screens.sheet.validUntil")}</dt><dd className={cn(draft.validUntil === null && "text-warning-text")}>{draft.validUntil ? draft.validUntil.slice(0, 10) : t("proposal.screens.sheet.noValidity")}</dd></div>
           </dl>
         </Block>
       </div>

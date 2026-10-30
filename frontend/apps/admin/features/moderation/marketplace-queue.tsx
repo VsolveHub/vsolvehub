@@ -1,9 +1,10 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, EmptyState, Field, Textarea, formatMoney } from "@vsolve/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePagedList, type Page } from "@vsolve/query";
+import { Button, Card, EmptyState, Field, LoadMore, Textarea, formatMoney } from "@vsolve/ui";
 import { MapPin } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { ModerationAction } from "./queries";
 
@@ -80,20 +81,26 @@ function actionsFor(row: MarketplaceQueueRow): ModerationAction[] {
   return [];
 }
 
-function isPending(row: MarketplaceQueueRow): boolean {
-  return row.moderation_status === "PENDING" || row.public_state === "PENDING_REVIEW";
-}
-
+/**
+ * A moderation queue for marketplace listings (rentals, stays), one server page at a time.
+ *
+ * The Pending tab is filtered on the server (`moderation_status=PENDING`), so a listing waiting
+ * for a decision is never hidden on a page that has not loaded. `loadPage` gets the cursor and
+ * that filter, and maps the API rows into queue rows.
+ */
 export function MarketplaceQueue({
   heading,
   queryKey,
-  load,
+  loadPage,
   moderate,
   leading,
 }: {
   heading: string;
   queryKey: string;
-  load: () => Promise<MarketplaceQueueRow[]>;
+  loadPage: (
+    cursor: string | undefined,
+    moderationStatus: "PENDING" | undefined,
+  ) => Promise<Page<MarketplaceQueueRow>>;
   moderate: (id: string, action: ModerationAction, reason: string) => Promise<void>;
   leading?: ReactNode;
 }) {
@@ -104,13 +111,12 @@ export function MarketplaceQueue({
     row: MarketplaceQueueRow;
     action: ModerationAction;
   } | null>(null);
-  const queue = useQuery({ queryKey: [queryKey], queryFn: load });
-  const rows = useMemo(() => queue.data ?? [], [queue.data]);
-  const pendingCount = rows.filter(isPending).length;
-  const visible = useMemo(
-    () => (filter === "PENDING" ? rows.filter(isPending) : rows),
-    [filter, rows],
+  const queue = usePagedList([queryKey, filter], (cursor) =>
+    loadPage(cursor, filter === "PENDING" ? "PENDING" : undefined),
   );
+  const visible = queue.items;
+  // A "+" while more pages remain: the count is what is loaded, not a guess at the total.
+  const shownCount = `${visible.length}${queue.hasMore ? "+" : ""}`;
 
   const command = useMutation({
     mutationFn: ({
@@ -151,7 +157,11 @@ export function MarketplaceQueue({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-text-secondary">
-          {pendingCount} waiting for a decision
+          {queue.isLoading
+            ? null
+            : filter === "PENDING"
+              ? `${shownCount} waiting for a decision`
+              : `${shownCount} listings`}
         </p>
         <div className="flex gap-2">
           <Button
@@ -248,6 +258,7 @@ export function MarketplaceQueue({
           );
         })}
       </ul>
+      <LoadMore hasMore={queue.hasMore} loading={queue.loadingMore} onLoadMore={queue.loadMore} />
 
       {decision && copy ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-4 backdrop-blur-sm">

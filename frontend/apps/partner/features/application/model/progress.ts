@@ -65,7 +65,12 @@ export interface StepProgress extends ApplicationStep {
 /** Steps that bracket the path rather than sitting on it. */
 const WAYPOINTS: readonly string[] = ["/apply", "/apply/review"];
 
-export function stepProgress(application: Application | null): StepProgress[] {
+type Schedule = Schemas["PartnerSchedule"];
+
+export function stepProgress(
+  application: Application | null,
+  availability?: Schedule | null,
+): StepProgress[] {
   /*
     `requirements` takes `null` directly and reports everything unmet.
 
@@ -76,7 +81,7 @@ export function stepProgress(application: Application | null): StepProgress[] {
     of truth what an application *needs*, rather than inferring it from what one
     *has*, removes that whole class of mistake.
   */
-  const met = requirements(application);
+  const met = requirements(application, availability);
 
   return applicationSteps(application?.track).map((step) => {
     const mine = met.filter((requirement) => requirement.href === step.href);
@@ -107,13 +112,13 @@ export interface ProgressSummary {
 /**
  * The one-line answer: how much of this is finished.
  *
- * Counts only the steps that gate a submission. Including the overview, the
- * review screen and the optional hours step would make "3 of 8" mean something
- * different from "3 things left to do", and the applicant would be reading two
- * numbers that never agree.
+ * Counts only the steps that gate a submission.
  */
-export function progressSummary(application: Application | null): ProgressSummary {
-  const steps = stepProgress(application);
+export function progressSummary(
+  application: Application | null,
+  availability?: Schedule | null,
+): ProgressSummary {
+  const steps = stepProgress(application, availability);
   const gating = steps.filter((step) => step.state === "done" || step.state === "todo");
   const done = gating.filter((step) => step.state === "done").length;
 

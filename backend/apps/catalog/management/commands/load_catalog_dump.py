@@ -30,7 +30,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.catalog.seed_content import content_for_trade
+from apps.catalog.seed_content import content_for_service
 from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.pricing.models import (
     CancellationPolicy,
@@ -209,7 +209,12 @@ class Command(BaseCommand):
     def _seed_policies(self, service: Service, payload: JsonObject) -> None:
         variants = payload.get("variants") or []
         skill = (variants[0].get("skill_code") if variants else "") or ""
-        content = content_for_trade(skill)
+        content = content_for_service(service.slug, skill)
+        if content is None:
+            # The M2 project and day-hire services have no trade template; their lines are
+            # authored in `seed_m2_demo`, and overwriting them here is what put beauty-salon
+            # exclusions on a demolition crew.
+            return
         ServicePolicy.objects.filter(service=service).update(is_active=False)
         rows: list[tuple[str, str, str, int]] = [
             (ServicePolicy.Kind.PROCESS, step.title, step.text, order)

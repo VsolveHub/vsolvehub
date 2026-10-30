@@ -23,6 +23,7 @@ real one is a document somebody eventually files with their accounts. When the f
 is stamped across the middle, in a grey that still reads on a monochrome printer.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import BytesIO
@@ -98,6 +99,9 @@ class DocumentSpec:
     footnote: str = ""
     is_draft: bool = False
     meta: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    #: Words drawn across the page. `is_draft` implies TEST DOCUMENT; a published example says
+    #: SAMPLE, so a reviewer's copy can never be filed as a real receipt either.
+    watermark: str = ""
 
 
 def _styles() -> dict[str, ParagraphStyle]:
@@ -131,14 +135,17 @@ def _styles() -> dict[str, ParagraphStyle]:
     }
 
 
-def _watermark(canvas: Canvas, _doc: Any) -> None:
-    canvas.saveState()
-    canvas.setFont("Helvetica-Bold", 60)
-    canvas.setFillColor(colors.HexColor("#E4E4E4"))
-    canvas.translate(A4[0] / 2, A4[1] / 2)
-    canvas.rotate(38)
-    canvas.drawCentredString(0, 0, "TEST DOCUMENT")
-    canvas.restoreState()
+def _watermark(text: str) -> Callable[[Canvas, Any], None]:
+    def draw(canvas: Canvas, _doc: Any) -> None:
+        canvas.saveState()
+        canvas.setFont("Helvetica-Bold", 60)
+        canvas.setFillColor(colors.HexColor("#E4E4E4"))
+        canvas.translate(A4[0] / 2, A4[1] / 2)
+        canvas.rotate(38)
+        canvas.drawCentredString(0, 0, text)
+        canvas.restoreState()
+
+    return draw
 
 
 def _no_decoration(_canvas: Canvas, _doc: Any) -> None:
@@ -195,6 +202,7 @@ def _brand_mark() -> Drawing:
 def render_pdf(spec: DocumentSpec) -> bytes:
     """One document, as PDF bytes. Same spec in, same page out."""
     styles = _styles()
+    watermark = spec.watermark or ("TEST DOCUMENT" if spec.is_draft else "")
     buffer = BytesIO()
 
     document = BaseDocTemplate(
@@ -216,7 +224,7 @@ def render_pdf(spec: DocumentSpec) -> bytes:
             PageTemplate(
                 id="default",
                 frames=[frame],
-                onPage=_watermark if spec.is_draft else _no_decoration,
+                onPage=_watermark(watermark) if watermark else _no_decoration,
             )
         ]
     )

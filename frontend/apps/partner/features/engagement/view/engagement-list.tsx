@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, EmptyState, ErrorState, Skeleton, SkeletonRegion } from "@vsolve/ui";
+import { Card, EmptyState, ErrorState, Skeleton, SkeletonRegion, useT } from "@vsolve/ui";
 import {
   describeError,
   groupEngagements,
@@ -63,6 +63,7 @@ export function EngagementList<Key extends string>({
   wording,
   workLabel,
 }: EngagementListProps<Key>) {
+  const t = useT();
   const query = usePartnerEngagements();
 
   const mine = useMemo(
@@ -77,7 +78,7 @@ export function EngagementList<Key extends string>({
 
   if (query.isPending) {
     return (
-      <SkeletonRegion loading label={`Loading your ${wording.parentMany}`}>
+      <SkeletonRegion loading label={t("work.engagementList.loading", { parentMany: wording.parentMany })}>
         <div className="flex flex-col gap-2">
           <Skeleton className="h-20 w-full" />
           <Skeleton className="h-20 w-full" />
@@ -95,13 +96,13 @@ export function EngagementList<Key extends string>({
         title={presentation.title}
         message={
           refused
-            ? `Vsolve has no ${wording.parentMany} on this account. If you were working a moment ago, your access may have changed — contact support.`
+            ? t("work.engagementList.refused", { parentMany: wording.parentMany })
             : presentation.message
         }
         severity={presentation.severity}
         // A refused read does not offer a retry: asking again walks into the same
         // refusal and delays the honest screen.
-        actionLabel={refused ? undefined : "Try again"}
+        actionLabel={refused ? undefined : t("common.tryAgain")}
         onAction={refused ? undefined : () => void query.refetch()}
         reference={presentation.reference}
       />
@@ -112,8 +113,12 @@ export function EngagementList<Key extends string>({
     return (
       <EmptyState
         icon={<CalendarCheck size={24} aria-hidden />}
-        title={`No ${wording.parentMany} yet`}
-        description={`When a customer chooses your quote for ${workLabel} and it is confirmed, the ${wording.parent} appears here with its ${wording.many}.`}
+        title={t("work.engagementList.empty.title", { parentMany: wording.parentMany })}
+        description={t("work.engagementList.empty.description", {
+          workLabel,
+          parent: wording.parent,
+          many: wording.many,
+        })}
       />
     );
   }
@@ -157,13 +162,10 @@ export function EngagementList<Key extends string>({
             id="engagements-unplaceable"
             className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted"
           >
-            Not recognised
+            {t("work.engagementList.unplaceable.heading")}
           </h2>
           <p className="mb-2 text-xs text-text-secondary">
-            Vsolve sent a state this version of the app cannot describe. These are shown rather
-            than hidden — they are still yours, and guessing which group they belong in could put
-            a finished {wording.parent} under &ldquo;coming up&rdquo; or the other way round.
-            Updating the app usually resolves it.
+            {t("work.engagementList.unplaceable.body", { parent: wording.parent })}
           </p>
           <div className="flex flex-col gap-2">
             {grouping.unplaceable.map((engagement) => (
@@ -179,8 +181,7 @@ export function EngagementList<Key extends string>({
 
       {query.data?.next === null ? null : (
         <Card className="p-4 text-sm leading-6 text-text-secondary">
-          Vsolve is holding older {wording.parentMany} that this screen cannot ask for yet. Nothing
-          is missing from the groups above; there is simply more behind them.
+          {t("work.engagementList.moreBehind", { parentMany: wording.parentMany })}
         </Card>
       )}
     </div>
@@ -199,6 +200,7 @@ function UnfillableBucket<Key extends string>({
 }: {
   readonly bucket: EngagementBucket<Key>;
 }) {
+  const t = useT();
   return (
     <section aria-labelledby={`engagements-${bucket.key}`}>
       <h2
@@ -208,8 +210,7 @@ function UnfillableBucket<Key extends string>({
         {bucket.label}
       </h2>
       <Card className="border-dashed p-4 text-sm leading-6 text-text-secondary">
-        {bucket.unavailableBecause ??
-          "This group is not available in this version of the app."}
+        {bucket.unavailableBecause ?? t("work.engagementList.groupUnavailable")}
       </Card>
     </section>
   );

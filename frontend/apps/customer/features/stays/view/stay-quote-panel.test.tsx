@@ -16,6 +16,18 @@ const client = {
 };
 const push = vi.fn();
 
+/** Signed in unless a test says otherwise. */
+const session = vi.hoisted(() => ({ signedIn: true }));
+vi.mock("@/features/session/queries", () => ({
+  useCustomerSession: () => ({
+    isResolving: false,
+    isAuthenticated: session.signedIn,
+    isAnonymous: !session.signedIn,
+    isUnavailable: false,
+    refetch: () => {},
+  }),
+}));
+
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn(), push, replace: vi.fn() }),
@@ -40,7 +52,10 @@ function mockProperty(overrides: Partial<StayProperty> = {}): StayProperty {
     title: "Green Villa PG",
     variant: "variant-1",
     description: "Cozy rooms with all amenities.",
+    host_id: "host-1",
+    partner_id: "partner-1",
     host_name: "Ramesh Rao",
+    host_phone: "+919876500003",
     location_text: "Gachibowli, Hyderabad",
     min_stay_nights: 1,
     booking_mode: "ENQUIRY",
@@ -50,6 +65,8 @@ function mockProperty(overrides: Partial<StayProperty> = {}): StayProperty {
     highlights: [],
     can_review: false,
     visits_offered: false,
+    area_latitude: null,
+    area_longitude: null,
     public_state: "PUBLISHED",
     media: [],
     reviews: [],
@@ -64,6 +81,7 @@ function mockProperty(overrides: Partial<StayProperty> = {}): StayProperty {
         nightly_rate_paise: 900_000,
         is_active: true,
         media: [],
+        looks: [],
       },
     ],
     ...overrides,
@@ -86,6 +104,7 @@ beforeEach(() => {
   });
   for (const method of Object.values(client)) method.mockReset();
   push.mockReset();
+  session.signedIn = true;
 });
 
 afterEach(() => {
@@ -137,7 +156,7 @@ describe("StayQuotePanel", () => {
     const body = client.POST.mock.calls[0]![1].body;
     expect(body).toMatchObject({ property_id: "prop-1", unit_id: "unit-1", length: 1 });
     expect(body).not.toHaveProperty("check_out");
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/stays/mine"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/activity?type=stays"));
   });
 
   it("explains a minimum stay in the property's unit", async () => {
@@ -147,5 +166,31 @@ describe("StayQuotePanel", () => {
 
     expect(await screen.findByText("Minimum stay is 3 months.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Send enquiry/i })).toBeDisabled();
+  });
+
+  it("shows a signed-out guest the estimate and a sign-in card instead of Send", async () => {
+    session.signedIn = false;
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 50000, total_quote_paise: 150000 }));
+
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
+
+    expect(screen.queryByRole("button", { name: /Send enquiry/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in to send an enquiry" })).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it("says the session ended instead of the raw 401 message", async () => {
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 50000, total_quote_paise: 150000 }));
+    client.POST.mockResolvedValue(
+      refusal("not_authenticated", "Authentication credentials were not provided.", 401),
+    );
+
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
+    fireEvent.click(await screen.findByRole("button", { name: /Send enquiry/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Your session ended. Sign in again" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Authentication credentials/)).not.toBeInTheDocument();
   });
 });

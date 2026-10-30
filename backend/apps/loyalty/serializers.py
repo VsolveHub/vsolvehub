@@ -3,6 +3,7 @@
 from itertools import pairwise
 from typing import Any
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.loyalty.models import (
@@ -88,6 +89,17 @@ class ReferralProgramSummarySerializer(serializers.ModelSerializer[ReferralProgr
         )
 
 
+class WelcomeRewardSerializer(serializers.Serializer[dict[str, object]]):
+    """The new customer's own reward for joining with a code, while it is on its way."""
+
+    status = serializers.ChoiceField(
+        choices=[ReferralAttribution.Status.PENDING, ReferralAttribution.Status.QUALIFIED]
+    )
+    wallet_paise = serializers.IntegerField()
+    coins = serializers.IntegerField()
+    reward_available_at = serializers.DateTimeField(allow_null=True)
+
+
 class CustomerReferralSummarySerializer(serializers.Serializer[dict[str, object]]):
     code = serializers.CharField()
     share_url = serializers.CharField()
@@ -97,6 +109,15 @@ class CustomerReferralSummarySerializer(serializers.Serializer[dict[str, object]
     invited_count = serializers.IntegerField()
     successful_referral_count = serializers.IntegerField()
     pending_referral_count = serializers.IntegerField()
+    #: Friends who joined but have not completed a booking yet.
+    waiting_booking_count = serializers.IntegerField()
+    #: Friends who booked; their reward is waiting out the hold.
+    reward_on_the_way_count = serializers.IntegerField()
+    on_the_way_paise = serializers.IntegerField()
+    on_the_way_coins = serializers.IntegerField()
+    #: Days a reward is held after the friend's booking, in case it is cancelled.
+    reward_hold_days = serializers.IntegerField()
+    welcome_reward = WelcomeRewardSerializer(allow_null=True)
     current_tier_min = serializers.IntegerField(allow_null=True)
     next_tier_min = serializers.IntegerField(allow_null=True)
     referrals_to_next_tier = serializers.IntegerField(allow_null=True)
@@ -105,6 +126,9 @@ class CustomerReferralSummarySerializer(serializers.Serializer[dict[str, object]
 
 class ReferralAttributionSerializer(serializers.ModelSerializer[ReferralAttribution]):
     referee_display = serializers.SerializerMethodField()
+    reward_wallet_paise = serializers.SerializerMethodField()
+    reward_coins = serializers.SerializerMethodField()
+    reward_is_estimate = serializers.SerializerMethodField()
 
     class Meta:
         model = ReferralAttribution
@@ -116,7 +140,30 @@ class ReferralAttributionSerializer(serializers.ModelSerializer[ReferralAttribut
             "qualified_at",
             "reward_available_at",
             "rewarded_at",
+            "reward_wallet_paise",
+            "reward_coins",
+            "reward_is_estimate",
         )
+
+    def _shown(self, obj: ReferralAttribution) -> Any:
+        return self.context.get("rewards", {}).get(obj.id)
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_reward_wallet_paise(self, obj: ReferralAttribution) -> int | None:
+        """Your reward for this friend: paid, or expected. `null` when there is none."""
+        shown = self._shown(obj)
+        return None if shown is None else int(shown.wallet_paise)
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_reward_coins(self, obj: ReferralAttribution) -> int | None:
+        shown = self._shown(obj)
+        return None if shown is None else int(shown.coins)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_reward_is_estimate(self, obj: ReferralAttribution) -> bool:
+        """True until paid: a tier, the monthly cap or a refund can still change it."""
+        shown = self._shown(obj)
+        return True if shown is None else bool(shown.is_estimate)
 
     def get_referee_display(self, obj: ReferralAttribution) -> str:
         return _mask_phone(obj.referee.phone_number, obj.referee_id)

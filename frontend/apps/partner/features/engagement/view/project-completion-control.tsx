@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Dialog, Field, Input } from "@vsolve/ui";
+import { Button, Dialog, Field, Input, useT } from "@vsolve/ui";
 import { describeError, type Engagement } from "@vsolve/query";
 import { CheckCircle2 } from "lucide-react";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useCompleteProjectWithCode } from "../queries";
 
 export function ProjectCompletionControl({ engagement }: { readonly engagement: Engagement }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const completion = useCompleteProjectWithCode(engagement.id);
@@ -19,7 +20,7 @@ export function ProjectCompletionControl({ engagement }: { readonly engagement: 
   if (terminal) {
     return (
       <p className="flex items-center gap-2 text-sm font-semibold text-success-text">
-        <CheckCircle2 size={18} aria-hidden /> Project completed
+        <CheckCircle2 size={18} aria-hidden /> {t("work.projectCompletion.completed")}
       </p>
     );
   }
@@ -46,35 +47,35 @@ export function ProjectCompletionControl({ engagement }: { readonly engagement: 
   return (
     <>
       <Button type="button" size="lg" onClick={() => setOpen(true)} className="w-full sm:w-auto">
-        End project
+        {t("work.projectCompletion.endProject")}
       </Button>
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        title="End this project"
-        description="Ask the customer for the completion code shown in their booking. This closes every stage and the project."
+        title={t("work.projectCompletion.dialogTitle")}
+        description={t("work.projectCompletion.dialogDescription")}
         dismissable={!completion.isPending}
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={completion.isPending}>
-              Not yet
+              {t("work.projectCompletion.notYet")}
             </Button>
             <Button
               onClick={submit}
               loading={completion.isPending}
-              loadingLabel="Completing"
+              loadingLabel={t("work.projectCompletion.completing")}
               disabled={code.replace(/\D/g, "").length < 4}
             >
-              Complete project
+              {t("work.projectCompletion.completeProject")}
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-3">
           <Field
-            label="Completion code"
+            label={t("work.projectCompletion.codeLabel")}
             required
-            description="The customer must share this only after checking the finished work."
+            description={t("work.projectCompletion.codeDescription")}
             error={error?.message}
           >
             <Input
@@ -82,7 +83,7 @@ export function ProjectCompletionControl({ engagement }: { readonly engagement: 
               onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))}
               inputMode="numeric"
               autoComplete="one-time-code"
-              placeholder="Enter code"
+              placeholder={t("work.projectCompletion.codePlaceholder")}
               className="text-center text-xl font-bold tracking-[0.3em]"
               disabled={completion.isPending}
             />

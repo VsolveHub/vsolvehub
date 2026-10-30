@@ -1,24 +1,23 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { ChoiceChips, Field, Input, Spinner } from "@vsolve/ui";
+import { ChoiceChips, Disclosure, Field, Input, Spinner } from "@vsolve/ui";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 /**
- * Typing a new address, inside the picker rather than instead of it.
+ * Completing a new address, after the pin is on the map.
  *
- * Locating happens on the picker (popup 1). This form is the second step: the
- * fields the Customer checks and completes. Reverse geocoding is good at the
- * street and bad at everything a courier actually needs — it cannot know the
- * flat number, the gate, or which of two towers is yours — so "Flat, plot or
- * building" is always left for them, even when the rest arrived from GPS.
+ * The pin is placed on the map picker (`LocationPicker`). This form is the
+ * second step: the fields the Customer checks and completes. Reverse geocoding
+ * is good at the street and bad at everything a courier actually needs — it
+ * cannot know the flat number, the gate, or which of two towers is yours — so
+ * "Flat, plot or building" is always left for them.
  *
  * ## Why a pin still matters
  *
- * `AddressRequest` requires `latitude` and `longitude`, and there is no forward
- * geocoder. The pin comes from **Use my location** on the picker. A form opened
- * from **Add a new address** has no pin yet; Save says so rather than sending a
- * request the server would refuse.
+ * `AddressRequest` requires `latitude` and `longitude`. The dialog only opens
+ * this form from a confirmed pin, so the check below is a guard rather than a
+ * step: Save says so rather than sending a request the server would refuse.
  *
  * ## Serviceability is shown and never blocks
  *
@@ -57,11 +56,11 @@ export interface AddressFormProps {
    */
   formId: string;
   /**
-   * Seed from **Use my location**. GPS cannot resolve a flat number, so `line1`
-   * is left empty even when the geocoder guessed one.
+   * Seed from the confirmed map pin. A pin cannot resolve a flat number, so
+   * `line1` is left empty even when the geocoder guessed one.
    */
   initial?: Draft;
-  /** Confirmation that the fields arrived from the device, not from typing. */
+  /** Confirmation that the fields arrived from the pin, not from typing. */
   showPinnedBanner?: boolean;
   /** Writes the address. Resolving is the caller's; this only reports the draft. */
   onSubmit: (draft: AddressRequest) => void;
@@ -84,6 +83,8 @@ export interface Draft {
   postalCode: string;
   latitude: string;
   longitude: string;
+  /** Geocoder's one-line summary, shown as confirmation after pinning. */
+  formattedAddress: string;
 }
 
 export const EMPTY_DRAFT: Draft = {
@@ -98,6 +99,7 @@ export const EMPTY_DRAFT: Draft = {
   postalCode: "",
   latitude: "",
   longitude: "",
+  formattedAddress: "",
 };
 
 const REQUIRED_MESSAGE: Record<"line1" | "locality" | "city" | "state" | "postalCode", string> = {
@@ -150,6 +152,7 @@ export function draftFromLocated(resolved: LocatedAddress): Draft {
     postalCode,
     latitude: resolved.latitude ?? "",
     longitude: resolved.longitude ?? "",
+    formattedAddress: resolved.formatted_address ?? "",
   };
 }
 
@@ -203,7 +206,7 @@ export function AddressForm({
 
     if (!isPinned) {
       setPinError(
-        "We need your location to send a professional. Go back and tap Use my location, then add your flat or building number.",
+        "We need the location on the map to send a professional. Go back, set the pin, then add your flat or building number.",
       );
     } else {
       setPinError(null);
@@ -236,17 +239,19 @@ export function AddressForm({
       {showPinnedBanner ? (
         <div className="rounded-card border border-success-line bg-success-surface p-4">
           <p className="text-sm font-bold text-text">Location pinned</p>
+          {draft.formattedAddress ? (
+            <p className="mt-0.5 text-sm leading-5 text-text">{draft.formattedAddress}</p>
+          ) : null}
           <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-            Check the details below and add your flat or building number.
+            Add your flat or building number below.
           </p>
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="flex flex-col gap-4">
         <Field
           label="Flat, plot or building"
           required
-          className="sm:col-span-2"
           error={fieldErrors.line1}
         >
           <Input
@@ -256,41 +261,79 @@ export function AddressForm({
             autoComplete="address-line1"
           />
         </Field>
-        <Field label="Street, area" required error={fieldErrors.locality}>
-          <Input
-            value={draft.locality}
-            onChange={(event) => set("locality", event.target.value)}
-            autoComplete="address-level3"
-          />
-        </Field>
-        <Field label="Landmark">
-          <Input
-            value={draft.landmark}
-            onChange={(event) => set("landmark", event.target.value)}
-          />
-        </Field>
-        <Field label="City" required error={fieldErrors.city}>
-          <Input
-            value={draft.city}
-            onChange={(event) => set("city", event.target.value)}
-            autoComplete="address-level2"
-          />
-        </Field>
-        <Field label="State" required error={fieldErrors.state}>
-          <Input
-            value={draft.state}
-            onChange={(event) => set("state", event.target.value)}
-            autoComplete="address-level1"
-          />
-        </Field>
-        <Field label="Pincode" required error={fieldErrors.postalCode}>
-          <Input
-            inputMode="numeric"
-            value={draft.postalCode}
-            onChange={(event) => set("postalCode", event.target.value)}
-            autoComplete="postal-code"
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Street, area" required error={fieldErrors.locality}>
+            <Input
+              value={draft.locality}
+              onChange={(event) => set("locality", event.target.value)}
+              autoComplete="address-level3"
+            />
+          </Field>
+          <Field label="Landmark">
+            <Input
+              value={draft.landmark}
+              onChange={(event) => set("landmark", event.target.value)}
+            />
+          </Field>
+        </div>
+        {/* Geocoded fields: collapsed when the pin filled them, expanded for manual entry. */}
+        {isPinned && draft.city && draft.state && draft.postalCode ? (
+          <Disclosure
+            summary="Edit city, state or pincode"
+            hint={`${draft.city}, ${draft.state} ${draft.postalCode}`}
+            defaultOpen={Boolean(fieldErrors.city || fieldErrors.state || fieldErrors.postalCode)}
+          >
+            <div className="grid gap-4 pt-1 sm:grid-cols-3">
+              <Field label="City" required error={fieldErrors.city}>
+                <Input
+                  value={draft.city}
+                  onChange={(event) => set("city", event.target.value)}
+                  autoComplete="address-level2"
+                />
+              </Field>
+              <Field label="State" required error={fieldErrors.state}>
+                <Input
+                  value={draft.state}
+                  onChange={(event) => set("state", event.target.value)}
+                  autoComplete="address-level1"
+                />
+              </Field>
+              <Field label="Pincode" required error={fieldErrors.postalCode}>
+                <Input
+                  inputMode="numeric"
+                  value={draft.postalCode}
+                  onChange={(event) => set("postalCode", event.target.value)}
+                  autoComplete="postal-code"
+                />
+              </Field>
+            </div>
+          </Disclosure>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="City" required error={fieldErrors.city}>
+              <Input
+                value={draft.city}
+                onChange={(event) => set("city", event.target.value)}
+                autoComplete="address-level2"
+              />
+            </Field>
+            <Field label="State" required error={fieldErrors.state}>
+              <Input
+                value={draft.state}
+                onChange={(event) => set("state", event.target.value)}
+                autoComplete="address-level1"
+              />
+            </Field>
+            <Field label="Pincode" required error={fieldErrors.postalCode}>
+              <Input
+                inputMode="numeric"
+                value={draft.postalCode}
+                onChange={(event) => set("postalCode", event.target.value)}
+                autoComplete="postal-code"
+              />
+            </Field>
+          </div>
+        )}
       </div>
 
       <Coverage

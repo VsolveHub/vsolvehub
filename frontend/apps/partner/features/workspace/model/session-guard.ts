@@ -120,6 +120,10 @@ export function canRunCommand(
   return false;
 }
 
+/**
+ * `headline`, `detail` and `actionLabel` are catalogue keys
+ * (`workspaces.recovery.*`) — `CapabilityNotice` resolves them with `t`.
+ */
 export interface WorkspaceRecovery {
   readonly headline: string;
   readonly detail: string;
@@ -143,9 +147,8 @@ export function recoveryFor(availability: WorkspaceAvailability): WorkspaceRecov
 
     case "REDUCED":
       return {
-        headline: "Some actions are no longer available",
-        detail:
-          "Your access to part of this work changed while you had this open. Everything here is still readable, and support can tell you why.",
+        headline: "workspaces.recovery.reduced.headline",
+        detail: "workspaces.recovery.reduced.detail",
         href: null,
         actionLabel: null,
         isRetryable: false,
@@ -153,11 +156,10 @@ export function recoveryFor(availability: WorkspaceAvailability): WorkspaceRecov
 
     case "WITHDRAWN":
       return {
-        headline: "This work is no longer on your account",
-        detail:
-          "Your approval for it changed while you had this open. Work you already committed to is unaffected — contact support to find out why this changed.",
+        headline: "workspaces.recovery.withdrawn.headline",
+        detail: "workspaces.recovery.withdrawn.detail",
         href: RECOVERY_HREF,
-        actionLabel: "Go to your home screen",
+        actionLabel: "workspaces.recovery.goHome",
         isRetryable: false,
       };
 
@@ -166,19 +168,17 @@ export function recoveryFor(availability: WorkspaceAvailability): WorkspaceRecov
       // deployment that authorized something this bundle does not carry, and
       // reloading genuinely can fix it.
       return {
-        headline: "This part of the app needs updating",
-        detail:
-          "Your account is approved for work this version cannot show yet. Reload to pick up the latest version.",
+        headline: "workspaces.recovery.unknown.headline",
+        detail: "workspaces.recovery.unknown.detail",
         href: RECOVERY_HREF,
-        actionLabel: "Go to your home screen",
+        actionLabel: "workspaces.recovery.goHome",
         isRetryable: true,
       };
 
     case "UNVERIFIED":
       return {
-        headline: "We could not check what you are approved for",
-        detail:
-          "Nothing has changed and nothing has been lost. Actions stay switched off until we can confirm your access.",
+        headline: "workspaces.recovery.unverified.headline",
+        detail: "workspaces.recovery.unverified.detail",
         href: null,
         actionLabel: null,
         isRetryable: true,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@vsolve/ui";
+import { Button, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import type { DuplicateView } from "../adapters";
@@ -75,9 +75,7 @@ export function DuplicateNotice({ duplicates, hrefFor }: DuplicateNoticeProps) {
               <p className="text-sm text-text-secondary">{duplicate.createdLabel}</p>
             </div>
             {duplicate.mergeable ? (
-              <Link href={hrefFor(duplicate.id)}>
-                <Button variant="secondary">Open that request</Button>
-              </Link>
+              <Link href={hrefFor(duplicate.id)} className={buttonStyles({ variant: "secondary" })}>Open that request</Link>
             ) : null}
           </li>
         ))}

@@ -79,6 +79,7 @@ class VariantSeed:
     price_paise: int
     minutes: int
     description: str = ""
+    image_url: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,8 +202,8 @@ PET_CARE = TradeContent(
     ),
 )
 
-#: The trades that follow the repair shape. Everything absent from this map falls back by
-#: category in `content_for_trade`.
+#: The trades that follow the repair shape. A trade absent from every set below gets no
+#: template from `content_for_trade`.
 REPAIR_TRADES = frozenset(
     {
         "electrician",
@@ -239,14 +240,43 @@ CLEANING_TRADES = frozenset(
 PET_TRADES = frozenset(
     {"pet-grooming", "veterinary", "pet-walking", "pet-sitting", "pet-training", "pet-photography"}
 )
+#: The Beautician trades, plus the M2 bridal/event makeup service whose skill is its own slug.
+PERSONAL_CARE_TRADES = frozenset(
+    {
+        "advanced-skin-care",
+        "bleach-detan",
+        "body-care",
+        "face-care",
+        "hair-services",
+        "makeup",
+        "manicure-pedicure",
+        "mehendi",
+        "threading",
+        "waxing",
+        "bridal-event-makeup",
+    }
+)
+
+#: Services whose visit has a different shape from the rest of their trade. These are
+#: cleaning jobs sold by repair trades: nothing is diagnosed or quoted mid-visit, so the
+#: repair script ("inspection and diagnosis of the reported fault") would describe a visit
+#: that does not happen.
+SERVICE_CONTENT_OVERRIDES: dict[str, TradeContent] = {
+    "ac-deep-cleaning": CLEANING,
+    "ac-jet-wash": CLEANING,
+    "plumber-chamber-cleaning": CLEANING,
+    "gas-burner-cleaning": CLEANING,
+}
 
 
-def content_for_trade(trade_slug: str) -> TradeContent:
-    """The process, inclusions and exclusions a trade publishes.
+def content_for_trade(trade_slug: str) -> TradeContent | None:
+    """The process, inclusions and exclusions a trade publishes, or `None` for no template.
 
-    Personal care is the fallback rather than a default-of-convenience: every remaining trade is
-    a Beautician one, and a repair script on a facial would describe a visit that does not
-    happen.
+    There is deliberately no fallback. Personal care used to be one, on the theory that every
+    remaining trade was a Beautician one — until the M2 project and day-hire services arrived
+    with their own slugs as skills and a demolition crew was told about "treatment on skin with
+    an open wound". A trade with no template publishes no template lines; the M2 services carry
+    their own authored lines from `seed_m2_demo`.
     """
 
     if trade_slug in REPAIR_TRADES:
@@ -255,7 +285,15 @@ def content_for_trade(trade_slug: str) -> TradeContent:
         return CLEANING
     if trade_slug in PET_TRADES:
         return PET_CARE
-    return PERSONAL_CARE
+    if trade_slug in PERSONAL_CARE_TRADES:
+        return PERSONAL_CARE
+    return None
+
+
+def content_for_service(service_slug: str, trade_slug: str) -> TradeContent | None:
+    """A service's own override if it has one, otherwise its trade's template."""
+
+    return SERVICE_CONTENT_OVERRIDES.get(service_slug) or content_for_trade(trade_slug)
 
 
 def _charm(paise: int) -> int:

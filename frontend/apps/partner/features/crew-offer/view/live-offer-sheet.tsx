@@ -1,19 +1,19 @@
 "use client";
 
 import { describeError, useServerCountdown } from "@vsolve/query";
-import { Badge, Button, ConfirmAction, Sheet, formatMoney } from "@vsolve/ui";
+import { Badge, Button, ConfirmAction, Sheet, formatMoney, useT } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import {
-  ACCEPT_CONSEQUENCE,
-  PAID_DAILY,
+  acceptConsequence,
   acceptQuestion,
   crewMathsLine,
   crewSizeLine,
   inclusionsLine,
   isOfferLive,
+  paidDailyLabel,
   startDayLabel,
   type CrewOfferAnswer,
 } from "../model/offer-state";
@@ -96,6 +96,7 @@ function OfferSheet({
   readonly onDismiss: () => void;
   readonly onAnswered: (answer: CrewOfferAnswer) => void;
 }) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
   const [declining, setDeclining] = useState(false);
   const countdown = useServerCountdown(offer.responds_by, 1000);
@@ -115,7 +116,10 @@ function OfferSheet({
 
   const area = offer.area_label.trim();
   const start = startDayLabel(offer.requested_start);
-  const whereWhen = [area || null, start === null ? null : `from ${start}`]
+  const whereWhen = [
+    area || null,
+    start === null ? null : t("work.crewOfferLiveSheet.fromDate", { date: start }),
+  ]
     .filter((part): part is string => part !== null)
     .join(" · ");
   const brief = inclusionsLine(offer.brief.slice(0, 2).map((line) => line.value));
@@ -123,11 +127,15 @@ function OfferSheet({
   const acceptError = accept.error ? describeError(accept.error, "mutation").message : null;
 
   return (
-    <Sheet open onOpenChange={(next) => (next ? undefined : onDismiss())} title="New job">
+    <Sheet
+      open
+      onOpenChange={(next) => (next ? undefined : onDismiss())}
+      title={t("work.crewOfferLiveSheet.newJob")}
+    >
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xl font-bold leading-tight text-text">
-            {crewSizeLine(offer.headcount, offer.days)}
+            {crewSizeLine(t, offer.headcount, offer.days)}
           </p>
           {countdown !== null ? (
             // `announce` rather than the digits for assistive tech: a
@@ -144,15 +152,15 @@ function OfferSheet({
         )}
 
         <p className="text-2xl font-extrabold leading-tight tabular-nums text-text">
-          {formatMoney(offer.lead_total_receipt_paise)} to you
+          {t("work.crewOfferLiveSheet.toYou", { amount: formatMoney(offer.lead_total_receipt_paise) })}
         </p>
         <p className="text-sm leading-5 text-text-secondary">
-          {crewMathsLine({
+          {crewMathsLine(t, {
             leadDayReceiptPaise: offer.lead_day_receipt_paise,
             headcount: offer.headcount,
             days: offer.days,
           })}{" "}
-          · {PAID_DAILY}
+          · {paidDailyLabel(t)}
         </p>
 
         {brief === null ? null : (
@@ -171,12 +179,12 @@ function OfferSheet({
             onClick={() => setConfirming(true)}
             disabled={busy}
             loading={accept.isPending}
-            loadingLabel="Taking it"
+            loadingLabel={t("work.crewOfferLiveSheet.takingIt")}
           >
-            Take it
+            {t("work.crewOfferLiveSheet.takeIt")}
           </Button>
           <Button variant="ghost" onClick={() => setDeclining(true)} disabled={busy}>
-            Pass
+            {t("work.crewOfferLiveSheet.pass")}
           </Button>
         </div>
 
@@ -184,17 +192,17 @@ function OfferSheet({
           href={`/work/offers/${offer.invitation_id}`}
           className="text-xs font-semibold text-action-secondary underline-offset-2 hover:underline"
         >
-          See the whole brief
+          {t("work.crewOfferLiveSheet.seeWholeBrief")}
         </Link>
       </div>
 
       <ConfirmAction
         open={confirming}
         onOpenChange={setConfirming}
-        title={acceptQuestion(offer)}
-        consequence={ACCEPT_CONSEQUENCE}
-        confirmLabel="Yes, send them"
-        cancelLabel="Back"
+        title={acceptQuestion(t, offer)}
+        consequence={acceptConsequence(t)}
+        confirmLabel={t("work.crewOfferLiveSheet.confirmSend")}
+        cancelLabel={t("common.back")}
         pending={accept.isPending}
         onConfirm={() => {
           // Success closes it through `onAccepted`. Failure closes it here so
@@ -223,12 +231,17 @@ function OutcomeSheet({
   readonly answer: CrewOfferAnswer;
   readonly onDone: () => void;
 }) {
+  const t = useT();
   return (
     <Sheet
       open
       onOpenChange={(next) => (next ? undefined : onDone())}
-      title={answer.kind === "accepted" ? "Your answer" : "Passed"}
-      footer={<Button onClick={onDone}>Done</Button>}
+      title={
+        answer.kind === "accepted"
+          ? t("work.crewOfferLiveSheet.outcomeTitle.accepted")
+          : t("work.crewOfferLiveSheet.outcomeTitle.declined")
+      }
+      footer={<Button onClick={onDone}>{t("common.done")}</Button>}
     >
       <CrewOfferOutcome answer={answer} />
     </Sheet>

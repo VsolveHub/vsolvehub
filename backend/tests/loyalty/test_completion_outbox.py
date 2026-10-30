@@ -29,7 +29,12 @@ from apps.loyalty.handlers import handle_customer_fulfilment_completed
 from apps.notifications.models import NotificationIntent
 from tests.fulfilment.test_completion import _all_outcomes, _in_progress_booking
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Reaches en route and arrival through shared helpers for a visit booked for tomorrow; the
+    # clock gates on those steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 
 def test_t1_settlement_completed_emits_one_outbox_event() -> None:

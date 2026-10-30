@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { Skeleton } from "@vsolve/ui";
 
 /**
@@ -29,7 +29,7 @@ export function CategoryCard({
   children?: ReactNode;
 }) {
   return (
-    <Link
+    <IntentLink
       href={href}
       className={`group relative flex flex-col overflow-hidden rounded-card p-5 transition-all duration-200 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action active:scale-[0.99] motion-reduce:transform-none ${
         variant === "large"
@@ -84,7 +84,7 @@ export function CategoryCard({
           </div>
         </>
       )}
-    </Link>
+    </IntentLink>
   );
 }
 

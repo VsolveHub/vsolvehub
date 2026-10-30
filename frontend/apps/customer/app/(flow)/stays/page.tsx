@@ -3,59 +3,78 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useBrowseList } from "@vsolve/query";
 import {
+  ArrowLeft,
   Building2,
   FileCheck2,
-  MapPin,
   Search,
 } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
+import { EMPTY_PLACE, PlaceFilter, type PlaceFilterValue } from "@vsolve/ui/location-picker";
 
+import { NearbyNotice, hasPoint, placeKey, placeQuery } from "@/features/browse/nearby";
+import { GOOGLE_MAPS_KEY } from "@/lib/google-maps";
+
+import { useCustomerSession } from "@/features/session/queries";
 import { fetchStays } from "@/features/stays/queries";
 import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
 
 function StaysBrowseContent() {
+  const session = useCustomerSession();
   const searchParams = useSearchParams();
   const initCategory = searchParams.get("category") ?? undefined;
 
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
+  const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [sort, setSort] = useState("newest");
   const [filters, setFilters] = useState<ActiveFilters>(
     initCategory ? { categorySlug: initCategory } : {}
   );
-  const [visible, setVisible] = useState(6);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
-    setVisible(6);
+    setAppliedPlace(draftPlace);
+  };
+
+  /** A picked suggestion or Near me searches at once; typing waits for the Search button. */
+  const changePlace = (next: PlaceFilterValue, applyNow: boolean) => {
+    setDraftPlace(next);
+    if (applyNow) {
+      setAppliedQuery(draftQuery);
+      setAppliedPlace(next);
+    }
   };
 
   const clearFilters = () => {
     setDraftQuery("");
-    setDraftLocation("");
+    setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
-    setAppliedLocation("");
+    setAppliedPlace(EMPTY_PLACE);
     setFilters({});
     setSort("newest");
-    setVisible(6);
   };
 
+  /**
+   * The server sends one page at a time (24 in the chosen sort) and "Show more" asks for the next.
+   * Sort and every filter are in the key, so changing one starts again from the first page.
+   */
   const {
-    data: stays = [],
+    items: stays,
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: [
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useBrowseList(
+    [
       "stays",
       appliedQuery,
-      appliedLocation,
+      placeKey(appliedPlace),
       filters.ac,
       filters.food,
       filters.minPrice,
@@ -65,10 +84,10 @@ function StaysBrowseContent() {
       filters.serviceSlug,
       sort,
     ],
-    queryFn: () =>
+    (offset, limit) =>
       fetchStays({
         q: appliedQuery,
-        location: appliedLocation,
+        ...placeQuery(appliedPlace),
         ac: filters.ac,
         food: filters.food,
         min_price: filters.minPrice,
@@ -76,49 +95,60 @@ function StaysBrowseContent() {
         tenant_preference: filters.tenantPreference,
         service: filters.serviceSlug || filters.categorySlug,
         sort,
-        limit: 100,
-        offset: 0,
+        limit,
+        offset,
       }),
-    staleTime: 30_000,
-  });
-
-  const displayedStays = stays.slice(0, visible);
+  );
 
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-6 px-4 pt-3 pb-8 sm:py-8">
+      <div>
+        <Link
+          href="/"
+          className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back to Home</span>
+        </Link>
+      </div>
+
       {/* Hero / Header Section */}
-      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800 p-6 text-warm-0 shadow-raised sm:p-10">
+      <section className="relative z-20 rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-navy-300/30 bg-navy-500/15 px-3 py-1 text-xs font-semibold text-navy-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-navy-400/30 bg-navy-800/60 px-3 py-1 text-xs font-semibold text-navy-200">
               <Building2 className="size-3.5" />
               Verified Rooms, PG & Short Stays
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-warm-0 sm:text-4xl lg:text-5xl">
+            <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
               Find Rooms, PG & Hotels
             </h1>
-            <p className="text-sm text-warm-200 sm:text-base">
+            <p className="text-sm text-navy-100/90 sm:text-base">
               Verified coliving, PG accommodation, and short stay rooms.
               Instant date quote calculations and direct host communication.
             </p>
           </div>
 
+          {/* Only once signed in: before that there is nothing of theirs to show, and the
+              page would only send them to log in. */}
+          {session.isAuthenticated ? (
           <div className="flex shrink-0 items-center gap-3">
             <Link
-              href="/stays/mine"
-              className="inline-flex items-center gap-2 rounded-control border border-warm-0/20 bg-warm-0/10 px-4 py-2.5 text-sm font-semibold text-warm-0 backdrop-blur-xs transition hover:bg-warm-0/20"
+              href="/activity?type=stays"
+              className="inline-flex items-center gap-2 rounded-control border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-xs transition hover:bg-white/20"
             >
               <FileCheck2 className="size-4 text-warm-100" />
-              My Enquiries
+              My bookings
             </Link>
           </div>
+          ) : null}
         </div>
 
         {/* Search Bar */}
         <form
           onSubmit={handleSearchSubmit}
-          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]"
+          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_320px_auto]"
         >
           <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
             <Search className="size-4 shrink-0 text-text-secondary" />
@@ -127,22 +157,18 @@ function StaysBrowseContent() {
               value={draftQuery}
               onChange={(e) => setDraftQuery(e.target.value)}
               placeholder="Search properties (e.g. Lakeview PG, Executive Single Room)"
-              className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
+              className="w-full bg-transparent py-2.5 text-base sm:text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
             />
           </label>
 
-          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
-            <MapPin className="size-4 shrink-0 text-text-secondary" />
-            <input
-              type="text"
-              value={draftLocation}
-              onChange={(e) => setDraftLocation(e.target.value)}
-              placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
-              className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
-            />
-          </label>
+          <PlaceFilter
+            apiKey={GOOGLE_MAPS_KEY}
+            value={draftPlace}
+            onChange={changePlace}
+            placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
+          />
 
-          <Button type="submit" className="h-full px-6 font-bold">
+          <Button type="submit" className="min-h-11 px-6 font-bold sm:h-full">
             Search Stays
           </Button>
         </form>
@@ -152,16 +178,22 @@ function StaysBrowseContent() {
       <StayFilters
         activeFilters={filters}
         onChangeFilter={setFilters}
-        count={stays.length}
+        count={isLoading ? null : stays.length}
       />
 
       {/* Results Header with Count & Sort */}
       {!isLoading && stays.length > 0 ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-3">
           <p className="text-sm font-semibold text-text">
-            Showing <span className="font-bold text-action">{displayedStays.length}</span> of{" "}
-            <span className="font-bold">{stays.length}</span> {stays.length === 1 ? "stay" : "stays"}
-            {appliedLocation ? ` in "${appliedLocation}"` : ""}
+            Showing <span className="font-bold text-action">{stays.length}</span>{" "}
+            {stays.length === 1 ? "stay" : "stays"}
+            {hasPoint(appliedPlace)
+              ? appliedPlace.source === "device"
+                ? " near you"
+                : ` near ${appliedPlace.name}`
+              : appliedPlace.name.trim()
+                ? ` in "${appliedPlace.name.trim()}"`
+                : ""}
           </p>
           <div className="flex items-center gap-2 self-end sm:self-auto">
             <label htmlFor="stays-sort" className="text-xs font-medium text-text-secondary">
@@ -172,17 +204,27 @@ function StaysBrowseContent() {
               value={sort}
               onChange={(e) => {
                 setSort(e.target.value);
-                setVisible(6);
               }}
               className="rounded-control border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-text shadow-xs transition hover:border-line-strong focus:border-line-strong focus:outline-none"
             >
-              <option value="newest">Newest First</option>
+              {/* With a searched place the server's default order is nearest first. */}
+              <option value="newest">{hasPoint(appliedPlace) ? "Nearest First" : "Newest First"}</option>
               <option value="price_asc">Price: Low to High</option>
               <option value="price_desc">Price: High to Low</option>
               <option value="rating_desc">Top Rated</option>
             </select>
           </div>
         </div>
+      ) : null}
+
+      {/* Only for the default order: with a price sort the first card is not the nearest. */}
+      {!isLoading && !error && sort === "newest" ? (
+        <NearbyNotice
+          place={appliedPlace}
+          noun="stays"
+          count={stays.length}
+          nearestKm={stays[0]?.distance_km}
+        />
       ) : null}
 
       {/* State Rendering */}
@@ -216,17 +258,13 @@ function StaysBrowseContent() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {displayedStays.map((property) => (
+          {stays.map((property) => (
             <StayCard key={property.id} property={property} />
           ))}
         </div>
       )}
-      {stays.length > visible ? (
-        <div className="flex justify-center pt-4">
-          <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
-            Load more ({stays.length - visible} remaining)
-          </Button>
-        </div>
+      {stays.length > 0 ? (
+        <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} label="Show more stays" />
       ) : null}
     </main>
   );

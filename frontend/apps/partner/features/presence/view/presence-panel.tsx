@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, Card, Dialog, ErrorState, Spinner, cn } from "@vsolve/ui";
+import { Badge, Button, Card, Dialog, ErrorState, Spinner, cn, useT } from "@vsolve/ui";
 import { Check, ChevronDown, MapPin, Power } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
@@ -9,14 +9,17 @@ import { useApplicationReference } from "@/features/application/reference-querie
 
 import {
   HEARTBEAT_INTERVAL_MS,
-  PRESENCE_COPY,
+  presenceCopy,
   presenceStatus,
+  type PresenceCopy,
   type PresenceStatus,
 } from "../model/presence";
 import { announceHeartbeat, claimRecurringHeartbeat } from "../model/heartbeat-lease";
 import {
   clearStoredSession,
+  readStoredAreaId,
   readStoredSession,
+  writeStoredAreaId,
   writeStoredSession,
 } from "../model/stored-session";
 import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
@@ -121,12 +124,27 @@ export function PresencePanel({
   consentVersion: string | null;
   variant?: "default" | "driver";
 }) {
+  const t = useT();
   const reference = useApplicationReference();
   const goOnline = useGoOnline();
   const goOffline = useGoOffline();
   const heartbeat = useHeartbeat();
 
   const [areaId, setAreaId] = useState("");
+  /**
+   * Restored once, after mount: reading storage during the initial render
+   * would disagree with the server pass, which has none. A field defaulting
+   * in a frame after paint is a non-issue — unlike `storedSession` above,
+   * nothing here is asserted as true before the Partner acts on it.
+   */
+  useEffect(() => {
+    const stored = readStoredAreaId();
+    if (stored) setAreaId((current) => current || stored);
+  }, []);
+  const chooseArea = useCallback((value: string) => {
+    setAreaId(value);
+    writeStoredAreaId(value);
+  }, []);
   const [openAreaModal, setOpenAreaModal] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastBeatAt, setLastBeatAt] = useState<number | null>(null);
@@ -324,7 +342,7 @@ export function PresencePanel({
     clearStoredSession();
   }
 
-  const copy = PRESENCE_COPY[status];
+  const copy = presenceCopy(status, t);
   const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending;
   const isOnline = sessionId !== null && (status === "online" || status === "stale");
   const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
@@ -341,7 +359,7 @@ export function PresencePanel({
           isRestoring={isRestoring}
           sessionId={sessionId}
           areaId={areaId}
-          setAreaId={setAreaId}
+          setAreaId={chooseArea}
           openAreaModal={openAreaModal}
           setOpenAreaModal={setOpenAreaModal}
           canGoOnline={canGoOnline}
@@ -356,7 +374,7 @@ export function PresencePanel({
           onOpenChange={setOpenAreaModal}
           areas={reference.serviceAreas}
           selectedId={areaId}
-          onSelect={setAreaId}
+          onSelect={chooseArea}
         />
       </>
     );
@@ -366,7 +384,7 @@ export function PresencePanel({
     <>
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-bold text-text">Your availability</h2>
+          <h2 className="text-base font-bold text-text">{t("presence.panel.heading")}</h2>
           <Badge tone={TONE[status]} dot>
             {copy.label}
           </Badge>
@@ -378,8 +396,7 @@ export function PresencePanel({
 
         {consentVersion === null ? (
           <p className="mt-4 rounded-card border border-line bg-surface-sunken p-3 text-sm text-text-secondary">
-            Accept the Partner agreements before going online — we record which
-            version you agreed to alongside your location.
+            {t("presence.panel.consentNotice")}
           </p>
         ) : null}
 
@@ -387,9 +404,9 @@ export function PresencePanel({
           <ErrorState
             inline
             className="mt-4"
-            title="We could not load your areas"
-            message="You are not online. Check your connection and try again."
-            actionLabel="Try again"
+            title={t("presence.panel.areasError.title")}
+            message={t("presence.panel.areasError.message")}
+            actionLabel={t("common.tryAgain")}
             onAction={reference.refetch}
           />
         ) : null}
@@ -413,7 +430,7 @@ export function PresencePanel({
         {isRestoring ? (
           <p className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
             <Spinner size="sm" />
-            Checking your last session…
+            {t("presence.panel.restoring")}
           </p>
         ) : sessionId === null ? (
           // DESKTOP ONLY: `lg:max-w-sm`. The area picker and the go-online
@@ -433,9 +450,9 @@ export function PresencePanel({
               onClick={() => void handleGoOnline()}
               disabled={!canGoOnline}
               loading={goOnline.isPending}
-              loadingLabel="Going online"
+              loadingLabel={t("presence.panel.goingOnline")}
             >
-              Go online
+              {t("presence.panel.goOnline")}
             </Button>
           </div>
         ) : (
@@ -446,16 +463,15 @@ export function PresencePanel({
               icon={<Power size={16} />}
               onClick={() => void handleGoOffline()}
               loading={goOffline.isPending}
-              loadingLabel="Going offline"
+              loadingLabel={t("presence.panel.goingOffline")}
             >
-              Go offline
+              {t("presence.panel.goOffline")}
             </Button>
           </div>
         )}
 
         <p className="mt-3 text-xs leading-5 text-text-muted">
-          While you are online we keep a coarse location so we can offer you nearby
-          work. It stops the moment you go offline.
+          {t("presence.panel.locationNote")}
         </p>
       </Card>
 
@@ -464,7 +480,7 @@ export function PresencePanel({
         onOpenChange={setOpenAreaModal}
         areas={reference.serviceAreas}
         selectedId={areaId}
-        onSelect={setAreaId}
+        onSelect={chooseArea}
       />
     </>
   );
@@ -493,7 +509,7 @@ function DriverPresenceControls({
   handleGoOffline,
 }: {
   status: PresenceStatus;
-  copy: (typeof PRESENCE_COPY)[PresenceStatus];
+  copy: PresenceCopy;
   tone: (typeof TONE)[PresenceStatus];
   consentVersion: string | null;
   reference: ReturnType<typeof useApplicationReference>;
@@ -510,6 +526,7 @@ function DriverPresenceControls({
   handleGoOnline: () => Promise<void>;
   handleGoOffline: () => Promise<void>;
 }) {
+  const t = useT();
   const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
 
   return (
@@ -520,7 +537,7 @@ function DriverPresenceControls({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-text-muted">
-            Availability
+            {t("presence.driver.availabilityLabel")}
           </p>
           {/*
             Deliberately not `truncate`. This line is the whole instruction an
@@ -540,16 +557,16 @@ function DriverPresenceControls({
 
       {consentVersion === null ? (
         <p className="rounded-2xl border border-line bg-surface-sunken px-3 py-2.5 text-sm text-text-secondary">
-          Accept the Partner agreements before going online.
+          {t("presence.driver.consentNotice")}
         </p>
       ) : null}
 
       {reference.isError ? (
         <ErrorState
           inline
-          title="We could not load your areas"
-          message="You are not online. Check your connection and try again."
-          actionLabel="Try again"
+          title={t("presence.panel.areasError.title")}
+          message={t("presence.panel.areasError.message")}
+          actionLabel={t("common.tryAgain")}
           onAction={reference.refetch}
         />
       ) : null}
@@ -559,7 +576,7 @@ function DriverPresenceControls({
       {isRestoring ? (
         <p className="flex items-center justify-center gap-2 py-6 text-sm text-text-secondary">
           <Spinner size="sm" />
-          Checking your last session…
+          {t("presence.panel.restoring")}
         </p>
       ) : (
         <div className="flex flex-col items-center gap-4">
@@ -573,7 +590,7 @@ function DriverPresenceControls({
 
           <button
             type="button"
-            aria-label={isOnline ? "Go offline" : "Go online"}
+            aria-label={isOnline ? t("presence.driver.goOfflineAria") : t("presence.driver.goOnlineAria")}
             disabled={
               isRestoring ||
               (sessionId === null && !canGoOnline) ||
@@ -610,7 +627,7 @@ function DriverPresenceControls({
           </button>
 
           <p className="text-center text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">
-            {isOnline ? "Tap to go offline" : "Tap to go online"}
+            {isOnline ? t("presence.driver.tapToGoOffline") : t("presence.driver.tapToGoOnline")}
           </p>
         </div>
       )}
@@ -630,6 +647,7 @@ function AreaPickerButton({
   disabled?: boolean;
   onClick: () => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -644,7 +662,7 @@ function AreaPickerButton({
       <span className="flex items-center gap-2.5 min-w-0 truncate">
         <MapPin className="h-4 w-4 text-signal-600 shrink-0" />
         <span className={cn("truncate text-sm", areaName ? "font-bold text-navy-900" : "font-medium text-text-muted")}>
-          {areaName ?? "Choose your area…"}
+          {areaName ?? t("presence.areaPicker.placeholder")}
         </span>
       </span>
       <ChevronDown className="h-4 w-4 text-text-muted shrink-0" />
@@ -668,16 +686,17 @@ function AreaPickerModal({
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Choose Service Area"
-      description="Select the operational area where you want to receive on-duty job offers."
+      title={t("presence.areaPicker.dialogTitle")}
+      description={t("presence.areaPicker.dialogDescription")}
     >
       <div className="flex flex-col gap-2 py-2 max-h-[60vh] overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {areas.length === 0 ? (
-          <p className="text-sm text-text-secondary py-6 text-center">No service areas available.</p>
+          <p className="text-sm text-text-secondary py-6 text-center">{t("presence.areaPicker.empty")}</p>
         ) : (
           areas.map((area) => {
             const isSelected = area.id === selectedId;
@@ -707,7 +726,7 @@ function AreaPickerModal({
                   </div>
                   <div>
                     <p className="text-sm font-bold leading-tight text-navy-900">{area.name}</p>
-                    <p className="text-xs text-text-secondary mt-0.5">High booking demand</p>
+                    <p className="text-xs text-text-secondary mt-0.5">{t("presence.areaPicker.highDemand")}</p>
                   </div>
                 </div>
                 {isSelected ? <Check className="h-5 w-5 text-emerald-600 shrink-0" /> : null}

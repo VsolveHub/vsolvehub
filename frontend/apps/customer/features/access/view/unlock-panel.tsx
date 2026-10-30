@@ -1,7 +1,7 @@
 "use client";
 
 import type { UnlockPhase } from "@vsolve/query";
-import { Badge, Button, EmptyState, Skeleton } from "@vsolve/ui";
+import { Badge, Button, buttonStyles, EmptyState, Skeleton } from "@vsolve/ui";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -253,9 +253,7 @@ function UnlockAction({
             once — coming back later costs nothing.
           </p>
           <div className="mt-3">
-            <Link href={quotesHref} className="inline-block">
-              <Button>Read the quotes</Button>
-            </Link>
+            <Link href={quotesHref} className={buttonStyles()}>Read the quotes</Link>
           </div>
         </div>
       );

@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import type { useT } from "@vsolve/ui";
 
 import type { EnquiryStatus } from "@/features/enquiry/model/enquiry-state";
 
@@ -54,62 +55,49 @@ export interface ProposalStatusCopy {
   readonly meaning: string;
 }
 
-const STATUS_COPY: Record<ProposalStatus, ProposalStatusCopy> = {
-  SUBMITTED: {
-    label: "With the customer",
-    tone: "progress",
-    meaning:
-      "This is the quote the customer sees. You can revise it or withdraw it any time until they choose it.",
-  },
-  SUPERSEDED: {
-    label: "Replaced",
-    tone: "settled",
-    meaning:
-      "You sent a newer quote. The customer can still see this one — quotes are never overwritten.",
-  },
-  WITHDRAWN: {
-    label: "Withdrawn",
-    tone: "gone",
-    meaning:
-      "You took this quote off the table. The customer can no longer choose it, and your enquiry is still open — send a new one whenever you are ready.",
-  },
-  EXPIRED: {
-    label: "Expired",
-    tone: "gone",
-    meaning:
-      "The validity date you set has passed, so this quote is no longer offered. Send a new one if you still want the work.",
-  },
-  SELECTED: {
-    label: "Chosen — confirm it",
-    tone: "won",
-    meaning:
-      "The customer chose this quote and is waiting for you to confirm the price, the dates and that you can still staff it. It is not a booking until you do.",
-  },
-  REJECTED: {
-    label: "Not chosen",
-    tone: "settled",
-    // The Customer's own refusal, and named as theirs.
-    meaning: "The customer read this quote and went with someone else.",
-  },
-  ACCEPTED: {
-    label: "Confirmed",
-    tone: "won",
-    meaning:
-      "You confirmed this quote after the customer chose it. The work opens from here — changes from this point are scope amendments, not new quotes.",
-  },
-  LAPSED: {
-    label: "Lapsed after selection",
-    tone: "gone",
-    // Never "rejected". The customer wanted this quote; this vendor did not
-    // confirm it in time or declined it. Saying otherwise misreports the
-    // vendor's own standing back to them.
-    meaning:
-      "The customer had chosen this quote and it lapsed before you confirmed it — either you declined, or the confirmation window closed. That is not a rejection by the customer, and their fee stands, so they can go to the next quote at no extra cost.",
-  },
+/**
+ * Catalogue keys per state (`proposal.state.<status>.label` / `.meaning`).
+ *
+ * The English is commentary here; the copy lives in `i18n/catalogs/proposal.ts`.
+ * `LAPSED` is never "rejected": the customer wanted this quote; this vendor did
+ * not confirm it in time or declined it. Saying otherwise misreports the
+ * vendor's own standing back to them. `REJECTED` is the Customer's own refusal,
+ * and named as theirs.
+ */
+const STATUS_TONE: Record<ProposalStatus, ProposalStatusCopy["tone"]> = {
+  SUBMITTED: "progress",
+  SUPERSEDED: "settled",
+  WITHDRAWN: "gone",
+  EXPIRED: "gone",
+  SELECTED: "won",
+  REJECTED: "settled",
+  ACCEPTED: "won",
+  LAPSED: "gone",
 };
 
-export function describeProposalStatus(status: ProposalStatus): ProposalStatusCopy {
-  return STATUS_COPY[status];
+/**
+ * The words for the document itself. A5 records are estimates and A3 records
+ * are quotes; every sentence that names the document takes `{doc}` / `{docs}`.
+ */
+export function documentNouns(
+  t: ReturnType<typeof useT>,
+  documentKind: "quote" | "estimate" = "quote",
+): { readonly doc: string; readonly docs: string } {
+  return documentKind === "estimate"
+    ? { doc: t("proposal.document.estimate"), docs: t("proposal.document.estimates") }
+    : { doc: t("proposal.document.quote"), docs: t("proposal.document.quotes") };
+}
+
+export function describeProposalStatus(
+  status: ProposalStatus,
+  t: ReturnType<typeof useT>,
+  documentKind: "quote" | "estimate" = "quote",
+): ProposalStatusCopy {
+  return {
+    label: t(`proposal.state.${status}.label`),
+    tone: STATUS_TONE[status],
+    meaning: t(`proposal.state.${status}.meaning`, documentNouns(t, documentKind)),
+  };
 }
 
 /**
@@ -121,14 +109,18 @@ export function describeProposalStatus(status: ProposalStatus): ProposalStatusCo
  * handled because the enum publishes it and a screen that crashes on a value the
  * server can legally send is worse than one that renders it plainly.
  */
-export function describeUsability(usability: Schemas["ProposalUsabilityEnum"]): string | null {
+export function describeUsability(
+  usability: Schemas["ProposalUsabilityEnum"],
+  t: ReturnType<typeof useT>,
+  documentKind: "quote" | "estimate" = "quote",
+): string | null {
   switch (usability) {
     case "USABLE":
       return null;
     case "OUT_OF_BUDGET":
-      return "Above the budget the customer stated. They can still choose it — Vsolve shows it labelled rather than hiding it.";
+      return t("proposal.state.usability.outOfBudget");
     case "INCOMPLETE":
-      return "Vsolve has this quote marked incomplete, so it is not being shown as a usable option.";
+      return t("proposal.state.usability.incomplete", documentNouns(t, documentKind));
   }
 }
 
@@ -141,9 +133,13 @@ export function describeUsability(usability: Schemas["ProposalUsabilityEnum"]): 
  * by superseding. Left unsurfaced it would be an expired quote the vendor had no
  * reason to touch and a customer waiting on an answer nobody told them about.
  */
-export function revalidationNoticeFor(proposal: Proposal): string | null {
+export function revalidationNoticeFor(
+  proposal: Proposal,
+  t: ReturnType<typeof useT>,
+  documentKind: "quote" | "estimate" = "quote",
+): string | null {
   if (proposal.revalidation_requested_at === null) return null;
-  return "The customer asked whether this price still stands. Send a revised quote to answer — it costs them nothing and it is the only way to say yes.";
+  return t("proposal.state.revalidationNotice", documentNouns(t, documentKind));
 }
 
 export interface ProposalPermissions {
@@ -277,5 +273,13 @@ export function traceForInvitation(input: {
 }
 
 /** The sentence the `unreadable` state shows. Stated once, used by both composers. */
-export const UNREADABLE_PROPOSAL_NOTICE =
-  "You have already quoted on this enquiry and Vsolve could not load the quote itself just now. Nothing is lost — the customer still has it. Try again, or send a new quote, which replaces whatever is with them.";
+export function unreadableProposalNotice(
+  t: ReturnType<typeof useT>,
+  documentKind: "quote" | "estimate" = "quote",
+): string {
+  return t(
+    documentKind === "estimate"
+      ? "proposal.state.unreadableNotice.estimate"
+      : "proposal.state.unreadableNotice.quote",
+  );
+}

@@ -6,9 +6,11 @@ import { getAllPosts, getPost, formatBlogDate, readingMinutes } from "@/lib/blog
 import { Markdown } from "@/components/markdown";
 import { Faq, faqJsonLd } from "@/components/faq";
 
+import { SITE_URL } from "@/lib/site";
+
 export const dynamic = "force-static";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
+const siteUrl = SITE_URL;
 
 export function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug }));
@@ -75,7 +77,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   };
 
   return (
-    <main className="px-5 py-16">
+    <main className="px-5 pt-24 sm:pt-28 lg:pt-32 pb-20">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

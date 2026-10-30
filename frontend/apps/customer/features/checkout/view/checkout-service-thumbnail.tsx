@@ -15,7 +15,7 @@ export function CheckoutServiceThumbnail({
 }) {
   const serviceQuery = useServiceDetail(serviceSlug);
   const service = serviceQuery.data;
-  const imageUrl = service?.cover?.url ?? "";
+  const imageUrl = service?.cover?.url || service?.variants?.[0]?.image_url || "";
   const resolvedIconKey = service?.icon_key ?? iconKey ?? serviceSlug;
 
   if (imageUrl !== "") {

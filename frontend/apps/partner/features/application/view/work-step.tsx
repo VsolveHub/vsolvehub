@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
-import { Badge, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, ErrorState, Spinner, useT } from "@vsolve/ui";
 
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 import type { MainCategory, OfferableService } from "@/features/catalog/queries";
 import { toggle } from "../model/draft";
 import {
+  findSkillForCategory,
   isTradeCategorySelected,
   selectedTradeCategories,
+  syncRequiredSkills,
   toggleTradeCategorySelection,
   variantIdsForCategory,
 } from "../model/main-categories";
@@ -28,6 +30,7 @@ function servicesForCategory(
 }
 
 export function WorkStep({ mainCategories, services }: WorkStepProps) {
+  const t = useT();
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
 
@@ -35,6 +38,30 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
     () => selectedTradeCategories(mainCategories, reference.skills, draft.skillCodes),
     [draft.skillCodes, mainCategories, reference.skills],
   );
+
+  const categorySkillCodes = useMemo(
+    () =>
+      mainCategories
+        .map((category) => findSkillForCategory(reference.skills, category)?.code)
+        .filter((code): code is string => code !== undefined),
+    [mainCategories, reference.skills],
+  );
+
+  // Every change to the selection goes through here, so the skills the chosen
+  // job types need travel with them. See `syncRequiredSkills`.
+  function select(next: { skillCodes?: readonly string[]; serviceVariantIds: readonly string[] }) {
+    update({
+      serviceVariantIds: [...next.serviceVariantIds],
+      skillCodes: syncRequiredSkills({
+        skillCodes: next.skillCodes ?? draft.skillCodes,
+        previousVariantIds: draft.serviceVariantIds,
+        nextVariantIds: next.serviceVariantIds,
+        services,
+        skills: reference.skills,
+        categorySkillCodes,
+      }),
+    });
+  }
 
   const selectableServices = useMemo(() => {
     const activeNames = new Set(selectedCategories.map((category) => category.name));
@@ -57,29 +84,29 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
   return (
     <fieldset className="border-0 p-0">
       <legend className="text-sm font-bold text-navy-900">
-        Select Your Trades <span className="text-danger-text">*</span>
+        {t("apply.work.legend")} <span className="text-danger-text">*</span>
       </legend>
       <p className="mt-1 text-xs leading-5 text-text-muted">
-        Choose your main categories, then pick the job types you want under each one.
+        {t("apply.work.hint")}
       </p>
 
       {reference.isPending ? (
         <p className="mt-3 flex items-center gap-2 py-4 text-sm text-text-secondary">
           <Spinner size="sm" />
-          Loading categories…
+          {t("apply.work.loading")}
         </p>
       ) : reference.isError ? (
         <ErrorState
           className="mt-3"
           inline
-          title="Could not load categories"
-          message="Check your connection and try again."
-          actionLabel="Try again"
+          title={t("apply.work.loadError.title")}
+          message={t("apply.common.checkConnectionAndRetry")}
+          actionLabel={t("common.tryAgain")}
           onAction={reference.refetch}
         />
       ) : mainCategories.length === 0 ? (
         <p className="mt-3 rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
-          No categories are currently open for registration.
+          {t("apply.work.empty")}
         </p>
       ) : (
         <div className="mt-3 flex flex-col gap-4">
@@ -101,7 +128,7 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                   checked={checked}
                   disabled={isReadOnly}
                   onChange={() =>
-                    update(
+                    select(
                       toggleTradeCategorySelection(
                         category,
                         reference.skills,
@@ -119,20 +146,20 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                     <div className="ml-1 flex flex-col gap-2 border-l-2 border-line pl-3 sm:ml-2 sm:pl-4">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                          Job types
+                          {t("apply.work.jobTypes")}
                         </p>
                         {!isReadOnly ? (
                           <button
                             type="button"
                             onClick={() => {
                               if (allServicesSelected) {
-                                update({
+                                select({
                                   serviceVariantIds: draft.serviceVariantIds.filter(
                                     (id) => !allCategoryIds.includes(id),
                                   ),
                                 });
                               } else {
-                                update({
+                                select({
                                   serviceVariantIds: Array.from(
                                     new Set([...draft.serviceVariantIds, ...allCategoryIds]),
                                   ),
@@ -141,7 +168,7 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                             }}
                             className="text-xs font-semibold text-navy-700 hover:text-signal-700"
                           >
-                            {allServicesSelected ? "Deselect all" : "Select all"}
+                            {allServicesSelected ? t("apply.areas.deselectAll") : t("apply.areas.selectAll")}
                           </button>
                         ) : null}
                       </div>
@@ -150,7 +177,10 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                         {categoryServices.map((service) => {
                           const needsSkill =
                             service.requiredSkillCode.length > 0 &&
-                            !draft.skillCodes.includes(service.requiredSkillCode);
+                            !draft.skillCodes.includes(service.requiredSkillCode) &&
+                            !reference.skills.some(
+                              (skill) => skill.code === service.requiredSkillCode,
+                            );
 
                           return (
                             <div key={service.variantId} className="flex flex-col gap-1">
@@ -158,7 +188,7 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                                 checked={draft.serviceVariantIds.includes(service.variantId)}
                                 disabled={isReadOnly}
                                 onChange={() =>
-                                  update({
+                                  select({
                                     serviceVariantIds: toggle(
                                       draft.serviceVariantIds,
                                       service.variantId,
@@ -170,8 +200,10 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                               />
                               {needsSkill &&
                               draft.serviceVariantIds.includes(service.variantId) ? (
+                                // Only reachable now when the skill is not one
+                                // Django offers: `select` adds every other one.
                                 <Badge tone="warning">
-                                  Requires {service.requiredSkillCode.replace(/-/g, " ")} trade
+                                  {t("apply.work.notOpenYet")}
                                 </Badge>
                               ) : null}
                             </div>
@@ -181,7 +213,7 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                     </div>
                   ) : (
                     <p className="ml-1 border-l-2 border-line pl-3 text-xs leading-5 text-text-secondary sm:ml-2 sm:pl-4">
-                      No bookable job types are open for this category yet.
+                      {t("apply.work.noBookableTypes")}
                     </p>
                   )
                 ) : null}
@@ -193,11 +225,11 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
 
       {selectedCategories.length === 0 ? (
         <p className="mt-3 text-xs font-semibold text-danger-text">
-          * Please select at least one category to proceed.
+          {t("apply.work.selectCategoryError")}
         </p>
       ) : selectableServices.length > 0 && selectedServiceCount === 0 ? (
         <p className="mt-3 text-xs font-semibold text-danger-text">
-          * Please select at least one job type under your chosen categories.
+          {t("apply.work.selectJobTypeError")}
         </p>
       ) : null}
     </fieldset>

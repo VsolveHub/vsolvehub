@@ -1,6 +1,6 @@
 "use client";
 
-import { safeNextPath, useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { safeNextPath, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { ErrorState, Spinner } from "@vsolve/ui";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
@@ -39,7 +39,7 @@ export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const guard = useAuthGuard(getApiClient());
-  const flow = useOtpFlow(getApiClient(), { getReferralCode: readPendingReferral });
+  const flow = usePhoneAuthFlow(getApiClient(), { getReferralCode: readPendingReferral });
 
   const isAuthenticated = guard.status === "authenticated";
   const next = safeNextPath(searchParams.get("next"));
@@ -91,12 +91,16 @@ export function LoginScreen() {
         flow={flow}
         variant="page"
         footer={
-          <a
-            href="/catalog"
-            className="block text-center text-[13px] font-medium text-[#64748B] hover:text-navy-900 hover:underline transition-colors"
-          >
-            Browse services first
-          </a>
+          <p>
+            New here?{" "}
+            <a
+              href="/catalog"
+              className="py-3 font-semibold text-info-text underline-offset-4 hover:underline"
+            >
+              Browse services
+            </a>{" "}
+            — you can add to your basket before signing in.
+          </p>
         }
       />
     </main>

@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/workspace/queries", () => ({
   usePartnerWorkspaceGrants: vi.fn(),
+  // MeHome reads the specialty home to decide whether Money shows; none means "show it".
+  useSpecialtyHome: () => ({ isPending: false, home: null }),
 }));
 vi.mock("@vsolve/query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vsolve/query")>()),
@@ -24,6 +26,8 @@ vi.mock("@/features/profile/queries", () => ({
 }));
 
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
+import { withI18n } from "@/i18n/test-utils";
+
 import { MeHome } from "./me-home";
 
 /**
@@ -38,9 +42,11 @@ import { MeHome } from "./me-home";
 function renderMeHome() {
   const client = new QueryClient();
   return render(
-    <QueryClientProvider client={client}>
-      <MeHome />
-    </QueryClientProvider>,
+    withI18n(
+      <QueryClientProvider client={client}>
+        <MeHome />
+      </QueryClientProvider>,
+    ),
   );
 }
 

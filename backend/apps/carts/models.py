@@ -517,7 +517,16 @@ class BookingGroup(models.Model):
         choices=FulfilmentPlan.ConfirmationPolicy.choices,
         default=FulfilmentPlan.ConfirmationPolicy.ALL_OR_NOTHING,
     )
+    class BookingMode(models.TextChoices):
+        INSTANT = "INSTANT", "Instant"
+        SCHEDULED = "SCHEDULED", "Scheduled"
+
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.CONFIRMED)
+    booking_mode = models.CharField(
+        max_length=16,
+        choices=BookingMode.choices,
+        default=BookingMode.SCHEDULED,
+    )
     version = models.PositiveIntegerField(default=1)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)

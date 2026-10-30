@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "./cn";
+import { useTOrDefault } from "./i18n";
 
 /**
  * Files attached to a requirement, a proposal or a stage's evidence.
@@ -29,11 +30,18 @@ export type AttachmentStatus = "uploading" | "attached" | "failed";
 
 export type AttachmentKind = "image" | "video" | "audio" | "document";
 
-const KIND_LABEL: Record<AttachmentKind, string> = {
-  image: "Photo",
-  video: "Video",
+const KIND_LABEL_KEY: Record<AttachmentKind, string> = {
+  image: "ui.attachment.kind.image",
+  video: "ui.attachment.kind.video",
   // "Voice note" rather than "Audio": it is the fast path the customer was
   // offered, and calling it back by a different name reads as a different thing.
+  audio: "ui.attachment.kind.audio",
+  document: "ui.attachment.kind.document",
+};
+
+const KIND_LABEL_DEFAULT: Record<AttachmentKind, string> = {
+  image: "Photo",
+  video: "Video",
   audio: "Voice note",
   document: "Document",
 };
@@ -64,10 +72,13 @@ export interface AttachmentListProps {
 }
 
 function StatusLine({ item }: { item: Attachment }) {
+  const tf = useTOrDefault();
+
   if (item.status === "failed") {
     return (
       <p className="text-xs text-danger-text">
-        {item.error ?? "This file did not upload. It has not been attached."}
+        {item.error ??
+          tf("ui.attachment.uploadFailed", "This file did not upload. It has not been attached.")}
       </p>
     );
   }
@@ -81,7 +92,7 @@ function StatusLine({ item }: { item: Attachment }) {
         <progress
           value={percent}
           max={100}
-          aria-label={`Uploading ${item.name}`}
+          aria-label={tf("ui.attachment.uploading", "Uploading {name}", { name: item.name })}
           className="h-1 w-24 overflow-hidden rounded-full"
         />
         <span className="text-xs text-text-secondary">{percent}%</span>
@@ -91,7 +102,7 @@ function StatusLine({ item }: { item: Attachment }) {
 
   return (
     <p className="text-xs text-text-secondary">
-      {KIND_LABEL[item.kind]}
+      {tf(KIND_LABEL_KEY[item.kind], KIND_LABEL_DEFAULT[item.kind])}
       {item.size ? ` · ${item.size}` : ""}
     </p>
   );
@@ -105,6 +116,7 @@ export function AttachmentList({
   empty,
   className,
 }: AttachmentListProps) {
+  const tf = useTOrDefault();
   if (items.length === 0) return empty ? <>{empty}</> : null;
 
   return (
@@ -133,8 +145,11 @@ export function AttachmentList({
                 onClick={() => onRetry(item.id)}
                 className="inline-flex min-h-11 items-center rounded-control px-2.5 text-xs font-semibold text-text-link hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
-                Try again
-                <span className="sr-only"> uploading {item.name}</span>
+                {tf("ui.attachment.tryAgain", "Try again")}
+                <span className="sr-only">
+                  {" "}
+                  {tf("ui.attachment.uploadingSr", "uploading {name}", { name: item.name })}
+                </span>
               </button>
             ) : null}
 
@@ -144,7 +159,7 @@ export function AttachmentList({
                 onClick={() => onRemove(item.id)}
                 className="inline-flex min-h-11 items-center rounded-control px-2.5 text-xs font-semibold text-text-secondary hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
-                Remove
+                {tf("ui.attachment.remove", "Remove")}
                 <span className="sr-only"> {item.name}</span>
               </button>
             ) : null}

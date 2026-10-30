@@ -227,6 +227,12 @@ export const queryKeys = {
     performance: () => [...queryKeys.partnerMoney.all, "performance"] as const,
     ledger: () => [...queryKeys.partnerMoney.all, "ledger"] as const,
     payoutAccount: () => [...queryKeys.partnerMoney.all, "payout-account"] as const,
+    /**
+     * Withdrawals (contract 1.85.0). Under `partnerMoney`, so one invalidation of `all` after a
+     * withdrawal moves the balance, the ledger, the preview and the list together.
+     */
+    withdrawals: () => [...queryKeys.partnerMoney.all, "withdrawals"] as const,
+    withdrawalPreview: () => [...queryKeys.partnerMoney.all, "withdrawal-preview"] as const,
   },
 
   /**
@@ -433,10 +439,13 @@ export const queryKeys = {
     case: (caseId: string) => [...queryKeys.operations.all, "case", caseId] as const,
 
     /** Payout runs. The list carries no items; the detail does. */
-    payoutBatches: (filters: { status?: string }) =>
+    payoutBatches: (filters: { status?: string; kind?: string }) =>
       [...queryKeys.operations.all, "payout-batches", filters] as const,
     payoutBatch: (batchId: string) =>
       [...queryKeys.operations.all, "payout-batch", batchId] as const,
+    /** Partner withdrawals by status; `PENDING_APPROVAL` is the review queue (contract 1.85.0). */
+    withdrawals: (status: string) =>
+      [...queryKeys.operations.all, "withdrawals", status] as const,
 
     /** Kill switches. One key: the board is read whole, never a switch at a time. */
     killSwitches: () => [...queryKeys.operations.all, "kill-switches"] as const,

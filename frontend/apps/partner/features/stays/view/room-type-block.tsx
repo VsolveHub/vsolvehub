@@ -1,27 +1,34 @@
 "use client";
 
-import { RoomPhotosLive } from "./room-photos";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Dialog, Field, Input, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Dialog, Field, Input, Select, formatMoney, useT } from "@vsolve/ui";
 import { Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 import {
-  addPartnerStayRoom,
   byRoomNumber,
+  deletePartnerStayLook,
   deletePartnerStayRoom,
   partnerStayRoomAction,
   ratePeriodSuffix,
+  renamePartnerStayLook,
   updatePartnerStayRoom,
+  type StayLook,
+  type StayProperty,
   type StayRoom,
   type StayUnit,
 } from "@/features/stays/queries";
 
+import { AddRoomSheet } from "./add-room-sheet";
+import { GuestPreview } from "./guest-preview";
+import { LookPhotosLive } from "./room-photos";
+
 const STATUS_LOOK: Record<string, { label: string; dot: string; tone: "success" | "neutral" | "danger" }> = {
-  AVAILABLE: { label: "Available", dot: "🟢", tone: "success" },
-  UNAVAILABLE: { label: "Not available", dot: "⚪", tone: "neutral" },
-  BOOKED: { label: "Booked", dot: "🔴", tone: "danger" },
+  // `label` is a catalogue key, resolved with `t` at render time.
+  AVAILABLE: { label: "stays.roomBlock.status.available", dot: "🟢", tone: "success" },
+  UNAVAILABLE: { label: "stays.enquiryStatus.declined", dot: "⚪", tone: "neutral" },
+  BOOKED: { label: "stays.roomBlock.status.booked", dot: "🔴", tone: "danger" },
 };
 
 /** The ON / OFF control for one room. Large enough to hit with a thumb. */
@@ -36,6 +43,7 @@ function AvailabilitySwitch({
   label: string;
   onChange: (next: boolean) => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -56,7 +64,7 @@ function AvailabilitySwitch({
           on ? "translate-x-0 bg-emerald-500" : "bg-white ring-1 ring-line"
         }`}
       />
-      {on ? "ON" : "OFF"}
+      {on ? t("stays.roomBlock.on") : t("stays.roomBlock.off")}
     </button>
   );
 }
@@ -67,25 +75,40 @@ type Pending =
   | { kind: "release"; room: StayRoom }
   | null;
 
+/** Rooms of each look, in room-number order. A room whose look isn't listed joins the first. */
+export function roomsByLook(unit: StayUnit): Array<{ look: StayLook; rooms: StayRoom[] }> {
+  const looks = [...(unit.looks ?? [])].sort((a, b) => a.display_order - b.display_order);
+  const rooms = [...(unit.rooms ?? [])].sort(byRoomNumber);
+  const known = new Set(looks.map((l) => l.id));
+  return looks.map((look, index) => ({
+    look,
+    rooms: rooms.filter((r) => r.look === look.id || (index === 0 && !known.has(r.look))),
+  }));
+}
+
 /**
- * One room type and its numbered rooms, as the owner manages them.
+ * One room type and its numbered rooms, as the owner manages them, grouped by look.
  *
- * Guests see the type and how many are available. Here every room has its own row: switch it
- * ON or OFF, mark it Booked once a guest has agreed, and mark it available again when they move
- * out. The type's available count follows the rooms.
+ * A look is a set of photos some rooms share ("1 BHK" 101-103 vs 104-105 "With balcony").
+ * Guests see one card per look, never room numbers; the panel beside the looks shows those
+ * cards live. Every room keeps its ON / OFF switch and Booked controls, and can move to
+ * another look.
  */
 export function RoomTypeBlock({
+  property,
   unit,
   pricePeriod,
   summary,
   onEdit,
 }: {
+  property: StayProperty;
   unit: StayUnit;
   pricePeriod: string | undefined;
   /** "Single · up to 1 guest · AC" — the type's description line. */
   summary: string;
   onEdit: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const rooms = [...(unit.rooms ?? [])].sort(byRoomNumber);
   const available = rooms.filter((room) => room.status === "AVAILABLE").length;
@@ -93,9 +116,11 @@ export function RoomTypeBlock({
   const [pending, setPending] = useState<Pending>(null);
   const [occupant, setOccupant] = useState("");
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const [renamingLook, setRenamingLook] = useState<{ id: string; value: string } | null>(null);
   const [adding, setAdding] = useState(false);
-  const [newNumber, setNewNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const groups = roomsByLook(unit);
+  const manyLooks = groups.length > 1;
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
   const run = useMutation({
@@ -104,6 +129,7 @@ export function RoomTypeBlock({
       setError(null);
       setPending(null);
       setRenaming(null);
+      setRenamingLook(null);
       invalidate();
     },
     onError: (err: unknown) => setError(friendlyErrorMessage(err)),
@@ -112,17 +138,6 @@ export function RoomTypeBlock({
   const switchable = rooms.filter((room) => room.status !== "BOOKED");
   const anyOn = switchable.some((room) => room.status === "AVAILABLE");
 
-  function onAddRoom(event: FormEvent) {
-    event.preventDefault();
-    const number = newNumber.trim();
-    if (!number) return setError("Type the room number, for example 104.");
-    run.mutate(async () => {
-      await addPartnerStayRoom(unit.id, { number });
-      setNewNumber("");
-      setAdding(false);
-    });
-  }
-
   return (
     <li className="flex flex-col gap-3 rounded-card border border-line bg-surface p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -130,30 +145,113 @@ export function RoomTypeBlock({
           <p className="font-semibold text-navy-900">
             {unit.name}{" "}
             <span className="font-normal text-text-secondary">
-              · {formatMoney(unit.nightly_rate_paise)} {ratePeriodSuffix(pricePeriod)}
+              · {formatMoney(unit.nightly_rate_paise)} {ratePeriodSuffix(pricePeriod, t)}
             </span>
           </p>
           <p className="text-xs text-text-secondary">{summary}</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={available > 0 ? "success" : "neutral"}>
-            {available} of {rooms.length} available
+            {t("stays.roomBlock.availableOf", { available, total: rooms.length })}
           </Badge>
-          {booked > 0 ? <Badge tone="danger">{booked} booked</Badge> : null}
+          {booked > 0 ? <Badge tone="danger">{t("stays.roomBlock.bookedCount", { n: booked })}</Badge> : null}
         </div>
       </div>
 
-      <RoomPhotosLive unit={unit} />
-
       {available === 0 ? (
         <p className="rounded-control bg-surface-sunken px-3 py-2 text-xs text-text-secondary">
-          No room of this type is available, so guests don&apos;t see it right now.
+          {t("stays.roomBlock.noneAvailable")}
         </p>
       ) : null}
 
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-3">
+          {manyLooks ? (
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">{t("stays.roomBlock.looks")}</p>
+          ) : null}
+          {groups.map(({ look, rooms: lookRooms }, lookIndex) => (
+            <section
+              key={look.id}
+              className="flex flex-col gap-3 rounded-card border border-line bg-surface-sunken/60 p-3"
+              aria-label={look.display_name}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {renamingLook?.id === look.id ? (
+                  <form
+                    className="flex flex-1 flex-wrap items-end gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      run.mutate(() => renamePartnerStayLook(look.id, renamingLook.value.trim()));
+                    }}
+                  >
+                    <Field label={t("stays.roomBlock.lookName")} className="min-w-0 flex-1 sm:min-w-[12rem]">
+                      <Input
+                        value={renamingLook.value}
+                        maxLength={60}
+                        autoFocus
+                        placeholder={
+                          lookIndex === 0
+                            ? t("stays.roomBlock.lookNameFirstPlaceholder")
+                            : t("stays.roomBlock.lookNamePlaceholder")
+                        }
+                        onChange={(event) => setRenamingLook({ id: look.id, value: event.target.value })}
+                      />
+                    </Field>
+                    <Button type="submit" size="sm" disabled={run.isPending}>
+                      {t("common.save")}
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setRenamingLook(null)}>
+                      {t("common.cancel")}
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-navy-900">
+                        {manyLooks
+                          ? `${t("stays.roomBlock.lookLetter", { letter: String.fromCharCode(65 + lookIndex) })} · `
+                          : ""}
+                        {look.name ||
+                          (manyLooks ? t("stays.roomBlock.mainLook") : t("stays.photos.roomPhotos"))}
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        {t("stays.roomBlock.guestsSee", {
+                          name: look.display_name,
+                          count: lookRooms.length,
+                        })}
+                      </p>
+                    </div>
+                    {manyLooks ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setRenamingLook({ id: look.id, value: look.name })}
+                        >
+                          {t("stays.roomBlock.rename")}
+                        </Button>
+                        {lookRooms.length === 0 ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-danger-text"
+                            disabled={run.isPending}
+                            onClick={() => run.mutate(() => deletePartnerStayLook(look.id))}
+                          >
+                            {t("stays.roomBlock.removeLook")}
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+
+              <LookPhotosLive unit={unit} look={look} label={manyLooks ? t("stays.roomBlock.lookPhotos") : undefined} />
+
       <ul className="grid gap-2 sm:grid-cols-2">
-        {rooms.map((room) => {
-          const look = STATUS_LOOK[room.status ?? "UNAVAILABLE"] ?? STATUS_LOOK.UNAVAILABLE!;
+        {lookRooms.map((room) => {
+          const status = STATUS_LOOK[room.status ?? "UNAVAILABLE"] ?? STATUS_LOOK.UNAVAILABLE!;
           const isBooked = room.status === "BOOKED";
           const isRenaming = renaming?.id === room.id;
           return (
@@ -167,12 +265,12 @@ export function RoomTypeBlock({
                   onSubmit={(event) => {
                     event.preventDefault();
                     const value = renaming.value.trim();
-                    if (!value) return setError("Type the room number.");
+                    if (!value) return setError(t("stays.roomBlock.numberMissing"));
                     run.mutate(() => updatePartnerStayRoom(room.id, { number: value }));
                   }}
                 >
                   <Input
-                    aria-label="Room number"
+                    aria-label={t("stays.addRoom.numberLabel")}
                     value={renaming.value}
                     maxLength={40}
                     autoFocus
@@ -180,10 +278,10 @@ export function RoomTypeBlock({
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button type="submit" size="sm" disabled={run.isPending}>
-                      Save
+                      {t("common.save")}
                     </Button>
                     <Button type="button" size="sm" variant="ghost" onClick={() => setRenaming(null)}>
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                     {!isBooked && rooms.length > 1 ? (
                       <Button
@@ -194,7 +292,7 @@ export function RoomTypeBlock({
                         disabled={run.isPending}
                         onClick={() => run.mutate(() => deletePartnerStayRoom(room.id))}
                       >
-                        Remove room
+                        {t("stays.roomBlock.removeRoom")}
                       </Button>
                     ) : null}
                   </div>
@@ -206,17 +304,17 @@ export function RoomTypeBlock({
                       type="button"
                       className="truncate text-left text-base font-bold text-navy-900 hover:underline"
                       onClick={() => setRenaming({ id: room.id, value: room.number })}
-                      title="Rename this room"
+                      title={t("stays.roomBlock.renameRoom")}
                     >
                       {room.number}
                     </button>
                     {isBooked ? (
-                      <Badge tone="danger">🔴 Booked</Badge>
+                      <Badge tone="danger">{t("stays.summary.booked")}</Badge>
                     ) : (
                       <AvailabilitySwitch
                         on={room.status === "AVAILABLE"}
                         disabled={run.isPending}
-                        label={`${room.number} available`}
+                        label={t("stays.roomBlock.switchLabel", { number: room.number })}
                         onChange={(next) =>
                           next
                             ? run.mutate(() => updatePartnerStayRoom(room.id, { available: true }))
@@ -226,16 +324,32 @@ export function RoomTypeBlock({
                     )}
                   </div>
                   <p className="text-xs text-text-secondary">
-                    {look.dot} {look.label}
+                    {status.dot} {t(status.label)}
                     {isBooked && room.occupant_name ? ` · ${room.occupant_name}` : ""}
                   </p>
+                  {manyLooks ? (
+                    <Select
+                      aria-label={t("stays.roomBlock.lookOf", { number: room.number })}
+                      value={room.look}
+                      disabled={run.isPending}
+                      onChange={(event) =>
+                        run.mutate(() => updatePartnerStayRoom(room.id, { look_id: event.target.value }))
+                      }
+                    >
+                      {groups.map(({ look: option }) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name || t("stays.roomBlock.mainLook")}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : null}
                   {isBooked ? (
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => setPending({ kind: "release", room })}
                     >
-                      Mark available
+                      {t("stays.roomBlock.markAvailable")}
                     </Button>
                   ) : (
                     <Button
@@ -246,7 +360,7 @@ export function RoomTypeBlock({
                         setPending({ kind: "book", room });
                       }}
                     >
-                      Mark Booked
+                      {t("stays.roomBlock.markBooked")}
                     </Button>
                   )}
                 </>
@@ -255,36 +369,24 @@ export function RoomTypeBlock({
           );
         })}
       </ul>
+            </section>
+          ))}
+        </div>
 
-      {adding ? (
-        <form className="flex flex-wrap items-end gap-2" onSubmit={onAddRoom}>
-          <Field label="New room number" className="min-w-[10rem] flex-1">
-            <Input
-              value={newNumber}
-              maxLength={40}
-              autoFocus
-              placeholder="e.g. 104"
-              onChange={(event) => setNewNumber(event.target.value)}
-            />
-          </Field>
-          <Button type="submit" size="sm" disabled={run.isPending}>
-            Add
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
-            Cancel
-          </Button>
-        </form>
-      ) : null}
+        <div className="min-w-0 flex-[1_1_300px]">
+          <GuestPreview property={property} unit={unit} />
+        </div>
+      </div>
 
       {error ? <p className="text-sm text-danger-text">{error}</p> : null}
 
       <div className="flex flex-wrap gap-2 border-t border-line pt-3">
         <Button size="sm" variant="outline" onClick={onEdit}>
-          Edit type
+          {t("stays.roomBlock.editType")}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
+        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
           <Plus className="size-4" aria-hidden />
-          Add room number
+          {t("stays.addRoom.submit")}
         </Button>
         {switchable.length > 1 ? (
           <Button
@@ -301,20 +403,22 @@ export function RoomTypeBlock({
               )
             }
           >
-            {anyOn ? "Turn all off" : "Turn all on"}
+            {anyOn ? t("stays.roomBlock.allOff") : t("stays.roomBlock.allOn")}
           </Button>
         ) : null}
       </div>
 
+      <AddRoomSheet unit={unit} open={adding} onOpenChange={setAdding} />
+
       <Dialog
         open={pending?.kind === "off"}
         onOpenChange={(open) => !open && setPending(null)}
-        title={pending ? `Turn off ${pending.room.number}?` : ""}
-        description="This room will no longer appear as available to customers."
+        title={pending ? t("stays.roomBlock.offTitle", { number: pending.room.number }) : ""}
+        description={t("stays.roomBlock.offBody")}
         footer={
           <>
             <Button variant="ghost" onClick={() => setPending(null)}>
-              Keep it on
+              {t("stays.roomBlock.keepOn")}
             </Button>
             <Button
               loading={run.isPending}
@@ -322,7 +426,7 @@ export function RoomTypeBlock({
                 pending && run.mutate(() => updatePartnerStayRoom(pending.room.id, { available: false }))
               }
             >
-              Turn off
+              {t("stays.roomBlock.turnOff")}
             </Button>
           </>
         }
@@ -333,16 +437,16 @@ export function RoomTypeBlock({
       <Dialog
         open={pending?.kind === "book"}
         onOpenChange={(open) => !open && setPending(null)}
-        title="Booking confirmed?"
+        title={t("stays.enquiry.bookingConfirmed")}
         description={
           pending
-            ? `${pending.room.number} will show as Booked and stop appearing as available.`
+            ? t("stays.roomBlock.bookBody", { number: pending.room.number })
             : undefined
         }
         footer={
           <>
             <Button variant="ghost" onClick={() => setPending(null)}>
-              Not yet
+              {t("stays.enquiry.notYet")}
             </Button>
             <Button
               loading={run.isPending}
@@ -353,16 +457,16 @@ export function RoomTypeBlock({
                 )
               }
             >
-              Yes – Mark Room Booked
+              {t("stays.enquiry.confirmBooked")}
             </Button>
           </>
         }
       >
-        <Field label="Guest's name" showOptional>
+        <Field label={t("stays.roomBlock.guestName")} showOptional>
           <Input
             value={occupant}
             maxLength={120}
-            placeholder="For your own reference"
+            placeholder={t("stays.roomBlock.guestNamePlaceholder")}
             onChange={(event) => setOccupant(event.target.value)}
           />
         </Field>
@@ -371,18 +475,18 @@ export function RoomTypeBlock({
       <Dialog
         open={pending?.kind === "release"}
         onOpenChange={(open) => !open && setPending(null)}
-        title={pending ? `Make ${pending.room.number} available again?` : ""}
-        description="Use this when the guest has moved out or the booking fell through. Guests will see the room as available."
+        title={pending ? t("stays.roomBlock.releaseTitle", { number: pending.room.number }) : ""}
+        description={t("stays.roomBlock.releaseBody")}
         footer={
           <>
             <Button variant="ghost" onClick={() => setPending(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               loading={run.isPending}
               onClick={() => pending && run.mutate(() => partnerStayRoomAction(pending.room.id, "release"))}
             >
-              Mark available
+              {t("stays.roomBlock.markAvailable")}
             </Button>
           </>
         }

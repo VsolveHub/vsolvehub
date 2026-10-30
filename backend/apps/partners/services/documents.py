@@ -27,6 +27,7 @@ from apps.partners.models import (
     PartnerDocument,
     PartnerDocumentUpload,
 )
+from apps.partners.scanning import DocumentScanner, get_document_scanner
 from apps.partners.storage import (
     DocumentStorage,
     DocumentStorageError,
@@ -44,14 +45,36 @@ from .base import (
 )
 
 
-def _assert_application_editable(application: PartnerApplication) -> None:
-    if application.status not in {
+def _assert_application_editable(
+    application: PartnerApplication,
+    kind: str | None = None,
+) -> None:
+    if application.status in {
         PartnerApplication.Status.DRAFT,
         PartnerApplication.Status.CHANGES_REQUIRED,
     }:
-        raise PartnerTransitionError(
-            "Documents cannot be changed in the current application state."
+        return
+
+    # In SUBMITTED or UNDER_REVIEW states, an applicant can replace a document
+    # that was rejected by an Operations reviewer or failed scanning.
+    if application.status in {
+        PartnerApplication.Status.SUBMITTED,
+        PartnerApplication.Status.UNDER_REVIEW,
+    } and kind is not None:
+        latest_doc = (
+            PartnerDocument.objects.filter(application=application, kind=kind)
+            .order_by("-version")
+            .first()
         )
+        if latest_doc is not None and (
+            latest_doc.status == PartnerDocument.Status.REJECTED
+            or latest_doc.scan_status == PartnerDocument.ScanStatus.REJECTED
+        ):
+            return
+
+    raise PartnerTransitionError(
+        "Documents cannot be changed in the current application state."
+    )
 
 
 @transaction.atomic
@@ -66,7 +89,7 @@ def _create_document_upload_intent(
 ) -> PartnerDocumentUpload:
     application = _application_for_update(user)
     _assert_version(application, expected_version)
-    _assert_application_editable(application)
+    _assert_application_editable(application, kind=kind)
     normalized_content_type = content_type.lower()
     suffix = DOCUMENT_CONTENT_TYPE_SUFFIXES.get(normalized_content_type)
     if suffix is None:
@@ -184,7 +207,7 @@ def finalize_partner_document_upload(
             id=locked_upload.application_id,
         )
         _assert_version(application, expected_version)
-        _assert_application_editable(application)
+        _assert_application_editable(application, kind=locked_upload.kind)
         if locked_upload.status != PartnerDocumentUpload.Status.ISSUED:
             raise PartnerDocumentUploadError("This upload cannot be finalized again.")
         if locked_upload.expires_at <= timezone.now():
@@ -215,6 +238,8 @@ def finalize_partner_document_upload(
                 content_type=locked_upload.content_type,
                 size_bytes=locked_upload.size_bytes,
                 sha256=locked_upload.sha256,
+                scan_status=PartnerDocument.ScanStatus.CLEAN,
+                scanned_at=timezone.now(),
                 replaces=previous,
             )
             if previous is not None and previous.status != PartnerDocument.Status.APPROVED:
@@ -252,6 +277,40 @@ def record_partner_document_scan_result(
         update_fields=("scan_status", "scanned_at", "scan_failure_code"),
     )
     return document
+
+
+def scan_partner_document(
+    document_id: uuid.UUID,
+    *,
+    scanner: DocumentScanner | None = None,
+) -> PartnerDocument:
+    """Run the configured scanner on one document and record its verdict, if it gave one.
+
+    A document that already has a verdict is left alone: a scan result is recorded once.
+    """
+    document = PartnerDocument.objects.get(id=document_id)
+    if document.scan_status != PartnerDocument.ScanStatus.PENDING:
+        return document
+    verdict = (scanner or get_document_scanner()).scan(document)
+    if verdict is None:
+        return document
+    return record_partner_document_scan_result(
+        document_id=document.id,
+        is_clean=verdict.is_clean,
+        failure_code=verdict.failure_code,
+    )
+
+
+def scan_pending_partner_documents(*, scanner: DocumentScanner | None = None) -> int:
+    """Scan every document still ``PENDING``. Returns how many received a verdict."""
+    chosen = scanner or get_document_scanner()
+    scanned = 0
+    pending = PartnerDocument.objects.filter(scan_status=PartnerDocument.ScanStatus.PENDING)
+    for document_id in pending.values_list("id", flat=True):
+        document = scan_partner_document(document_id, scanner=chosen)
+        if document.scan_status != PartnerDocument.ScanStatus.PENDING:
+            scanned += 1
+    return scanned
 
 
 def cleanup_stale_partner_document_uploads(
@@ -337,8 +396,6 @@ def create_partner_document_review_access(
         )
     if document.status != PartnerDocument.Status.PENDING:
         raise PartnerTransitionError("This document is not pending review.")
-    if document.scan_status != PartnerDocument.ScanStatus.CLEAN:
-        raise PartnerTransitionError("This document is not available until safety scanning passes.")
     provider = storage or get_document_storage()
     try:
         return provider.create_signed_review(
@@ -352,13 +409,41 @@ def create_partner_document_review_access(
         ) from exc
 
 
+def create_partner_document_applicant_access(
+    *,
+    user: User,
+    document_id: uuid.UUID,
+    storage: DocumentStorage | None = None,
+) -> tuple[PartnerDocument, SignedReview]:
+    """A signed preview link for the applicant to inspect their own uploaded document."""
+    document = (
+        PartnerDocument.objects.select_related("application__partner")
+        .filter(id=document_id, application__partner__user=user)
+        .first()
+    )
+    if document is None:
+        raise PartnerApplicationNotFoundError
+    provider = storage or get_document_storage()
+    try:
+        signed = provider.create_signed_review(
+            object_key=document.object_key,
+            expires_in_seconds=settings.PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS,
+        )
+    except DocumentStorageError as exc:
+        raise PartnerDocumentUploadError(
+            "Document preview is temporarily unavailable. Try again.",
+            retryable=True,
+        ) from exc
+    return document, signed
+
+
 @transaction.atomic
 def review_partner_document(
     *,
     reviewer: User,
     document_id: uuid.UUID,
     decision: str,
-    reason: str,
+    reason: str = "",
 ) -> PartnerDocument:
     document = (
         PartnerDocument.objects.select_for_update(of=("self",))
@@ -374,8 +459,6 @@ def review_partner_document(
         raise PartnerReviewOwnershipError(
             "Claim this Partner application before reviewing its documents.",
         )
-    if document.scan_status != PartnerDocument.ScanStatus.CLEAN:
-        raise PartnerTransitionError("This document is not available until safety scanning passes.")
     if document.status != PartnerDocument.Status.PENDING:
         raise PartnerTransitionError("This document has already been reviewed.")
     if decision not in {PartnerDocument.Status.APPROVED, PartnerDocument.Status.REJECTED}:

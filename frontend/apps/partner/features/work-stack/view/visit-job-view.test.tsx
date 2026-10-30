@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useRouter } from "next/navigation";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
 
 import type { PartnerVisit } from "@/features/work/queries";
 import { VisitJobView } from "./visit-job-view";
+import { withI18n } from "@/i18n/test-utils";
 
 /**
  * C3 — a Partner who cannot get to a job has a way to hand it back.
@@ -53,18 +54,36 @@ function confirmedVisit(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
       currency: "INR",
     },
     earning: null,
+    gates: {
+      address_unlocks_at: "2026-08-20T07:00:00Z",
+      en_route_opens_at: "2026-08-20T08:00:00Z",
+      en_route_closes_at: "2026-08-20T10:30:00Z",
+      arrival_opens_at: "2026-08-20T08:30:00Z",
+      arrival_closes_at: "2026-08-20T10:30:00Z",
+    },
+    allowed_actions: ["MARK_EN_ROUTE", "PARTNER_RELEASE"],
+    site_address: null,
+    directions_url: null,
+    customer_first_name: null,
+    customer_phone: null,
     server_now: "2026-08-20T08:00:00Z",
     ...overrides,
   };
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 function renderVisit(visit: PartnerVisit) {
   vi.mocked(useRouter).mockReturnValue({ back: vi.fn() } as never);
   const client = new QueryClient();
   return render(
-    <QueryClientProvider client={client}>
-      <VisitJobView visit={visit} />
-    </QueryClientProvider>,
+    withI18n(
+      <QueryClientProvider client={client}>
+        <VisitJobView visit={visit} />
+      </QueryClientProvider>,
+    ),
   );
 }
 
@@ -84,6 +103,19 @@ describe("handing a job back", () => {
     const details = screen.getByRole("heading", { name: "Service details" });
     const action = screen.getByRole("button", { name: "I am on my way" });
     expect(details.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("separates title and quantity when display_title contains a count (e.g. Cupboard / Hinge Repair x 1)", () => {
+    renderVisit(
+      confirmedVisit({
+        display_title: "Cupboard / Hinge Repair x 1",
+        service_lines: [],
+      }),
+    );
+
+    expect(screen.getAllByText("Cupboard / Hinge Repair")).toHaveLength(2);
+    expect(screen.getByText("×1")).toBeInTheDocument();
+    expect(screen.getByText("Qty 1")).toBeInTheDocument();
   });
 
   it("offers the control while the job is still confirmed", () => {
@@ -135,5 +167,70 @@ describe("a partial completion", () => {
     fireEvent.click(screen.getByRole("button", { name: "Part done" }));
 
     expect(screen.getByRole("textbox", { name: "What happened — Deep clean" })).toBeInTheDocument();
+  });
+});
+
+describe("the clocked steps and the door (contract 1.82.0)", () => {
+  it("says when 'On the way' opens instead of offering it early", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-20T07:30:00Z"));
+
+    renderVisit(confirmedVisit({ allowed_actions: ["PARTNER_RELEASE"] }));
+
+    expect(screen.queryByRole("button", { name: "I am on my way" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/“I am on my way” opens at/);
+  });
+
+  it("tells the Partner a closed window needs support rather than hiding the step", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-20T11:00:00Z"));
+
+    renderVisit(
+      confirmedVisit({ status: "EN_ROUTE", allowed_actions: ["PARTNER_RELEASE"] }),
+    );
+
+    expect(screen.queryByRole("button", { name: "I have arrived" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/closed at .* Contact support/);
+  });
+
+  it("keeps the address locked, with the unlock time, until the server sends it", () => {
+    renderVisit(confirmedVisit());
+
+    expect(screen.getByText(/exact address, map route and customer's number unlock at/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Call/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Open route in Maps/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the address, the Maps route and a Call button once unlocked", () => {
+    const route = "https://www.google.com/maps/dir/?api=1&destination=17.44,78.38";
+    renderVisit(
+      confirmedVisit({
+        site_address: {
+          line1: "Flat 402, Lake View Apartments",
+          line2: "",
+          landmark: "Opposite the metro",
+          locality: "Madhapur",
+          city: "Hyderabad",
+          state: "Telangana",
+          postal_code: "500081",
+          directions_url: route,
+        },
+        directions_url: route,
+        customer_first_name: "Asha",
+        customer_phone: "+919876543210",
+      }),
+    );
+
+    expect(screen.getByText("Flat 402, Lake View Apartments")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open route in Maps/ })).toHaveAttribute("href", route);
+    expect(screen.getByText("Asha")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Call/ })).toHaveAttribute("href", "tel:+919876543210");
+  });
+
+  it("withdraws the location card once the visit is finished", () => {
+    renderVisit(confirmedVisit({ status: "COMPLETED", allowed_actions: [] }));
+
+    expect(screen.queryByRole("region", { name: "Visit location" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/unlock at/i)).not.toBeInTheDocument();
   });
 });

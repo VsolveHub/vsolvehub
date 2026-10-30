@@ -44,7 +44,7 @@ export function fetchStays(params?: StayFilterParams): Promise<StayPropertySumma
         },
       },
     }),
-  );
+  ) as unknown as Promise<StayPropertySummary[]>;
 }
 
 export function fetchStayTaxonomy(): Promise<StayTaxonomyCategory[]> {
@@ -59,7 +59,7 @@ export function fetchStayProperty(key: string): Promise<StayProperty> {
         path: { key },
       },
     }),
-  );
+  ) as unknown as Promise<StayProperty>;
 }
 
 export function fetchStayQuote(params: {
@@ -108,27 +108,41 @@ export function createStayEnquiry(payload: {
         unit_id: sanitizedUnitId,
       },
     }),
-  );
+  ) as unknown as Promise<StayEnquiry>;
 }
 
-export function fetchMyStayEnquiries(): Promise<StayEnquiry[]> {
-  return request(() => getApiClient().GET("/api/v1/me/stay-enquiries"));
+export async function fetchMyStayEnquiries(): Promise<StayEnquiry[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/me/stay-enquiries"));
+  if (Array.isArray(data)) return data as StayEnquiry[];
+  return ((data as unknown as { results?: StayEnquiry[] })?.results ?? []) as StayEnquiry[];
 }
 
-export function fetchMyStayReservations(): Promise<StayReservation[]> {
-  return request(() => getApiClient().GET("/api/v1/me/stay-reservations"));
+export async function fetchMyStayReservations(): Promise<StayReservation[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/me/stay-reservations"));
+  if (Array.isArray(data)) return data as StayReservation[];
+  return ((data as unknown as { results?: StayReservation[] })?.results ?? []) as StayReservation[];
 }
 
-export function fetchMyStayVisits(): Promise<StayVisit[]> {
-  return request(() => getApiClient().GET("/api/v1/me/stay-visits"));
+export async function fetchMyStayVisits(): Promise<StayVisit[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/me/stay-visits"));
+  if (Array.isArray(data)) return data as StayVisit[];
+  return ((data as unknown as { results?: StayVisit[] })?.results ?? []) as StayVisit[];
 }
 
-export function fetchVisitSlots(propertyId: string): Promise<StayVisitSlot[]> {
-  return request(() =>
+export async function fetchVisitSlots(propertyId: string): Promise<StayVisitSlot[]> {
+  const data = await request(() =>
     getApiClient().GET("/api/v1/stays/{property_id}/visit-slots", {
       params: { path: { property_id: propertyId } },
     }),
   );
+  if (Array.isArray(data)) {
+    const first = (data as any)[0];
+    if (first && Array.isArray(first.slots)) {
+      return (data as any).flatMap((d: any) => d.slots);
+    }
+    return data as unknown as StayVisitSlot[];
+  }
+  return [];
 }
 
 export function createStayVisit(payload: {
@@ -148,7 +162,7 @@ export function createStayVisit(payload: {
         message: payload.message ?? "",
       },
     }),
-  );
+  ) as unknown as Promise<StayVisit>;
 }
 
 export function cancelStayEnquiry(enquiryId: string): Promise<{ status?: string }> {

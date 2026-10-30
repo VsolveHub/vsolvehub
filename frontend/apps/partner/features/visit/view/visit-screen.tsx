@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { describeError } from "@vsolve/query";
-import { ErrorState, Spinner, buttonStyles } from "@vsolve/ui";
+import { ErrorState, Spinner, buttonStyles, useT } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -25,6 +25,7 @@ import { SiteAddress } from "./site-address";
  * arrival it reveals completion, and after completion it reveals the estimate.
  */
 export function VisitScreen({ invitationId }: { readonly invitationId: string }) {
+  const t = useT();
   const router = useRouter();
   const query = usePartnerEnquiry(invitationId, true, { watchHeldVisit: true });
   const enquiryHref = `/work/enquiries/${invitationId}`;
@@ -34,7 +35,7 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
       <Screen>
         <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
           <Spinner size="sm" />
-          Loading your visit…
+          {t("visit.screen.loading")}
         </p>
       </Screen>
     );
@@ -47,14 +48,18 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
       <Screen>
         <div className="px-4 py-6">
           <ErrorState
-            title={forbidden ? "This visit is not on your account" : (presentation?.title ?? "Visit unavailable")}
+            title={
+              forbidden
+                ? t("visit.screen.forbidden.title")
+                : (presentation?.title ?? t("visit.screen.unavailable.title"))
+            }
             message={
               forbidden
-                ? "Open Work to find visits assigned to you."
-                : (presentation?.message ?? "Check your connection and try again.")
+                ? t("visit.screen.forbidden.message")
+                : (presentation?.message ?? t("visit.arrival.loadError.message"))
             }
             severity={presentation?.severity}
-            actionLabel={forbidden ? "Open Work" : "Try again"}
+            actionLabel={forbidden ? t("visit.screen.openWork") : t("common.tryAgain")}
             onAction={forbidden ? () => router.replace("/work") : () => void query.refetch()}
             reference={presentation?.reference}
           />
@@ -74,14 +79,14 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
           className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
         >
           <Pictogram name="back" size="md" className="text-surface" />
-          <span className="sr-only">Back to Work</span>
+          <span className="sr-only">{t("visit.screen.backToWork")}</span>
         </Link>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-            Site visit
+            {t("visit.screen.eyebrow")}
           </span>
           <h1 className="truncate text-[1.1875rem] font-bold leading-snug text-surface">
-            {enquiry.serviceName || "Project visit"}
+            {enquiry.serviceName || t("visit.screen.defaultTitle")}
           </h1>
         </span>
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy-500">
@@ -92,10 +97,10 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
       <div className="flex flex-1 flex-col gap-3 px-4 py-4">
         {visit === null ? (
           <ErrorState
-            title="No visit booked yet"
-            message="Choose an available time from the enquiry."
+            title={t("visit.screen.noVisit.title")}
+            message={t("visit.screen.noVisit.message")}
             severity="info"
-            actionLabel="Choose a time"
+            actionLabel={t("visit.screen.noVisit.action")}
             onAction={() => router.replace(enquiryHref)}
           />
         ) : (
@@ -114,7 +119,7 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
         )}
 
         <Link href={enquiryHref} className={buttonStyles({ variant: "outline" })}>
-          View enquiry details
+          {t("visit.screen.viewEnquiry")}
         </Link>
       </div>
     </Screen>

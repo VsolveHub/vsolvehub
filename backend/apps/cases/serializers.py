@@ -6,6 +6,7 @@ complaint verbatim and name a Partner in a safety report, so there is no Custome
 Partner-facing shape to publish.
 """
 
+import uuid
 from typing import Any
 
 from django.utils import timezone
@@ -19,6 +20,7 @@ from apps.cases.models import (
     OperationsCaseEvent,
     OperationsCaseEvidence,
 )
+from apps.identity.serializers import PhoneNumberField
 
 #: The request-body names of the subject columns, derived from the model's own tuple rather than
 #: retyped — RULES §3(a) applied to a validator instead of a constraint. The model gained two
@@ -62,6 +64,18 @@ class OperationsCaseEvidenceSerializer(serializers.ModelSerializer[OperationsCas
         read_only_fields = fields
 
 
+def case_source(idempotency_key: str) -> tuple[str, str] | None:
+    """Split `m2:{source_kind}:{uuid}` into its parts, or `None` when the key is not that shape."""
+    prefix, _, rest = (idempotency_key or "").partition(":")
+    source_kind, _, raw_id = rest.partition(":")
+    if prefix != "m2" or not source_kind or ":" in raw_id:
+        return None
+    try:
+        return source_kind, str(uuid.UUID(raw_id))
+    except ValueError:
+        return None
+
+
 class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     """One case, with the vocabulary a reviewer needs to close it.
 
@@ -88,6 +102,8 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     events = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
+    source_kind = serializers.SerializerMethodField()
+    source_id = serializers.SerializerMethodField()
 
     class Meta:
         model = OperationsCase
@@ -126,9 +142,27 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
             "events",
             "evidence",
             "server_now",
+            "source_kind",
+            "source_id",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_source_kind(self, instance: OperationsCase) -> str | None:
+        """The row that opened an M2 case, e.g. `engagement_stage` or `safety_incident`.
+
+        Read back from the `m2:{source_kind}:{source_id}` idempotency key the opener wrote, so a
+        console can drive the source's own decision (a disputed stage, a safety report) from the
+        case. `null` for a case opened by hand or by M1.
+        """
+        source = case_source(instance.idempotency_key)
+        return source[0] if source else None
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_source_id(self, instance: OperationsCase) -> str | None:
+        source = case_source(instance.idempotency_key)
+        return source[1] if source else None
 
     @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_allowed_resolutions(self, instance: OperationsCase) -> list[str]:
@@ -283,3 +317,44 @@ class CaseQueueSummarySerializer(serializers.Serializer[dict[str, Any]]):
     mine_due_soon = serializers.IntegerField()
     holding_payout = serializers.IntegerField()
     teams = TeamQueueSerializer(many=True)
+
+
+#: What the Contact form asks about. The label is what the Operations queue reads.
+CONTACT_TOPICS: dict[str, str] = {
+    "booking": "A booking or visit",
+    "payment": "Payment or refund",
+    "partner": "Working as a professional",
+    "feedback": "Feedback or a complaint",
+    "other": "Something else",
+}
+
+
+class ContactMessageRequestSerializer(serializers.Serializer[dict[str, object]]):
+    """A message from the public Contact form (contract 1.78.0).
+
+    At least one way to reply is required: a message nobody can answer is not a case anyone can
+    close. `website` is a honeypot — invisible to people, filled by form-spamming scripts.
+    """
+
+    name = serializers.CharField(max_length=120, trim_whitespace=True)
+    phone_number = PhoneNumberField(
+        max_length=32, trim_whitespace=True, required=False, allow_blank=True, default=""
+    )
+    email = serializers.EmailField(max_length=254, required=False, allow_blank=True, default="")
+    topic = serializers.ChoiceField(choices=list(CONTACT_TOPICS))
+    message = serializers.CharField(min_length=10, max_length=2000, trim_whitespace=True)
+    website = serializers.CharField(
+        required=False, allow_blank=True, default="", write_only=True, max_length=200
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not attrs.get("phone_number") and not attrs.get("email"):
+            raise serializers.ValidationError(
+                {"phone_number": ["Give a phone number or an email address so we can reply."]}
+            )
+        return attrs
+
+
+class ContactMessageAcceptedSerializer(serializers.Serializer[dict[str, object]]):
+    #: Quote this when following up. Short and readable on purpose; it is not an id to look up.
+    reference = serializers.CharField(read_only=True)

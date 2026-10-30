@@ -5,6 +5,15 @@ export { queryKeys } from "./keys";
 export type { QueryKeys } from "./keys";
 
 export { CursorContractError, cursorFromNextUrl } from "./cursor";
+export {
+  BROWSE_PAGE_SIZE,
+  fetchAllPages,
+  flattenPages,
+  nextBrowseOffset,
+  useBrowseList,
+  usePagedList,
+} from "./paged-list";
+export type { Page } from "./paged-list";
 
 export { safeNextPath } from "./next-path";
 
@@ -100,7 +109,23 @@ export {
   sanitizeCodeInput,
   sanitizePhoneInput,
 } from "./otp-flow";
-export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase } from "./otp-flow";
+export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase, SignInRole } from "./otp-flow";
+
+export {
+  useFirebasePhoneFlow,
+  useVerifyFirebase,
+  getFirebaseAuth,
+  getFirebaseApp,
+  mapFirebaseError,
+  formatToE164,
+  startFirebasePhoneVerification,
+} from "./firebase-phone";
+export type { FirebaseVerifyInput } from "./firebase-phone";
+
+export {
+  usePhoneAuthFlow,
+  isFirebasePhoneAuth,
+} from "./phone-auth-flow";
 
 export { AppErrorBoundary } from "./error-boundary";
 export type { AppErrorBoundaryProps } from "./error-boundary";

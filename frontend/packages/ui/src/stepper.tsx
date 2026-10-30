@@ -1,4 +1,5 @@
 import { cn } from "./cn";
+import { useTOrDefault } from "./i18n";
 
 /**
  * Progress through a multi-stage flow.
@@ -26,9 +27,11 @@ interface StepperProps {
   label?: string;
 }
 
-export function Stepper({ steps, current, label = "Progress" }: StepperProps) {
+export function Stepper({ steps, current, label }: StepperProps) {
+  const tf = useTOrDefault();
+  const resolvedLabel = label ?? tf("ui.stepper.progress", "Progress");
   return (
-    <ol aria-label={label} className="flex list-none items-center gap-2 p-0">
+    <ol aria-label={resolvedLabel} className="flex list-none items-center gap-2 p-0">
       {steps.map((step, index) => {
         const done = index < current;
         const active = index === current;
@@ -65,8 +68,16 @@ export function Stepper({ steps, current, label = "Progress" }: StepperProps) {
               {step.title}
             </span>
             <span className="sr-only">
-              {`Step ${index + 1} of ${steps.length}: ${step.title}`}
-              {done ? ", completed" : active ? ", current step" : ""}
+              {tf("ui.stepper.stepOf", "Step {index} of {total}: {title}", {
+                index: index + 1,
+                total: steps.length,
+                title: step.title,
+              })}
+              {done
+                ? tf("ui.stepper.completed", ", completed")
+                : active
+                  ? tf("ui.stepper.current", ", current step")
+                  : ""}
             </span>
 
             {index < steps.length - 1 ? (

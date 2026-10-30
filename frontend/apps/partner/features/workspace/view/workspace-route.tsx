@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@vsolve/ui";
+import { Spinner, useT } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -50,6 +50,7 @@ export interface WorkspaceRouteProps {
 }
 
 export function WorkspaceRoute({ workspaceKey, actions, children }: WorkspaceRouteProps) {
+  const t = useT();
   const router = useRouter();
   // Known keys only. An unknown one never reaches Django — there is nothing this
   // bundle could ask on its behalf.
@@ -67,7 +68,7 @@ export function WorkspaceRoute({ workspaceKey, actions, children }: WorkspaceRou
     return (
       <main className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-16 text-text-secondary">
         <Spinner size="sm" />
-        Checking what you are approved for…
+        {t("workspaces.route.checkingApproval")}
       </main>
     );
   }

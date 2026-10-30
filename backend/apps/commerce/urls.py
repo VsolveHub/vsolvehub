@@ -9,14 +9,19 @@ from apps.commerce.views import (
     PaymentAttemptCollectionView,
     PaymentAttemptDetailView,
     PaymentAttemptReconcileView,
+    PublishedCancellationPolicyView,
     RazorpayWebhookView,
     RefundDetailView,
+    SampleReceiptView,
     SimulatedCaptureView,
     TaxDocumentDetailView,
     TaxDocumentDownloadView,
 )
 
 urlpatterns = [
+    # Public: what the Refund & Cancellation page states, and the receipt reviewers ask to see.
+    path("legal/cancellation-policy/", PublishedCancellationPolicyView.as_view()),
+    path("legal/sample-receipt/", SampleReceiptView.as_view()),
     path("payment-attempts/", PaymentAttemptCollectionView.as_view()),
     path("payment-attempts/<uuid:attempt_id>/", PaymentAttemptDetailView.as_view()),
     path(

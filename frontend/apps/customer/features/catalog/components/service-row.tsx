@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { formatMoney } from "@vsolve/ui";
 
 import { bookingModeLabel } from "../search";
@@ -43,7 +43,7 @@ export function ServiceRow({
 
   return (
     <li>
-      <Link
+      <IntentLink
         href={serviceHref(service, category.slug)}
         className="group relative flex items-stretch gap-4 rounded-card border border-line bg-surface px-4 py-4 transition-colors duration-fast hover:border-navy-300 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring sm:gap-6 sm:px-5"
       >
@@ -102,7 +102,7 @@ export function ServiceRow({
             </svg>
           </span>
         </div>
-      </Link>
+      </IntentLink>
     </li>
   );
 }

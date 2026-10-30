@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "./cn";
+import { useTOrDefault } from "./i18n";
 
 /**
  * The three summaries that repeat across every M2 screen: where, when, and how
@@ -43,6 +44,7 @@ export interface AddressSummaryProps {
 }
 
 export function AddressSummary({ lines, note, masked = false, className }: AddressSummaryProps) {
+  const tf = useTOrDefault();
   return (
     <div className={cn("text-sm", className)}>
       <address className="not-italic text-text">
@@ -55,7 +57,7 @@ export function AddressSummary({ lines, note, masked = false, className }: Addre
       {note ? <p className="mt-1 text-text-secondary">{note}</p> : null}
       {masked ? (
         <p className="mt-1 text-xs text-text-muted">
-          The full address is shared once you accept.
+          {tf("ui.summary.addressMasked", "The full address is shared once you accept.")}
         </p>
       ) : null}
     </div>
@@ -91,16 +93,21 @@ export function ScheduleSummary({
   flexible = false,
   className,
 }: ScheduleSummaryProps) {
+  const tf = useTOrDefault();
   return (
     <div className={cn("text-sm", className)}>
       <p className="text-text">
         {dates}
         {hours ? <span className="text-text-secondary"> · {hours}</span> : null}
       </p>
-      {flexible ? <p className="mt-0.5 text-xs text-text-secondary">Dates can move</p> : null}
+      {flexible ? (
+        <p className="mt-0.5 text-xs text-text-secondary">
+          {tf("ui.summary.datesCanMove", "Dates can move")}
+        </p>
+      ) : null}
       {serviceBy ? (
         <p className="mt-1 text-xs font-medium text-warning-text">
-          No longer useful after {serviceBy}
+          {tf("ui.summary.noLongerUsefulAfter", "No longer useful after {serviceBy}", { serviceBy })}
         </p>
       ) : null}
     </div>
@@ -139,12 +146,19 @@ export interface PersonCountProps {
 export function PersonCount({
   present,
   expected,
-  noun = "worker",
+  noun,
   qualifier,
   className,
 }: PersonCountProps) {
+  const tf = useTOrDefault();
   const short = present < expected;
-  const plural = expected === 1 ? noun : `${noun}s`;
+  const resolvedNoun = noun ?? tf("ui.summary.personCount.noun", "worker");
+  const plural =
+    expected === 1
+      ? resolvedNoun
+      : noun
+        ? `${noun}s`
+        : tf("ui.summary.personCount.nounPlural", "workers");
 
   return (
     <p
@@ -157,10 +171,15 @@ export function PersonCount({
       <span data-numeric className="font-bold">
         {present} of {expected}
       </span>{" "}
-      {plural} present{qualifier ? ` ${qualifier}` : ""}
+      {plural} {tf("ui.summary.personCount.present", "present")}
+      {qualifier ? ` ${qualifier}` : ""}
       {short ? (
         <span className="block text-xs font-normal">
-          {expected - present} fewer than agreed. Settlement follows what was confirmed.
+          {tf(
+            "ui.summary.personCount.shortfall",
+            "{count} fewer than agreed. Settlement follows what was confirmed.",
+            { count: expected - present },
+          )}
         </span>
       ) : null}
     </p>

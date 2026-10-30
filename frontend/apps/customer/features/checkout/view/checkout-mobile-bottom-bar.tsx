@@ -1,7 +1,7 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Dialog } from "@vsolve/ui";
+import { Button, Dialog } from "@vsolve/ui";
 import { useState } from "react";
 
 import type { GroupQuote } from "../queries";
@@ -13,7 +13,23 @@ const LINE_KIND_HINTS: Record<Schemas["QuoteLineKindEnum"], string | null> = {
   PLATFORM_FEE_ALLOCATION: "This visit's share of the platform fee",
 };
 
-export function CheckoutMobileBottomBar({ quote }: { quote: GroupQuote | null }) {
+export interface CheckoutMobileBottomBarProps {
+  quote: GroupQuote | null;
+  showConfirmButton?: boolean;
+  onConfirm?: () => void;
+  isConfirmDisabled?: boolean;
+  isConfirmLoading?: boolean;
+  confirmLoadingLabel?: string;
+}
+
+export function CheckoutMobileBottomBar({
+  quote,
+  showConfirmButton = false,
+  onConfirm,
+  isConfirmDisabled = false,
+  isConfirmLoading = false,
+  confirmLoadingLabel,
+}: CheckoutMobileBottomBarProps) {
   const [breakupOpen, setBreakupOpen] = useState(false);
 
   if (quote === null || quote.status !== "ACTIVE") {
@@ -24,25 +40,58 @@ export function CheckoutMobileBottomBar({ quote }: { quote: GroupQuote | null })
     <>
       <div
         aria-label="Amount to pay"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white px-4 py-3.5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] lg:hidden transition-all duration-200"
       >
         <div className="mx-auto w-full max-w-lg">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-sm font-bold text-text">Amount to pay</span>
-            <Money
-              value={quote.total}
-              className="text-xl font-bold tabular-nums text-text"
-            />
-          </div>
-          <div className="mt-1 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setBreakupOpen(true)}
-              className="text-sm font-medium text-text-secondary underline decoration-dotted underline-offset-4"
-            >
-              View breakup
-            </button>
-          </div>
+          {showConfirmButton ? (
+            <div className="flex items-center justify-between gap-3 animate-in fade-in duration-200">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs font-semibold text-text-secondary">To pay:</span>
+                  <Money
+                    value={quote.total}
+                    className="text-lg font-bold tabular-nums text-text"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBreakupOpen(true)}
+                  className="mt-0.5 block text-xs font-medium text-text-secondary underline decoration-dotted underline-offset-2"
+                >
+                  View breakup
+                </button>
+              </div>
+
+              <Button
+                className="shrink-0 px-5 shadow-sm font-bold min-h-11"
+                disabled={isConfirmDisabled}
+                loading={isConfirmLoading}
+                loadingLabel={confirmLoadingLabel}
+                onClick={onConfirm}
+              >
+                Confirm booking
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 transition-all duration-200">
+              <div>
+                <span className="text-xs font-semibold text-text-secondary">Amount to pay</span>
+                <div className="mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setBreakupOpen(true)}
+                    className="text-xs font-medium text-text-secondary underline decoration-dotted underline-offset-4"
+                  >
+                    View breakup
+                  </button>
+                </div>
+              </div>
+              <Money
+                value={quote.total}
+                className="text-xl font-bold tabular-nums text-text"
+              />
+            </div>
+          )}
         </div>
       </div>
 

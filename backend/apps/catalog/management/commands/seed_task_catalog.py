@@ -82,7 +82,7 @@ from apps.catalog.seed_content import (
     TILE_FOR_M1_SERVICE,
     VariantSeed,
     category_for_trade,
-    content_for_trade,
+    content_for_service,
 )
 from apps.catalog.seed_images import fill_blank_image, image_for
 from apps.locations.models import ServiceArea, ServiceAreaService
@@ -1409,6 +1409,7 @@ class Command(BaseCommand):
             defaults={
                 "name": option.name,
                 "description": option.description or fallback_description,
+                "image_url": option.image_url,
                 "display_order": position,
                 "pricing_strategy": ServiceVariant.PricingStrategy.FIXED,
                 "booking_archetype": ServiceVariant.BookingArchetype.A1_TASK_VISIT,
@@ -1701,6 +1702,19 @@ class Command(BaseCommand):
                 alt_text=service.name,
             )
 
+        cupboard = Service.objects.filter(slug="cupboard-hinge-repair").first()
+        if cupboard is not None:
+            cupboard_cover = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/Images/Home%20Services/Handyman_repairing_cabinet_fixture_202608261908.jpeg"
+            Command._seed_service_cover(
+                service=cupboard,
+                url=cupboard_cover,
+                alt_text=cupboard.name,
+            )
+            for v in cupboard.variants.all():
+                if not getattr(v, "image_url", None):
+                    v.image_url = cupboard_cover
+                    v.save(update_fields=["image_url", "updated_at"])
+
     @staticmethod
     def _retire_empty_subcategories() -> None:
         """Switch off any subcategory left with nothing active in it.
@@ -1735,9 +1749,12 @@ class Command(BaseCommand):
         was shown when they booked, and a dispute is argued from it.
         """
 
-        # Keyed on the trade, never the tile: `content_for_trade("fans")` would fall
-        # through to the personal-care template and describe a facial on a fan repair.
-        content = content_for_trade(trade.dispatch_skill)
+        # Keyed on the trade, never the tile: `content_for_trade("fans")` has no template,
+        # so a tile slug would leave a fan repair with no lines at all.
+        content = content_for_service(service.slug, trade.dispatch_skill)
+        if content is None:
+            # No template is no claim: leave whatever lines the service already carries.
+            return
         ServicePolicy.objects.filter(service=service).update(is_active=False)
 
         rows: list[tuple[str, str, str, int]] = [

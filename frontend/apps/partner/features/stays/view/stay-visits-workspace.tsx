@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, Dialog, EmptyState, Field, Textarea } from "@vsolve/ui";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import { Badge, Button, Card, Dialog, EmptyState, Field, LoadMore, Textarea, useT } from "@vsolve/ui";
 import { CalendarClock, Phone } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -10,35 +10,39 @@ import {
   VISIT_DECLINE_REASONS,
   clockWindow,
   dayLabel,
-  fetchPartnerStayVisits,
+  fetchPartnerStayVisitsPage,
   partnerStayRoomAction,
   partnerStayVisitAction,
   type PartnerStayVisit,
   type VisitDeclineReason,
 } from "@/features/stays/queries";
 import { RoomChoice, useBookableRooms } from "@/features/stays/view/stay-record-sheets";
-import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
+import { useStaySections } from "@/features/stays/view/stay-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
+/** Second element is a catalogue key, resolved with `t` at render time. */
 const FILTERS = [
-  ["REQUESTED", "To answer"],
-  ["ACCEPTED", "Accepted"],
-  ["CLOSED", "Closed"],
+  ["REQUESTED", "stays.visits.filter.requested"],
+  ["ACCEPTED", "stays.visits.filter.accepted"],
+  ["CLOSED", "stays.enquiries.filter.closed"],
 ] as const;
 type Filter = (typeof FILTERS)[number][0];
 
+/** `label` is a catalogue key, resolved with `t` at render time. */
 const STATUS: Record<string, { label: string; tone: "info" | "success" | "danger" | "neutral" }> = {
-  REQUESTED: { label: "New request", tone: "info" },
-  ACCEPTED: { label: "🟢 Accepted", tone: "success" },
-  DECLINED: { label: "🔴 Not accepted", tone: "danger" },
-  CANCELLED: { label: "Cancelled by guest", tone: "neutral" },
-  EXPIRED: { label: "Expired", tone: "neutral" },
+  REQUESTED: { label: "stays.visits.status.requested", tone: "info" },
+  ACCEPTED: { label: "stays.visits.status.accepted", tone: "success" },
+  DECLINED: { label: "stays.visits.status.declined", tone: "danger" },
+  CANCELLED: { label: "stays.visits.status.cancelled", tone: "neutral" },
+  EXPIRED: { label: "stays.enquiryStatus.expired", tone: "neutral" },
 };
 
-function inFilter(filter: Filter, status: string | undefined) {
-  if (filter === "CLOSED") return status !== "REQUESTED" && status !== "ACCEPTED";
-  return status === filter;
-}
+/** Each tab as the visit states the server filters on. Exported for tests. */
+export const VISIT_FILTER_STATUSES: Record<Filter, string> = {
+  REQUESTED: "REQUESTED",
+  ACCEPTED: "ACCEPTED",
+  CLOSED: "DECLINED,CANCELLED,EXPIRED",
+};
 
 /**
  * Visit requests, grouped by day and slot ("Sat 12 Oct · 5 PM – 6 PM · 3 visitors"). The owner
@@ -46,6 +50,8 @@ function inFilter(filter: Filter, status: string | undefined) {
  * can mark a room booked for that guest.
  */
 export function PartnerStayVisitsWorkspace() {
+  const t = useT();
+  const sections = useStaySections();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<Filter>("REQUESTED");
   const [declining, setDeclining] = useState<PartnerStayVisit | null>(null);
@@ -55,7 +61,16 @@ export function PartnerStayVisitsWorkspace() {
   const [roomId, setRoomId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const visits = useQuery({ queryKey: ["partner-stays", "visits"], queryFn: fetchPartnerStayVisits });
+  const visits = usePagedList(["partner-stays", "visits", filter], (cursor) =>
+    fetchPartnerStayVisitsPage(cursor, VISIT_FILTER_STATUSES[filter]),
+  );
+  // Tab badges count their own first page, so they stay right whichever tab is open.
+  const [requestedPage, acceptedPage] = useQueries({
+    queries: (["REQUESTED", "ACCEPTED"] as const).map((name) => ({
+      queryKey: ["partner-stays", "visits", "count", name],
+      queryFn: () => fetchPartnerStayVisitsPage(undefined, name),
+    })),
+  }).map((query) => query.data);
   const rooms = useBookableRooms(booking?.property, booking?.unit);
 
   const act = useMutation({
@@ -69,14 +84,17 @@ export function PartnerStayVisitsWorkspace() {
     onError: (err: unknown) => setError(friendlyErrorMessage(err)),
   });
 
-  const all = useMemo(() => visits.data ?? [], [visits.data]);
-  const counts = {
-    REQUESTED: all.filter((v) => v.status === "REQUESTED").length,
-    ACCEPTED: all.filter((v) => v.status === "ACCEPTED").length,
+  const all = visits.items;
+  const countOf = (page: typeof requestedPage) =>
+    page ? `${page.results.length}${page.next ? "+" : ""}` : "0";
+  const counts: Record<Filter, string> = {
+    REQUESTED: countOf(requestedPage),
+    ACCEPTED: countOf(acceptedPage),
+    CLOSED: "0",
   };
   const groups = useMemo(() => {
     const map = new Map<string, PartnerStayVisit[]>();
-    for (const visit of all.filter((v) => inFilter(filter, v.status))) {
+    for (const visit of all) {
       const key = `${visit.visit_date}|${visit.start_time}|${visit.end_time}|${visit.property}`;
       map.set(key, [...(map.get(key) ?? []), visit]);
     }
@@ -87,15 +105,14 @@ export function PartnerStayVisitsWorkspace() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Stays</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Visit requests</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("stays.bookings.eyebrow")}</p>
+        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("stays.visits.heading")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Guests pick one of your visiting times. Accept or decline each one — they&apos;re told
-          either way. Set your times under a property&apos;s &ldquo;Visiting hours&rdquo;.
+          {t("stays.visits.intro")}
         </p>
       </div>
 
-      <SectionNav label="Stay sections" items={STAY_SECTIONS} />
+      <SectionNav label={t("stays.sections.ariaLabel")} items={sections} />
 
       <Card>
         <div className="flex flex-wrap gap-2">
@@ -110,13 +127,13 @@ export function PartnerStayVisitsWorkspace() {
                   : "border border-line bg-surface text-text-secondary hover:text-navy-900"
               }`}
             >
-              {label}
-              {value !== "CLOSED" && counts[value] > 0 ? ` (${counts[value]})` : ""}
+              {t(label)}
+              {value !== "CLOSED" && counts[value] !== "0" ? ` (${counts[value]})` : ""}
             </button>
           ))}
         </div>
 
-        {visits.isLoading ? <p className="mt-3 text-sm text-text-secondary">Loading…</p> : null}
+        {visits.isLoading ? <p className="mt-3 text-sm text-text-secondary">{t("common.loading")}</p> : null}
         {visits.error ? (
           <p className="mt-3 text-sm text-danger-text">{friendlyErrorMessage(visits.error)}</p>
         ) : null}
@@ -125,8 +142,10 @@ export function PartnerStayVisitsWorkspace() {
           <EmptyState
             compact
             className="mt-3"
-            title={filter === "REQUESTED" ? "No visit requests to answer" : "Nothing here"}
-            description="When a guest schedules a visit it appears here with their number."
+            title={
+              filter === "REQUESTED" ? t("stays.visits.emptyRequested") : t("stays.enquiries.emptyOther")
+            }
+            description={t("stays.visits.emptyDescription")}
           />
         ) : null}
 
@@ -139,7 +158,7 @@ export function PartnerStayVisitsWorkspace() {
                   <CalendarClock className="size-4 text-action" aria-hidden />
                   {dayLabel(first.visit_date)} · {clockWindow(first.start_time, first.end_time)}
                   <span className="font-normal text-text-secondary">
-                    · {first.property_title} · {group.length} visitor{group.length === 1 ? "" : "s"}
+                    · {first.property_title} · {t("stays.visits.visitors", { count: group.length })}
                   </span>
                 </p>
                 <ul className="flex flex-col gap-2">
@@ -153,20 +172,22 @@ export function PartnerStayVisitsWorkspace() {
                         <div className="min-w-0">
                           <p className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold text-navy-900">
-                              {visit.customer_name || "Guest"}
+                              {visit.customer_name || t("stays.sheet.guest")}
                             </span>
-                            <Badge tone={look.tone}>{look.label}</Badge>
+                            <Badge tone={look.tone}>{t(look.label)}</Badge>
                           </p>
                           <p className="text-sm text-text-secondary">
                             {visit.customer_phone}
-                            {visit.unit_name ? ` · interested in ${visit.unit_name}` : ""}
+                            {visit.unit_name
+                              ? ` · ${t("stays.visits.interestedIn", { name: visit.unit_name })}`
+                              : ""}
                           </p>
                           {visit.message ? (
                             <p className="mt-1 text-sm text-text">&ldquo;{visit.message}&rdquo;</p>
                           ) : null}
                           {visit.status === "DECLINED" && visit.reason_text ? (
                             <p className="mt-1 text-xs text-text-secondary">
-                              Reason given: {visit.reason_text}
+                              {t("stays.visits.reasonGiven", { reason: visit.reason_text })}
                             </p>
                           ) : null}
                         </div>
@@ -175,10 +196,10 @@ export function PartnerStayVisitsWorkspace() {
                           (visit.status === "REQUESTED" || visit.status === "ACCEPTED") ? (
                             <a
                               href={`tel:${visit.customer_phone}`}
-                              className="inline-flex h-9 items-center gap-2 rounded-control border border-line px-3.5 text-xs font-bold text-text hover:border-line-strong"
+                              className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-4 text-xs font-bold text-text hover:border-line-strong"
                             >
                               <Phone className="size-4" aria-hidden />
-                              Call
+                              {t("stays.enquiries.call")}
                             </a>
                           ) : null}
                           {visit.status === "REQUESTED" ? (
@@ -193,7 +214,7 @@ export function PartnerStayVisitsWorkspace() {
                                   setDeclining(visit);
                                 }}
                               >
-                                Decline
+                                {t("stays.visits.decline")}
                               </Button>
                               <Button
                                 size="sm"
@@ -202,7 +223,7 @@ export function PartnerStayVisitsWorkspace() {
                                   act.mutate(() => partnerStayVisitAction(visit.id, "accept"))
                                 }
                               >
-                                Accept
+                                {t("stays.visits.accept")}
                               </Button>
                             </>
                           ) : null}
@@ -218,10 +239,10 @@ export function PartnerStayVisitsWorkspace() {
                                   setDeclining(visit);
                                 }}
                               >
-                                Cancel visit
+                                {t("stays.visits.cancelVisit")}
                               </Button>
                               <Button size="sm" onClick={() => setBooking(visit)}>
-                                Mark as Booked
+                                {t("stays.enquiry.markBooked")}
                               </Button>
                             </>
                           ) : null}
@@ -234,17 +255,18 @@ export function PartnerStayVisitsWorkspace() {
             );
           })}
         </ul>
+        <LoadMore hasMore={visits.hasMore} loading={visits.loadingMore} onLoadMore={visits.loadMore} />
       </Card>
 
       <Dialog
         open={declining !== null}
         onOpenChange={(open) => !open && setDeclining(null)}
-        title="Decline this visit?"
-        description="The guest is told “The owner has not accepted your visit”. A reason is optional and only shown if you pick one."
+        title={t("stays.visits.declineTitle")}
+        description={t("stays.visits.declineBody")}
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeclining(null)}>
-              Back
+              {t("common.back")}
             </Button>
             <Button
               variant="danger"
@@ -256,14 +278,14 @@ export function PartnerStayVisitsWorkspace() {
                 )
               }
             >
-              Decline visit
+              {t("stays.visits.declineVisit")}
             </Button>
           </>
         }
       >
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-semibold text-navy-900">Reason (optional)</legend>
-          {[{ value: "" as const, label: "Don't give a reason" }, ...VISIT_DECLINE_REASONS].map(
+          <legend className="mb-1 text-sm font-semibold text-navy-900">{t("stays.visits.reasonLegend")}</legend>
+          {[{ value: "" as const, labelKey: "stays.visits.noReason" }, ...VISIT_DECLINE_REASONS].map(
             (option) => (
               <label key={option.value || "none"} className="flex items-center gap-2 text-sm">
                 <input
@@ -272,12 +294,12 @@ export function PartnerStayVisitsWorkspace() {
                   checked={reason === option.value}
                   onChange={() => setReason(option.value)}
                 />
-                {option.label}
+                {t(option.labelKey)}
               </label>
             ),
           )}
           {reason === "OTHER" ? (
-            <Field label="Note for the guest" showOptional>
+            <Field label={t("stays.enquiry.noteLabel")} showOptional>
               <Textarea
                 rows={2}
                 maxLength={240}
@@ -292,16 +314,18 @@ export function PartnerStayVisitsWorkspace() {
       <Dialog
         open={booking !== null}
         onOpenChange={(open) => !open && setBooking(null)}
-        title="Booking confirmed?"
+        title={t("stays.enquiry.bookingConfirmed")}
         description={
           booking
-            ? `${booking.customer_name || "The guest"} is taking a room. It will show as Booked and stop appearing as available.`
+            ? t("stays.visits.bookDialogBody", {
+                name: booking.customer_name || t("stays.enquiries.theGuest"),
+              })
             : undefined
         }
         footer={
           <>
             <Button variant="ghost" onClick={() => setBooking(null)}>
-              Not yet
+              {t("stays.enquiry.notYet")}
             </Button>
             <Button
               loading={act.isPending}
@@ -313,7 +337,7 @@ export function PartnerStayVisitsWorkspace() {
                 )
               }
             >
-              Yes – Mark Room Booked
+              {t("stays.enquiry.confirmBooked")}
             </Button>
           </>
         }

@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { DispatchRecoveryWorkspace } from "@/features/dispatch-recovery/view/dispatch-recovery-workspace";
+
+export const metadata: Metadata = { title: "Dispatch" };
 
 /**
  * Dispatch recovery: read why a visit went where it went, then correct it.

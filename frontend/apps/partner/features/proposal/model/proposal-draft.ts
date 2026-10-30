@@ -1,4 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
+import { createTranslator, type useT } from "@vsolve/ui";
+
+import { catalogs } from "@/i18n/catalogs";
 
 /**
  * The two composers' drafts, their arithmetic and their validation.
@@ -170,78 +173,93 @@ export type DraftErrors = Readonly<Record<string, string>>;
 const MAX_LINE = 200;
 const MAX_WARRANTY = 4000;
 
-function checkShared(input: {
-  taxBasis: TaxBasis | null;
-  taxPaise: number;
-  total: number | null;
-  inclusions: readonly string[];
-}): Record<string, string> {
+type Translate = ReturnType<typeof useT>;
+
+/** English, for callers that do not thread `t` (tests, non-rendering code). */
+function englishT(): Translate {
+  return createTranslator("en-IN", catalogs["en-IN"]).t;
+}
+
+function checkShared(
+  input: {
+    taxBasis: TaxBasis | null;
+    taxPaise: number;
+    total: number | null;
+    inclusions: readonly string[];
+  },
+  t: Translate,
+): Record<string, string> {
   const errors: Record<string, string> = {};
 
   if (input.taxBasis === null) {
-    errors.taxBasis = "Say whether your price includes tax. Vsolve compares every quote on the same basis.";
+    errors.taxBasis = t("proposal.draft.error.taxBasis");
   }
   if (input.taxPaise < 0) {
-    errors.taxPaise = "Tax cannot be negative.";
+    errors.taxPaise = t("proposal.draft.error.taxNegative");
   } else if (input.total !== null && input.taxPaise > input.total) {
-    errors.taxPaise = "Tax cannot be more than the quoted total.";
+    errors.taxPaise = t("proposal.draft.error.taxTooHigh");
   }
   if (input.inclusions.some((line) => line.length > MAX_LINE)) {
-    errors.inclusions = `Keep each line under ${MAX_LINE} characters.`;
+    errors.inclusions = t("proposal.draft.error.lineTooLong", { max: MAX_LINE });
   }
 
   return errors;
 }
 
-export function validateA3(draft: A3Draft): DraftErrors {
+export function validateA3(draft: A3Draft, t: Translate = englishT()): DraftErrors {
   const total = a3Total(draft);
-  const errors = checkShared({
-    taxBasis: draft.taxBasis,
-    taxPaise: draft.taxPaise,
-    total,
-    inclusions: draft.inclusions,
-  });
+  const errors = checkShared(
+    {
+      taxBasis: draft.taxBasis,
+      taxPaise: draft.taxPaise,
+      total,
+      inclusions: draft.inclusions,
+    },
+    t,
+  );
 
   if (draft.ratePaisePerWorkerDay === null || draft.ratePaisePerWorkerDay <= 0) {
-    errors.ratePaisePerWorkerDay = "Enter what you charge for one worker for one day.";
+    errors.ratePaisePerWorkerDay = t("proposal.draft.error.rate");
   }
   if (draft.minimumDays === null || draft.minimumDays <= 0) {
-    errors.minimumDays = "Enter the smallest number of days you will take this for.";
+    errors.minimumDays = t("proposal.draft.error.minimumDays");
   }
   if (draft.workerCount === null || draft.workerCount <= 0) {
-    errors.workerCount = "Enter how many people you can supply.";
+    errors.workerCount = t("proposal.draft.error.workerCount");
   }
   if (draft.inclusions.filter((line) => line.trim() !== "").length === 0) {
-    errors.inclusions =
-      "Say what the rate covers. A quote with nothing listed is the one customers skip.";
+    errors.inclusions = t("proposal.draft.error.inclusions");
   }
 
   return errors;
 }
 
-export function validateA5(draft: A5Draft): DraftErrors {
+export function validateA5(draft: A5Draft, t: Translate = englishT()): DraftErrors {
   const total = a5Total(draft);
-  const errors = checkShared({
-    taxBasis: draft.taxBasis,
-    taxPaise: draft.taxPaise,
-    total,
-    inclusions: draft.inclusions,
-  });
+  const errors = checkShared(
+    {
+      taxBasis: draft.taxBasis,
+      taxPaise: draft.taxPaise,
+      total,
+      inclusions: draft.inclusions,
+    },
+    t,
+  );
 
   const filled = draft.stages.filter((stage) => stage.title.trim() !== "");
   if (filled.length === 0) {
-    errors.stages = "A project quote needs at least one stage.";
+    errors.stages = t("proposal.draft.error.noStages");
   } else if (draft.stages.some((stage) => stage.amountPaise === null || stage.amountPaise <= 0)) {
-    errors.stages = "Give every stage an amount. The stage amounts have to add up to your total.";
+    errors.stages = t("proposal.draft.error.stageAmount");
   } else if (draft.stages.some((stage) => stage.title.trim() === "")) {
-    errors.stages = "Name every stage, or remove the empty one.";
+    errors.stages = t("proposal.draft.error.stageName");
   }
 
   if (draft.warrantyTerms.length > MAX_WARRANTY) {
-    errors.warrantyTerms = `Keep the warranty under ${MAX_WARRANTY} characters.`;
+    errors.warrantyTerms = t("proposal.draft.error.warrantyTooLong", { max: MAX_WARRANTY });
   }
   if (draft.exclusions.some((line) => line.length > MAX_LINE)) {
-    errors.exclusions = `Keep each line under ${MAX_LINE} characters.`;
+    errors.exclusions = t("proposal.draft.error.lineTooLong", { max: MAX_LINE });
   }
 
   return errors;

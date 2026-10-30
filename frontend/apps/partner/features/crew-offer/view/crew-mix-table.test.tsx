@@ -2,6 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import { describe, expect, it } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import { CrewMixTable } from "./crew-mix-table";
 
 function line(
@@ -20,7 +22,7 @@ const WEDDING: readonly Schemas["CrewMixLine"][] = [
 
 describe("the crew mix a lead checks before accepting", () => {
   it("shows every role as a row, with the totals in the heading", () => {
-    render(<CrewMixTable lines={WEDDING} />);
+    render(withI18n(<CrewMixTable lines={WEDDING} />));
 
     const waiters = screen.getByRole("row", { name: /Waiters and serving staff/ });
     expect(within(waiters).getByText("3")).toBeInTheDocument();
@@ -35,26 +37,26 @@ describe("the crew mix a lead checks before accepting", () => {
    * they can take and one they cannot. A blank cell would read as missing data instead.
    */
   it("renders a zero rather than leaving the cell blank", () => {
-    render(<CrewMixTable lines={WEDDING} />);
+    render(withI18n(<CrewMixTable lines={WEDDING} />));
 
     const setup = screen.getByRole("row", { name: /Setup and teardown crew/ });
     expect(within(setup).getByText("0")).toBeInTheDocument();
   });
 
   it("says nothing at all for a service that asks for no split", () => {
-    const { container } = render(<CrewMixTable lines={[]} />);
+    const { container } = render(withI18n(<CrewMixTable lines={[]} />));
 
     expect(container).toBeEmptyDOMElement();
   });
 
   it("carries the roster footnote the offer screen passes it", () => {
-    render(<CrewMixTable lines={WEDDING} footnote="Your verified crew list has 4 people." />);
+    render(withI18n(<CrewMixTable lines={WEDDING} footnote="Your verified crew list has 4 people." />));
 
     expect(screen.getByText(/Your verified crew list has 4 people/)).toBeInTheDocument();
   });
 
   it("uses singulars where the count earns them", () => {
-    render(<CrewMixTable lines={[line("hostess_count", "Guest reception", 1, 1)]} />);
+    render(withI18n(<CrewMixTable lines={[line("hostess_count", "Guest reception", 1, 1)]} />));
 
     expect(screen.getByText("1 man · 1 woman")).toBeInTheDocument();
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Button, ErrorState, cn, useHydrated } from "@vsolve/ui";
+import { Button, ErrorState, cn, useHydrated, useT, useTranslator } from "@vsolve/ui";
 import {
   ArrowLeft,
   CheckCheck,
@@ -30,8 +30,8 @@ const MAX_OPEN = 3;
 /** Mirrors the id `PartnerShell`'s focused header renders. */
 const HEADER_ACTION_SLOT_ID = "partner-header-action";
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
+function when(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: "numeric",
     month: "short",
     hour: "numeric",
@@ -57,6 +57,7 @@ export function ClarificationThread({
   open,
   onOpenChange,
 }: ClarificationThreadProps) {
+  const t = useT();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isOpen = open ?? uncontrolledOpen;
   const setIsOpen = (next: boolean) => {
@@ -104,7 +105,7 @@ export function ClarificationThread({
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              aria-label="Open chat with customer"
+              aria-label={t("enquiry.thread.openChat")}
               className="group relative grid size-11 place-items-center rounded-control text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               <MessageCircle className="size-5" />
@@ -122,7 +123,7 @@ export function ClarificationThread({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Chat with Customer"
+          aria-label={t("enquiry.thread.dialogLabel")}
           className="fixed inset-0 z-[100] flex flex-col bg-canvas animate-in fade-in slide-in-from-bottom-3 duration-200"
         >
           {/* Top Navigation Bar */}
@@ -131,7 +132,7 @@ export function ClarificationThread({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                aria-label="Back to enquiry"
+                aria-label={t("enquiry.thread.backToEnquiry")}
                 className="grid size-10 place-items-center rounded-full text-text-secondary hover:bg-surface-sunken hover:text-text transition-colors cursor-pointer"
               >
                 <ArrowLeft className="size-5" />
@@ -146,10 +147,10 @@ export function ClarificationThread({
 
               <div className="min-w-0 flex-1">
                 <h1 className="truncate text-base font-bold text-navy-900 leading-tight">
-                  Customer
+                  {t("enquiry.thread.customer")}
                 </h1>
                 <p className="truncate text-xs font-medium text-text-muted">
-                  {enquiry.serviceName ? enquiry.serviceName : "Project Enquiry"}
+                  {enquiry.serviceName ? enquiry.serviceName : t("enquiry.thread.defaultTitle")}
                 </p>
               </div>
             </div>
@@ -157,7 +158,7 @@ export function ClarificationThread({
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              aria-label="Close chat"
+              aria-label={t("enquiry.thread.closeChat")}
               className="grid size-9 place-items-center rounded-full text-text-muted hover:bg-surface-sunken hover:text-text transition-colors cursor-pointer"
             >
               <X className="size-5" />
@@ -167,7 +168,7 @@ export function ClarificationThread({
           {/* Safety & Context Header Banner */}
           <div className="shrink-0 bg-navy-900/5 border-b border-line/60 px-4 py-2 text-center text-xs text-text-secondary flex items-center justify-center gap-1.5">
             <Lock className="size-3.5 text-text-muted shrink-0" />
-            <span>Keep details to the work. Direct phone numbers unlock once booked.</span>
+            <span>{t("enquiry.thread.safetyBanner")}</span>
           </div>
 
           {/* Mutation Failure Alert */}
@@ -186,7 +187,7 @@ export function ClarificationThread({
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             <div className="flex justify-center my-1">
               <span className="rounded-full bg-black/5 px-3 py-1 text-[11px] font-semibold text-text-muted shadow-2xs">
-                Questions & Clarifications
+                {t("enquiry.thread.streamLabel")}
               </span>
             </div>
 
@@ -195,9 +196,9 @@ export function ClarificationThread({
                 <div className="grid size-12 place-items-center rounded-full bg-navy-100 text-navy-800 mb-3">
                   <MessageCircle className="size-6" />
                 </div>
-                <h3 className="text-sm font-bold text-navy-900">No questions yet</h3>
+                <h3 className="text-sm font-bold text-navy-900">{t("enquiry.thread.empty.title")}</h3>
                 <p className="mt-1 text-xs text-text-secondary max-w-xs leading-relaxed">
-                  Have questions regarding site access, materials, or requirements? Send a message below to clarify with the customer.
+                  {t("enquiry.thread.empty.message")}
                 </p>
               </div>
             ) : (
@@ -206,18 +207,18 @@ export function ClarificationThread({
                   const mine = row.asked_by_role === "VENDOR";
                   return (
                     <li key={row.id} className="flex flex-col gap-2">
-                      <ChatBubble side={mine ? "mine" : "theirs"} who={mine ? "You" : "Customer"} at={row.asked_at}>
+                      <ChatBubble side={mine ? "mine" : "theirs"} who={mine ? t("enquiry.thread.you") : t("enquiry.thread.customer")} at={row.asked_at}>
                         {row.question}
                       </ChatBubble>
 
                       {row.answered_at !== null && row.answer.trim() !== "" ? (
-                        <ChatBubble side={mine ? "theirs" : "mine"} who={mine ? "Customer" : "You"} at={row.answered_at}>
+                        <ChatBubble side={mine ? "theirs" : "mine"} who={mine ? t("enquiry.thread.customer") : t("enquiry.thread.you")} at={row.answered_at}>
                           {row.answer}
                         </ChatBubble>
                       ) : row.asked_by_role === "CUSTOMER" ? (
                         <div className="ml-2 max-w-[92%] rounded-2xl border border-line bg-white p-3.5 shadow-sm">
                           <p className="text-xs font-bold text-signal-700 uppercase tracking-wide">
-                            Customer is waiting for your reply
+                            {t("enquiry.thread.customerWaiting")}
                           </p>
                           <AnswerBox
                             onAnswer={(text) => answer.mutate({ questionId: row.id, answer: text })}
@@ -226,7 +227,7 @@ export function ClarificationThread({
                         </div>
                       ) : (
                         <p className="text-right text-[11px] font-medium text-text-muted pr-2">
-                          Waiting for customer reply…
+                          {t("enquiry.thread.waitingForCustomer")}
                         </p>
                       )}
                     </li>
@@ -239,17 +240,17 @@ export function ClarificationThread({
           {/* Bottom Chat Message Input */}
           {closed ? (
             <div className="shrink-0 border-t border-line bg-surface p-4 text-center text-xs text-text-muted">
-              This enquiry is closed. Messaging is no longer available.
+              {t("enquiry.thread.closed")}
             </div>
           ) : (
             <div className="shrink-0 border-t border-line bg-white px-3.5 pt-2.5 pb-[max(1.25rem,calc(env(safe-area-inset-bottom)+0.75rem))] shadow-lg">
               <div className="flex items-center justify-between text-[11px] font-medium text-text-muted mb-1.5 px-1">
                 <span>
                   {left === 0
-                    ? "Wait for reply before asking another"
-                    : `${left} open question${left === 1 ? "" : "s"} allowed`}
+                    ? t("enquiry.thread.waitBeforeAsking")
+                    : t("enquiry.thread.openQuestionsAllowed", { count: left })}
                 </span>
-                <span>Max 2000 chars</span>
+                <span>{t("enquiry.thread.maxChars", { max: 2000 })}</span>
               </div>
 
               <form
@@ -264,7 +265,7 @@ export function ClarificationThread({
                   <textarea
                     rows={1}
                     maxLength={2000}
-                    placeholder="Type a message to the customer…"
+                    placeholder={t("enquiry.thread.messagePlaceholder")}
                     value={draft}
                     onChange={(e) => {
                       setDraft(e.target.value);
@@ -296,7 +297,7 @@ export function ClarificationThread({
                 <button
                   type="submit"
                   disabled={draft.trim() === "" || left === 0 || ask.isPending}
-                  aria-label="Send message"
+                  aria-label={t("enquiry.thread.send")}
                   className="grid size-11 shrink-0 place-items-center rounded-full bg-navy-900 text-white shadow-md transition-all hover:bg-navy-800 active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                 >
                   <Send className="size-5" />
@@ -320,6 +321,7 @@ function ChatBubble({
   at: string;
   children: string;
 }) {
+  const { locale } = useTranslator();
   const isMine = side === "mine";
   return (
     <div className={cn("flex flex-col gap-1", isMine ? "items-end" : "items-start")}>
@@ -338,7 +340,7 @@ function ChatBubble({
             isMine ? "text-navy-200" : "text-text-muted",
           )}
         >
-          <span>{when(at)}</span>
+          <span>{when(at, locale)}</span>
           {isMine ? <CheckCheck className="size-3 text-sky-300 inline" /> : null}
         </div>
       </div>
@@ -347,6 +349,7 @@ function ChatBubble({
 }
 
 function AnswerBox({ onAnswer, pending }: { onAnswer: (text: string) => void; pending: boolean }) {
+  const t = useT();
   const [text, setText] = useState("");
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -355,7 +358,7 @@ function AnswerBox({ onAnswer, pending }: { onAnswer: (text: string) => void; pe
         maxLength={2000}
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Type your answer here…"
+        placeholder={t("enquiry.thread.answerPlaceholder")}
         className="w-full resize-none rounded-xl border border-line bg-white p-2.5 text-sm text-navy-900 placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-navy-900/20"
       />
       <div className="flex justify-end">
@@ -363,13 +366,13 @@ function AnswerBox({ onAnswer, pending }: { onAnswer: (text: string) => void; pe
           size="sm"
           disabled={text.trim() === ""}
           loading={pending}
-          loadingLabel="Sending"
+          loadingLabel={t("enquiry.thread.sending")}
           onClick={() => {
             onAnswer(text.trim());
             setText("");
           }}
         >
-          Send reply
+          {t("enquiry.thread.sendReply")}
         </Button>
       </div>
     </div>

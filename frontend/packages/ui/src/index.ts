@@ -4,6 +4,8 @@ export { cn } from "./cn";
 export { Button, buttonStyles } from "./button";
 export type { ButtonProps } from "./button";
 export { Spinner } from "./spinner";
+export { LoadMore } from "./load-more";
+export type { LoadMoreProps } from "./load-more";
 
 // Form controls
 export { Field, useFieldContext, controlChrome } from "./field";
@@ -52,6 +54,8 @@ export { EmptyState } from "./empty-state";
 export type { EmptyStateProps } from "./empty-state";
 export { Skeleton, SkeletonText, SkeletonRegion } from "./skeleton";
 export type { SkeletonProps } from "./skeleton";
+export { ProgressiveImage } from "./progressive-image";
+export type { ProgressiveImageProps } from "./progressive-image";
 export { ToastProvider, useToast } from "./toast";
 export { ServiceRatingDialog, ServiceRatingList } from "./service-rating";
 export type {
@@ -109,10 +113,11 @@ export {
   I18nProvider,
   useTranslator,
   useT,
-  createTranslator,
-  DEFAULT_LOCALE,
+  useTOrDefault,
 } from "./i18n";
-export type { Catalog, Locale, Message, Translator } from "./i18n";
+// From the plain module, not the "use client" one, so server components can call it.
+export { createTranslator, DEFAULT_LOCALE } from "./i18n-core";
+export type { Catalog, Locale, Message, Translator } from "./i18n-core";
 
 // The signature device: money, countdowns and OTP codes.
 export {
@@ -169,3 +174,5 @@ export {
 } from "./command-palette";
 export { KeyboardHint } from "./keyboard-hint";
 export type { KeyboardHintProps } from "./keyboard-hint";
+export { StayRoomCard } from "./stay-room-card";
+export type { StayRoomCardChip, StayRoomCardProps } from "./stay-room-card";

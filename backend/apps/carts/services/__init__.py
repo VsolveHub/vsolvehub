@@ -40,10 +40,12 @@ from .windows import (
     BookingWindow,
     BookingWindowDay,
     BookingWindows,
+    InstantAvailability,
     _resolve_scheduling_group,
     _signed_window_id,
     _window_start_from_id,
     build_arrival_window_grid,
+    compute_instant_availability,
     create_booking_windows,
 )
 
@@ -53,6 +55,8 @@ __all__ = [
     "BookingWindow",
     "BookingWindowDay",
     "BookingWindows",
+    "InstantAvailability",
+    "compute_instant_availability",
     "_assert_cart_version",
     "_cart_for",
     "_cart_item_fingerprint",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, cn } from "@vsolve/ui";
+import { Card, cn, useT } from "@vsolve/ui";
 
 import type { BusinessType } from "../adapters/business-type";
 import type { BusinessTypeChoice } from "../adapters/capability-options";
@@ -53,11 +53,12 @@ export function BusinessTypeChoiceGroup({
   disabled = false,
   className,
 }: BusinessTypeChoiceProps) {
+  const t = useT();
   return (
     <fieldset className={cn("m-0 border-0 p-0", className)} disabled={disabled}>
-      <legend className="text-base font-semibold text-text">How do you work?</legend>
+      <legend className="text-base font-semibold text-text">{t("me.capability.businessChoice.legend")}</legend>
       <p className="mt-1 text-sm text-text-secondary">
-        This decides who pays you and how tax is handled. You can change it later.
+        {t("me.capability.businessChoice.description")}
       </p>
 
       <div className="mt-4 flex flex-col gap-2">

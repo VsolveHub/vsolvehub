@@ -3,30 +3,36 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import {
-  Badge,
   Button,
   Card,
+  Disclosure,
   EmptyState,
   Field,
   Input,
   Select,
+  StatCard,
   Textarea,
-  formatMoney,
+  cn,
+  useT,
 } from "@vsolve/ui";
-import { Camera, MapPin, X } from "lucide-react";
+import { Camera, CheckCircle2, Clock, MapPin, PackageOpen, Plus, Power, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
-import { canSubmitAsset } from "@/features/rentals/booking-actions";
 import {
   createPartnerRentalAsset,
   fetchPartnerDefaultLocation,
   fetchPartnerRentalAssets,
   fetchRentalTaxonomy,
-  submitPartnerRentalAsset,
   uploadPartnerRentalPhoto,
+  type RentalAsset,
   type RentalTaxonomySubcategory,
 } from "@/features/rentals/queries";
-import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
+import { FindOnMap } from "@/features/location/view/find-on-map";
+import { PickupHoursCard } from "@/features/rentals/view/pickup-hours-card";
+import { RentalAdEditor } from "@/features/rentals/view/rental-ad-editor";
+import { RentalAssetCard } from "@/features/rentals/view/rental-asset-card";
+import { RentalFieldInput, fieldLabel, type SchemaProperty } from "@/features/rentals/view/rental-field-input";
+import { useRentalSections } from "@/features/rentals/view/rental-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const MAX_PHOTOS = 8;
@@ -39,10 +45,22 @@ type PhotoDraft = {
   error?: string;
 };
 
-type SchemaProperty = {
-  type?: string;
-  enum?: unknown[];
+/**
+ * The pickup address, with its map pin when the owner placed one. The pin
+ * travels with the text — prefilled from the last item, reset after posting —
+ * and typing a correction keeps it, as it does on a Customer's address.
+ */
+type PickupAddressForm = {
+  line: string;
+  area: string;
+  city: string;
+  pincode: string;
+  pin: { latitude: string; longitude: string } | null;
+  /** The one-line summary from the geocoder, shown when a pin exists. */
+  formattedAddress: string;
 };
+const EMPTY_ADDRESS: PickupAddressForm = { line: "", area: "", city: "", pincode: "", pin: null, formattedAddress: "" };
+const PINCODE = /^[1-9][0-9]{5}$/;
 
 function schemaPropertyMap(
   schema: Record<string, unknown> | undefined,
@@ -88,8 +106,14 @@ function newLocalId(): string {
  * scroll past the form to reach.
  */
 export function PartnerRentalsWorkspace() {
+  const t = useT();
+  const rentalSections = useRentalSections();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [creating, setCreating] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<RentalAsset | null>(null);
+  const [tab, setTab] = useState<"ALL" | "PUBLISHED" | "PAUSED" | "DRAFT">("ALL");
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [subcategorySlug, setSubcategorySlug] = useState("");
@@ -98,8 +122,9 @@ export function PartnerRentalsWorkspace() {
   const [dailyRate, setDailyRate] = useState("");
   const [depositOverride, setDepositOverride] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("1");
-  const [location, setLocation] = useState("");
-  const [defaultLocation, setDefaultLocation] = useState("");
+  const [address, setAddress] = useState<PickupAddressForm>(EMPTY_ADDRESS);
+  const [defaultAddress, setDefaultAddress] = useState<PickupAddressForm>(EMPTY_ADDRESS);
+  const [deliveryAvailable, setDeliveryAvailable] = useState(false);
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [structuredFields, setStructuredFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -126,17 +151,38 @@ export function PartnerRentalsWorkspace() {
     depositOverride ??
     (backendDepositPaise == null ? "" : paiseToRupeeInput(backendDepositPaise));
 
+  // A new item starts at the owner's last pickup address; a first item at their profile address.
+  const latest = assets.data?.find((a) => a.pickup_address_line || a.pickup_city);
   useEffect(() => {
     let cancelled = false;
+    if (latest) {
+      const fromLatest: PickupAddressForm = {
+        line: latest.pickup_address_line,
+        area: latest.pickup_area,
+        city: latest.pickup_city,
+        pincode: latest.pickup_pincode,
+        pin:
+          latest.pickup_latitude && latest.pickup_longitude
+            ? { latitude: latest.pickup_latitude, longitude: latest.pickup_longitude }
+            : null,
+        formattedAddress: [latest.pickup_area, latest.pickup_city, latest.pickup_pincode]
+          .filter(Boolean)
+          .join(", "),
+      };
+      setDefaultAddress(fromLatest);
+      setAddress((current) => (current.line.trim() ? current : fromLatest));
+      return;
+    }
     void fetchPartnerDefaultLocation().then((loc) => {
-      if (cancelled) return;
-      setDefaultLocation(loc);
-      setLocation((current) => (current.trim() ? current : loc));
+      if (cancelled || !loc) return;
+      const fromProfile = { ...EMPTY_ADDRESS, line: loc };
+      setDefaultAddress(fromProfile);
+      setAddress((current) => (current.line.trim() ? current : fromProfile));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [latest]);
 
   useEffect(() => {
     return () => {
@@ -162,18 +208,15 @@ export function PartnerRentalsWorkspace() {
       setDailyRate("");
       setDepositOverride(null);
       setQuantity("1");
-      setLocation(defaultLocation);
+      setAddress(defaultAddress);
+      setDeliveryAvailable(false);
       setPhotos([]);
       setStructuredFields({});
       setFormError(null);
+      setCreating(false);
       invalidate();
     },
     onError: (err: unknown) => setFormError(friendlyErrorMessage(err)),
-  });
-
-  const act = useMutation({
-    mutationFn: (id: string) => submitPartnerRentalAsset(id),
-    onSuccess: invalidate,
   });
 
   function patchPhoto(localId: string, patch: Partial<PhotoDraft>) {
@@ -184,7 +227,7 @@ export function PartnerRentalsWorkspace() {
     if (!fileList?.length) return;
     const remaining = MAX_PHOTOS - photos.length;
     if (remaining <= 0) {
-      setFormError(`You can add up to ${MAX_PHOTOS} photos.`);
+      setFormError(t("rentals.ads.errorMaxPhotos", { max: MAX_PHOTOS }));
       return;
     }
     const chosen = Array.from(fileList).slice(0, remaining);
@@ -205,7 +248,7 @@ export function PartnerRentalsWorkspace() {
         } catch (err) {
           patchPhoto(draft.localId, {
             uploading: false,
-            error: friendlyErrorMessage(err, "Could not upload this photo."),
+            error: friendlyErrorMessage(err, t("rentals.ads.errorPhotoUpload")),
           });
         }
       }),
@@ -230,36 +273,40 @@ export function PartnerRentalsWorkspace() {
         : rupeesToPaise(deposit);
     const quantityAvailable = Number.parseInt(quantity.trim(), 10);
     if (!variantId || !title.trim()) {
-      setFormError("Choose what you are renting, and add a title.");
+      setFormError(t("rentals.ads.errorChooseItem"));
       return;
     }
-    if (!location.trim()) {
-      setFormError("Add the pickup location for this ad.");
+    if (!address.line.trim() || !address.city.trim()) {
+      setFormError(t("rentals.ads.errorAddress"));
+      return;
+    }
+    if (!PINCODE.test(address.pincode.trim())) {
+      setFormError(t("rentals.ads.errorPincode"));
       return;
     }
     if (dailyPaise == null || dailyPaise < 1) {
-      setFormError("Enter a daily rate in rupees, for example 250 or 249.50.");
+      setFormError(t("rentals.ads.errorDailyRate"));
       return;
     }
     if (depositPaise == null) {
-      setFormError("Choose what you are renting so the refundable deposit can load.");
+      setFormError(t("rentals.ads.errorDeposit"));
       return;
     }
     if (!Number.isFinite(quantityAvailable) || quantityAvailable < 1) {
-      setFormError("Quantity must be at least 1.");
+      setFormError(t("rentals.ads.errorQuantity"));
       return;
     }
     if (photos.some((photo) => photo.uploading)) {
-      setFormError("Wait for every photo to finish uploading.");
+      setFormError(t("rentals.ads.errorPhotosUploading"));
       return;
     }
     if (photos.some((photo) => photo.error)) {
-      setFormError("Remove failed photos or try uploading them again.");
+      setFormError(t("rentals.ads.errorPhotosFailed"));
       return;
     }
     const urls = photos.map((photo) => photo.remoteUrl).filter((url): url is string => Boolean(url));
     if (urls.length < 1) {
-      setFormError("Add at least one photo. Customers see the first photo as the cover.");
+      setFormError(t("rentals.ads.errorNoPhotos"));
       return;
     }
     const fields: Record<string, string | number | boolean> = {};
@@ -267,13 +314,15 @@ export function PartnerRentalsWorkspace() {
       const raw = structuredFields[key]?.trim() ?? "";
       if (!raw) {
         if (requiredSchemaKeys.has(key)) {
-          setFormError(`Fill in ${key.replace(/_/g, " ")}.`);
+          setFormError(t("rentals.ads.errorFillField", { field: fieldLabel(key, schemaProps[key] ?? {}).toLowerCase() }));
           return;
         }
         continue;
       }
-      if (raw === "true" || raw === "false") fields[key] = raw === "true";
-      else if (/^\d+$/.test(raw)) fields[key] = Number(raw);
+      const spec = schemaProps[key] ?? {};
+      if (spec.type === "boolean") fields[key] = raw === "true";
+      else if ((spec.type === "integer" || spec.type === "number") && /^\d+(\.\d+)?$/.test(raw))
+        fields[key] = Number(raw);
       else fields[key] = raw;
     }
     setFormError(null);
@@ -281,7 +330,15 @@ export function PartnerRentalsWorkspace() {
       variant_id: variantId,
       title: title.trim(),
       description: description.trim(),
-      location_text: location.trim(),
+      location_text: "",
+      pickup_address_line: address.line.trim(),
+      pickup_area: address.area.trim(),
+      pickup_city: address.city.trim(),
+      pickup_pincode: address.pincode.trim(),
+      ...(address.pin
+        ? { pickup_latitude: address.pin.latitude, pickup_longitude: address.pin.longitude }
+        : {}),
+      delivery_available: deliveryAvailable,
       daily_rate_paise: dailyPaise,
       deposit_paise: depositPaise,
       quantity_available: quantityAvailable,
@@ -292,27 +349,70 @@ export function PartnerRentalsWorkspace() {
   }
 
   const uploadingCount = photos.filter((photo) => photo.uploading).length;
+  const allAssets = assets.data ?? [];
+  const liveCount = allAssets.filter((a) => a.public_state === "PUBLISHED").length;
+  const pausedCount = allAssets.filter((a) => a.public_state === "PAUSED").length;
+  const draftCount = allAssets.filter(
+    (a) => a.public_state !== "PUBLISHED" && a.public_state !== "PAUSED",
+  ).length;
+
+  const filteredAssets = allAssets.filter((asset) => {
+    if (tab === "PUBLISHED") return asset.public_state === "PUBLISHED";
+    if (tab === "PAUSED") return asset.public_state === "PAUSED";
+    if (tab === "DRAFT") return asset.public_state !== "PUBLISHED" && asset.public_state !== "PAUSED";
+    return true;
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Rental ads</p>
-        <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Post your rental</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Add real photos, a price, and a pickup location. The first photo becomes the cover.
-          Customer bookings have their own section.
-        </p>
+      {/* Top Header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">{t("rentals.inventory.eyebrow")}</p>
+          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">{t("rentals.inventory.title")}</h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            {t("rentals.inventory.intro")}
+          </p>
+        </div>
+        {!creating ? (
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="mr-1.5 size-4" aria-hidden />
+            {t("rentals.inventory.postItem")}
+          </Button>
+        ) : null}
       </div>
 
-      <SectionNav label="Rental sections" items={RENTAL_SECTIONS} />
+      <SectionNav label={t("rentals.sections.ariaLabel")} items={rentalSections} />
 
-      <Card padding="lg">
-        <form className="flex flex-col gap-6" onSubmit={onCreate}>
+      {/* Inventory Overview Stats Bar */}
+      {allAssets.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label={t("rentals.inventory.statTotal")} value={allAssets.length} icon={<PackageOpen className="size-4" />} />
+          <StatCard label={t("rentals.inventory.statLive")} value={liveCount} icon={<CheckCircle2 className="size-4 text-positive-text" />} />
+          <StatCard label={t("rentals.inventory.statPaused")} value={pausedCount} icon={<Power className="size-4 text-warning-text" />} />
+          <StatCard label={t("rentals.inventory.statDrafts")} value={draftCount} icon={<Clock className="size-4 text-text-secondary" />} />
+        </div>
+      ) : null}
+
+      {/* Creation Form (Only displayed when partner clicks 'Post an item') */}
+      {creating ? (
+        <Card padding="lg" className="border-action/40 shadow-sm">
+          <div className="mb-6 flex items-center justify-between border-b border-line pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{t("rentals.inventory.createTitle")}</h2>
+              <p className="text-xs text-text-secondary">{t("rentals.inventory.createHint")}</p>
+            </div>
+            <Button variant="outline" size="sm" type="button" onClick={() => setCreating(false)}>
+              {t("common.cancel")}
+            </Button>
+          </div>
+
+          <form className="flex flex-col gap-6" onSubmit={onCreate}>
           <section className="flex flex-col gap-3">
             <Field
-              label="Photos"
+              label={t("rentals.ads.photos")}
               required
-              description={`First photo is the cover. JPEG, PNG or WebP, up to ${MAX_PHOTOS} photos.`}
+              description={t("rentals.ads.photosHint", { max: MAX_PHOTOS })}
             >
               <input
                 ref={fileInputRef}
@@ -335,24 +435,24 @@ export function PartnerRentalsWorkspace() {
                     <img src={photo.previewUrl} alt="" className="size-full object-cover" />
                     {index === 0 ? (
                       <span className="absolute left-1.5 top-1.5 rounded-control bg-navy-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                        Cover
+                        {t("rentals.ads.cover")}
                       </span>
                     ) : null}
                     {photo.uploading ? (
                       <span className="absolute inset-x-0 bottom-0 bg-navy-900/80 px-2 py-1 text-center text-[11px] font-medium text-white">
-                        Uploading…
+                        {t("rentals.ads.uploading")}
                       </span>
                     ) : null}
                     {photo.error ? (
                       <span className="absolute inset-x-0 bottom-0 bg-danger-text px-2 py-1 text-center text-[11px] font-medium text-white">
-                        Failed
+                        {t("rentals.ads.failed")}
                       </span>
                     ) : null}
                     <button
                       type="button"
                       className="absolute right-1.5 top-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-navy-900 shadow-xs"
                       onClick={() => removePhoto(photo.localId)}
-                      aria-label="Remove photo"
+                      aria-label={t("rentals.ads.removePhoto")}
                     >
                       <X className="size-3.5" />
                     </button>
@@ -366,7 +466,7 @@ export function PartnerRentalsWorkspace() {
                       className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-line-strong bg-surface-sunken text-text-secondary transition hover:border-action hover:bg-surface hover:text-navy-900"
                     >
                       <Camera className="size-7" />
-                      <span className="text-xs font-semibold">Add photo</span>
+                      <span className="text-xs font-semibold">{t("rentals.ads.addPhoto")}</span>
                     </button>
                   </li>
                 ) : null}
@@ -375,7 +475,7 @@ export function PartnerRentalsWorkspace() {
           </section>
 
           <section className="grid gap-3 sm:grid-cols-2">
-            <Field label="Type" required>
+            <Field label={t("rentals.ads.type")} required>
               <Select
                 id="rental-subcategory"
                 value={subcategorySlug}
@@ -387,7 +487,7 @@ export function PartnerRentalsWorkspace() {
                   setDepositOverride(null);
                 }}
               >
-                <option value="">Select a type</option>
+                <option value="">{t("rentals.ads.selectType")}</option>
                 {subcategories.map((sub) => (
                   <option key={sub.id} value={sub.slug}>
                     {sub.name}
@@ -395,7 +495,7 @@ export function PartnerRentalsWorkspace() {
                 ))}
               </Select>
             </Field>
-            <Field label="What are you renting?" required>
+            <Field label={t("rentals.ads.whatRenting")} required>
               <Select
                 id="rental-service"
                 value={serviceId}
@@ -412,7 +512,7 @@ export function PartnerRentalsWorkspace() {
                   }
                 }}
               >
-                <option value="">Select an item</option>
+                <option value="">{t("rentals.ads.selectItem")}</option>
                 {selectedSub?.services.map((svc) => (
                   <option key={svc.id} value={svc.id}>
                     {svc.name}
@@ -421,7 +521,7 @@ export function PartnerRentalsWorkspace() {
               </Select>
             </Field>
             {(selectedService?.variants.length ?? 0) > 1 ? (
-              <Field label="Option" required>
+              <Field label={t("rentals.ads.option")} required>
                 <Select
                   id="rental-variant"
                   value={variantId}
@@ -431,7 +531,7 @@ export function PartnerRentalsWorkspace() {
                     setDepositOverride(null);
                   }}
                 >
-                  <option value="">Select an option</option>
+                  <option value="">{t("rentals.ads.selectOption")}</option>
                   {selectedService?.variants.map((variant) => (
                     <option key={variant.id} value={variant.id}>
                       {variant.name}
@@ -443,95 +543,42 @@ export function PartnerRentalsWorkspace() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <Field label="Ad title" required>
+            <Field label={t("rentals.ads.adTitle")} required>
               <Input
                 id="rental-title"
                 value={title}
                 maxLength={180}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Bosch hammer drill, lightly used"
+                placeholder={t("rentals.ads.adTitlePlaceholder")}
               />
             </Field>
-            <Field label="Description" showOptional={false}>
+            <Field label={t("rentals.ads.description")} showOptional={false}>
               <Textarea
                 id="rental-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Condition, what is included, and pickup notes."
+                placeholder={t("rentals.ads.descriptionPlaceholder")}
               />
             </Field>
-            {schemaKeys.map((key) => {
-              const spec = schemaProps[key] ?? {};
-              const enums = Array.isArray(spec.enum) ? spec.enum.map(String) : null;
-              const required = requiredSchemaKeys.has(key);
-              const label = key.replace(/_/g, " ");
-              const currentValue = structuredFields[key] ?? "";
-
-              if (enums || spec.type === "boolean") {
-                const options = enums ?? ["true", "false"];
-                // Determine whether the current value is one of the known enum options.
-                const isOtherSelected = currentValue !== "" && !options.includes(currentValue);
-                const selectValue = isOtherSelected ? "__other__" : currentValue;
-
-                return (
-                  <Field key={key} label={label} required={required} showOptional={false}>
-                    <div className="flex flex-col gap-2">
-                      <Select
-                        id={`rental-field-${key}`}
-                        value={selectValue}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "__other__") {
-                            // Clear stored value so user types in the text input below
-                            setStructuredFields((current) => ({ ...current, [key]: "" }));
-                          } else {
-                            setStructuredFields((current) => ({ ...current, [key]: val }));
-                          }
-                        }}
-                      >
-                        <option value="">Select {label}</option>
-                        {options.map((option) => (
-                          <option key={option} value={option}>
-                            {spec.type === "boolean" ? (option === "true" ? "Yes" : "No") : option}
-                          </option>
-                        ))}
-                        {/* Boolean fields don't need an Other option */}
-                        {spec.type !== "boolean" && (
-                          <option value="__other__">Other…</option>
-                        )}
-                      </Select>
-                      {(selectValue === "__other__" || isOtherSelected) && (
-                        <Input
-                          id={`rental-field-${key}-other`}
-                          value={currentValue}
-                          placeholder={`Describe the ${label.toLowerCase()}`}
-                          autoFocus
-                          onChange={(e) =>
-                            setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
-                          }
-                        />
-                      )}
-                    </div>
-                  </Field>
-                );
-              }
-              return (
-                <Field key={key} label={label} required={required} showOptional={false}>
-                  <Input
-                    id={`rental-field-${key}`}
-                    inputMode={spec.type === "number" ? "numeric" : "text"}
-                    value={currentValue}
-                    onChange={(e) =>
-                      setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
-                    }
+            {schemaKeys.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {schemaKeys.map((key) => (
+                  // Colour, material and the like are a dropdown with "Other…" for anything else.
+                  <RentalFieldInput
+                    key={`${variantId}-${key}`}
+                    fieldKey={key}
+                    spec={schemaProps[key] ?? {}}
+                    required={requiredSchemaKeys.has(key)}
+                    value={structuredFields[key] ?? ""}
+                    onChange={(next) => setStructuredFields((current) => ({ ...current, [key]: next }))}
                   />
-                </Field>
-              );
-            })}
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="grid gap-3 sm:grid-cols-3">
-            <Field label="Daily rate" required description="Amount in rupees. Customers see this per day.">
+            <Field label={t("rentals.ads.dailyRate")} required description={t("rentals.ads.dailyRateHint")}>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
                   ₹
@@ -547,9 +594,9 @@ export function PartnerRentalsWorkspace() {
               </div>
             </Field>
             <Field
-              label="Refundable deposit"
+              label={t("rentals.ads.deposit")}
               required
-              description="Suggested from this variant's category policy. Change it only if this asset needs a different hold."
+              description={t("rentals.ads.depositHint")}
             >
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
@@ -564,7 +611,7 @@ export function PartnerRentalsWorkspace() {
                 />
               </div>
             </Field>
-            <Field label="Quantity available" required description="How many identical units you can rent out.">
+            <Field label={t("rentals.ads.quantity")} required description={t("rentals.ads.quantityHint")}>
               <Input
                 id="rental-quantity"
                 inputMode="numeric"
@@ -575,89 +622,259 @@ export function PartnerRentalsWorkspace() {
             </Field>
           </section>
 
-          <Field
-            label="Pickup location"
-            required
-            description={
-              defaultLocation
-                ? "Prefills from your profile default address. Edit if this pickup differs."
-                : "Customers collect from this address."
-            }
-          >
-            <Input
-              id="rental-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Area, city — customers collect from here"
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-navy-900">{t("rentals.ads.pickupAddress")}</h2>
+                <p className="mt-0.5 text-xs text-text-secondary">
+                  {t("rentals.ads.pickupAddressHint")}
+                </p>
+              </div>
+              <FindOnMap
+                title={t("rentals.ads.findPickup")}
+                pin={address.pin}
+                onPicked={(picked) =>
+                  // Area, city and pincode follow the pin. The first line keeps
+                  // what the owner typed — a shop name the map cannot know.
+                  setAddress((current) => ({
+                    line: current.line.trim() ? current.line : picked.line1,
+                    area: picked.locality || current.area,
+                    city: picked.city || current.city,
+                    pincode: picked.postal_code.replace(/\D/g, "").slice(0, 6) || current.pincode,
+                    pin: { latitude: picked.latitude, longitude: picked.longitude },
+                    formattedAddress: picked.formatted_address || current.formattedAddress,
+                  }))
+                }
+              />
+            </div>
+            {/* After a pin: show the geocoded address as a read-only summary.
+                The partner only needs to type the shop/building — the rest is from Google. */}
+            {address.pin && address.formattedAddress ? (
+              <div className="flex items-start gap-2 rounded-control border border-success-line bg-success-surface px-3 py-2.5">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-success-text" aria-hidden />
+                <p className="text-sm font-medium text-text">{address.formattedAddress}</p>
+              </div>
+            ) : null}
+            <Field label={t("rentals.ads.line")} required>
+              <Input
+                id="rental-pickup-line"
+                value={address.line}
+                maxLength={240}
+                onChange={(e) => setAddress((a) => ({ ...a, line: e.target.value }))}
+                placeholder={t("rentals.ads.linePlaceholder")}
+              />
+            </Field>
+            {/* Geocoded fields: collapsed behind a disclosure when a pin fills them,
+                expanded when the user has not pinned yet (manual entry). */}
+            {address.pin && address.city && address.pincode ? (
+              <Disclosure
+                summary={t("rentals.ads.editArea")}
+                hint={[address.area, address.city, address.pincode].filter(Boolean).join(", ")}
+              >
+                <div className="grid gap-3 pt-1 sm:grid-cols-3">
+                  <Field label={t("rentals.ads.area")} showOptional={false}>
+                    <Input
+                      id="rental-pickup-area"
+                      value={address.area}
+                      maxLength={120}
+                      onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
+                      placeholder={t("rentals.ads.areaPlaceholder")}
+                    />
+                  </Field>
+                  <Field label={t("rentals.ads.city")} required>
+                    <Input
+                      id="rental-pickup-city"
+                      value={address.city}
+                      maxLength={120}
+                      onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                      placeholder={t("rentals.ads.cityPlaceholder")}
+                    />
+                  </Field>
+                  <Field label={t("rentals.ads.pincode")} required>
+                    <Input
+                      id="rental-pickup-pincode"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={address.pincode}
+                      onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value.replace(/\D/g, "") }))}
+                    />
+                  </Field>
+                </div>
+              </Disclosure>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label={t("rentals.ads.area")} showOptional={false}>
+                  <Input
+                    id="rental-pickup-area"
+                    value={address.area}
+                    maxLength={120}
+                    onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
+                    placeholder={t("rentals.ads.areaPlaceholder")}
+                  />
+                </Field>
+                <Field label={t("rentals.ads.city")} required>
+                  <Input
+                    id="rental-pickup-city"
+                    value={address.city}
+                    maxLength={120}
+                    onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                    placeholder={t("rentals.ads.cityPlaceholder")}
+                  />
+                </Field>
+                <Field label={t("rentals.ads.pincode")} required>
+                  <Input
+                    id="rental-pickup-pincode"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={address.pincode}
+                    onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value.replace(/\D/g, "") }))}
+                  />
+                </Field>
+              </div>
+            )}
+          </section>
+
+          <label className="flex items-start gap-3 rounded-control border border-line bg-surface-sunken p-3">
+            <input
+              id="rental-delivery-available"
+              type="checkbox"
+              className="mt-0.5 size-4 accent-[var(--color-action)]"
+              checked={deliveryAvailable}
+              onChange={(e) => setDeliveryAvailable(e.target.checked)}
             />
-          </Field>
+            <span className="text-sm">
+              <span className="font-semibold text-navy-900">{t("rentals.ads.delivery")}</span>
+              <span className="mt-0.5 block text-xs text-text-secondary">
+                {t("rentals.ads.deliveryHint")}
+              </span>
+            </span>
+          </label>
 
           {formError ? <p className="text-sm text-danger-text">{formError}</p> : null}
-          <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={create.isPending || uploadingCount > 0}>
-            {create.isPending ? "Posting ad…" : "Post ad"}
-          </Button>
+
+          <div className="flex items-center justify-end gap-3 border-t border-line pt-4">
+            <Button variant="outline" type="button" onClick={() => setCreating(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" size="lg" disabled={create.isPending || uploadingCount > 0}>
+              {create.isPending ? t("rentals.ads.posting") : t("rentals.ads.post")}
+            </Button>
+          </div>
         </form>
       </Card>
+      ) : null}
 
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-navy-900">Your ads</h2>
-          <p className="text-sm text-text-secondary">Submit a draft when the photos and price look right.</p>
-        </div>
-        {assets.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
+      {/* Main Ads List Section */}
+      <section className="flex flex-col gap-4">
+        {allAssets.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setTab("ALL")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "ALL"
+                    ? "bg-navy-900 text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabAll", { count: allAssets.length })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("PUBLISHED")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "PUBLISHED"
+                    ? "bg-positive-text text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabLive", { count: liveCount })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("PAUSED")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "PAUSED"
+                    ? "bg-warning-text text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabPaused", { count: pausedCount })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("DRAFT")}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-bold transition",
+                  tab === "DRAFT"
+                    ? "bg-navy-700 text-white"
+                    : "bg-surface-sunken text-text-secondary hover:bg-line/70 hover:text-navy-900",
+                )}
+              >
+                {t("rentals.inventory.tabDrafts", { count: draftCount })}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {assets.isLoading ? <p className="text-sm text-text-secondary">{t("rentals.inventory.loading")}</p> : null}
         {assets.error ? (
           <p className="text-sm text-danger-text">{friendlyErrorMessage(assets.error)}</p>
         ) : null}
-        {assets.data && assets.data.length === 0 ? (
-          <EmptyState compact title="No ads yet" description="Post an ad with photos to list it for review." />
+
+        {allAssets.length === 0 && !creating ? (
+          <EmptyState
+            compact
+            title={t("rentals.inventory.emptyTitle")}
+            description={t("rentals.inventory.emptyDescription")}
+            action={
+              <Button onClick={() => setCreating(true)}>
+                <Plus className="mr-1.5 size-4" aria-hidden />
+                {t("rentals.inventory.postItem")}
+              </Button>
+            }
+          />
         ) : null}
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.data?.map((asset) => {
-            const thumb = asset.media?.[0]?.url;
-            const qty = asset.quantity_available;
-            return (
+
+        {filteredAssets.length > 0 ? (
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredAssets.map((asset) => (
               <li key={asset.id}>
-                <Card padding="none" className="overflow-hidden">
-                  <div className="relative aspect-[4/3] bg-surface-sunken">
-                    {thumb ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumb} alt="" className="size-full object-cover" />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-sm text-text-muted">
-                        No photo
-                      </div>
-                    )}
-                    <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
-                      <Badge>{asset.public_state}</Badge>
-                      {typeof qty === "number" ? <Badge tone="neutral">Qty {qty}</Badge> : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 p-3">
-                    <p className="text-lg font-extrabold text-navy-900">{formatMoney(asset.daily_rate_paise)} / day</p>
-                    <p className="font-semibold text-navy-900">{asset.title}</p>
-                    {asset.location_text ? (
-                      <p className="inline-flex items-center gap-1 text-sm text-text-secondary">
-                        <MapPin className="size-3.5 shrink-0" />
-                        {asset.location_text}
-                      </p>
-                    ) : null}
-                    {canSubmitAsset(asset.moderation_status) ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={act.isPending}
-                        onClick={() => act.mutate(asset.id)}
-                      >
-                        Submit for review
-                      </Button>
-                    ) : null}
-                  </div>
-                </Card>
+                <RentalAssetCard asset={asset} onEdit={(selected) => setEditingAsset(selected)} />
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        ) : allAssets.length > 0 && !creating ? (
+          <EmptyState
+            compact
+            title={t("rentals.inventory.emptyTabTitle")}
+            description={t("rentals.inventory.emptyTabDescription")}
+          />
+        ) : null}
       </section>
+
+      {/* Pickup Schedule Configuration */}
+      <div className="pt-2">
+        <PickupHoursCard />
+      </div>
+
+      {/* Slide-Over Editor for Editing Existing Rental Ads */}
+      {editingAsset ? (
+        <RentalAdEditor
+          asset={editingAsset}
+          taxonomy={subcategories}
+          defaultLocation={defaultAddress.line}
+          onClose={() => setEditingAsset(null)}
+          onSaved={() => {
+            setEditingAsset(null);
+            invalidate();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

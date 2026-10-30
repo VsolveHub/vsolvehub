@@ -131,10 +131,7 @@ export function describePlanSetFailure(planSet: Schemas["FulfilmentPlanSet"] | n
         "match it. Nothing has been booked or charged."
       );
     case "SELECTED":
-      return (
-        "These options have already been used for a booking. Nothing extra has been booked " +
-        "or charged."
-      );
+      return "We couldn’t confirm these options. Please choose a time again.";
     default:
       // `null`, or an ACTIVE set the caller decided was unusable for a reason of its own. Says
       // only what is certainly true rather than guessing at which of the above happened.

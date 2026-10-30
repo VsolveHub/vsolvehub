@@ -43,7 +43,7 @@ export function CheckoutCancellationPanel({
   quoteUnitCount: number;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-[#FDE6D5] bg-[#FFF7F0] px-5 py-4">
+    <div className="flex items-start gap-3 rounded-xl border border-[#FDE6D5] bg-[#FFF7F0] px-4 py-3.5 sm:px-5 sm:py-4">
       <span
         aria-hidden
         className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#FFE8D6] text-action"

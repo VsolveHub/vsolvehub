@@ -1,4 +1,5 @@
 import { formatMoney } from "@vsolve/ui";
+import type { useT } from "@vsolve/ui";
 
 import type { EngagementStage } from "@/features/engagement/queries";
 
@@ -25,40 +26,43 @@ export interface DayChip {
 }
 
 /** What the partner sees on a day chip. */
-export function describeShiftDay(summary: ShiftSummary): DayChip {
+export function describeShiftDay(summary: ShiftSummary, t: ReturnType<typeof useT>): DayChip {
   if (summary.settlement_status === "SETTLED") {
     const amount =
       summary.settlement_amount_paise === null ? "" : ` ${formatMoney(summary.settlement_amount_paise)}`;
-    return { label: `Paid ✓${amount}`, tone: "success", settled: true };
+    return { label: t("work.dayChip.paid", { amount }), tone: "success", settled: true };
   }
   if (summary.attendance_status === "DISPUTED") {
-    return { label: "Count disputed", tone: "danger", settled: false };
+    return { label: t("work.dayChip.countDisputed"), tone: "danger", settled: false };
   }
   if (summary.settlement_status === "CUSTOMER_CLAIMED") {
-    return { label: "Customer says paid — confirm", tone: "action", settled: false };
+    return { label: t("work.dayChip.customerSaysPaid"), tone: "action", settled: false };
   }
   if (summary.attendance_status === "CUSTOMER_CONFIRMED") {
     if (summary.settlement_status === "SUPERVISOR_CLAIMED") {
-      return { label: "Waiting for customer to confirm payment", tone: "info", settled: false };
+      return { label: t("work.dayChip.waitingPaymentConfirm"), tone: "info", settled: false };
     }
     const amount =
       summary.settlement_amount_paise === null ? "" : ` ${formatMoney(summary.settlement_amount_paise)}`;
-    return { label: `Collect${amount}`, tone: "action", settled: false };
+    return { label: t("work.dayChip.collect", { amount }), tone: "action", settled: false };
   }
   if (summary.attendance_status === "SUPERVISOR_CONFIRMED") {
     return {
-      label: `${summary.present_count ?? 0} of ${summary.expected_count} · waiting for customer`,
+      label: t("work.dayChip.countWaiting", {
+        present: summary.present_count ?? 0,
+        expected: summary.expected_count,
+      }),
       tone: "info",
       settled: false,
     };
   }
   if (summary.arrived_at !== null) {
-    return { label: "Reached", tone: "action", settled: false };
+    return { label: t("work.dayChip.reached"), tone: "action", settled: false };
   }
   if (summary.crew_named > 0) {
-    return { label: "Crew named", tone: "info", settled: false };
+    return { label: t("work.dayChip.crewNamed"), tone: "info", settled: false };
   }
-  return { label: "Name crew", tone: "warning", settled: false };
+  return { label: t("work.dayChip.nameCrew"), tone: "warning", settled: false };
 }
 
 /* --------------------------------------------------------------------------
@@ -110,27 +114,34 @@ export interface NextCrewAction {
  * Walks the stages in order and stops at the first unsettled, uncancelled
  * shift-day. Null when every day is settled or nothing is a shift-day.
  */
-export function nextCrewAction(stages: readonly EngagementStage[]): NextCrewAction | null {
+export function nextCrewAction(
+  stages: readonly EngagementStage[],
+  t: ReturnType<typeof useT>,
+): NextCrewAction | null {
   const sorted = [...stages].sort((left, right) => left.position - right.position);
   for (const stage of sorted) {
     const summary = stage.shift_summary;
     if (summary === null || stage.status === "CANCELLED") continue;
     if (summary.settlement_status === "SETTLED") continue;
-    const day = dayName(stage.scheduled_on) ?? `day ${stage.position}`;
-    return { stageId: stage.id, label: crewActionLabel(summary, day) };
+    const day = dayName(stage.scheduled_on) ?? t("work.dayChip.dayFallback", { position: stage.position });
+    return { stageId: stage.id, label: crewActionLabel(summary, day, t) };
   }
   return null;
 }
 
-function crewActionLabel(summary: ShiftSummary, day: string): string {
-  if (summary.attendance_status === "DISPUTED") return `Sort out ${day}'s count`;
-  if (summary.settlement_status === "CUSTOMER_CLAIMED") return `Confirm ${day}'s payment`;
-  if (summary.settlement_status === "SUPERVISOR_CLAIMED") return `Waiting for customer · ${day}`;
-  if (summary.attendance_status === "CUSTOMER_CONFIRMED") return `Collect for ${day}`;
-  if (summary.attendance_status === "SUPERVISOR_CONFIRMED") return `Waiting for customer · ${day}`;
-  if (summary.crew_named === 0) return `Name ${day}'s crew`;
-  if (summary.arrived_at === null) return `${day}: we've reached`;
-  return `Close ${day}`;
+function crewActionLabel(summary: ShiftSummary, day: string, t: ReturnType<typeof useT>): string {
+  if (summary.attendance_status === "DISPUTED") return t("work.dayChip.action.sortCount", { day });
+  if (summary.settlement_status === "CUSTOMER_CLAIMED") return t("work.dayChip.action.confirmPayment", { day });
+  if (summary.settlement_status === "SUPERVISOR_CLAIMED") {
+    return t("work.dayChip.action.waitingCustomer", { day });
+  }
+  if (summary.attendance_status === "CUSTOMER_CONFIRMED") return t("work.dayChip.action.collect", { day });
+  if (summary.attendance_status === "SUPERVISOR_CONFIRMED") {
+    return t("work.dayChip.action.waitingCustomer", { day });
+  }
+  if (summary.crew_named === 0) return t("work.dayChip.action.nameCrew", { day });
+  if (summary.arrived_at === null) return t("work.dayChip.action.reached", { day });
+  return t("work.dayChip.action.close", { day });
 }
 
 /* --------------------------------------------------------------------------

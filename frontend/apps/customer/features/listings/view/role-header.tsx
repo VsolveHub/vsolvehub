@@ -13,13 +13,13 @@ export function RoleHeader({ listing }: RoleHeaderProps) {
       <div className="flex items-center justify-between">
         <Link
           href="/listings"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text"
+          className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-medium text-text-muted transition hover:text-text"
         >
           <ArrowLeft className="size-4" /> Back to open listings
         </Link>
         <Link
           href="/listings/my-applications"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-link hover:underline"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-text-link hover:underline"
         >
           <FileCheck2 className="size-3.5" /> My Applications
         </Link>

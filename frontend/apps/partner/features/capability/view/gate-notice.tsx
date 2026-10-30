@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, buttonStyles, cn } from "@vsolve/ui";
+import { Card, buttonStyles, cn, useT } from "@vsolve/ui";
 import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
@@ -54,6 +54,7 @@ export interface GateNoticeProps {
 }
 
 export function GateNotice({ explanation, actionDescription, className }: GateNoticeProps) {
+  const t = useT();
   if (explanation === null) return null;
 
   return (
@@ -67,7 +68,7 @@ export function GateNotice({ explanation, actionDescription, className }: GateNo
         <ShieldCheck size={18} aria-hidden className="mt-0.5 shrink-0 text-warning-text" />
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-warning-text">
-            One thing before you can {actionDescription}
+            {t("me.capability.gateNotice.heading", { action: actionDescription })}
           </h3>
           {/* The server's own words. Never summarised, never replaced. */}
           <p className="mt-1 text-sm leading-6 text-text-secondary">{explanation.reason}</p>

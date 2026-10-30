@@ -1,4 +1,4 @@
-import { cn } from "@vsolve/ui";
+import { cn, useT } from "@vsolve/ui";
 
 /**
  * What stands in place of an invoice line, until one exists to show.
@@ -23,11 +23,12 @@ import { cn } from "@vsolve/ui";
  */
 export function InvoiceNotice({
   className,
-  children = "The tax invoice for this booking is not shared with Partner accounts yet. The amounts above are what the customer was charged.",
+  children,
 }: {
   className?: string;
   children?: string;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -36,9 +37,9 @@ export function InvoiceNotice({
       )}
     >
       <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-muted">
-        Invoice
+        {t("workspaces.invoice.title")}
       </p>
-      <p className="mt-1 text-sm text-text-secondary">{children}</p>
+      <p className="mt-1 text-sm text-text-secondary">{children ?? t("workspaces.invoice.notShared")}</p>
     </div>
   );
 }

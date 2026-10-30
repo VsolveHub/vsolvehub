@@ -15,6 +15,7 @@ units do not — nobody toggles online on Sunday for a Tuesday job. The boundary
 same horizon as reachability: `requested_start <= now + M1_TODAY_LEAD_TIME_MINUTES`.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
@@ -23,11 +24,21 @@ from uuid import UUID
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from psycopg.types.range import Range
 
-from apps.assignments.models import AssignmentAttempt
+from apps.assignments.models import AssignmentAttempt, Reservation
 from apps.carts.availability import schedule_available_partner_ids
-from apps.carts.models import FulfilmentUnit
-from apps.partners.models import PartnerApplication, PartnerOnlineSession, PartnerProfile
+from apps.carts.models import BookingGroup, FulfilmentUnit
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerLocation,
+    PartnerOnlineSession,
+    PartnerProfile,
+    PartnerPushSubscription,
+    PartnerShift,
+)
+
+logger = logging.getLogger(__name__)
 
 RANKING_POLICY: Final[str] = "service_area_stable_uuid"
 RANKING_POLICY_VERSION: Final[int] = 1
@@ -39,6 +50,10 @@ class ExclusionReason(models.TextChoices):
     ALREADY_ATTEMPTED = "already_attempted", "Already attempted for this unit"
     UNAVAILABLE_AT_START = "unavailable_at_start", "Unavailable at the requested start"
     OFFLINE_FOR_SAME_DAY = "OFFLINE_FOR_SAME_DAY", "Offline for a same-day visit"
+    NO_ACTIVE_SHIFT = "no_active_shift", "No active shift for instant visit"
+    NO_PUSH_SUBSCRIPTION = "no_push_subscription", "No active push subscription"
+    LOCATION_STALE = "location_stale", "Location fix is stale"
+    ALREADY_BOOKED = "already_booked", "Already booked at the requested time"
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +124,14 @@ def unit_variant_ids(unit: FulfilmentUnit) -> tuple[UUID, ...]:
 def is_same_day_unit(*, unit: FulfilmentUnit, now: datetime | None = None) -> bool:
     """Same horizon as reachability (§7): within today's lead-time window from `now`."""
 
+    group = getattr(unit, "booking_group", None)
+    if group is not None:
+        mode = getattr(group, "booking_mode", None)
+        if mode == BookingGroup.BookingMode.INSTANT:
+            return True
+        if mode == BookingGroup.BookingMode.SCHEDULED:
+            return False
+
     clock = timezone.now() if now is None else now
     return unit.requested_start <= clock + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
 
@@ -120,7 +143,12 @@ def _exclusions_for(
     attempted: frozenset[str],
     online_partner_ids: frozenset[UUID],
     require_online: bool,
+    feature_push_gated: bool,
+    active_shift_ids: frozenset[UUID],
+    push_capable_ids: frozenset[UUID],
+    fresh_location_ids: frozenset[UUID],
     schedule_available_ids: frozenset[UUID],
+    booked_ids: frozenset[UUID],
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     application = getattr(candidate, "application", None)
@@ -131,15 +159,55 @@ def _exclusions_for(
         reasons.append(ExclusionReason.VARIANT_NOT_OFFERED)
     if str(candidate.id) in attempted:
         reasons.append(ExclusionReason.ALREADY_ATTEMPTED)
-    if require_online and candidate.id not in online_partner_ids:
-        reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
+
+    if require_online:
+        if feature_push_gated:
+            if candidate.id not in active_shift_ids:
+                reasons.append(ExclusionReason.NO_ACTIVE_SHIFT)
+            elif candidate.id not in push_capable_ids:
+                reasons.append(ExclusionReason.NO_PUSH_SUBSCRIPTION)
+            elif candidate.id not in fresh_location_ids:
+                reasons.append(ExclusionReason.LOCATION_STALE)
+        else:
+            if candidate.id not in online_partner_ids:
+                reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
+
     # Availability is read last so a Partner excluded for the wrong service is not also
-    # reported as unavailable. The membership test is free: schedules for the whole pool
-    # were resolved in two queries by the caller, where the per-Partner selector costs
-    # two queries each and turns one dispatch into hundreds of round trips.
+    # reported as unavailable.
     if not reasons and candidate.id not in schedule_available_ids:
         reasons.append(ExclusionReason.UNAVAILABLE_AT_START)
+    if not reasons and candidate.id in booked_ids:
+        reasons.append(ExclusionReason.ALREADY_BOOKED)
     return tuple(reasons)
+
+
+def _booked_partner_ids(*, unit: FulfilmentUnit, partner_ids: list[UUID]) -> frozenset[UUID]:
+    """Partners in the pool holding a live reservation that overlaps this unit's occupied range.
+
+    Widened by `M1_TURNAROUND_MINUTES`, the same range `directly_assign` and `accept_unit_offer`
+    write and the planner's `_eligible_partner_ids` probes, so a Partner ranking treats as free is
+    one the exclusion constraint will accept. The unit's own holds are left out: a held unit's
+    Partner is not busy with somebody else, and Operations reads this ranking for held units.
+    """
+
+    if not partner_ids:
+        return frozenset()
+    occupied = Range(
+        unit.requested_start,
+        unit.requested_start
+        + timedelta(minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
+        "[)",
+    )
+    return frozenset(
+        Reservation.objects.filter(
+            partner_id__in=partner_ids,
+            status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+            occupied_range__overlap=occupied,
+        )
+        .exclude(fulfilment_unit=unit)
+        .values_list("partner_id", flat=True)
+        .distinct()
+    )
 
 
 def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
@@ -164,33 +232,84 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
     )
     pool_ids = [partner.id for partner in pool]
     require_online = is_same_day_unit(unit=unit)
+    feature_push_gated = getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False)
+
     online_partner_ids: frozenset[UUID] = frozenset()
+    active_shift_ids: frozenset[UUID] = frozenset()
+    push_capable_ids: frozenset[UUID] = frozenset()
+    fresh_location_ids: frozenset[UUID] = frozenset()
+
     if require_online and pool_ids:
-        online_partner_ids = frozenset(
-            PartnerOnlineSession.objects.filter(
-                partner_id__in=pool_ids,
-                ended_at__isnull=True,
-            ).values_list("partner_id", flat=True)
-        )
+        if feature_push_gated:
+            now = timezone.now()
+            active_shift_ids = frozenset(
+                PartnerShift.objects.filter(
+                    partner_id__in=pool_ids,
+                    ended_at__isnull=True,
+                    scheduled_end_at__gt=now,
+                ).values_list("partner_id", flat=True)
+            )
+            push_capable_ids = frozenset(
+                PartnerPushSubscription.objects.filter(
+                    partner_id__in=pool_ids,
+                    is_active=True,
+                ).values_list("partner_id", flat=True)
+            )
+            max_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
+            fresh_location_ids = frozenset(
+                PartnerLocation.objects.filter(
+                    partner_id__in=pool_ids,
+                    captured_at__gte=now - timedelta(minutes=max_age),
+                ).values_list("partner_id", flat=True)
+            )
+        else:
+            online_partner_ids = frozenset(
+                PartnerOnlineSession.objects.filter(
+                    partner_id__in=pool_ids,
+                    ended_at__isnull=True,
+                ).values_list("partner_id", flat=True)
+            )
+
     schedule_available_ids = schedule_available_partner_ids(
         partner_ids=pool_ids,
         area=unit.service_area,
         starts_at=unit.requested_start,
         duration_minutes=unit.estimated_duration_minutes,
     )
-    return UnitRanking(
-        evaluations=tuple(
-            CandidateEvaluation(
-                partner=candidate,
-                exclusions=_exclusions_for(
-                    candidate=candidate,
-                    required=required,
-                    attempted=attempted,
-                    online_partner_ids=online_partner_ids,
-                    require_online=require_online,
-                    schedule_available_ids=schedule_available_ids,
-                ),
-            )
-            for candidate in pool
+    booked_ids = _booked_partner_ids(unit=unit, partner_ids=pool_ids)
+
+    evaluations: list[CandidateEvaluation] = []
+    for candidate in pool:
+        exclusions = _exclusions_for(
+            candidate=candidate,
+            required=required,
+            attempted=attempted,
+            online_partner_ids=online_partner_ids,
+            require_online=require_online,
+            feature_push_gated=feature_push_gated,
+            active_shift_ids=active_shift_ids,
+            push_capable_ids=push_capable_ids,
+            fresh_location_ids=fresh_location_ids,
+            schedule_available_ids=schedule_available_ids,
+            booked_ids=booked_ids,
         )
-    )
+        if not exclusions:
+            logger.info(
+                "instant_candidate_included",
+                extra={
+                    "partner_id": str(candidate.id),
+                    "unit_id": str(unit.id),
+                },
+            )
+        else:
+            logger.info(
+                "instant_candidate_excluded",
+                extra={
+                    "partner_id": str(candidate.id),
+                    "unit_id": str(unit.id),
+                    "reasons": list(exclusions),
+                },
+            )
+        evaluations.append(CandidateEvaluation(partner=candidate, exclusions=exclusions))
+
+    return UnitRanking(evaluations=tuple(evaluations))

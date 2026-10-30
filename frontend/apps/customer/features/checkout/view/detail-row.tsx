@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, type ButtonProps } from "@vsolve/ui";
+import { Button, type ButtonProps, cn } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 /**
@@ -36,11 +36,10 @@ export function DetailRow({
 }: DetailRowProps) {
   return (
     <div
-      className={
-        isFirst
-          ? "flex items-start gap-4 p-5"
-          : "flex items-start gap-4 border-t border-line p-5"
-      }
+      className={cn(
+        "flex items-start gap-3 sm:gap-4 p-4 sm:p-5",
+        !isFirst && "border-t border-line",
+      )}
     >
       <span aria-hidden className="mt-0.5 shrink-0 text-text-muted">
         {icon}
@@ -52,7 +51,12 @@ export function DetailRow({
       </div>
 
       {actionLabel !== undefined && onAction !== undefined ? (
-        <Button size="sm" variant={actionVariant} className="shrink-0" onClick={onAction}>
+        <Button
+          size="sm"
+          variant={actionVariant}
+          className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 py-1 sm:py-1.5"
+          onClick={onAction}
+        >
           {actionLabel}
         </Button>
       ) : null}

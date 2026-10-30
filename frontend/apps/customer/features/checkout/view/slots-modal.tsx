@@ -116,12 +116,12 @@ function SlotsModalBody({
       onOpenChange={(next) => {
         if (!next) onDismiss();
       }}
-      title={editing ? `When should we do ${editing.label}?` : "Select slots"}
+      title={editing ? `Select time for ${editing.label}` : "Select service slots"}
       description={
         editing
           ? undefined
           : groups.length > 1
-            ? "These need different professionals, so each one gets its own time."
+            ? "Services need different professionals, scheduled separately."
             : undefined
       }
       footer={
@@ -172,23 +172,27 @@ function SlotsModalBody({
             return (
               <li
                 key={group.key}
-                className="flex items-center justify-between gap-4 rounded-card border border-line p-4"
+                className="flex items-center justify-between gap-4 rounded-card border border-line p-3.5 sm:p-4"
               >
-                <div className="min-w-0">
-                  <p className="font-semibold text-text">{group.label}</p>
-                  <p className="mt-0.5 text-sm text-text-secondary">
-                    Service will take approx. {formatServiceDuration(group.estimated_duration_minutes)}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-text text-sm sm:text-base leading-snug">{group.label}</p>
+                  <p className="mt-0.5 text-xs text-text-secondary">
+                    Est. duration: {formatServiceDuration(group.estimated_duration_minutes)}
                   </p>
                   {startsAt === null ? null : (
-                    <p className="mt-1 text-sm font-medium text-text">{formatChosen(startsAt)}</p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                      ✓ {formatChosen(startsAt)}
+                    </p>
                   )}
                 </div>
                 <Button
                   size="sm"
                   variant={startsAt === null ? "primary" : "outline"}
                   onClick={() => setEditingKey(group.key)}
+                  aria-label={startsAt === null ? `Select ${group.label}` : `Change ${group.label}`}
+                  className="shrink-0 whitespace-nowrap min-w-[96px]"
                 >
-                  {startsAt === null ? `Select ${group.label}` : `Change ${group.label}`}
+                  {startsAt === null ? "Select slot" : "Change slot"}
                 </Button>
               </li>
             );

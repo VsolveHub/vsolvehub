@@ -45,7 +45,7 @@ const FOOTER_COLS = [
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-canvas text-text relative">
+    <div className="min-h-screen bg-canvas text-text relative overflow-x-clip">
       {/* Floating Dynamic-Island Navigation with White Background */}
       <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
         <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
@@ -62,8 +62,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
-                <span className="text-text-secondary font-medium">Daily Bookings:</span>
-                <span className="text-navy-900 font-bold">1,400+ Active</span>
+                <span className="text-text-secondary font-medium">Now onboarding:</span>
+                <span className="text-navy-900 font-bold">Hyderabad</span>
               </div>
             </div>
 
@@ -168,7 +168,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
 
             <Link href="/contact" className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold transition-colors">
               <PhoneCall className="h-3.5 w-3.5" />
-              <span>Partner Helpline: +91 (800) 876-5832</span>
+              <span>Partner Helpline: +91 879 056 4634</span>
             </Link>
           </div>
 

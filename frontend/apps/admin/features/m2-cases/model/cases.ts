@@ -138,6 +138,13 @@ export const CASE_KIND_COPY: Record<CaseKind, CaseKindCopy> = {
     claim: "Somebody reported a listing application as abusive or fraudulent.",
     isM2: false,
   },
+  CONTACT: {
+    label: "Contact form message",
+    claim:
+      "Somebody wrote in through the website's Contact form. The message and how to reply are " +
+      "in the detail; close it as answered once they have a reply.",
+    isM2: false,
+  },
 };
 
 /** Every kind, in queue order — the M2 kinds last so the M1 queue reads unchanged. */

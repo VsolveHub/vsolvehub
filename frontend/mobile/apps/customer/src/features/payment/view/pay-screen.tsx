@@ -106,7 +106,7 @@ export function PayScreen({ groupId }: { groupId: string }) {
   const checkoutPayment = useCheckoutPayment(checkoutId);
   const startPayment = useStartPayment();
   const [startedId, setStartedId] = useState<string | null>(null);
-  const attemptId = startedId ?? checkoutPayment.data?.id ?? startPayment.data?.id ?? null;
+  const attemptId = startedId ?? checkoutPayment.data?.id ?? (startPayment.data as any)?.id ?? null;
   const attemptQuery = usePaymentAttempt(attemptId);
   const reconcile = useReconcilePayment();
   const simulateCapture = useSimulateCapture();

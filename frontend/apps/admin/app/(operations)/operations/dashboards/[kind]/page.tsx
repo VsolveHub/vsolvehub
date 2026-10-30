@@ -1,4 +1,6 @@
 import { Metadata } from "next";
+
+import { DashboardTabs } from "../../../../../features/dashboard/dashboard-tabs";
 import { DashboardView } from "../../../../../features/dashboard/kind-dashboard";
 
 export const metadata: Metadata = {
@@ -7,5 +9,10 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage(props: { params: Promise<{ kind: string }> }) {
   const params = await props.params;
-  return <DashboardView kind={params.kind} />;
+  return (
+    <>
+      <DashboardTabs />
+      <DashboardView kind={params.kind} />
+    </>
+  );
 }

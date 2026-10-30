@@ -16,6 +16,13 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
+  // A desktop viewport, so the skill picker renders as its popover.
+  window.matchMedia = vi.fn().mockImplementation((media: string) => ({
+    matches: true,
+    media,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  })) as unknown as typeof window.matchMedia;
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -42,7 +49,7 @@ afterEach(() => {
 });
 
 describe("PartnerDirectory filters", () => {
-  it("renders skill filter chips", async () => {
+  it("offers skills behind a searchable picker instead of listing them all", async () => {
     render(
       <PartnerDirectory
         filters={{}}
@@ -53,7 +60,10 @@ describe("PartnerDirectory filters", () => {
       { wrapper },
     );
 
-    expect(await screen.findByRole("button", { name: /^Electrician$/i })).toBeInTheDocument();
+    const trigger = await screen.findByRole("button", { name: /any skill/i });
+    expect(screen.queryByText("Electrician")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("option", { name: /electrician/i })).toBeInTheDocument();
   });
 
   it("indicates active skills and allows clearing", async () => {
@@ -68,8 +78,9 @@ describe("PartnerDirectory filters", () => {
       { wrapper },
     );
 
-    const chip = await screen.findByRole("button", { name: /^Electrician$/i });
-    expect(chip).toHaveAttribute("aria-pressed", "true");
+    const chip = await screen.findByRole("button", { name: /remove electrician/i });
+    fireEvent.click(chip);
+    expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ skills: [] }));
     const clearBtn = screen.getByRole("button", { name: /clear 1 skill filter/i });
     expect(clearBtn).toBeInTheDocument();
     fireEvent.click(clearBtn);

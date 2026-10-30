@@ -1,11 +1,11 @@
 "use client";
 
-import { Button, Dialog, Field, Select } from "@vsolve/ui";
+import { Button, Dialog, Field, Select, useT } from "@vsolve/ui";
 import { useId, useState } from "react";
 
 import {
-  DECLINE_REASONS,
   asDeclineReasonCode,
+  declineReasonsFor,
   findDeclineReason,
   type DeclineReasonCode,
 } from "../model/decline-reasons";
@@ -52,11 +52,12 @@ export function DeclineDialog({
   error,
   onActionPointerDown,
 }: DeclineDialogProps) {
+  const t = useT();
   const [reasonCode, setReasonCode] = useState("");
   const [touched, setTouched] = useState(false);
   const errorId = useId();
 
-  const chosen = findDeclineReason(reasonCode);
+  const chosen = findDeclineReason(reasonCode, t);
   const missing = touched && reasonCode === "";
 
   const submit = () => {
@@ -74,8 +75,8 @@ export function DeclineDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Decline this enquiry"
-      description="Your quote slot goes back to the pool and Vsolve invites another vendor. You cannot take this one back."
+      title={t("enquiry.declineDialog.title")}
+      description={t("enquiry.declineDialog.description")}
       // Dismissable: nothing has been sent yet, and trapping a vendor in a
       // dialog they opened by accident is its own failure.
       dismissable
@@ -88,30 +89,30 @@ export function DeclineDialog({
             data-booking-alert-action=""
             onPointerDown={() => onActionPointerDown?.()}
           >
-            Keep it
+            {t("enquiry.declineDialog.keep")}
           </Button>
           <Button
             variant="danger"
             onClick={submit}
             loading={pending}
-            loadingLabel="Declining"
+            loadingLabel={t("enquiry.declineDialog.declining")}
             disabled={pending}
             data-booking-alert-action=""
             onPointerDown={() => onActionPointerDown?.()}
           >
-            Decline
+            {t("enquiry.declineDialog.decline")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
         <Field
-          label="Why are you turning this down?"
+          label={t("enquiry.declineDialog.reasonLabel")}
           required
-          error={missing ? "Pick a reason so we stop sending you work that does not fit." : undefined}
+          error={missing ? t("enquiry.declineDialog.reasonMissing") : undefined}
         >
           <Select
-            placeholder="Choose a reason"
+            placeholder={t("enquiry.declineDialog.reasonPlaceholder")}
             value={reasonCode}
             onChange={(event) => {
               setReasonCode(event.target.value);
@@ -119,7 +120,7 @@ export function DeclineDialog({
             }}
             disabled={pending}
           >
-            {DECLINE_REASONS.map((reason) => (
+            {declineReasonsFor(t).map((reason) => (
               <option key={reason.code} value={reason.code}>
                 {reason.label}
               </option>

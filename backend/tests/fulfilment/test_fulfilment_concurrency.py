@@ -46,7 +46,12 @@ from apps.fulfilment.services import mark_arrived, mark_en_route
 from apps.identity.models import User
 from tests.fulfilment.conftest import BookedGroup, create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 
 RACERS = 2
 TWO_UNITS = 2

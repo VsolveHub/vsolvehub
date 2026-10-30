@@ -130,6 +130,21 @@ export function runListingAction(
   );
 }
 
+export function fetchListingApplicationsPage(
+  listingId: string,
+  cursor?: string,
+  status?: string,
+) {
+  return request(() =>
+    getApiClient().GET("/api/v1/partner/listings/{listing_id}/applications", {
+      params: {
+        path: { listing_id: listingId },
+        query: { ...(cursor ? { cursor } : {}), ...(status ? { status } : {}) },
+      },
+    }),
+  );
+}
+
 export async function fetchListingApplications(listingId: string) {
   try {
     return await request(() =>

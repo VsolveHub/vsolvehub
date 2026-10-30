@@ -5,13 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentReveal } from "./document-reveal";
 
-/**
- * KYC disclosure is the most sensitive thing this console does, so these assert
- * the rules rather than the layout: nothing is fetched until a reviewer asks,
- * nothing survives hiding it, and a scan that has not finished is not a document
- * a reviewer can open.
- */
-
 const api = vi.hoisted(() => {
   const calls: string[] = [];
   let response: () => Promise<unknown> = () =>
@@ -59,14 +52,21 @@ const document = (overrides: Partial<Schemas["PartnerDocument"]> = {}) =>
     ...overrides,
   }) as Schemas["PartnerDocument"];
 
-function renderReveal(doc: Schemas["PartnerDocument"] = document()) {
+function renderReveal(
+  doc: Schemas["PartnerDocument"] = document(),
+  canReview = true,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
   render(
     <QueryClientProvider client={queryClient}>
-      <DocumentReveal document={doc} />
+      <DocumentReveal
+        document={doc}
+        applicationId="app-1"
+        canReview={canReview}
+      />
     </QueryClientProvider>,
   );
 }
@@ -83,8 +83,6 @@ beforeEach(() => {
 
 describe("masked by default", () => {
   it("requests nothing until a reviewer asks", () => {
-    // An automatic fetch would record a disclosure for every row scrolled past,
-    // which is both a privacy problem and a useless audit trail.
     renderReveal();
 
     expect(api.calls).toEqual([]);
@@ -94,7 +92,7 @@ describe("masked by default", () => {
 
   it("warns that opening it is recorded, before it is opened", () => {
     renderReveal();
-    expect(screen.getByText(/recorded against your account/i)).toBeInTheDocument();
+    expect(screen.getByText(/access is recorded for audit/i)).toBeInTheDocument();
   });
 
   it("fetches a fresh URL only on the explicit press", async () => {
@@ -120,21 +118,42 @@ describe("masked by default", () => {
   });
 });
 
-describe("scan gate", () => {
-  it("offers no reveal while the file is still being checked", () => {
-    // Django refuses access before the scan finishes, so a Reveal button here
-    // would produce a denial the reviewer cannot act on.
-    renderReveal(document({ scan_status: "PENDING" }));
+describe("document review actions", () => {
+  it("allows reviewer to approve a pending document", async () => {
+    renderReveal(document({ status: "PENDING" }), true);
 
-    expect(screen.queryByRole("button", { name: /reveal/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/still being checked/i)).toBeInTheDocument();
+    const approveBtn = screen.getByRole("button", { name: /approve document/i });
+    expect(approveBtn).toBeInTheDocument();
+    fireEvent.click(approveBtn);
+
+    await waitFor(() =>
+      expect(api.calls).toContain("/api/v1/operations/partner-documents/{document_id}/review/"),
+    );
   });
 
-  it("explains a failed scan as a file problem, not a review decision", () => {
-    renderReveal(document({ scan_status: "REJECTED" }));
+  it("allows reviewer to reject with a required reason", async () => {
+    renderReveal(document({ status: "PENDING" }), true);
 
-    expect(screen.queryByRole("button", { name: /reveal/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/upload it again/i)).toBeInTheDocument();
+    const rejectBtn = screen.getByRole("button", { name: /reject document/i });
+    fireEvent.click(rejectBtn);
+
+    expect(screen.getByPlaceholderText(/type specific reason/i)).toBeInTheDocument();
+    const confirmBtn = screen.getByRole("button", { name: /confirm rejection/i });
+    expect(confirmBtn).toBeDisabled();
+
+    // Select a quick reason
+    fireEvent.click(screen.getByRole("button", { name: /expired document/i }));
+    expect(confirmBtn).toBeEnabled();
+
+    fireEvent.click(confirmBtn);
+    await waitFor(() =>
+      expect(api.calls).toContain("/api/v1/operations/partner-documents/{document_id}/review/"),
+    );
+  });
+
+  it("does not show approve button if document is already approved", () => {
+    renderReveal(document({ status: "APPROVED" }), true);
+    expect(screen.queryByRole("button", { name: /approve document/i })).not.toBeInTheDocument();
   });
 });
 

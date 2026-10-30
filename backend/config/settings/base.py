@@ -5,6 +5,14 @@ from pathlib import Path
 import environ
 from corsheaders.defaults import default_headers
 
+from config.settings.guards import (
+    WITHDRAWAL_FEE_UNSET,
+    guard_payout_account_cooling,
+    guard_payout_clearing,
+    guard_payout_minimum,
+    guard_withdrawal_limits,
+)
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 env = environ.Env(
@@ -61,6 +69,7 @@ INSTALLED_APPS = [
     "apps.loyalty",
     "apps.ops_reports",
     "apps.mobile",
+    "apps.stories",
 ]
 
 MIDDLEWARE = [
@@ -232,6 +241,10 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.errors.handler.api_exception_handler",
     "NON_FIELD_ERRORS_KEY": "non_field_errors",
     "DEFAULT_THROTTLE_RATES": {
+        "firebase_verify": "30/minute",
+        # The public Contact form opens an Operations case per message. A person writes a few;
+        # a script writes hundreds. Keyed per IP, since most senders are signed out.
+        "contact_message": "5/hour",
         "geocoding": "30/min",
         "serviceability": "60/min",
         # M2 abuse controls (`M2-BE-803`), enforced by `common.throttling.ScopedWriteThrottle`
@@ -275,6 +288,10 @@ REST_FRAMEWORK = {
         # rejection path is here, and it is the one worth naming — it reopens a quote slot each
         # time, so a loop on it churns real vendors' invitations.
         "m2_quote_action": "120/hour",
+        # Each submission creates a RazorpayX contact and fund account and restarts cooling.
+        "payout_account": "10/hour",
+        # Withdraw taps. The daily limit is the real rule; this only stops a loop hammering it.
+        "payout_withdrawal": "20/hour",
     },
 }
 
@@ -320,8 +337,8 @@ M1_QUOTE_TTL_SECONDS = 15 * 60
 M1_PARTNER_OFFER_TIMEOUT_SECONDS = 45
 M1_PARTNER_SEARCH_CANDIDATE_LIMIT = 3
 M1_PARTNER_UNDO_TIMEOUT_SECONDS = 120
-M1_CART_ITEM_LIMIT = 5
-M1_FULFILMENT_UNIT_LIMIT = 5
+M1_CART_ITEM_LIMIT = env.int("M1_CART_ITEM_LIMIT", default=50)
+M1_FULFILMENT_UNIT_LIMIT = env.int("M1_FULFILMENT_UNIT_LIMIT", default=20)
 M1_CONCURRENT_PARTNER_LIMIT = 2
 M1_SEQUENTIAL_UNIT_MAX_MINUTES = 240
 M1_FULFILMENT_PLAN_LIMIT = 3
@@ -342,6 +359,20 @@ M1_CUSTOMER_WAIT_MINUTES = 10
 M1_CUSTOMER_CONTACT_ATTEMPT_MINUTES = (0, 5)
 M1_START_OTP_TTL_SECONDS = 5 * 60
 M1_START_OTP_MAX_ATTEMPTS = 5
+# Server-clock gates on a booked visit (`apps.fulfilment.gates`), all measured from
+# `Booking.scheduled_start`. 120: the exact address, pin and Customer contact reach the
+# assigned Partner two hours out — the M2 visit contact rung uses the same horizon — so a
+# Partner with days of lead time holds neither a door to knock on nor a number to call.
+M1_ADDRESS_UNLOCK_MINUTES = env.int("M1_ADDRESS_UNLOCK_MINUTES", default=120)
+# 60: "On the way" opens an hour out; earlier than that a Partner is not travelling to
+# this job, and an early en-route tells the Customer something untrue.
+M1_EN_ROUTE_OPENS_MINUTES = env.int("M1_EN_ROUTE_OPENS_MINUTES", default=60)
+# 30: "Arrived" opens half an hour before the start. Arrival drives the start code and
+# the after-arrival cancellation band, so it must not be claimable from across town.
+M1_ARRIVAL_OPENS_MINUTES = env.int("M1_ARRIVAL_OPENS_MINUTES", default=30)
+# 30: arrival (and en route) stay open until the scheduled end plus this grace, so a
+# late Partner can still arrive and finish rather than strand a paid visit.
+M1_ARRIVAL_CLOSE_GRACE_MINUTES = env.int("M1_ARRIVAL_CLOSE_GRACE_MINUTES", default=30)
 # 60: what "nearing deadline" means on the Operations home screen. An hour is the point a case
 # stops being something to schedule and starts being something to pick up now.
 M1_CASE_DUE_SOON_MINUTES = 60
@@ -387,7 +418,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.67.0",
+    "VERSION": "1.89.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -456,6 +487,13 @@ SPECTACULAR_SETTINGS = {
         "PayoutAccountStatusEnum": "apps.payouts.models.PartnerPayoutAccount.Status",
         "PayoutBatchStatusEnum": "apps.payouts.models.PayoutBatch.Status",
         "PayoutBatchItemStatusEnum": "apps.payouts.models.PayoutBatchItem.Status",
+        # Partner withdrawals (1.85.0). `kind`, `status` and `reason` are all reused field names,
+        # so each new choice set is named here rather than left to a positional hash.
+        "PayoutBatchKindEnum": "apps.payouts.models.PayoutBatch.Kind",
+        "PayoutBatchApprovalBasisEnum": "apps.payouts.models.PayoutBatch.ApprovalBasis",
+        "PartnerWithdrawalStatusEnum": "apps.payouts.serializers.WITHDRAWAL_STATUSES",
+        "WithdrawalRefusalReasonEnum": "apps.payouts.services.WITHDRAWAL_REFUSAL_REASONS",
+        "WithdrawalReviewReasonEnum": "apps.payouts.services.WITHDRAWAL_REVIEW_REASONS",
         "KillSwitchScopeEnum": "apps.notifications.models.KillSwitch.Scope",
         "NotificationChannelEnum": "apps.notifications.models.NotificationIntent.Channel",
         "NotificationIntentStatusEnum": "apps.notifications.models.NotificationIntent.Status",
@@ -602,6 +640,15 @@ SPECTACULAR_SETTINGS = {
         # Stays/rentals and listings moderation status choice sets
         "ModerationStatusEnum": "apps.stay.models.Property.ModerationStatus",
         "ListingModerationStatusEnum": "apps.listings.models.Listing.ModerationStatus",
+        # A7 rental delivery. The booking status set gained AWAITING_TRANSPORT_QUOTE, which
+        # changes its hash name (it was `StatusD8aEnum`, unreferenced by name in the apps), so
+        # it is named here once and for good, with the three new choice sets beside it.
+        # Pinned so the new `RentalAssetDetail` component doesn't push it to a hash name.
+        "RentalAssetModerationStatusEnum": "apps.rental.models.RentalAsset.ModerationStatus",
+        "RentalBookingStatusEnum": "apps.rental.models.RentalBooking.Status",
+        "RentalBookingModeEnum": "apps.rental.models.RentalBooking.Mode",
+        "RentalTransportStatusEnum": "apps.rental.models.RentalTransportRequest.Status",
+        "RentalTransportTripEnum": "apps.rental.models.RentalTransportRequest.Trip",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -640,6 +687,11 @@ OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
 
+FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
+FIREBASE_CREDENTIALS_JSON = env("FIREBASE_CREDENTIALS_JSON", default="")
+FIREBASE_AUTH_ENABLED = env.bool("FIREBASE_AUTH_ENABLED", default=False)
+FIREBASE_TOKEN_MAX_AGE_SECONDS = env.int("FIREBASE_TOKEN_MAX_AGE_SECONDS", default=300)
+
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
 #: Lets a caller mark their own payment captured without a real provider.
@@ -660,6 +712,19 @@ PAYMENT_PROVIDER_READ_TIMEOUT_SECONDS = env.float(
 PAYMENT_LEGAL_ENTITY_CODE = env("PAYMENT_LEGAL_ENTITY_CODE", default="vsolve")
 PAYMENT_LIVE_COLLECTIONS_APPROVED = env.bool("PAYMENT_LIVE_COLLECTIONS_APPROVED", default=False)
 
+# Who issues customer documents (receipts, credit notes). Empty means "not registered yet", never a
+# placeholder: an unset address is left off the page, and without a GSTIN a booking document is a
+# **payment receipt** that claims no tax. Setting DOCUMENT_ISSUER_GSTIN after GST registration turns
+# the same document into a tax invoice carrying the number. Set the legal name and registered
+# address exactly as on the registration certificate.
+DOCUMENT_ISSUER_NAME = env("DOCUMENT_ISSUER_NAME", default="V Solve Hub")
+DOCUMENT_ISSUER_ADDRESS = env("DOCUMENT_ISSUER_ADDRESS", default="")
+DOCUMENT_ISSUER_GSTIN = env("DOCUMENT_ISSUER_GSTIN", default="")
+DOCUMENT_ISSUER_CONTACT = env(
+    "DOCUMENT_ISSUER_CONTACT",
+    default="support@vsolvehub.com · +91 733 076 4634 · www.vsolvehub.com",
+)
+
 # Outbound payouts. Separate credentials from collections on purpose: the key that can move
 # money *out* is the more dangerous of the two, and sharing one secret between them means a
 # read-only integration cannot be granted without also granting payout rights.
@@ -670,9 +735,50 @@ RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
 RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
 RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
-# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded.
+# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded. The name is
+# older than test mode: RazorpayX test keys need it on too, and move only dummy money.
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
+# How long a new or changed payout account waits before money can leave through it: the
+# account-takeover control. Production refuses less than 24 hours; a test-mode run may set 0.
+PAYOUT_ACCOUNT_COOLING_HOURS = env.int("PAYOUT_ACCOUNT_COOLING_HOURS", default=24)
+guard_payout_account_cooling(PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=0)
+# How long a visit's earning waits after settlement before it can be paid: the Customer's quality
+# dispute window, so a dispute always freezes money before any of it leaves. Production refuses
+# less than that window; a test-mode run may set 0.
+PAYOUT_CLEARING_HOURS = env.int("PAYOUT_CLEARING_HOURS", default=M1_QUALITY_DISPUTE_WINDOW_HOURS)
+guard_payout_clearing(PAYOUT_CLEARING_HOURS, minimum_hours=0)
+# The smallest transfer a payout run sends. A Partner owed less carries it to the next run rather
+# than being sent a payout that costs more in fees than it pays. RazorpayX's own floor is ₹1.
+PAYOUT_MINIMUM_PAISE = env.int("PAYOUT_MINIMUM_PAISE", default=100)
+guard_payout_minimum(PAYOUT_MINIMUM_PAISE)
+# A payout whose submission got no clear answer, and that RazorpayX still has no record of this
+# long afterwards, was never received: its money goes back to the Partner's balance. Before then
+# it is only looked up, never re-sent.
+PAYOUT_AMBIGUOUS_RELEASE_HOURS = 24
+# A payout claimed for sending (`SUBMITTING`) that has not recorded an answer this long afterwards
+# is one whose process died mid-call. Reconciliation looks it up by reference, like an ambiguous
+# one, and never sends it again.
+PAYOUT_SUBMITTING_STALE_MINUTES = 10
+
+# Partner instant withdrawals (Phase 2). Off until Operations decides to open them, and then best
+# started with a low maximum. Full available balance only; one in progress at a time.
+PAYOUT_WITHDRAW_ENABLED = env.bool("PAYOUT_WITHDRAW_ENABLED", default=False)
+PAYOUT_WITHDRAWAL_MIN_PAISE = env.int("PAYOUT_WITHDRAWAL_MIN_PAISE", default=10_000)
+PAYOUT_WITHDRAWAL_MAX_PAISE = env.int("PAYOUT_WITHDRAWAL_MAX_PAISE", default=2_500_000)
+PAYOUT_WITHDRAWALS_PER_DAY = env.int("PAYOUT_WITHDRAWALS_PER_DAY", default=2)
+# VSolveHub pays for this many withdrawals a week (Monday to Sunday, India time); the Partner pays
+# PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE for each one after that. Unset (-1), extra withdrawals are
+# refused rather than charged a price nobody chose.
+PAYOUT_FREE_WITHDRAWALS_PER_WEEK = env.int("PAYOUT_FREE_WITHDRAWALS_PER_WEEK", default=1)
+PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE = env.int(
+    "PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE", default=WITHDRAWAL_FEE_UNSET
+)
+guard_withdrawal_limits(
+    minimum_paise=PAYOUT_WITHDRAWAL_MIN_PAISE,
+    maximum_paise=PAYOUT_WITHDRAWAL_MAX_PAISE,
+    fee_paise=PAYOUT_EXTRA_WITHDRAWAL_FEE_PAISE,
+)
 
 # Outbound message transport for SMS, WhatsApp and voice. MSG91 sends only when MSG91_AUTH_KEY
 # is set. An empty key refuses rather than reporting a send that never left.
@@ -699,14 +805,9 @@ MOBILE_CUSTOMER_ANDROID_STORE_URL = env("MOBILE_CUSTOMER_ANDROID_STORE_URL", def
 MOBILE_CUSTOMER_IOS_STORE_URL = env("MOBILE_CUSTOMER_IOS_STORE_URL", default="")
 
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
-GEOCODING_NOMINATIM_URL = env(
-    "GEOCODING_NOMINATIM_URL",
-    default="https://nominatim.openstreetmap.org",
-)
-GEOCODING_USER_AGENT = env(
-    "GEOCODING_USER_AGENT",
-    default="VsolveHub/0.1 (configure-production-contact)",
-)
+# Server-only Google key, restricted to the Geocoding API and the servers' IPs. The browser key the
+# frontends use for the map is a different key and never reaches Django.
+GOOGLE_MAPS_SERVER_KEY = env("GOOGLE_MAPS_SERVER_KEY", default="")
 GEOCODING_TIMEOUT_SECONDS = env.float("GEOCODING_TIMEOUT_SECONDS", default=3.0)
 GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 24 * 7)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
@@ -717,6 +818,14 @@ GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
 PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
 # "r2" (Cloudflare, uses R2_PRIVATE_BUCKET above), "supabase", or "unconfigured".
 DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="unconfigured")
+# Malware scanning of uploaded Partner documents; see `apps.partners.scanning`. `unconfigured`
+# leaves every document PENDING (fail closed); `development` marks everything clean and is refused
+# in production; `none` is the owner's explicit choice to accept production uploads unscanned.
+DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="unconfigured")
+# Where the Partner site publishes its terms (`/terms`) and privacy notice (`/privacy`). The
+# release publishes those as the agreements every applicant accepts. Empty outside production,
+# where placeholder agreements at a `.test` host are used instead.
+PARTNER_LEGAL_BASE_URL = env("PARTNER_LEGAL_BASE_URL", default="")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
 PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")
@@ -921,6 +1030,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
         "schedule": 60.0,
     },
+    "reconcile-partner-shifts": {
+        "task": "apps.partners.tasks.reconcile_partner_shifts",
+        "schedule": 300.0,
+    },
+    "reconcile-expired-dispatch-offers": {
+        "task": "apps.assignments.tasks.reconcile_expired_dispatch_offers",
+        "schedule": 30.0,
+    },
     "reconcile-payments": {
         "task": "apps.commerce.tasks.reconcile_payments",
         "schedule": 30.0,
@@ -941,6 +1058,13 @@ CELERY_BEAT_SCHEDULE = {
         # Pays booking coins and referral rewards once their waiting period is over.
         "task": "apps.loyalty.tasks.release_due_loyalty_rewards",
         "schedule": 60.0 * 15,
+    },
+    "resume-payout-submissions": {
+        "task": "apps.payouts.tasks.resume_payout_submissions",
+        # Five minutes. Re-queues a transfer whose send job was lost between being approved and
+        # being sent. Never re-sends: a transfer already claimed for sending is left to
+        # reconciliation, which only looks it up.
+        "schedule": 60.0 * 5,
     },
     "reconcile-payouts": {
         "task": "apps.payouts.tasks.reconcile_payouts",
@@ -1184,6 +1308,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.mobile.tasks.check_push_receipts",
         "schedule": 900.0,
     },
+    # A7 rental delivery. A quote has a 24-hour answer window, so 5 minutes late is close enough;
+    # an expired request only lets go of dates nobody has paid for.
+    "expire-rental-transport-requests": {
+        "task": "apps.rental.tasks.expire_rental_transport_requests",
+        "schedule": 60.0 * 5,
+    }
+    },
 }
 
 SESSION_COOKIE_HTTPONLY = True
@@ -1232,3 +1363,20 @@ LOGGING = {
         },
     },
 }
+
+# OneSignal Push & Instant Dispatch settings
+ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
+ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
+ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
+ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
+DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
+PARTNER_PORTAL_BASE_URL = env("PARTNER_PORTAL_BASE_URL", default="http://localhost:3001")
+
+# Shift-Based, Push-Gated Instant Availability feature flags & thresholds
+FEATURE_PUSH_GATED_INSTANT = env.bool("FEATURE_PUSH_GATED_INSTANT", default=False)
+PARTNER_SHIFT_DEFAULT_DURATION_HOURS = env.int("PARTNER_SHIFT_DEFAULT_DURATION_HOURS", default=8)
+PARTNER_SHIFT_MAX_IDLE_MINUTES = env.int("PARTNER_SHIFT_MAX_IDLE_MINUTES", default=30)
+PARTNER_LOCATION_MAX_AGE_MINUTES = env.int("PARTNER_LOCATION_MAX_AGE_MINUTES", default=30)
+MAX_DISPATCH_ATTEMPTS = env.int("MAX_DISPATCH_ATTEMPTS", default=5)
+MAX_CONSECUTIVE_MISSED_OFFERS = env.int("MAX_CONSECUTIVE_MISSED_OFFERS", default=3)
+

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { EmptyState } from "@vsolve/ui";
 
 import { CATALOGUE_SCROLL_MARGIN_CLASS, categorySectionId } from "./category-rail";
@@ -123,7 +123,7 @@ export function ServiceGrid({ categories, hrefs }: ServiceGridProps) {
 
                 return (
                   <li key={service.id} className="min-w-0">
-                    <Link
+                    <IntentLink
                       href={href}
                       className={[
                         "flex h-full min-h-24 flex-col items-center gap-2",
@@ -146,7 +146,7 @@ export function ServiceGrid({ categories, hrefs }: ServiceGridProps) {
                       <span className="line-clamp-2 text-pretty text-[12px] font-semibold leading-[15px] text-text">
                         {service.name}
                       </span>
-                    </Link>
+                    </IntentLink>
                   </li>
                 );
               })}

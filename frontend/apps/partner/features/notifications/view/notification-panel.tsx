@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, EmptyState, ErrorState, Sheet, cn } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, Sheet, cn, useT } from "@vsolve/ui";
 import { BellOff, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -107,6 +107,7 @@ function NotificationPanelBody({
   workspaceKeys,
   unreadCount,
 }: NotificationPanelProps) {
+  const t = useT();
   // Fetched when the panel opens, never before and never on a timer. See
   // `useNotificationFeed`.
   const feed = useNotificationFeed(open);
@@ -131,17 +132,17 @@ function NotificationPanelBody({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Notifications"
+      title={t("notifications.panel.title")}
       footer={
         hasUnread ? (
           <Button
             variant="ghost"
             onClick={handleDismissAll}
             loading={markRead.isPending}
-            loadingLabel="Marking everything read"
+            loadingLabel={t("notifications.panel.markingAllRead")}
             disabled={markRead.isPending}
           >
-            Mark all read
+            {t("notifications.panel.markAllRead")}
           </Button>
         ) : undefined
       }
@@ -151,7 +152,7 @@ function NotificationPanelBody({
 
         <AsyncSection
           state={state}
-          label="Loading your notifications"
+          label={t("notifications.panel.loading")}
           isEmpty={(page) =>
             dismissedAll ||
             page.results.filter((item) => !dismissedIds.has(item.id)).length === 0
@@ -165,8 +166,8 @@ function NotificationPanelBody({
             <EmptyState
               compact
               icon={<BellOff size={24} aria-hidden />}
-              title="Nothing to read yet"
-              description="Vsolve tells you here when a job is confirmed, when a customer answers, and when money moves. There is nothing you need to do."
+              title={t("notifications.panel.empty.title")}
+              description={t("notifications.panel.empty.description")}
             />
           }
         >
@@ -195,8 +196,7 @@ function NotificationPanelBody({
                     list that reads as a complete history is a quiet lie. */}
                 {page.next === null ? null : (
                   <p className="text-sm leading-6 text-text-secondary">
-                    Only your most recent notices are shown here. Older ones stay on the job
-                    they belong to.
+                    {t("notifications.panel.truncated")}
                   </p>
                 )}
               </>
@@ -238,6 +238,7 @@ function NotificationRow({
   onOpened,
   onMarkRead,
 }: NotificationRowProps) {
+  const t = useT();
   const href = targetHref(notification.target, workspaceKeys);
   const unread = isUnread(notification);
 
@@ -258,7 +259,7 @@ function NotificationRow({
           )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-text">
-              {unread ? <span className="sr-only">Unread. </span> : null}
+              {unread ? <span className="sr-only">{t("notifications.row.unreadSr")}</span> : null}
               {notification.title}
             </p>
             <p className="mt-0.5 text-sm leading-6 text-text-secondary">{notification.body}</p>
@@ -272,8 +273,8 @@ function NotificationRow({
         <button
           type="button"
           onClick={onMarkRead}
-          title="Clear notification"
-          aria-label={`Clear notification: ${notification.title}`}
+          title={t("notifications.row.clearTitle")}
+          aria-label={t("notifications.row.clearAriaLabel", { title: notification.title })}
           className="shrink-0 -mr-1 -mt-1 grid h-7 w-7 place-items-center rounded-full text-text-muted hover:bg-surface-hover hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
           <X className="h-4 w-4" />
@@ -287,8 +288,8 @@ function NotificationRow({
             onClick={onMarkRead}
             className="inline-flex min-h-9 w-fit items-center rounded-control px-2.5 text-xs font-bold text-action-secondary hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
-            Mark read
-            <span className="sr-only">: {notification.title}</span>
+            {t("notifications.row.markRead")}
+            <span className="sr-only">{t("notifications.row.markReadSr", { title: notification.title })}</span>
           </button>
         ) : null
       ) : (
@@ -301,8 +302,8 @@ function NotificationRow({
             }}
             className="inline-flex min-h-9 items-center rounded-lg bg-navy-900 px-3 py-1 text-xs font-bold text-white hover:bg-navy-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
-            Open
-            <span className="sr-only">: {notification.title}</span>
+            {t("notifications.row.open")}
+            <span className="sr-only">{t("notifications.row.openSr", { title: notification.title })}</span>
           </Link>
         </div>
       )}
@@ -320,13 +321,15 @@ function NotificationRow({
  * still there and still unread.
  */
 function MarkReadRefusal({ error }: { readonly error: unknown }) {
+  const t = useT();
+
   if (isNotificationNotFound(error)) {
     return (
       <ErrorState
         inline
         severity="info"
-        title="That notice is no longer here"
-        message="It was read somewhere else, or it has been cleared. Close and re-open this panel to see what is actually waiting."
+        title={t("notifications.markReadRefusal.notFound.title")}
+        message={t("notifications.markReadRefusal.notFound.message")}
       />
     );
   }
@@ -335,8 +338,8 @@ function MarkReadRefusal({ error }: { readonly error: unknown }) {
     <ErrorState
       inline
       severity="warning"
-      title="We could not mark that read"
-      message="Nothing has changed and the notice is still here. Try again in a moment."
+      title={t("notifications.markReadRefusal.generic.title")}
+      message={t("notifications.markReadRefusal.generic.message")}
     />
   );
 }

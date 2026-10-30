@@ -7,7 +7,9 @@ import { ChevronLeft } from "lucide-react";
 
 import { CategoryTileBrowser } from "@/features/catalog/components/category-tile-browser";
 import { getCategory, getCategoryServices } from "@/features/catalog/queries";
+import { breadcrumbJsonLd, JsonLd } from "@/features/seo/json-ld";
 import { isCareerJobsCategory, isRentalCategory, isStayCategory, LISTINGS_HREF, RENTALS_HREF, STAYS_HREF } from "@/lib/routes";
+import { clampDescription, SERVICE_CITY, SITE_NAME } from "@/lib/site";
 
 type PageProps = {
   params: Promise<{ category: string }>;
@@ -17,12 +19,14 @@ type PageProps = {
 /**
  * One trade, opened directly on the service list (first tile when none is selected).
  * Career/Jobs (A10) redirects to the listing surface — not area-priced bookables.
+ *
+ * No `generateStaticParams`, on purpose. Even an empty one marks the route static (ISR), and
+ * this page reads `?tile=` from `searchParams`, which only exists per request: a production
+ * build then fails every category with `DYNAMIC_SERVER_USAGE` (a 500) while `next dev`, which
+ * renders everything dynamically, never shows it. The catalog reads stay cached for
+ * `revalidate` seconds through the fetch cache, so rendering per request costs no API calls.
  */
 export const revalidate = 300;
-
-export function generateStaticParams(): { category: string }[] {
-  return [];
-}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category: slug } = await params;
@@ -40,16 +44,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
   const category = await getCategory(slug);
 
-  if (!category) return { title: "Category not found" };
+  if (!category) return { title: "Category not found", robots: { index: false } };
 
+  const title = `${category.name} Services in ${SERVICE_CITY}`;
+  const description = clampDescription(
+    category.description ||
+      `Book verified ${category.name.toLowerCase()} professionals in ${SERVICE_CITY} on ${SITE_NAME}. ` +
+        "See the price before you book and pay only after a professional accepts.",
+  );
   return {
-    title: `${category.name} services`,
-    description: category.description,
+    title,
+    description,
     alternates: { canonical: `/catalog/${category.slug}` },
     openGraph: {
-      title: `${category.name} services — V Solve Hub`,
-      description: category.description,
+      title: `${title} | ${SITE_NAME}`,
+      description,
       type: "website",
+      url: `/catalog/${category.slug}`,
+      ...(category.image_url ? { images: [{ url: category.image_url, alt: title }] } : {}),
     },
   };
 }
@@ -101,6 +113,13 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
 
   return (
     <main className="mx-auto w-full max-w-[1360px] px-2 sm:px-4 md:px-6 pt-2 pb-1 h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))] md:h-[calc(100dvh-4rem)] flex flex-col overflow-hidden">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Home", path: "/" },
+          { name: "Services", path: "/catalog" },
+          { name: category.name, path: `/catalog/${category.slug}` },
+        ])}
+      />
       <header className="lg:hidden shrink-0 flex items-center gap-1 pb-2">
         <Link
           href="/"

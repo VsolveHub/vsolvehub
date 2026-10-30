@@ -1,5 +1,8 @@
+import { I18nProvider } from "@vsolve/ui";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { catalogs } from "@/i18n/catalogs";
 
 vi.mock("../queries", () => ({
   usePartnerBalance: vi.fn(),
@@ -11,6 +14,16 @@ vi.mock("../queries", () => ({
 vi.mock("./earnings-chart", () => ({
   EarningsChart: () => <div>Earnings chart</div>,
   toDailyEarnings: (days: unknown) => days,
+}));
+
+// The account card has its own tests (payout-account-card.test.tsx).
+vi.mock("./payout-account-card", () => ({
+  PayoutAccountCard: () => <div>Payout account</div>,
+}));
+
+// So does the withdraw card (withdraw-card.test.tsx).
+vi.mock("./withdraw-card", () => ({
+  WithdrawCard: () => <div>Withdraw card</div>,
 }));
 
 import {
@@ -27,6 +40,9 @@ describe("EarningsPanel", () => {
       data: {
         pending_paise: 0,
         available_paise: 0,
+        clearing_paise: 0,
+        held_paise: 0,
+        withdrawable_paise: 0,
         reserved_paise: 0,
         paid_paise: 0,
         currency: "INR",
@@ -63,7 +79,11 @@ describe("EarningsPanel", () => {
   });
 
   it("separates direct-paid earnings from the Vsolve payout balance", () => {
-    render(<EarningsPanel />);
+    render(
+      <I18nProvider locale="en-IN" catalog={catalogs["en-IN"]}>
+        <EarningsPanel />
+      </I18nProvider>,
+    );
 
     expect(screen.getByText("Total earned this month")).toBeInTheDocument();
     expect(screen.getByText("₹7,550 was paid directly by customers.")).toBeInTheDocument();
@@ -74,5 +94,35 @@ describe("EarningsPanel", () => {
     expect(screen.getByText("Jobs done this month")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText(/Direct customer payments are included/)).toBeInTheDocument();
+  });
+
+  it("keeps money still clearing out of On hold", () => {
+    vi.mocked(usePartnerBalance).mockReturnValue({
+      data: {
+        pending_paise: 300_000,
+        available_paise: 50_000,
+        clearing_paise: 300_000,
+        held_paise: 0,
+        withdrawable_paise: 50_000,
+        reserved_paise: 0,
+        paid_paise: 120_000,
+        currency: "INR",
+        server_now: "2026-09-02T12:30:00Z",
+      },
+      isPending: false,
+      isError: false,
+    } as never);
+
+    render(
+      <I18nProvider locale="en-IN" catalog={catalogs["en-IN"]}>
+        <EarningsPanel />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Clearing")).toBeInTheDocument();
+    expect(screen.getByText("₹3,000")).toBeInTheDocument();
+    // Clearing waits on time, not on a decision: no on-hold warning for it.
+    expect(screen.queryByText("Some of your earnings are on hold")).not.toBeInTheDocument();
+    expect(screen.getByText("Withdraw card")).toBeInTheDocument();
   });
 });

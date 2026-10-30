@@ -2,7 +2,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { useServerCountdown } from "@vsolve/query";
-import { Button, cn, formatMoney } from "@vsolve/ui";
+import { Button, cn, formatMoney, useT, useTranslator } from "@vsolve/ui";
 import { Clock } from "lucide-react";
 
 import type { Offer, OfferAction, OfferStatus } from "../queries";
@@ -29,14 +29,15 @@ import type { Offer, OfferAction, OfferStatus } from "../queries";
  * subtracted, is the only honest version.
  */
 
+/** Catalogue keys, resolved with `t` at render time. */
 const STATUS_LABELS: Record<OfferStatus, string> = {
-  OFFERED: "Offered to you",
-  ACCEPTED_PENDING_UNDO: "Accepted — you can still undo",
-  COMMITTED: "Committed",
-  UNDONE: "Undone",
-  DECLINED: "Declined",
-  EXPIRED: "Expired",
-  REVOKED: "Withdrawn",
+  OFFERED: "offers.status.offered",
+  ACCEPTED_PENDING_UNDO: "offers.status.acceptedPendingUndo",
+  COMMITTED: "offers.status.committed",
+  UNDONE: "offers.status.undone",
+  DECLINED: "offers.status.declined",
+  EXPIRED: "offers.status.expired",
+  REVOKED: "offers.status.revoked",
 };
 
 /** Background, text and accent for the status header strip. */
@@ -78,9 +79,12 @@ const STATUS_STYLES: Record<OfferStatus, { bg: string; text: string; border: str
   },
 };
 
-function formatWhen(instant: string | null): string {
-  if (instant === null) return "Time not given";
-  return new Date(instant).toLocaleString("en-IN", {
+function formatWhen(
+  instant: string | null,
+  translator: { t: ReturnType<typeof useT>; locale: string },
+): string {
+  if (instant === null) return translator.t("offers.card.timeNotGiven");
+  return new Date(instant).toLocaleString(translator.locale, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -144,6 +148,8 @@ export interface OfferCardProps {
 }
 
 export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: OfferCardProps) {
+  const translator = useTranslator();
+  const { t } = translator;
   const isOffered = offer.status === "OFFERED";
   const isPendingUndo = offer.status === "ACCEPTED_PENDING_UNDO";
   const style = STATUS_STYLES[offer.status];
@@ -165,13 +171,13 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
         )}
       >
         <span className="text-xs font-bold uppercase tracking-wide">
-          {STATUS_LABELS[offer.status]}
+          {t(STATUS_LABELS[offer.status])}
         </span>
         {isOffered ? (
-          <Deadline label="to respond" deadline={offer.expires_at} />
+          <Deadline label={t("offers.card.toRespond")} deadline={offer.expires_at} />
         ) : null}
         {isPendingUndo ? (
-          <Deadline label="left to undo" deadline={offer.undo_deadline} />
+          <Deadline label={t("offers.card.leftToUndo")} deadline={offer.undo_deadline} />
         ) : null}
       </div>
 
@@ -181,7 +187,7 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-base font-bold text-text">
-              {offer.approximate_area ?? "Area not given"}
+              {offer.approximate_area ?? t("offers.card.areaNotGiven")}
             </h3>
             <p className="mt-0.5 text-sm font-medium text-text-secondary">
               {offer.service_lines.map((l) => l.service_label).join(", ")}
@@ -191,9 +197,11 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
 
         {/* When + duration */}
         <p className="mt-2 flex items-center gap-1 text-sm text-text-secondary">
-          <time dateTime={offer.starts_at ?? undefined}>{formatWhen(offer.starts_at)}</time>
+          <time dateTime={offer.starts_at ?? undefined}>{formatWhen(offer.starts_at, translator)}</time>
           {offer.estimated_duration_minutes !== null ? (
-            <> · ~{offer.estimated_duration_minutes} min work</>
+            <>
+              {t("offers.card.duration", { minutes: offer.estimated_duration_minutes })}
+            </>
           ) : null}
         </p>
 
@@ -201,7 +209,7 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
         {offer.requirements.length > 0 ? (
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              Requirements
+              {t("offers.card.requirements")}
             </p>
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {offer.requirements.map((requirement) => (
@@ -218,13 +226,13 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
 
         {/* Money breakdown */}
         <dl className="mt-3 flex flex-col gap-1 rounded-card border border-line bg-surface-sunken p-3">
-          <MoneyRow label="Job total" value={offer.estimated_gross} />
-          <MoneyRow label="Commission" value={offer.commission} negative />
+          <MoneyRow label={t("offers.card.jobTotal")} value={offer.estimated_gross} />
+          <MoneyRow label={t("offers.card.commission")} value={offer.commission} negative />
           <div className="my-1 border-t border-line" />
-          <MoneyRow label="You receive" value={offer.estimated_net} strong />
+          <MoneyRow label={t("offers.card.youReceive")} value={offer.estimated_net} strong />
         </dl>
         <p className="mt-1.5 text-[0.6875rem] text-text-muted">
-          Estimated from the scope above. The final amount follows what is actually done.
+          {t("offers.card.estimateNote")}
         </p>
 
         {/* Unconfirmed message */}
@@ -241,9 +249,9 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
               className="flex-1"
               onClick={() => onCommand("accept")}
               loading={isBusy}
-              loadingLabel="Accepting"
+              loadingLabel={t("offers.card.accepting")}
             >
-              Accept
+              {t("offers.card.accept")}
             </Button>
             <Button
               className="flex-1"
@@ -251,7 +259,7 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
               onClick={() => onCommand("decline")}
               disabled={isBusy}
             >
-              Decline
+              {t("offers.card.decline")}
             </Button>
           </div>
         ) : null}
@@ -259,17 +267,16 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
         {isPendingUndo ? (
           <div className="mt-4">
             <p className="text-sm text-text-secondary">
-              This is yours. You can still undo at no cost until the timer runs out, or commit
-              now to lock it in.
+              {t("offers.card.pendingUndoNote")}
             </p>
             <div className="mt-3 flex gap-3">
               <Button
                 className="flex-1"
                 onClick={() => onCommand("commit")}
                 loading={isBusy}
-                loadingLabel="Committing"
+                loadingLabel={t("offers.card.committing")}
               >
-                Commit now
+                {t("offers.card.commit")}
               </Button>
               <Button
                 className="flex-1"
@@ -277,7 +284,7 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
                 onClick={() => onCommand("undo")}
                 disabled={isBusy}
               >
-                Undo — no penalty
+                {t("offers.card.undo")}
               </Button>
             </div>
           </div>
@@ -285,7 +292,7 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
 
         {offer.status === "COMMITTED" ? (
           <p className="mt-4 text-sm text-text-secondary">
-            Committed. The job details will appear in your work list when that is available.
+            {t("offers.card.committedNote")}
           </p>
         ) : null}
       </div>

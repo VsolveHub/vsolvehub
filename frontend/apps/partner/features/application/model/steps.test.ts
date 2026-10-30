@@ -83,7 +83,7 @@ describe("the list itself", () => {
 
   it("labels every step, because the navigation renders them", () => {
     for (const step of APPLICATION_STEPS) {
-      expect(step.label.length).toBeGreaterThan(0);
+      expect(step.labelKey.length).toBeGreaterThan(0);
       expect(step.href.startsWith("/apply")).toBe(true);
     }
   });

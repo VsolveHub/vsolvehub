@@ -1,10 +1,11 @@
 "use client";
 
-import { Badge, Card, cn } from "@vsolve/ui";
+import { Badge, Card, cn, useT } from "@vsolve/ui";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import type { WorkspaceSummary } from "../model/home-summary";
+import { translateNavLabel, translateWorkspaceDescription } from "../nav-labels";
 
 /**
  * Each workspace on the global home, in its own words.
@@ -39,26 +40,27 @@ export interface WorkspaceSummariesProps {
 }
 
 export function WorkspaceSummaries({ summaries, className }: WorkspaceSummariesProps) {
+  const t = useT();
   // An A1 Partner holds none, and their home stays exactly as it is today.
   if (summaries.length === 0) return null;
 
   return (
-    <section className={cn("flex flex-col gap-3", className)} aria-label="Your workspaces">
+    <section className={cn("flex flex-col gap-3", className)} aria-label={t("workspaces.summaries.ariaLabel")}>
       {summaries.map((summary) => (
         <Card key={summary.key} className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-text">{summary.label}</h3>
-                {summary.needsAttention ? <Badge tone="warning">Needs you</Badge> : null}
+                <h3 className="text-sm font-semibold text-text">{translateNavLabel(t, summary.label)}</h3>
+                {summary.needsAttention ? <Badge tone="warning">{t("workspaces.summaries.needsYou")}</Badge> : null}
               </div>
               <p className="mt-1 text-sm leading-6 text-text-secondary">
-                {summary.description}
+                {translateWorkspaceDescription(t, summary.description)}
               </p>
             </div>
             <Link
               href={summary.home}
-              aria-label={`Open ${summary.label}`}
+              aria-label={t("workspaces.summaries.open", { label: translateNavLabel(t, summary.label) })}
               className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               <ChevronRight size={18} aria-hidden />
@@ -67,7 +69,7 @@ export function WorkspaceSummaries({ summaries, className }: WorkspaceSummariesP
 
           {summary.isQuiet ? (
             <p className="mt-3 text-sm text-text-muted">
-              Nothing waiting on you here right now.
+              {t("workspaces.summaries.quiet")}
             </p>
           ) : (
             <ul className="mt-3 flex list-none flex-wrap gap-2 p-0">

@@ -1,3 +1,4 @@
+import { createTranslator } from "@vsolve/ui";
 import { describe, expect, it } from "vitest";
 
 import type { BusinessProfileInput } from "./wire";
@@ -8,6 +9,9 @@ import {
   missingExpected,
   normalizeForType,
 } from "./business-type";
+import { catalogs } from "@/i18n/catalogs";
+
+const t = createTranslator("en-IN", catalogs["en-IN"]).t;
 
 /**
  * Business type: which fields each carries, and what the database will refuse.
@@ -49,18 +53,18 @@ describe("field shapes", () => {
 
 describe("refusals the database is certain to make", () => {
   it("catches a registration number on an individual", () => {
-    const problems = certainRefusals(profile({ registration_number: "AP/2019/0042" }));
+    const problems = certainRefusals(profile({ registration_number: "AP/2019/0042" }), t);
     expect(problems[0]?.field).toBe("registration_number");
   });
 
   it("catches a GSTIN without the flag", () => {
-    const problems = certainRefusals(profile({ gstin: "37ABCDE1234F1Z5" }));
+    const problems = certainRefusals(profile({ gstin: "37ABCDE1234F1Z5" }), t);
     expect(problems[0]?.field).toBe("gstin");
   });
 
   it("allows a GSTIN once the flag is set", () => {
     expect(
-      certainRefusals(profile({ gst_registered: true, gstin: "37ABCDE1234F1Z5" })),
+      certainRefusals(profile({ gst_registered: true, gstin: "37ABCDE1234F1Z5" }), t),
     ).toEqual([]);
   });
 
@@ -68,7 +72,7 @@ describe("refusals the database is certain to make", () => {
     // Guidance, not a gate. A client rule stricter than the server's traps
     // people who have actually finished — and someone who cannot get past a
     // business-type screen has no account at all.
-    expect(certainRefusals(profile({ business_type: "WORKFORCE_AGENCY" }))).toEqual([]);
+    expect(certainRefusals(profile({ business_type: "WORKFORCE_AGENCY" }), t)).toEqual([]);
   });
 });
 
@@ -103,7 +107,7 @@ describe("switching type", () => {
 
     expect(switched.registration_number).toBe("");
     expect(switched.legal_name).toBe("");
-    expect(certainRefusals(switched)).toEqual([]);
+    expect(certainRefusals(switched, t)).toEqual([]);
   });
 
   it("clears a GSTIN when the flag is turned off", () => {

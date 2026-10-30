@@ -15,14 +15,21 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.commerce.models import PaymentAttempt
+from apps.commerce.services.simulation import simulate_capture
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
+from apps.stay import models as stay_models
 from apps.stay.models import PropertyMedia, StayEnquiry, StayPhotoUpload
 from apps.stay.services import (
     StayStateError,
+    calculate_stay_quote,
     create_enquiry,
     create_property,
+    create_reservation,
+    initiate_reservation_payment,
     moderate_property,
+    public_properties,
     respond_enquiry,
     store_stay_photo,
     submit_property,
@@ -33,7 +40,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def stay_world(db):
+def stay_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="stay-test", name="Stay Test")
     sub = Subcategory.objects.create(category=category, slug="pg", name="PG")
     service = Service.objects.create(
@@ -114,8 +121,6 @@ def test_enquiry_happy_path(stay_world):
 
 @pytest.mark.django_db
 def test_stay_quote_calculation_and_filters(stay_world):
-    from apps.stay.services import calculate_stay_quote, public_properties
-
     prop = create_property(
         host=stay_world["host"],
         variant_id=stay_world["variant"].id,
@@ -165,8 +170,6 @@ def test_stay_quote_calculation_and_filters(stay_world):
 
 @pytest.mark.django_db
 def test_no_fulfilment_unit_on_stay_models():
-    from apps.stay import models as stay_models
-
     for name in ("Property", "Unit", "StayEnquiry"):
         model = getattr(stay_models, name)
         field_names = {f.name for f in model._meta.get_fields()}
@@ -235,20 +238,7 @@ def test_partner_must_upload_stay_photos_not_paste_urls(stay_world):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_stay_reservation_simulated_capture(stay_world, client):
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from apps.commerce.models import PaymentAttempt
-    from apps.commerce.services.simulation import simulate_capture
-    from apps.stay.services import (
-        create_property,
-        initiate_reservation_payment,
-        moderate_property,
-        submit_property,
-    )
-
+def test_stay_reservation_simulated_capture(stay_world):
     prop = create_property(
         host=stay_world["host"],
         variant_id=stay_world["variant"].id,
@@ -264,7 +254,6 @@ def test_stay_reservation_simulated_capture(stay_world, client):
     check_in = timezone.localdate() + timedelta(days=3)
 
     # We can create reservation directly
-    from apps.stay.services import create_reservation
 
     unit = prop.units.first()
     res = create_reservation(

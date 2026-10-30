@@ -1,6 +1,7 @@
 import { describeCountdown } from "@vsolve/query";
+import type { useT } from "@vsolve/ui";
 
-import { helperNoun, isOfferLive } from "@/features/crew-offer/model/offer-state";
+import { helperCountLine, isOfferLive } from "@/features/crew-offer/model/offer-state";
 import type { CrewOffer } from "@/features/crew-offer/queries";
 import { bucketOf } from "@/features/enquiry/model/enquiry-state";
 import type { EnquirySummary } from "@/features/enquiry/queries";
@@ -175,10 +176,12 @@ export interface WorkItem {
  * ("Full home rewiring"), and the archetype noun only for a record written
  * before the name was published.
  */
-function engagementTitle(engagement: Engagement): string {
+function engagementTitle(engagement: Engagement, t: ReturnType<typeof useT>): string {
   const named = engagement.service_name?.trim();
   if (named) return named;
-  return engagement.archetype === "A3_TIME_BLOCK" ? "Crew booking" : "Project";
+  return engagement.archetype === "A3_TIME_BLOCK"
+    ? t("work.workItem.title.crewBooking")
+    : t("work.workItem.title.project");
 }
 
 /**
@@ -189,11 +192,11 @@ function engagementTitle(engagement: Engagement): string {
  * compatibility fallback for older records, and the generic noun is reserved
  * for a record that genuinely publishes neither.
  */
-function jobTitle(job: PartnerVisit): string {
+function jobTitle(job: PartnerVisit, t: ReturnType<typeof useT>): string {
   const durableTitle = blankToNull(job.display_title);
   if (durableTitle !== null) return durableTitle;
   const [first, ...rest] = job.work_tasks;
-  if (first === undefined) return "Job";
+  if (first === undefined) return t("work.workItem.title.job");
   return rest.length === 0 ? first.label : `${first.label} +${rest.length}`;
 }
 
@@ -264,17 +267,23 @@ function blankToNull(value: string | null): string | null {
  * A null deadline — the nullable A3 `responds_by` — reads as "Offer" with
  * nothing to count down.
  */
-function offerStateLabel(respondsBy: string | null, serverNow: string): string {
-  if (respondsBy === null) return "Offer";
+function offerStateLabel(respondsBy: string | null, serverNow: string, t: ReturnType<typeof useT>): string {
+  if (respondsBy === null) return t("work.workItem.offer.state");
   const remainingMs = new Date(respondsBy).getTime() - new Date(serverNow).getTime();
-  return `Offer · ${describeCountdown(Math.max(remainingMs, 0)).display} left`;
+  return t("work.workItem.offer.stateLeft", {
+    time: describeCountdown(Math.max(remainingMs, 0)).display,
+  });
 }
 
 /* --------------------------------------------------------------------------
    A3 crew offers — the rate-card cascade
    -------------------------------------------------------------------------- */
 
-function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkItem[] {
+function fromCrewOffers(
+  offers: readonly CrewOffer[],
+  serverNow: string,
+  t: ReturnType<typeof useT>,
+): WorkItem[] {
   return offers
     .filter((offer) => isOfferLive(offer, serverNow))
     .map((offer) => {
@@ -291,7 +300,7 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
         // it is never reconstructed from a rate card here (`offer-state.ts`
         // rule 1).
         amountPaise: offer.lead_total_receipt_paise,
-        amountLabel: "Your payout",
+        amountLabel: t("work.workItem.amount.yourPayout"),
         urgency: "live" as const,
         respondsBy: offer.responds_by,
         whenIso: offer.requested_start,
@@ -300,9 +309,12 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
         areaLabel: area,
         ...named(
           headline === null
-            ? `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`
-            : `${headline} · ${offer.headcount} ${offer.headcount === 1 ? "person" : "people"}`,
-          offerStateLabel(offer.responds_by, serverNow),
+            ? t("work.workItem.offer.crewTitle", { helpers: helperCountLine(t, offer.headcount) })
+            : t("work.workItem.offer.headlineTitle", {
+                headline,
+                people: t("work.workItem.offer.peopleCount", { count: offer.headcount }),
+              }),
+          offerStateLabel(offer.responds_by, serverNow, t),
         ),
       };
     });
@@ -340,7 +352,7 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
  * window to close; inventing the same guard here would be this adapter deciding
  * an offer is dead while the server still says otherwise.
  */
-function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
+function fromDirectOffers(offers: readonly Offer[], t: ReturnType<typeof useT>): WorkItem[] {
   return offers
     .filter((offer) => !isOfferSettled(offer))
     .map((offer) => {
@@ -349,9 +361,12 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
       const first = lines[0];
       const label =
         first === undefined
-          ? "job"
+          ? t("work.workItem.offer.jobFallback")
           : lines.length > 1
-            ? `${first.service_label} +${lines.length - 1} more`
+            ? t("work.workItem.offer.moreLines", {
+                label: first.service_label,
+                count: lines.length - 1,
+              })
             : first.service_label;
 
       return {
@@ -363,7 +378,7 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         // `estimated_net` is the server's own gross-minus-commission figure.
         // Null before the projection has priced the unit.
         amountPaise: offer.estimated_net?.amount_paise ?? null,
-        amountLabel: "Est. payout",
+        amountLabel: t("work.workItem.amount.estPayout"),
         urgency: "live" as const,
         // `undo_deadline` first, because once the offer is `ACCEPTED_PENDING_UNDO`
         // that is the clock actually running — `expires_at` is the window the
@@ -378,7 +393,7 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         // `offer.server_now` (not `sources.serverNow`, which belongs to the A3
         // read): each `Offer` row carries its own calibrated clock, published
         // for exactly this reason.
-        ...named(label, offerStateLabel(offer.undo_deadline ?? offer.expires_at, offer.server_now)),
+        ...named(label, offerStateLabel(offer.undo_deadline ?? offer.expires_at, offer.server_now, t)),
       };
     });
 }
@@ -427,6 +442,7 @@ function isEnquiryLapsed(enquiry: EnquirySummary, serverNow: string | null): boo
 function fromEnquiries(
   enquiries: readonly EnquirySummary[],
   serverNow: string | null,
+  t: ReturnType<typeof useT>,
 ): WorkItem[] {
   return enquiries
     .filter((enquiry) => isVendorsMove(enquiry) && !isEnquiryLapsed(enquiry, serverNow))
@@ -450,11 +466,11 @@ function fromEnquiries(
       actionLabel:
         enquiry.archetype === "A5_CUSTOM_PROJECT"
           ? enquiry.status === "INVITED"
-            ? "Review & book visit"
-            : "Book visit"
+            ? t("work.workItem.enquiry.action.reviewAndBookVisit")
+            : t("work.workItem.enquiry.action.bookVisit")
           : enquiry.status === "INVITED"
-            ? "Review request"
-            : "Prepare quote",
+            ? t("work.workItem.enquiry.action.reviewRequest")
+            : t("work.workItem.enquiry.action.prepareQuote"),
       // An `INVITED` enquiry has not been accepted yet, so "needs a price" would
       // be the wrong state for it even though it shares the `needs_price`
       // urgency. The urgency is the card's colour; this is the chip.
@@ -467,10 +483,10 @@ function fromEnquiries(
       ...named(
         enquiry.service_name,
         enquiry.fixed_visit_status === "BOOKED"
-          ? "Visit booked"
+          ? t("work.workItem.enquiry.state.visitBooked")
           : enquiry.status === "INVITED"
-            ? "Waiting for your answer"
-            : "Needs a price",
+            ? t("work.workItem.enquiry.state.waitingForAnswer")
+            : t("work.workItem.enquiry.state.needsPrice"),
       ),
     }));
 }
@@ -504,7 +520,7 @@ function quotedOutcome(
   return null;
 }
 
-function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
+function fromQuotedEnquiries(enquiries: readonly EnquirySummary[], t: ReturnType<typeof useT>): WorkItem[] {
   return enquiries.flatMap((enquiry): WorkItem[] => {
     const outcome = quotedOutcome(enquiry);
     if (outcome === null) return [];
@@ -525,10 +541,10 @@ function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
         ...named(
           enquiry.service_name,
           outcome === "waiting"
-            ? "Quote sent — waiting on the customer"
+            ? t("work.workItem.enquiry.state.quoteSent")
             : outcome === "not_chosen"
-              ? "Not chosen"
-              : "Cancelled",
+              ? t("work.workItem.enquiry.state.notChosen")
+              : t("work.workItem.enquiry.state.cancelled"),
         ),
       },
     ];
@@ -578,7 +594,10 @@ function engagementUrgency(status: EngagementStatus): WorkUrgency {
  * amounts, labelled "Collected directly". A record with no settled day yet
  * falls back to the agreed receipt rather than printing a zero.
  */
-function engagementMoney(engagement: Engagement): {
+function engagementMoney(
+  engagement: Engagement,
+  t: ReturnType<typeof useT>,
+): {
   amountPaise: number | null;
   amountLabel: string | null;
 } {
@@ -586,7 +605,7 @@ function engagementMoney(engagement: Engagement): {
     return { amountPaise: null, amountLabel: null };
   }
   if (engagement.commercial_mode !== "LEAD_ONLY") {
-    return { amountPaise: engagement.staged_total_paise, amountLabel: "Agreed total" };
+    return { amountPaise: engagement.staged_total_paise, amountLabel: t("work.workItem.amount.agreedTotal") };
   }
   if (
     engagement.status === "COMPLETING" ||
@@ -595,11 +614,11 @@ function engagementMoney(engagement: Engagement): {
     engagement.status === "CLOSED"
   ) {
     const collected = collectedDirectlyPaise(engagement.stages);
-    if (collected !== null) return { amountPaise: collected, amountLabel: "Collected directly" };
+    if (collected !== null) return { amountPaise: collected, amountLabel: t("work.workItem.amount.collectedDirectly") };
   }
   return {
     amountPaise: engagement.crew_terms?.lead_receipt_paise ?? engagement.staged_total_paise,
-    amountLabel: "To you, paid daily",
+    amountLabel: t("work.workItem.amount.paidDaily"),
   };
 }
 
@@ -618,38 +637,43 @@ function engagementMoney(engagement: Engagement): {
  * not yet materialised) falls back to "In progress" rather than printing
  * "Day 0 of 0".
  */
-function engagementStatusLabel(engagement: Engagement): string {
+function engagementStatusLabel(engagement: Engagement, t: ReturnType<typeof useT>): string {
   switch (engagement.status) {
     case "PENDING_START":
-      return "Confirmed";
+      return t("work.workItem.engagement.confirmed");
     case "ACTIVE": {
       if (engagement.commercial_mode === "LEAD_ONLY" && engagement.stages.length > 0) {
         const { settled, total } = settledDayCount(engagement.stages);
-        if (total > 0) return `Day ${Math.min(settled + 1, total)} of ${total}`;
+        if (total > 0) {
+          return t("work.workItem.engagement.dayOf", {
+            day: Math.min(settled + 1, total),
+            total,
+          });
+        }
       }
-      return "In progress";
+      return t("work.workItem.engagement.inProgress");
     }
     case "COMPLETING":
-      return "Waiting for the customer";
+      return t("work.workItem.engagement.waitingForCustomer");
     case "COMPLETED":
-      return "Completed";
+      return t("work.workItem.engagement.completed");
     case "WARRANTY":
-      return "Warranty period";
+      return t("work.workItem.engagement.warranty");
     case "CLOSED":
-      return "Closed";
+      return t("work.workItem.engagement.closed");
     case "DISPUTED":
-      return "In dispute";
+      return t("work.workItem.engagement.disputed");
     case "CANCELLED":
-      return "Cancelled";
+      return t("work.workItem.engagement.cancelled");
   }
 }
 
-function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
+function fromEngagements(engagements: readonly Engagement[], t: ReturnType<typeof useT>): WorkItem[] {
   return engagements.map((engagement) => ({
     kind: "engagement" as const,
     key: `engagement:${engagement.id}`,
     href: ENGAGEMENT_HREF(engagement.id),
-    ...engagementMoney(engagement),
+    ...engagementMoney(engagement, t),
     urgency: engagementUrgency(engagement.status),
     respondsBy: null,
     // Only terminal engagements publish an honest completion instant. Active
@@ -675,7 +699,7 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
         vendor the one thing they could already see from its colour, and none
         of the thing they opened the app to find out.
     */
-    ...named(engagementTitle(engagement), engagementStatusLabel(engagement)),
+    ...named(engagementTitle(engagement, t), engagementStatusLabel(engagement, t)),
   }));
 }
 
@@ -696,7 +720,7 @@ function visitUrgency(status: VisitStatus): WorkUrgency {
   return "doing";
 }
 
-function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
+function fromJobs(jobs: readonly PartnerVisit[], t: ReturnType<typeof useT>): WorkItem[] {
   return jobs.map((job) => ({
       kind: "job" as const,
       key: `job:${job.id}`,
@@ -709,7 +733,11 @@ function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
           ? null
           : (job.earning?.net_paise ?? job.estimated_earning?.net_paise ?? null),
       amountLabel:
-        job.status === "CANCELLED" ? null : job.earning === null ? "Est. payout" : "You earned",
+        job.status === "CANCELLED"
+          ? null
+          : job.earning === null
+            ? t("work.workItem.amount.estPayout")
+            : t("work.workItem.amount.youEarned"),
       urgency: visitUrgency(job.status),
       respondsBy: null,
       whenIso: job.scheduled_start,
@@ -724,7 +752,7 @@ function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
       // that table is already the one truth the job list and the job detail
       // screen both read, and a card here saying something different for the
       // same status would be a third, disagreeing, vocabulary.
-      ...named(jobTitle(job), STATUS_COPY[job.status].label),
+      ...named(jobTitle(job, t), t(STATUS_COPY[job.status].labelKey)),
     }));
 }
 
@@ -794,7 +822,7 @@ export function toWorkItems(sources: {
    * is dead. The list endpoint's own filtering is the backstop in that gap.
    */
   serverNow: string | null;
-}): WorkItem[] {
+}, t: ReturnType<typeof useT>): WorkItem[] {
   const items: WorkItem[] = [
     // No `server_now` means the offers read has not landed — `CrewOfferList`
     // publishes it non-nullable (`schema.d.ts:6213`), so the only way it is
@@ -805,17 +833,17 @@ export function toWorkItems(sources: {
     // An explicit null check rather than a truthiness one: the distinction being
     // drawn is "did the read land", not "is this string non-empty".
     ...(sources.offersServerNow !== null
-      ? fromCrewOffers(sources.offers, sources.offersServerNow)
+      ? fromCrewOffers(sources.offers, sources.offersServerNow, t)
       : []),
     // Both offer sources land in `live` and interleave by deadline — an A1 offer
     // expiring in seconds should outrank an A3 one with a minute left, and the
     // comparator already does that on `respondsBy` without knowing which source
     // produced the row.
-    ...fromDirectOffers(sources.directOffers),
-    ...fromEnquiries(sources.enquiries, sources.serverNow),
-    ...fromQuotedEnquiries(sources.enquiries),
-    ...fromEngagements(sources.engagements),
-    ...fromJobs(sources.jobs),
+    ...fromDirectOffers(sources.directOffers, t),
+    ...fromEnquiries(sources.enquiries, sources.serverNow, t),
+    ...fromQuotedEnquiries(sources.enquiries, t),
+    ...fromEngagements(sources.engagements, t),
+    ...fromJobs(sources.jobs, t),
   ];
 
   return items.sort((a, b) => {

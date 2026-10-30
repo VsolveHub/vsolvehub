@@ -1,12 +1,13 @@
 "use client";
 
-import { ErrorState, Spinner } from "@vsolve/ui";
+import { ErrorState, Spinner, useT } from "@vsolve/ui";
 import { useApplicationEditor } from "./application-editor";
 import { useApplicationReference } from "../reference-queries";
 import { toggle } from "../model/draft";
 import { SelectableRow } from "./selectable-row";
 
 export function AreasStep() {
+  const t = useT();
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
 
@@ -14,7 +15,7 @@ export function AreasStep() {
     return (
       <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Loading service areas…
+        {t("apply.areas.loading")}
       </p>
     );
   }
@@ -22,9 +23,9 @@ export function AreasStep() {
   if (reference.isError) {
     return (
       <ErrorState
-        title="Could not load service areas"
-        message="Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.areas.loadError.title")}
+        message={t("apply.common.checkConnectionAndRetry")}
+        actionLabel={t("common.tryAgain")}
         onAction={reference.refetch}
       />
     );
@@ -36,7 +37,7 @@ export function AreasStep() {
         role="status"
         className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary"
       >
-        No service areas are currently available for registration.
+        {t("apply.areas.empty")}
       </p>
     );
   }
@@ -50,7 +51,7 @@ export function AreasStep() {
     <fieldset className="border-0 p-0 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <legend className="text-sm font-bold text-navy-900">
-          Service Locations <span className="text-danger-text">*</span>
+          {t("apply.areas.legend")} <span className="text-danger-text">*</span>
         </legend>
 
         {!isReadOnly && reference.serviceAreas.length > 1 && (
@@ -65,7 +66,7 @@ export function AreasStep() {
             }}
             className="text-xs font-semibold text-navy-700 hover:text-signal-700"
           >
-            {allSelected ? "Deselect all" : "Select all"}
+            {allSelected ? t("apply.areas.deselectAll") : t("apply.areas.selectAll")}
           </button>
         )}
       </div>
@@ -87,7 +88,7 @@ export function AreasStep() {
 
       {selectedCount === 0 && (
         <p className="text-xs font-semibold text-danger-text mt-1">
-          * Please select at least one service location.
+          {t("apply.areas.selectAtLeastOne")}
         </p>
       )}
     </fieldset>

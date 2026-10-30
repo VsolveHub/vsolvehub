@@ -3,7 +3,12 @@
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *
-from config.settings.guards import guard_per_host_sessions
+from config.settings.guards import (
+    PRODUCTION_MINIMUM_PAYOUT_COOLING_HOURS,
+    guard_payout_account_cooling,
+    guard_payout_clearing,
+    guard_per_host_sessions,
+)
 
 DEBUG = False
 
@@ -48,10 +53,10 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
 
 if OTP_PROVIDER == "development" or OTP_DEVELOPMENT_CODE_ENABLED:
     raise ImproperlyConfigured("Development OTP delivery/exposure is forbidden in production.")
-if GEOCODING_PROVIDER == "unconfigured":
-    raise ImproperlyConfigured("GEOCODING_PROVIDER must be configured in production.")
-if "configure-production-contact" in GEOCODING_USER_AGENT:
-    raise ImproperlyConfigured("GEOCODING_USER_AGENT must identify a production contact.")
+if GEOCODING_PROVIDER != "google":
+    raise ImproperlyConfigured("GEOCODING_PROVIDER must be google in production.")
+if not GOOGLE_MAPS_SERVER_KEY:
+    raise ImproperlyConfigured("GOOGLE_MAPS_SERVER_KEY must be configured in production.")
 # Files on a server's own disk vanish when it is replaced: production keeps every file in R2.
 if not R2_PUBLIC_ENABLED:
     raise ImproperlyConfigured(
@@ -64,6 +69,12 @@ if not R2_PRIVATE_ENABLED:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must be configured in production.")
 if R2_PRIVATE_BUCKET == R2_PUBLIC_BUCKET:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must not be the public photo bucket.")
+
+if not PARTNER_LEGAL_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured(
+        "PARTNER_LEGAL_BASE_URL must be the Partner site's https origin, where /terms and "
+        "/privacy are published as the agreements applicants accept."
+    )
 if DOCUMENT_STORAGE_PROVIDER not in {"r2", "supabase"}:
     raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be r2 or supabase in production.")
 if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_STORAGE_URL.startswith("https://"):
@@ -109,6 +120,28 @@ if len(PAYMENT_WEBHOOK_SECRET) < MINIMUM_WEBHOOK_SECRET_LENGTH:
     raise ImproperlyConfigured("PAYMENT_WEBHOOK_SECRET must contain at least 32 characters.")
 if not RAZORPAY_API_BASE_URL.startswith("https://"):
     raise ImproperlyConfigured("RAZORPAY_API_BASE_URL must use HTTPS.")
+
+# Payouts. `unconfigured` is a valid production state (payouts off). The fake never is, and a
+# RazorpayX deployment must be able to verify its webhooks, so an empty secret refuses to boot.
+if PAYOUT_PROVIDER == "fake" or PAYOUTS_ALLOW_FAKE_PROVIDER:
+    raise ImproperlyConfigured("The fake payout provider must stay off in production.")
+if PAYOUT_PROVIDER == "razorpayx":
+    if not (RAZORPAYX_KEY_ID and RAZORPAYX_KEY_SECRET and RAZORPAYX_ACCOUNT_NUMBER):
+        raise ImproperlyConfigured(
+            "RAZORPAYX_KEY_ID, RAZORPAYX_KEY_SECRET and RAZORPAYX_ACCOUNT_NUMBER must be set "
+            "when PAYOUT_PROVIDER is razorpayx."
+        )
+    if len(RAZORPAYX_WEBHOOK_SECRET) < MINIMUM_WEBHOOK_SECRET_LENGTH:
+        raise ImproperlyConfigured("RAZORPAYX_WEBHOOK_SECRET must contain at least 32 characters.")
+    if not RAZORPAYX_API_BASE_URL.startswith("https://"):
+        raise ImproperlyConfigured("RAZORPAYX_API_BASE_URL must use HTTPS.")
+if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER != "razorpayx":
+    raise ImproperlyConfigured("PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx.")
+guard_payout_account_cooling(
+    PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=PRODUCTION_MINIMUM_PAYOUT_COOLING_HOURS
+)
+guard_payout_clearing(PAYOUT_CLEARING_HOURS, minimum_hours=M1_QUALITY_DISPUTE_WINDOW_HOURS)
+
 if not PAYMENT_LIVE_COLLECTIONS_APPROVED:
     raise ImproperlyConfigured(
         "PAYMENT_LIVE_COLLECTIONS_APPROVED requires CA/legal approval before live collection."

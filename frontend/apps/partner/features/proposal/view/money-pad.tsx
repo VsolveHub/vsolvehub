@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, cn, formatMoney } from "@vsolve/ui";
+import { Button, cn, formatMoney, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 import { type PictogramName } from "@/components/pictogram";
@@ -62,6 +62,7 @@ export function MoneyPad({
 }: MoneyPadProps) {
   // Held as rupees while being typed. Converting on every key would round the
   // display out from under somebody mid-number.
+  const t = useT();
   const [rupees, setRupees] = useState<number>(amountPaise === null ? 0 : amountPaise / 100);
 
   function commit(next: number): void {
@@ -110,17 +111,17 @@ export function MoneyPad({
         ))}
         <PadKey
           label="⌫"
-          announce="Delete the last digit"
+          announce={t("proposal.screens.moneyPad.deleteDigit")}
           onPress={() => commit(Math.floor(rupees / 10))}
         />
       </div>
 
       <div className="flex items-center gap-2 pt-0.5">
         <Button variant="ghost" size="sm" className="shrink-0 px-3 text-xs text-text-secondary" onClick={() => commit(0)}>
-          Clear
+          {t("proposal.screens.moneyPad.clear")}
         </Button>
         <Button block size="sm" className="flex-1 font-bold text-sm h-9" onClick={onDone}>
-          Done
+          {t("common.done")}
         </Button>
       </div>
     </section>

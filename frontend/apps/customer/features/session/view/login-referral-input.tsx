@@ -66,7 +66,7 @@ export function LoginReferralInput() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-[#EA580C] hover:text-[#d65f1a] transition-colors"
+        className="flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[#EA580C] hover:text-[#d65f1a] transition-colors"
       >
         <Gift className="size-3.5" />
         <span>Have an invite code? Apply it only at signup</span>

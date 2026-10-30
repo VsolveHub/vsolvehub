@@ -1,7 +1,5 @@
 """Unit and API tests for referral codes, attributions, and volume-tier payouts (ADR-0010)."""
 
-# ruff: noqa: PLR2004
-
 import uuid
 from datetime import timedelta
 from http import HTTPStatus

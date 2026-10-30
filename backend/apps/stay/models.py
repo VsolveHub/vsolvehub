@@ -16,6 +16,7 @@ from apps.foundation.storage_paths import (
 from apps.foundation.storage_paths import (
     stay_review_upload_to as _unified_stay_review_upload_to,
 )
+from apps.locations.pins import pin_constraints
 
 
 def stay_ad_upload_to(instance: models.Model, filename: str) -> str:
@@ -58,6 +59,11 @@ class Property(models.Model):
     slug = models.SlugField(max_length=100, unique=True, editable=False)
     description = models.TextField(blank=True)
     location_text = models.CharField(max_length=180, blank=True)
+    #: The host's map pin. Both or neither; a property from before pins existed has neither.
+    #: Guests see it only rounded to an area (`apps.locations.pins.AREA_DECIMALS`): the public
+    #: listing names the area and city, never the building.
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     moderation_status = models.CharField(
         max_length=16, choices=ModerationStatus.choices, default=ModerationStatus.DRAFT
     )
@@ -80,6 +86,9 @@ class Property(models.Model):
     class Meta:
         ordering = ("-created_at",)
         verbose_name_plural = "properties"
+        constraints = [
+            *pin_constraints(prefix="stay_property", latitude="latitude", longitude="longitude"),
+        ]
 
     def __str__(self) -> str:
         return self.title
@@ -146,6 +155,31 @@ class Unit(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return self.name
+
+
+class RoomLook(models.Model):
+    """A look of a room type: the photos some of its rooms share.
+
+    "1 BHK" may have rooms 101-103 that look one way and 104-105 that look another. Each look
+    has its own photos and is shown to guests as its own card ("1 BHK", "1 BHK · With balcony"),
+    with the type's price. Every room belongs to exactly one look. The first look of a type may
+    be unnamed; every other look needs a name, so guests can tell the cards apart.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="looks")
+    name = models.CharField(max_length=60, blank=True, default="")
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.name or "Main look"
+
 
 class Room(models.Model):
     """One physical room (or bed) of a room type, numbered by the host: "Room 101".
@@ -165,6 +199,8 @@ class Room(models.Model):
     #: Denormalised from ``unit`` so room numbers can be unique per property.
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="rooms")
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="rooms")
+    #: Which of the type's looks (photo sets) this room has. Always one of ``unit``'s looks.
+    look = models.ForeignKey(RoomLook, on_delete=models.PROTECT, related_name="rooms")
     number = models.CharField(max_length=40)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.AVAILABLE)
     #: Who is in the room, for the host's own reference. Filled from the enquiry or visit.
@@ -214,6 +250,10 @@ class StayEnquiry(models.Model):
     unit = models.ForeignKey(
         Unit, null=True, blank=True, on_delete=models.PROTECT, related_name="enquiries"
     )
+    #: The look the guest picked, when the type has several. Tells the host which kind of room.
+    look = models.ForeignKey(
+        RoomLook, null=True, blank=True, on_delete=models.SET_NULL, related_name="enquiries"
+    )
     unit_reservation = models.OneToOneField(
         "UnitReservation",
         null=True,
@@ -245,6 +285,10 @@ class StayEnquiry(models.Model):
     class Meta:
         ordering = ("-created_at",)
         verbose_name_plural = "stay enquiries"
+        indexes = [models.Index(fields=("-created_at",), name="stay_enquiry_created_idx")]
+
+    def __str__(self) -> str:
+        return f"stay-enquiry:{self.pk}"
 
 
 class VisitSlot(models.Model):
@@ -329,6 +373,9 @@ class StayVisit(models.Model):
     unit = models.ForeignKey(
         Unit, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
     )
+    look = models.ForeignKey(
+        RoomLook, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
+    )
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stay_visits"
     )
@@ -388,6 +435,9 @@ class StayModerationEvent(models.Model):
     reason = models.CharField(max_length=480, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self) -> str:
+        return f"stay-moderation:{self.property_id}:{self.pk}"
+
 
 class PropertyMedia(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -399,6 +449,9 @@ class PropertyMedia(models.Model):
 
     class Meta:
         ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.caption or f"media:{self.pk}"
 
     @builtins.property
     def image_url(self) -> str:
@@ -418,6 +471,8 @@ class UnitMedia(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="media")
+    #: The look these photos show. Guests see each look's photos on its own card.
+    look = models.ForeignKey(RoomLook, on_delete=models.CASCADE, related_name="media")
     url = models.URLField(max_length=1024)
     display_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -498,15 +553,15 @@ class StayReview(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return str(self.id)
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.body and self.comment:
             self.body = self.comment
         elif not self.comment and self.body:
             self.comment = self.body
         super().save(*args, **kwargs)
-
-    def __str__(self) -> str:
-        return str(self.id)
 
 
 class UnitReservation(models.Model):
@@ -584,6 +639,7 @@ class StayReservation(models.Model):
                 name="stay_reservation_positive_total",
             ),
         ]
+        indexes = [models.Index(fields=("-created_at",), name="stay_reservation_created_idx")]
 
     def __str__(self) -> str:
         return str(self.id)
@@ -645,4 +701,3 @@ class StaySubscription(models.Model):
 
     def __str__(self) -> str:
         return f"{self.host_id}:{self.plan_id}:{self.status}"
-

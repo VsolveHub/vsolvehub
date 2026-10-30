@@ -1,8 +1,15 @@
 "use client";
 
-import { ApiRequestError, getStableIdempotencyKey, request, type Schemas } from "@vsolve/api-client";
+import {
+  ApiRequestError,
+  getStableIdempotencyKey,
+  request,
+  serverClock,
+  type Schemas,
+} from "@vsolve/api-client";
 import { EXPIRING_STATE, boundedPoll, queryKeys } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -17,8 +24,9 @@ import { getApiClient } from "@/lib/api/browser";
  * — which is the point. `G7` requires that a Partner cannot see another
  * Partner's scope or earnings, and absence is a stronger guarantee than a filter.
  *
- * The customer's exact address is likewise not here. It arrives through the
- * offer disclosure gate, not through the work surface.
+ * The customer's exact address, map route and phone arrive on the visit itself,
+ * but only from two hours before the start (contract 1.82.0). Until then the
+ * server sends `null` and the locality alone; this module never derives either.
  *
  * ## Release is offered without a threat attached
  *
@@ -52,12 +60,104 @@ export function isSettled(visit: PartnerVisit): boolean {
   return SETTLED_STATUSES.includes(visit.status);
 }
 
+export type GatedAction = "MARK_EN_ROUTE" | "MARK_ARRIVED";
+
+/** The status each clocked step moves on from. */
+const GATED_FROM: Record<GatedAction, VisitStatus> = {
+  MARK_EN_ROUTE: "CONFIRMED",
+  MARK_ARRIVED: "EN_ROUTE",
+};
+
+/**
+ * "On the way" and "Arrived" are clocked by the server (contract 1.82.0): on
+ * the way from an hour before the start, arrived from half an hour before.
+ * `allowed_actions` is the server's answer for the instant it was read, and it
+ * is the only thing these read — Django refuses an early tap regardless, so a
+ * client that guessed the window itself would only be wrong in public.
+ */
 export function canGoEnRoute(visit: PartnerVisit): boolean {
-  return visit.status === "CONFIRMED";
+  return visit.status === "CONFIRMED" && visit.allowed_actions.includes("MARK_EN_ROUTE");
 }
 
 export function canArrive(visit: PartnerVisit): boolean {
-  return visit.status === "EN_ROUTE";
+  return visit.status === "EN_ROUTE" && visit.allowed_actions.includes("MARK_ARRIVED");
+}
+
+export interface WaitingGate {
+  readonly action: GatedAction;
+  /**
+   * `not_yet`: opens at `opensAt`. `opening`: the window has started by the
+   * calibrated clock but this read predates it — a refetch is due. `closed`:
+   * the window ended at `closesAt`; only Operations can move the visit now.
+   */
+  readonly state: "not_yet" | "opening" | "closed";
+  readonly opensAt: string;
+  readonly closesAt: string;
+}
+
+/** The clocked step this visit is waiting on, when the server has not opened it. */
+export function waitingGate(visit: PartnerVisit, serverNowMs: number): WaitingGate | null {
+  for (const action of ["MARK_EN_ROUTE", "MARK_ARRIVED"] as const) {
+    if (visit.status !== GATED_FROM[action] || visit.allowed_actions.includes(action)) continue;
+    const opensAt =
+      action === "MARK_EN_ROUTE" ? visit.gates.en_route_opens_at : visit.gates.arrival_opens_at;
+    const closesAt =
+      action === "MARK_EN_ROUTE" ? visit.gates.en_route_closes_at : visit.gates.arrival_closes_at;
+    const state =
+      serverNowMs > Date.parse(closesAt)
+        ? "closed"
+        : serverNowMs >= Date.parse(opensAt)
+          ? "opening"
+          : "not_yet";
+    return { action, state, opensAt, closesAt };
+  }
+  return null;
+}
+
+/** Who the Partner is visiting, once the server discloses it; `null` before. */
+export function visitContact(visit: PartnerVisit): { firstName: string; phone: string } | null {
+  if (visit.customer_first_name === null || visit.customer_phone === null) return null;
+  return { firstName: visit.customer_first_name, phone: visit.customer_phone };
+}
+
+/** setTimeout's ceiling; a visit is at most a week out, so this only guards. */
+const MAX_TIMER_MS = 2_147_483_647;
+
+/**
+ * Re-read the visit the moment its next window opens.
+ *
+ * The countdown is drawn from the server's published instants, but whether the
+ * step is open is the server's call — so when the clock reaches `opensAt` (or
+ * the address unlock), this asks again rather than flipping a button locally.
+ */
+export function useRefreshVisitAtGates(visit: PartnerVisit): void {
+  const queryClient = useQueryClient();
+  const refetchedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    const refresh = () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.partnerWork.visit(visit.id) });
+    const now = serverClock.now();
+    const gate = waitingGate(visit, now);
+    const instants = [
+      gate?.state === "not_yet" ? gate.opensAt : null,
+      visit.site_address === null && !isSettled(visit) ? visit.gates.address_unlocks_at : null,
+    ]
+      .filter((instant): instant is string => instant !== null)
+      .map((instant) => Date.parse(instant))
+      .filter((at) => Number.isFinite(at) && at > now);
+
+    // Opened by the clock but not by this read: ask once per version, not in a loop.
+    const staleKey = `${visit.id}:${visit.version}`;
+    if (gate?.state === "opening" && refetchedFor.current !== staleKey) {
+      refetchedFor.current = staleKey;
+      refresh();
+    }
+    if (instants.length === 0) return undefined;
+    const delay = Math.min(Math.min(...instants) - now + 1_000, MAX_TIMER_MS);
+    const timer = setTimeout(refresh, delay);
+    return () => clearTimeout(timer);
+  }, [queryClient, visit]);
 }
 
 /** The Partner is on site and work has not begun: the OTP is the next step. */

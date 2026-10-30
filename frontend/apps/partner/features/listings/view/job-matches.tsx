@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, EmptyState } from "@vsolve/ui";
+import { Badge, Button, Card, EmptyState, useT } from "@vsolve/ui";
 import { Lock, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -17,11 +17,14 @@ import {
   type CandidateMatch,
 } from "../jobs-queries";
 
-const LEVELS = [
-  { key: "STRONG", label: "Strong", tone: "success" as const },
-  { key: "GOOD", label: "Good", tone: "info" as const },
-  { key: "OTHER", label: "Others", tone: "neutral" as const },
-];
+function useLevels() {
+  const t = useT();
+  return [
+    { key: "STRONG", label: t("listings.matches.level.strong"), tone: "success" as const },
+    { key: "GOOD", label: t("listings.matches.level.good"), tone: "info" as const },
+    { key: "OTHER", label: t("listings.matches.level.others"), tone: "neutral" as const },
+  ];
+}
 
 /**
  * Candidates for one job, best first, grouped Strong / Good / Others, with why each matches
@@ -38,6 +41,8 @@ export function JobMatches({
   /** Strong and good matches who have not applied (from the job's counts). */
   hiddenMatchCount?: number;
 }) {
+  const t = useT();
+  const LEVELS = useLevels();
   const [level, setLevel] = useState("STRONG");
   const home = useQuery({ queryKey: ["partner-listings", "home"], queryFn: fetchListingHome });
   const locked = home.data ? !home.data.can_see_matches : false;
@@ -75,40 +80,41 @@ export function JobMatches({
               {hiddenMatchCount > 0 ? (
                 <>
                   <strong>
-                    {hiddenMatchCount} {hiddenMatchCount === 1 ? "person matches" : "people match"} this job
+                    {t(
+                      hiddenMatchCount === 1 ? "listings.matches.lockedSingular" : "listings.matches.lockedPlural",
+                      { count: hiddenMatchCount },
+                    )}
                   </strong>{" "}
-                  but {hiddenMatchCount === 1 ? "hasn't" : "haven't"} applied yet.
+                  {t(hiddenMatchCount === 1 ? "listings.matches.notAppliedSingular" : "listings.matches.notAppliedPlural")}
                 </>
               ) : (
-                <strong>Find people who match this job before they apply.</strong>
+                <strong>{t("listings.matches.lockedNoMatches")}</strong>
               )}{" "}
-              Upgrade your plan to see matching candidates and invite them. On the free plan you see the people who
-              applied, below.
+              {t("listings.matches.upgradeNote")}
             </p>
           </div>
           <Link
             href="/listings?plans=open"
             className="inline-flex shrink-0 items-center justify-center rounded-control bg-action px-4 py-2 text-xs font-bold text-action-text"
           >
-            See plans
+            {t("listings.matches.seePlans")}
           </Link>
         </Card>
       ) : null}
       <p className="text-xs text-text-secondary">
-        Matched on the information in each profile. Please interview candidates to check their skills and experience —
-        the final choice is yours.
+        {t("listings.matches.matchedNote")}
       </p>
-      {matches.isLoading ? <p className="text-sm text-text-secondary">Finding candidates…</p> : null}
+      {matches.isLoading ? <p className="text-sm text-text-secondary">{t("listings.matches.finding")}</p> : null}
       {matches.error ? <p className="text-sm text-danger-text">{friendlyErrorMessage(matches.error)}</p> : null}
       {invite.error ? <p className="text-sm text-danger-text">{friendlyErrorMessage(invite.error)}</p> : null}
       {!matches.isLoading && shown.length === 0 ? (
         <EmptyState
           compact
-          title="No candidates here yet"
+          title={t("listings.matches.emptyTitle")}
           description={
             locked
-              ? "People who apply to this job appear here with their match score."
-              : "As job seekers in this city make profiles, they appear here. You'll get a daily summary."
+              ? t("listings.matches.emptyLocked")
+              : t("listings.matches.emptyUnlocked")
           }
         />
       ) : null}
@@ -121,14 +127,22 @@ export function JobMatches({
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <p className="flex flex-wrap items-center gap-2">
                     <span className="text-base font-bold text-navy-900">{row.display_name}</span>
-                    <Badge tone={look.tone}>{row.match.score}% match</Badge>
-                    {row.applied ? <Badge tone="action">Applied</Badge> : null}
+                    <Badge tone={look.tone}>{t("listings.matches.scorePercent", { score: row.match.score })}</Badge>
+                    {row.applied ? <Badge tone="action">{t("listings.matches.applied")}</Badge> : null}
                   </p>
                   <p className="text-sm text-text-secondary">
                     {[
                       optionLabel(options.data?.experience_bands, row.experience_band),
-                      row.expected_salary_rupees ? `expects ₹${row.expected_salary_rupees.toLocaleString("en-IN")}` : "",
-                      row.available_from ? `joins ${row.available_from === "IMMEDIATE" ? "immediately" : "soon"}` : "",
+                      row.expected_salary_rupees
+                        ? t("listings.matches.expectsPay", { amount: row.expected_salary_rupees.toLocaleString("en-IN") })
+                        : "",
+                      row.available_from
+                        ? t(
+                            row.available_from === "IMMEDIATE"
+                              ? "listings.matches.joinsImmediately"
+                              : "listings.matches.joinsSoon",
+                          )
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -150,7 +164,7 @@ export function JobMatches({
                 <div className="flex shrink-0 gap-2">
                   {row.applied ? (
                     <Button size="sm" variant="secondary" onClick={onOpenApplications}>
-                      View application
+                      {t("listings.matches.viewApplication")}
                     </Button>
                   ) : (
                     <Button
@@ -158,7 +172,7 @@ export function JobMatches({
                       disabled={invited.has(row.profile_id) || invite.isPending}
                       onClick={() => invite.mutate(row.profile_id)}
                     >
-                      {invited.has(row.profile_id) ? "Invited" : "Invite to apply"}
+                      {invited.has(row.profile_id) ? t("listings.matches.invited") : t("listings.matches.inviteToApply")}
                     </Button>
                   )}
                 </div>

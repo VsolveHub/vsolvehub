@@ -2,9 +2,10 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dialog, formatMoney } from "@vsolve/ui";
+import { Dialog, formatMoney, useHydrated } from "@vsolve/ui";
 import { describeError, fetchCachedQuery, queryKeys, SESSION_STATE } from "@vsolve/query";
 import { fetchServiceDetail } from "@/features/catalog/client-queries";
 import {
@@ -16,6 +17,7 @@ import {
   type CartItem,
 } from "@/features/checkout/queries";
 import { cartMergeConflict, duplicateCartItemConflict } from "@/features/checkout/conflicts";
+import { RemoteImage } from "@/components/remote-image";
 import { getApiClient } from "@/lib/api/browser";
 import { request } from "@vsolve/api-client";
 
@@ -261,12 +263,12 @@ function HomepageServiceCard({
   return (
     <div className="group flex w-[280px] shrink-0 flex-col rounded-2xl border border-[#e7e2da] bg-white shadow-xs transition-shadow hover:shadow-md md:w-full">
       <div className="flex flex-1 flex-col justify-between gap-4 p-4">
-        <Link href={href} className="flex cursor-pointer flex-col gap-1.5">
+        <IntentLink href={href} className="flex cursor-pointer flex-col gap-1.5">
           <h3 className="font-extrabold text-base text-navy-900 transition-colors group-hover:text-action">
             {item.name}
           </h3>
           <p className="text-xs text-text-secondary line-clamp-2 leading-relaxed">{item.desc}</p>
-        </Link>
+        </IntentLink>
         <div className="mt-1 flex items-center justify-between">
           <span className="text-sm font-black text-navy-900">₹{item.price}</span>
           {renderAction(item.slug)}
@@ -321,7 +323,7 @@ const CAROUSEL_SLIDES: PromoSlide[] = [
     subtitle: "Ensure your home wiring is safe. Book modular switchboard repairs and switch safety audits starting at ₹129.",
     buttonText: "Know more",
     link: "/catalog/electrician",
-    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&fit=crop",
     bgClass: "bg-[#FFF9F5]",
     btnBg: "bg-[#EA580C] hover:bg-[#C2410C] text-white",
   },
@@ -330,7 +332,7 @@ const CAROUSEL_SLIDES: PromoSlide[] = [
     subtitle: "Trace hidden pipeline leaks and install premium, drip-free bathroom mixers starting at ₹199.",
     buttonText: "Know more",
     link: "/catalog/plumber",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&fit=crop",
     bgClass: "bg-[#F0F7FF]",
     btnBg: "bg-[#0284C7] hover:bg-[#0369a1] text-white",
   },
@@ -339,7 +341,7 @@ const CAROUSEL_SLIDES: PromoSlide[] = [
     subtitle: "Fix loose cabinet shutters, align squeaking door hinges, or mount floating wall shelves starting at ₹299.",
     buttonText: "Know more",
     link: "/catalog/technician",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&fit=crop",
     bgClass: "bg-[#FEFDF0]",
     btnBg: "bg-[#D97706] hover:bg-[#B45309] text-white",
   },
@@ -386,9 +388,13 @@ export function HeroSplitCarousel() {
 
         {/* Right Image column */}
         <div className="relative w-full md:w-[50%] h-[180px] md:h-full shrink-0 overflow-hidden">
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-all duration-500 scale-100"
-            style={{ backgroundImage: `url('${slide.image}')` }}
+          <RemoteImage
+            key={slide.image}
+            src={slide.image}
+            alt=""
+            fill
+            sizes="(min-width: 768px) 600px, 100vw"
+            className="object-cover object-center"
           />
         </div>
 
@@ -397,7 +403,7 @@ export function HeroSplitCarousel() {
       {/* Navigation Buttons */}
       <button
         onClick={handlePrev}
-        className="absolute left-4 top-1/2 -translate-y-1/2 size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
+        className="absolute bottom-3 right-16 size-10 md:bottom-auto md:right-auto md:left-4 md:top-1/2 md:-translate-y-1/2 md:size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
         aria-label="Previous slide"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="size-4 rotate-180">
@@ -406,7 +412,7 @@ export function HeroSplitCarousel() {
       </button>
       <button
         onClick={handleNext}
-        className="absolute right-4 top-1/2 -translate-y-1/2 size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
+        className="absolute bottom-3 right-4 size-10 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
         aria-label="Next slide"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
@@ -415,16 +421,23 @@ export function HeroSplitCarousel() {
       </button>
 
       {/* Dot Indicators */}
-      <div className="absolute bottom-4 left-8 flex gap-1.5 z-20">
+      {/* Each dot sits in a 44px-tall button: the dot alone was a 6px tap target. */}
+      <div className="absolute bottom-1 left-7 flex z-20">
         {CAROUSEL_SLIDES.map((_, idx) => (
           <button
             key={idx}
+            type="button"
             onClick={() => setCurrentIdx(idx)}
-            className={`size-1.5 rounded-full transition-all duration-300 ${
-              idx === currentIdx ? "w-5 bg-navy-900" : "bg-navy-900/30"
-            }`}
+            className="flex h-11 items-center px-[3px]"
             aria-label={`Go to slide ${idx + 1}`}
-          />
+            aria-current={idx === currentIdx ? "true" : undefined}
+          >
+            <span
+              className={`block h-1.5 rounded-full transition-all duration-300 ${
+                idx === currentIdx ? "w-5 bg-navy-900" : "w-1.5 bg-navy-900/30"
+              }`}
+            />
+          </button>
         ))}
       </div>
     </section>
@@ -642,6 +655,10 @@ function CustomerReviewsMarquee() {
 export function HomepageClientSections() {
   const queryClient = useQueryClient();
   const cartQuery = useCart();
+  // The server renders with no cart; the browser may already hold one in the query cache.
+  // Reading it before hydration drew a quantity stepper where the server drew "Add +" and
+  // React threw a hydration mismatch. Until hydrated, render exactly what the server did.
+  const hydrated = useHydrated();
   const addItem = useAddCartItem();
   const updateItem = useUpdateCartItem();
   const removeItem = useRemoveCartItem();
@@ -789,7 +806,7 @@ export function HomepageClientSections() {
   };
 
   const renderItemAction = (slug: string) => {
-    const cart = cartQuery.data;
+    const cart = hydrated ? cartQuery.data : undefined;
     const cartItem = cart?.items.find((item) => item.service_slug === slug);
 
     if (cartItem) {
@@ -862,7 +879,7 @@ export function HomepageClientSections() {
       <section className="flex flex-col gap-5">
         <div>
           <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Best Sellers</h2>
-          <p className="text-sm md:text-base text-text-secondary mt-1">Most booked services in your city</p>
+          <p className="text-sm md:text-base text-text-secondary mt-1">Popular quick fixes with a fixed starting price</p>
         </div>
 
         <HomepageServiceRow items={BEST_SELLERS} renderAction={renderItemAction} />
@@ -878,15 +895,15 @@ export function HomepageClientSections() {
             <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Electrician Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Certified electrical installations and diagnostics</p>
           </div>
-          <Link
+          <IntentLink
             href="/catalog/electrician"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
+            className="-my-3.5 inline-flex items-center gap-1 py-3.5 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
             </svg>
-          </Link>
+          </IntentLink>
         </div>
 
         <HomepageServiceRow items={ELECTRICIAN_SERVICES} renderAction={renderItemAction} />
@@ -937,15 +954,15 @@ export function HomepageClientSections() {
             <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Plumbing Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Taps, leakages, and sanitary fixes</p>
           </div>
-          <Link
+          <IntentLink
             href="/catalog/plumber"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
+            className="-my-3.5 inline-flex items-center gap-1 py-3.5 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
             </svg>
-          </Link>
+          </IntentLink>
         </div>
 
         <HomepageServiceRow items={PLUMBING_SERVICES} renderAction={renderItemAction} />
@@ -958,15 +975,15 @@ export function HomepageClientSections() {
             <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Carpenter Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Furniture repair, mounts, and fittings</p>
           </div>
-          <Link
+          <IntentLink
             href="/catalog/technician"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
+            className="-my-3.5 inline-flex items-center gap-1 py-3.5 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
             </svg>
-          </Link>
+          </IntentLink>
         </div>
 
         <HomepageServiceRow items={CARPENTRY_SERVICES} renderAction={renderItemAction} />

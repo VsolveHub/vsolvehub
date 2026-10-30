@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withI18n } from "@/i18n/test-utils";
+
 import type { CrewRow } from "../adapters/roster";
 import { CrewMemberEditForm } from "./crew-member-edit-form";
 
@@ -32,7 +34,7 @@ const ROW: CrewRow = {
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return withI18n(<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 }
 
 beforeEach(() => {

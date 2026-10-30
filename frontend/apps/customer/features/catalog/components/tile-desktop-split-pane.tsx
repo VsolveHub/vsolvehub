@@ -2,24 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { formatMoney, cn } from "@vsolve/ui";
-import {
-  BadgeCheck,
-  ChevronRight,
-  Clock,
-  Headphones,
-  ShieldCheck,
-  Tag,
-} from "lucide-react";
+import { BadgeCheck, Headphones, ShieldCheck, Tag } from "lucide-react";
+
+import { RemoteImage } from "@/components/remote-image";
 
 import { type Category, type ServiceCard } from "../client-queries";
 import { ServicePhoto } from "./category-artwork";
-import {
-  categoryHeadline,
-  displayCategoryStats,
-  displayRating,
-  earliestSlotLabel,
-} from "./tile-desktop-rating";
+import { categoryHeadline } from "./tile-desktop-rating";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { TileServiceDetailPanel } from "./tile-service-detail-panel";
 import { TileDesktopSeeAllModal } from "./tile-desktop-see-all-modal";
@@ -35,11 +26,16 @@ type DesktopTile = {
 
 const SIDEBAR_TILE_CAP = 6;
 
+/**
+ * Only what the product actually does: Partners are approved after an identity
+ * review, the server prices the job before payment, and extra time or parts
+ * need the customer's approval. Punctuality and satisfaction promises have no
+ * policy behind them, so they are not badges.
+ */
 const TRUST_BADGES = [
-  { label: "Verified Professionals", icon: ShieldCheck },
-  { label: "On-time Service", icon: Clock },
-  { label: "Transparent Pricing", icon: Tag },
-  { label: "Satisfaction Guarantee", icon: BadgeCheck },
+  { label: "ID-verified professionals", icon: ShieldCheck },
+  { label: "Price confirmed before you pay", icon: Tag },
+  { label: "Extra work only with your approval", icon: BadgeCheck },
 ] as const;
 
 /** First two rows of the 3-column sidebar, keeping the active tile visible. */
@@ -50,47 +46,6 @@ function sidebarTilesForDisplay(tiles: DesktopTile[], activeSlug: string): Deskt
   const active = tiles.find((tile) => tile.slug === activeSlug);
   if (!active) return head;
   return [...head.slice(0, SIDEBAR_TILE_CAP - 1), active];
-}
-
-function SidebarEarliestBadge() {
-  return (
-    <div className="shrink-0 rounded-[0.9rem] bg-success-surface px-2.5 py-2 text-center">
-      <p className="flex items-center justify-center gap-1 text-[10px] font-bold text-success-text">
-        <Clock className="size-3" strokeWidth={2.2} aria-hidden />
-        Earliest
-      </p>
-      <p className="mt-0.5 text-[12px] font-extrabold leading-none text-navy-900">
-        {earliestSlotLabel()}
-      </p>
-    </div>
-  );
-}
-
-function SidebarWarrantyCard() {
-  return (
-    <div className="mt-4 flex items-center gap-3 rounded-[1.15rem] bg-[#F3F4F6] px-3.5 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wide text-success-text">
-          <span className="grid size-3.5 place-items-center rounded-full bg-success-text text-white" aria-hidden>
-            <svg viewBox="0 0 12 12" fill="none" className="size-2.5">
-              <path
-                d="M2.5 6.2 4.8 8.5 9.5 3.5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-          V SOLVE COVER
-        </p>
-        <p className="mt-1 text-[13px] font-semibold leading-snug text-navy-900">
-          Upto 30 days warranty on repairs
-        </p>
-      </div>
-      <ChevronRight className="size-5 shrink-0 text-navy-300" strokeWidth={1.8} aria-hidden />
-    </div>
-  );
 }
 
 function DesktopTileServiceCard({
@@ -104,7 +59,6 @@ function DesktopTileServiceCard({
   categorySlug: string;
   onOpenPanel: () => void;
 }) {
-  const rating = displayRating(service.slug);
   const pricePaise = service.starting_price?.amount_paise ?? null;
 
   return (
@@ -118,15 +72,6 @@ function DesktopTileServiceCard({
 
       <div className="min-w-0 flex-1">
         <h3 className="text-[15px] font-extrabold leading-snug text-navy-900">{service.name}</h3>
-        <p className="mt-0.5 flex items-center gap-1 text-[12px] font-semibold text-navy-900">
-          <span className="text-[#F5A524]" aria-hidden>
-            ★
-          </span>
-          <span>
-            {rating.score}{" "}
-            <span className="font-medium text-text-secondary">({rating.count})</span>
-          </span>
-        </p>
         <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-text-secondary">
           {service.short_description}
         </p>
@@ -144,12 +89,12 @@ function DesktopTileServiceCard({
           <span className="text-[12px] font-bold text-navy-900">Price on request</span>
         )}
         <div className="flex items-center gap-2">
-          <Link
+          <IntentLink
             href={`/catalog/${categorySlug}/${service.slug}`}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-navy-900 bg-white px-3.5 text-[13px] font-bold text-navy-900 transition-colors hover:bg-[#FAF9F7]"
           >
             View details
-          </Link>
+          </IntentLink>
           <TileCatalogAddButton
             service={service}
             categorySlug={categorySlug}
@@ -185,7 +130,6 @@ export function TileDesktopSplitPane({
   const visibleTiles = sidebarTilesForDisplay(tiles, activeTile.slug);
   const showSeeAll = tiles.length > SIDEBAR_TILE_CAP;
   const headline = categoryHeadline(category.name);
-  const stats = displayCategoryStats(category.slug);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -207,22 +151,14 @@ export function TileDesktopSplitPane({
         className="flex h-full w-[22rem] shrink-0 flex-col border-r border-[#e7e2da] bg-white"
       >
         <div className="shrink-0 px-5 pb-1 pt-6">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="min-w-0 text-[2rem] font-extrabold leading-[1.05] tracking-tight text-navy-900">
-              {headline}
-            </h2>
-            <SidebarEarliestBadge />
-          </div>
-          <p className="mt-2 flex items-center gap-1 text-[13px] text-navy-900">
-            <span className="text-[13px] leading-none" aria-hidden>
-              ★
-            </span>
-            <span className="font-semibold">{stats.score}</span>
-            <span className="underline decoration-navy-900/35 underline-offset-[3px]">
-              ({stats.bookings})
-            </span>
-          </p>
-          <SidebarWarrantyCard />
+          <h2 className="min-w-0 text-[2rem] font-extrabold leading-[1.05] tracking-tight text-navy-900">
+            {headline}
+          </h2>
+          {category.description.trim() !== "" ? (
+            <p className="mt-2 line-clamp-3 text-[13px] leading-snug text-text-secondary">
+              {category.description}
+            </p>
+          ) : null}
         </div>
         <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 pt-3">
           <section
@@ -243,7 +179,7 @@ export function TileDesktopSplitPane({
                 const active = tile.slug === activeTile.slug;
                 return (
                   <li key={tile.slug} className="min-w-0">
-                    <Link
+                    <IntentLink
                       href={`/catalog/${category.slug}?tile=${tile.slug}`}
                       scroll={false}
                       aria-current={active ? "page" : undefined}
@@ -265,7 +201,7 @@ export function TileDesktopSplitPane({
                       >
                         {tile.name}
                       </span>
-                    </Link>
+                    </IntentLink>
                   </li>
                 );
               })}
@@ -305,7 +241,7 @@ export function TileDesktopSplitPane({
         </div>
       </nav>
 
-      <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="relative flex min-h-0 min-w-0 flex-1">
         <section
           aria-labelledby={`desktop-tile-${activeTile.slug}`}
           className="no-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6"
@@ -334,18 +270,26 @@ export function TileDesktopSplitPane({
               >
                 {activeTile.name}
               </h1>
-              <p className="mt-2 text-[14px] leading-relaxed text-text-secondary">
-                {activeTile.description.trim() !== ""
-                  ? activeTile.description
-                  : `Book expert ${activeTile.name} for installation, repair, service and maintenance at your doorstep.`}
-              </p>
+              {/* No generic fallback: "installation, repair, service and maintenance" is
+                  wrong for most tiles, and a missing line is honest. */}
+              {activeTile.description.trim() !== "" ? (
+                <p className="mt-2 text-[14px] leading-relaxed text-text-secondary">
+                  {activeTile.description}
+                </p>
+              ) : (
+                <p className="mt-2 text-[14px] leading-relaxed text-text-secondary">
+                  {activeTile.services.length}{" "}
+                  {activeTile.services.length === 1 ? "service" : "services"} to choose from
+                </p>
+              )}
             </div>
             {activeTile.imageUrl !== "" ? (
               <span className="flex h-28 w-40 shrink-0 items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <RemoteImage
                   src={activeTile.imageUrl}
                   alt=""
+                  width={160}
+                  height={112}
                   className="max-h-full max-w-full object-contain"
                 />
               </span>
@@ -380,7 +324,10 @@ export function TileDesktopSplitPane({
 
         <div
           className={cn(
-            "h-full shrink-0 overflow-hidden py-4 pr-4 transition-[width,opacity] duration-200 ease-out",
+            // Between 1024 and 1280px a 416px column left the service list ~250px wide and
+            // titles wrapped a word per line. There the panel floats over the list instead;
+            // from `xl` there is room for both side by side.
+            "absolute inset-y-0 right-0 z-20 h-full shrink-0 overflow-hidden py-4 pr-4 transition-[width,opacity] duration-200 ease-out xl:static",
             selectedService ? "w-[416px] opacity-100" : "w-0 py-0 pr-0 opacity-0",
           )}
         >

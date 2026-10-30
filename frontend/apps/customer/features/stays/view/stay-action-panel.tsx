@@ -18,12 +18,15 @@ export function StayActionPanel({
   onSelectUnit,
   onViewProperty,
   initialUnitId,
+  initialLookId,
 }: {
   property: StayProperty;
   onSelectUnit?: (unitId: string) => void;
   onViewProperty?: () => void;
   /** The room the guest opened from search; enquiries and visits start with it chosen. */
   initialUnitId?: string;
+  /** Its look, when the room type has several. */
+  initialLookId?: string;
 }) {
   const [mode, setMode] = useState<Mode>("enquire");
   const visits = Boolean(property.visits_offered);
@@ -70,13 +73,14 @@ export function StayActionPanel({
 
       <div className="mt-4">
         {mode === "visit" && visits ? (
-          <StayVisitPanel property={property} initialUnitId={initialUnitId} />
+          <StayVisitPanel property={property} initialUnitId={initialUnitId} initialLookId={initialLookId} />
         ) : (
           <StayQuotePanel
             property={property}
             onSelectUnit={onSelectUnit}
             onViewProperty={onViewProperty}
             initialUnitId={initialUnitId}
+            lookId={initialLookId}
             embedded
           />
         )}

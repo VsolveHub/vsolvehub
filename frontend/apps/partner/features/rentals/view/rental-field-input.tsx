@@ -1,6 +1,6 @@
 "use client";
 
-import { Field, Input, Select } from "@vsolve/ui";
+import { Field, Input, Select, useT } from "@vsolve/ui";
 import { useState } from "react";
 
 export type SchemaProperty = {
@@ -37,6 +37,7 @@ export function RentalFieldInput({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const t = useT();
   const label = fieldLabel(fieldKey, spec);
   const id = `rental-field-${fieldKey}`;
   const isBoolean = spec.type === "boolean";
@@ -78,21 +79,21 @@ export function RentalFieldInput({
             }
           }}
         >
-          <option value="">Select {label.toLowerCase()}</option>
+          <option value="">{t("rentals.field.select", { label: label.toLowerCase() })}</option>
           {options.map((option) => (
             <option key={option} value={option}>
-              {isBoolean ? (option === "true" ? "Yes" : "No") : option}
+              {isBoolean ? (option === "true" ? t("common.yes") : t("common.no")) : option}
             </option>
           ))}
-          {isBoolean ? null : <option value={OTHER}>Other…</option>}
+          {isBoolean ? null : <option value={OTHER}>{t("rentals.field.other")}</option>}
         </Select>
         {showOther ? (
           <Input
             id={`${id}-other`}
-            aria-label={`Your ${label.toLowerCase()}`}
+            aria-label={t("rentals.field.yourValue", { label: label.toLowerCase() })}
             value={value}
             autoFocus={otherMode && !valueIsCustom}
-            placeholder={`Type the ${label.toLowerCase()}`}
+            placeholder={t("rentals.field.typeValue", { label: label.toLowerCase() })}
             onChange={(e) => onChange(e.target.value)}
           />
         ) : null}

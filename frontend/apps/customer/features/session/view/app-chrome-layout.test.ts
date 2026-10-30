@@ -38,10 +38,16 @@ describe("appChromeLayout", () => {
     expect(layout.mobileBackHref).toBe("/catalog");
   });
 
-  it("keeps the existing site footer and page height on non-cart routes", () => {
+  it("keeps the site footer only on the homepage", () => {
+    expect(appChromeLayout("/")).toEqual({
+      contentMinHeightClass: "min-h-screen",
+      hideMobileFooter: false,
+      showFooter: true,
+    });
     expect(appChromeLayout("/catalog")).toEqual({
       contentMinHeightClass: "min-h-screen",
       hideMobileFooter: false,
+      showFooter: false,
     });
   });
 

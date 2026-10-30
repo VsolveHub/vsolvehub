@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { AvailabilityEditor } from "@/features/partner-availability/view/availability-editor";
+
+export const metadata: Metadata = { title: "Partner availability" };
 
 /**
  * Partner availability, changed on the Partner's behalf.

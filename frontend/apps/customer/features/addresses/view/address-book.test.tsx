@@ -230,6 +230,24 @@ describe("deleting is confirmed, then verified", () => {
   });
 });
 
+/**
+ * The map picker step. Tests run without `NEXT_PUBLIC_GOOGLE_MAPS_KEY`, so the
+ * real `LocationPicker` renders its no-map mode: the device fix, the server's
+ * reverse geocode and Confirm — the same path the map's own button takes.
+ */
+async function confirmPin() {
+  const confirm = await screen.findByRole("button", { name: /confirm location/i });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
+}
+
+/** Reverse geocode that echoes the coordinate it was asked about. */
+function echoReverseGeocode(path: string, init: { body: { latitude: string; longitude: string } }) {
+  return path === "/api/v1/geocoding/reverse/"
+    ? Promise.resolve(ok(resolvedLocation({ ...init.body })))
+    : undefined;
+}
+
 describe("adding an address", () => {
   it("asks for the pin first, because an address cannot be saved without one", async () => {
     serveList([]);
@@ -248,6 +266,8 @@ describe("adding an address", () => {
       latitude: "17.456789",
       longitude: "78.364512",
     });
+    // The fields wait for the Customer to confirm the pin.
+    expect(screen.queryByLabelText(/name this address/i)).toBeNull();
   });
 
   it("says why the address cannot be saved when the pin was refused", async () => {
@@ -266,7 +286,22 @@ describe("adding an address", () => {
     // Retrying does nothing until a browser setting changes, so the copy has to
     // say that rather than offer a button that was never going to work.
     expect(await screen.findByRole("alert")).toHaveTextContent(/browser settings/i);
-    expect(screen.getByText(/needs a map pin before it can be saved/i)).toBeInTheDocument();
+    // No pin, so nothing to confirm.
+    expect(screen.getByRole("button", { name: /confirm location/i })).toBeDisabled();
+  });
+
+  it("fills the fields from the confirmed pin", async () => {
+    serveList([]);
+    grantGeolocation();
+    client.POST.mockResolvedValue(ok(resolvedLocation()));
+    render(<AddressBook />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: /add an address/i }));
+    expect(await screen.findByText(/Lotus Residency, Kondapur/)).toBeInTheDocument();
+    await confirmPin();
+
+    expect(screen.getByLabelText(/area/i, { selector: "input" })).toHaveValue("Kondapur");
+    expect(screen.getByText("Pinned on map")).toBeInTheDocument();
   });
 
   it("keeps the draft on screen when the save is rejected", async () => {
@@ -282,6 +317,7 @@ describe("adding an address", () => {
     render(<AddressBook />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: /add an address/i }));
+    await confirmPin();
     await screen.findByDisplayValue("Kondapur");
 
     fireEvent.change(screen.getByLabelText(/name this address/i), { target: { value: "Home" } });
@@ -305,6 +341,7 @@ describe("adding an address", () => {
     render(<AddressBook />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: /add an address/i }));
+    await confirmPin();
     await screen.findByDisplayValue("Kondapur");
 
     expect(screen.queryByLabelText(/use this address by default/i)).not.toBeInTheDocument();
@@ -341,6 +378,8 @@ describe("editing an address", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: /pin my location/i }));
+    fireEvent.click(screen.getByRole("button", { name: /use my current location/i }));
+    await confirmPin();
     await screen.findByText("Pinned on map");
 
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
@@ -349,6 +388,38 @@ describe("editing an address", () => {
     expect(client.PATCH.mock.calls[0]![1].body).toMatchObject({
       latitude: "17.456789",
       longitude: "78.364512",
+      source: "REVERSE_GEOCODED",
+    });
+  });
+
+  it("sends the moved coordinates when an already pinned address is pinned again", async () => {
+    // Regression: the edit used to send coordinates only for an address that had
+    // none, so moving an existing pin was silently dropped on save.
+    serveList([address({ line1: "Flat 7" })]);
+    grantGeolocation({ latitude: 17.44, longitude: 78.38 });
+    client.POST.mockImplementation(echoReverseGeocode);
+    client.PATCH.mockResolvedValue(ok(address()));
+    render(<AddressBook />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /pin again/i }));
+    fireEvent.click(screen.getByRole("button", { name: /use my current location/i }));
+    await waitFor(() =>
+      expect(client.POST).toHaveBeenLastCalledWith(
+        "/api/v1/geocoding/reverse/",
+        expect.objectContaining({ body: { latitude: "17.440000", longitude: "78.380000" } }),
+      ),
+    );
+    await confirmPin();
+
+    // A moved pin is no reason to overwrite the flat the Customer typed.
+    expect(screen.getByLabelText(/flat, house or building/i)).toHaveValue("Flat 7");
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(client.PATCH).toHaveBeenCalledTimes(1));
+    expect(client.PATCH.mock.calls[0]![1].body).toMatchObject({
+      latitude: "17.440000",
+      longitude: "78.380000",
       source: "REVERSE_GEOCODED",
     });
   });

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { AsyncState } from "@/components/async-section";
+import { withI18n } from "@/i18n/test-utils";
 
 import type { DemandView } from "../adapters/demand";
 import type { GateExplanation } from "../adapters/gates";
@@ -54,7 +55,7 @@ describe("browsing before KYC", () => {
   });
 
   it("shows real demand to someone who has proved nothing", () => {
-    render(<DemandList state={INELIGIBLE} />);
+    render(withI18n(<DemandList state={INELIGIBLE} />));
 
     expect(screen.getByText("4 housekeeping staff, 12 days")).toBeInTheDocument();
     expect(screen.getByText("Gachibowli, Hyderabad")).toBeInTheDocument();
@@ -63,14 +64,14 @@ describe("browsing before KYC", () => {
   it("offers no action it cannot honour", () => {
     // The card is proof that work exists, not an invitation to accept it. The
     // accept lives behind the enquiry, behind the capability, behind KYC.
-    render(<DemandList state={INELIGIBLE} />);
+    render(withI18n(<DemandList state={INELIGIBLE} />));
 
     expect(screen.queryByRole("button", { name: /accept/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /accept/i })).toBeNull();
   });
 
   it("says what stands in the way, in the server's words", () => {
-    render(<DemandList state={INELIGIBLE} />);
+    render(withI18n(<DemandList state={INELIGIBLE} />));
     expect(
       screen.getByText("Needs an approved Housekeeping staff capability."),
     ).toBeInTheDocument();
@@ -93,7 +94,7 @@ describe("browsing before KYC", () => {
       ],
     });
 
-    const { container } = render(<DemandList state={unknown} />);
+    const { container } = render(withI18n(<DemandList state={unknown} />));
     expect(container.textContent).not.toMatch(/A[0-9]_[A-Z_]+/);
   });
 });
@@ -103,16 +104,16 @@ describe("the demand screen's exception states", () => {
     // Two empties with different causes and different next steps. Collapsing
     // them into one "no results" sends both people to the wrong place.
     const noMatches = ready({ cards: [], isEmpty: true, matchedServiceCount: 0 });
-    const { unmount } = render(<DemandList state={noMatches} />);
+    const { unmount } = render(withI18n(<DemandList state={noMatches} />));
     expect(screen.getByText(/nothing matched your services/i)).toBeInTheDocument();
     unmount();
 
-    render(<DemandList state={ready({ cards: [], isEmpty: true, matchedServiceCount: 3 })} />);
+    render(withI18n(<DemandList state={ready({ cards: [], isEmpty: true, matchedServiceCount: 3 })} />));
     expect(screen.getByText(/nothing in your area right now/i)).toBeInTheDocument();
   });
 
   it("reports being offline as recoverable and says nothing is lost", () => {
-    render(<DemandList state={{ status: "failed", kind: "offline" }} onRetry={() => {}} />);
+    render(withI18n(<DemandList state={{ status: "failed", kind: "offline" }} onRetry={() => {}} />));
 
     expect(screen.getByText(/you are offline/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
@@ -121,14 +122,14 @@ describe("the demand screen's exception states", () => {
   it("offers no retry for an endpoint that does not exist yet", () => {
     // The honest state for this milestone. A retry button here would be an
     // invitation to keep pressing something that cannot start working.
-    render(<DemandList state={{ status: "failed", kind: "unavailable" }} onRetry={() => {}} />);
+    render(withI18n(<DemandList state={{ status: "failed", kind: "unavailable" }} onRetry={() => {}} />));
 
     expect(screen.getByText(/not available yet/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).toBeNull();
   });
 
   it("announces its loading state to a screen reader", () => {
-    render(<DemandList state={{ status: "loading" }} />);
+    render(withI18n(<DemandList state={{ status: "loading" }} />));
     expect(screen.getByText(/loading work near you/i)).toBeInTheDocument();
   });
 });
@@ -138,25 +139,25 @@ describe("the gate notice", () => {
     // Browsing must never carry a gate banner. A component that rendered an
     // "all clear" would be one somebody puts at the top of a list.
     const { container } = render(
-      <GateNotice explanation={null} actionDescription="accept this job" />,
+      withI18n(<GateNotice explanation={null} actionDescription="accept this job" />),
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   it("uses the server's sentence verbatim", () => {
-    render(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />);
+    render(withI18n(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />));
     expect(screen.getByText(KYC_BLOCK.reason)).toBeInTheDocument();
   });
 
   it("names the action it is standing in front of", () => {
     // Placement is the design: the explanation belongs to the control, not to
     // the page. A generic "one thing first" would be ignorable.
-    render(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />);
+    render(withI18n(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />));
     expect(screen.getByText(/before you can accept this job/i)).toBeInTheDocument();
   });
 
   it("gives one way forward", () => {
-    render(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />);
+    render(withI18n(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />));
 
     const link = screen.getByRole("link", { name: "Finish your application" });
     expect(link).toHaveAttribute("href", "/apply/review");
@@ -166,17 +167,19 @@ describe("the gate notice", () => {
     // It appears at the moment someone tried to act. A polite announcement is
     // read after they have already pressed again.
     const { container } = render(
-      <GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />,
+      withI18n(<GateNotice explanation={KYC_BLOCK} actionDescription="accept this job" />),
     );
     expect(container.querySelector('[aria-live="assertive"]')).not.toBeNull();
   });
 
   it("renders without a route when the server named no next action", () => {
     render(
-      <GateNotice
-        explanation={{ ...KYC_BLOCK, actionHref: null, actionLabel: null }}
-        actionDescription="accept this job"
-      />,
+      withI18n(
+        <GateNotice
+          explanation={{ ...KYC_BLOCK, actionHref: null, actionLabel: null }}
+          actionDescription="accept this job"
+        />,
+      ),
     );
 
     expect(screen.getByText(KYC_BLOCK.reason)).toBeInTheDocument();

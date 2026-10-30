@@ -4,12 +4,14 @@ import Link from "next/link";
 import { Suspense, useCallback, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useBrowseList } from "@vsolve/query";
 import {
+  ArrowLeft,
   FileCheck2,
   MapPin,
   Search,
 } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { fetchListingFilters, fetchListings, type Listing } from "@/features/listings/queries";
 import { ListingOpportunityCard } from "@/features/listings/listing-opportunity-card";
@@ -61,12 +63,15 @@ function ListingsBrowseContent() {
   });
 
   const {
-    data: listings = [],
+    items: listings,
     isLoading,
     isFetching,
     error,
-  } = useQuery({
-    queryKey: [
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useBrowseList(
+    [
       "listings",
       appliedQuery,
       appliedLocation,
@@ -76,7 +81,7 @@ function ListingsBrowseContent() {
       minSalary,
       sort,
     ],
-    queryFn: () =>
+    (offset, limit) =>
       fetchListings({
         q: appliedQuery,
         location: appliedLocation,
@@ -85,29 +90,41 @@ function ListingsBrowseContent() {
         employment_type: employmentType,
         work_mode: workMode,
         min_salary: minSalary,
+        limit,
+        offset,
       }),
-    staleTime: 30_000,
-    placeholderData: (previous) => previous,
-    refetchOnWindowFocus: false,
-  });
+  );
 
 
   const hasActiveFilters = Boolean(draftQuery || draftLocation || selectedCategory);
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-6 px-4 pt-3 pb-8 sm:py-8">
+      <div>
+        <Link
+          href="/"
+          className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back to Home</span>
+        </Link>
+      </div>
+
       <PartAHero
         title="Find Your Next Opportunity"
         subtitle="Jobs from trusted employers. Build your career with V Solve Hub."
         image="/part-a/careers.svg"
         aside={
-          <Link
-            href="/listings/my-applications"
-            className="inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-navy-900"
-          >
-            <FileCheck2 className="size-4" />
-            My Applications
-          </Link>
+          // Only once signed in: before that there is nothing of theirs to show.
+          session.isAuthenticated ? (
+            <Link
+              href="/listings/my-applications"
+              className="inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-navy-900"
+            >
+              <FileCheck2 className="size-4" />
+              My Applications
+            </Link>
+          ) : undefined
         }
       >
         <div className="grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]">
@@ -230,6 +247,7 @@ function ListingsBrowseContent() {
           <ListingOpportunityCard key={listing.id} listing={listing} />
         ))}
       </section>
+      <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} label="Show more jobs" />
     </main>
   );
 }

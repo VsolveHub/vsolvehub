@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { CompatibilityRulesWorkspace } from "@/features/compatibility-rules/view/compatibility-rules-workspace";
+
+export const metadata: Metadata = { title: "Service rules" };
 
 /**
  * Service compatibility rules.

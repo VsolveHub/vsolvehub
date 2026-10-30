@@ -117,18 +117,22 @@ class OperationsTransitionSerializer(serializers.Serializer[dict[str, object]]):
             PartnerApplication.Status.UNDER_REVIEW,
             PartnerApplication.Status.CHANGES_REQUIRED,
             PartnerApplication.Status.APPROVED,
+            PartnerApplication.Status.DECLINED,
             PartnerApplication.Status.SUSPENDED,
             PartnerApplication.Status.OFFBOARDED,
         ),
     )
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    # Optional for the decisions that do not need one, so leaving it out means "no reason". The
+    # default matters: the service takes ``reason`` as a required argument, and an omitted field
+    # used to reach it as a missing keyword — a 500 on every Approve with the reason box empty.
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=2000, default="")
 
 
 class OperationsDocumentReviewSerializer(serializers.Serializer[dict[str, object]]):
     decision = serializers.ChoiceField(
         choices=(PartnerDocument.Status.APPROVED, PartnerDocument.Status.REJECTED),
     )
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    reason = serializers.CharField(required=False, default="", allow_blank=True, max_length=2000)
 
 
 class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str, object]]):
@@ -155,6 +159,38 @@ class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str,
 class PartnerDocumentReviewAccessSerializer(serializers.Serializer[dict[str, object]]):
     review_url = serializers.URLField(read_only=True)
     expires_at = serializers.DateTimeField(read_only=True)
+
+
+class PartnerDocumentDetailMetadataSerializer(serializers.ModelSerializer[PartnerDocument]):
+    label = serializers.CharField(read_only=True)  # type: ignore[assignment]
+    file_name = serializers.CharField(read_only=True)
+    mime_type = serializers.CharField(source="content_type", read_only=True)
+    file_size = serializers.IntegerField(source="size_bytes", read_only=True)
+    rejection_reason = serializers.CharField(
+        source="review_reason", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = PartnerDocument
+        fields = (
+            "id",
+            "kind",
+            "label",
+            "status",
+            "version",
+            "file_name",
+            "mime_type",
+            "file_size",
+            "uploaded_at",
+            "rejection_reason",
+        )
+        read_only_fields = fields
+
+
+class PartnerDocumentApplicantAccessSerializer(serializers.Serializer[dict[str, object]]):
+    document = PartnerDocumentDetailMetadataSerializer(read_only=True)
+    access_url = serializers.URLField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True, required=False)
 
 
 class PartnerConsentSerializer(serializers.ModelSerializer[PartnerConsent]):

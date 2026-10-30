@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthGuard } from "@vsolve/query";
-import { Button, Card, ErrorState, Spinner } from "@vsolve/ui";
+import { Button, Card, ErrorState, Spinner, useT } from "@vsolve/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -45,6 +45,7 @@ import { usePartnerApplication } from "../queries";
  * this route, for the same reason.
  */
 export function ApplyGuard({ children }: { children: ReactNode }) {
+  const t = useT();
   const guard = useAuthGuard(getApiClient());
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -60,7 +61,7 @@ export function ApplyGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isApproved) {
-      router.replace("/home");
+      router.replace("/me/documents");
     }
   }, [isApproved, router]);
 
@@ -85,10 +86,10 @@ export function ApplyGuard({ children }: { children: ReactNode }) {
     requestedPhoneDigits !== activePhoneDigits
   );
 
-  if (guard.status === "checking") return <Waiting>Checking your access…</Waiting>;
-  if (isUnauthenticated) return <Waiting>Taking you to sign in…</Waiting>;
-  if (guard.isSelectingRole) return <Waiting>Opening your account…</Waiting>;
-  if (isApproved) return <Waiting>Opening your workspace…</Waiting>;
+  if (guard.status === "checking") return <Waiting>{t("common.checkingAccess")}</Waiting>;
+  if (isUnauthenticated) return <Waiting>{t("common.takingYouToSignIn")}</Waiting>;
+  if (guard.isSelectingRole) return <Waiting>{t("common.openingYourAccount")}</Waiting>;
+  if (isApproved) return <Waiting>{t("apply.guard.openingWorkspace")}</Waiting>;
 
   if (isPhoneMismatch) {
     const handleContinueAsCurrent = () => {
@@ -110,17 +111,20 @@ export function ApplyGuard({ children }: { children: ReactNode }) {
                 ⚠️
               </div>
               <div>
-                <h2 className="text-lg font-extrabold text-navy-900">Switch Account?</h2>
-                <p className="text-xs text-text-secondary">Different mobile number detected</p>
+                <h2 className="text-lg font-extrabold text-navy-900">{t("apply.guard.switchAccount.title")}</h2>
+                <p className="text-xs text-text-secondary">{t("apply.guard.switchAccount.subtitle")}</p>
               </div>
             </div>
 
             <p className="text-sm text-text leading-relaxed">
-              You are currently signed in as <strong className="text-navy-900">{guard.user?.phone_number || activePhoneDigits}</strong>, but navigated to apply with <strong className="text-navy-900">+91 {requestedPhoneDigits}</strong>.
+              {t("apply.guard.switchAccount.body", {
+                current: guard.user?.phone_number || activePhoneDigits || "",
+                requested: `+91 ${requestedPhoneDigits}`,
+              })}
             </p>
 
             <div className="rounded-2xl bg-surface-sunken p-3.5 border border-line text-xs text-text-muted">
-              Choose <strong>Switch Account</strong> to verify and apply with +91 {requestedPhoneDigits}, or continue with your current account.
+              {t("apply.guard.switchAccount.chooseHint", { requested: `+91 ${requestedPhoneDigits}` })}
             </div>
 
             <div className="flex flex-col gap-2.5 pt-2">
@@ -129,14 +133,14 @@ export function ApplyGuard({ children }: { children: ReactNode }) {
                 onClick={handleSwitchAccount}
                 className="w-full justify-center font-bold"
               >
-                Switch to +91 {requestedPhoneDigits}
+                {t("apply.guard.switchAccount.switchTo", { phone: `+91 ${requestedPhoneDigits}` })}
               </Button>
               <Button
                 variant="secondary"
                 onClick={handleContinueAsCurrent}
                 className="w-full justify-center"
               >
-                Continue as {guard.user?.phone_number || activePhoneDigits}
+                {t("apply.guard.switchAccount.continueAs", { phone: guard.user?.phone_number || activePhoneDigits || "" })}
               </Button>
             </div>
           </div>
@@ -149,9 +153,9 @@ export function ApplyGuard({ children }: { children: ReactNode }) {
     return (
       <Centred>
         <ErrorState
-          title="We could not check your access"
-          message="Nothing has changed. Check your connection and try again."
-          actionLabel="Try again"
+          title={t("common.couldNotCheckAccess")}
+          message={t("common.nothingChanged")}
+          actionLabel={t("common.tryAgain")}
           onAction={() => window.location.reload()}
         />
       </Centred>
@@ -168,8 +172,8 @@ export function ApplyGuard({ children }: { children: ReactNode }) {
     return (
       <Centred>
         <ErrorState
-          title="You cannot apply from this account"
-          message="Sign in with the mobile number you want your Partner account to use."
+          title={t("apply.guard.forbidden.title")}
+          message={t("apply.guard.forbidden.message")}
         />
       </Centred>
     );

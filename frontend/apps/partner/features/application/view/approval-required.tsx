@@ -1,4 +1,6 @@
-import { Card } from "@vsolve/ui";
+"use client";
+
+import { Card, useT } from "@vsolve/ui";
 import Link from "next/link";
 
 /**
@@ -16,15 +18,16 @@ import Link from "next/link";
  * actually has.
  */
 export function ApprovalRequired({ detail }: { detail: string }) {
+  const t = useT();
   return (
     <Card className="p-5">
-      <h2 className="text-base font-bold text-text">You are not approved to take work yet</h2>
+      <h2 className="text-base font-bold text-text">{t("apply.approvalRequired.heading")}</h2>
       <p className="mt-2 text-sm leading-6 text-text-secondary">{detail}</p>
       <Link
         href="/apply"
         className="mt-4 inline-flex min-h-11 items-center font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
-        See your application
+        {t("apply.approvalRequired.cta")}
       </Link>
     </Card>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Field, Input, Select } from "@vsolve/ui";
+import { Field, Input, Select, useT } from "@vsolve/ui";
 
 import { labelFor, schemaPropertyMap, schemaRequiredKeys } from "./stay-form-helpers";
 
@@ -23,6 +23,7 @@ export function SchemaQuestions({
   onChange: (next: Record<string, string>) => void;
   columns?: 2 | 3;
 }) {
+  const t = useT();
   const props = schemaPropertyMap(schema);
   const required = schemaRequiredKeys(schema);
   const keys = Object.keys(props);
@@ -38,12 +39,12 @@ export function SchemaQuestions({
         if (enums || spec.type === "boolean") {
           const options = enums ?? ["true", "false"];
           return (
-            <Field key={key} label={labelFor(key)} required={required.has(key)} showOptional={false}>
+            <Field key={key} label={labelFor(key, t)} required={required.has(key)} showOptional={false}>
               <Select id={id} value={answers[key] ?? ""} onChange={(e) => set(e.target.value)}>
-                <option value="">Select</option>
+                <option value="">{t("stays.schema.select")}</option>
                 {options.map((option) => (
                   <option key={option} value={option}>
-                    {spec.type === "boolean" ? (option === "true" ? "Yes" : "No") : option}
+                    {spec.type === "boolean" ? (option === "true" ? t("common.yes") : t("common.no")) : option}
                   </option>
                 ))}
               </Select>
@@ -51,7 +52,7 @@ export function SchemaQuestions({
           );
         }
         return (
-          <Field key={key} label={labelFor(key)} required={required.has(key)} showOptional={false}>
+          <Field key={key} label={labelFor(key, t)} required={required.has(key)} showOptional={false}>
             <Input
               id={id}
               inputMode={spec.type === "number" ? "numeric" : "text"}

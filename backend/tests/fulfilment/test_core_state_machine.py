@@ -19,7 +19,12 @@ from apps.fulfilment.services import (
 )
 from tests.fulfilment.conftest import create_booked_group
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    # Walks visits booked for tomorrow through en route and arrival; the clock gates on those
+    # steps are tested in tests/fulfilment/test_partner_time_gates.py.
+    pytest.mark.usefixtures("partner_gates_open"),
+]
 CONCURRENT_COMMANDS = 2
 VERSION_AFTER_ONE_MOVE = 2
 
@@ -175,7 +180,7 @@ def test_group_completes_only_once_every_unit_reaches_a_terminal_outcome() -> No
     )
     group = booked.group
     units = list(group.units.order_by("position"))
-    assert len(units) == 2  # noqa: PLR2004
+    assert len(units) == 2
 
     first_booking = units[0].booking
     first_booking.status = Booking.Status.COMPLETED

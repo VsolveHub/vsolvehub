@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiRequestError } from "@vsolve/api-client";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { useToast } from "@vsolve/ui";
+import { useT, useToast } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -20,7 +20,15 @@ import {
   WorkspaceStats,
 } from "@/features/listings/view";
 
+const TAB_LABEL_KEYS: Record<string, string> = {
+  ALL: "listings.page.tab.all",
+  ACTIVE: "listings.page.tab.active",
+  DRAFT: "listings.page.tab.draft",
+  CLOSED: "listings.page.tab.closed",
+};
+
 export default function PartnerListingsPage() {
+  const t = useT();
   const {
     home,
     services,
@@ -77,7 +85,7 @@ export default function PartnerListingsPage() {
   const publishNow = useMutation({
     mutationFn: publishJob,
     onSuccess: () => {
-      notify("Your job is live.");
+      notify(t("listings.wizard.jobLive"));
       setActionError(null);
       refresh();
     },
@@ -111,7 +119,7 @@ export default function PartnerListingsPage() {
             onClick={() => setActionError(null)}
             className="shrink-0 text-xs font-semibold text-danger-text underline"
           >
-            Dismiss
+            {t("listings.page.dismiss")}
           </button>
         </div>
       ) : null}
@@ -136,7 +144,7 @@ export default function PartnerListingsPage() {
                 : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
             }`}
           >
-            {tab.label}
+            {t(TAB_LABEL_KEYS[tab.key] ?? tab.key)}
           </button>
         ))}
       </div>
@@ -149,7 +157,7 @@ export default function PartnerListingsPage() {
 
       <div className="grid gap-4">
         {isLoading ? (
-          <div className="py-12 text-center text-sm text-text-muted">Loading workspace listings...</div>
+          <div className="py-12 text-center text-sm text-text-muted">{t("listings.page.loadingWorkspace")}</div>
         ) : null}
 
         {!isLoading && filteredListings.length === 0 ? (

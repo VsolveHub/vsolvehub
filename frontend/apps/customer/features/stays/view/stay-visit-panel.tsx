@@ -16,6 +16,8 @@ import {
   type StayProperty,
 } from "../model";
 import { createStayVisit, fetchVisitSlots, type StayVisit } from "../queries";
+import { useCustomerSession } from "@/features/session/queries";
+import { SignInCard, isSignInError } from "@/features/session/view/sign-in-gate";
 
 function visitRefusal(err: unknown): string {
   if (isApiRequestError(err)) {
@@ -36,10 +38,13 @@ function visitRefusal(err: unknown): string {
 export function StayVisitPanel({
   property,
   initialUnitId,
+  initialLookId,
 }: {
   property: StayProperty;
   /** The room chosen to start with (the one opened from search). */
   initialUnitId?: string;
+  /** The look opened from search, sent with the visit while that room type stays chosen. */
+  initialLookId?: string;
 }) {
   const period = pricePeriodOf(property.price_period);
   const slots = useQuery({
@@ -62,6 +67,8 @@ export function StayVisitPanel({
   const activeDay = day ?? days[0]?.date ?? null;
   const chosenDay = days.find((row) => row.date === activeDay) ?? null;
 
+  // Visiting times are open to everyone; requesting one needs an account.
+  const session = useCustomerSession();
   const mutation = useMutation({
     mutationFn: () =>
       createStayVisit({
@@ -69,11 +76,18 @@ export function StayVisitPanel({
         slot_id: slotId ?? "",
         visit_date: activeDay ?? "",
         unit_id: unitId || null,
+        // The look opened from search, as long as the guest kept its room type.
+        look_id:
+          initialLookId && unitId && unitId === initialUnitId ? initialLookId : null,
         message,
       }),
     onSuccess: (visit) => setRequested(visit as StayVisit),
-    onError: (err: unknown) => setError(visitRefusal(err)),
+    // A 401 shows as the "session ended" card, not as a message.
+    onError: (err: unknown) => {
+      if (!isSignInError(err)) setError(visitRefusal(err));
+    },
   });
+  const sessionEnded = isSignInError(mutation.error);
 
   if (requested) {
     return (
@@ -91,7 +105,7 @@ export function StayVisitPanel({
           </div>
         </div>
         <Link
-          href="/stays/mine?tab=visits"
+          href="/activity?type=stays"
           className="text-center text-xs font-bold text-text-link hover:underline"
         >
           See my visits
@@ -215,14 +229,23 @@ export function StayVisitPanel({
         </div>
       ) : null}
 
-      <Button
-        type="submit"
-        loading={mutation.isPending}
-        loadingLabel="Requesting visit…"
-        className="w-full py-3 text-sm font-bold"
-      >
-        Request visit
-      </Button>
+      {session.isAnonymous || sessionEnded ? (
+        <SignInCard
+          title="Sign in to request a visit"
+          message="The host confirms the time with you. Your chosen day stays here while you sign in."
+          expired={sessionEnded && !session.isAnonymous}
+          onSignIn={() => mutation.reset()}
+        />
+      ) : (
+        <Button
+          type="submit"
+          loading={mutation.isPending}
+          loadingLabel="Requesting visit…"
+          className="w-full py-3 text-sm font-bold"
+        >
+          Request visit
+        </Button>
+      )}
     </form>
   );
 }

@@ -36,7 +36,7 @@ from apps.fulfilment.cancellation import (
     reschedule_windows,
 )
 from apps.fulfilment.models import ScopeAmendment
-from apps.fulfilment.otp import request_start_otp
+from apps.fulfilment.otp import OtpRateLimitError, live_start_code, request_start_otp
 from apps.fulfilment.quality_dispute import open_quality_dispute
 from apps.fulfilment.serializers import (
     AmendmentApprovalResultSerializer,
@@ -53,6 +53,7 @@ from apps.fulfilment.serializers import (
     StartOtpSerializer,
     VersionedCommandSerializer,
 )
+from apps.identity.exceptions import OtpThrottled
 from apps.identity.models import User
 from common.errors.serializers import ApiErrorSerializer
 from common.schema import IDEMPOTENCY_KEY_HEADER
@@ -205,17 +206,26 @@ class CustomerStartOtpView(APIView):
         serializer.is_valid(raise_exception=True)
         user = cast(User, request.user)
         booking = _customer_booking(booking_id, user)
-        issued = request_start_otp(
-            booking_id=booking.id,
-            customer_id=user.id,
-            expected_version=serializer.validated_data["expected_version"],
-        )
+        try:
+            issued = request_start_otp(
+                booking_id=booking.id,
+                customer_id=user.id,
+                expected_version=serializer.validated_data["expected_version"],
+            )
+        except OtpRateLimitError as exc:
+            # Inside the resend cooldown: hand back the code already issued, if it is still live.
+            live = live_start_code(booking_id=booking.id, customer_id=user.id)
+            if live is None:
+                raise OtpThrottled(wait=exc.retry_after_seconds) from exc
+            issued = live
+
         return Response(
             StartOtpSerializer(
                 {
                     "booking_id": booking.id,
                     "expires_at": issued.otp.expires_at,
                     "code_length": settings.OTP_CODE_LENGTH,
+                    "code": issued.code,
                     "development_code": issued.development_code,
                     "server_now": timezone.now(),
                 }

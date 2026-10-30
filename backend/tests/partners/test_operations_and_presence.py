@@ -26,13 +26,19 @@ from apps.partners.services import (
     record_partner_document_scan_result,
 )
 from tests.helpers import force_role_client
-from tests.partners.conftest import PartnerSetup, application_payload, upload_partner_document
+from tests.partners.conftest import (
+    PartnerSetup,
+    application_payload,
+    set_partner_schedule,
+    upload_partner_document,
+)
 
 pytestmark = pytest.mark.django_db
 
 APPROVAL_TRANSITION_COUNT = 4
 OPERATIONS_QUEUE_PAGE_SIZE = 25
-DENIED_REVEAL_COUNT = 2
+#: Only the reveal before claiming is denied; scan status no longer blocks one after it.
+DENIED_REVEAL_COUNT = 1
 
 
 def _submitted_application(setup: PartnerSetup) -> tuple[PartnerApplication, PartnerDocument]:
@@ -41,6 +47,8 @@ def _submitted_application(setup: PartnerSetup) -> tuple[PartnerApplication, Par
         application_payload(setup),
         format="json",
     ).json()
+    # Submission requires weekly working hours in every service area.
+    assert set_partner_schedule(setup).status_code == HTTPStatus.OK
     application = PartnerApplication.objects.get(partner__user=setup.user)
     document_response = upload_partner_document(
         setup.client,
@@ -253,7 +261,9 @@ def test_operations_queue_claim_detail_and_masked_document_access(
     assert claimed.status_code == HTTPStatus.OK
     assert claimed.json()["status"] == PartnerApplication.Status.UNDER_REVIEW
     assert claimed.json()["review_assigned_to_id"] == str(operations_user.id)
-    assert pending_scan.status_code == HTTPStatus.CONFLICT
+    # Scanning no longer gates review (e1d29ae6): once claimed, the reviewer can open the
+    # document whatever its scan status.
+    assert pending_scan.status_code == HTTPStatus.OK
     assert access.status_code == HTTPStatus.OK
     assert access.json()["review_url"].startswith("https://storage.test/review/")
     assert assigned.status_code == HTTPStatus.OK
@@ -279,7 +289,6 @@ def test_operations_queue_claim_detail_and_masked_document_access(
     assert denied_reveals.count() == DENIED_REVEAL_COUNT
     assert {event.metadata["error_code"] for event in denied_reveals} == {
         "partner_review_ownership_conflict",
-        "partner_transition_not_allowed",
     }
 
 

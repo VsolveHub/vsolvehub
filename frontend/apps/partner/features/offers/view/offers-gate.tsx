@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@vsolve/ui";
+import { Spinner, useT } from "@vsolve/ui";
 
 import { usePartnerApplication } from "@/features/application/queries";
 import { ApprovalRequired } from "@/features/application/view/approval-required";
@@ -17,26 +17,27 @@ import { OfferInbox } from "./offer-inbox";
  * application is still in review is accurate and misleading at once.
  */
 export function OffersGate() {
+  const t = useT();
   const application = usePartnerApplication();
   const isApproved = application.data?.status === "APPROVED";
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-text">Your offers</h1>
+      <h1 className="text-2xl font-bold text-text">{t("offers.gate.title")}</h1>
       <p className="mt-1.5 text-sm leading-6 text-text-secondary">
-        Each offer is one visit. Accepting gives you two minutes to change your mind.
+        {t("offers.gate.subtitle")}
       </p>
 
       <div className="mt-5">
         {application.isPending ? (
           <p className="flex items-center gap-2 text-text-secondary">
             <Spinner size="sm" />
-            Loading your account…
+            {t("offers.gate.loading")}
           </p>
         ) : isApproved ? (
           <OfferInbox />
         ) : (
-          <ApprovalRequired detail="Offers start arriving once a reviewer has approved your application. This is not the same as there being no work — nothing is being offered to you yet." />
+          <ApprovalRequired detail={t("offers.gate.approvalRequired")} />
         )}
       </div>
     </main>

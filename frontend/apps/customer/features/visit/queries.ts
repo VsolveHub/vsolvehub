@@ -167,6 +167,9 @@ interface VersionedVisitInput {
  * triggering a refetch. The group list is invalidated because a visit reaching a
  * terminal state can settle its whole group — but only invalidated, never
  * written: this response knows nothing about sibling units.
+ *
+ * A refused command usually means the visit moved under the customer, and the
+ * group read carries that same visit's status, so both are re-read.
  */
 function useVisitCommandCache() {
   const queryClient = useQueryClient();
@@ -178,6 +181,7 @@ function useVisitCommandCache() {
     },
     refetchVisit(bookingId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.booking.visit(bookingId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.groups() });
     },
   };
 }
@@ -283,8 +287,13 @@ export function useRescheduleVisit() {
  * challenge and mints a new one, which is what "Resend" has to mean. Django
  * throttles it per booking, so a customer pressing it repeatedly gets a typed
  * `429` rather than an unbounded stream of codes.
+ *
+ * A refusal is re-read rather than left on screen: the commonest one is a page
+ * that missed the Partner starting work, and the fix for that is the new status.
  */
 export function useRequestStartOtp() {
+  const cache = useVisitCommandCache();
+
   return useMutation({
     mutationFn: (input: VersionedVisitInput) =>
       request(() =>
@@ -293,6 +302,7 @@ export function useRequestStartOtp() {
           body: { expected_version: input.expectedVersion },
         }),
       ),
+    onError: (_error, input) => cache.refetchVisit(input.bookingId),
     retry: false,
   });
 }

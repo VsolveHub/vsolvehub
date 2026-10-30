@@ -1,6 +1,15 @@
 "use client";
 
-import { Button, Dialog, ErrorState, FactTile, Sheet, cn, formatMoney } from "@vsolve/ui";
+import {
+  Button,
+  Dialog,
+  ErrorState,
+  FactTile,
+  Sheet,
+  cn,
+  formatMoney,
+  useTranslator,
+} from "@vsolve/ui";
 import { useServerCountdown } from "@vsolve/query";
 import { useState } from "react";
 
@@ -47,16 +56,18 @@ export interface FixedTimeOfferProps {
   enquiry: EnquiryRecord;
 }
 
+/** `label` is a catalogue key, resolved with `t` at render time. */
 const PASS_REASONS: readonly { code: DeclineReasonCode; label: string; icon: "distance" | "date" | "papers" }[] = [
-  { code: "TOO_FAR", label: "Too far", icon: "distance" },
-  { code: "NO_CAPACITY", label: "Busy then", icon: "date" },
-  { code: "OUT_OF_SCOPE", label: "Not my kind of work", icon: "papers" },
+  { code: "TOO_FAR", label: "visit.fixedOffer.pass.tooFar", icon: "distance" },
+  { code: "NO_CAPACITY", label: "visit.fixedOffer.pass.busy", icon: "date" },
+  { code: "OUT_OF_SCOPE", label: "visit.fixedOffer.pass.outOfScope", icon: "papers" },
 ];
 
 /** `2 · π · 66`, the radius the artboard draws the ring at. */
 const RING_CIRCUMFERENCE = 414.7;
 
 export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
+  const { t, locale } = useTranslator();
   // The browser's own zone: the partner is standing in it.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const accept = useAcceptEnquiry(enquiry.id);
@@ -74,8 +85,8 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
       <ErrorState
         inline
         severity="info"
-        title="No visit time yet"
-        message="The customer has not picked a time for this visit. We will send it to you the moment they do."
+        title={t("visit.fixedOffer.noTime.title")}
+        message={t("visit.fixedOffer.noTime.message")}
       />
     );
   }
@@ -83,14 +94,14 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
   const starts = new Date(enquiry.fixedVisitStart);
   const dateLabel = Number.isNaN(starts.getTime())
     ? enquiry.fixedVisitStart
-    : new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone }).format(starts);
+    : new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone }).format(starts);
   const timeLabel = Number.isNaN(starts.getTime())
     ? ""
-    : new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(starts);
+    : new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(starts);
   const startsLabel =
     enquiry.fixedVisitDurationMinutes === null
       ? timeLabel
-      : `${timeLabel} · ${describeVisitDuration(enquiry.fixedVisitDurationMinutes)}`;
+      : `${timeLabel} · ${describeVisitDuration(enquiry.fixedVisitDurationMinutes, t)}`;
   const windowMs =
     enquiry.respondsBy === null
       ? 0
@@ -142,7 +153,7 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
         {enquiry.fixedVisitEarningPaise === null ? null : (
           <>
             <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-action-text opacity-80">
-              You receive
+              {t("visit.fixedOffer.youReceive")}
             </span>
             <span className="-mt-1 text-[2.75rem] font-extrabold leading-none tracking-[-0.025em] tabular-nums text-action-text">
               {formatMoney(enquiry.fixedVisitEarningPaise)}
@@ -152,27 +163,31 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
-        <FactTile icon={<Pictogram name="papers" size="md" />} label="Service" value={enquiry.serviceName} />
+        <FactTile icon={<Pictogram name="papers" size="md" />} label={t("visit.fixedOffer.service")} value={enquiry.serviceName} />
         <FactTile
           icon={<Pictogram name="distance" size="md" />}
-          label="Area"
-          value={enquiry.approximateArea.trim() === "" ? "Not given" : enquiry.approximateArea}
+          label={t("visit.fixedOffer.area")}
+          value={
+            enquiry.approximateArea.trim() === ""
+              ? t("visit.fixedOffer.notGiven")
+              : enquiry.approximateArea
+          }
           onClick={() => setShowingAreaDetail(true)}
         />
-        <FactTile icon={<Pictogram name="date" size="md" />} label="Date" value={dateLabel} />
-        <FactTile icon={<Pictogram name="time" size="md" />} label="Starts" value={startsLabel} />
+        <FactTile icon={<Pictogram name="date" size="md" />} label={t("visit.fixedOffer.date")} value={dateLabel} />
+        <FactTile icon={<Pictogram name="time" size="md" />} label={t("visit.fixedOffer.starts")} value={startsLabel} />
       </div>
 
       <p className="text-sm leading-6 text-text-secondary">
-        The customer picked this time. Take it or pass — there is nothing to schedule.
+        {t("visit.fixedOffer.customerPicked")}
       </p>
 
       {accept.isError ? (
         <ErrorState
           inline
           severity="warning"
-          title="This visit was taken by another professional"
-          message="Someone accepted it first. Nothing is owed either way, and the next offer will reach you the same way."
+          title={t("visit.fixedOffer.taken.title")}
+          message={t("visit.fixedOffer.taken.message")}
         />
       ) : null}
 
@@ -185,7 +200,7 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
         >
           <Pictogram name="yes" size="lg" className="text-surface" />
           <span className="text-xl font-bold text-surface">
-            {accept.isPending ? "Accepting…" : "Take this visit"}
+            {accept.isPending ? t("visit.fixedOffer.accepting") : t("visit.fixedOffer.take")}
           </span>
         </button>
         <Button
@@ -197,20 +212,20 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
           onClick={() => setPassing(true)}
           disabled={busy}
           loading={decline.isPending}
-          loadingLabel="Passing"
+          loadingLabel={t("visit.fixedOffer.passing")}
         >
-          Pass on this one
+          {t("visit.fixedOffer.pass")}
         </Button>
       </div>
 
       <Dialog
         open={showingAreaDetail}
         onOpenChange={setShowingAreaDetail}
-        title="Location details"
-        description="Approximate area for this visit"
+        title={t("visit.fixedOffer.location.title")}
+        description={t("visit.fixedOffer.location.description")}
         footer={
           <Button variant="secondary" onClick={() => setShowingAreaDetail(false)}>
-            Done
+            {t("common.done")}
           </Button>
         }
       >
@@ -221,15 +236,17 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
             </span>
             <div className="min-w-0 flex-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Area / Neighbourhood
+                {t("visit.fixedOffer.location.areaLabel")}
               </span>
               <p className="mt-1 text-base font-bold text-navy-900 leading-snug break-words">
-                {enquiry.approximateArea.trim() === "" ? "Not given" : enquiry.approximateArea}
+                {enquiry.approximateArea.trim() === ""
+                  ? t("visit.fixedOffer.notGiven")
+                  : enquiry.approximateArea}
               </p>
             </div>
           </div>
           <p className="text-xs leading-relaxed text-text-secondary">
-            Before a visit is confirmed, only the approximate locality is shown. The exact doorstep address and directions will appear directly in your visit workspace once accepted.
+            {t("visit.fixedOffer.location.note")}
           </p>
         </div>
       </Dialog>
@@ -237,10 +254,10 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
       <Sheet
         open={passing}
         onOpenChange={setPassing}
-        title="Why pass?"
+        title={t("visit.fixedOffer.whyPass")}
         footer={
           <Button variant="ghost" onClick={() => setPassing(false)}>
-            Keep it open
+            {t("visit.fixedOffer.keepOpen")}
           </Button>
         }
       >
@@ -260,7 +277,7 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
               )}
             >
               <Pictogram name={reason.icon} size="lg" className="text-action-secondary" />
-              <span className="text-xs font-semibold leading-tight text-text">{reason.label}</span>
+              <span className="text-xs font-semibold leading-tight text-text">{t(reason.label)}</span>
             </button>
           ))}
         </div>

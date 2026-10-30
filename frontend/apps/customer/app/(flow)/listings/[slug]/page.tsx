@@ -17,7 +17,7 @@ import {
 } from "@/features/listings/model";
 import {
   fetchListing,
-  fetchMyApplications,
+  fetchMyApplicationsPage,
   reportListing,
   submitListingApplication,
 } from "@/features/listings/queries";
@@ -79,14 +79,15 @@ export default function ListingDetailPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["saved-jobs"] }),
   });
 
+  // Only this job's applications: asking for all of them would miss one on a later page.
   const myApplicationsQuery = useQuery({
-    queryKey: ["my-listing-applications"],
-    queryFn: fetchMyApplications,
-    enabled: session.isAuthenticated,
+    queryKey: ["my-listing-applications", "for", listingId],
+    queryFn: () => fetchMyApplicationsPage(undefined, { listing: listingId }),
+    enabled: session.isAuthenticated && Boolean(listingId),
   });
 
   const activeApplication = (() => {
-    const rows = (myApplicationsQuery.data ?? []) as Array<{
+    const rows = (myApplicationsQuery.data?.results ?? []) as Array<{
       listing?: string;
       status?: string;
       created_at?: string;
@@ -206,6 +207,7 @@ export default function ListingDetailPage() {
             listingId={listingId}
             posterName={listing.poster_name}
             profile={jobProfile.data}
+            jobSkills={[...asStringList(listing.required_skills), ...asStringList(listing.preferred_skills)]}
           />
         ) : (
         <ApplySteps
@@ -243,7 +245,7 @@ export default function ListingDetailPage() {
             </div>
             <a
               href="#apply-panel"
-              className="inline-flex items-center justify-center rounded-control bg-action px-5 py-2 text-xs font-bold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active shrink-0"
+              className="inline-flex min-h-11 items-center justify-center rounded-control bg-action px-5 py-2 text-sm font-bold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active shrink-0"
             >
               Apply Now
             </a>
@@ -264,4 +266,9 @@ export default function ListingDetailPage() {
       />
     </main>
   );
+}
+
+/** The job's skill lists arrive untyped from the contract; keep only the text items. */
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
 }

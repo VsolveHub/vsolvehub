@@ -7,8 +7,8 @@
 
 Several capabilities have both a real implementation and a development stand-in: payments
 (`razorpay` against `fake`), document storage (`supabase` against `unconfigured`), OTP delivery
-(a real sender against `development`, which exposes the code), and geocoding (`nominatim` against
-`unconfigured`).
+(a real sender against `development`, which exposes the code), and geocoding (`google` against
+`unconfigured`; `nominatim` until it was retired in October 2026).
 
 The convenient pattern is to select the real provider when its credentials are present and quietly
 fall back to the stand-in when they are not. That pattern fails in the worst possible direction.
@@ -32,7 +32,7 @@ misconfiguration of the provider that was named.
 `ImproperlyConfigured` when a real provider is required and not properly configured. It requires
 `PAYMENT_PROVIDER` to be `razorpay` with server credentials present and a webhook secret of at
 least 32 characters, `DOCUMENT_STORAGE_PROVIDER` to be `supabase` over HTTPS with a service-role
-key, a configured `GEOCODING_PROVIDER` with a contactable `GEOCODING_USER_AGENT`, and it forbids
+key, `GEOCODING_PROVIDER` to be `google` with `GOOGLE_MAPS_SERVER_KEY` present, and it forbids
 development OTP delivery or exposure outright.
 
 The development stand-ins remain available in `local`, `test` and `integration` settings, where

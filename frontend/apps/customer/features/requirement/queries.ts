@@ -407,6 +407,15 @@ export function isSubmitInProgress(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "idempotency_in_progress";
 }
 
+/**
+ * A remembered draft that can no longer take answers: deleted (404) or already sent to
+ * vendors (409). Only these replace it with a fresh request; anything else must reach the
+ * customer rather than quietly opening a second request.
+ */
+export function isDraftUnusable(error: unknown): boolean {
+  return error instanceof ApiRequestError && (error.status === 404 || error.status === 409);
+}
+
 /** `409 m2_requirement_expired` — `service_by` passed while the draft sat open. */
 export function isRequirementExpired(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "m2_requirement_expired";

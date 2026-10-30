@@ -32,6 +32,14 @@ from tests.helpers import force_role_client
 
 User = get_user_model()
 
+#: What an ad needs before `submit_asset` will publish it: a photo and a full pickup address.
+LISTABLE_ASSET: dict[str, object] = {
+    "image_urls": ["https://cdn.example.com/drill.jpg"],
+    "pickup_address_line": "Shop 1, Main Road",
+    "pickup_city": "Hyderabad",
+    "pickup_pincode": "500032",
+}
+
 
 def _customer_client(user):
     role, _ = Role.objects.get_or_create(code="customer", defaults={"name": "Customer"})
@@ -40,7 +48,7 @@ def _customer_client(user):
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-cancel-test", name="Rental Cancel Test")
     sub = Subcategory.objects.create(category=category, slug="tools-cancel", name="Tools")
     service = Service.objects.create(
@@ -86,6 +94,7 @@ def _booked(rental_world, *, hold_deposit_for_demo: bool = False) -> RentalBooki
         title="Cancel Drill",
         daily_rate_paise=50000,
         deposit_paise=100000,
+        **LISTABLE_ASSET,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
     moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok")
@@ -183,6 +192,7 @@ def test_cancel_http_forbidden_after_handover(rental_world):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "handover" in response.data["error"]["message"].lower()
 
+
 @pytest.mark.django_db
 def test_partner_cancel_booking(rental_world):
     booking = _booked(rental_world)
@@ -233,12 +243,19 @@ def test_ops_force_cancel_booking(rental_world):
     UserRole.objects.get_or_create(user=ops_user, role=role, revoked_at=None)
 
     client = force_role_client(user=ops_user, role_code="operations")
-    response = client.post(f"/api/v1/ops/rentals/bookings/{booking.id}/cancel")
+    response = client.post(
+        f"/api/v1/ops/rentals/bookings/{booking.id}/cancel",
+        {"reason": "Owner reported the drill broken"},
+        format="json",
+    )
     assert response.status_code == status.HTTP_200_OK
     assert response.data["status"] == RentalBooking.Status.CANCELLED
+    assert response.data["cancellation_reason"] == "Owner reported the drill broken"
 
     booking.refresh_from_db()
     assert booking.status == RentalBooking.Status.CANCELLED
+    assert booking.cancellation_reason == "Owner reported the drill broken"
+    assert booking.cancelled_at is not None
     reservation = AssetReservation.objects.get(id=reservation_id)
     assert reservation.status == AssetReservation.Status.RELEASED
 
@@ -252,6 +269,7 @@ def test_per_booking_handover_pins_are_unique(rental_world):
         title="PIN Drill",
         daily_rate_paise=50000,
         deposit_paise=100000,
+        **LISTABLE_ASSET,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
     moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok")
@@ -305,3 +323,29 @@ def test_per_booking_handover_pins_are_unique(rental_world):
     )
     second.refresh_from_db()
     assert second.status == RentalBooking.Status.HANDOVER
+
+
+@pytest.mark.django_db
+def test_ops_cancel_requires_a_reason(rental_world):
+    """Regression: Operations cancels were recorded only as "Ops force-cancel"."""
+    booking = _booked(rental_world)
+    ops_user = User.objects.create(phone_number="+919922220013", full_name="Ops Reason")
+    role, _ = Role.objects.get_or_create(code="operations", defaults={"name": "Operations"})
+    UserRole.objects.get_or_create(user=ops_user, role=role, revoked_at=None)
+    client = force_role_client(user=ops_user, role_code="operations")
+
+    for body in ({}, {"reason": "   "}):
+        response = client.post(
+            f"/api/v1/ops/rentals/bookings/{booking.id}/cancel", body, format="json"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+    booking.refresh_from_db()
+    assert booking.status != RentalBooking.Status.CANCELLED
+
+
+@pytest.mark.django_db
+def test_customer_cancel_stamps_the_time_without_a_reason(rental_world):
+    booking = _booked(rental_world)
+    cancelled = cancel_booking(booking=booking, customer=rental_world["customer"])
+    assert cancelled.cancelled_at is not None
+    assert cancelled.cancellation_reason == ""

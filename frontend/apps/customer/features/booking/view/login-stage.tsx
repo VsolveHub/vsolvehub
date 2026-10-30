@@ -1,6 +1,6 @@
 "use client";
 
-import { useOtpFlow } from "@vsolve/query";
+import { usePhoneAuthFlow } from "@vsolve/query";
 import { Button, ErrorState, OtpForm, Spinner } from "@vsolve/ui";
 
 import { readPendingReferral } from "@/features/referral/pending-referral";
@@ -34,7 +34,7 @@ export function LoginStage({ summary }: LoginStageProps) {
   const { state, dispatch } = useWorkspace();
   const session = useCustomerSession();
 
-  const flow = useOtpFlow(getApiClient(), {
+  const flow = usePhoneAuthFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     // The verify mutation writes the session into the cache and tells sibling
     // tabs; this returns the customer to what they were doing.

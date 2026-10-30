@@ -5,6 +5,7 @@ Redis key has disappeared. The eligibility gate that only an approved, fully doc
 pass lives here too, as does the coarse location capture that instant matching reads.
 """
 
+import logging
 import uuid
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -15,13 +16,17 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
+logger = logging.getLogger(__name__)
+
 from apps.identity.models import User
 from apps.partners.exceptions import PartnerEligibilityError, PartnerPresenceError
 from apps.partners.models import (
     PartnerApplication,
     PartnerLocation,
     PartnerOnlineSession,
+    PartnerPushSubscription,
     PartnerServiceArea,
+    PartnerShift,
 )
 from apps.partners.selectors import presence_cache_key
 
@@ -92,6 +97,27 @@ def go_online(
         )
         if area_link is None:
             raise PartnerPresenceError("Select one of your approved service areas.")
+
+        if getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False):
+            active_shift = (
+                PartnerShift.objects.select_for_update()
+                .filter(partner=application.partner, ended_at__isnull=True)
+                .first()
+            )
+            duration_hours = getattr(settings, "PARTNER_SHIFT_DEFAULT_DURATION_HOURS", 8)
+            if active_shift is None:
+                PartnerShift.objects.create(
+                    partner=application.partner,
+                    service_area=area_link.service_area,
+                    started_at=now,
+                    scheduled_end_at=now + timedelta(hours=duration_hours),
+                    last_active_at=now,
+                )
+            else:
+                if active_shift.service_area_id != area_link.service_area_id:
+                    active_shift.service_area = area_link.service_area
+                active_shift.last_active_at = now
+                active_shift.save(update_fields=("service_area", "last_active_at", "updated_at"))
 
         current = (
             PartnerOnlineSession.objects.select_for_update()
@@ -191,6 +217,12 @@ def heartbeat_presence(
         )
     _publish_presence(session)
 
+    if getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False):
+        PartnerShift.objects.filter(
+            partner=application.partner,
+            ended_at__isnull=True,
+        ).update(last_active_at=timezone.now())
+
     persistence_cutoff = timezone.now() - timedelta(
         seconds=settings.PARTNER_PRESENCE_DB_TOUCH_SECONDS,
     )
@@ -208,15 +240,26 @@ def heartbeat_presence(
 @transaction.atomic
 def go_offline(*, user: User, session_id: uuid.UUID) -> None:
     application = _application_for_update(user)
+    now = timezone.now()
     session = (
         PartnerOnlineSession.objects.select_for_update()
         .filter(id=session_id, partner=application.partner)
         .first()
     )
     if session is not None and session.ended_at is None:
-        session.ended_at = timezone.now()
+        session.ended_at = now
         session.end_reason = PartnerOnlineSession.EndReason.PARTNER_OFFLINE
         session.save(update_fields=("ended_at", "end_reason"))
+
+    if getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False):
+        PartnerShift.objects.filter(
+            partner=application.partner,
+            ended_at__isnull=True,
+        ).update(
+            ended_at=now,
+            end_reason=PartnerShift.EndReason.PARTNER_LOGOUT,
+        )
+
     try:
         cache.delete(presence_cache_key(application.partner_id))
     except Exception as exc:
@@ -252,3 +295,143 @@ def expire_missing_presence_sessions(*, batch_size: int = 500) -> int:
         ended_at=timezone.now(),
         end_reason=PartnerOnlineSession.EndReason.PRESENCE_EXPIRED,
     )
+
+
+def expire_expired_shifts() -> int:
+    """Reconcile partner shifts: expire shifts past scheduled_end_at or idle beyond threshold."""
+    now = timezone.now()
+
+    # 1. Scheduled expiry (shift duration finished)
+    scheduled_expired = PartnerShift.objects.filter(
+        ended_at__isnull=True,
+        scheduled_end_at__lte=now,
+    ).update(
+        ended_at=now,
+        end_reason=PartnerShift.EndReason.SHIFT_EXPIRED,
+    )
+
+    # 2. Safety idle check: only expire if partner has been inactive beyond threshold
+    # and has NO pending dispatch offers
+    idle_minutes = getattr(settings, "PARTNER_SHIFT_MAX_IDLE_MINUTES", 30)
+    idle_cutoff = now - timedelta(minutes=idle_minutes)
+
+    from apps.assignments.models import DispatchOffer
+
+    partners_with_pending_offers = set(
+        DispatchOffer.objects.filter(
+            status=DispatchOffer.Status.PENDING,
+        ).values_list("partner_id", flat=True)
+    )
+
+    idle_expired = (
+        PartnerShift.objects.filter(
+            ended_at__isnull=True,
+            last_active_at__lte=idle_cutoff,
+        )
+        .exclude(partner_id__in=partners_with_pending_offers)
+        .update(
+            ended_at=now,
+            end_reason=PartnerShift.EndReason.IDLE_EXPIRED,
+        )
+    )
+
+    # 3. Consecutive missed offers check
+    max_missed = getattr(settings, "MAX_CONSECUTIVE_MISSED_OFFERS", 3)
+    missed_expired = 0
+    active_shifts = PartnerShift.objects.filter(ended_at__isnull=True).select_related("partner")
+    for shift in active_shifts:
+        recent_offers = list(
+            DispatchOffer.objects.filter(
+                partner=shift.partner,
+                offered_at__gte=shift.started_at,
+            ).order_by("-offered_at")[:max_missed]
+        )
+        if len(recent_offers) >= max_missed and all(
+            offer.status in (DispatchOffer.Status.EXPIRED, DispatchOffer.Status.DECLINED)
+            for offer in recent_offers
+        ):
+            shift.ended_at = now
+            shift.end_reason = PartnerShift.EndReason.MISSED_OFFERS
+            shift.save(update_fields=("ended_at", "end_reason"))
+            missed_expired += 1
+            logger.info(
+                "shift_ended_missed_offers",
+                extra={
+                    "partner_id": str(shift.partner_id),
+                    "shift_id": str(shift.id),
+                    "missed_count": len(recent_offers),
+                },
+            )
+
+    return scheduled_expired + idle_expired + missed_expired
+
+
+def sync_partner_push_subscription(
+    *,
+    user: User,
+    onesignal_subscription_id: str,
+    platform: str = PartnerPushSubscription.Platform.WEB,
+    user_agent: str = "",
+    is_active: bool = True,
+) -> tuple[PartnerPushSubscription, bool]:
+    """Upsert PartnerPushSubscription and evaluate partner instant eligibility."""
+    profile = getattr(user, "partner_profile", None)
+    if profile is None:
+        from apps.partners.selectors import partner_profile_for_user
+
+        profile = partner_profile_for_user(user)
+    if profile is None:
+        raise PartnerEligibilityError("Partner profile was not found.")
+
+    partner_external_id = str(profile.id)
+    now = timezone.now()
+
+    with transaction.atomic():
+        if is_active and platform == PartnerPushSubscription.Platform.WEB:
+            PartnerPushSubscription.objects.filter(
+                partner=profile,
+                platform=PartnerPushSubscription.Platform.WEB,
+                is_active=True,
+            ).exclude(onesignal_subscription_id=onesignal_subscription_id).update(is_active=False)
+
+        subscription, _ = PartnerPushSubscription.objects.update_or_create(
+            onesignal_subscription_id=onesignal_subscription_id,
+            defaults={
+                "partner": profile,
+                "user": user,
+                "onesignal_external_id": partner_external_id,
+                "platform": platform,
+                "user_agent": user_agent,
+                "is_active": is_active,
+                "last_verified_at": now,
+            },
+        )
+
+    log_event = "push_subscription_registered" if is_active else "push_subscription_deactivated"
+    logger.info(
+        log_event,
+        extra={
+            "partner_id": str(profile.id),
+            "subscription_id": onesignal_subscription_id,
+            "platform": platform,
+            "is_active": is_active,
+        },
+    )
+
+    has_active_shift = PartnerShift.objects.filter(
+        partner=profile,
+        ended_at__isnull=True,
+        scheduled_end_at__gt=now,
+    ).exists()
+    has_active_sub = PartnerPushSubscription.objects.filter(
+        partner=profile,
+        is_active=True,
+    ).exists()
+    max_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
+    has_fresh_loc = PartnerLocation.objects.filter(
+        partner=profile,
+        captured_at__gte=now - timedelta(minutes=max_age),
+    ).exists()
+
+    instant_eligible = bool(has_active_shift and has_active_sub and has_fresh_loc)
+    return subscription, instant_eligible
