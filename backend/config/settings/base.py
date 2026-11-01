@@ -1313,7 +1313,6 @@ CELERY_BEAT_SCHEDULE = {
     "expire-rental-transport-requests": {
         "task": "apps.rental.tasks.expire_rental_transport_requests",
         "schedule": 60.0 * 5,
-    }
     },
 }
 
