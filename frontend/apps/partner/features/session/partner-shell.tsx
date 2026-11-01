@@ -25,6 +25,7 @@ import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 import { PartnerHeaderTitleProvider } from "./partner-header-title";
 import { LocaleSwitcher } from "./view/locale-switcher";
+import { DesktopMobileHandoff } from "./view/desktop-mobile-handoff";
 import { translateNavLabel } from "@/features/workspace/nav-labels";
 
 export const PARTNER_ROLE = "partner";
@@ -399,55 +400,79 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     isApprovedPartner;
   const isRegistrationDocumentsRoute =
     pathname.startsWith("/apply") ||
-    pathname.startsWith("/me");
+    pathname.startsWith("/me/documents") ||
+    pathname === "/me/application";
 
   return (
     <PartnerHeaderTitleProvider>
       {(headerTitle) => (
-        <div className="flex min-h-screen w-full flex-col items-center bg-canvas overflow-x-clip">
+        <>
+          {/*
+            DESKTOP ONLY POLICY:
+            Once registration and verification are completed successfully, partner
+            operations (dispatches, work stack, live radar, jobs, payouts) are mobile-only.
+            On desktop screens (lg: and above), only the registration process (/apply/*)
+            and application/KYC document reviews (/me/documents) are accessible.
+            All other routes display the dedicated "Download Partner App - Registration Completed"
+            screen, and no partner operations portal can be opened on desktop.
+          */}
+          {isApprovedPartner && !isRegistrationDocumentsRoute ? (
+            <div className="hidden lg:flex w-full min-h-screen flex-col">
+              <DesktopMobileHandoff
+                application={application.data}
+                name={application.data?.display_name || guard.user?.full_name || guard.user?.display_name}
+                phone={guard.user?.phone_number}
+              />
+            </div>
+          ) : null}
+
+          {/* MOBILE (< lg) AND REGISTRATION/DOCUMENTS ON DESKTOP */}
           <div
             className={cn(
-              "relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 shadow-sm",
-              "lg:max-w-none lg:border-x-0 lg:shadow-none",
-              isDarkHero ? "bg-[var(--color-ink-900)]" : "bg-canvas",
+              "flex min-h-screen w-full flex-col items-center bg-canvas overflow-x-clip",
+              isApprovedPartner && !isRegistrationDocumentsRoute && "lg:hidden",
             )}
           >
-            {chromeMode === "full" ? (
-              <div className={isDarkHero ? "sticky top-0 z-30 bg-[var(--color-ink-900)]" : "sticky top-0 z-30 bg-surface"}>
-                <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)] lg:rounded-b-none lg:border-b lg:border-line lg:px-8 lg:py-3 lg:shadow-none">
-                  <div className="flex items-center justify-between lg:mx-auto lg:w-full lg:max-w-7xl lg:gap-8">
-                    <Link
-                      href="/home"
-                      className="flex min-h-11 min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-                    >
-                      <Logo className="text-base h-7 w-auto" />
-                    </Link>
-
-                    {chromeMode === "full" && isApprovedPartner ? (
-                      <DesktopPrimaryNav items={primaryNav} workspaceKeys={workspaceKeys} />
-                    ) : isApprovedPartner && isRegistrationDocumentsRoute ? (
-                      <div className="hidden lg:flex items-center gap-2">
-                        <span className="text-sm font-bold text-navy-900">
-                          {pathname.startsWith("/me/profile") || pathname === "/me"
-                            ? "Partner Profile"
-                            : "Partner Application & Documents Hub"}
-                        </span>
-                      </div>
-                    ) : null}
-
-                    <div className="flex items-center gap-2">
-                      <LocaleSwitcher />
-                      <Button
-                        variant="ghost"
-                        onClick={() => logout.mutate()}
-                        loading={logout.isPending}
-                        loadingLabel={t("common.signingOut")}
+            <div
+              className={cn(
+                "relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 shadow-sm",
+                // On registration documents page, expand on desktop for high-grade responsive layout
+                isRegistrationDocumentsRoute && "lg:max-w-none lg:border-x-0 lg:shadow-none",
+                isDarkHero ? "bg-[var(--color-ink-900)]" : "bg-canvas",
+              )}
+            >
+              {chromeMode === "full" ? (
+                <div className={isDarkHero ? "sticky top-0 z-30 bg-[var(--color-ink-900)]" : "sticky top-0 z-30 bg-surface"}>
+                  <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)] lg:rounded-b-none lg:border-b lg:border-line lg:px-8 lg:py-3 lg:shadow-none">
+                    <div className="flex items-center justify-between lg:mx-auto lg:w-full lg:max-w-7xl lg:gap-8">
+                      <Link
+                        href={isApprovedPartner ? "/me/documents" : "/home"}
+                        className="flex min-h-11 min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                       >
-                        {t("common.signOut")}
-                      </Button>
+                        <Logo className="text-base h-7 w-auto" />
+                      </Link>
+
+                      {isApprovedPartner && isRegistrationDocumentsRoute ? (
+                        <div className="hidden lg:flex items-center gap-2">
+                          <span className="text-sm font-bold text-navy-900">
+                            Partner Application & Documents Hub
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center gap-2">
+                        <LocaleSwitcher />
+                        <Button
+                          variant="ghost"
+                          onClick={() => logout.mutate()}
+                          loading={logout.isPending}
+                          loadingLabel={t("common.signingOut")}
+                        >
+                          {t("common.signOut")}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </header>
+                  </header>
               </div>
             ) : chromeMode === "focused" && !hasOwnFocusedHeader(pathname) ? (
               <FocusedHeader pathname={pathname} titleOverride={headerTitle} />
@@ -472,6 +497,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             {isApprovedPartner ? <LiveOfferSheet /> : null}
           </div>
         </div>
+      </>
       )}
     </PartnerHeaderTitleProvider>
   );
