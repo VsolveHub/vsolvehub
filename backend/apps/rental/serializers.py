@@ -129,6 +129,19 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
     def get_pickup_address(self, asset: RentalAsset) -> dict[str, Any]:
         return pickup_address_payload(asset)
 
+    def get_reserved_ranges(self, asset: RentalAsset) -> list[dict[str, str]]:
+        today = timezone.localdate()
+        return [
+            {
+                "start_date": r.start_date.isoformat(),
+                "end_date": r.end_date.isoformat(),
+            }
+            for r in asset.reservations.filter(
+                status__in=[AssetReservation.Status.CONFIRMED, AssetReservation.Status.TENTATIVE],
+                end_date__gte=today,
+            )
+        ]
+
     class Meta:
         model = RentalAsset
         fields: tuple[str, ...] = (
@@ -173,19 +186,6 @@ class RentalAssetDetailSerializer(RentalAssetSerializer):
     class Meta(RentalAssetSerializer.Meta):
         fields = (*RentalAssetSerializer.Meta.fields, "pickup_hours")
         read_only_fields = fields
-
-    def get_reserved_ranges(self, asset: RentalAsset) -> list[dict[str, str]]:
-        today = timezone.localdate()
-        return [
-            {
-                "start_date": r.start_date.isoformat(),
-                "end_date": r.end_date.isoformat(),
-            }
-            for r in asset.reservations.filter(
-                status__in=[AssetReservation.Status.CONFIRMED, AssetReservation.Status.TENTATIVE],
-                end_date__gte=today,
-            )
-        ]
 
     @extend_schema_field(PickupHoursSerializer)
     def get_pickup_hours(self, asset: RentalAsset) -> dict[str, Any]:
