@@ -52,7 +52,7 @@ export function CartSuggestions({
   if (suggestions.length === 0) return null;
 
   return (
-    <section aria-labelledby="cart-suggestions-heading" className="mt-10">
+    <section aria-labelledby="cart-suggestions-heading" className="mt-10 min-w-0 max-w-full overflow-hidden">
       <h2 id="cart-suggestions-heading" className="text-base font-bold text-text">
         Add to the same visit
       </h2>
@@ -63,7 +63,10 @@ export function CartSuggestions({
 
       {/* Scrolls inside itself. A horizontal strip that widens the page body is
           the classic way a phone layout starts scrolling sideways. */}
-      <ul className="mt-4 flex gap-3 overflow-x-auto pb-2" data-testid="cart-suggestions">
+      <ul
+        className="mt-4 flex gap-3 overflow-x-auto pb-2 min-w-0 max-w-full overscroll-x-contain touch-pan-x"
+        data-testid="cart-suggestions"
+      >
         {suggestions.map((card) => {
           const imageUrl = card.cover?.url ?? "";
           const isCoverIcon = imageUrl
@@ -73,7 +76,7 @@ export function CartSuggestions({
           return (
             <li
               key={card.slug}
-              className="flex w-56 shrink-0 flex-col rounded-card border border-line bg-surface p-3 sm:p-4"
+              className="relative flex w-56 shrink-0 flex-col overflow-hidden rounded-card border border-line bg-surface p-3 sm:p-4"
             >
               <IntentLink
                 href={`/catalog/${card.category_slug}/${card.slug}`}
@@ -141,7 +144,7 @@ export function CartSuggestions({
               ) : (
                 <IntentLink
                   href={`/catalog/${card.category_slug}/${card.slug}`}
-                  className="mt-2 block rounded-md border border-line-strong px-3 py-1.5 text-center text-xs font-semibold text-text hover:bg-surface-hover"
+                  className="relative mt-2 block rounded-md border border-line-strong px-3 py-1.5 text-center text-xs font-semibold text-text hover:bg-surface-hover"
                 >
                   Choose an option<span className="sr-only"> for {card.name}</span>
                 </IntentLink>

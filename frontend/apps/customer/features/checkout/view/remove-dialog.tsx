@@ -57,8 +57,13 @@ export function RemoveCartItemDialog({
       description={`${item.service_name} (${item.variant_name}) will leave this booking. Other services stay as they are.`}
       dismissable={!isPending}
       footer={
-        <>
-          <Button variant="outline" disabled={isPending} onClick={onDismiss}>
+        <div className="flex w-full flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
+            disabled={isPending}
+            onClick={onDismiss}
+            className="w-full min-h-[44px] touch-manipulation sm:w-auto"
+          >
             Cancel
           </Button>
           <Button
@@ -67,10 +72,11 @@ export function RemoveCartItemDialog({
             loading={isPending}
             loadingLabel={`Removing ${item.service_name}`}
             onClick={onConfirm}
+            className="w-full min-h-[44px] touch-manipulation sm:w-auto"
           >
             {errorMessage === null ? "Remove" : "Try again"}
           </Button>
-        </>
+        </div>
       }
     >
       <p className="sr-only" aria-live="polite">

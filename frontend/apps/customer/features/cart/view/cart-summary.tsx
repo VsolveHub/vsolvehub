@@ -184,12 +184,12 @@ export function CartStickyBar({
           : "translate-y-full opacity-0 pointer-events-none",
       )}
     >
-      <div className="mx-auto flex max-w-[1216px] items-center justify-between gap-4">
-        <div className="min-w-0">
+      <div className="mx-auto flex max-w-[1216px] min-w-0 items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1">
           {total !== null ? (
             <>
               <span className="block text-xs text-text-secondary">Amount to pay</span>
-              <span data-numeric className="block text-lg font-extrabold tabular-nums text-navy-900">
+              <span data-numeric className="block truncate text-lg font-extrabold tabular-nums text-navy-900">
                 {formatMoney(total.amount_paise)}
               </span>
             </>
