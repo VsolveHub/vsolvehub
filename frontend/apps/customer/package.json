@@ -13,6 +13,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",
     "@vsolve/api-client": "workspace:*",
+    "@vsolve/config": "workspace:*",
     "@vsolve/query": "workspace:*",
     "@vsolve/ui": "workspace:*",
     "lottie-react": "^3.1.0",

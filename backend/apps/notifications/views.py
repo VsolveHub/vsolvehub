@@ -20,8 +20,12 @@ an incident is a control nobody uses. Releasing is equally light for the same re
 The audit lives in the row itself: actor, reason and timestamp for both directions.
 """
 
+import logging
 from typing import cast
 
+logger = logging.getLogger(__name__)
+
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import APIException
@@ -38,8 +42,11 @@ from apps.notifications.feed import (
     notification_feed,
     unread_count,
 )
-from apps.notifications.models import KillSwitch
+from apps.notifications.models import KillSwitch, PushNotificationPreference
 from apps.notifications.serializers import (
+    CustomerPushSubscriptionResponseSerializer,
+    CustomerPushSubscriptionSyncSerializer,
+    CustomerPushSubscriptionUpdateSerializer,
     EngageKillSwitchRequestSerializer,
     KillSwitchSerializer,
     MarkNotificationReadRequestSerializer,
@@ -48,7 +55,11 @@ from apps.notifications.serializers import (
     ReleaseKillSwitchRequestSerializer,
     UnreadNotificationCountSerializer,
 )
-from apps.notifications.services import engage_kill_switch, release_kill_switch
+from apps.notifications.services import (
+    engage_kill_switch,
+    release_kill_switch,
+    sync_customer_push_subscription,
+)
 from apps.partners.permissions import IsOperationsUser
 from common.errors.serializers import ApiErrorSerializer
 from common.pagination import (
@@ -264,3 +275,277 @@ class DevOneSignalTestPushView(APIView):
         )
         return Response(result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST)
 
+class CustomerPushSubscriptionSyncView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Customer push subscriptions"],
+        request=CustomerPushSubscriptionSyncSerializer,
+        responses={
+            200: CustomerPushSubscriptionResponseSerializer,
+            201: CustomerPushSubscriptionResponseSerializer,
+            400: ApiErrorSerializer,
+            401: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = CustomerPushSubscriptionSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        subscription, is_created = sync_customer_push_subscription(
+            user=cast(User, request.user),
+            **serializer.validated_data,
+        )
+        return Response(
+            CustomerPushSubscriptionResponseSerializer(subscription).data,
+            status=status.HTTP_201_CREATED if is_created else status.HTTP_200_OK,
+        )
+
+
+class CustomerPushSubscriptionDetailView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def _get_subscription(self, request: Request, subscription_id: str):
+        import uuid
+        from rest_framework.exceptions import NotFound, PermissionDenied
+        from apps.notifications.models import CustomerPushSubscription
+
+        is_uuid = False
+        try:
+            uuid.UUID(subscription_id)
+            is_uuid = True
+        except ValueError:
+            pass
+
+        if is_uuid:
+            from django.db.models import Q
+            sub = CustomerPushSubscription.objects.filter(
+                Q(id=subscription_id) | Q(onesignal_subscription_id=subscription_id)
+            ).first()
+        else:
+            sub = CustomerPushSubscription.objects.filter(onesignal_subscription_id=subscription_id).first()
+
+        if sub is None:
+            raise NotFound("Customer push subscription was not found.")
+
+        if sub.user_id != request.user.id:
+            raise PermissionDenied("This push subscription belongs to another user account.")
+
+        return sub
+
+    @extend_schema(
+        tags=["Customer push subscriptions"],
+        request=CustomerPushSubscriptionUpdateSerializer,
+        responses={
+            200: CustomerPushSubscriptionResponseSerializer,
+            400: ApiErrorSerializer,
+            401: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def patch(self, request: Request, subscription_id: str) -> Response:
+        sub = self._get_subscription(request, subscription_id)
+        serializer = CustomerPushSubscriptionUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        now = timezone.now()
+        update_fields = ["last_verified_at", "updated_at"]
+        sub.last_verified_at = now
+
+        if "is_active" in data:
+            sub.is_active = data["is_active"]
+            update_fields.append("is_active")
+        if "opted_in" in data:
+            sub.opted_in = data["opted_in"]
+            update_fields.append("opted_in")
+        if "permission_state" in data:
+            sub.permission_state = data["permission_state"]
+            update_fields.append("permission_state")
+            if sub.permission_state.lower() == "denied":
+                sub.is_active = False
+                if "is_active" not in update_fields:
+                    update_fields.append("is_active")
+        if "user_agent" in data:
+            sub.user_agent = data["user_agent"]
+            update_fields.append("user_agent")
+
+        # If opted_in is False, also deactivate
+        if sub.opted_in is False and sub.is_active:
+            sub.is_active = False
+            if "is_active" not in update_fields:
+                update_fields.append("is_active")
+
+        # If becoming active WEB, deactivate other active WEB subscriptions for same customer
+        from apps.notifications.models import CustomerPushSubscription
+        if sub.is_active and sub.platform == CustomerPushSubscription.Platform.WEB:
+            CustomerPushSubscription.objects.filter(
+                user=request.user,
+                platform=CustomerPushSubscription.Platform.WEB,
+                is_active=True,
+            ).exclude(id=sub.id).update(is_active=False, updated_at=now)
+
+        sub.save(update_fields=update_fields)
+
+        event = "customer_push_subscription_updated" if sub.is_active else "customer_push_subscription_deactivated"
+        logger.info(
+            event,
+            extra={
+                "user_id": str(request.user.id),
+                "role": "CUSTOMER",
+                "platform": sub.platform,
+                "permission_state": sub.permission_state,
+                "subscription_id": sub.onesignal_subscription_id,
+                "sync_status": "SUCCESS",
+                "failure_reason": "",
+            },
+        )
+        return Response(CustomerPushSubscriptionResponseSerializer(sub).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=["Customer push subscriptions"],
+        responses={
+            204: OpenApiResponse(description="Subscription deactivated successfully."),
+            401: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def delete(self, request: Request, subscription_id: str) -> Response:
+        sub = self._get_subscription(request, subscription_id)
+        now = timezone.now()
+        sub.is_active = False
+        sub.opted_in = False
+        sub.last_verified_at = now
+        sub.save(update_fields=["is_active", "opted_in", "last_verified_at", "updated_at"])
+
+        import logging
+        logger.info(
+            "customer_push_subscription_deactivated",
+            extra={
+                "user_id": str(request.user.id),
+                "role": "CUSTOMER",
+                "platform": sub.platform,
+                "permission_state": sub.permission_state,
+                "subscription_id": sub.onesignal_subscription_id,
+                "sync_status": "SUCCESS",
+                "failure_reason": "",
+            },
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+
+class BasePushNotificationPreferencesView(APIView):
+    permission_classes = [IsAuthenticated]
+    role: str = ""
+
+    @extend_schema(
+        tags=["Notification preferences"],
+        responses={200: OpenApiResponse(description="User push notification preferences.")},
+    )
+    def get(self, request: Request) -> Response:
+        role = self.role
+        metadata = PushNotificationPreference.CATEGORY_METADATA.get(role, {})
+        existing = {
+            p.category: p.is_enabled
+            for p in PushNotificationPreference.objects.filter(user=request.user, role=role)
+        }
+
+        preferences = []
+        for cat_key, meta in metadata.items():
+            is_enabled = existing.get(cat_key, meta.get("default_enabled", True))
+            preferences.append({
+                "category": cat_key,
+                "label": meta.get("label", cat_key),
+                "description": meta.get("description", ""),
+                "is_enabled": is_enabled,
+                "is_mutable": meta.get("is_mutable", True),
+            })
+
+        return Response({
+            "role": role,
+            "preferences": preferences,
+        }, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=["Notification preferences"],
+        responses={
+            200: OpenApiResponse(description="Preferences updated successfully."),
+            400: OpenApiResponse(description="Invalid request or attempt to disable immutable category."),
+        },
+    )
+    def patch(self, request: Request) -> Response:
+        role = self.role
+        metadata = PushNotificationPreference.CATEGORY_METADATA.get(role, {})
+        data = request.data
+
+        updates: dict[str, bool] = {}
+
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and "category" in item and "is_enabled" in item:
+                    updates[item["category"]] = bool(item["is_enabled"])
+        elif isinstance(data, dict):
+            if "category" in data and "is_enabled" in data:
+                updates[data["category"]] = bool(data["is_enabled"])
+            elif "preferences" in data:
+                prefs = data["preferences"]
+                if isinstance(prefs, dict):
+                    for k, v in prefs.items():
+                        updates[k] = bool(v)
+                elif isinstance(prefs, list):
+                    for item in prefs:
+                        if isinstance(item, dict) and "category" in item and "is_enabled" in item:
+                            updates[item["category"]] = bool(item["is_enabled"])
+            else:
+                for k, v in data.items():
+                    if k in metadata:
+                        updates[k] = bool(v)
+
+        if not updates:
+            return Response(
+                {"error": "No valid preferences provided to update."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for cat, enabled in updates.items():
+            if cat not in metadata:
+                return Response(
+                    {"error": f"Unknown category '{cat}' for role '{role}'."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            meta = metadata[cat]
+            if not meta.get("is_mutable", True) and not enabled:
+                return Response(
+                    {"error": f"Category '{cat}' is critical and cannot be disabled.", "category": cat},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        for cat, enabled in updates.items():
+            PushNotificationPreference.objects.update_or_create(
+                user=request.user,
+                role=role,
+                category=cat,
+                defaults={"is_enabled": enabled},
+            )
+
+        logger.info(
+            "push_notification_preferences_updated",
+            extra={
+                "user_id": str(request.user.id),
+                "role": role,
+                "updates": updates,
+            },
+        )
+
+        return self.get(request)
+
+
+class CustomerPushNotificationPreferencesView(BasePushNotificationPreferencesView):
+    role = PushNotificationPreference.Role.CUSTOMER
+
+
+class PartnerPushNotificationPreferencesView(BasePushNotificationPreferencesView):
+    role = PushNotificationPreference.Role.PARTNER

@@ -12,14 +12,25 @@ sweep, because a retry loop inside a request holds a transaction open across a p
 """
 
 import hashlib
+import logging
+from datetime import datetime, timedelta
 from typing import Any, Final
 from uuid import UUID
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.identity.models import CommunicationPreference, User
-from apps.notifications.models import KillSwitch, NotificationDelivery, NotificationIntent
+from apps.notifications.models import (
+    CustomerPushSubscription,
+    KillSwitch,
+    NotificationDelivery,
+    NotificationIntent,
+)
+
+logger = logging.getLogger(__name__)
 from apps.notifications.templates_registry import assert_template_registered
 
 #: The provider name recorded against an in-app delivery. Not a provider at all — the row is
@@ -40,6 +51,7 @@ _CHANNEL_KILL_SWITCH: dict[str, str] = {
     NotificationIntent.Channel.SMS: KillSwitch.Scope.SMS,
     NotificationIntent.Channel.WHATSAPP: KillSwitch.Scope.WHATSAPP,
     NotificationIntent.Channel.VOICE: KillSwitch.Scope.VOICE,
+    NotificationIntent.Channel.PUSH: KillSwitch.Scope.PUSH,
 }
 
 #: Purposes a recipient cannot mute. Telling somebody their visit was cancelled is not marketing,
@@ -56,6 +68,7 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "booking.partner_en_route",
         "booking.start_otp",
         "booking.completed",
+        "booking.downgraded_to_scheduled",
         "payment.receipt",
         "refund.issued",
         "partner.offer",
@@ -267,6 +280,7 @@ def request_notification(
     template_code: str,
     context: dict[str, Any] | None = None,
     idempotency_key: str = "",
+    deep_link: str = "",
 ) -> NotificationIntent:
     """Record the decision to notify somebody. Sending is a separate, later step.
 
@@ -334,6 +348,12 @@ def record_delivery_attempt(
     status: str,
     provider_message_id: str = "",
     failure_code: str = "",
+    app_id: str = "",
+    request_payload: dict[str, Any] | None = None,
+    response_status: int | None = None,
+    response_body: dict[str, Any] | None = None,
+    metrics: dict[str, Any] | None = None,
+    completed_at: datetime | None = None,
 ) -> NotificationIntent:
     """Append one attempt and move the intent if it is now settled.
 
@@ -349,11 +369,20 @@ def record_delivery_attempt(
         status=status,
         provider_message_id=provider_message_id,
         failure_code=failure_code,
+        app_id=app_id,
+        request_payload=request_payload or {},
+        response_status=response_status,
+        response_body=response_body or {},
+        metrics=metrics or {},
+        completed_at=completed_at,
     )
     intent.attempts += 1
     if status in (NotificationDelivery.Status.ACCEPTED, NotificationDelivery.Status.DELIVERED):
         intent.status = NotificationIntent.Status.SENT
-    elif intent.attempts >= MAX_DELIVERY_ATTEMPTS:
+    elif intent.attempts >= MAX_DELIVERY_ATTEMPTS or status in (
+        NotificationDelivery.Status.SKIPPED,
+        NotificationDelivery.Status.BLOCKED,
+    ):
         intent.status = NotificationIntent.Status.FAILED
     intent.save(update_fields=("attempts", "status", "updated_at"))
     return intent
@@ -367,3 +396,213 @@ def retryable_intents(*, limit: int = 100) -> list[NotificationIntent]:
             status=NotificationIntent.Status.PENDING, attempts__lt=MAX_DELIVERY_ATTEMPTS
         ).order_by("created_at")[:limit]
     )
+
+class CustomerPushReachabilityReason:
+    ACTIVE_SUBSCRIPTION = "ACTIVE_SUBSCRIPTION"
+    NO_ACTIVE_SUBSCRIPTION = "NO_ACTIVE_SUBSCRIPTION"
+    OPTED_OUT = "OPTED_OUT"
+    STALE_SUBSCRIPTION = "STALE_SUBSCRIPTION"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+
+
+def get_customer_push_reachability(user: User | None) -> dict[str, object]:
+    """Answers whether a customer can receive OneSignal web push right now.
+
+    Returns:
+        dict:
+            reachable: bool
+            reason: str (ACTIVE_SUBSCRIPTION, NO_ACTIVE_SUBSCRIPTION, OPTED_OUT, STALE_SUBSCRIPTION, PERMISSION_DENIED)
+            subscription_id: str | None
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        res = {
+            "reachable": False,
+            "reason": CustomerPushReachabilityReason.NO_ACTIVE_SUBSCRIPTION,
+            "subscription_id": None,
+        }
+        return res
+
+    user_id_str = str(user.id)
+    latest_sub = CustomerPushSubscription.objects.filter(user=user).order_by("-updated_at").first()
+
+    if latest_sub is None:
+        reachable = False
+        reason = CustomerPushReachabilityReason.NO_ACTIVE_SUBSCRIPTION
+        sub_id = None
+    else:
+        active_sub = CustomerPushSubscription.objects.filter(
+            user=user,
+            is_active=True,
+        ).order_by("-last_verified_at").first()
+
+        if active_sub is None:
+            sub_id = latest_sub.onesignal_subscription_id
+            if latest_sub.permission_state.lower() == "denied":
+                reason = CustomerPushReachabilityReason.PERMISSION_DENIED
+            elif not latest_sub.opted_in:
+                reason = CustomerPushReachabilityReason.OPTED_OUT
+            else:
+                reason = CustomerPushReachabilityReason.NO_ACTIVE_SUBSCRIPTION
+            reachable = False
+        else:
+            sub_id = active_sub.onesignal_subscription_id
+            if active_sub.permission_state.lower() == "denied":
+                reason = CustomerPushReachabilityReason.PERMISSION_DENIED
+                reachable = False
+            elif not active_sub.opted_in:
+                reason = CustomerPushReachabilityReason.OPTED_OUT
+                reachable = False
+            else:
+                freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
+                is_stale = (timezone.now() - active_sub.last_verified_at) > timedelta(days=freshness_days)
+                if is_stale:
+                    reason = CustomerPushReachabilityReason.STALE_SUBSCRIPTION
+                    reachable = False
+                else:
+                    reason = CustomerPushReachabilityReason.ACTIVE_SUBSCRIPTION
+                    reachable = True
+
+    logger.info(
+        "customer_push_reachability_checked",
+        extra={
+            "user_id": user_id_str,
+            "role": "CUSTOMER",
+            "reachable": reachable,
+            "reason": reason,
+            "subscription_id": sub_id,
+        },
+    )
+
+    return {
+        "reachable": reachable,
+        "reason": reason,
+        "subscription_id": sub_id,
+    }
+
+
+def sync_customer_push_subscription(
+    *,
+    user: User,
+    onesignal_subscription_id: str,
+    platform: str = CustomerPushSubscription.Platform.WEB,
+    user_agent: str = "",
+    is_active: bool = True,
+    opted_in: bool = True,
+    permission_state: str = "",
+    action: str = "sync",
+) -> tuple[CustomerPushSubscription, bool]:
+    """Upsert CustomerPushSubscription.
+
+    Returns:
+        tuple[CustomerPushSubscription, bool]: (subscription, is_created)
+    """
+    clean_sub_id = (onesignal_subscription_id or "").strip()
+    if not clean_sub_id:
+        raise ValidationError({"onesignal_subscription_id": "Subscription ID cannot be empty."})
+
+    user_id_str = str(user.id)
+    logger.info(
+        "customer_push_subscription_sync_started",
+        extra={
+            "user_id": user_id_str,
+            "role": "CUSTOMER",
+            "platform": platform,
+            "permission_state": permission_state,
+            "subscription_id": clean_sub_id,
+            "sync_status": "STARTED",
+            "failure_reason": "",
+        },
+    )
+
+    # Cross-user validation: Ensure subscription does not belong to another user
+    existing = CustomerPushSubscription.objects.filter(
+        onesignal_subscription_id=clean_sub_id,
+    ).first()
+    if existing and existing.user_id != user.id:
+        logger.warning(
+            "customer_push_subscription_sync_failed",
+            extra={
+                "user_id": user_id_str,
+                "role": "CUSTOMER",
+                "existing_user_id": str(existing.user_id),
+                "subscription_id": clean_sub_id,
+                "sync_status": "FAILED",
+                "failure_reason": "cross_user_denied",
+            },
+        )
+        raise PermissionDenied("This push subscription belongs to another user account.")
+
+    now = timezone.now()
+    is_deactivate = action == "deactivate"
+    effective_opted_in = False if is_deactivate else bool(opted_in)
+    effective_is_active = bool(
+        not is_deactivate
+        and is_active
+        and effective_opted_in
+        and permission_state.lower() != "denied"
+    )
+
+    with transaction.atomic():
+        # Deactivate older active WEB subscriptions for this customer if activating a new one
+        if effective_is_active and platform == CustomerPushSubscription.Platform.WEB:
+            CustomerPushSubscription.objects.filter(
+                user=user,
+                platform=CustomerPushSubscription.Platform.WEB,
+                is_active=True,
+            ).exclude(onesignal_subscription_id=clean_sub_id).update(
+                is_active=False,
+                updated_at=now,
+            )
+
+        subscription, is_created = CustomerPushSubscription.objects.update_or_create(
+            onesignal_subscription_id=clean_sub_id,
+            defaults={
+                "user": user,
+                "onesignal_external_id": user_id_str,
+                "platform": platform,
+                "user_agent": user_agent,
+                "is_active": effective_is_active,
+                "opted_in": effective_opted_in,
+                "permission_state": permission_state,
+                "last_verified_at": now,
+                "last_sync_attempt_at": now,
+                "last_sync_status": "SUCCESS",
+                "last_sync_error": "",
+            },
+        )
+
+    event_name = (
+        "customer_push_subscription_created"
+        if is_created
+        else "customer_push_subscription_deactivated"
+        if not effective_is_active
+        else "customer_push_subscription_updated"
+    )
+    logger.info(
+        event_name,
+        extra={
+            "user_id": user_id_str,
+            "role": "CUSTOMER",
+            "platform": platform,
+            "permission_state": permission_state,
+            "subscription_id": clean_sub_id,
+            "sync_status": "SUCCESS",
+            "failure_reason": "",
+            "is_created": is_created,
+        },
+    )
+    logger.info(
+        "customer_push_subscription_sync_succeeded",
+        extra={
+            "user_id": user_id_str,
+            "role": "CUSTOMER",
+            "platform": platform,
+            "permission_state": permission_state,
+            "subscription_id": clean_sub_id,
+            "sync_status": "SUCCESS",
+            "failure_reason": "",
+        },
+    )
+
+    return subscription, is_created
+

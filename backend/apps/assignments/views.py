@@ -317,11 +317,11 @@ class DispatchOfferDetailView(BaseDispatchOfferView):
 
         offer, profile = self._get_offer(request, offer_id)
         now = timezone.now()
-        if offer.status == DispatchOffer.Status.PENDING and offer.expires_at <= now:
+        if offer.status in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT) and offer.expires_at <= now:
             with transaction.atomic():
                 offer_locked = (
                     DispatchOffer.objects.select_for_update()
-                    .filter(id=offer_id, status=DispatchOffer.Status.PENDING)
+                    .filter(id=offer_id, status__in=[DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT])
                     .first()
                 )
                 if offer_locked and offer_locked.expires_at <= now:
@@ -372,9 +372,9 @@ class DispatchOfferAcceptView(BaseDispatchOfferView):
             if offer.partner_id != profile.id:
                 raise PermissionDenied("This offer belongs to another partner.")
 
-            if offer.status != DispatchOffer.Status.PENDING:
+            if offer.status not in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT):
                 return Response(
-                    {"error": f"Offer is not pending (current status: {offer.status})."},
+                    {"error": f"Offer is not active (current status: {offer.status})."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -415,9 +415,10 @@ class DispatchOfferAcceptView(BaseDispatchOfferView):
                         status=Reservation.Status.CONFIRMED,
                     )
 
-            # Cancel any other competing pending offers for this booking
+            # Cancel any other competing active offers for this booking
             DispatchOffer.objects.filter(
-                booking_id=offer.booking_id, status=DispatchOffer.Status.PENDING
+                booking_id=offer.booking_id,
+                status__in=[DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT],
             ).exclude(id=offer.id).update(
                 status=DispatchOffer.Status.CANCELLED,
                 responded_at=now,
@@ -466,9 +467,9 @@ class DispatchOfferDeclineView(BaseDispatchOfferView):
             if offer.partner_id != profile.id:
                 raise PermissionDenied("This offer belongs to another partner.")
 
-            if offer.status != DispatchOffer.Status.PENDING:
+            if offer.status not in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT):
                 return Response(
-                    {"error": f"Offer is not pending (current status: {offer.status})."},
+                    {"error": f"Offer is not active (current status: {offer.status})."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 

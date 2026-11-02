@@ -587,10 +587,16 @@ def compute_instant_availability(
             ).values_list("partner_id", flat=True)
         )
 
+        freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
+        freshness_cutoff = now - timedelta(days=freshness_days)
         push_capable_partner_ids = set(
             PartnerPushSubscription.objects.filter(
                 partner_id__in=snapshot.partner_ids,
                 is_active=True,
+                opted_in=True,
+                last_verified_at__gte=freshness_cutoff,
+            ).exclude(
+                permission_state__iexact="denied",
             ).values_list("partner_id", flat=True)
         )
 

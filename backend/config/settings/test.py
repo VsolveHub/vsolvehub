@@ -32,3 +32,8 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 MESSAGE_TRANSPORT = "fake"
 NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = True
+
+ONESIGNAL_PARTNER_APP_ID = "test-partner-app-id"
+ONESIGNAL_PARTNER_REST_API_KEY = "test-partner-rest-key"
+ONESIGNAL_CUSTOMER_APP_ID = "test-customer-app-id"
+ONESIGNAL_CUSTOMER_REST_API_KEY = "test-customer-rest-key"

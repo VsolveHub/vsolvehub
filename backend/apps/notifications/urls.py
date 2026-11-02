@@ -4,12 +4,16 @@ from django.urls import path
 
 from apps.notifications.streaming import PartnerOfferStreamView
 from apps.notifications.views import (
+    CustomerPushNotificationPreferencesView,
+    CustomerPushSubscriptionDetailView,
+    CustomerPushSubscriptionSyncView,
     DevOneSignalTestPushView,
     KillSwitchListView,
     KillSwitchReleaseView,
     NotificationFeedView,
     NotificationReadView,
     NotificationUnreadCountView,
+    PartnerPushNotificationPreferencesView,
 )
 
 urlpatterns = [
@@ -36,5 +40,25 @@ urlpatterns = [
         name="operations-kill-switch-release",
     ),
     path("dev/onesignal/test-push/", DevOneSignalTestPushView.as_view(), name="dev-onesignal-test-push"),
+    path(
+        "customer/push-subscriptions/sync/",
+        CustomerPushSubscriptionSyncView.as_view(),
+        name="customer-push-subscription-sync",
+    ),
+    path(
+        "customer/push-subscriptions/<str:subscription_id>/",
+        CustomerPushSubscriptionDetailView.as_view(),
+        name="customer-push-subscription-detail",
+    ),
+    path(
+        "customer/notification-preferences/",
+        CustomerPushNotificationPreferencesView.as_view(),
+        name="customer-push-notification-preferences",
+    ),
+    path(
+        "partner/notification-preferences/",
+        PartnerPushNotificationPreferencesView.as_view(),
+        name="partner-push-notification-preferences",
+    ),
 ]
 

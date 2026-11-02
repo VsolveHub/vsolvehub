@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
 import { bookingVisitHref } from "@/lib/routes";
+import { CustomerPushPromptCard } from "@/features/notifications/view/CustomerPushPromptCard";
 
 import { formatBookingWhen } from "./booking-format";
 import {
@@ -358,6 +359,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
     return (
       <div className="flex flex-col gap-3">
         <BackToBookingsLink />
+
+        
+
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -369,6 +373,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
     return (
       <div className="flex flex-col gap-4">
         <BackToBookingsLink />
+
+        
+
         <ErrorState
           title="We could not load this booking"
           message={describeError(groupQuery.error, "read").message}
@@ -463,6 +470,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         }
       >
         <BackToBookingsLink />
+
+        <CustomerPushPromptCard bookingId={groupId} />
+
 
         {isMultiPaidVisit ? (
           <h1 className="text-2xl font-bold text-text">Your visits</h1>
