@@ -40,7 +40,7 @@ export function usePartnerPushPreferences() {
   return useQuery<PartnerPushPreferencesResponse>({
     queryKey: ["partner", "push-preferences"],
     queryFn: () =>
-      request(() =>
+      request<PartnerPushPreferencesResponse>(() =>
         (getApiClient() as any).GET("/api/v1/partner/notification-preferences/")
       ),
     staleTime: 60_000,
@@ -52,7 +52,7 @@ export function useUpdatePartnerPushPreference() {
 
   return useMutation({
     mutationFn: (input: { category: string; isEnabled: boolean }) =>
-      request(() =>
+      request<PartnerPushPreferencesResponse>(() =>
         (getApiClient() as any).PATCH("/api/v1/partner/notification-preferences/", {
           body: { category: input.category, is_enabled: input.isEnabled },
         })

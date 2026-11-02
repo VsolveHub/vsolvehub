@@ -242,7 +242,7 @@ export function usePushNotificationPreferences() {
   return useQuery<PushPreferencesResponse>({
     queryKey: ["privacy", "push-preferences"],
     queryFn: () =>
-      request(() =>
+      request<PushPreferencesResponse>(() =>
         (getApiClient() as any).GET("/api/v1/customer/notification-preferences/")
       ),
     ...SESSION_STATE,
@@ -254,7 +254,7 @@ export function useUpdatePushNotificationPreference() {
 
   return useMutation({
     mutationFn: (input: { category: string; isEnabled: boolean }) =>
-      request(() =>
+      request<PushPreferencesResponse>(() =>
         (getApiClient() as any).PATCH("/api/v1/customer/notification-preferences/", {
           body: { category: input.category, is_enabled: input.isEnabled },
         })
