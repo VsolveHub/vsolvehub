@@ -5,7 +5,7 @@ from typing import Any
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.notifications.models import KillSwitch, NotificationIntent
+from apps.notifications.models import CustomerPushSubscription, KillSwitch, NotificationIntent
 from apps.notifications.templates_registry import render_notification
 
 #: Context keys that name the thing a notice is about, in the order a link should prefer them.
@@ -148,3 +148,62 @@ class MarkNotificationReadRequestSerializer(serializers.Serializer[dict[str, Any
                 "Send either notification_id or all, not both and not neither."
             )
         return attrs
+
+class CustomerPushSubscriptionSyncSerializer(serializers.Serializer[dict[str, Any]]):
+    onesignal_subscription_id = serializers.CharField(max_length=64, min_length=1)
+    platform = serializers.ChoiceField(
+        choices=CustomerPushSubscription.Platform.choices,
+        default=CustomerPushSubscription.Platform.WEB,
+        required=False,
+    )
+    user_agent = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+    is_active = serializers.BooleanField(required=False, default=True)
+    opted_in = serializers.BooleanField(required=False, default=True)
+    permission_state = serializers.ChoiceField(
+        choices=["", "granted", "denied", "default"],
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+    action = serializers.ChoiceField(
+        choices=["sync", "deactivate"],
+        required=False,
+        default="sync",
+    )
+
+    def validate_onesignal_subscription_id(self, value: str) -> str:
+        val = value.strip()
+        if not val:
+            raise serializers.ValidationError("onesignal_subscription_id cannot be blank.")
+        return val
+
+
+class CustomerPushSubscriptionUpdateSerializer(serializers.Serializer[dict[str, Any]]):
+    is_active = serializers.BooleanField(required=False)
+    opted_in = serializers.BooleanField(required=False)
+    permission_state = serializers.ChoiceField(
+        choices=["", "granted", "denied", "default"],
+        required=False,
+        allow_blank=True,
+    )
+    user_agent = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+
+class CustomerPushSubscriptionResponseSerializer(serializers.ModelSerializer[CustomerPushSubscription]):
+    class Meta:
+        model = CustomerPushSubscription
+        fields = (
+            "id",
+            "onesignal_subscription_id",
+            "onesignal_external_id",
+            "platform",
+            "is_active",
+            "opted_in",
+            "permission_state",
+            "last_verified_at",
+            "last_sync_status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+

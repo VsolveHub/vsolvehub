@@ -128,3 +128,33 @@ def test_send_push_network_exception_handled():
         assert result["success"] is False
         assert result["notification_id"] is None
         assert any("Network timeout" in str(e) for e in result["errors"])
+
+
+def test_send_push_with_collapse_id_web_push_topic_ttl_priority():
+    with patch("requests.Session.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b'{"id": "notif-collapse-1"}'
+        mock_response.json.return_value = {"id": "notif-collapse-1"}
+        mock_post.return_value = mock_response
+
+        result = send_push_to_external_ids(
+            external_ids=["partner-1"],
+            heading="Instant Job",
+            body="New job nearby",
+            data={"offer_id": "off-1"},
+            collapse_id="dispatch_offer_off-1",
+            web_push_topic="dispatch_off-1",
+            ttl=45,
+            priority=10,
+            app_id="partner-app-999",
+        )
+
+        assert result["success"] is True
+        assert result["notification_id"] == "notif-collapse-1"
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["app_id"] == "partner-app-999"
+        assert payload["collapse_id"] == "dispatch_offer_off-1"
+        assert payload["web_push_topic"] == "dispatch_off-1"
+        assert payload["ttl"] == 45
+        assert payload["priority"] == 10

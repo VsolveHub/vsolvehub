@@ -219,3 +219,63 @@ export function useCreatePrivacyRequest() {
 export function isRequestOpen(privacyRequest: PrivacyRequest): boolean {
   return privacyRequest.status === "RECEIVED" || privacyRequest.status === "IN_REVIEW";
 }
+
+
+/* -----------------------------------------------------------------------------
+   Push notification preferences (Milestone 6)
+   -------------------------------------------------------------------------- */
+
+export interface PushPreferenceItem {
+  category: string;
+  label: string;
+  description: string;
+  is_enabled: boolean;
+  is_mutable: boolean;
+}
+
+export interface PushPreferencesResponse {
+  role: "CUSTOMER" | "PARTNER";
+  preferences: PushPreferenceItem[];
+}
+
+export function usePushNotificationPreferences() {
+  return useQuery<PushPreferencesResponse>({
+    queryKey: ["privacy", "push-preferences"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/customer/notification-preferences/", {
+        headers: { Accept: "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load push notification preferences");
+      return res.json();
+    },
+    ...SESSION_STATE,
+  });
+}
+
+export function useUpdatePushNotificationPreference() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { category: string; isEnabled: boolean }) => {
+      const res = await fetch("/api/v1/customer/notification-preferences/", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ category: input.category, is_enabled: input.isEnabled }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update preference");
+      }
+      return (await res.json()) as PushPreferencesResponse;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["privacy", "push-preferences"], data);
+    },
+    retry: false,
+  });
+}

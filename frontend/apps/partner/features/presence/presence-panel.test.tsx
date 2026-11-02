@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -254,5 +254,64 @@ describe("when Django refuses to put the Partner online", () => {
 
     await waitFor(() => expect(screen.getByText(/not sure/i)).toBeInTheDocument());
     expect(screen.queryByText(/^online$/i)).not.toBeInTheDocument();
+  });
+});
+
+
+describe("recurring heartbeat while online", () => {
+  it("sends consent_version alongside location during heartbeat", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      client.POST.mockImplementation(async (url: string) => {
+        if (url === "/api/v1/partner/presence/online/") {
+          return ok({
+            id: "sess-new",
+            service_area_id: AREA.id,
+            started_at: new Date().toISOString(),
+            last_persisted_heartbeat_at: new Date().toISOString(),
+            server_now: new Date().toISOString(),
+          });
+        }
+        if (url === "/api/v1/partner/presence/heartbeat/") {
+          return ok({
+            id: "sess-new",
+            service_area_id: AREA.id,
+            started_at: new Date().toISOString(),
+            last_persisted_heartbeat_at: new Date().toISOString(),
+            server_now: new Date().toISOString(),
+          });
+        }
+        return ok({});
+      });
+
+      render(<PresencePanel consentVersion="2026-07" />, { wrapper });
+      await goOnline();
+
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /go offline/i })).toBeInTheDocument(),
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      await waitFor(() => {
+        const heartbeatCalls = client.POST.mock.calls.filter(
+          (call) => call[0] === "/api/v1/partner/presence/heartbeat/",
+        );
+        expect(heartbeatCalls.length).toBeGreaterThanOrEqual(1);
+        expect(heartbeatCalls[0]![1]).toEqual({
+          body: {
+            session_id: "sess-new",
+            latitude: "17.440000",
+            longitude: "78.380000",
+            accuracy_m: 20,
+            consent_version: "2026-07",
+          },
+        });
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

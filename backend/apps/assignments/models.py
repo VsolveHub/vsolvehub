@@ -319,10 +319,14 @@ class DispatchOffer(models.Model):
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
+        SENDING = "SENDING", "Sending"
+        SENT = "SENT", "Sent"
         ACCEPTED = "ACCEPTED", "Accepted"
         DECLINED = "DECLINED", "Declined"
+        FAILED = "FAILED", "Failed"
         EXPIRED = "EXPIRED", "Expired"
         CANCELLED = "CANCELLED", "Cancelled"
+        SKIPPED = "SKIPPED", "Skipped"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     booking = models.ForeignKey(
@@ -343,8 +347,12 @@ class DispatchOffer(models.Model):
     offered_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
     responded_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
     attempt_number = models.PositiveSmallIntegerField(default=1)
+    retry_count = models.PositiveSmallIntegerField(default=0)
+    failure_reason = models.CharField(max_length=128, blank=True, default="")
     onesignal_notification_id = models.CharField(max_length=128, null=True, blank=True)
+    onesignal_response = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -357,6 +365,7 @@ class DispatchOffer(models.Model):
                 name="dispatch_offer_partner_expires",
             ),
             models.Index(fields=["expires_at", "status"], name="dispatch_offer_expires_status"),
+            models.Index(fields=["status", "updated_at"], name="dispatch_offer_status_updated"),
         ]
         constraints = [
             models.UniqueConstraint(

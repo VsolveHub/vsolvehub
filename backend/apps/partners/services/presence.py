@@ -19,7 +19,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 from apps.identity.models import User
-from apps.partners.exceptions import PartnerEligibilityError, PartnerPresenceError
+from apps.partners.exceptions import PartnerAccessDeniedError, PartnerEligibilityError, PartnerPresenceError, PartnerPushSubscriptionConflictError
 from apps.partners.models import (
     PartnerApplication,
     PartnerLocation,
@@ -373,8 +373,19 @@ def sync_partner_push_subscription(
     platform: str = PartnerPushSubscription.Platform.WEB,
     user_agent: str = "",
     is_active: bool = True,
-) -> tuple[PartnerPushSubscription, bool]:
-    """Upsert PartnerPushSubscription and evaluate partner instant eligibility."""
+    opted_in: bool = True,
+    permission_state: str = "",
+    action: str = "sync",
+) -> tuple[PartnerPushSubscription, bool, bool]:
+    """Upsert PartnerPushSubscription and evaluate partner instant eligibility.
+
+    Returns:
+        tuple[PartnerPushSubscription, bool, bool]: (subscription, instant_eligible, created)
+    """
+    clean_sub_id = (onesignal_subscription_id or "").strip()
+    if not clean_sub_id:
+        raise PartnerPushSubscriptionConflictError("Subscription ID cannot be empty.")
+
     profile = getattr(user, "partner_profile", None)
     if profile is None:
         from apps.partners.selectors import partner_profile_for_user
@@ -383,38 +394,75 @@ def sync_partner_push_subscription(
     if profile is None:
         raise PartnerEligibilityError("Partner profile was not found.")
 
+    # Cross-user validation: Ensure subscription does not belong to another user
+    existing = PartnerPushSubscription.objects.filter(
+        onesignal_subscription_id=clean_sub_id,
+    ).first()
+    if existing and existing.user_id != user.id:
+        logger.warning(
+            "push_subscription_cross_user_denied",
+            extra={
+                "request_user_id": str(user.id),
+                "existing_user_id": str(existing.user_id),
+                "subscription_id": clean_sub_id,
+            },
+        )
+        raise PartnerAccessDeniedError("This push subscription belongs to another user account.")
+
     partner_external_id = str(profile.id)
     now = timezone.now()
 
+    # Determine effective active status
+    is_deactivate = action == "deactivate"
+    effective_opted_in = False if is_deactivate else bool(opted_in)
+    effective_is_active = bool(
+        not is_deactivate
+        and is_active
+        and effective_opted_in
+        and permission_state.lower() != "denied"
+    )
+
     with transaction.atomic():
-        if is_active and platform == PartnerPushSubscription.Platform.WEB:
+        # Replace older active WEB subscriptions for this partner if activating a new one
+        if effective_is_active and platform == PartnerPushSubscription.Platform.WEB:
             PartnerPushSubscription.objects.filter(
                 partner=profile,
                 platform=PartnerPushSubscription.Platform.WEB,
                 is_active=True,
-            ).exclude(onesignal_subscription_id=onesignal_subscription_id).update(is_active=False)
+            ).exclude(onesignal_subscription_id=clean_sub_id).update(
+                is_active=False,
+                updated_at=now,
+            )
 
-        subscription, _ = PartnerPushSubscription.objects.update_or_create(
-            onesignal_subscription_id=onesignal_subscription_id,
+        subscription, created = PartnerPushSubscription.objects.update_or_create(
+            onesignal_subscription_id=clean_sub_id,
             defaults={
                 "partner": profile,
                 "user": user,
                 "onesignal_external_id": partner_external_id,
                 "platform": platform,
                 "user_agent": user_agent,
-                "is_active": is_active,
+                "is_active": effective_is_active,
+                "opted_in": effective_opted_in,
+                "permission_state": permission_state,
                 "last_verified_at": now,
+                "last_sync_attempt_at": now,
+                "last_sync_status": "SUCCESS",
+                "last_sync_error": "",
             },
         )
 
-    log_event = "push_subscription_registered" if is_active else "push_subscription_deactivated"
+    log_event = "push_subscription_registered" if effective_is_active else "push_subscription_deactivated"
     logger.info(
         log_event,
         extra={
             "partner_id": str(profile.id),
-            "subscription_id": onesignal_subscription_id,
+            "subscription_id": clean_sub_id,
             "platform": platform,
-            "is_active": is_active,
+            "is_active": effective_is_active,
+            "opted_in": effective_opted_in,
+            "permission_state": permission_state,
+            "is_created": created,
         },
     )
 
@@ -434,4 +482,4 @@ def sync_partner_push_subscription(
     ).exists()
 
     instant_eligible = bool(has_active_shift and has_active_sub and has_fresh_loc)
-    return subscription, instant_eligible
+    return subscription, instant_eligible, created

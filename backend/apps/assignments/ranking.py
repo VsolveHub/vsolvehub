@@ -52,6 +52,10 @@ class ExclusionReason(models.TextChoices):
     OFFLINE_FOR_SAME_DAY = "OFFLINE_FOR_SAME_DAY", "Offline for a same-day visit"
     NO_ACTIVE_SHIFT = "no_active_shift", "No active shift for instant visit"
     NO_PUSH_SUBSCRIPTION = "no_push_subscription", "No active push subscription"
+    NO_ACTIVE_PUSH_SUBSCRIPTION = "NO_ACTIVE_PUSH_SUBSCRIPTION", "No active push subscription"
+    PUSH_OPTED_OUT = "PUSH_OPTED_OUT", "Push notifications opted out"
+    PUSH_PERMISSION_DENIED = "PUSH_PERMISSION_DENIED", "Push permission denied"
+    PUSH_SUBSCRIPTION_STALE = "PUSH_SUBSCRIPTION_STALE", "Push subscription is stale"
     LOCATION_STALE = "location_stale", "Location fix is stale"
     ALREADY_BOOKED = "already_booked", "Already booked at the requested time"
 
@@ -149,6 +153,8 @@ def _exclusions_for(
     fresh_location_ids: frozenset[UUID],
     schedule_available_ids: frozenset[UUID],
     booked_ids: frozenset[UUID],
+    freshness_cutoff: datetime | None = None,
+    unit_id: UUID | None = None,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     application = getattr(candidate, "application", None)
@@ -165,7 +171,37 @@ def _exclusions_for(
             if candidate.id not in active_shift_ids:
                 reasons.append(ExclusionReason.NO_ACTIVE_SHIFT)
             elif candidate.id not in push_capable_ids:
-                reasons.append(ExclusionReason.NO_PUSH_SUBSCRIPTION)
+                sub = PartnerPushSubscription.objects.filter(partner_id=candidate.id).order_by("-updated_at").first()
+                if sub is None:
+                    reasons.append(ExclusionReason.NO_ACTIVE_PUSH_SUBSCRIPTION)
+                    logger.info(
+                        "dispatch_candidate_excluded_no_active_subscription",
+                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "NO_ACTIVE_PUSH_SUBSCRIPTION"},
+                    )
+                elif sub.permission_state.lower() == "denied":
+                    reasons.append(ExclusionReason.PUSH_PERMISSION_DENIED)
+                    logger.info(
+                        "dispatch_candidate_excluded_permission_denied",
+                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "PUSH_PERMISSION_DENIED"},
+                    )
+                elif not sub.opted_in or not sub.is_active:
+                    reasons.append(ExclusionReason.PUSH_OPTED_OUT)
+                    logger.info(
+                        "dispatch_candidate_excluded_opted_out",
+                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "PUSH_OPTED_OUT"},
+                    )
+                elif freshness_cutoff and sub.last_verified_at < freshness_cutoff:
+                    reasons.append(ExclusionReason.PUSH_SUBSCRIPTION_STALE)
+                    logger.info(
+                        "dispatch_candidate_excluded_stale_subscription",
+                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "PUSH_SUBSCRIPTION_STALE"},
+                    )
+                else:
+                    reasons.append(ExclusionReason.NO_ACTIVE_PUSH_SUBSCRIPTION)
+                    logger.info(
+                        "dispatch_candidate_excluded_no_active_subscription",
+                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "NO_ACTIVE_PUSH_SUBSCRIPTION"},
+                    )
             elif candidate.id not in fresh_location_ids:
                 reasons.append(ExclusionReason.LOCATION_STALE)
         else:
@@ -233,6 +269,9 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
     pool_ids = [partner.id for partner in pool]
     require_online = is_same_day_unit(unit=unit)
     feature_push_gated = getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False)
+    now = timezone.now()
+    freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
+    freshness_cutoff = now - timedelta(days=freshness_days) if feature_push_gated else None
 
     online_partner_ids: frozenset[UUID] = frozenset()
     active_shift_ids: frozenset[UUID] = frozenset()
@@ -249,10 +288,16 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
                     scheduled_end_at__gt=now,
                 ).values_list("partner_id", flat=True)
             )
+            freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
+            freshness_cutoff = now - timedelta(days=freshness_days)
             push_capable_ids = frozenset(
                 PartnerPushSubscription.objects.filter(
                     partner_id__in=pool_ids,
                     is_active=True,
+                    opted_in=True,
+                    last_verified_at__gte=freshness_cutoff,
+                ).exclude(
+                    permission_state__iexact="denied",
                 ).values_list("partner_id", flat=True)
             )
             max_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
@@ -292,6 +337,8 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
             fresh_location_ids=fresh_location_ids,
             schedule_available_ids=schedule_available_ids,
             booked_ids=booked_ids,
+            freshness_cutoff=now - timedelta(days=getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)) if feature_push_gated else None,
+            unit_id=unit.id,
         )
         if not exclusions:
             logger.info(
