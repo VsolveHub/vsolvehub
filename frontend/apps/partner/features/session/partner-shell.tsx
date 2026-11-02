@@ -24,6 +24,7 @@ import {
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 import { PartnerHeaderTitleProvider } from "./partner-header-title";
+import { LocaleSwitcher } from "./view/locale-switcher";
 import { DesktopMobileHandoff } from "./view/desktop-mobile-handoff";
 import { translateNavLabel } from "@/features/workspace/nav-labels";
 
@@ -399,7 +400,8 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     isApprovedPartner;
   const isRegistrationDocumentsRoute =
     pathname.startsWith("/apply") ||
-    pathname.startsWith("/me");
+    pathname.startsWith("/me/documents") ||
+    pathname === "/me/application";
 
   return (
     <PartnerHeaderTitleProvider>
@@ -407,13 +409,14 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
         <>
           {/*
             DESKTOP ONLY POLICY:
-            Per requirements, the partner operations app (jobs, dispatches, live radar,
-            wallet, shift) is mobile-only. On desktop screens (lg: and above), only the
-            registration process (/apply/*) and application/KYC document reviews
-            (/me/documents) are available.
-            All other portal routes show the dedicated Desktop Mobile Handoff screen.
+            Once registration and verification are completed successfully, partner
+            operations (dispatches, work stack, live radar, jobs, payouts) are mobile-only.
+            On desktop screens (lg: and above), only the registration process (/apply/*)
+            and application/KYC document reviews (/me/documents) are accessible.
+            All other routes display the dedicated "Download Partner App - Registration Completed"
+            screen, and no partner operations portal can be opened on desktop.
           */}
-          {!isRegistrationDocumentsRoute ? (
+          {isApprovedPartner && !isRegistrationDocumentsRoute ? (
             <div className="hidden lg:flex w-full min-h-screen flex-col">
               <DesktopMobileHandoff
                 application={application.data}
@@ -423,11 +426,11 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             </div>
           ) : null}
 
-          {/* MOBILE (< lg) AND REGISTRATION DOCUMENTS ON DESKTOP */}
+          {/* MOBILE (< lg) AND REGISTRATION/DOCUMENTS ON DESKTOP */}
           <div
             className={cn(
               "flex min-h-screen w-full flex-col items-center bg-canvas overflow-x-clip",
-              !isRegistrationDocumentsRoute && "lg:hidden",
+              isApprovedPartner && !isRegistrationDocumentsRoute && "lg:hidden",
             )}
           >
             <div
@@ -443,7 +446,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                   <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)] lg:rounded-b-none lg:border-b lg:border-line lg:px-8 lg:py-3 lg:shadow-none">
                     <div className="flex items-center justify-between lg:mx-auto lg:w-full lg:max-w-7xl lg:gap-8">
                       <Link
-                        href="/home"
+                        href={isApprovedPartner ? "/me/documents" : "/home"}
                         className="flex min-h-11 min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                       >
                         <Logo className="text-base h-7 w-auto" />
@@ -452,14 +455,13 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                       {isApprovedPartner && isRegistrationDocumentsRoute ? (
                         <div className="hidden lg:flex items-center gap-2">
                           <span className="text-sm font-bold text-navy-900">
-                            {pathname.startsWith("/me/profile") || pathname === "/me"
-                              ? "Partner Profile"
-                              : "Partner Application & Documents Hub"}
+                            Partner Application & Documents Hub
                           </span>
                         </div>
                       ) : null}
 
                       <div className="flex items-center gap-2">
+                        <LocaleSwitcher />
                         <Button
                           variant="ghost"
                           onClick={() => logout.mutate()}
@@ -471,31 +473,31 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                       </div>
                     </div>
                   </header>
-                </div>
-              ) : chromeMode === "focused" && !hasOwnFocusedHeader(pathname) ? (
-                <FocusedHeader pathname={pathname} titleOverride={headerTitle} />
-              ) : null}
+              </div>
+            ) : chromeMode === "focused" && !hasOwnFocusedHeader(pathname) ? (
+              <FocusedHeader pathname={pathname} titleOverride={headerTitle} />
+            ) : null}
 
-              <ShellContent
-                paddingBottom={
-                  chromeMode === "full" && isApprovedPartner ? "pb-32 lg:pb-12" : "pb-0 lg:pb-0"
-                }
-              >
-                {children}
-              </ShellContent>
+            <ShellContent
+              paddingBottom={
+                chromeMode === "full" && isApprovedPartner ? "pb-32 lg:pb-12" : "pb-0 lg:pb-0"
+              }
+            >
+              {children}
+            </ShellContent>
 
-              {chromeMode === "full" &&
-              isApprovedPartner &&
-              pathname !== "/me/documents" &&
-              pathname !== "/me/application" &&
-              !pathname.startsWith("/apply") ? (
-                <BottomTabBar items={primaryNav} workspaceKeys={workspaceKeys} />
-              ) : null}
+            {chromeMode === "full" &&
+            isApprovedPartner &&
+            pathname !== "/me/documents" &&
+            pathname !== "/me/application" &&
+            !pathname.startsWith("/apply") ? (
+              <BottomTabBar items={primaryNav} workspaceKeys={workspaceKeys} />
+            ) : null}
 
-              {isApprovedPartner ? <LiveOfferSheet /> : null}
-            </div>
+            {isApprovedPartner ? <LiveOfferSheet /> : null}
           </div>
-        </>
+        </div>
+      </>
       )}
     </PartnerHeaderTitleProvider>
   );

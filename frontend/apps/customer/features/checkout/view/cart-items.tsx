@@ -154,7 +154,7 @@ function CartItemRow({
 
   const handleCardClick = (e: React.MouseEvent) => {
     // If the click originated from a button, stepper, or interactive control, do not navigate
-    if ((e.target as HTMLElement).closest("button, [role='button'], input, a")) {
+    if ((e.target as HTMLElement).closest("button, [role='button'], input, a, [role='group']")) {
       return;
     }
     if (serviceUrl && typeof window !== "undefined") {
@@ -223,9 +223,9 @@ function CartItemRow({
                 e.stopPropagation();
                 onRemove();
               }}
-              className="size-10 p-0 grid place-items-center text-text-muted hover:text-critical hover:bg-critical-surface/20 transition-colors"
+              className="size-11 min-h-[44px] min-w-[44px] shrink-0 p-0 grid place-items-center text-text-muted hover:text-critical hover:bg-critical-surface/20 active:scale-95 transition-all touch-manipulation"
             >
-              <Trash2 className="size-4" />
+              <Trash2 className="size-4.5" />
             </Button>
           </div>
 
