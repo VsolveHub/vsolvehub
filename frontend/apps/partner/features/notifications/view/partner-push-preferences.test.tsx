@@ -4,6 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PartnerPushPreferencesCard } from "./partner-push-preferences";
 import { PARTNER_DISMISS_KEY } from "@vsolve/ui";
+const ok = (data: unknown) => ({ data, error: undefined, response: new Response(null, { status: 200 }) });
+const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
+vi.mock("@/lib/api/browser", () => ({
+  browserApiBaseUrl: () => "http://localhost:8000",
+  getApiClient: () => client,
+}));
+
 
 const mockPreferences = {
   role: "PARTNER",
@@ -91,28 +98,29 @@ describe("PartnerPushPreferencesCard", () => {
       },
     });
 
+    client.GET.mockImplementation((path: string) => {
+      if (path.includes("/api/v1/partner/notification-preferences/")) {
+        return Promise.resolve(ok(mockPreferences));
+      }
+      return Promise.resolve(ok({}));
+    });
+    client.PATCH.mockImplementation((path: string, options?: any) => {
+      if (path.includes("/api/v1/partner/notification-preferences/")) {
+        const body = options?.body || {};
+        const updated = {
+          ...mockPreferences,
+          preferences: mockPreferences.preferences.map((p) =>
+            p.category === body.category ? { ...p, is_enabled: body.is_enabled } : p
+          ),
+        };
+        return Promise.resolve(ok(updated));
+      }
+      return Promise.resolve(ok({}));
+    });
+
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string, init?: RequestInit) => {
-        if (url.includes("/api/v1/partner/notification-preferences/")) {
-          if (init?.method === "PATCH") {
-            const body = JSON.parse(init.body as string);
-            const updated = {
-              ...mockPreferences,
-              preferences: mockPreferences.preferences.map((p) =>
-                p.category === body.category ? { ...p, is_enabled: body.is_enabled } : p
-              ),
-            };
-            return Promise.resolve({
-              ok: true,
-              json: () => Promise.resolve(updated),
-            });
-          }
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockPreferences),
-          });
-        }
         if (url.includes("/api/v1/auth/csrf/")) {
           return Promise.resolve({
             ok: true,
@@ -173,11 +181,10 @@ describe("PartnerPushPreferencesCard", () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
+      expect(client.PATCH).toHaveBeenCalledWith(
         "/api/v1/partner/notification-preferences/",
         expect.objectContaining({
-          method: "PATCH",
-          body: JSON.stringify({ category: "JOB_AND_DISPATCH_ALERTS", is_enabled: false }),
+          body: { category: "JOB_AND_DISPATCH_ALERTS", is_enabled: false },
         })
       );
     });

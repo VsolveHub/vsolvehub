@@ -241,14 +241,10 @@ export interface PushPreferencesResponse {
 export function usePushNotificationPreferences() {
   return useQuery<PushPreferencesResponse>({
     queryKey: ["privacy", "push-preferences"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/customer/notification-preferences/", {
-        headers: { Accept: "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load push notification preferences");
-      return res.json();
-    },
+    queryFn: () =>
+      request(() =>
+        (getApiClient() as any).GET("/api/v1/customer/notification-preferences/")
+      ),
     ...SESSION_STATE,
   });
 }
@@ -257,23 +253,13 @@ export function useUpdatePushNotificationPreference() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { category: string; isEnabled: boolean }) => {
-      const res = await fetch("/api/v1/customer/notification-preferences/", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ category: input.category, is_enabled: input.isEnabled }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to update preference");
-      }
-      return (await res.json()) as PushPreferencesResponse;
-    },
-    onSuccess: (data) => {
+    mutationFn: (input: { category: string; isEnabled: boolean }) =>
+      request(() =>
+        (getApiClient() as any).PATCH("/api/v1/customer/notification-preferences/", {
+          body: { category: input.category, is_enabled: input.isEnabled },
+        })
+      ),
+    onSuccess: (data: PushPreferencesResponse) => {
       queryClient.setQueryData(["privacy", "push-preferences"], data);
     },
     retry: false,

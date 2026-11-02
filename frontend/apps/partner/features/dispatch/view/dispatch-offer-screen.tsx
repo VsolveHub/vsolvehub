@@ -14,6 +14,7 @@ import {
   Building,
 } from "lucide-react";
 import { Spinner } from "@vsolve/ui";
+import { browserApiBaseUrl } from "@/lib/api/browser";
 
 interface DispatchBooking {
   id: string;
@@ -57,7 +58,8 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/v1/partner/dispatch-offers/${offerId}/`, {
+      const res = await fetch(`${browserApiBaseUrl()}/api/v1/partner/dispatch-offers/${offerId}/`, {
+        credentials: "include",
         headers: { Accept: "application/json" },
       });
 
@@ -129,7 +131,8 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
     setActionInProgress("accepting");
 
     try {
-      const res = await fetch(`/api/v1/partner/dispatch-offers/${offerId}/accept/`, {
+      const res = await fetch(`${browserApiBaseUrl()}/api/v1/partner/dispatch-offers/${offerId}/accept/`, {
+        credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -173,7 +176,8 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
     setActionInProgress("declining");
 
     try {
-      const res = await fetch(`/api/v1/partner/dispatch-offers/${offerId}/decline/`, {
+      const res = await fetch(`${browserApiBaseUrl()}/api/v1/partner/dispatch-offers/${offerId}/decline/`, {
+        credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

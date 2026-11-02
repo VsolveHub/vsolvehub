@@ -15,6 +15,7 @@ import {
   CheckCircle,
   ShieldAlert,
 } from "lucide-react";
+import { request } from "@vsolve/api-client";
 import { browserApiBaseUrl, getApiClient } from "@/lib/api/browser";
 
 const ONESIGNAL_APP_ID =
@@ -38,14 +39,10 @@ export interface PartnerPushPreferencesResponse {
 export function usePartnerPushPreferences() {
   return useQuery<PartnerPushPreferencesResponse>({
     queryKey: ["partner", "push-preferences"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/partner/notification-preferences/", {
-        headers: { Accept: "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load partner notification preferences");
-      return res.json();
-    },
+    queryFn: () =>
+      request(() =>
+        (getApiClient() as any).GET("/api/v1/partner/notification-preferences/")
+      ),
     staleTime: 60_000,
   });
 }
@@ -54,23 +51,13 @@ export function useUpdatePartnerPushPreference() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { category: string; isEnabled: boolean }) => {
-      const res = await fetch("/api/v1/partner/notification-preferences/", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ category: input.category, is_enabled: input.isEnabled }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to update preference");
-      }
-      return (await res.json()) as PartnerPushPreferencesResponse;
-    },
-    onSuccess: (data) => {
+    mutationFn: (input: { category: string; isEnabled: boolean }) =>
+      request(() =>
+        (getApiClient() as any).PATCH("/api/v1/partner/notification-preferences/", {
+          body: { category: input.category, is_enabled: input.isEnabled },
+        })
+      ),
+    onSuccess: (data: PartnerPushPreferencesResponse) => {
       queryClient.setQueryData(["partner", "push-preferences"], data);
     },
   });

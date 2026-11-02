@@ -4,6 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CustomerPushPreferencesSection } from "./push-preferences";
 import { CUSTOMER_DISMISS_KEY } from "@vsolve/ui";
+import { ok } from "../fixtures";
+
+const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
+vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
+
 
 const mockCustomerPrefs = {
   role: "CUSTOMER",
@@ -89,28 +94,29 @@ describe("CustomerPushPreferencesSection", () => {
       },
     });
 
+    client.GET.mockImplementation((path: string) => {
+      if (path.includes("/api/v1/customer/notification-preferences/")) {
+        return Promise.resolve(ok(mockCustomerPrefs));
+      }
+      return Promise.resolve(ok({}));
+    });
+    client.PATCH.mockImplementation((path: string, options?: any) => {
+      if (path.includes("/api/v1/customer/notification-preferences/")) {
+        const body = options?.body || {};
+        const updated = {
+          ...mockCustomerPrefs,
+          preferences: mockCustomerPrefs.preferences.map((p) =>
+            p.category === body.category ? { ...p, is_enabled: body.is_enabled } : p
+          ),
+        };
+        return Promise.resolve(ok(updated));
+      }
+      return Promise.resolve(ok({}));
+    });
+
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string, init?: RequestInit) => {
-        if (url.includes("/api/v1/customer/notification-preferences/")) {
-          if (init?.method === "PATCH") {
-            const body = JSON.parse(init.body as string);
-            const updated = {
-              ...mockCustomerPrefs,
-              preferences: mockCustomerPrefs.preferences.map((p) =>
-                p.category === body.category ? { ...p, is_enabled: body.is_enabled } : p
-              ),
-            };
-            return Promise.resolve({
-              ok: true,
-              json: () => Promise.resolve(updated),
-            });
-          }
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockCustomerPrefs),
-          });
-        }
         if (url.includes("/api/v1/auth/csrf/")) {
           return Promise.resolve({
             ok: true,
@@ -173,11 +179,10 @@ describe("CustomerPushPreferencesSection", () => {
     fireEvent.click(bookingCheckbox);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
+      expect(client.PATCH).toHaveBeenCalledWith(
         "/api/v1/customer/notification-preferences/",
         expect.objectContaining({
-          method: "PATCH",
-          body: JSON.stringify({ category: "BOOKING_UPDATES", is_enabled: false }),
+          body: { category: "BOOKING_UPDATES", is_enabled: false },
         })
       );
     });
