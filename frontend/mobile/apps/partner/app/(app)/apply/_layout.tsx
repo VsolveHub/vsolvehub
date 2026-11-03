@@ -10,7 +10,7 @@ import {
   LogOut,
   X,
 } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -40,12 +40,16 @@ export default function ApplyLayout() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dockConfig, setDockConfig] = useState<DockConfig | null>(null);
 
+  const onCommitRef = useRef<(() => void) | null>(null);
+
   const registerDock = useCallback((config: DockConfig | null) => {
     setDockConfig((prev) => {
       if (prev === null && config === null) return prev;
+      if (prev === null || config === null) {
+        if (config?.onCommit) onCommitRef.current = config.onCommit;
+        return config;
+      }
       if (
-        prev !== null &&
-        config !== null &&
         prev.label === config.label &&
         prev.backHref === config.backHref &&
         prev.nextStepName === config.nextStepName &&
@@ -54,13 +58,15 @@ export default function ApplyLayout() {
         prev.saved === config.saved &&
         prev.conflict === config.conflict &&
         prev.refusal?.message === config.refusal?.message &&
+        prev.refusal?.title === config.refusal?.title &&
         prev.failed === config.failed &&
         prev.requestId === config.requestId &&
-        prev.fieldMessages.join(",") === config.fieldMessages.join(",") &&
-        prev.onCommit === config.onCommit
+        prev.fieldMessages.join("::") === config.fieldMessages.join("::")
       ) {
+        onCommitRef.current = config.onCommit;
         return prev;
       }
+      if (config.onCommit) onCommitRef.current = config.onCommit;
       return config;
     });
   }, []);
@@ -437,7 +443,7 @@ export default function ApplyLayout() {
                 accessibilityRole="button"
                 accessibilityLabel={dockConfig.label}
                 disabled={dockConfig.proceedDisabled || dockConfig.isSaving}
-                onPress={dockConfig.onCommit}
+                onPress={() => onCommitRef.current?.()}
                 style={({ pressed }) => ({
                   flex: 1,
                   height: 48,

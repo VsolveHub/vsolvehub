@@ -2,6 +2,7 @@
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { SESSION_STATE, queryKeys } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import { getApiClient } from "@vsolve/mobile-core";
 
@@ -88,8 +89,10 @@ export function describeRefusal(
  */
 export function useCurrentVersion(): () => number | undefined {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.getQueryData<Application>(queryKeys.partner.application())?.version;
+  return useCallback(
+    () => queryClient.getQueryData<Application>(queryKeys.partner.application())?.version,
+    [queryClient],
+  );
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -127,8 +128,12 @@ function Editor({
 
   const fieldErrors =
     save.error instanceof ApiRequestError && refusal === null ? save.error.fieldErrors : {};
-  const fieldMessages = Object.entries(fieldErrors).flatMap(([field, messages]) =>
-    messages.map((message) => `${field}: ${message}`),
+  const fieldMessagesStr = Object.entries(fieldErrors)
+    .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`))
+    .join("::");
+  const fieldMessages = useMemo(
+    () => (fieldMessagesStr ? fieldMessagesStr.split("::") : []),
+    [fieldMessagesStr],
   );
 
   const update = useCallback((patch: Partial<ApplicationDraft>) => {
@@ -171,6 +176,12 @@ function Editor({
     );
   }, [dirty, following, router, save, draft, application, currentVersion]);
 
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  const stableOnCommit = useCallback(() => {
+    commitRef.current();
+  }, []);
+
   const previous = previousStep(pathname);
   const backHref = previous ? previous.href : "/apply";
 
@@ -192,7 +203,7 @@ function Editor({
       label: primaryLabel,
       backHref,
       nextStepName,
-      onCommit: commit,
+      onCommit: stableOnCommit,
       isSaving,
       proceedDisabled: isProceedBlocked,
       saved: isSaved,
@@ -211,15 +222,16 @@ function Editor({
     primaryLabel,
     backHref,
     nextStepName,
-    commit,
+    stableOnCommit,
     isSaving,
     isProceedBlocked,
     isSaved,
     isConflict,
-    refusal,
+    refusal?.title,
+    refusal?.message,
     isFailed,
     requestId,
-    fieldMessages,
+    fieldMessagesStr,
     registerDock,
   ]);
 

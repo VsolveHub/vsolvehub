@@ -1,7 +1,9 @@
 // Ported from frontend/apps/partner/features/crew-offer/queries.ts
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
-import { M2_FRESHNESS, boundedPoll, invalidateForM2Command, m2QueryKeys } from "@vsolve/query/native";
+import { M2_FRESHNESS, boundedPoll, hasRole, invalidateForM2Command, m2QueryKeys, useCurrentSession } from "@vsolve/query/native";
+import { PARTNER_ROLE } from "@/features/session/chrome";
+import { usePartnerApplication } from "@/features/application/queries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
@@ -97,10 +99,15 @@ function inboxIsSettled(data: CrewOfferList): boolean {
  * moves). Hidden tabs pause it; a failing endpoint backs it off.
  */
 export function usePartnerCrewOffers(enabled = true) {
+  const session = useCurrentSession(getApiClient());
+  const hasPartnerGrant = session.data?.user != null && hasRole(session.data.user, PARTNER_ROLE);
+  const application = usePartnerApplication({ enabled: hasPartnerGrant });
+  const isApprovedPartner = application.data?.status === "APPROVED";
+
   return useQuery({
     queryKey: crewOffersKey(),
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/crew-offers/")),
-    enabled,
+    enabled: enabled && hasPartnerGrant && isApprovedPartner,
     ...M2_FRESHNESS.invitationList,
     ...boundedPoll<CrewOfferList>({ intervalMs: 15_000, isSettled: inboxIsSettled }),
     retry: (failureCount, error) =>

@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationPanel } from "@/features/notifications/view/notification-panel";
 import { JobAlertsBanner } from "@/features/notifications/view/job-alerts-banner";
-import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
 import { subscribeOpenAlerts } from "@/features/notifications/alerts-bus";
 import { unreadBadgeDisplay, unreadBadgeLabel } from "@/features/notifications/model/feed";
 import { useUnreadNotificationCount } from "@/features/notifications/queries";
@@ -203,7 +202,6 @@ export default function TabsLayout() {
         workspaceKeys={(grants.grants ?? []).map((grant) => grant.workspaceKey)}
       />
 
-      <LiveOfferSheet />
     </View>
   );
 }
