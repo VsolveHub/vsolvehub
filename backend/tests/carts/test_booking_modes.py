@@ -2,16 +2,15 @@
 
 from datetime import UTC, datetime, time, timedelta
 from http import HTTPStatus
-from zoneinfo import ZoneInfo
 
-from django.core.management import call_command
-from django.utils import timezone
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.assignments.group_services import dispatch_unit
 from apps.assignments.models import PartnerOffer, Reservation
-from apps.carts.models import BookingGroup, FulfilmentPlanSet, Quote
+from apps.carts.models import BookingGroup, FulfilmentPlanSet
+from apps.catalog.models import ServiceVariant
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
 from apps.partners.models import (
@@ -23,14 +22,15 @@ from apps.partners.models import (
     PartnerService,
     PartnerServiceArea,
 )
-from apps.catalog.models import ServiceVariant
-from tests.carts.test_fulfilment_planning import _add_item, _address_payload, _customer_context
+from tests.carts.test_fulfilment_planning import _add_item, _customer_context
 
 FROZEN_NOW = datetime(2026, 8, 10, 4, 30, tzinfo=UTC)  # 10:00 AM IST Monday
-NIGHT_NOW = datetime(2026, 8, 10, 18, 0, tzinfo=UTC)   # 11:30 PM IST Monday
+NIGHT_NOW = datetime(2026, 8, 10, 18, 0, tzinfo=UTC)  # 11:30 PM IST Monday
 
 
-def _create_online_partner(area: ServiceArea, variant: ServiceVariant, *, suffix: str = "0001") -> PartnerProfile:
+def _create_online_partner(
+    area: ServiceArea, variant: ServiceVariant, *, suffix: str = "0001"
+) -> PartnerProfile:
     user = User.objects.create_user(phone_number=f"+91987654{int(suffix):04d}")
     partner = PartnerProfile.objects.create(user=user, display_name=f"Partner {suffix}")
     PartnerApplication.objects.create(partner=partner, status=PartnerApplication.Status.APPROVED)
@@ -57,7 +57,9 @@ def _create_online_partner(area: ServiceArea, variant: ServiceVariant, *, suffix
     return partner
 
 
-def _create_offline_partner(area: ServiceArea, variant: ServiceVariant, *, suffix: str = "0099") -> PartnerProfile:
+def _create_offline_partner(
+    area: ServiceArea, variant: ServiceVariant, *, suffix: str = "0099"
+) -> PartnerProfile:
     user = User.objects.create_user(phone_number=f"+91987654{int(suffix):04d}")
     partner = PartnerProfile.objects.create(user=user, display_name=f"Partner {suffix}")
     PartnerApplication.objects.create(partner=partner, status=PartnerApplication.Status.APPROVED)
@@ -84,7 +86,9 @@ def _create_offline_partner(area: ServiceArea, variant: ServiceVariant, *, suffi
     return partner
 
 
-def _get_scheduling_groups(client: APIClient, *, address_id: str, cart_version: int) -> list[dict[str, object]]:
+def _get_scheduling_groups(
+    client: APIClient, *, address_id: str, cart_version: int
+) -> list[dict[str, object]]:
     response = client.post(
         "/api/v1/cart/scheduling-groups/",
         {"address_id": address_id, "expected_cart_version": cart_version},
@@ -95,7 +99,9 @@ def _get_scheduling_groups(client: APIClient, *, address_id: str, cart_version: 
 
 
 @pytest.mark.django_db
-def test_booking_windows_publishes_instant_summary_when_online_partner_reachable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_booking_windows_publishes_instant_summary_when_online_partner_reachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
@@ -122,7 +128,9 @@ def test_booking_windows_publishes_instant_summary_when_online_partner_reachable
 
 
 @pytest.mark.django_db
-def test_booking_windows_publishes_instant_unavailable_when_no_partner_online(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_booking_windows_publishes_instant_unavailable_when_no_partner_online(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
@@ -146,7 +154,9 @@ def test_booking_windows_publishes_instant_unavailable_when_no_partner_online(mo
 
 
 @pytest.mark.django_db
-def test_booking_windows_publishes_instant_unavailable_outside_operating_hours(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_booking_windows_publishes_instant_unavailable_outside_operating_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: NIGHT_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
@@ -193,7 +203,9 @@ def test_instant_plan_set_creation_uses_earliest_starts_at(monkeypatch: pytest.M
 
 
 @pytest.mark.django_db
-def test_scheduled_plan_set_creation_uses_selected_starts_at(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scheduled_plan_set_creation_uses_selected_starts_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
@@ -210,7 +222,9 @@ def test_scheduled_plan_set_creation_uses_selected_starts_at(monkeypatch: pytest
             "address_id": address_id,
             "expected_cart_version": cart_version + 1,
             "booking_mode": "SCHEDULED",
-            "preferred_starts": [{"group_key": groups[0]["key"], "starts_at": future_start.isoformat()}],
+            "preferred_starts": [
+                {"group_key": groups[0]["key"], "starts_at": future_start.isoformat()}
+            ],
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY="plan-set-scheduled-test",
@@ -224,7 +238,9 @@ def test_scheduled_plan_set_creation_uses_selected_starts_at(monkeypatch: pytest
 
 
 @pytest.mark.django_db
-def test_instant_booking_group_dispatches_via_same_day_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_instant_booking_group_dispatches_via_same_day_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
@@ -273,7 +289,9 @@ def test_instant_booking_group_dispatches_via_same_day_path(monkeypatch: pytest.
 
 
 @pytest.mark.django_db
-def test_scheduled_booking_group_dispatches_via_advance_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scheduled_booking_group_dispatches_via_advance_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
@@ -290,7 +308,9 @@ def test_scheduled_booking_group_dispatches_via_advance_path(monkeypatch: pytest
             "address_id": address_id,
             "expected_cart_version": cart_version + 1,
             "booking_mode": "SCHEDULED",
-            "preferred_starts": [{"group_key": groups[0]["key"], "starts_at": future_start.isoformat()}],
+            "preferred_starts": [
+                {"group_key": groups[0]["key"], "starts_at": future_start.isoformat()}
+            ],
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY="plan-set-dispatch-sched",
@@ -341,7 +361,9 @@ def test_mode_switch_invalidates_prior_plan_set_and_quote(monkeypatch: pytest.Mo
             "address_id": address_id,
             "expected_cart_version": cart_version + 1,
             "booking_mode": "SCHEDULED",
-            "preferred_starts": [{"group_key": groups[0]["key"], "starts_at": future_start.isoformat()}],
+            "preferred_starts": [
+                {"group_key": groups[0]["key"], "starts_at": future_start.isoformat()}
+            ],
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY="mode-switch-1",
@@ -384,7 +406,9 @@ def test_mode_switch_invalidates_prior_plan_set_and_quote(monkeypatch: pytest.Mo
 
 
 @pytest.mark.django_db
-def test_no_instant_booking_created_when_no_partner_reachable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_instant_booking_created_when_no_partner_reachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
     client, customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)

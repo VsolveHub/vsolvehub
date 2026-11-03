@@ -1,84 +1,39 @@
 "use client";
 
-import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Badge, buttonStyles, ErrorState, Spinner, useT, type Translator } from "@vsolve/ui";
+import { ApiRequestError } from "@vsolve/api-client";
+import { Button, ErrorState, Skeleton, buttonStyles, useT } from "@vsolve/ui";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
-import { useState } from "react";
-
-import { isListingTrack } from "../model/steps";
+import { previousStep } from "../model/progress";
+import { OFFERED_DOCUMENTS, requiredDocumentKinds } from "../model/readiness";
+import { nextStep } from "../model/steps";
 import { usePartnerApplication } from "../queries";
-import { DocumentUpload } from "./document-upload";
-import { UploadedDocumentCard } from "./uploaded-document-card";
+import { ApplyDock } from "./apply-shell";
+import { StepFrame } from "./application-editor";
+import { DocumentSlot } from "./document-upload";
 
 /**
- * The documents a reviewer will look at.
+ * The documents a reviewer will look at: one slot per kind, required ones first.
  *
- * Contract 1.5.0 publishes the server-owned signed upload, so this is now the
- * whole flow: what is on file, what a reviewer said about it, and a picker that
- * requests an upload, sends the bytes to private storage and finalizes against
- * a checksum Django recomputes.
- *
- * Two waits are shown separately because they are separate. A scan runs before
- * a reviewer can open the file; review happens after. Collapsing them into
- * "uploaded" is how a Partner stops chasing the one that was rejected.
+ * Which kinds are required is the server's `required_document_kinds`; the rest are offered as
+ * optional. Whether a file may be uploaded or replaced is each slot's own decision from the
+ * server's flags — this screen adds no rule of its own.
  */
-
-type Application = Schemas["PartnerApplication"];
-type DocumentKind = Schemas["PartnerDocumentKindEnum"];
-
-const REQUIRED: readonly { kind: DocumentKind; labelKey: string; whyKey: string }[] = [
-  {
-    kind: "GOVERNMENT_ID",
-    labelKey: "apply.requirements.governmentId",
-    whyKey: "apply.documents.why.governmentId",
-  },
-  {
-    kind: "ADDRESS_PROOF",
-    labelKey: "apply.requirements.addressProof",
-    whyKey: "apply.documents.why.addressProof",
-  },
-];
-
-function statusTone(
-  status: Schemas["PartnerDocumentStatusEnum"],
-  t: Translator["t"],
-): { tone: "neutral" | "info" | "success" | "warning" | "danger"; label: string } {
-  switch (status) {
-    case "PENDING":
-      return { tone: "info", label: t("apply.documents.status.pending") };
-    case "APPROVED":
-      return { tone: "success", label: t("apply.documents.status.approved") };
-    case "REJECTED":
-      return { tone: "danger", label: t("apply.documents.status.rejected") };
-    case "SUPERSEDED":
-      return { tone: "neutral", label: t("apply.documents.status.superseded") };
-  }
-}
-
-/** The document that currently counts for a kind: the newest non-superseded one. */
-function currentDocument(
-  application: Application,
-  kind: DocumentKind,
-): Schemas["PartnerDocument"] | null {
-  const candidates = application.documents
-    .filter((document) => document.kind === kind && document.status !== "SUPERSEDED")
-    .sort((a, b) => b.version - a.version);
-  return candidates[0] ?? null;
-}
-
 export function DocumentsStep() {
   const t = useT();
+  const router = useRouter();
+  const pathname = usePathname();
   const query = usePartnerApplication();
-  const [replacingKinds, setReplacingKinds] = useState<Set<DocumentKind>>(new Set());
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
     return (
-      <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
-        <Spinner size="sm" />
-        {t("apply.documents.loading")}
-      </p>
+      <div role="status" aria-label={t("apply.documents.loading")} className="flex flex-col gap-3">
+        <Skeleton className="h-8 w-1/2" />
+        <Skeleton className="h-32 w-full rounded-card" />
+        <Skeleton className="h-32 w-full rounded-card" />
+      </div>
     );
   }
 
@@ -94,92 +49,47 @@ export function DocumentsStep() {
   }
 
   const application = query.data ?? null;
-  const isEditable =
-    application === null ||
-    application.status === "DRAFT" ||
-    application.status === "CHANGES_REQUIRED";
+  const track = application?.track ?? null;
+  const required = new Set(requiredDocumentKinds(application));
+  const kinds = [...OFFERED_DOCUMENTS]
+    .map((offered) => offered.kind)
+    .sort((a, b) => Number(required.has(b)) - Number(required.has(a)));
+  const back = previousStep(pathname, track);
+  const next = nextStep(pathname, track);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        {REQUIRED.map((required) => {
-          const document = application ? currentDocument(application, required.kind) : null;
-          const status = document ? statusTone(document.status, t) : null;
-          const label = t(required.labelKey);
-          const isReplacing = replacingKinds.has(required.kind);
-          const isDocRejected =
-            document?.status === "REJECTED" || document?.scan_status === "REJECTED";
-          const canReplace =
-            (isEditable &&
-              (document?.status !== "APPROVED" || application?.status === "CHANGES_REQUIRED")) ||
-            isDocRejected;
+    <>
+      <StepFrame title={t("apply.documents.pageTitle")} description={t("apply.documents.pageDescription")}>
+        {application === null ? (
+          <p className="text-sm text-text-secondary">{t("apply.documents.startFirst")}</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {kinds.map((kind) => (
+              <DocumentSlot
+                key={kind}
+                application={application}
+                kind={kind}
+                required={required.has(kind)}
+                hintKey={kind === "GOVERNMENT_ID" ? "apply.documents.why.governmentId" : "apply.documents.why.addressProof"}
+              />
+            ))}
+          </div>
+        )}
+      </StepFrame>
 
-          return (
-            <div key={required.kind} className="rounded-control border border-line bg-surface p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-bold text-navy-900">
-                  {label} <span className="text-danger-text">*</span>
-                </p>
-                <Badge tone={status?.tone ?? "neutral"}>
-                  {status?.label ?? t("apply.documents.notUploaded")}
-                </Badge>
-              </div>
-              <p className="mt-1 text-xs text-text-secondary">{t(required.whyKey)}</p>
-
-              {document && !isReplacing ? (
-                <UploadedDocumentCard
-                  document={document}
-                  label={label}
-                  canReplace={canReplace}
-                  onReplace={() =>
-                    setReplacingKinds((prev) => new Set(prev).add(required.kind))
-                  }
-                />
-              ) : isEditable || isDocRejected ? (
-                <DocumentUpload
-                  kind={required.kind}
-                  label={label}
-                  expectedVersion={application?.version ?? null}
-                  replacing={Boolean(document)}
-                  onSuccess={() =>
-                    setReplacingKinds((prev) => {
-                      const next = new Set(prev);
-                      next.delete(required.kind);
-                      return next;
-                    })
-                  }
-                  onCancel={
-                    document
-                      ? () =>
-                          setReplacingKinds((prev) => {
-                            const next = new Set(prev);
-                            next.delete(required.kind);
-                            return next;
-                          })
-                      : undefined
-                  }
-                />
-              ) : (
-                <p className="mt-2 text-xs text-text-muted">
-                  {document
-                    ? t("apply.documents.lockedReviewing")
-                    : t("apply.documents.notRequiredAnymore")}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Navigation actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-line gap-3">
-        <Link href="/apply/consent" className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 font-bold text-sm h-12 px-5" })}>
+      <ApplyDock>
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <Link
+            href={back?.href ?? "/apply"}
+            className={buttonStyles({ variant: "outline", size: "lg", className: "shrink-0 px-4 sm:px-5 font-bold text-sm sm:text-base" })}
+          >
             {t("common.back")}
           </Link>
-        <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"} className={buttonStyles({ size: "lg", className: "font-bold text-sm h-12 px-5 shadow-md" })}>
-            {isListingTrack(query.data?.track) ? t("apply.documents.continueReview") : t("apply.documents.continueHours")}
-          </Link>
-      </div>
-    </div>
+          <Button size="lg" block className="flex-1 font-bold text-sm sm:text-base" onClick={() => router.push(next?.href ?? "/apply")}>
+            {t("apply.editor.continue")}
+          </Button>
+        </div>
+      </ApplyDock>
+    </>
   );
 }

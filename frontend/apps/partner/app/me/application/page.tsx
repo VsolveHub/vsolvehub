@@ -1,19 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { PartnerShell } from "@/features/session/partner-shell";
-import { PartnerDocumentsView } from "@/features/profile/view/partner-documents-view";
-
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Application & Documents",
-  robots: { index: false, follow: false },
-};
-
+/** The application and its documents live on one page. */
 export default function PartnerApplicationPage() {
-  return (
-    <PartnerShell requirePartnerRole>
-      <PartnerDocumentsView />
-    </PartnerShell>
-  );
+  redirect("/me/documents");
 }

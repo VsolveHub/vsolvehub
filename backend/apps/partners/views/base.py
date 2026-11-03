@@ -20,7 +20,7 @@ from apps.identity.services import record_access_event
 from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_application_for_user, partner_profile_for_user
-from apps.partners.serializers import PartnerApplicationSerializer
+from apps.partners.serializers import APPLICANT_AUDIENCE, PartnerApplicationSerializer
 from common.observability.context import get_request_id
 
 
@@ -56,7 +56,9 @@ def _application_response(user: User) -> Response:
     application = partner_application_for_user(user)
     if application is None:
         raise NotFound("Partner application was not found.")
-    return Response(PartnerApplicationSerializer(application).data)
+    return Response(
+        PartnerApplicationSerializer(application, context={"audience": APPLICANT_AUDIENCE}).data
+    )
 
 
 class OperationsApplicationCursorPagination(CursorPagination):

@@ -149,6 +149,10 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "rental.claim.decided",
         "rental.overdue",
         "rental.enquiry.quoted",
+        # Where a Partner's application stands. Muting it would leave an applicant waiting on a
+        # decision that was already made, or on a document they were asked to replace.
+        "partner_application_progress",
+        "partner_application_decision",
     }
 )
 
@@ -397,6 +401,7 @@ def retryable_intents(*, limit: int = 100) -> list[NotificationIntent]:
         ).order_by("created_at")[:limit]
     )
 
+
 class CustomerPushReachabilityReason:
     ACTIVE_SUBSCRIPTION = "ACTIVE_SUBSCRIPTION"
     NO_ACTIVE_SUBSCRIPTION = "NO_ACTIVE_SUBSCRIPTION"
@@ -430,10 +435,14 @@ def get_customer_push_reachability(user: User | None) -> dict[str, object]:
         reason = CustomerPushReachabilityReason.NO_ACTIVE_SUBSCRIPTION
         sub_id = None
     else:
-        active_sub = CustomerPushSubscription.objects.filter(
-            user=user,
-            is_active=True,
-        ).order_by("-last_verified_at").first()
+        active_sub = (
+            CustomerPushSubscription.objects.filter(
+                user=user,
+                is_active=True,
+            )
+            .order_by("-last_verified_at")
+            .first()
+        )
 
         if active_sub is None:
             sub_id = latest_sub.onesignal_subscription_id
@@ -454,7 +463,9 @@ def get_customer_push_reachability(user: User | None) -> dict[str, object]:
                 reachable = False
             else:
                 freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
-                is_stale = (timezone.now() - active_sub.last_verified_at) > timedelta(days=freshness_days)
+                is_stale = (timezone.now() - active_sub.last_verified_at) > timedelta(
+                    days=freshness_days
+                )
                 if is_stale:
                     reason = CustomerPushReachabilityReason.STALE_SUBSCRIPTION
                     reachable = False
@@ -605,4 +616,3 @@ def sync_customer_push_subscription(
     )
 
     return subscription, is_created
-

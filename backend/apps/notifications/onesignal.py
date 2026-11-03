@@ -2,10 +2,11 @@
 
 import logging
 from typing import Any
+
 import requests
+from django.conf import settings
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,11 @@ def send_push_to_external_ids(
         or getattr(settings, "ONESIGNAL_PARTNER_APP_ID", "")
         or getattr(settings, "ONESIGNAL_APP_ID", "")
     )
-    resolved_rest_api_key = (
+    resolved_rest_api_key: str = (
         rest_api_key
         or getattr(settings, "ONESIGNAL_PARTNER_REST_API_KEY", "")
         or getattr(settings, "ONESIGNAL_REST_API_KEY", "")
+        or ""
     )
     api_url = getattr(settings, "ONESIGNAL_API_URL", "https://api.onesignal.com/notifications")
 

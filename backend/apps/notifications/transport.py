@@ -11,17 +11,19 @@ The deterministic fake remains selectable only outside production.
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 from urllib.error import URLError
 from urllib.request import Request, urlopen
-from uuid import UUID
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
 from django.utils import timezone
 
+import apps.notifications.onesignal as onesignal_module
 from apps.notifications.models import (
     CustomerPushSubscription,
     KillSwitch,
@@ -30,13 +32,15 @@ from apps.notifications.models import (
     PushNotificationPreference,
 )
 
-import apps.notifications.onesignal as onesignal_module
-send_push_to_external_ids = None
+#: Test seam: tests patch this name to stand in for the OneSignal call.
+send_push_to_external_ids: Callable[..., dict[str, Any]] | None = None
 
-def _get_send_push_fn():
+
+def _get_send_push_fn() -> Callable[..., dict[str, Any]]:
     if send_push_to_external_ids is not None:
         return send_push_to_external_ids
     return onesignal_module.send_push_to_external_ids
+
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +161,6 @@ class Msg91MessageTransport:
         )
 
 
-
 class OneSignalMessageTransport:
     """Outbound OneSignal Web Push transport.
 
@@ -200,14 +203,23 @@ class OneSignalMessageTransport:
         from apps.partners.models import PartnerProfile, PartnerPushSubscription
 
         ctx = dict(context or {})
-        role = (recipient_role or ctx.get("role") or ctx.get("recipient_role") or "").strip().upper()
+        role = (
+            str(recipient_role or ctx.get("role") or ctx.get("recipient_role") or "")
+            .strip()
+            .upper()
+        )
         if not role:
-            if recipient and (hasattr(recipient, "partner_profile") or PartnerProfile.objects.filter(user=recipient).exists()):
+            if recipient and (
+                hasattr(recipient, "partner_profile")
+                or PartnerProfile.objects.filter(user=recipient).exists()
+            ):
                 role = "PARTNER"
             elif recipient:
                 role = "CUSTOMER"
             else:
-                raise MessageTransportError("Unknown or missing recipient role: role must be CUSTOMER or PARTNER")
+                raise MessageTransportError(
+                    "Unknown or missing recipient role: role must be CUSTOMER or PARTNER"
+                )
 
         if role not in ("CUSTOMER", "PARTNER"):
             raise MessageTransportError(f"Unknown or missing recipient role: {role}")
@@ -238,7 +250,7 @@ class OneSignalMessageTransport:
         if user_recipient is None:
             raise MessageTransportError("No valid recipient user found for push notification.")
 
-        notif_purpose = purpose or ctx.get("purpose") or "transactional"
+        notif_purpose = str(purpose or ctx.get("purpose") or "transactional")
         fitted_idempotency_key = fit_idempotency_key(idempotency_key) if idempotency_key else ""
         notif_deep_link = deep_link or str(ctx.get("url") or ctx.get("deep_link") or "")
         notif_title = title or str(ctx.get("title") or ctx.get("heading") or "Notification")
@@ -303,7 +315,7 @@ class OneSignalMessageTransport:
             )
 
         # 1.5 Preference Check
-        resolved_category = ctx.get("category")
+        resolved_category = str(ctx.get("category") or "")
         if not resolved_category:
             template_str = (template_code or "").lower()
             if role == "CUSTOMER":
@@ -311,23 +323,30 @@ class OneSignalMessageTransport:
                     resolved_category = PushNotificationPreference.Category.ACCOUNT_SECURITY
                 elif any(k in template_str for k in ["otp", "arrival", "arrived"]):
                     resolved_category = PushNotificationPreference.Category.ARRIVAL_AND_OTP_ALERTS
-                elif any(k in template_str for k in ["dispatch", "assigned", "assignment", "match"]):
-                    resolved_category = PushNotificationPreference.Category.DISPATCH_AND_ASSIGNMENT_UPDATES
+                elif any(
+                    k in template_str for k in ["dispatch", "assigned", "assignment", "match"]
+                ):
+                    resolved_category = (
+                        PushNotificationPreference.Category.DISPATCH_AND_ASSIGNMENT_UPDATES
+                    )
                 elif any(k in template_str for k in ["promo", "offer", "discount", "campaign"]):
                     resolved_category = PushNotificationPreference.Category.OFFERS_AND_PROMOTIONS
                 else:
                     resolved_category = PushNotificationPreference.Category.BOOKING_UPDATES
+            elif any(k in template_str for k in ["security", "auth", "login", "bank", "payout"]):
+                resolved_category = PushNotificationPreference.Category.ACCOUNT_SECURITY
+            elif any(k in template_str for k in ["shift", "availability", "schedule", "reminder"]):
+                resolved_category = (
+                    PushNotificationPreference.Category.SHIFT_AND_AVAILABILITY_REMINDERS
+                )
+            elif any(k in template_str for k in ["product", "feature", "news", "announcement"]):
+                resolved_category = PushNotificationPreference.Category.PRODUCT_UPDATES
             else:
-                if any(k in template_str for k in ["security", "auth", "login", "bank", "payout"]):
-                    resolved_category = PushNotificationPreference.Category.ACCOUNT_SECURITY
-                elif any(k in template_str for k in ["shift", "availability", "schedule", "reminder"]):
-                    resolved_category = PushNotificationPreference.Category.SHIFT_AND_AVAILABILITY_REMINDERS
-                elif any(k in template_str for k in ["product", "feature", "news", "announcement"]):
-                    resolved_category = PushNotificationPreference.Category.PRODUCT_UPDATES
-                else:
-                    resolved_category = PushNotificationPreference.Category.JOB_AND_DISPATCH_ALERTS
+                resolved_category = PushNotificationPreference.Category.JOB_AND_DISPATCH_ALERTS
 
-        if not PushNotificationPreference.is_category_enabled(user_recipient, role, resolved_category):
+        if not PushNotificationPreference.is_category_enabled(
+            user_recipient, role, resolved_category
+        ):
             logger.info(
                 "push_send_suppressed_by_preference",
                 extra={
@@ -391,26 +410,42 @@ class OneSignalMessageTransport:
         freshness_cutoff = now - timedelta(days=freshness_days)
 
         if role == "CUSTOMER":
-            subs = CustomerPushSubscription.objects.filter(user=user_recipient).order_by("-updated_at")
-            valid_sub = subs.filter(
-                is_active=True,
-                opted_in=True,
-                last_verified_at__gte=freshness_cutoff,
-            ).exclude(permission_state__iexact="denied").first()
+            subs: QuerySet[Any] = CustomerPushSubscription.objects.filter(
+                user=user_recipient
+            ).order_by("-updated_at")
+            valid_sub = (
+                subs.filter(
+                    is_active=True,
+                    opted_in=True,
+                    last_verified_at__gte=freshness_cutoff,
+                )
+                .exclude(permission_state__iexact="denied")
+                .first()
+            )
             external_id = str(user_recipient.id)
         else:
             partner = getattr(user_recipient, "partner_profile", None)
             if not partner:
                 partner = PartnerProfile.objects.filter(user=user_recipient).first()
-            subs = PartnerPushSubscription.objects.filter(partner=partner).order_by("-updated_at") if partner else PartnerPushSubscription.objects.filter(user=user_recipient).order_by("-updated_at")
-            valid_sub = subs.filter(
-                is_active=True,
-                opted_in=True,
-                last_verified_at__gte=freshness_cutoff,
-            ).exclude(permission_state__iexact="denied").first()
+            subs = (
+                PartnerPushSubscription.objects.filter(partner=partner)
+                if partner
+                else PartnerPushSubscription.objects.filter(user=user_recipient)
+            ).order_by("-updated_at")
+            valid_sub = (
+                subs.filter(
+                    is_active=True,
+                    opted_in=True,
+                    last_verified_at__gte=freshness_cutoff,
+                )
+                .exclude(permission_state__iexact="denied")
+                .first()
+            )
             external_id = str(user_recipient.id)
 
-        gate_required = True if role == "CUSTOMER" else getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False)
+        gate_required = (
+            True if role == "CUSTOMER" else getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False)
+        )
         if not valid_sub and (gate_required or subs.exists()):
             latest = subs.first()
             if latest is None:
@@ -482,12 +517,16 @@ class OneSignalMessageTransport:
 
         # 3. Idempotency Check & NotificationIntent Creation
         if fitted_idempotency_key:
-            existing_intent = NotificationIntent.objects.filter(idempotency_key=fitted_idempotency_key).first()
+            existing_intent = NotificationIntent.objects.filter(
+                idempotency_key=fitted_idempotency_key
+            ).first()
             if existing_intent and existing_intent.status == NotificationIntent.Status.SENT:
                 existing_delivery = existing_intent.deliveries.order_by("-created_at").first()
                 return TransportResult(
                     provider=self.code,
-                    provider_message_id=existing_delivery.provider_message_id if existing_delivery else "",
+                    provider_message_id=existing_delivery.provider_message_id
+                    if existing_delivery
+                    else "",
                     accepted=True,
                     status=NotificationDelivery.Status.ACCEPTED,
                     intent_id=str(existing_intent.id),
@@ -569,14 +608,19 @@ class OneSignalMessageTransport:
 
         # 5. Response Classification & Audit Recording
         # Case A: Success (2xx + valid notification_id)
-        if 200 <= http_status < 300 and notification_id and not ("unsubscribed" in error_text):
+        if 200 <= http_status < 300 and notification_id and "unsubscribed" not in error_text:
             delivery = NotificationDelivery.objects.create(
                 intent=intent,
                 provider=self.code,
                 status=NotificationDelivery.Status.ACCEPTED,
                 provider_message_id=str(notification_id),
                 app_id=app_id,
-                request_payload={"heading": notif_title, "body": notif_body, "url": notif_deep_link, "data": ctx},
+                request_payload={
+                    "heading": notif_title,
+                    "body": notif_body,
+                    "url": notif_deep_link,
+                    "data": ctx,
+                },
                 response_status=http_status,
                 response_body=raw_response,
                 completed_at=timezone.now(),
@@ -616,7 +660,12 @@ class OneSignalMessageTransport:
                 status=NotificationDelivery.Status.RATE_LIMITED,
                 failure_code="RATE_LIMITED_429",
                 app_id=app_id,
-                request_payload={"heading": notif_title, "body": notif_body, "url": notif_deep_link, "data": ctx},
+                request_payload={
+                    "heading": notif_title,
+                    "body": notif_body,
+                    "url": notif_deep_link,
+                    "data": ctx,
+                },
                 response_status=http_status,
                 response_body=raw_response,
             )
@@ -656,7 +705,12 @@ class OneSignalMessageTransport:
                 status=NotificationDelivery.Status.RETRYABLE,
                 failure_code=reason,
                 app_id=app_id,
-                request_payload={"heading": notif_title, "body": notif_body, "url": notif_deep_link, "data": ctx},
+                request_payload={
+                    "heading": notif_title,
+                    "body": notif_body,
+                    "url": notif_deep_link,
+                    "data": ctx,
+                },
                 response_status=http_status,
                 response_body=raw_response,
             )
@@ -696,7 +750,12 @@ class OneSignalMessageTransport:
                 status=NotificationDelivery.Status.FAILED,
                 failure_code=reason,
                 app_id=app_id,
-                request_payload={"heading": notif_title, "body": notif_body, "url": notif_deep_link, "data": ctx},
+                request_payload={
+                    "heading": notif_title,
+                    "body": notif_body,
+                    "url": notif_deep_link,
+                    "data": ctx,
+                },
                 response_status=http_status,
                 response_body=raw_response,
                 completed_at=timezone.now(),
@@ -705,11 +764,20 @@ class OneSignalMessageTransport:
             intent.status = NotificationIntent.Status.FAILED
             intent.save(update_fields=["attempts", "status", "updated_at"])
 
-            if "not subscribed" in error_text or "unsubscribed" in error_text or "invalid" in error_text or "not found" in error_text:
+            if (
+                "not subscribed" in error_text
+                or "unsubscribed" in error_text
+                or "invalid" in error_text
+                or "not found" in error_text
+            ):
                 if role == "CUSTOMER":
-                    CustomerPushSubscription.objects.filter(user=user_recipient).update(is_active=False)
+                    CustomerPushSubscription.objects.filter(user=user_recipient).update(
+                        is_active=False
+                    )
                 else:
-                    PartnerPushSubscription.objects.filter(user=user_recipient).update(is_active=False)
+                    PartnerPushSubscription.objects.filter(user=user_recipient).update(
+                        is_active=False
+                    )
 
             logger.error(
                 "push_notification_send_failed",
@@ -744,7 +812,12 @@ class OneSignalMessageTransport:
             status=NotificationDelivery.Status.FAILED,
             failure_code=reason,
             app_id=app_id,
-            request_payload={"heading": notif_title, "body": notif_body, "url": notif_deep_link, "data": ctx},
+            request_payload={
+                "heading": notif_title,
+                "body": notif_body,
+                "url": notif_deep_link,
+                "data": ctx,
+            },
             response_status=http_status,
             response_body=raw_response,
             completed_at=timezone.now(),
@@ -754,7 +827,11 @@ class OneSignalMessageTransport:
         intent.suppressed_reason = reason
         intent.save(update_fields=["attempts", "status", "suppressed_reason", "updated_at"])
 
-        if "not subscribed" in error_text or "unsubscribed" in error_text or "invalid" in error_text:
+        if (
+            "not subscribed" in error_text
+            or "unsubscribed" in error_text
+            or "invalid" in error_text
+        ):
             if role == "CUSTOMER":
                 CustomerPushSubscription.objects.filter(user=user_recipient).update(is_active=False)
             else:

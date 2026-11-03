@@ -27,7 +27,7 @@ Additive, Operations only. The Operations console is the only consumer.
   project money held for vendors, reported separately.
 - **Added** `GET /ops/listings/{listing_id}/applications`: who applied to one job.
 
-## 1.90.0 - Every payment goes through Razorpay Checkout
+## 1.90.0 - Every payment goes through Razorpay Checkout; Partner onboarding updates
 
 Breaking for clients that used the development "Mark as paid" shortcut. The Customer and Partner
 apps are updated with this change.
@@ -36,8 +36,10 @@ apps are updated with this change.
 - **Removed** `simulated_capture_available` from `PaymentAttempt`, `RentalDeposit`, `BookingFee`
   and `VisitPlan`. A pending payment is always paid by opening Razorpay Checkout; locally that is
   Razorpay test mode.
-- **Published**: the customer and partner `notification-preferences` endpoints, which were in
-  the code but missing from this document.
+- **Added** to `PartnerDocument`: `can_replace` and `file_name`.
+- **Added** to `PartnerApplication`: `can_edit`, `required_document_kinds`, and `consents_complete`.
+- **Notifications**: in-app notices and OneSignal web push for partner application milestones.
+- **Published**: the customer and partner `notification-preferences` and push subscription endpoints.
 
 ## 1.89.0 - Operations reports an admin can use without knowing codes
 

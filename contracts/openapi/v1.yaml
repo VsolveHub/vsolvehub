@@ -2785,10 +2785,15 @@ paths:
   /api/v1/dev/onesignal/test-push/:
     post:
       operationId: dev_onesignal_test_push_create
-      description: Local development & testing endpoint to verify OneSignal push delivery
-        to an external_id.
+      description: |-
+        Local development only: send a test push to yourself.
+
+        Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+        — and only to the signed-in caller, so it can never be used to push to someone else.
       tags:
       - dev
+      security:
+      - cookieAuth: []
       responses:
         '200':
           description: No response body
@@ -15757,8 +15762,9 @@ paths:
       description: |-
         Changes what a Partner may change about themselves.
 
-        Deliberately narrow. The phone number is the login credential and is not
-        accepted here — see `PartnerProfileUpdateSerializer`.
+        Deliberately narrow. Neither the phone number (the login credential) nor the
+        name (checked against the Partner's ID) is accepted here — see
+        `PartnerProfileUpdateSerializer`.
       tags:
       - Partner
       requestBody:
@@ -34018,6 +34024,17 @@ components:
           items:
             $ref: '#/components/schemas/PartnerApplicationTransition'
           readOnly: true
+        can_edit:
+          type: boolean
+          readOnly: true
+        required_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        consents_complete:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -34028,14 +34045,17 @@ components:
           readOnly: true
       required:
       - biography
+      - can_edit
       - change_request_message
       - consents
+      - consents_complete
       - created_at
       - display_name
       - documents
       - experience_years
       - id
       - partner_id
+      - required_document_kinds
       - review_assigned_at
       - review_assigned_to_id
       - reviewed_at
@@ -34961,8 +34981,16 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        file_name:
+          type: string
+          readOnly: true
+        can_replace:
+          type: boolean
+          readOnly: true
       required:
+      - can_replace
       - content_type
+      - file_name
       - id
       - kind
       - review_reason
@@ -37420,9 +37448,12 @@ components:
       description: |-
         What a Partner may change about themselves without a review.
 
-        `display_name` is the name Customers see. `default_location_text` is the
-        registered pickup / address used to prefill A7 rental ads (still editable
-        per asset).
+        `default_location_text` is the registered pickup / address used to prefill A7
+        rental ads (still editable per asset).
+
+        **Not** `display_name`. It is the name on the application Operations checked
+        against the Partner's ID, so it is fixed once the application is sent; before
+        that it is edited on the application itself.
 
         **Not** `phone_number`. That is the login credential: changing it moves who
         can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -37433,10 +37464,6 @@ components:
         Skills and service areas are absent for a different reason: Operations
         reviewed them, and a field here would silently reopen a reviewed decision.
       properties:
-        display_name:
-          type: string
-          minLength: 1
-          maxLength: 120
         default_location_text:
           type: string
           maxLength: 240

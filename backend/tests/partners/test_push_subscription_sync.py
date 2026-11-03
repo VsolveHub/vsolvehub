@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
@@ -184,7 +184,9 @@ def test_push_subscription_deactivate_action(auth_client: APIClient, partner_use
     assert sub.opted_in is False
 
 
-def test_push_subscription_denied_permission_deactivates(auth_client: APIClient, partner_user: User):
+def test_push_subscription_denied_permission_deactivates(
+    auth_client: APIClient, partner_user: User
+):
     sub_id = str(uuid.uuid4())
     sub = PartnerPushSubscription.objects.create(
         partner=partner_user.partner_profile,

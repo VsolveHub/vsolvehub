@@ -1,7 +1,9 @@
 """Management command to test OneSignal push delivery to a partner external_id."""
 
 from typing import Any
+
 from django.core.management.base import BaseCommand
+
 from apps.notifications.onesignal import send_push_to_external_ids
 
 

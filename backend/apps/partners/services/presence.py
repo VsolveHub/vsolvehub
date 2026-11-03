@@ -19,7 +19,12 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 from apps.identity.models import User
-from apps.partners.exceptions import PartnerAccessDeniedError, PartnerEligibilityError, PartnerPresenceError, PartnerPushSubscriptionConflictError
+from apps.partners.exceptions import (
+    PartnerAccessDeniedError,
+    PartnerEligibilityError,
+    PartnerPresenceError,
+    PartnerPushSubscriptionConflictError,
+)
 from apps.partners.models import (
     PartnerApplication,
     PartnerLocation,
@@ -409,7 +414,8 @@ def sync_partner_push_subscription(
         )
         raise PartnerAccessDeniedError("This push subscription belongs to another user account.")
 
-    partner_external_id = str(profile.id)
+    # The browser logs in to OneSignal as the user id and pushes target that alias.
+    partner_external_id = str(user.id)
     now = timezone.now()
 
     # Determine effective active status
@@ -452,7 +458,9 @@ def sync_partner_push_subscription(
             },
         )
 
-    log_event = "push_subscription_registered" if effective_is_active else "push_subscription_deactivated"
+    log_event = (
+        "push_subscription_registered" if effective_is_active else "push_subscription_deactivated"
+    )
     logger.info(
         log_event,
         extra={

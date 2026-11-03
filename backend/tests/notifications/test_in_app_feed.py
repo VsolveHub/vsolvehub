@@ -152,6 +152,9 @@ def test_every_registered_template_renders_from_its_documented_context() -> None
         "workers_expected": "4",
         "extension_days": "2",
         "deliverables": "3 deliverables",
+        # Partner application notices (`apps.partners.services.base._notify_application_event`).
+        "reason": "The photo is blurred",
+        "document": "Government identity",
     }
     for template_code in registered_template_codes():
         rendered = render_notification(template_code=template_code, context=context)

@@ -1,41 +1,34 @@
 import datetime
 import uuid
-from datetime import time, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from django.test import override_settings
 from django.utils import timezone
+from psycopg.types.range import Range
 from rest_framework.test import APIClient
 
+from apps.assignments.models import DispatchOffer, Reservation
+from apps.assignments.tasks import (
+    reconcile_expired_dispatch_offers,
+)
+from apps.carts.availability import AvailabilitySnapshot, compute_instant_availability
+from apps.carts.models import BookingGroup, CheckoutSession, Quote
+from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
+from apps.commerce.models import Booking, Order
 from apps.identity.models import Role, User, UserRole
 from apps.locations.models import Address, ServiceArea
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityRule,
     PartnerLocation,
-    PartnerOnlineSession,
     PartnerProfile,
     PartnerPushSubscription,
     PartnerServiceArea,
     PartnerShift,
 )
-from apps.assignments.models import DispatchOffer, Reservation
-from apps.assignments.ranking import evaluate_unit_candidates
-from apps.assignments.tasks import (
-    dispatch_instant_booking_task,
-    expire_dispatch_offer_task,
-    reassign_or_downgrade_booking_task,
-    reconcile_expired_dispatch_offers,
-    send_dispatch_offer_push_task,
-)
-from apps.carts.availability import AvailabilitySnapshot, compute_instant_availability
-from apps.carts.models import BookingGroup, Cart, CartItem, CheckoutSession, FulfilmentUnit, Quote
-from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
-from apps.commerce.models import Booking, Order
-from psycopg.types.range import Range
 
 
 @pytest.fixture
@@ -55,8 +48,10 @@ def test_setup():
         name="Madhapur",
         timezone="Asia/Kolkata",
     )
-    from apps.locations.models import ServiceAreaOperatingWindow
     import datetime
+
+    from apps.locations.models import ServiceAreaOperatingWindow
+
     for d in range(7):
         ServiceAreaOperatingWindow.objects.create(
             service_area=area,
@@ -84,6 +79,7 @@ def test_setup():
         PartnerApplication.objects.create(partner=p, status=PartnerApplication.Status.APPROVED)
         PartnerServiceArea.objects.create(partner=p, service_area=area, is_active=True)
         from apps.partners.models import PartnerService
+
         PartnerService.objects.create(partner=p, variant=variant, is_active=True)
         return p
 
@@ -104,6 +100,7 @@ def test_setup():
         confirmed_at=timezone.now(),
     )
     from apps.pricing.models import PricingPolicy
+
     policy, _ = PricingPolicy.objects.get_or_create(
         code="m1-technician",
         version=1,

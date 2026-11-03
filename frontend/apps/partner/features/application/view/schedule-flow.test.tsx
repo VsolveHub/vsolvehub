@@ -59,9 +59,14 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
         uploaded_at: "2026-01-01",
         reviewed_at: "2026-01-01",
         review_reason: "",
+        file_name: "government_id_v1.jpg",
+        can_replace: true,
       },
     ],
     transitions: [],
+    can_edit: true,
+    required_document_kinds: ["GOVERNMENT_ID"],
+    consents_complete: true,
     change_request_message: "",
     submitted_at: null,
     review_assigned_to_id: null,
@@ -95,10 +100,19 @@ vi.mock("../queries", () => ({
   usePartnerAvailability: () => mockAvailability,
   isVersionConflict: () => false,
   useSubmitApplication: () => ({
-    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
     isPending: false,
     error: null,
   }),
+  useUpdateApplication: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
+}));
+
+vi.mock("@/features/notifications/view/partner-push-preferences", () => ({
+  PushOptInCard: () => null,
 }));
 
 vi.mock("../reference-queries", () => ({
@@ -138,7 +152,7 @@ describe("Schedule auto-save behavior", () => {
 
   const areas = [{ id: "area-1", label: "West Hyderabad" }];
 
-  it("auto-saves modified schedule before navigating to review", async () => {
+  it("continues to the documents step with no changes", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
 
     renderWithClient(
@@ -146,19 +160,20 @@ describe("Schedule auto-save behavior", () => {
         areas={areas}
         initialPeriods={[]}
         onSave={onSave}
+        backHref="/apply/work"
+        nextHref="/apply/documents"
       />
     );
 
-    // Click "Review Application" with no changes
-    const reviewBtn = screen.getByRole("button", { name: /Review Application/i });
-    fireEvent.click(reviewBtn);
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
-      expect(push).toHaveBeenCalledWith("/apply/review");
+      expect(push).toHaveBeenCalledWith("/apply/documents");
     });
+    expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("auto-saves edited periods when Review Application is clicked", async () => {
+  it("saves edited hours before continuing", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
 
     renderWithClient(
@@ -166,31 +181,27 @@ describe("Schedule auto-save behavior", () => {
         areas={areas}
         initialPeriods={[]}
         onSave={onSave}
+        backHref="/apply/work"
+        nextHref="/apply/documents"
       />
     );
 
-    // Open set shift modal for Monday
     const [mondaySetShift] = screen.getAllByRole("button", { name: /Set Shift/i });
     expect(mondaySetShift).toBeDefined();
     fireEvent.click(mondaySetShift as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: /Save Shift/i }));
 
-    // Save shift in modal
-    const saveShiftBtn = screen.getByRole("button", { name: /Save Shift/i });
-    fireEvent.click(saveShiftBtn);
-
-    // Now hasChanges is true. Click "Review Application"
-    const reviewBtn = screen.getByRole("button", { name: /Review Application/i });
-    fireEvent.click(reviewBtn);
+    fireEvent.click(screen.getByRole("button", { name: /Save and Continue/i }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalled();
-      expect(push).toHaveBeenCalledWith("/apply/review");
+      expect(push).toHaveBeenCalledWith("/apply/documents");
     });
   });
 });
 
-describe("ReviewStep working hours section", () => {
-  it("displays configured working hours for active service areas", () => {
+describe("ReviewStep working hours summary", () => {
+  it("counts the areas that have hours", () => {
     mockAvailability.data = {
       rules: [
         {
@@ -208,12 +219,11 @@ describe("ReviewStep working hours section", () => {
 
     renderWithClient(<ReviewStep />);
 
-    expect(screen.getByText(/4\. Working Hours & Availability/i)).toBeDefined();
+    expect(screen.getByText(/Hours set for 1 of 1 areas/i)).toBeDefined();
     expect(screen.getAllByText(/West Hyderabad/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/9 hrs \/ week/i)).toBeDefined();
   });
 
-  it("displays missing hours warning and edit link when active service area has no rules", () => {
+  it("names missing hours as still needed and keeps Send disabled", () => {
     mockAvailability.data = {
       rules: [],
       exceptions: [],
@@ -221,12 +231,9 @@ describe("ReviewStep working hours section", () => {
 
     renderWithClient(<ReviewStep />);
 
-    expect(screen.getByText(/No hours set/i)).toBeDefined();
-    expect(screen.getByText(/No working hours set for this area/i)).toBeDefined();
-    expect(screen.getByRole("link", { name: /Edit working hours →/i })).toBeDefined();
-
-    // Submit button should be disabled when hours are missing
-    const submitButton = screen.getByRole("button", { name: /Submit Application/i });
-    expect(submitButton).toHaveProperty("disabled", true);
+    expect(screen.getByText(/Hours set for 0 of 1 areas/i)).toBeDefined();
+    expect(screen.getByRole("link", { name: /Working hours/i })).toBeDefined();
+    const send = screen.getByRole("button", { name: /Send application/i });
+    expect(send).toHaveProperty("disabled", true);
   });
 });

@@ -2,8 +2,9 @@
 
 import Script from "next/script";
 import { useEffect, useRef } from "react";
+import { ApiRequestError, request } from "@vsolve/api-client";
 import { useCurrentSession } from "@vsolve/query";
-import { browserApiBaseUrl, getApiClient } from "@/lib/api/browser";
+import { getApiClient } from "@/lib/api/browser";
 
 const ONESIGNAL_APP_ID =
   process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ||
@@ -27,7 +28,6 @@ interface PendingPartnerPushSync {
   firstAttemptAt: number;
 }
 
-let cachedCsrfToken: string | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Exponential backoff: 30s, 2m, 10m, 1h */
@@ -36,35 +36,6 @@ function getBackoffDelayMs(attempt: number): number {
   if (attempt === 2) return 2 * 60 * 1000;
   if (attempt === 3) return 10 * 60 * 1000;
   return 60 * 60 * 1000;
-}
-
-async function fetchCsrfToken(baseUrl: string): Promise<string | null> {
-  if (cachedCsrfToken) return cachedCsrfToken;
-
-  if (typeof document !== "undefined") {
-    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    if (match?.[1]) {
-      cachedCsrfToken = match[1];
-      return cachedCsrfToken;
-    }
-  }
-
-  try {
-    const res = await fetch(`${baseUrl}/api/v1/auth/csrf/`, {
-      method: "GET",
-      credentials: "include",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.csrf_token) {
-        cachedCsrfToken = data.csrf_token;
-        return cachedCsrfToken;
-      }
-    }
-  } catch (err) {
-    console.error("[OneSignal Partner] Failed to bootstrap CSRF token:", err);
-  }
-  return null;
 }
 
 function loadPendingSync(): PendingPartnerPushSync | null {
@@ -85,132 +56,51 @@ function savePendingSync(item: PendingPartnerPushSync | null): void {
     } else {
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(item));
     }
-  } catch (err) {
-    console.error("[OneSignal Partner] Failed to update localStorage queue:", err);
+  } catch {
+    // Storage can be blocked (private mode); the sync still runs, it just will not be retried.
   }
 }
 
-async function executePushSubscriptionSync(
-  item: PendingPartnerPushSync,
-  isCsrfRetry: boolean = false,
-): Promise<boolean> {
+/**
+ * Sends one subscription state to Django through the app's own API client, which carries the
+ * session and the CSRF token. A refusal (signed out, not this account, bad payload) is dropped;
+ * a rate limit, a server error or no connection is retried with backoff.
+ */
+async function executePushSubscriptionSync(item: PendingPartnerPushSync): Promise<boolean> {
   const { subscriptionId, isActive, optedIn, permissionState, action } = item;
   if (!subscriptionId) {
     savePendingSync(null);
     return true;
   }
 
-  const base = browserApiBaseUrl();
-  const csrf = await fetchCsrfToken(base);
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (csrf) {
-    headers["X-CSRFToken"] = csrf;
-  }
-
-  const payload = {
-    onesignal_subscription_id: subscriptionId,
-    platform: "WEB",
-    user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
-    is_active: action === "deactivate" ? false : Boolean(isActive),
-    opted_in: action === "deactivate" ? false : Boolean(optedIn),
-    permission_state: permissionState || (typeof Notification !== "undefined" ? Notification.permission : ""),
-    action,
-  };
-
   try {
-    const res = await fetch(`${base}/api/v1/partner/push-subscriptions/sync/`, {
-      method: "POST",
-      headers,
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
-      savePendingSync(null);
-      return true;
-    }
-
-    if (res.status === 401) {
-      console.error("[OneSignal Partner] Sync rejected: unauthenticated (401)", {
-        subscriptionId,
-      });
-      // Do not continue retrying when unauthenticated; clear queue
-      savePendingSync(null);
-      return false;
-    }
-
-    if (res.status === 403) {
-      let isCsrfFailure = false;
-      let errorCode: string | null = null;
-      try {
-        const body = await res.clone().json();
-        errorCode = body?.error?.code ?? body?.code ?? null;
-        if (
-          errorCode === "csrf_failed" ||
-          String(body?.detail || "").toLowerCase().includes("csrf") ||
-          String(body?.error?.message || "").toLowerCase().includes("security token")
-        ) {
-          isCsrfFailure = true;
-        }
-      } catch {
-        try {
-          const text = await res.clone().text();
-          if (text.toLowerCase().includes("csrf")) {
-            isCsrfFailure = true;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (isCsrfFailure && !isCsrfRetry) {
-        console.warn("[OneSignal Partner] CSRF failure detected on sync (403). Refreshing CSRF token and retrying once...", {
-          subscriptionId,
-        });
-        cachedCsrfToken = null;
-        await fetchCsrfToken(base);
-        return executePushSubscriptionSync(item, true);
-      }
-
-      // Authorization / ownership failure: do not retry; log and discard queued sync
-      console.error("[OneSignal Partner] Authorization/ownership failure (403): sync discarded", {
-        subscriptionId,
-        errorCode: errorCode || "forbidden",
-        isCsrfFailure,
-      });
+    await request(() =>
+      getApiClient().POST("/api/v1/partner/push-subscriptions/sync/", {
+        body: {
+          onesignal_subscription_id: subscriptionId,
+          platform: "WEB",
+          user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+          is_active: action === "deactivate" ? false : isActive,
+          opted_in: action === "deactivate" ? false : optedIn,
+          permission_state: (permissionState ||
+            (typeof Notification !== "undefined" ? Notification.permission : "")) as
+            | ""
+            | "granted"
+            | "denied"
+            | "default",
+          action,
+        },
+      }),
+    );
+    savePendingSync(null);
+    return true;
+  } catch (error) {
+    const status = error instanceof ApiRequestError ? error.status : null;
+    if (status !== null && status !== 429 && status < 500) {
+      console.warn("[OneSignal] Subscription sync refused; not retrying.", { status });
       savePendingSync(null);
       return false;
     }
-
-    if (res.status === 400) {
-      console.error("[OneSignal Partner] Sync rejected: invalid payload (400)", {
-        subscriptionId,
-      });
-      savePendingSync(null);
-      return false;
-    }
-
-    if (res.status === 409) {
-      console.error("[OneSignal Partner] Sync rejected: subscription state conflict (409)", {
-        subscriptionId,
-      });
-      savePendingSync(null);
-      return false;
-    }
-
-    // 429 Rate Limit or 5xx Server Error: retryable
-    console.error(`[OneSignal Partner] Push subscription backend error (${res.status}):`, {
-      subscriptionId,
-      status: res.status,
-    });
-    scheduleRetry(item);
-    return false;
-  } catch (netErr) {
-    // Network failure / offline: retryable
-    console.error("[OneSignal Partner] Push subscription backend network error:", netErr);
     scheduleRetry(item);
     return false;
   }
@@ -219,14 +109,7 @@ async function executePushSubscriptionSync(
 function scheduleRetry(item: PendingPartnerPushSync): void {
   const now = Date.now();
   if (item.attempts >= MAX_ATTEMPTS || now - item.firstAttemptAt > MAX_QUEUE_AGE_MS) {
-    console.error(
-      "[OneSignal Partner] Sync dropped: exceeded max retry attempts (10) or max age (24h)",
-      {
-        subscriptionId: item.subscriptionId,
-        attempts: item.attempts,
-        ageMs: now - item.firstAttemptAt,
-      },
-    );
+    console.warn("[OneSignal] Subscription sync gave up after repeated failures.");
     savePendingSync(null);
     return;
   }
@@ -399,8 +282,8 @@ export function OneSignalInit() {
               );
             }
           });
-        } catch (listenerErr) {
-          console.warn("[OneSignal] Push subscription listener error:", listenerErr);
+        } catch {
+          // An older SDK without the event: the visibility re-sync still covers changes.
         }
 
         // Check if already opted in and sync subscription
@@ -422,16 +305,9 @@ export function OneSignalInit() {
           return;
         }
         isPartnerOneSignalInitialized = false;
-        if (process.env.NODE_ENV === "development") {
-          const isOriginMismatch = err instanceof Error && err.message.includes("Can only be used on");
-          if (isOriginMismatch) {
-            console.info(
-              `[OneSignal Partner] Web push is inactive on ${window.location.hostname} (OneSignal app is configured for production domain only).`,
-            );
-          } else {
-            console.warn("[OneSignal] init warning:", err);
-          }
-        }
+        // Logged everywhere: a push setup that fails silently in production is how partners
+        // stop hearing about decisions without anyone noticing.
+        console.warn("[OneSignal] Web push could not start:", err);
       }
     });
   }, [userId]);
@@ -451,11 +327,14 @@ export function OneSignalInit() {
           const subId = OneSignal.User?.PushSubscription?.id;
           if (subId) {
             activeSubscriptionIdRef.current = subId;
+            // The real opt-in state: a subscription can exist before permission is granted,
+            // and recording it as reachable would make every send fail silently.
+            const optedIn = Boolean(OneSignal.User?.PushSubscription?.optedIn);
             await syncPushSubscription(
               subId,
-              true,
-              true,
-              typeof Notification !== "undefined" ? Notification.permission : "granted",
+              optedIn,
+              optedIn,
+              typeof Notification !== "undefined" ? Notification.permission : "",
               "sync",
               userId,
             );

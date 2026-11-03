@@ -39,14 +39,17 @@ def reconcile_partner_shifts() -> int:
     """Periodic Celery Beat sweep: expire finished shifts and handle missed offer thresholds."""
     from django.conf import settings
     from django.utils import timezone
+
+    from apps.assignments.models import DispatchOffer
     from apps.partners.models import PartnerShift
     from apps.partners.services import expire_expired_shifts
-    from apps.assignments.models import DispatchOffer
 
     reconciled = expire_expired_shifts()
 
     max_missed = getattr(settings, "MAX_CONSECUTIVE_MISSED_OFFERS", 3)
-    active_shifts = list(PartnerShift.objects.filter(ended_at__isnull=True).select_related("partner"))
+    active_shifts = list(
+        PartnerShift.objects.filter(ended_at__isnull=True).select_related("partner")
+    )
 
     for shift in active_shifts:
         recent_offers = list(
@@ -54,9 +57,9 @@ def reconcile_partner_shifts() -> int:
             .order_by("-created_at")
             .values_list("status", flat=True)[:max_missed]
         )
-        if (
-            len(recent_offers) >= max_missed
-            and all(s in (DispatchOffer.Status.EXPIRED, DispatchOffer.Status.DECLINED) for s in recent_offers)
+        if len(recent_offers) >= max_missed and all(
+            s in (DispatchOffer.Status.EXPIRED, DispatchOffer.Status.DECLINED)
+            for s in recent_offers
         ):
             shift.ended_at = timezone.now()
             shift.end_reason = PartnerShift.EndReason.MISSED_OFFERS

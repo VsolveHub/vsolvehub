@@ -24,7 +24,6 @@ import {
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 import { PartnerHeaderTitleProvider } from "./partner-header-title";
-import { LocaleSwitcher } from "./view/locale-switcher";
 import { DesktopMobileHandoff } from "./view/desktop-mobile-handoff";
 import { translateNavLabel } from "@/features/workspace/nav-labels";
 
@@ -301,8 +300,8 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
 
   useEffect(() => {
     if (!mustLeavePortal) return;
-    // `homeForApplication` sends DRAFT/CHANGES_REQUIRED to `/apply` and every
-    // other unapproved state to `/home`. Neither destination sets
+    // `homeForApplication` sends unfinished, waiting and declined applications to
+    // `/apply` and every other state to `/home`. Neither destination sets
     // `requirePartnerRole`, so this cannot bounce.
     router.replace(homeForApplication(applicationStatus));
   }, [applicationStatus, mustLeavePortal, router]);
@@ -461,7 +460,6 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                       ) : null}
 
                       <div className="flex items-center gap-2">
-                        <LocaleSwitcher />
                         <Button
                           variant="ghost"
                           onClick={() => logout.mutate()}

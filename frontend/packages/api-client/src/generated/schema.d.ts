@@ -1165,7 +1165,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Local development & testing endpoint to verify OneSignal push delivery to an external_id. */
+        /**
+         * @description Local development only: send a test push to yourself.
+         *
+         *     Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+         *     — and only to the signed-in caller, so it can never be used to push to someone else.
+         */
         post: operations["dev_onesignal_test_push_create"];
         delete?: never;
         options?: never;
@@ -6487,8 +6492,9 @@ export interface paths {
         /**
          * @description Changes what a Partner may change about themselves.
          *
-         *     Deliberately narrow. The phone number is the login credential and is not
-         *     accepted here — see `PartnerProfileUpdateSerializer`.
+         *     Deliberately narrow. Neither the phone number (the login credential) nor the
+         *     name (checked against the Partner's ID) is accepted here — see
+         *     `PartnerProfileUpdateSerializer`.
          */
         patch: operations["partner_me_update"];
         trace?: never;
@@ -13758,6 +13764,9 @@ export interface components {
             readonly consents: components["schemas"]["PartnerConsent"][];
             readonly documents: components["schemas"]["PartnerDocument"][];
             readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            readonly can_edit: boolean;
+            readonly required_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly consents_complete: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -14118,6 +14127,8 @@ export interface components {
             readonly uploaded_at: string;
             /** Format: date-time */
             readonly reviewed_at: string | null;
+            readonly file_name: string;
+            readonly can_replace: boolean;
         };
         PartnerDocumentApplicantAccess: {
             readonly document: components["schemas"]["PartnerDocumentDetailMetadata"];
@@ -15059,9 +15070,12 @@ export interface components {
         /**
          * @description What a Partner may change about themselves without a review.
          *
-         *     `display_name` is the name Customers see. `default_location_text` is the
-         *     registered pickup / address used to prefill A7 rental ads (still editable
-         *     per asset).
+         *     `default_location_text` is the registered pickup / address used to prefill A7
+         *     rental ads (still editable per asset).
+         *
+         *     **Not** `display_name`. It is the name on the application Operations checked
+         *     against the Partner's ID, so it is fixed once the application is sent; before
+         *     that it is edited on the application itself.
          *
          *     **Not** `phone_number`. That is the login credential: changing it moves who
          *     can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -15073,7 +15087,6 @@ export interface components {
          *     reviewed them, and a field here would silently reopen a reviewed decision.
          */
         PatchedPartnerProfileUpdateRequest: {
-            display_name?: string;
             default_location_text?: string;
         };
         /**

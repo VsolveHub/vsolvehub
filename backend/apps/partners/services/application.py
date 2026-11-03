@@ -36,9 +36,11 @@ from apps.partners.models import (
 )
 
 from .base import (
+    PARTNER_APPLICATION_PROGRESS_PURPOSE,
     _application_for_update,
     _assert_version,
     _base_application_is_complete,
+    _notify_application_event,
     _record_transition,
 )
 
@@ -174,10 +176,7 @@ def _draft_application_for_update(
     if expected_version is None:
         raise PartnerVersionConflictError
     _assert_version(application, expected_version)
-    if application.status not in {
-        PartnerApplication.Status.DRAFT,
-        PartnerApplication.Status.CHANGES_REQUIRED,
-    }:
+    if not application.is_editable:
         raise PartnerTransitionError("This application cannot be edited in its current state.")
     return partner, application
 
@@ -373,10 +372,7 @@ def submit_partner_application(
 ) -> PartnerApplication:
     application = _application_for_update(user)
     _assert_version(application, expected_version)
-    if application.status not in {
-        PartnerApplication.Status.DRAFT,
-        PartnerApplication.Status.CHANGES_REQUIRED,
-    }:
+    if not application.is_editable:
         raise PartnerTransitionError("This application cannot be submitted in its current state.")
     partner = application.partner
     skills = list(
@@ -448,6 +444,16 @@ def submit_partner_application(
         application=application,
         from_status=previous_status,
         actor=user,
-        reason_code="application_submitted",
+        reason_code=(
+            "application_resubmitted"
+            if previous_status == PartnerApplication.Status.CHANGES_REQUIRED
+            else "application_submitted"
+        ),
+    )
+    _notify_application_event(
+        application=application,
+        template_code="partner_application_submitted",
+        purpose=PARTNER_APPLICATION_PROGRESS_PURPOSE,
+        idempotency_key=f"partner-application:{application.id}:v{application.version}",
     )
     return application

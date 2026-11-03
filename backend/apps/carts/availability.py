@@ -539,7 +539,7 @@ def compute_instant_availability(
     operating_ranges = list(operating_ranges_for_date(area=area, local_date=local_date))
 
     area_currently_open = any(
-        opens_at <= now and now < closes_at for opens_at, closes_at in operating_ranges
+        opens_at <= now < closes_at for opens_at, closes_at in operating_ranges
     )
 
     if not operating_ranges or not area_currently_open:
@@ -595,9 +595,11 @@ def compute_instant_availability(
                 is_active=True,
                 opted_in=True,
                 last_verified_at__gte=freshness_cutoff,
-            ).exclude(
+            )
+            .exclude(
                 permission_state__iexact="denied",
-            ).values_list("partner_id", flat=True)
+            )
+            .values_list("partner_id", flat=True)
         )
 
         max_loc_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
@@ -609,7 +611,9 @@ def compute_instant_availability(
             ).values_list("partner_id", flat=True)
         )
 
-        candidate_partner_ids = active_shift_partner_ids & push_capable_partner_ids & fresh_loc_partner_ids
+        candidate_partner_ids = (
+            active_shift_partner_ids & push_capable_partner_ids & fresh_loc_partner_ids
+        )
 
         excluded_reasons: dict[str, list[str]] = defaultdict(list)
         for pid in snapshot.partner_ids:

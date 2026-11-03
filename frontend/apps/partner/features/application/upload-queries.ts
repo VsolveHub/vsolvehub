@@ -104,6 +104,10 @@ function finalizeFailure(error: unknown, t: ReturnType<typeof useT>): UploadFail
     if (error.code === "partner_application_version_conflict") {
       return new UploadFailure("conflict", t("apply.upload.error.conflict"));
     }
+    if (error.code === "partner_transition_not_allowed") {
+      // The application moved on (a decision was made) since this screen loaded.
+      return new UploadFailure("rejected", t("apply.upload.error.notAllowed"));
+    }
     if (error.status === 409) {
       return new UploadFailure("rejected", error.message || t("apply.upload.error.conflict"));
     }

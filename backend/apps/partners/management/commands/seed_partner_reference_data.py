@@ -3,7 +3,7 @@
 Two kinds of it: the normalized skills derived from the active service catalog,
 and the published consent documents an applicant accepts.
 
-The consent documents are not optional furniture. `_required_consents_exist`
+The consent documents are not optional furniture. `partner_has_required_consents`
 returns False when nothing is published, so an environment without them has no
 path to a complete application — nobody can submit, nobody can be approved, and
 `presence/online` refuses everyone. Only the migration that created the table

@@ -1,7 +1,8 @@
 """Tests for PartnerMeView (GET and PATCH /api/v1/partner/me/).
 
 Verifies that the signed-in partner can read their profile (including default_location_text)
-and update mutable profile fields (display_name, default_location_text).
+and update the one field a Partner may change themselves (default_location_text). The name is
+fixed once the application is sent, so a `display_name` in the body changes nothing.
 """
 
 from http import HTTPStatus
@@ -119,10 +120,9 @@ def test_partner_me_patch_allows_clearing_default_location_text(
     assert profile.default_location_text == ""
 
 
-def test_partner_me_patch_updates_both_display_name_and_location(
-    partner_setup: PartnerSetup,
-) -> None:
+def test_partner_me_patch_never_changes_the_name(partner_setup: PartnerSetup) -> None:
     profile, client = _setup_partner_profile(partner_setup)
+    original_name = profile.display_name
 
     response = client.patch(
         ME_URL,
@@ -135,11 +135,11 @@ def test_partner_me_patch_updates_both_display_name_and_location(
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
-    assert data["display_name"] == "Ravi Electrical Works"
+    assert data["display_name"] == original_name
     assert data["default_location_text"] == "Gachibowli Stadium Road"
 
     profile.refresh_from_db()
-    assert profile.display_name == "Ravi Electrical Works"
+    assert profile.display_name == original_name
     assert profile.default_location_text == "Gachibowli Stadium Road"
 
 
@@ -153,7 +153,7 @@ def test_partner_me_patch_empty_payload_fails_validation(partner_setup: PartnerS
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert "Provide display_name and/or default_location_text." in str(response.json())
+    assert "Provide default_location_text." in str(response.json())
 
 
 def test_partner_me_patch_rejects_exceedingly_long_location(partner_setup: PartnerSetup) -> None:

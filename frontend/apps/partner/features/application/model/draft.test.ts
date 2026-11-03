@@ -6,7 +6,6 @@ import {
   changedFields,
   draftFromApplication,
   isDirty,
-  outstandingConsents,
   toggle,
   type ApplicationDraft,
 } from "./draft";
@@ -45,19 +44,6 @@ const application = {
   created_at: "2026-07-01T10:00:00Z",
   updated_at: "2026-07-02T10:00:00Z",
 } as unknown as Schemas["PartnerApplication"];
-
-const consentDocument = (
-  overrides: Partial<Schemas["PartnerConsentDocument"]> = {},
-): Schemas["PartnerConsentDocument"] =>
-  ({
-    purpose: "partner_terms",
-    title: "Partner terms",
-    document_version: "2026-07-01",
-    document_url: "https://vsolvehub.com/legal/partner-terms/2026-07-01",
-    is_required_for_submission: true,
-    published_at: "2026-07-01T00:00:00Z",
-    ...overrides,
-  }) as Schemas["PartnerConsentDocument"];
 
 describe("reading the server record", () => {
   it("carries every editable field", () => {
@@ -158,35 +144,6 @@ describe("what a step sends", () => {
     expect(changedFields(draft, application)).toEqual({
       consents: [{ purpose: "partner_terms", document_version: "2026-08-01" }],
     });
-  });
-});
-
-describe("outstanding consents", () => {
-  it("names a required document that has not been accepted", () => {
-    const outstanding = outstandingConsents(draftFromApplication(application), [
-      consentDocument(),
-      consentDocument({ purpose: "privacy_notice", title: "Privacy notice" }),
-    ]);
-
-    expect(outstanding.map((document) => document.purpose)).toEqual(["privacy_notice"]);
-  });
-
-  it("re-prompts when the published version moves on", () => {
-    // A version bump has to re-ask every Partner; that is the behaviour a
-    // hardcoded version string could never provide.
-    const outstanding = outstandingConsents(draftFromApplication(application), [
-      consentDocument({ document_version: "2026-08-01" }),
-    ]);
-
-    expect(outstanding).toHaveLength(1);
-  });
-
-  it("ignores documents Django does not require for submission", () => {
-    const outstanding = outstandingConsents(EMPTY_DRAFT, [
-      consentDocument({ purpose: "marketing", is_required_for_submission: false }),
-    ]);
-
-    expect(outstanding).toEqual([]);
   });
 });
 

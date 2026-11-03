@@ -39,7 +39,11 @@ urlpatterns = [
         KillSwitchReleaseView.as_view(),
         name="operations-kill-switch-release",
     ),
-    path("dev/onesignal/test-push/", DevOneSignalTestPushView.as_view(), name="dev-onesignal-test-push"),
+    path(
+        "dev/onesignal/test-push/",
+        DevOneSignalTestPushView.as_view(),
+        name="dev-onesignal-test-push",
+    ),
     path(
         "customer/push-subscriptions/sync/",
         CustomerPushSubscriptionSyncView.as_view(),
@@ -61,4 +65,3 @@ urlpatterns = [
         name="partner-push-notification-preferences",
     ),
 ]
-

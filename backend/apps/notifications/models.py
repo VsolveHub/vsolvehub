@@ -213,6 +213,7 @@ class NotificationDelivery(models.Model):
             raise ValueError("Notification delivery attempts are immutable.")
         super().save(*args, **kwargs)
 
+
 class CustomerPushSubscription(models.Model):
     """Stores the verified OneSignal Web Push subscription state for customers."""
 
@@ -281,7 +282,6 @@ class CustomerPushSubscription(models.Model):
         return f"{self.user_id}:{self.onesignal_subscription_id}:{state}"
 
 
-
 class PushNotificationPreference(models.Model):
     """User preference per push notification category.
 
@@ -297,14 +297,20 @@ class PushNotificationPreference(models.Model):
     class Category(models.TextChoices):
         # Customer categories
         BOOKING_UPDATES = "BOOKING_UPDATES", "Booking Updates"
-        DISPATCH_AND_ASSIGNMENT_UPDATES = "DISPATCH_AND_ASSIGNMENT_UPDATES", "Dispatch & Assignment Updates"
+        DISPATCH_AND_ASSIGNMENT_UPDATES = (
+            "DISPATCH_AND_ASSIGNMENT_UPDATES",
+            "Dispatch & Assignment Updates",
+        )
         ARRIVAL_AND_OTP_ALERTS = "ARRIVAL_AND_OTP_ALERTS", "Arrival & OTP Alerts"
         ACCOUNT_SECURITY = "ACCOUNT_SECURITY", "Account Security"
         OFFERS_AND_PROMOTIONS = "OFFERS_AND_PROMOTIONS", "Offers & Promotions"
 
         # Partner categories
         JOB_AND_DISPATCH_ALERTS = "JOB_AND_DISPATCH_ALERTS", "Job & Dispatch Alerts"
-        SHIFT_AND_AVAILABILITY_REMINDERS = "SHIFT_AND_AVAILABILITY_REMINDERS", "Shift & Availability Reminders"
+        SHIFT_AND_AVAILABILITY_REMINDERS = (
+            "SHIFT_AND_AVAILABILITY_REMINDERS",
+            "Shift & Availability Reminders",
+        )
         PRODUCT_UPDATES = "PRODUCT_UPDATES", "Product Updates"
 
     CATEGORY_METADATA = {
@@ -396,9 +402,9 @@ class PushNotificationPreference(models.Model):
         return f"{self.user_id}:{self.role}:{self.category}:{state}"
 
     @classmethod
-    def is_category_enabled(cls, user, role: str, category: str) -> bool:
+    def is_category_enabled(cls, user: Any, role: str, category: str) -> bool:
         """Return whether a category is enabled for a user and role.
-        
+
         ACCOUNT_SECURITY cannot be disabled.
         If a record does not exist, return the default for that category.
         """
@@ -407,10 +413,9 @@ class PushNotificationPreference(models.Model):
 
         role_meta = cls.CATEGORY_METADATA.get(role, {})
         cat_meta = role_meta.get(category, {})
-        default_val = cat_meta.get("default_enabled", True)
+        default_val = bool(cat_meta.get("default_enabled", True))
 
         pref = cls.objects.filter(user=user, role=role, category=category).first()
         if pref is not None:
             return pref.is_enabled
         return default_val
-

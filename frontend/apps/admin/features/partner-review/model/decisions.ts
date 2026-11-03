@@ -54,7 +54,7 @@ const APPROVE: ReviewAction = {
   target: "APPROVED",
   label: "Approve",
   consequence:
-    "The Partner may publish hours and receive job offers for the services and areas on this application.",
+    "The Partner receives job offers for the services, areas and working hours on this application. Any note stays in the record.",
   requiresReason: false,
   tone: "primary",
 };
@@ -88,7 +88,7 @@ const OFFBOARD: ReviewAction = {
 const REINSTATE: ReviewAction = {
   target: "APPROVED",
   label: "Reinstate",
-  consequence: "The Partner may receive offers again.",
+  consequence: "The Partner may receive offers again. Your reason stays in the record.",
   requiresReason: true,
   tone: "primary",
 };

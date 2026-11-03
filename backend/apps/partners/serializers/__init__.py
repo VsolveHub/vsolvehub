@@ -64,6 +64,7 @@ from .m2 import (
     ProgressiveGateSerializer,
 )
 from .onboarding import (
+    APPLICANT_AUDIENCE,
     ExpectedVersionSerializer,
     OperationsApplicationQueueItemSerializer,
     OperationsApplicationQueuePageSerializer,
@@ -89,6 +90,7 @@ from .onboarding import (
 )
 
 __all__ = [
+    "APPLICANT_AUDIENCE",
     "BusinessTypeOptionSerializer",
     "CapabilityOptionSerializer",
     "CapabilityOptionsSerializer",
@@ -149,6 +151,7 @@ __all__ = [
     "PartnerPresenceSessionRequestSerializer",
     "PartnerProfileSerializer",
     "PartnerProfileUpdateSerializer",
+    "PartnerPushSubscriptionSyncSerializer",
     "PartnerScheduleSerializer",
     "PartnerScheduleUpdateSerializer",
     "PartnerSkillChipSerializer",

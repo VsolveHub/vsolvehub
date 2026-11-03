@@ -10,7 +10,6 @@ flow in `apps.fulfilment.cancellation` and the A5 visit grid in
 those callers differ on, and the loop itself has exactly one home.
 """
 
-import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -20,8 +19,6 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.core import signing
 from django.utils import timezone
-
-from apps.partners.models import PartnerOnlineSession
 
 from apps.carts.availability import (
     AvailabilitySnapshot,

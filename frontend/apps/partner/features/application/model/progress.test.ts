@@ -27,6 +27,9 @@ const EMPTY = {
   consents: [],
   documents: [],
   transitions: [],
+  can_edit: true,
+  required_document_kinds: ["GOVERNMENT_ID"],
+  consents_complete: false,
   change_request_message: null,
   submitted_at: null,
   reviewed_at: null,
@@ -54,7 +57,8 @@ const COMPLETE = {
   service_variant_ids: ["var-1"],
   service_area_ids: ["area-1"],
   consents: [{ purpose: "PARTNER_TERMS", document_version: "2026-07", withdrawn_at: null }],
-  documents: withDocuments(["GOVERNMENT_ID", "ADDRESS_PROOF"]),
+  consents_complete: true,
+  documents: withDocuments(["GOVERNMENT_ID"]),
 } as unknown as Application;
 
 const COMPLETE_SCHEDULE = {
@@ -73,21 +77,19 @@ const COMPLETE_SCHEDULE = {
 } as unknown as Schemas["PartnerSchedule"];
 
 describe("what counts as a step", () => {
-  it("excludes the overview and the review screen from the denominator", () => {
+  it("excludes only the overview from the denominator", () => {
     /*
-      They collect nothing — they are the way in and the way out. Counting them
-      would make "4 of 8" mean something different from "2 things left to do",
-      and an applicant would be reading two numbers that never agree.
+      The overview collects nothing: it is the way in. The last step is a real
+      step, because the agreements are accepted there.
     */
     const summary = progressSummary(COMPLETE, COMPLETE_SCHEDULE);
     const steps = stepProgress(COMPLETE, COMPLETE_SCHEDULE);
 
     expect(steps.filter((step) => step.state === "waypoint").map((step) => step.href)).toEqual([
       "/apply",
-      "/apply/review",
     ]);
-    expect(summary.total).toBe(6);
-    expect(summary.done).toBe(6);
+    expect(summary.total).toBe(5);
+    expect(summary.done).toBe(5);
   });
 
   it("marks schedule step as todo until working hours are configured", () => {
@@ -119,8 +121,8 @@ describe("a brand-new applicant", () => {
 describe("partial progress", () => {
   it("counts a step done only when everything it collects is present", () => {
     /*
-      `/apply/work` carries both SKILLS and SERVICES. One of them being satisfied
-      is not the step being finished.
+      `/apply/work` carries SKILLS, SERVICES and SERVICE_AREAS. One of them being
+      satisfied is not the step being finished.
     */
     const halfWork = {
       ...EMPTY,
@@ -135,7 +137,7 @@ describe("partial progress", () => {
 
     expect(about?.state).toBe("done");
     expect(work?.state).toBe("todo");
-    expect(work?.outstanding).toBe(1);
+    expect(work?.outstanding).toBe(2);
   });
 
   it("keeps About you open until experience is entered", () => {
@@ -161,12 +163,12 @@ describe("partial progress", () => {
 
 describe("stepping backwards", () => {
   it("gives the previous step in the sequence", () => {
-    expect(previousStep("/apply/areas")?.href).toBe("/apply/work");
+    expect(previousStep("/apply/schedule")?.href).toBe("/apply/work");
     expect(previousStep("/apply/work")?.href).toBe("/apply/about");
   });
 
   it("tolerates a trailing slash, because Next produces either form", () => {
-    expect(previousStep("/apply/areas/")?.href).toBe("/apply/work");
+    expect(previousStep("/apply/schedule/")?.href).toBe("/apply/work");
   });
 
   it("has nowhere to go back to from the first step", () => {

@@ -13,7 +13,6 @@ from apps.assignments.tasks import (
     send_dispatch_offer_task,
 )
 from apps.carts.models import BookingGroup
-from apps.commerce.models import Booking
 from tests.fulfilment.conftest import create_booked_group
 
 pytestmark = [

@@ -517,6 +517,7 @@ class BookingGroup(models.Model):
         choices=FulfilmentPlan.ConfirmationPolicy.choices,
         default=FulfilmentPlan.ConfirmationPolicy.ALL_OR_NOTHING,
     )
+
     class BookingMode(models.TextChoices):
         INSTANT = "INSTANT", "Instant"
         SCHEDULED = "SCHEDULED", "Scheduled"
