@@ -1,18 +1,21 @@
-// Ported faithfully from frontend/apps/partner/features/application/view/apply-shell.tsx
+// Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
-import { Logo, Text, cn } from "@vsolve/mobile-ui";
+import { Logo, Text } from "@vsolve/mobile-ui";
 import { Slot, usePathname, useRouter } from "expo-router";
 import {
-  Check,
   ChevronLeft,
-  ListChecks,
+  ChevronRight,
+  HelpCircle,
   LogOut,
+  Phone,
+  Send,
   X,
 } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -25,10 +28,9 @@ import {
 import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
 import {
   previousStep,
-  progressSummary,
   stepProgress,
-  type StepProgress,
 } from "@/features/application/model/progress";
+import { APPLICATION_STEPS } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
 
 export default function ApplyLayout() {
@@ -37,8 +39,9 @@ export default function ApplyLayout() {
   const signOut = useMobileLogout("/login?next=%2Fapply");
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [dockConfig, setDockConfig] = useState<DockConfig | null>(null);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const onCommitRef = useRef<(() => void) | null>(null);
 
@@ -75,698 +78,756 @@ export default function ApplyLayout() {
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = missing ? null : (query.data ?? null);
 
-  const steps = stepProgress(application);
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
   const back = isSubmitted ? null : previousStep(pathname);
-  const currentStepIdx = steps.findIndex((s) => s.href === pathname);
+
+  // Find current step index in the 4-step sequence
+  const currentStepIdx = Math.max(
+    0,
+    APPLICATION_STEPS.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
+  );
+  const currentStep = APPLICATION_STEPS[currentStepIdx] ?? APPLICATION_STEPS[0];
+
+  // User initial (e.g. "W" for webaura)
+  const initialLetter = (application?.display_name || "W").trim()[0]?.toUpperCase() || "W";
 
   return (
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
-      <View style={{ flex: 1, backgroundColor: "#fbf9f6", minHeight: "100%" }}>
-      {/* Floating Dynamic-Island Navigation Bar Matching Web */}
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
-          top: isDesktop ? 12 : 10,
-          left: 0,
-          right: 0,
-          zIndex: 50,
-          paddingHorizontal: isDesktop ? 24 : 12,
-        }}
-      >
-        <View
-          style={{
-            maxWidth: width >= 1280 ? 1280 : 1152, // max-w-6xl xl:max-w-7xl
-            width: "100%",
-            marginHorizontal: "auto",
-            borderRadius: 9999,
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
-            borderWidth: 1,
-            borderColor: "#d3ccc0", // border-line-strong
-            paddingHorizontal: isDesktop ? 22 : 16,
-            paddingVertical: isDesktop ? 14 : 12,
-            minHeight: isDesktop ? 60 : 54,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            ...(Platform.OS === "web"
-              ? ({
-                  backdropFilter: "blur(24px)",
-                  WebkitBackdropFilter: "blur(24px)",
-                  boxShadow:
-                    "0 12px 32px rgba(0, 17, 46, 0.12), 0 1px 3px rgba(0, 0, 0, 0.05)",
-                } as any)
-              : {
-                  elevation: 8,
-                  shadowColor: "#00112e",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.12,
-                  shadowRadius: 16,
-                }),
-          }}
-        >
-          {/* Left: Brand + Now Onboarding Tag */}
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {back !== null && pathname !== "/apply" ? (
+      <View style={styles.rootContainer}>
+        {/* Top Header */}
+        <View style={styles.headerContainer}>
+          <View style={[styles.headerInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
+            {/* Left: Back button or placeholder */}
+            {back !== null && currentStepIdx > 0 ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 onPress={() => router.push(back.href as any)}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 9999,
-                  backgroundColor: "#f4f1ec",
-                  borderWidth: 1,
-                  borderColor: "#d3ccc0",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 8,
-                }}
+                style={({ pressed }) => [
+                  styles.backButton,
+                  pressed ? styles.backButtonPressed : null,
+                ]}
               >
-                <ChevronLeft size={16} color="#00112e" />
+                <ChevronLeft size={22} color="#00112e" />
               </Pressable>
-            ) : null}
+            ) : (
+              <View style={styles.backPlaceholder} />
+            )}
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/apply")}
-              style={{ flexDirection: "row", alignItems: "center", minHeight: 36 }}
-            >
+            {/* Center: VSolve Hub Logo */}
+            <View style={styles.logoCenter}>
               <Logo />
-            </Pressable>
-
-            {/* Desktop City Pill */}
-            {isDesktop ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  columnGap: 8,
-                  borderRadius: 9999,
-                  backgroundColor: "#f4f1ec", // bg-surface-sunken
-                  borderWidth: 1,
-                  borderColor: "#e7e2da", // border-line
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  marginLeft: 12,
-                }}
-              >
-                {/* Pulsing Green Dot */}
-                <View style={{ width: 8, height: 8, position: "relative", alignItems: "center", justifyContent: "center" }}>
-                  <View
-                    style={{
-                      position: "absolute",
-                      width: 8,
-                      height: 8,
-                      borderRadius: 9999,
-                      backgroundColor: "#34d399",
-                      opacity: 0.75,
-                    }}
-                  />
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 9999,
-                      backgroundColor: "#059669",
-                    }}
-                  />
-                </View>
-                <Text style={{ fontSize: 11, color: "#453f37", fontWeight: "500", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                  Now onboarding:{" "}
-                  <Text style={{ fontWeight: "700", color: "#00112e" }}>Hyderabad</Text>
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Desktop Center: Registration Hub Capsule */}
-          {isDesktop ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                columnGap: 8,
-                borderRadius: 9999,
-                backgroundColor: "rgba(244, 241, 236, 0.8)", // bg-surface-sunken/80
-                borderWidth: 1,
-                borderColor: "#d3ccc0", // border-line-strong
-                paddingHorizontal: 16,
-                paddingVertical: 7,
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "800", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                {isSubmitted
-                  ? "Application Submitted"
-                  : pathname === "/apply"
-                  ? "Registration Hub"
-                  : currentStepIdx >= 0
-                  ? `Step ${currentStepIdx + 1} of ${steps.length}`
-                  : "Application"}
-              </Text>
-              <Text style={{ fontSize: 12, color: "#a89f90" }}>•</Text>
-              <Text style={{ fontSize: 12, fontWeight: "500", color: "#453f37", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                Desktop Verification Mode
-              </Text>
             </View>
-          ) : null}
 
-          {/* Right: Steps, Overview & Sign Out */}
-          <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8 }}>
-            {!isSubmitted ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Steps"
-                onPress={() => setSheetOpen(true)}
-                style={({ pressed }) => ({
-                  height: 36,
-                  paddingHorizontal: isDesktop ? 14 : 10,
-                  width: isDesktop ? undefined : 36,
-                  borderRadius: 9999,
-                  backgroundColor: pressed ? "#ffffff" : "#f4f1ec", // bg-surface-sunken
-                  borderWidth: 1,
-                  borderColor: "#d3ccc0", // border-line-strong
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  columnGap: 6,
-                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-                })}
-              >
-                <ListChecks size={15} color="#00112e" />
-                {isDesktop ? (
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                    Steps
-                  </Text>
-                ) : null}
-              </Pressable>
-            ) : null}
-
-            {isDesktop ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Overview"
-                onPress={() => router.push("/apply")}
-                style={({ pressed }) => ({
-                  height: 36,
-                  paddingHorizontal: 16,
-                  borderRadius: 9999,
-                  backgroundColor: pressed ? "#ffffff" : "#f4f1ec", // bg-surface-sunken
-                  borderWidth: 1,
-                  borderColor: "#d3ccc0", // border-line-strong
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                  Overview
-                </Text>
-              </Pressable>
-            ) : null}
-
+            {/* Right: Circular User Initial Badge */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Sign Out"
-              onPress={() => void signOut()}
-              style={({ pressed }) => ({
-                height: 36,
-                paddingHorizontal: 14,
-                borderRadius: 9999,
-                backgroundColor: pressed ? "#ffe4e6" : "#fff1f2", // bg-rose-50
-                borderWidth: 1,
-                borderColor: "rgba(254, 205, 211, 0.9)", // border-rose-200/90
-                flexDirection: "row",
-                alignItems: "center",
-                columnGap: 6,
-                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-              })}
+              accessibilityLabel="Partner profile & options"
+              onPress={() => setProfileModalOpen(true)}
+              style={({ pressed }) => [
+                styles.avatarBadge,
+                pressed ? styles.avatarBadgePressed : null,
+              ]}
             >
-              <LogOut size={14} color="#be123c" />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#be123c", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                Sign Out
-              </Text>
+              <Text style={styles.avatarText}>{initialLetter}</Text>
             </Pressable>
           </View>
+
+          {/* Segmented 4-Step Progress Bar */}
+          <View style={[styles.progressRow, { maxWidth: isDesktop ? 672 : "100%" }]}>
+            {APPLICATION_STEPS.map((step, idx) => (
+              <View
+                key={step.href}
+                style={[
+                  styles.progressBarSegment,
+                  {
+                    backgroundColor: idx <= currentStepIdx ? "#ea580c" : "#e2e8f0",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Step Counter Label */}
+          <View style={[styles.stepLabelRow, { maxWidth: isDesktop ? 672 : "100%" }]}>
+            <Text style={styles.stepLabelText}>
+              Step {currentStepIdx + 1} of {APPLICATION_STEPS.length} • {currentStep.label}
+            </Text>
+          </View>
         </View>
+
+        {/* Scrollable Main Content */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isDesktop ? 672 : "100%",
+              paddingBottom: dockConfig ? 130 : 50,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Slot />
+        </ScrollView>
+
+        {/* Fixed Bottom Action Dock */}
+        {dockConfig ? (
+          <View style={styles.dockContainer}>
+            <View style={[styles.dockInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
+              {/* Conflict / Error alerts if any */}
+              {dockConfig.conflict ? (
+                <View style={styles.conflictBanner}>
+                  <Text style={styles.conflictTitle}>Someone else changed this application</Text>
+                  <Text style={styles.conflictSubtitle}>
+                    We reloaded the latest version so you can review before continuing.
+                  </Text>
+                </View>
+              ) : null}
+
+              {dockConfig.failed ? (
+                <View style={styles.failedBanner}>
+                  <Text style={styles.failedTitle}>We could not save this</Text>
+                  <Text style={styles.failedSubtitle}>
+                    Check your internet connection and try again.
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Main Dock Row: "Need help?" on left, "Continue ->" on right */}
+              <View style={styles.dockActionRow}>
+                {/* Left: Need help? */}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setHelpModalOpen(true)}
+                  style={({ pressed }) => [
+                    styles.helpButton,
+                    pressed ? { opacity: 0.7 } : null,
+                  ]}
+                >
+                  <Text style={styles.helpButtonText}>Need help?</Text>
+                </Pressable>
+
+                {/* Right: Continue -> (or Submit) */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={dockConfig.label}
+                  disabled={dockConfig.proceedDisabled || dockConfig.isSaving}
+                  onPress={() => onCommitRef.current?.()}
+                  style={({ pressed }) => [
+                    styles.continueButton,
+                    dockConfig.proceedDisabled
+                      ? styles.continueButtonDisabled
+                      : pressed
+                      ? styles.continueButtonPressed
+                      : styles.continueButtonActive,
+                  ]}
+                >
+                  {dockConfig.isSaving ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <>
+                      <Text style={styles.continueButtonText}>{dockConfig.label}</Text>
+                      <Text style={styles.continueButtonArrow}>{"->"}</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Need Help Modal */}
+        <Modal
+          visible={helpModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setHelpModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.helpModalCard}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderLeft}>
+                  <HelpCircle size={22} color="#ea580c" />
+                  <Text style={styles.modalHeaderTitle}>Need help onboarding?</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setHelpModalOpen(false)}
+                  style={styles.modalCloseIcon}
+                >
+                  <X size={20} color="#64748b" />
+                </Pressable>
+              </View>
+
+              <Text style={styles.helpModalDescription}>
+                Our partner operations team is here to assist you with your document submission, profile verification, and registration questions.
+              </Text>
+
+              <View style={styles.helpActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setHelpModalOpen(false);
+                    void Linking.openURL("tel:+918008765832");
+                  }}
+                  style={styles.helpPrimaryAction}
+                >
+                  <Phone size={18} color="#ffffff" />
+                  <Text style={styles.helpPrimaryActionText}>Call Support (+91 8008765832)</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setHelpModalOpen(false);
+                    void Linking.openURL("https://wa.me/918008765832");
+                  }}
+                  style={styles.helpSecondaryAction}
+                >
+                  <Send size={18} color="#ea580c" />
+                  <Text style={styles.helpSecondaryActionText}>WhatsApp Partner Support</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setHelpModalOpen(false)}
+                  style={styles.helpDismissButton}
+                >
+                  <Text style={styles.helpDismissButtonText}>Dismiss</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* User Profile / Steps Sheet Modal */}
+        <Modal
+          visible={profileModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setProfileModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.profileModalCard}>
+              <View style={styles.modalHeader}>
+                <View style={styles.profileHeaderInfo}>
+                  <View style={styles.avatarBadgeLarge}>
+                    <Text style={styles.avatarTextLarge}>{initialLetter}</Text>
+                  </View>
+                  <View style={{ marginLeft: 12 }}>
+                    <Text style={styles.profileNameText}>
+                      {application?.display_name || "Partner Applicant"}
+                    </Text>
+                    <Text style={styles.profileStatusText}>
+                      Status: {application?.status || "DRAFT"}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setProfileModalOpen(false)}
+                  style={styles.modalCloseIcon}
+                >
+                  <X size={20} color="#64748b" />
+                </Pressable>
+              </View>
+
+              <Text style={styles.sheetSectionTitle}>Onboarding Steps</Text>
+
+              <View style={styles.stepsList}>
+                {APPLICATION_STEPS.map((step, idx) => {
+                  const isCurrent = idx === currentStepIdx;
+                  return (
+                    <Pressable
+                      key={step.href}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setProfileModalOpen(false);
+                        router.push(step.href as any);
+                      }}
+                      style={[
+                        styles.stepItem,
+                        isCurrent ? styles.stepItemCurrent : null,
+                      ]}
+                    >
+                      <View style={styles.stepItemLeft}>
+                        <View
+                          style={[
+                            styles.stepNumberBadge,
+                            isCurrent
+                              ? styles.stepNumberBadgeCurrent
+                              : idx < currentStepIdx
+                              ? styles.stepNumberBadgeDone
+                              : styles.stepNumberBadgeFuture,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepNumberText,
+                              isCurrent
+                                ? { color: "#ffffff" }
+                                : idx < currentStepIdx
+                                ? { color: "#ffffff" }
+                                : { color: "#64748b" },
+                            ]}
+                          >
+                            {idx + 1}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.stepItemLabel,
+                            isCurrent ? { fontWeight: "700", color: "#00112e" } : null,
+                          ]}
+                        >
+                          {step.label}
+                        </Text>
+                      </View>
+                      <ChevronRight size={16} color="#94a3b8" />
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Sign Out Button */}
+              <View style={styles.profileModalFooter}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign Out"
+                  onPress={() => {
+                    setProfileModalOpen(false);
+                    void signOut();
+                  }}
+                  style={({ pressed }) => [
+                    styles.signOutButton,
+                    pressed ? { backgroundColor: "#ffe4e6" } : null,
+                  ]}
+                >
+                  <LogOut size={16} color="#be123c" />
+                  <Text style={styles.signOutButtonText}>Sign Out</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
-
-      {/* Main Form Scroll View with ample clearance matching web's pt-24 sm:pt-28 lg:pt-32 */}
-      <ScrollView
-        style={{ flex: 1, backgroundColor: "#fbf9f6" }}
-        contentContainerStyle={{
-          maxWidth: width >= 1280 ? 1152 : isDesktop ? 1024 : 672,
-          width: "100%",
-          marginHorizontal: "auto",
-          paddingHorizontal: isDesktop ? 32 : 16,
-          paddingTop: isDesktop ? 128 : 96,
-          paddingBottom: dockConfig ? 160 : 64,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Slot />
-      </ScrollView>
-
-      {/* Fixed Bottom Action Dock Matching Web Reference UI */}
-      {dockConfig ? (
-        <View
-          style={{
-            position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 40,
-            backgroundColor: "rgba(255, 255, 255, 0.96)",
-            borderTopWidth: 1,
-            borderColor: "#e7e2da",
-            ...(Platform.OS === "web"
-              ? ({
-                  backdropFilter: "blur(16px)",
-                  WebkitBackdropFilter: "blur(16px)",
-                  boxShadow: "0 -4px 20px rgba(0, 17, 46, 0.08)",
-                } as any)
-              : {
-                  elevation: 16,
-                  shadowColor: "#00112e",
-                  shadowOffset: { width: 0, height: -4 },
-                  shadowOpacity: 0.08,
-                  shadowRadius: 16,
-                }),
-          }}
-        >
-          <View
-            style={{
-              maxWidth: width >= 1280 ? 1152 : isDesktop ? 1024 : 672,
-              width: "100%",
-              marginHorizontal: "auto",
-              paddingHorizontal: isDesktop ? 32 : 16,
-              paddingTop: 12,
-              paddingBottom: Platform.OS === "web" ? "calc(env(safe-area-inset-bottom, 0px) + 12px)" : 16,
-              flexDirection: "column",
-              rowGap: 8,
-            }}
-          >
-            {dockConfig.conflict ? (
-              <View style={{ borderRadius: 8, backgroundColor: "#fffbeb", padding: 10, borderWidth: 1, borderColor: "#fef3c7" }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#92400e" }}>
-                  Someone else changed this application
-                </Text>
-                <Text style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>
-                  We have reloaded the latest version so you can see it before saving again.
-                </Text>
-              </View>
-            ) : null}
-
-            {dockConfig.refusal ? (
-              <View style={{ borderRadius: 8, backgroundColor: "#fff7ed", padding: 10, borderWidth: 1, borderColor: "#ffedd5" }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#c2410c" }}>
-                  {dockConfig.refusal.title}
-                </Text>
-                <Text style={{ fontSize: 12, color: "#9a3412", marginTop: 2 }}>
-                  {dockConfig.refusal.message}
-                </Text>
-              </View>
-            ) : null}
-
-            {dockConfig.failed ? (
-              <View style={{ borderRadius: 8, backgroundColor: "#fef2f2", padding: 10, borderWidth: 1, borderColor: "#fee2e2" }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#991b1b" }}>
-                  We could not save this
-                </Text>
-                <Text style={{ fontSize: 12, color: "#b91c1c", marginTop: 2 }}>
-                  Nothing was changed. Check your connection and try again.
-                </Text>
-              </View>
-            ) : null}
-
-            {dockConfig.fieldMessages.length > 0 ? (
-              <View style={{ flexDirection: "column", rowGap: 4 }}>
-                {dockConfig.fieldMessages.map((msg) => (
-                  <Text key={msg} style={{ fontSize: 13, fontWeight: "600", color: "#be123c" }}>
-                    {msg}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-
-            {dockConfig.saved && !dockConfig.conflict && !dockConfig.failed ? (
-              <Text style={{ textAlign: "center", fontSize: 13, fontWeight: "700", color: "#15803d" }}>
-                ✓ Changes saved securely.
-              </Text>
-            ) : null}
-
-            {/* Buttons Row */}
-            <View style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                onPress={() => router.push(dockConfig.backHref as any)}
-                style={({ pressed }) => ({
-                  height: 48,
-                  paddingHorizontal: 24,
-                  borderRadius: 12,
-                  backgroundColor: pressed ? "#f4f1ec" : "#ffffff",
-                  borderWidth: 1,
-                  borderColor: "#d3ccc0",
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                  Back
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={dockConfig.label}
-                disabled={dockConfig.proceedDisabled || dockConfig.isSaving}
-                onPress={() => onCommitRef.current?.()}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  height: 48,
-                  borderRadius: 12,
-                  backgroundColor: dockConfig.proceedDisabled
-                    ? "#fed7aa"
-                    : pressed
-                    ? "#ea580c"
-                    : "#ff6a00",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 2px 4px rgba(255, 106, 0, 0.25)",
-                  opacity: dockConfig.proceedDisabled ? 0.6 : 1,
-                })}
-              >
-                {dockConfig.isSaving ? (
-                  <ActivityIndicator color="#00112e" size="small" />
-                ) : (
-                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-                    {dockConfig.label}
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-
-            {dockConfig.nextStepName ? (
-              <Text
-                style={{
-                  textAlign: "center",
-                  fontSize: 11,
-                  fontWeight: "600",
-                  color: "#78716c",
-                  marginTop: 4,
-                  fontFamily: "system-ui, -apple-system, sans-serif",
-                }}
-              >
-                Auto-saves as you type • Tap to proceed to {dockConfig.nextStepName}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
-
-      {/* Centered Steps Pop-up Dialog Matching Web Exact UI */}
-      <Modal
-        visible={sheetOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSheetOpen(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 16,
-            paddingVertical: 24,
-            backgroundColor: "rgba(0, 17, 46, 0.45)",
-            ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
-          }}
-        >
-          {/* Backdrop dismiss */}
-          <Pressable
-            accessibilityLabel="Close dialog backdrop"
-            onPress={() => setSheetOpen(false)}
-            style={StyleSheet.absoluteFill}
-          />
-
-          {/* Centered Modal Card */}
-          <View
-            style={{
-              width: "100%",
-              maxWidth: 440,
-              maxHeight: "90%",
-              borderRadius: 24,
-              backgroundColor: "#ffffff",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              padding: 24,
-              boxShadow: "0 24px 64px rgba(0, 17, 46, 0.25)",
-              elevation: 24,
-            }}
-          >
-            {/* Modal Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                marginBottom: 6,
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "800",
-                    color: "#00112e",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
-                  }}
-                >
-                  Your application
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#64748b",
-                    marginTop: 3,
-                    fontFamily: "system-ui, -apple-system, sans-serif",
-                  }}
-                >
-                  Fill these in any order. Everything saves as you go.
-                </Text>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close steps dialog"
-                onPress={() => setSheetOpen(false)}
-                style={({ pressed }) => ({
-                  width: 32,
-                  height: 32,
-                  borderRadius: 9999,
-                  backgroundColor: pressed ? "#f1f5f9" : "transparent",
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <X size={18} color="#64748b" />
-              </Pressable>
-            </View>
-
-            {/* Steps List */}
-            <ScrollView
-              style={{ maxHeight: 380, marginTop: 10 }}
-              contentContainerStyle={{ rowGap: 8, paddingVertical: 4 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {steps.map((step) => {
-                const isCurrent = step.href === pathname;
-                return (
-                  <Pressable
-                    key={step.href}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setSheetOpen(false);
-                      router.push(step.href as any);
-                    }}
-                    style={({ pressed }) => ({
-                      flexDirection: "row",
-                      alignItems: "center",
-                      columnGap: 12,
-                      paddingVertical: 10,
-                      borderRadius: 14,
-                      backgroundColor: isCurrent
-                        ? "#f0f4ff"
-                        : pressed
-                        ? "#f8fafc"
-                        : "transparent",
-                      borderWidth: isCurrent ? 1 : 0,
-                      borderColor: isCurrent ? "#c7d7fe" : "transparent",
-                      paddingHorizontal: 12,
-                    })}
-                  >
-                    <StepMark state={step.state} isCurrent={isCurrent} />
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontWeight: isCurrent ? "800" : "600",
-                          color: "#00112e",
-                          fontFamily: "system-ui, -apple-system, sans-serif",
-                        }}
-                      >
-                        {step.label}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: "#64748b",
-                          marginTop: 1,
-                          fontFamily: "system-ui, -apple-system, sans-serif",
-                        }}
-                      >
-                        {describe(step, isCurrent)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Bottom Sign Out Button */}
-            <View style={{ marginTop: 14, borderTopWidth: 1, borderColor: "#f1f5f9", paddingTop: 14 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Sign Out"
-                onPress={() => {
-                  setSheetOpen(false);
-                  void signOut();
-                }}
-                style={({ pressed }) => ({
-                  width: "100%",
-                  height: 42,
-                  borderRadius: 14,
-                  backgroundColor: pressed ? "#ffe4e6" : "#fff1f2",
-                  borderWidth: 1,
-                  borderColor: "rgba(254, 205, 211, 0.9)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexDirection: "row",
-                  columnGap: 8,
-                })}
-              >
-                <LogOut size={15} color="#be123c" />
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: "#be123c",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
-                  }}
-                >
-                  Sign Out
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
     </ApplyDockContext.Provider>
   );
 }
 
-function StepMark({ state, isCurrent }: { state: StepProgress["state"]; isCurrent?: boolean }) {
-  if (state === "done") {
-    return (
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 9999,
-          backgroundColor: "#10b981",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Check size={13} color="#ffffff" strokeWidth={3} />
-      </View>
-    );
-  }
-
-  if (isCurrent || state === "waypoint") {
-    return (
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 9999,
-          borderWidth: 2,
-          borderColor: isCurrent ? "#64748b" : "#94a3b8",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "transparent",
-        }}
-      >
-        <View
-          style={{
-            width: isCurrent ? 6 : 5,
-            height: isCurrent ? 6 : 5,
-            borderRadius: 9999,
-            backgroundColor: isCurrent ? "#00112e" : "#64748b",
-          }}
-        />
-      </View>
-    );
-  }
-
-  if (state === "todo") {
-    return (
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 9999,
-          borderWidth: 2,
-          borderColor: "#f59e0b",
-          backgroundColor: "transparent",
-        }}
-      />
-    );
-  }
-
-  return (
-    <View
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 9999,
-        borderWidth: 2,
-        borderColor: "#cbd5e1",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <View
-        style={{
-          borderRadius: 9999,
-          backgroundColor: "#94a3b8",
-          width: state === "optional" ? 8 : 4,
-          height: state === "optional" ? 2 : 4,
-        }}
-      />
-    </View>
-  );
-}
-
-function describe(step: StepProgress, isCurrent: boolean): string {
-  if (step.href === "/apply") return "Where everything stands";
-  if (step.href === "/apply/review") return "Check it, then send it";
-  if (step.state === "optional") return "Optional — you can set this later";
-  if (step.state === "done") return "Done";
-  return step.outstanding === 1 ? "1 thing needed" : `${step.outstanding} things needed`;
-}
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+    backgroundColor: "#fbfaf8",
+    minHeight: "100%",
+  },
+  headerContainer: {
+    backgroundColor: "#fbfaf8",
+    borderBottomWidth: 1,
+    borderColor: "#f1f5f9",
+    paddingTop: Platform.OS === "web" ? 14 : 10,
+    zIndex: 20,
+  },
+  headerInner: {
+    width: "100%",
+    marginHorizontal: "auto",
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    height: 48,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 9999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backButtonPressed: {
+    backgroundColor: "#f1f5f9",
+  },
+  backPlaceholder: {
+    width: 36,
+    height: 36,
+  },
+  logoCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ffedd5",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarBadgePressed: {
+    backgroundColor: "#fed7aa",
+  },
+  avatarText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#ea580c",
+  },
+  progressRow: {
+    width: "100%",
+    marginHorizontal: "auto",
+    flexDirection: "row",
+    columnGap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  progressBarSegment: {
+    flex: 1,
+    height: 4.5,
+    borderRadius: 9999,
+  },
+  stepLabelRow: {
+    width: "100%",
+    marginHorizontal: "auto",
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  stepLabelText: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: "#fbfaf8",
+  },
+  scrollContent: {
+    width: "100%",
+    marginHorizontal: "auto",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  dockContainer: {
+    position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 40,
+    backgroundColor: "rgba(251, 250, 248, 0.98)",
+    borderTopWidth: 1,
+    borderColor: "#f1f5f9",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "web" ? "calc(env(safe-area-inset-bottom, 0px) + 16px)" : 20,
+    ...(Platform.OS === "web"
+      ? ({
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          boxShadow: "0 -4px 16px rgba(0, 17, 46, 0.05)",
+        } as any)
+      : {
+          elevation: 12,
+          shadowColor: "#00112e",
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+        }),
+  },
+  dockInner: {
+    width: "100%",
+    marginHorizontal: "auto",
+    flexDirection: "column",
+    rowGap: 8,
+  },
+  conflictBanner: {
+    borderRadius: 8,
+    backgroundColor: "#fffbeb",
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#fef3c7",
+  },
+  conflictTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400e",
+  },
+  conflictSubtitle: {
+    fontSize: 12,
+    color: "#b45309",
+    marginTop: 2,
+  },
+  failedBanner: {
+    borderRadius: 8,
+    backgroundColor: "#fef2f2",
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#fee2e2",
+  },
+  failedTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#991b1b",
+  },
+  failedSubtitle: {
+    fontSize: 12,
+    color: "#b91c1c",
+    marginTop: 2,
+  },
+  dockActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  helpButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  helpButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#00112e",
+    textDecorationLine: "underline",
+  },
+  continueButton: {
+    height: 46,
+    paddingHorizontal: 26,
+    borderRadius: 9999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 6,
+  },
+  continueButtonActive: {
+    backgroundColor: "#ea580c",
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 2px 8px rgba(234, 88, 12, 0.28)",
+        } as any)
+      : {
+          elevation: 4,
+          shadowColor: "#ea580c",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.28,
+          shadowRadius: 8,
+        }),
+  },
+  continueButtonPressed: {
+    backgroundColor: "#c2410c",
+  },
+  continueButtonDisabled: {
+    backgroundColor: "#cbd5e1",
+  },
+  continueButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  continueButtonArrow: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "flex-end",
+  },
+  helpModalCard: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderColor: "#f1f5f9",
+    paddingBottom: 14,
+  },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 8,
+  },
+  modalHeaderTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#00112e",
+  },
+  modalCloseIcon: {
+    padding: 6,
+    borderRadius: 9999,
+    backgroundColor: "#f1f5f9",
+  },
+  helpModalDescription: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: "#475569",
+    marginTop: 14,
+  },
+  helpActions: {
+    flexDirection: "column",
+    rowGap: 10,
+    marginTop: 20,
+  },
+  helpPrimaryAction: {
+    backgroundColor: "#ea580c",
+    borderRadius: 9999,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 10,
+  },
+  helpPrimaryActionText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  helpSecondaryAction: {
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    borderRadius: 9999,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 10,
+  },
+  helpSecondaryActionText: {
+    color: "#ea580c",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  helpDismissButton: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  helpDismissButtonText: {
+    color: "#64748b",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  profileModalCard: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: "80%",
+  },
+  profileHeaderInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatarBadgeLarge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#ffedd5",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarTextLarge: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#ea580c",
+  },
+  profileNameText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#00112e",
+  },
+  profileStatusText: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2,
+  },
+  sheetSectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  stepsList: {
+    flexDirection: "column",
+    rowGap: 4,
+  },
+  stepItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  stepItemCurrent: {
+    backgroundColor: "#fff7ed",
+  },
+  stepItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 10,
+  },
+  stepNumberBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumberBadgeCurrent: {
+    backgroundColor: "#ea580c",
+  },
+  stepNumberBadgeDone: {
+    backgroundColor: "#15803d",
+  },
+  stepNumberBadgeFuture: {
+    backgroundColor: "#e2e8f0",
+  },
+  stepNumberText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  stepItemLabel: {
+    fontSize: 14,
+    color: "#334155",
+    fontWeight: "500",
+  },
+  profileModalFooter: {
+    borderTopWidth: 1,
+    borderColor: "#f1f5f9",
+    marginTop: 18,
+    paddingTop: 14,
+  },
+  signOutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 8,
+    backgroundColor: "#fff1f2",
+    borderWidth: 1,
+    borderColor: "#fecdd3",
+    paddingVertical: 12,
+    borderRadius: 9999,
+  },
+  signOutButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#be123c",
+  },
+});

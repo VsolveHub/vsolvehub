@@ -3,10 +3,7 @@ import { ApplicationEditor } from "@/features/application/view/application-edito
 
 export default function AboutPage() {
   return (
-    <ApplicationEditor
-      title="Personal Information"
-      description="Enter your basic profile details for your partner account."
-    >
+    <ApplicationEditor>
       <AboutStep />
     </ApplicationEditor>
   );

@@ -1,31 +1,70 @@
 // Ported from frontend/apps/partner/features/application/view/review-step.tsx
 import { ApiRequestError } from "@vsolve/api-client";
-import { Button, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Check, CheckCircle2, ChevronRight, Edit3 } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useApplyDock } from "../model/dock-context";
 import { canSubmit, isEditable, outstandingRequirements } from "../model/readiness";
 import { isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
 import { useApplicationReference } from "../reference-queries";
-import { ApplicationStatusBanner } from "./status-banner";
 
 export function ReviewStep() {
   const router = useRouter();
   const query = usePartnerApplication();
   const reference = useApplicationReference();
   const submit = useSubmitApplication();
-  const [confirmed, setConfirmed] = useState(false);
+  const { registerDock } = useApplyDock();
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
+
+  const application = query.data ?? null;
+  const editable = application !== null && isEditable(application);
+  const ready = application !== null && canSubmit(application);
+  const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
+
+  useEffect(() => {
+    if (!editable) {
+      registerDock(null);
+      return;
+    }
+
+    registerDock({
+      label: "Submit application",
+      backHref: "/apply/documents",
+      nextStepName: null,
+      onCommit: () => {
+        submit.mutate(undefined, {
+          onSuccess: () => {
+            void query.refetch();
+          },
+        });
+      },
+      isSaving: submit.isPending,
+      proceedDisabled: !ready || submit.isPending,
+      saved: submit.isSuccess,
+      conflict: isVersionConflict(submit.error),
+      refusal: null,
+      failed: submit.isError && !isVersionConflict(submit.error),
+      requestId: null,
+      fieldMessages: [],
+    });
+
+    return () => {
+      registerDock(null);
+    };
+  }, [editable, ready, submit.isPending, submit.isSuccess, submit.isError, registerDock, query]);
 
   if (query.isPending || reference.isPending) {
     return (
-      <View className="flex-row items-center gap-2 px-4 py-8">
+      <View style={styles.loadingContainer}>
         <Spinner size="sm" />
-        <Text className="text-text-secondary">Loading your application summary…</Text>
+        <Text style={styles.loadingText}>Loading your application summary…</Text>
       </View>
     );
   }
+
   if (query.isError && !isMissing) {
     return (
       <ErrorState
@@ -36,115 +75,336 @@ export function ReviewStep() {
       />
     );
   }
-  const application = query.data ?? null;
+
   if (application === null) {
     return (
-      <View className="gap-3 px-4 py-6">
-        <Text className="text-xl font-bold text-text">Review and Submit</Text>
-        <Text className="text-sm text-text-secondary">You have not started your application yet.</Text>
-        <Button onPress={() => router.push("/apply/about")}>Start Your Application Now</Button>
+      <View style={styles.emptyContainer}>
+        <Text style={styles.title}>Review and send</Text>
+        <Text style={styles.subtitle}>You have not started your application yet.</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/apply/about")}
+          style={styles.startButton}
+        >
+          <Text style={styles.startButtonText}>Start Your Application</Text>
+        </Pressable>
       </View>
     );
   }
 
   const outstanding = outstandingRequirements(application);
-  const ready = canSubmit(application);
-  const skillName = new Map(reference.skills.map((skill) => [skill.code, skill.name]));
-  const areaName = new Map(reference.serviceAreas.map((area) => [area.id, area.name]));
-  const editable = isEditable(application);
 
   return (
-    <ScrollView contentContainerClassName="gap-5 px-4 py-5 pb-20">
-      <Text className="text-2xl font-extrabold text-text">Review & Submit</Text>
-      <Text className="text-sm text-text-secondary">
-        Please review your details below before sending for partner verification. You can edit any section.
-      </Text>
-      <ApplicationStatusBanner application={application} />
-      {!ready ? (
-        <View className="rounded-card border border-warning-line bg-warning-surface p-4">
-          <Text className="text-sm font-bold text-warning-text">Items remaining before you can submit:</Text>
-          {outstanding.map((item) => (
-            <Text key={item.code} className="mt-1 text-sm text-text">
-              {item.label}
+    <View style={styles.container}>
+      {/* Title */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Review and send</Text>
+        <Text style={styles.subtitle}>
+          {isSubmitted
+            ? "Your application has been received and is being processed."
+            : "Please review your details before submitting for approval."}
+        </Text>
+      </View>
+
+      {/* Submitted Status Banner */}
+      {isSubmitted ? (
+        <View style={styles.submittedBanner}>
+          <CheckCircle2 size={24} color="#15803d" />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.submittedTitle}>Application Under Review</Text>
+            <Text style={styles.submittedBody}>
+              Our partner operations team is reviewing your documents. We will notify you once your account is activated.
             </Text>
-          ))}
-        </View>
-      ) : null}
-      <Section title="1. About you" onEdit={editable ? () => router.push("/apply/about") : undefined}>
-        <Text className="text-sm font-bold text-text">{application.display_name || "Not set"}</Text>
-        <Text className="text-sm text-text">
-          {application.experience_years} {application.experience_years === 1 ? "Year" : "Years"}
-        </Text>
-        <Text className="text-xs text-text-secondary">{application.biography || "No biography entered yet."}</Text>
-      </Section>
-      <Section title="2. Trades & Services" onEdit={editable ? () => router.push("/apply/work") : undefined}>
-        <Text className="text-sm text-text">
-          {application.skill_codes.length === 0
-            ? "No trade selected yet."
-            : application.skill_codes.map((code) => skillName.get(code) ?? code).join(", ")}
-        </Text>
-        <Text className="text-xs text-text-secondary">{application.service_variant_ids.length} job service variants selected</Text>
-      </Section>
-      <Section title="3. Travel & Service Areas" onEdit={editable ? () => router.push("/apply/areas") : undefined}>
-        <Text className="text-sm text-text">
-          {application.service_area_ids.length === 0
-            ? "No service area selected."
-            : application.service_area_ids.map((id) => areaName.get(id) ?? id).join(", ")}
-        </Text>
-      </Section>
-      {editable ? (
-        <View className="gap-4 rounded-card border border-line bg-surface p-5">
-          {isVersionConflict(submit.error) ? (
-            <ErrorState
-              inline
-              title="Your application changed in another session"
-              message="We have reloaded the latest data. Please check and submit again."
-            />
-          ) : submit.isError ? (
-            <ErrorState
-              inline
-              title="We could not submit your application"
-              message="Nothing was lost. Please verify all sections above and try again."
-            />
-          ) : null}
-          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }} onPress={() => setConfirmed((value) => !value)}>
-            <Text className="text-xs leading-relaxed text-text-secondary">
-              {confirmed ? "☑ " : "☐ "}
-              I certify that all the information provided is accurate and truthful. I understand that my profile and documents will be reviewed by V Solve Hub Operations before activation.
-            </Text>
-          </Pressable>
-          <View className="flex-row gap-3">
-            <Button variant="outline" onPress={() => router.push("/apply/schedule")}>
-              Back
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={!ready || !confirmed}
-              loading={submit.isPending}
-              loadingLabel="Submitting Application…"
-              onPress={() => submit.mutate()}
-            >
-              Submit Application for Review
-            </Button>
           </View>
         </View>
       ) : null}
-    </ScrollView>
-  );
-}
 
-function Section({ title, onEdit, children }: { title: string; onEdit?: () => void; children: ReactNode }) {
-  return (
-    <View className="gap-2 rounded-card border border-line bg-surface p-5">
-      <View className="flex-row items-center justify-between">
-        <Text className="text-sm font-bold uppercase text-text">{title}</Text>
-        {onEdit ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${title}`} onPress={onEdit}>
-            <Text className="text-sm font-semibold text-action">Edit</Text>
-          </Pressable>
-        ) : null}
+      {/* Outstanding Items Banner */}
+      {!ready && editable ? (
+        <View style={styles.outstandingBanner}>
+          <Text style={styles.outstandingTitle}>Missing information to complete:</Text>
+          {outstanding.map((item) => (
+            <Pressable
+              key={item.code}
+              accessibilityRole="button"
+              onPress={() => router.push(item.href as any)}
+              style={styles.outstandingItem}
+            >
+              <Text style={styles.outstandingItemText}>• {item.label}</Text>
+              <ChevronRight size={14} color="#c2410c" />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Summary Cards */}
+      <View style={styles.cardsContainer}>
+        {/* Card 1: About you */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>1. About you</Text>
+            {editable ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/apply/about")}
+                style={styles.editButton}
+              >
+                <Edit3 size={13} color="#2563eb" />
+                <Text style={styles.editText}>Edit</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Full Name</Text>
+            <Text style={styles.fieldValue}>{application.display_name || "Not entered"}</Text>
+          </View>
+          {application.biography ? (
+            <View style={[styles.fieldRow, { marginTop: 8 }]}>
+              <Text style={styles.fieldLabel}>Bio</Text>
+              <Text style={styles.fieldValue}>{application.biography}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Card 2: Agreements */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>2. Agreements</Text>
+            {editable ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/apply/consent")}
+                style={styles.editButton}
+              >
+                <Edit3 size={13} color="#2563eb" />
+                <Text style={styles.editText}>Edit</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {application.consents.length > 0 ? (
+            <View style={{ rowGap: 8 }}>
+              {application.consents.map((c) => (
+                <View key={c.purpose} style={styles.checkRow}>
+                  <Check size={14} color="#15803d" strokeWidth={3} />
+                  <Text style={styles.checkText}>
+                    {c.purpose.replace(/_/g, " ")} (v{c.document_version})
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.unmetText}>No agreements signed yet</Text>
+          )}
+        </View>
+
+        {/* Card 3: Documents */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>3. Documents</Text>
+            {editable ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/apply/documents")}
+                style={styles.editButton}
+              >
+                <Edit3 size={13} color="#2563eb" />
+                <Text style={styles.editText}>Edit</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={{ rowGap: 8 }}>
+            <View style={styles.checkRow}>
+              {application.documents.some((d) => d.kind === "GOVERNMENT_ID") ? (
+                <>
+                  <Check size={14} color="#15803d" strokeWidth={3} />
+                  <Text style={styles.checkText}>Government photo ID uploaded</Text>
+                </>
+              ) : (
+                <Text style={styles.unmetText}>Government photo ID missing</Text>
+              )}
+            </View>
+            <View style={styles.checkRow}>
+              {application.documents.some((d) => d.kind === "ADDRESS_PROOF") ? (
+                <>
+                  <Check size={14} color="#15803d" strokeWidth={3} />
+                  <Text style={styles.checkText}>Proof of address uploaded</Text>
+                </>
+              ) : (
+                <Text style={styles.unmetText}>Proof of address missing</Text>
+              )}
+            </View>
+          </View>
+        </View>
       </View>
-      {children}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "column",
+    width: "100%",
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 8,
+    paddingVertical: 32,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  emptyContainer: {
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  header: {
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#00112e",
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#64748b",
+    marginTop: 4,
+  },
+  startButton: {
+    marginTop: 16,
+    backgroundColor: "#ea580c",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 9999,
+  },
+  startButtonText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  submittedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  submittedTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  submittedBody: {
+    fontSize: 13,
+    color: "#15803d",
+    marginTop: 2,
+  },
+  outstandingBanner: {
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  outstandingTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#9a3412",
+    marginBottom: 6,
+  },
+  outstandingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  outstandingItemText: {
+    fontSize: 13,
+    color: "#c2410c",
+    fontWeight: "600",
+  },
+  cardsContainer: {
+    flexDirection: "column",
+    rowGap: 14,
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    padding: 18,
+    flexDirection: "column",
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 1px 4px rgba(0, 0, 0, 0.05)",
+        } as any)
+      : {
+          elevation: 2,
+          shadowColor: "#00112e",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+        }),
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderColor: "#f1f5f9",
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#00112e",
+  },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 4,
+  },
+  editText: {
+    fontSize: 13,
+    color: "#2563eb",
+    fontWeight: "600",
+  },
+  fieldRow: {
+    flexDirection: "column",
+  },
+  fieldLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  fieldValue: {
+    fontSize: 14,
+    color: "#00112e",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 8,
+  },
+  checkText: {
+    fontSize: 14,
+    color: "#00112e",
+    fontWeight: "600",
+    textTransform: "capitalize",
+  },
+  unmetText: {
+    fontSize: 13,
+    color: "#94a3b8",
+    fontStyle: "italic",
+  },
+});

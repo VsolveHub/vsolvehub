@@ -1,15 +1,11 @@
 // Ported from frontend/apps/partner/features/application/model/steps.ts
 /**
- * The onboarding step sequence.
+ * The 4-step mobile onboarding sequence matching the VSolve Hub partner mobile app design.
  *
- * One list, imported by both the shell's navigation and the editor's
- * "Save and continue". They were previously separate concerns — the nav had the
- * order and the editor had none — which is exactly how a button labelled
- * "continue" ended up not continuing: nothing in the editor knew what came next,
- * so it silently did half of what it said.
- *
- * Keeping the order here also means adding or reordering a step is one edit
- * rather than two that can disagree.
+ * Step 1: About you (/apply/about)
+ * Step 2: Agreements (/apply/consent)
+ * Step 3: Documents (/apply/documents)
+ * Step 4: Review and send (/apply/review)
  */
 
 export interface ApplicationStep {
@@ -18,28 +14,14 @@ export interface ApplicationStep {
 }
 
 export const APPLICATION_STEPS: readonly ApplicationStep[] = [
-  { href: "/apply", label: "Overview" },
   { href: "/apply/about", label: "About you" },
-  { href: "/apply/work", label: "Your trades" },
-  { href: "/apply/areas", label: "Where you work" },
   { href: "/apply/consent", label: "Agreements" },
   { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/schedule", label: "Your hours" },
   { href: "/apply/review", label: "Review and send" },
 ] as const;
 
 /**
- * The specialist-work routes added by M2 (`M2-FE-103..106`, `M2-FE-109`).
- *
- * A separate list, and deliberately **not** appended to `APPLICATION_STEPS`.
- * Those eight steps are the path every applicant walks; these four are asked for
- * only when a Partner applies for workforce or project work, and putting them in
- * the main strip would show four extra tabs to the overwhelming majority of
- * Partners who will never need one. That is the up-front wall `M2-FE-105`
- * exists to remove, rebuilt as navigation.
- *
- * `ApplyShell` renders this strip only while the reader is inside it, so it
- * orients somebody who is here and stays invisible to everybody else.
+ * The specialist-work routes.
  */
 export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/capabilities", label: "Specialist work" },
@@ -50,10 +32,6 @@ export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
 
 /**
  * Which step a path is on, or -1.
- *
- * Compared exactly rather than by prefix: `/apply` is a prefix of every other
- * step, so a `startsWith` check would report the overview for all of them. A
- * trailing slash is tolerated because Next can produce either form.
  */
 export function stepIndexOf(pathname: string): number {
   return APPLICATION_STEPS.findIndex((step) => step.href === normalise(pathname));

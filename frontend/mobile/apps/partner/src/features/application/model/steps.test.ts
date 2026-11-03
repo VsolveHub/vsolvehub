@@ -1,33 +1,17 @@
 // Ported from frontend/apps/partner/features/application/model/steps.test.ts
 import { APPLICATION_STEPS, isLastStep, nextStep, stepIndexOf } from "./steps";
 
-/**
- * The step sequence, and the two bugs it exists to prevent.
- *
- * "Save and continue" saved and did not continue, because nothing outside the
- * navigation knew what came next. And the navigation marked no current step, so
- * an applicant could not tell whether a press had moved them. Both were a single
- * missing idea — an ordered list anything could ask.
- */
-
-describe("finding the current step", () => {
+describe("finding the current step in the 4-step sequence", () => {
   it("matches each step exactly", () => {
-    expect(stepIndexOf("/apply")).toBe(0);
-    expect(stepIndexOf("/apply/about")).toBe(1);
-    expect(stepIndexOf("/apply/review")).toBe(APPLICATION_STEPS.length - 1);
+    expect(stepIndexOf("/apply/about")).toBe(0);
+    expect(stepIndexOf("/apply/consent")).toBe(1);
+    expect(stepIndexOf("/apply/documents")).toBe(2);
+    expect(stepIndexOf("/apply/review")).toBe(3);
   });
 
-  it("does not let the overview claim every step", () => {
-    // `/apply` is a prefix of all of them, so a `startsWith` check would report
-    // the overview as current on every page — which is how a nav ends up
-    // highlighting the wrong tab everywhere.
-    expect(stepIndexOf("/apply/work")).not.toBe(stepIndexOf("/apply"));
-    expect(stepIndexOf("/apply/consent")).toBe(4);
-  });
-
-  it("tolerates the trailing slash Next can produce", () => {
-    expect(stepIndexOf("/apply/about/")).toBe(stepIndexOf("/apply/about"));
-    expect(stepIndexOf("/apply/")).toBe(0);
+  it("tolerates the trailing slash", () => {
+    expect(stepIndexOf("/apply/about/")).toBe(0);
+    expect(stepIndexOf("/apply/consent/")).toBe(1);
   });
 
   it("reports -1 for a path outside the sequence", () => {
@@ -36,10 +20,10 @@ describe("finding the current step", () => {
   });
 });
 
-describe("what comes next", () => {
+describe("what comes next in the 4-step sequence", () => {
   it("walks the whole sequence in order", () => {
-    const visited: string[] = ["/apply"];
-    let current = nextStep("/apply");
+    const visited: string[] = ["/apply/about"];
+    let current = nextStep("/apply/about");
     while (current !== null) {
       visited.push(current.href);
       current = nextStep(current.href);
@@ -55,21 +39,18 @@ describe("what comes next", () => {
   });
 
   it("has no next step for a path off the sequence", () => {
-    // A step page that gets moved without updating this list should navigate
-    // nowhere rather than to an arbitrary step.
     expect(nextStep("/offers")).toBeNull();
   });
 
   it("sends each editable step to the one after it", () => {
-    expect(nextStep("/apply/about")?.href).toBe("/apply/work");
-    expect(nextStep("/apply/work")?.href).toBe("/apply/areas");
-    expect(nextStep("/apply/areas")?.href).toBe("/apply/consent");
+    expect(nextStep("/apply/about")?.href).toBe("/apply/consent");
     expect(nextStep("/apply/consent")?.href).toBe("/apply/documents");
+    expect(nextStep("/apply/documents")?.href).toBe("/apply/review");
   });
 });
 
 describe("the list itself", () => {
-  it("has no duplicate hrefs, which would make the current step ambiguous", () => {
+  it("has no duplicate hrefs", () => {
     const hrefs = APPLICATION_STEPS.map((step) => step.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });

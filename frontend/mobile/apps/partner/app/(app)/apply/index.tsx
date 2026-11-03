@@ -1,5 +1,5 @@
-import { ApplicationOverview } from "@/features/application/view/application-overview";
+import { Redirect } from "expo-router";
 
 export default function ApplyPage() {
-  return <ApplicationOverview />;
+  return <Redirect href="/apply/about" />;
 }

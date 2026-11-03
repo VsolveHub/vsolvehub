@@ -1,9 +1,10 @@
 // Ported from frontend/apps/partner/features/application/view/document-upload.tsx
-import { Badge, ErrorState, Sheet, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Sheet } from "@vsolve/mobile-ui";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { CloudUpload, Upload as UploadIcon } from "lucide-react-native";
 import { useState } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
   formatBytes,
@@ -11,15 +12,20 @@ import {
   rejectFile,
   type UploadProgress,
 } from "../model/upload";
-import { UploadFailure, useUploadDocument, type DocumentKind, type LocalDocumentFile } from "../upload-queries";
+import {
+  UploadFailure,
+  useUploadDocument,
+  type DocumentKind,
+  type LocalDocumentFile,
+} from "../upload-queries";
 
 const PHASE_LABEL: Record<UploadProgress["phase"], string> = {
   idle: "",
-  hashing: "Checking the file…",
-  requesting: "Preparing a secure upload…",
-  uploading: "Uploading…",
-  finalizing: "Confirming with our server…",
-  done: "Uploaded",
+  hashing: "Checking file integrity…",
+  requesting: "Preparing upload…",
+  uploading: "Uploading document…",
+  finalizing: "Confirming upload…",
+  done: "Uploaded successfully",
   failed: "Upload failed",
 };
 
@@ -125,7 +131,7 @@ export function DocumentUpload({
   async function choosePdf() {
     setChooserOpen(false);
     const result = await DocumentPicker.getDocumentAsync({
-      type: "application/pdf",
+      type: ["application/pdf", "image/*"],
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
@@ -140,36 +146,57 @@ export function DocumentUpload({
   }
 
   return (
-    <View className="mt-3">
-      <Text className="mb-1 text-sm font-bold text-text">
-        {replacing ? `Replace your ${label.toLowerCase()}` : `Upload your ${label.toLowerCase()}`}
-      </Text>
-
+    <View style={styles.container}>
+      {/* Dashed Upload Dropzone Box matching Mockup */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Choose a file"
+        accessibilityLabel={`Upload ${label}`}
         accessibilityState={{ disabled: blocked }}
         disabled={blocked}
         onPress={() => setChooserOpen(true)}
-        className="items-center justify-center rounded-card border-2 border-dashed border-line-strong bg-surface p-5"
+        style={({ pressed }) => [
+          styles.dropzone,
+          pressed && !blocked ? styles.dropzonePressed : null,
+          blocked ? styles.dropzoneDisabled : null,
+        ]}
       >
-        <Text className="text-sm font-bold text-navy-900">
-          <Text className="text-signal-700 underline">Choose a file</Text>
-        </Text>
-        <Text className="mt-1 text-center text-xs text-text-muted">
-          Supports clear photo (JPG, PNG) or PDF document (up to {formatBytes(20 * 1024 * 1024)})
-        </Text>
+        {/* Orange Cloud Icon */}
+        <CloudUpload size={32} color="#ea580c" />
+
+        {/* Peach Pill Button [^ Upload] */}
+        <View style={styles.uploadPill}>
+          <UploadIcon size={14} color="#c2410c" strokeWidth={2.5} />
+          <Text style={styles.uploadPillText}>
+            {replacing ? "Replace file" : "Upload"}
+          </Text>
+        </View>
+
+        {/* Helper Subtext */}
+        <Text style={styles.dropzoneSubtext}>JPG, PNG or PDF • up to 20 MB</Text>
       </Pressable>
 
-      <Sheet open={chooserOpen} onOpenChange={setChooserOpen} title="Add a document">
-        <Pressable accessibilityRole="button" onPress={() => void takePhoto()} className="min-h-11 justify-center">
-          <Text className="text-base text-text">Take photo</Text>
+      {/* File Chooser Sheet */}
+      <Sheet open={chooserOpen} onOpenChange={setChooserOpen} title={`Upload ${label}`}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void takePhoto()}
+          style={styles.sheetOption}
+        >
+          <Text style={styles.sheetOptionText}>Take photo with camera</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => void choosePhoto()} className="min-h-11 justify-center">
-          <Text className="text-base text-text">Choose photo</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void choosePhoto()}
+          style={styles.sheetOption}
+        >
+          <Text style={styles.sheetOptionText}>Choose from photo library</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => void choosePdf()} className="min-h-11 justify-center">
-          <Text className="text-base text-text">Choose PDF</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void choosePdf()}
+          style={styles.sheetOption}
+        >
+          <Text style={styles.sheetOptionText}>Choose document (PDF / Image)</Text>
         </Pressable>
       </Sheet>
 
@@ -185,31 +212,26 @@ export function DocumentUpload({
       ) : null}
 
       {rejection ? (
-        <Text accessibilityRole="alert" className="mt-2 text-xs font-bold text-danger-text">
+        <Text accessibilityRole="alert" style={styles.rejectionText}>
           ⚠️ {rejection}
         </Text>
       ) : null}
 
+      {/* Upload Progress Indicator */}
       {isBusy ? (
-        <View accessibilityLiveRegion="polite" className="mt-3 rounded-card border border-line bg-surface-sunken p-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-xs font-semibold text-text">{PHASE_LABEL[progress.phase]}</Text>
-            <Text className="text-xs font-semibold text-text">
+        <View style={styles.progressContainer}>
+          <View style={styles.progressRow}>
+            <Text style={styles.progressPhaseText}>{PHASE_LABEL[progress.phase]}</Text>
+            <Text style={styles.progressPercentText}>
               {progress.phase === "uploading" ? `${progress.percent}%` : ""}
             </Text>
           </View>
-          <View
-            accessibilityRole="progressbar"
-            accessibilityValue={{
-              min: 0,
-              max: 100,
-              now: progress.phase === "uploading" ? progress.percent : undefined,
-            }}
-            className="mt-2 h-2 w-full overflow-hidden rounded-full bg-line"
-          >
+          <View style={styles.progressBarTrack}>
             <View
-              className="h-full bg-action"
-              style={{ width: progress.phase === "uploading" ? `${progress.percent}%` : "100%" }}
+              style={[
+                styles.progressBarFill,
+                { width: progress.phase === "uploading" ? `${progress.percent}%` : "100%" },
+              ]}
             />
           </View>
         </View>
@@ -219,40 +241,111 @@ export function DocumentUpload({
         <ErrorState
           inline
           className="mt-3"
-          severity={failure.reason === "rejected" ? "error" : "warning"}
-          title={
-            failure.reason === "expired"
-              ? "That upload link expired"
-              : failure.reason === "conflict"
-                ? "Your application changed while uploading"
-                : failure.reason === "rejected"
-                  ? "We could not accept that file"
-                  : "The upload did not finish"
-          }
-          message={
-            failure.reason === "rejected"
-              ? "The file did not match what we expected. Choose the document again — a clear photo of the original usually works."
-              : failure.reason === "conflict"
-                ? "Nothing was uploaded. Reload this page to pick up the latest version, then try again."
-                : "Nothing was uploaded. Check your connection and try again."
-          }
+          title="Could not upload document"
+          message={failure.message}
           actionLabel={isRetryableUploadFailure(failure.reason) && pendingFile ? "Try again" : undefined}
-          onAction={
-            isRetryableUploadFailure(failure.reason) && pendingFile
-              ? () => void send(pendingFile)
-              : undefined
-          }
+          onAction={pendingFile ? () => void send(pendingFile) : undefined}
         />
-      ) : null}
-
-      {upload.isSuccess && progress.phase === "done" ? (
-        <View className="mt-3 flex-row items-center gap-2">
-          <Badge tone="success">Uploaded</Badge>
-          <Text className="flex-1 text-xs font-bold text-success-text">
-            File received securely. A reviewer will verify this during review.
-          </Text>
-        </View>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    width: "100%",
+  },
+  dropzone: {
+    width: "100%",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#fed7aa",
+    backgroundColor: "#fffaf5",
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropzonePressed: {
+    borderColor: "#ea580c",
+    backgroundColor: "#fff7ed",
+  },
+  dropzoneDisabled: {
+    opacity: 0.6,
+  },
+  uploadPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 6,
+    backgroundColor: "#ffedd5",
+    borderRadius: 9999,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  uploadPillText: {
+    color: "#c2410c",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  dropzoneSubtext: {
+    fontSize: 11,
+    color: "#64748b",
+    marginTop: 8,
+    fontWeight: "500",
+  },
+  sheetOption: {
+    minHeight: 48,
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderColor: "#f1f5f9",
+    paddingVertical: 12,
+  },
+  sheetOptionText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#00112e",
+  },
+  rejectionText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#be123c",
+    marginTop: 8,
+  },
+  progressContainer: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    backgroundColor: "#fffaf5",
+    padding: 12,
+  },
+  progressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  progressPhaseText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#00112e",
+  },
+  progressPercentText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#ea580c",
+  },
+  progressBarTrack: {
+    marginTop: 8,
+    height: 6,
+    width: "100%",
+    borderRadius: 9999,
+    backgroundColor: "#fed7aa",
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#ea580c",
+  },
+});

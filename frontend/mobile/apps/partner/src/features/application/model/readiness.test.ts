@@ -19,8 +19,8 @@ function document(overrides: Partial<Document> = {}): Document {
     content_type: "image/jpeg",
     size_bytes: 120_000,
     scan_status: "CLEAN",
-  scanned_at: "2026-07-01T10:00:00Z",
-  sha256: "a".repeat(64),
+    scanned_at: "2026-07-01T10:00:00Z",
+    sha256: "a".repeat(64),
     status: "PENDING",
     review_reason: "",
     uploaded_at: "2026-07-30T09:00:00Z",
@@ -53,35 +53,27 @@ function application(overrides: Partial<Application> = {}): Application {
   } as Application;
 }
 
-/** An application with everything M1 requires before review. */
+/** An application with everything the 4-step mobile onboarding requires. */
 function completeApplication(overrides: Partial<Application> = {}): Application {
   return application({
-    display_name: "Ramesh K.",
-    experience_years: 5,
-    skill_codes: ["electrical"],
-    service_variant_ids: ["variant-1"],
-    service_area_ids: ["area-1"],
+    display_name: "webaura",
     documents: [
       document({ id: "doc-id", kind: "GOVERNMENT_ID" }),
       document({ id: "doc-addr", kind: "ADDRESS_PROOF" }),
     ],
-    consents: [{ code: "terms", granted_at: "2026-07-30T09:00:00Z" }] as never,
+    consents: [{ purpose: "PARTNER_TERMS", document_version: "2026-07", withdrawn_at: null }] as never,
     ...overrides,
   });
 }
 
-describe("requirements", () => {
-  it("lists everything as outstanding for an empty draft", () => {
+describe("requirements in 4-step flow", () => {
+  it("lists core requirements as outstanding for an empty draft", () => {
     const outstanding = outstandingRequirements(application());
     expect(outstanding.map((item) => item.code)).toEqual([
       "DISPLAY_NAME",
-      "EXPERIENCE_YEARS",
-      "SKILLS",
-      "SERVICES",
-      "SERVICE_AREAS",
+      "CONSENTS",
       "GOVERNMENT_ID",
       "ADDRESS_PROOF",
-      "CONSENTS",
     ]);
   });
 
@@ -90,16 +82,12 @@ describe("requirements", () => {
   });
 
   it("does not require bank or tax documents to apply", () => {
-    // Payout details are collected before the first payout, not before review.
-    // Requiring them here turns a form into an errand.
     const codes = requirements(application()).map((item) => item.code);
     expect(codes).not.toContain("BANK");
     expect(codes).not.toContain("TAX");
   });
 
   it("counts a pending document as done", () => {
-    // The Partner did their part; the document is in a queue they do not
-    // control. Calling it missing tells them to re-upload it.
     const withPending = completeApplication({
       documents: [
         document({ kind: "GOVERNMENT_ID", status: "PENDING" }),
@@ -162,8 +150,6 @@ describe("editability", () => {
   });
 
   it("locks the application while it is being reviewed", () => {
-    // Editing underneath a reviewer is how two people end up looking at
-    // different versions of the same document set.
     expect(isEditable(application({ status: "SUBMITTED" }))).toBe(false);
     expect(isEditable(application({ status: "UNDER_REVIEW" }))).toBe(false);
   });
