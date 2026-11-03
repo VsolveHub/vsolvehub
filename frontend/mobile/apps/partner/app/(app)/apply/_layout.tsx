@@ -1,10 +1,16 @@
-// Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
+// Ported faithfully from frontend/apps/partner/features/application/view/apply-shell.tsx
 import { ApiRequestError } from "@vsolve/api-client";
-import { Button, Logo, Sheet, Text, cn } from "@vsolve/mobile-ui";
+import { useMobileLogout } from "@vsolve/mobile-core";
+import { Logo, Sheet, Text, cn } from "@vsolve/mobile-ui";
 import { Slot, usePathname, useRouter } from "expo-router";
-import { Check, ChevronLeft, ListChecks } from "lucide-react-native";
+import {
+  Check,
+  ChevronLeft,
+  ListChecks,
+  LogOut,
+} from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
 import {
   previousStep,
@@ -17,97 +23,247 @@ import { usePartnerApplication } from "@/features/application/queries";
 export default function ApplyLayout() {
   const pathname = usePathname();
   const router = useRouter();
+  const signOut = useMobileLogout();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const query = usePartnerApplication();
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = missing ? null : (query.data ?? null);
 
-  const summary = progressSummary(application);
   const steps = stepProgress(application);
-  const current = steps.find(
-    (step) => pathname === step.href || pathname.startsWith(`${step.href}/`),
-  );
-  const back = previousStep(pathname);
-
-  const sentence =
-    current && current.state !== "waypoint"
-      ? `Step ${summary.done} of ${summary.total}`
-      : "Application";
-  const progressPercent = Math.round(summary.fraction * 100);
+  const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
+  const back = isSubmitted ? null : previousStep(pathname);
+  const currentStepIdx = steps.findIndex((s) => s.href === pathname);
 
   return (
-    <View className="flex-1 bg-canvas">
-      {/* Top Header matching Web ApplyShell capsule */}
-      <View className="border-b border-line bg-surface px-4 py-2.5 shadow-xs">
-        <View className="flex-row items-center justify-between">
-          {/* Left: Back affordance + Logo */}
-          <View className="flex-row items-center gap-2">
-            {back ? (
+    <View style={{ flex: 1, backgroundColor: "#fbf9f6", minHeight: "100%" }}>
+      {/* Floating Dynamic-Island Navigation Bar Matching Web */}
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
+          top: isDesktop ? 12 : 10,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          paddingHorizontal: isDesktop ? 24 : 12,
+        }}
+      >
+        <View
+          style={{
+            maxWidth: 1200,
+            width: "100%",
+            marginHorizontal: "auto",
+            borderRadius: 9999,
+            backgroundColor: "rgba(255, 255, 255, 0.95)",
+            borderWidth: 1,
+            borderColor: "rgba(226, 232, 240, 0.9)",
+            paddingHorizontal: isDesktop ? 20 : 14,
+            paddingVertical: isDesktop ? 10 : 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            ...(Platform.OS === "web"
+              ? ({
+                  backdropFilter: "blur(20px)",
+                  boxShadow:
+                    "0 12px 32px rgba(0, 17, 46, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)",
+                } as any)
+              : {
+                  elevation: 6,
+                  shadowColor: "#00112e",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 12,
+                }),
+          }}
+        >
+          {/* Left: Brand + Now Onboarding Tag */}
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {back !== null && pathname !== "/apply" ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Back to ${back.label}`}
-                hitSlop={8}
-                onPress={() => router.push(back.href as never)}
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-surface-sunken active:bg-surface-hover"
+                accessibilityLabel="Go back"
+                onPress={() => router.push(back.href as any)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 9999,
+                  backgroundColor: "#f8fafc",
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 8,
+                }}
               >
-                <ChevronLeft size={20} color="#00112e" />
+                <ChevronLeft size={16} color="#00112e" />
               </Pressable>
             ) : null}
+
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/")}
-              className="active:opacity-80"
+              onPress={() => router.push("/apply")}
+              style={{ flexDirection: "row", alignItems: "center" }}
             >
               <Logo />
             </Pressable>
-          </View>
 
-          {/* Right: Step sheet toggle & Overview CTA */}
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View all steps"
-              onPress={() => setSheetOpen(true)}
-              className="flex-row items-center gap-1.5 rounded-full border border-line bg-surface-sunken px-3 py-1.5 active:bg-surface-hover"
-            >
-              <ListChecks size={15} color="#00112e" />
-              <Text className="text-xs font-bold text-navy-900">Steps</Text>
-            </Pressable>
-
-            {pathname !== "/apply" ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/apply")}
-                className="rounded-full border border-line bg-surface-sunken px-3 py-1.5 active:bg-surface-hover"
+            {/* Desktop City Pill */}
+            {isDesktop ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  columnGap: 8,
+                  borderRadius: 9999,
+                  backgroundColor: "#f8fafc",
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  marginLeft: 12,
+                }}
               >
-                <Text className="text-xs font-bold text-navy-900">Overview</Text>
-              </Pressable>
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 9999,
+                    backgroundColor: "#10b981",
+                  }}
+                />
+                <Text style={{ fontSize: 11, color: "#64748b", fontWeight: "500" }}>
+                  Now onboarding:{" "}
+                  <Text style={{ fontWeight: "700", color: "#00112e" }}>Hyderabad</Text>
+                </Text>
+              </View>
             ) : null}
           </View>
-        </View>
 
-        {/* Step indicator sentence and step label */}
-        <View className="mt-2 flex-row items-center justify-between">
-          <Text className="text-xs font-bold text-text">{sentence}</Text>
-          {current ? (
-            <Text className="text-xs font-semibold text-text-secondary">{current.label}</Text>
+          {/* Desktop Center: Registration Hub Capsule */}
+          {isDesktop ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                columnGap: 8,
+                borderRadius: 9999,
+                backgroundColor: "rgba(248, 250, 252, 0.8)",
+                borderWidth: 1,
+                borderColor: "#e2e8f0",
+                paddingHorizontal: 16,
+                paddingVertical: 6,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#00112e" }}>
+                {isSubmitted
+                  ? "Application Submitted"
+                  : pathname === "/apply"
+                  ? "Registration Hub"
+                  : currentStepIdx >= 0
+                  ? `Step ${currentStepIdx + 1} of ${steps.length}`
+                  : "Application"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#94a3b8" }}>•</Text>
+              <Text style={{ fontSize: 12, fontWeight: "500", color: "#64748b" }}>
+                Desktop Verification Mode
+              </Text>
+            </View>
           ) : null}
-        </View>
 
-        {/* Dynamic visual progress bar */}
-        <View className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-line">
-          <View
-            className="h-full rounded-full bg-signal-500"
-            style={{ width: `${Math.max(progressPercent, 4)}%` }}
-          />
+          {/* Right: Steps, Overview & Sign Out */}
+          <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8 }}>
+            {!isSubmitted ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Steps"
+                onPress={() => setSheetOpen(true)}
+                style={({ pressed }) => ({
+                  height: 32,
+                  paddingHorizontal: isDesktop ? 12 : 8,
+                  width: isDesktop ? undefined : 32,
+                  borderRadius: 9999,
+                  backgroundColor: pressed ? "#f1f5f9" : "#f8fafc",
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  columnGap: 6,
+                })}
+              >
+                <ListChecks size={15} color="#00112e" />
+                {isDesktop ? (
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
+                    Steps
+                  </Text>
+                ) : null}
+              </Pressable>
+            ) : null}
+
+            {isDesktop ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Overview"
+                onPress={() => router.push("/apply")}
+                style={({ pressed }) => ({
+                  height: 32,
+                  paddingHorizontal: 14,
+                  borderRadius: 9999,
+                  backgroundColor: pressed ? "#f1f5f9" : "#f8fafc",
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
+                  Overview
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign Out"
+              onPress={() => void signOut()}
+              style={({ pressed }) => ({
+                height: 32,
+                paddingHorizontal: 12,
+                borderRadius: 9999,
+                backgroundColor: pressed ? "#ffe4e6" : "#fff1f2",
+                borderWidth: 1,
+                borderColor: "rgba(254, 205, 211, 0.9)",
+                flexDirection: "row",
+                alignItems: "center",
+                columnGap: 5,
+              })}
+            >
+              <LogOut size={13} color="#be123c" />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#be123c" }}>
+                Sign Out
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
 
-      {/* Main Form Scroll View */}
+      {/* Main Form Scroll View with ample clearance for floating navbar */}
       <ScrollView
-        contentContainerClassName="px-4 pb-12 pt-4"
+        contentContainerStyle={{
+          maxWidth: isDesktop ? 1120 : 560,
+          width: "100%",
+          marginHorizontal: "auto",
+          paddingHorizontal: isDesktop ? 32 : 16,
+          paddingTop: isDesktop ? 108 : 88,
+          paddingBottom: 64,
+        }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <Slot />
       </ScrollView>
@@ -119,7 +275,7 @@ export default function ApplyLayout() {
         title="Your application"
         description="Fill these in any order. Everything saves as you go."
       >
-        <ScrollView className="max-h-96" contentContainerClassName="gap-1.5 pb-4">
+        <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ rowGap: 6, paddingBottom: 16 }}>
           {steps.map((step) => {
             const isCurrent = pathname === step.href;
             return (
@@ -131,30 +287,62 @@ export default function ApplyLayout() {
                   setSheetOpen(false);
                   router.push(step.href as never);
                 }}
-                className={cn(
-                  "flex-row items-center gap-3 rounded-card border p-3",
-                  isCurrent
-                    ? "border-navy-700 bg-navy-50"
-                    : "border-line bg-surface active:bg-surface-hover"
-                )}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  columnGap: 12,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: isCurrent ? "#00112e" : "#e2e8f0",
+                  backgroundColor: isCurrent ? "#f1f5f9" : "#ffffff",
+                  padding: 12,
+                }}
               >
                 <StepMark state={step.state} />
-                <View className="min-w-0 flex-1">
+                <View style={{ flex: 1 }}>
                   <Text
-                    className={cn(
-                      "text-sm font-semibold",
-                      isCurrent ? "font-bold text-navy-900" : "text-text"
-                    )}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: isCurrent ? "800" : "600",
+                      color: "#00112e",
+                    }}
                   >
                     {step.label}
                   </Text>
-                  <Text className="mt-0.5 text-xs text-text-secondary">
+                  <Text style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
                     {describe(step, isCurrent)}
                   </Text>
                 </View>
               </Pressable>
             );
           })}
+
+          <View style={{ marginTop: 16, borderTopWidth: 1, borderColor: "#e2e8f0", paddingTop: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setSheetOpen(false);
+                void signOut();
+              }}
+              style={{
+                width: "100%",
+                height: 44,
+                borderRadius: 12,
+                backgroundColor: "#fff1f2",
+                borderWidth: 1,
+                borderColor: "#fecdd3",
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "row",
+                columnGap: 8,
+              }}
+            >
+              <LogOut size={16} color="#be123c" />
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#be123c" }}>
+                Sign Out
+              </Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </Sheet>
     </View>
@@ -164,7 +352,16 @@ export default function ApplyLayout() {
 function StepMark({ state }: { state: StepProgress["state"] }) {
   if (state === "done") {
     return (
-      <View className="size-6 items-center justify-center rounded-full bg-success">
+      <View
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 9999,
+          backgroundColor: "#10b981",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <Check size={14} color="#ffffff" strokeWidth={3} />
       </View>
     );
@@ -172,17 +369,37 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
 
   if (state === "todo") {
     return (
-      <View className="size-6 rounded-full border-2 border-signal-500" />
+      <View
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 9999,
+          borderWidth: 2,
+          borderColor: "#f87000",
+        }}
+      />
     );
   }
 
   return (
-    <View className="size-6 items-center justify-center rounded-full border-2 border-line">
+    <View
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: 9999,
+        borderWidth: 2,
+        borderColor: "#cbd5e1",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <View
-        className={cn(
-          "rounded-full bg-text-muted",
-          state === "optional" ? "h-0.5 w-2" : "size-1.5"
-        )}
+        style={{
+          borderRadius: 9999,
+          backgroundColor: "#94a3b8",
+          width: state === "optional" ? 8 : 4,
+          height: state === "optional" ? 2 : 4,
+        }}
       />
     </View>
   );
