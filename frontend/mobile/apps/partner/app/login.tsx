@@ -29,7 +29,7 @@ export default function LoginScreen() {
   const status = useAuthStore((state) => state.status);
   const signedIn = status === "signedIn";
   const application = usePartnerApplication({ enabled: signedIn });
-  const flow = useMobileOtpFlow({ intendedRole: "partner" });
+  const flow = useMobileOtpFlow();
   const next = safeNextPath(typeof params.next === "string" ? params.next : null);
   const missing = application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || missing;
