@@ -62,30 +62,31 @@ export default function ApplyLayout() {
       >
         <View
           style={{
-            maxWidth: 1200,
+            maxWidth: width >= 1280 ? 1280 : 1152, // max-w-6xl xl:max-w-7xl
             width: "100%",
             marginHorizontal: "auto",
             borderRadius: 9999,
             backgroundColor: "rgba(255, 255, 255, 0.95)",
             borderWidth: 1,
-            borderColor: "rgba(226, 232, 240, 0.9)",
+            borderColor: "#d3ccc0", // border-line-strong
             paddingHorizontal: isDesktop ? 20 : 14,
-            paddingVertical: isDesktop ? 10 : 8,
+            paddingVertical: 10,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
             ...(Platform.OS === "web"
               ? ({
-                  backdropFilter: "blur(20px)",
+                  backdropFilter: "blur(24px)",
+                  WebkitBackdropFilter: "blur(24px)",
                   boxShadow:
-                    "0 12px 32px rgba(0, 17, 46, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)",
+                    "0 12px 32px rgba(0, 17, 46, 0.12), 0 1px 3px rgba(0, 0, 0, 0.05)",
                 } as any)
               : {
-                  elevation: 6,
+                  elevation: 8,
                   shadowColor: "#00112e",
                   shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 12,
+                  shadowOpacity: 0.12,
+                  shadowRadius: 16,
                 }),
           }}
         >
@@ -100,9 +101,9 @@ export default function ApplyLayout() {
                   width: 32,
                   height: 32,
                   borderRadius: 9999,
-                  backgroundColor: "#f8fafc",
+                  backgroundColor: "#f4f1ec",
                   borderWidth: 1,
-                  borderColor: "#e2e8f0",
+                  borderColor: "#d3ccc0",
                   alignItems: "center",
                   justifyContent: "center",
                   marginRight: 8,
@@ -128,23 +129,36 @@ export default function ApplyLayout() {
                   alignItems: "center",
                   columnGap: 8,
                   borderRadius: 9999,
-                  backgroundColor: "#f8fafc",
+                  backgroundColor: "#f4f1ec", // bg-surface-sunken
                   borderWidth: 1,
-                  borderColor: "#e2e8f0",
+                  borderColor: "#e7e2da", // border-line
                   paddingHorizontal: 10,
                   paddingVertical: 4,
                   marginLeft: 12,
                 }}
               >
-                <View
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: 9999,
-                    backgroundColor: "#10b981",
-                  }}
-                />
-                <Text style={{ fontSize: 11, color: "#64748b", fontWeight: "500" }}>
+                {/* Pulsing Green Dot */}
+                <View style={{ width: 8, height: 8, position: "relative", alignItems: "center", justifyContent: "center" }}>
+                  <View
+                    style={{
+                      position: "absolute",
+                      width: 8,
+                      height: 8,
+                      borderRadius: 9999,
+                      backgroundColor: "#34d399",
+                      opacity: 0.75,
+                    }}
+                  />
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 9999,
+                      backgroundColor: "#059669",
+                    }}
+                  />
+                </View>
+                <Text style={{ fontSize: 11, color: "#453f37", fontWeight: "500", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                   Now onboarding:{" "}
                   <Text style={{ fontWeight: "700", color: "#00112e" }}>Hyderabad</Text>
                 </Text>
@@ -160,14 +174,14 @@ export default function ApplyLayout() {
                 alignItems: "center",
                 columnGap: 8,
                 borderRadius: 9999,
-                backgroundColor: "rgba(248, 250, 252, 0.8)",
+                backgroundColor: "rgba(244, 241, 236, 0.8)", // bg-surface-sunken/80
                 borderWidth: 1,
-                borderColor: "#e2e8f0",
+                borderColor: "#d3ccc0", // border-line-strong
                 paddingHorizontal: 16,
                 paddingVertical: 6,
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: "800", color: "#00112e" }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                 {isSubmitted
                   ? "Application Submitted"
                   : pathname === "/apply"
@@ -176,8 +190,8 @@ export default function ApplyLayout() {
                   ? `Step ${currentStepIdx + 1} of ${steps.length}`
                   : "Application"}
               </Text>
-              <Text style={{ fontSize: 12, color: "#94a3b8" }}>•</Text>
-              <Text style={{ fontSize: 12, fontWeight: "500", color: "#64748b" }}>
+              <Text style={{ fontSize: 12, color: "#a89f90" }}>•</Text>
+              <Text style={{ fontSize: 12, fontWeight: "500", color: "#453f37", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                 Desktop Verification Mode
               </Text>
             </View>
@@ -195,18 +209,19 @@ export default function ApplyLayout() {
                   paddingHorizontal: isDesktop ? 12 : 8,
                   width: isDesktop ? undefined : 32,
                   borderRadius: 9999,
-                  backgroundColor: pressed ? "#f1f5f9" : "#f8fafc",
+                  backgroundColor: pressed ? "#ffffff" : "#f4f1ec", // bg-surface-sunken
                   borderWidth: 1,
-                  borderColor: "#e2e8f0",
+                  borderColor: "#d3ccc0", // border-line-strong
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
                   columnGap: 6,
+                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                 })}
               >
-                <ListChecks size={15} color="#00112e" />
+                <ListChecks size={14} color="#00112e" />
                 {isDesktop ? (
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                     Steps
                   </Text>
                 ) : null}
@@ -222,15 +237,15 @@ export default function ApplyLayout() {
                   height: 32,
                   paddingHorizontal: 14,
                   borderRadius: 9999,
-                  backgroundColor: pressed ? "#f1f5f9" : "#f8fafc",
+                  backgroundColor: pressed ? "#ffffff" : "#f4f1ec", // bg-surface-sunken
                   borderWidth: 1,
-                  borderColor: "#e2e8f0",
+                  borderColor: "#d3ccc0", // border-line-strong
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
                 })}
               >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                   Overview
                 </Text>
               </Pressable>
@@ -244,16 +259,17 @@ export default function ApplyLayout() {
                 height: 32,
                 paddingHorizontal: 12,
                 borderRadius: 9999,
-                backgroundColor: pressed ? "#ffe4e6" : "#fff1f2",
+                backgroundColor: pressed ? "#ffe4e6" : "#fff1f2", // bg-rose-50
                 borderWidth: 1,
-                borderColor: "rgba(254, 205, 211, 0.9)",
+                borderColor: "rgba(254, 205, 211, 0.9)", // border-rose-200/90
                 flexDirection: "row",
                 alignItems: "center",
                 columnGap: 5,
+                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
               })}
             >
               <LogOut size={13} color="#be123c" />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#be123c" }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#be123c", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                 Sign Out
               </Text>
             </Pressable>
@@ -261,14 +277,15 @@ export default function ApplyLayout() {
         </View>
       </View>
 
-      {/* Main Form Scroll View with ample clearance for floating navbar */}
+      {/* Main Form Scroll View with ample clearance matching web's pt-24 sm:pt-28 lg:pt-32 */}
       <ScrollView
+        style={{ flex: 1, backgroundColor: "#fbf9f6" }}
         contentContainerStyle={{
-          maxWidth: isDesktop ? 1120 : 560,
+          maxWidth: width >= 1280 ? 1152 : isDesktop ? 1024 : 672,
           width: "100%",
           marginHorizontal: "auto",
           paddingHorizontal: isDesktop ? 32 : 16,
-          paddingTop: isDesktop ? 108 : 88,
+          paddingTop: isDesktop ? 128 : 96,
           paddingBottom: 64,
         }}
         keyboardShouldPersistTaps="handled"
@@ -311,11 +328,10 @@ export default function ApplyLayout() {
               borderRadius: 24,
               backgroundColor: "#ffffff",
               borderWidth: 1,
-              borderColor: "rgba(226, 232, 240, 0.9)",
+              borderColor: "#e2e8f0",
               padding: 24,
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-              zIndex: 10,
-              flexDirection: "column",
+              boxShadow: "0 24px 64px rgba(0, 17, 46, 0.25)",
+              elevation: 24,
             }}
           >
             {/* Modal Header */}
@@ -324,7 +340,7 @@ export default function ApplyLayout() {
                 flexDirection: "row",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
-                marginBottom: 16,
+                marginBottom: 6,
               }}
             >
               <View style={{ flex: 1, paddingRight: 12 }}>
@@ -340,7 +356,7 @@ export default function ApplyLayout() {
                 </Text>
                 <Text
                   style={{
-                    fontSize: 12.5,
+                    fontSize: 12,
                     color: "#64748b",
                     marginTop: 3,
                     fontFamily: "system-ui, -apple-system, sans-serif",
@@ -352,51 +368,50 @@ export default function ApplyLayout() {
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Close"
-                hitSlop={12}
+                accessibilityLabel="Close steps dialog"
                 onPress={() => setSheetOpen(false)}
-                style={{
-                  width: 28,
-                  height: 28,
+                style={({ pressed }) => ({
+                  width: 32,
+                  height: 32,
                   borderRadius: 9999,
+                  backgroundColor: pressed ? "#f1f5f9" : "transparent",
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#f8fafc",
-                }}
+                })}
               >
-                <X size={16} color="#64748b" />
+                <X size={18} color="#64748b" />
               </Pressable>
             </View>
 
             {/* Steps List */}
             <ScrollView
+              style={{ maxHeight: 380, marginTop: 10 }}
+              contentContainerStyle={{ rowGap: 8, paddingVertical: 4 }}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ rowGap: 4, paddingBottom: 6 }}
             >
               {steps.map((step) => {
-                const isCurrent = pathname === step.href;
+                const isCurrent = step.href === pathname;
                 return (
                   <Pressable
                     key={step.href}
                     accessibilityRole="button"
-                    accessibilityLabel={step.label}
                     onPress={() => {
                       setSheetOpen(false);
-                      router.push(step.href as never);
+                      router.push(step.href as any);
                     }}
                     style={({ pressed }) => ({
                       flexDirection: "row",
                       alignItems: "center",
-                      columnGap: 14,
+                      columnGap: 12,
+                      paddingVertical: 10,
                       borderRadius: 14,
-                      borderWidth: isCurrent ? 1.5 : 1,
-                      borderColor: isCurrent ? "#93c5fd" : "transparent",
                       backgroundColor: isCurrent
-                        ? "#eff6ff"
+                        ? "#f0f4ff"
                         : pressed
                         ? "#f8fafc"
                         : "transparent",
-                      paddingVertical: isCurrent ? 11 : 9,
+                      borderWidth: isCurrent ? 1 : 0,
+                      borderColor: isCurrent ? "#c7d7fe" : "transparent",
                       paddingHorizontal: 12,
                     })}
                   >

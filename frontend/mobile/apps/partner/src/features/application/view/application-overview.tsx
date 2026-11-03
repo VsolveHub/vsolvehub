@@ -1,9 +1,10 @@
 // Ported faithfully from frontend/apps/partner/features/application/view/application-overview.tsx
-// 100% accurate layout, styling, track selection, and responsiveness.
+// 100% accurate layout, styling, track selection, typography, and responsiveness.
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Button, ErrorState, Skeleton, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   AlertCircle,
   AlertTriangle,
@@ -66,7 +67,7 @@ export function ApplicationOverview() {
 }
 
 /**
- * NotStarted — 100% replica of Web partner portal /apply
+ * NotStarted — 100% replica of Web partner portal /apply (matching Images 1, 3, 4)
  * Shown when the user hasn't started their application yet or wants to pick their track.
  */
 function NotStarted({ application }: { application?: Application }) {
@@ -89,70 +90,77 @@ function NotStarted({ application }: { application?: Application }) {
 
   return (
     <View style={{ width: "100%", rowGap: 24, paddingBottom: 40 }}>
-      {/* 1. Deep Navy Hero Card */}
+      {/* 1. Deep Navy Hero Card with LinearGradient Matching Image 3 */}
       <View
         style={{
           width: "100%",
-          borderRadius: 24,
-          backgroundColor: "#00112e",
-          paddingVertical: isDesktop ? 36 : 28,
-          paddingHorizontal: isDesktop ? 32 : 20,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 1,
-          borderColor: "rgba(255, 255, 255, 0.1)",
+          borderRadius: 20,
+          overflow: "hidden",
           boxShadow: "0 12px 32px rgba(0, 17, 46, 0.15)",
         }}
       >
-        {/* Top Circle Sparkles Icon */}
-        <View
+        <LinearGradient
+          colors={["#00204d", "#00183b", "#00112e"]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
           style={{
-            width: 52,
-            height: 52,
-            borderRadius: 9999,
-            backgroundColor: "rgba(255, 255, 255, 0.12)",
+            width: "100%",
+            paddingVertical: 32,
+            paddingHorizontal: 24,
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: 14,
           }}
         >
-          <Sparkles size={24} color="#ffffff" />
-        </View>
+          {/* Top Circle Sparkles Icon */}
+          <View
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: "rgba(255, 255, 255, 0.15)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 14,
+            }}
+          >
+            <Sparkles size={26} color="#ffffff" />
+          </View>
 
-        <Text
-          style={{
-            fontSize: isDesktop ? 26 : 22,
-            fontWeight: "900",
-            color: "#ffffff",
-            textAlign: "center",
-            letterSpacing: -0.5,
-            fontFamily: "system-ui, -apple-system, sans-serif",
-          }}
-        >
-          Start your application
-        </Text>
+          <Text
+            style={{
+              fontSize: 22,
+              fontWeight: "800",
+              color: "#ffffff",
+              textAlign: "center",
+              letterSpacing: -0.4,
+              fontFamily: "system-ui, -apple-system, sans-serif",
+            }}
+          >
+            Start your application
+          </Text>
 
-        <Text
-          style={{
-            marginTop: 8,
-            fontSize: 14,
-            lineHeight: 22,
-            color: "#cbd5e1",
-            textAlign: "center",
-            maxWidth: 480,
-            fontFamily: "system-ui, -apple-system, sans-serif",
-          }}
-        >
-          About five minutes. You can stop and come back — nothing is sent for review until you choose to send it.
-        </Text>
+          <Text
+            style={{
+              marginTop: 8,
+              fontSize: 15,
+              lineHeight: 24,
+              color: "#cbd5e1",
+              textAlign: "center",
+              maxWidth: 380,
+              fontFamily: "system-ui, -apple-system, sans-serif",
+            }}
+          >
+            About five minutes. You can stop and come back — nothing is sent for review until you choose to send it.
+          </Text>
+        </LinearGradient>
       </View>
 
       {/* 2. Track Prompt Heading */}
-      <View style={{ rowGap: 2 }}>
+      <View style={{ rowGap: 2, marginTop: 4 }}>
         <Text
           style={{
-            fontSize: 17,
-            fontWeight: "800",
+            fontSize: 16,
+            fontWeight: "700",
             color: "#00112e",
             fontFamily: "system-ui, -apple-system, sans-serif",
           }}
@@ -161,8 +169,8 @@ function NotStarted({ application }: { application?: Application }) {
         </Text>
         <Text
           style={{
-            fontSize: 13,
-            color: "#64748b",
+            fontSize: 14,
+            color: "#453f37",
             fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
@@ -170,285 +178,165 @@ function NotStarted({ application }: { application?: Application }) {
         </Text>
       </View>
 
-      {/* 3. Track Cards Grid (3-columns on desktop, stacked on mobile) */}
+      {/* 3. Track Cards Grid (3-columns on desktop, stacked on mobile) Matching Image 4 */}
       <View
         style={{
           flexDirection: isDesktop ? "row" : "column",
-          gap: 16,
+          gap: 12,
           width: "100%",
         }}
       >
-        {/* Track 1: Offer services */}
-        <Pressable
-          accessibilityRole="button"
+        <TrackCard
+          isDesktop={isDesktop}
+          icon={<Wrench size={22} color="#ea580c" />}
+          title="Offer services"
+          description="Repairs, cleaning and other work at customers' homes. You choose your areas and hours."
           onPress={() => handleSelectTrack("SERVICES")}
           disabled={start.isPending}
-          style={({ pressed }) => ({
-            flex: isDesktop ? 1 : undefined,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: pressed ? "#f87000" : "#e2e8f0",
-            backgroundColor: "#ffffff",
-            padding: 18,
-            flexDirection: "row",
-            alignItems: "center",
-            columnGap: 14,
-            boxShadow: pressed
-              ? "0 4px 12px rgba(248, 112, 0, 0.15)"
-              : "0 2px 6px rgba(0, 0, 0, 0.04)",
-          })}
-        >
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: "#fff7ed",
-              borderWidth: 1,
-              borderColor: "#fed7aa",
-              alignItems: "center",
-              justifyContent: "center",
-              alignSelf: "flex-start",
-            }}
-          >
-            <Wrench size={22} color="#ea580c" />
-          </View>
+        />
 
-          <View style={{ flex: 1, rowGap: 4 }}>
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: "800",
-                color: "#00112e",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              Offer services
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                lineHeight: 19,
-                color: "#64748b",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              Repairs, cleaning and other work at customers&apos; homes. You choose your areas and hours.
-            </Text>
-          </View>
-
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 9999,
-              backgroundColor: "#f8fafc",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <ChevronRight size={18} color="#00112e" />
-          </View>
-        </Pressable>
-
-        {/* Track 2: Stays */}
-        <Pressable
-          accessibilityRole="button"
+        <TrackCard
+          isDesktop={isDesktop}
+          icon={<BedDouble size={22} color="#ea580c" />}
+          title="Stays"
+          description="Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about three minutes."
           onPress={() => handleSelectTrack("STAY_HOST")}
           disabled={start.isPending}
-          style={({ pressed }) => ({
-            flex: isDesktop ? 1 : undefined,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: pressed ? "#f87000" : "#e2e8f0",
-            backgroundColor: "#ffffff",
-            padding: 18,
-            flexDirection: "row",
-            alignItems: "center",
-            columnGap: 14,
-            boxShadow: pressed
-              ? "0 4px 12px rgba(248, 112, 0, 0.15)"
-              : "0 2px 6px rgba(0, 0, 0, 0.04)",
-          })}
-        >
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: "#fffbeb",
-              borderWidth: 1,
-              borderColor: "#fef3c7",
-              alignItems: "center",
-              justifyContent: "center",
-              alignSelf: "flex-start",
-            }}
-          >
-            <BedDouble size={22} color="#d97706" />
-          </View>
+        />
 
-          <View style={{ flex: 1, rowGap: 4 }}>
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: "800",
-                color: "#00112e",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              Stays
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                lineHeight: 19,
-                color: "#64748b",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about three minutes.
-            </Text>
-          </View>
-
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 9999,
-              backgroundColor: "#f8fafc",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <ChevronRight size={18} color="#00112e" />
-          </View>
-        </Pressable>
-
-        {/* Track 3: Rent out items */}
-        <Pressable
-          accessibilityRole="button"
+        <TrackCard
+          isDesktop={isDesktop}
+          icon={<Package size={22} color="#ea580c" />}
+          title="Rent out items"
+          description="Tools and equipment. Same short application: your details, the agreements and an ID."
           onPress={() => handleSelectTrack("RENTAL_OWNER")}
           disabled={start.isPending}
-          style={({ pressed }) => ({
-            flex: isDesktop ? 1 : undefined,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: pressed ? "#f87000" : "#e2e8f0",
-            backgroundColor: "#ffffff",
-            padding: 18,
-            flexDirection: "row",
-            alignItems: "center",
-            columnGap: 14,
-            boxShadow: pressed
-              ? "0 4px 12px rgba(248, 112, 0, 0.15)"
-              : "0 2px 6px rgba(0, 0, 0, 0.04)",
-          })}
+        />
+      </View>
+
+      {/* 4. Safety & Trust Checklist matching Image 4 */}
+      <View style={{ rowGap: 8, marginTop: 4 }}>
+        <PromiseItem text="Nothing is sent for review until you choose to send it" />
+        <PromiseItem text="Nothing is shared with customers until you are approved" />
+      </View>
+    </View>
+  );
+}
+
+function TrackCard({
+  icon,
+  title,
+  description,
+  onPress,
+  disabled,
+  isDesktop,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  onPress: () => void;
+  disabled?: boolean;
+  isDesktop?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => ({
+        flex: isDesktop ? 1 : undefined,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: pressed ? "#f87000" : "#e7e2da",
+        backgroundColor: "#ffffff",
+        padding: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 14,
+        boxShadow: pressed
+          ? "0 4px 12px rgba(248, 112, 0, 0.15)"
+          : "0 1px 2px rgba(0, 0, 0, 0.05)",
+      })}
+    >
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          backgroundColor: "#fff7ed",
+          alignItems: "center",
+          justifyContent: "center",
+          alignSelf: "flex-start",
+        }}
+      >
+        {icon}
+      </View>
+
+      <View style={{ flex: 1, rowGap: 4 }}>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "700",
+            color: "#00112e",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
         >
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: "#fff7ed",
-              borderWidth: 1,
-              borderColor: "#ffedd5",
-              alignItems: "center",
-              justifyContent: "center",
-              alignSelf: "flex-start",
-            }}
-          >
-            <Package size={22} color="#ea580c" />
-          </View>
-
-          <View style={{ flex: 1, rowGap: 4 }}>
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: "800",
-                color: "#00112e",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              Rent out items
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                lineHeight: 19,
-                color: "#64748b",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              Tools and equipment. Same short application: your details, the agreements and an ID.
-            </Text>
-          </View>
-
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 9999,
-              backgroundColor: "#f8fafc",
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <ChevronRight size={18} color="#00112e" />
-          </View>
-        </Pressable>
+          {title}
+        </Text>
+        <Text
+          style={{
+            fontSize: 14,
+            lineHeight: 20,
+            color: "#453f37",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
+        >
+          {description}
+        </Text>
       </View>
 
-      {/* 4. Safety & Trust Checklist */}
-      <View style={{ rowGap: 10, marginTop: 4 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
-          <View
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 9999,
-              backgroundColor: "#ecfdf5",
-              borderWidth: 1,
-              borderColor: "#a7f3d0",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Check size={12} color="#059669" strokeWidth={3} />
-          </View>
-          <Text style={{ fontSize: 13.5, color: "#475569", fontWeight: "500" }}>
-            Nothing is sent for review until you choose to send it
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
-          <View
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 9999,
-              backgroundColor: "#ecfdf5",
-              borderWidth: 1,
-              borderColor: "#a7f3d0",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Check size={12} color="#059669" strokeWidth={3} />
-          </View>
-          <Text style={{ fontSize: 13.5, color: "#475569", fontWeight: "500" }}>
-            Nothing is shared with customers until you are approved
-          </Text>
-        </View>
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 9999,
+          backgroundColor: "#f4f1ec",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <ChevronRight size={18} color="#00112e" />
       </View>
+    </Pressable>
+  );
+}
+
+function PromiseItem({ text }: { text: string }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
+      <View
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 9999,
+          backgroundColor: "#dcfce7",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Check size={13} color="#15803d" strokeWidth={3} />
+      </View>
+      <Text
+        style={{
+          fontSize: 15,
+          lineHeight: 24,
+          color: "#453f37",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
+        {text}
+      </Text>
     </View>
   );
 }
@@ -488,76 +376,84 @@ function Standing({ application }: { application: Application }) {
           {editable ? (
             <View
               style={{
-                borderRadius: 24,
-                backgroundColor: "#00112e",
-                padding: isDesktop ? 28 : 20,
-                rowGap: 16,
+                borderRadius: 20,
+                overflow: "hidden",
                 borderWidth: 1,
                 borderColor: "rgba(255, 255, 255, 0.1)",
                 boxShadow: "0 12px 32px rgba(0, 17, 46, 0.15)",
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", columnGap: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 9999, backgroundColor: "#f87000" }} />
-                  <Text style={{ fontSize: 11, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase", color: "#fcd34d" }}>
-                    Application Progress
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    borderRadius: 9999,
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
-                    borderWidth: 1,
-                    borderColor: "rgba(255, 255, 255, 0.15)",
-                    paddingHorizontal: 10,
-                    paddingVertical: 3,
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
-                    {ready ? "All Done" : `${summary.done} of ${summary.total} Completed`}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={{ rowGap: 4 }}>
-                <Text style={{ fontSize: 24, fontWeight: "900", color: "#ffffff", letterSpacing: -0.5 }}>
-                  {ready ? "Application Complete!" : `${remaining} ${remaining === 1 ? "step" : "steps"} remaining`}
-                </Text>
-                <Text style={{ fontSize: 13, lineHeight: 20, color: "#cbd5e1" }}>
-                  {ready
-                    ? "All required steps are filled. Review your details and submit for verification."
-                    : `Next up: Complete your ${summary.nextIncomplete?.label.toLowerCase() ?? "profile"} to submit for fast 24h approval.`}
-                </Text>
-              </View>
-
-              {/* Progress Bar */}
-              <View style={{ rowGap: 6 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#94a3b8" }}>Overall Completion</Text>
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#fcd34d" }}>{percent}%</Text>
-                </View>
-                <View style={{ height: 8, width: "100%", borderRadius: 9999, backgroundColor: "rgba(255, 255, 255, 0.15)", overflow: "hidden" }}>
-                  <View style={{ height: "100%", borderRadius: 9999, backgroundColor: "#f87000", width: `${Math.max(6, percent)}%` }} />
-                </View>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push(nextHref as never)}
+              <LinearGradient
+                colors={["#00204d", "#00183b", "#00112e"]}
+                start={{ x: 0.1, y: 0 }}
+                end={{ x: 0.9, y: 1 }}
                 style={{
-                  height: 48,
-                  borderRadius: 14,
-                  backgroundColor: "#f87000",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 4px 14px rgba(248, 112, 0, 0.35)",
+                  padding: isDesktop ? 28 : 20,
+                  rowGap: 16,
                 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: "800", color: "#ffffff" }}>
-                  {ready ? "Review & Submit Application" : `Continue to ${summary.nextIncomplete?.label ?? "Next Step"}`}
-                </Text>
-              </Pressable>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", columnGap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 9999, backgroundColor: "#f87000" }} />
+                    <Text style={{ fontSize: 11, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase", color: "#fcd34d" }}>
+                      Application Progress
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      borderRadius: 9999,
+                      backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255, 255, 255, 0.15)",
+                      paddingHorizontal: 10,
+                      paddingVertical: 3,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
+                      {ready ? "All Done" : `${summary.done} of ${summary.total} Completed`}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ rowGap: 4 }}>
+                  <Text style={{ fontSize: 24, fontWeight: "900", color: "#ffffff", letterSpacing: -0.5 }}>
+                    {ready ? "Application Complete!" : `${remaining} ${remaining === 1 ? "step" : "steps"} remaining`}
+                  </Text>
+                  <Text style={{ fontSize: 13, lineHeight: 20, color: "#cbd5e1" }}>
+                    {ready
+                      ? "All required steps are filled. Review your details and submit for verification."
+                      : `Next up: Complete your ${summary.nextIncomplete?.label.toLowerCase() ?? "profile"} to submit for fast 24h approval.`}
+                  </Text>
+                </View>
+
+                {/* Progress Bar */}
+                <View style={{ rowGap: 6 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#94a3b8" }}>Overall Completion</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#fcd34d" }}>{percent}%</Text>
+                  </View>
+                  <View style={{ height: 8, width: "100%", borderRadius: 9999, backgroundColor: "rgba(255, 255, 255, 0.15)", overflow: "hidden" }}>
+                    <View style={{ height: "100%", borderRadius: 9999, backgroundColor: "#f87000", width: `${Math.max(6, percent)}%` }} />
+                  </View>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push(nextHref as never)}
+                  style={({ pressed }) => ({
+                    height: 48,
+                    borderRadius: 14,
+                    backgroundColor: pressed ? "#e06400" : "#f87000",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 4px 14px rgba(248, 112, 0, 0.35)",
+                  })}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#ffffff" }}>
+                    {ready ? "Review & Submit Application" : `Continue to ${summary.nextIncomplete?.label ?? "Next Step"}`}
+                  </Text>
+                </Pressable>
+              </LinearGradient>
             </View>
           ) : null}
 
@@ -587,14 +483,15 @@ function Standing({ application }: { application: Application }) {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push("/apply/capabilities" as never)}
-                style={{
+                style={({ pressed }) => ({
                   alignSelf: "flex-start",
                   borderRadius: 10,
                   borderWidth: 1,
                   borderColor: "#cbd5e1",
+                  backgroundColor: pressed ? "#f8fafc" : "#ffffff",
                   paddingHorizontal: 14,
                   paddingVertical: 8,
-                }}
+                })}
               >
                 <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
                   Explore Crew Rates
