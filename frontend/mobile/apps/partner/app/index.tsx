@@ -398,7 +398,7 @@ export default function Index() {
         <MarketingHeader activeTab="home" />
 
         {/* Hero Content Section */}
-        <View className="px-5 pt-8 pb-16 sm:pt-14 sm:pb-24">
+        <View className="px-5 pt-24 pb-16 sm:pt-32 sm:pb-24">
           <View
             className={`mx-auto w-full ${
               isDesktop ? "max-w-6xl flex-row items-center justify-between gap-12" : "max-w-md flex-col gap-8"

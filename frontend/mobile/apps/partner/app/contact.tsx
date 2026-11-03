@@ -51,7 +51,7 @@ export default function ContactScreen() {
       <MarketingHeader activeTab="contact" />
 
       {/* Hero Header */}
-      <View className="px-5 pt-12 pb-8 sm:pt-20 sm:pb-14">
+      <View className="px-5 pt-24 pb-8 sm:pt-28 lg:pt-32 sm:pb-14">
         <View className="mx-auto w-full max-w-3xl items-center text-center">
           <View className="flex-row items-center gap-1.5 rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1 shadow-xs mb-3">
             <ShieldCheck size={14} color="#059669" />

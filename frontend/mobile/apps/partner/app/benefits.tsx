@@ -85,7 +85,7 @@ export default function BenefitsScreen() {
       <MarketingHeader activeTab="benefits" />
 
       {/* Hero Header */}
-      <View className="px-5 pt-12 pb-8 sm:pt-20 sm:pb-14">
+      <View className="px-5 pt-24 pb-8 sm:pt-28 sm:pb-14">
         <View className="mx-auto w-full max-w-4xl items-center text-center">
           <View className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1 border border-emerald-200 shadow-xs">
             <Award size={14} color="#059669" />
