@@ -10,6 +10,7 @@ import { bookingVisitHref } from "@/lib/routes";
 
 import { newestBookingStatus, type BookingGroup, type FulfilmentUnit } from "../queries";
 import {
+  cleanServiceLabel,
   formatBookingDate,
   formatBookingTime,
   formatBookingWhen,
@@ -192,15 +193,6 @@ function SingleVisitLiveActions({ bookingId }: { bookingId: string }) {
   const visit = useVisit(bookingId);
   if (visit.data === undefined) return null;
   return <VisitActions visit={visit.data} />;
-}
-
-/** Strips duplicate trailing "x {qty}" from labels that already included it in database */
-export function cleanServiceLabel(label: string, quantity: number): string {
-  if (!label) return "";
-  let cleaned = label.trim();
-  const regex = new RegExp(`[x×]\\s*${quantity}$`, "i");
-  cleaned = cleaned.replace(regex, "").trim();
-  return cleaned;
 }
 
 /** Compact card on a multi-visit paid overview. */

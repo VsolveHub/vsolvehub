@@ -8,6 +8,7 @@ import { useBookingPayment } from "@/features/payment/use-booking-payment";
 import { CheckoutLoyaltyOptions } from "@/features/payment/view/checkout-loyalty-options";
 import { claimViewport } from "@/lib/focus-mode";
 import type { BookingGroup } from "../queries";
+import { cleanServiceLabel } from "./booking-format";
 import { GroupStatusBadge } from "./group-status";
 
 interface PaymentSummaryProps {
@@ -64,32 +65,40 @@ export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
         </p>
 
         <div className="space-y-2.5">
-          {group.units.map((unit, uIdx) => (
-            <div key={unit.id} className="space-y-1.5 rounded-xl bg-surface-sunken/60 border border-line/60 p-3 text-xs">
-              {group.units.length > 1 ? (
-                <div className="flex justify-between items-center font-semibold text-text border-b border-line/40 pb-1.5">
-                  <span className="text-action">Visit {uIdx + 1}</span>
-                  <span className="text-[11px] text-text-secondary font-normal">
-                    {unit.arrival_window_minutes} min window
-                  </span>
-                </div>
-              ) : null}
+          {group.units.map((unit, uIdx) => {
+            const displayLines = unit.lines.filter(
+              (line) => (line.amount?.amount_paise ?? 0) > 0 || line.kind === "SERVICE",
+            );
+            return (
+              <div key={unit.id} className="space-y-1.5 rounded-xl bg-surface-sunken/60 border border-line/60 p-3 text-xs">
+                {group.units.length > 1 ? (
+                  <div className="flex justify-between items-center font-semibold text-text border-b border-line/40 pb-1.5">
+                    <span className="text-action">Visit {uIdx + 1}</span>
+                    <span className="text-[11px] text-text-secondary font-normal">
+                      {unit.arrival_window_minutes} min window
+                    </span>
+                  </div>
+                ) : null}
 
-              {unit.lines.map((line) => (
-                <div key={line.id} className="flex justify-between items-start text-text gap-2">
-                  <span className="font-medium text-slate-700">
-                    {line.label}
-                    {line.quantity > 1 ? (
-                      <span className="text-text-secondary font-normal"> × {line.quantity}</span>
-                    ) : null}
-                  </span>
-                  <span className="font-semibold text-text tabular-nums shrink-0">
-                    <Money value={line.amount} />
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
+                {displayLines.map((line) => {
+                  const label = cleanServiceLabel(line.label, line.quantity);
+                  return (
+                    <div key={line.id} className="flex justify-between items-start text-text gap-2">
+                      <span className="font-medium text-slate-700">
+                        {label}
+                        {line.quantity > 1 ? (
+                          <span className="text-text-secondary font-normal"> × {line.quantity}</span>
+                        ) : null}
+                      </span>
+                      <span className="font-semibold text-text tabular-nums shrink-0">
+                        <Money value={line.amount} />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {/* Taxes & Platform Fee if applicable */}
@@ -219,24 +228,32 @@ export function MobilePaymentBottomBar({ group }: PaymentSummaryProps) {
       >
         <div className="p-4 space-y-4">
           <div className="space-y-2 border-b border-line pb-3">
-            {group.units.map((unit, uIdx) => (
-              <div key={unit.id} className="space-y-1 text-xs">
-                {group.units.length > 1 ? (
-                  <p className="font-semibold text-action">Visit {uIdx + 1}</p>
-                ) : null}
-                {unit.lines.map((line) => (
-                  <div key={line.id} className="flex justify-between items-center text-text">
-                    <span>
-                      {line.label}
-                      {line.quantity > 1 ? ` × ${line.quantity}` : ""}
-                    </span>
-                    <span className="font-semibold tabular-nums">
-                      <Money value={line.amount} />
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
+            {group.units.map((unit, uIdx) => {
+              const displayLines = unit.lines.filter(
+                (line) => (line.amount?.amount_paise ?? 0) > 0 || line.kind === "SERVICE",
+              );
+              return (
+                <div key={unit.id} className="space-y-1 text-xs">
+                  {group.units.length > 1 ? (
+                    <p className="font-semibold text-action">Visit {uIdx + 1}</p>
+                  ) : null}
+                  {displayLines.map((line) => {
+                    const label = cleanServiceLabel(line.label, line.quantity);
+                    return (
+                      <div key={line.id} className="flex justify-between items-center text-text">
+                        <span>
+                          {label}
+                          {line.quantity > 1 ? ` × ${line.quantity}` : ""}
+                        </span>
+                        <span className="font-semibold tabular-nums">
+                          <Money value={line.amount} />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
 
             {feeOrTaxPaise > 0 ? (
               <div className="flex justify-between items-center text-xs text-text-secondary pt-1 border-t border-line/40">

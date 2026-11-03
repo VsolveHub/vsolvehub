@@ -18,8 +18,10 @@ import { Badge } from "@vsolve/ui";
  */
 export function MockProfessionalCard({
   professional,
+  isHeld = false,
 }: {
   professional?: Schemas["AssignedProfessional"] | null;
+  isHeld?: boolean;
 }) {
   const facts = professional
     ? [
@@ -36,7 +38,11 @@ export function MockProfessionalCard({
         <div className="flex items-center gap-2">
           <span className="size-2 rounded-full bg-success animate-pulse" />
           <span className="text-xs font-bold uppercase tracking-wider text-text">
-            {professional ? "Professional Held & Assigned" : "Finding your professional"}
+            {professional
+              ? "Professional Held & Assigned"
+              : isHeld
+                ? "Professional Reserved & Held"
+                : "Finding your professional"}
           </span>
         </div>
         <Badge tone="success">Verified Pro</Badge>
