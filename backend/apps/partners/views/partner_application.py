@@ -1,4 +1,4 @@
-"""The Partner's own surface: application, profile, documents, availability, presence.
+﻿"""The Partner's own surface: application, profile, documents, availability, presence.
 
 Everything a signed-in Partner reads or writes about themselves before Operations is involved — the
 applicant option lists, `GET`/`PATCH` on their own profile, the application and its document
@@ -371,7 +371,7 @@ class PartnerScheduleView(APIView):
     def get(self, request: Request) -> Response:
         partner = partner_profile_for_user(cast(User, request.user))
         if partner is None:
-            raise NotFound("Partner application was not found.")
+            return Response({"rules": [], "exceptions": []})
         rules, exceptions = partner_schedule(partner)
         return Response(
             PartnerScheduleSerializer({"rules": rules, "exceptions": exceptions}).data,

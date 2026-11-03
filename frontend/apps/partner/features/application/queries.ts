@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { SESSION_STATE, queryKeys } from "@vsolve/query";
@@ -168,8 +168,19 @@ export function useSubmitApplication() {
 export function usePartnerAvailability() {
   return useQuery({
     queryKey: queryKeys.partner.availability(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/availability/")),
+    queryFn: async () => {
+      try {
+        return await request(() => getApiClient().GET("/api/v1/partner/availability/"));
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.status === 404) {
+          return { rules: [], exceptions: [] };
+        }
+        throw err;
+      }
+    },
     ...SESSION_STATE,
+    retry: (failureCount, error) =>
+      error instanceof ApiRequestError && error.status === 404 ? false : failureCount < 2,
   });
 }
 
