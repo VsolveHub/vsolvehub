@@ -1,3 +1,19 @@
+export interface StayLookMedia {
+  id: string;
+  url: string;
+  display_order?: number;
+}
+
+export interface StayLook {
+  id: string;
+  name: string;
+  display_name: string;
+  display_order: number;
+  media: StayLookMedia[];
+  available_count: number;
+  room_count: number;
+}
+
 export interface StayUnit {
   id: string;
   name: string;
@@ -5,6 +21,10 @@ export interface StayUnit {
   sharing_count?: number;
   max_guests?: number;
   quantity_available?: number;
+  available_count?: number;
+  quantity?: number;
+  media?: StayLookMedia[];
+  looks?: StayLook[];
 }
 
 export interface StayTaxonomyService {
@@ -39,14 +59,17 @@ export interface StayPropertySummary {
   min_price_paise?: number;
   min_stay_nights?: number;
   tenant_preference?: string;
-  average_rating?: number;
+  lat?: number;
+  lng?: number;
+  average_rating?: number | null;
   review_count?: number;
   total_units?: number;
   image_urls?: string[];
   host_name?: string;
   amenities?: { key: string; label: string }[];
   partner?: StayPartner;
-  structured_fields?: Record<string, unknown>;
+  structured_fields?: Record<string, unknown> | null;
+  distance_km?: number | null;
   units?: StayUnit[];
 }
 
@@ -62,7 +85,8 @@ export interface StayReview {
 export interface StayProperty extends StayPropertySummary {
   description?: string;
   house_rules?: string;
-  structured_fields?: Record<string, unknown>;
+  structured_fields?: Record<string, unknown> | null;
+  distance_km?: number | null;
   highlights?: { label: string; value: string }[];
   can_review?: boolean;
   reviews?: StayReview[];
@@ -80,11 +104,11 @@ export interface StayEnquiry {
   price_period?: string;
   guest_count?: number;
   message?: string;
-  status: string;
+  status?: string;
   property?: StayProperty | string;
   property_title?: string;
   property_slug?: string;
-  unit?: StayUnit;
+  unit?: StayUnit | string | null;
   unit_name?: string;
   total_quote_paise?: number;
   created_at?: string;
@@ -104,23 +128,24 @@ export interface StayVisitSlot {
 export interface StayVisit {
   id: string;
   visit_date: string;
-  status: string;
-  property?: StayProperty;
+  status?: string;
+  property?: StayProperty | string;
   property_title?: string;
   property_slug?: string;
   unit_name?: string;
-  slot?: StayVisitSlot;
+  slot?: StayVisitSlot | string | null;
   start_time?: string;
   end_time?: string;
   message?: string;
   host_name?: string;
   host_phone?: string;
   reason_text?: string;
+  created_at?: string;
 }
 
 export interface StayReservation {
   id: string;
-  status: string;
+  status?: string;
   check_in: string;
   check_out?: string;
   nights?: number;
@@ -155,8 +180,13 @@ export interface StayFilterParams {
   min_price?: number;
   max_price?: number;
   tenant_preference?: string;
+  lat?: number;
+  lng?: number;
   service?: string;
+  stay_type?: string;
+  amenities?: string[];
   sort?: string;
+  cursor?: string;
   limit?: number;
   offset?: number;
 }

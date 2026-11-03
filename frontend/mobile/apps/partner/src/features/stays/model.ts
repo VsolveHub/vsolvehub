@@ -49,12 +49,29 @@ export interface StayUnitMedia {
   caption?: string;
 }
 
+export interface StayLookMedia {
+  id: string;
+  url: string;
+  display_order?: number;
+}
+
+export interface StayLook {
+  id: string;
+  name: string;
+  display_name: string;
+  display_order: number;
+  media: StayLookMedia[];
+  available_count: number;
+  room_count: number;
+}
+
 export interface StayRoom {
   id: string;
   number: string;
   status?: "AVAILABLE" | "UNAVAILABLE" | "BOOKED" | string;
   available?: boolean;
   occupant_name?: string | null;
+  look?: string | null;
 }
 
 export interface StayUnit {
@@ -70,6 +87,7 @@ export interface StayUnit {
   media?: StayUnitMedia[];
   room_numbers?: string[];
   rooms?: StayRoom[];
+  looks?: StayLook[];
   attributes?: Record<string, unknown>;
 }
 
@@ -116,6 +134,7 @@ export interface StayProperty {
   visits_enabled?: boolean;
   visit_slots?: VisitSlotRow[];
   visit_blocked_dates?: string[];
+  reviews?: { rating?: number }[];
   created_at?: string;
 }
 
@@ -153,6 +172,7 @@ export interface StayEnquiry {
   customer_phone?: string;
   host_response?: string;
   responded_at?: string;
+  reviews?: { rating?: number }[];
   created_at?: string;
 }
 
@@ -198,6 +218,7 @@ export interface StayReservation {
   checked_out_at?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
+  reviews?: { rating?: number }[];
   created_at?: string;
 }
 

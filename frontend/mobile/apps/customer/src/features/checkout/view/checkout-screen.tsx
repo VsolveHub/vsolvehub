@@ -2,9 +2,9 @@
 // Exact match with Image 1 (previous customer portal) and web specification
 import { describeError } from "@vsolve/query/native";
 import { useAuthStore } from "@vsolve/mobile-core";
-import { Button, Spinner, Text, formatMoney } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { Button, COLOR_TOKENS, Spinner, Text, cn, formatMoney } from "@vsolve/mobile-ui";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
@@ -20,8 +20,10 @@ import {
   useCreatePlanSet,
   usePlanQuote,
   usePlanSet,
+  useCandidateStarts,
   useSchedulingGroups,
 } from "@/features/checkout/queries";
+import { BookingModeToggle, type BookingMode } from "./booking-mode-toggle";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 
 import { Image } from "expo-image";
@@ -31,6 +33,7 @@ import { AddressSheet } from "./address-sheet";
 import { ChevronLeftIcon, ClockIcon, DetailRow, PhoneIcon, PinIcon } from "./detail-row";
 import { OrderSummary } from "./order-summary";
 import { SlotsSheet } from "./slots-sheet";
+import { deriveSchedulingGroups } from "./scheduling-groups";
 import { useIsDesktop } from "@/lib/responsive";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 
@@ -40,8 +43,8 @@ function CheckoutItemCover({ slug }: { slug: string }) {
 
   if (!imageUrl) {
     return (
-      <View className="size-full items-center justify-center bg-[#F4F1EC]">
-        <Text className="text-xs font-bold text-[#94A3B8]">VS</Text>
+      <View className="size-full items-center justify-center bg-surface-sunken">
+        <Text className="text-xs font-bold text-text-muted">VS</Text>
       </View>
     );
   }
@@ -76,7 +79,7 @@ function formatChosen(startsAt: string): string {
 /** Shield Checkmark Icon matching web SecureBookingBadge & CheckoutCancellationPanel */
 function OrangeShieldIcon() {
   return (
-    <Svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="#EA580C" strokeWidth={1.5}>
+    <Svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke={COLOR_TOKENS.action} strokeWidth={1.5}>
       <Path
         d="M10 2.5 4 5v5c0 3.5 2.6 6.8 6 7.5 3.4-.7 6-4 6-7.5V5l-6-2.5Z"
         strokeLinejoin="round"
@@ -90,6 +93,7 @@ export function CheckoutScreen() {
   const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ slots?: string }>();
   const status = useAuthStore((state) => state.status);
   const [loginOpen, setLoginOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -101,7 +105,27 @@ export function CheckoutScreen() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [addressSheetOpen, setAddressSheetOpen] = useState(false);
   const [slotsSheetOpen, setSlotsSheetOpen] = useState(false);
-  const [starts, setStarts] = useState<Record<string, string>>({});
+  const [starts, setStarts] = useState<Record<string, string>>(() => {
+    if (params.slots) {
+      try {
+        const parsed = JSON.parse(params.slots);
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch {}
+    }
+    return {};
+  });
+  const [bookingMode, setBookingMode] = useState<BookingMode>("SCHEDULED");
+
+  useEffect(() => {
+    if (params.slots) {
+      try {
+        const parsed = JSON.parse(params.slots);
+        if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
+          setStarts(parsed);
+        }
+      } catch {}
+    }
+  }, [params.slots]);
 
   const [planSetId, setPlanSetId] = useState<string | null>(null);
   const [quoteId, setQuoteId] = useState<string | null>(null);
@@ -127,7 +151,29 @@ export function CheckoutScreen() {
       ? { cartVersion: cart!.version, addressId: effectiveAddressId }
       : null,
   );
-  const groups = groupsQuery.data ?? [];
+  const derivedGroups = useMemo(
+    () => deriveSchedulingGroups(cart?.items ?? [], groupsQuery.data),
+    [cart?.items, groupsQuery.data],
+  );
+  const groups = groupsQuery.data && groupsQuery.data.length > 0 ? groupsQuery.data : derivedGroups;
+
+  const firstGroupKey = groupsQuery.data && groupsQuery.data.length > 0 ? groupsQuery.data[0].key : null;
+  const windowsQuery = useCandidateStarts(
+    hasItems && effectiveAddressId && !isAddressKnownUnserviceable && firstGroupKey !== null
+      ? {
+        cartVersion: cart!.version,
+        addressId: effectiveAddressId,
+        groupKey: firstGroupKey,
+      }
+      : null,
+  );
+  const instant = windowsQuery.data?.instant;
+
+  useEffect(() => {
+    if (bookingMode === "INSTANT" && windowsQuery.data && !instant?.isAvailable) {
+      setBookingMode("SCHEDULED");
+    }
+  }, [bookingMode, windowsQuery.data, instant?.isAvailable]);
 
   const createPlanSet = useCreatePlanSet();
   const createQuote = useCreatePlanQuote();
@@ -138,7 +184,10 @@ export function CheckoutScreen() {
   const quoteQuery = usePlanQuote(quoteId);
   const quote = quoteQuery.data ?? null;
 
-  const isScheduled = groups.length > 0 && groups.every((g) => starts[g.key] && starts[g.key].trim().length > 0);
+  const isScheduled =
+    bookingMode === "INSTANT"
+      ? Boolean(instant?.isAvailable && Object.keys(starts).length > 0)
+      : groups.length > 0 && groups.every((g) => starts[g.key] && starts[g.key].trim().length > 0);
   const isServiceable = serviceabilityQuery.data ? serviceabilityQuery.data.is_serviceable : true;
 
   function rescheduleFromScratch() {
@@ -149,6 +198,62 @@ export function CheckoutScreen() {
     createQuote.reset();
     createCheckout.reset();
     void groupsQuery.refetch();
+  }
+
+  function handleBookingModeChange(nextMode: BookingMode) {
+    if (nextMode === bookingMode) return;
+    setBookingMode(nextMode);
+    setPlanSetId(null);
+    setQuoteId(null);
+    setStarts({});
+    createPlanSet.reset();
+    createQuote.reset();
+    createCheckout.reset();
+
+    if (nextMode === "INSTANT") {
+      if (instant?.isAvailable && instant.earliestStartsAt && cart && effectiveAddressId) {
+        const earliest = instant.earliestStartsAt;
+        const startsObj: Record<string, string> = {};
+        groups.forEach((g) => {
+          startsObj[g.key] = earliest;
+        });
+        setStarts(startsObj);
+
+        createPlanSet.mutate(
+          {
+            cartVersion: cart.version,
+            addressId: effectiveAddressId,
+            bookingMode: "INSTANT",
+            preferredStarts: groups.map((g) => ({
+              groupKey: g.key,
+              startsAt: earliest,
+            })),
+          },
+          {
+            onSuccess: (result) => {
+              if (!result) return;
+              setPlanSetId(result.id);
+              const recommended =
+                result.plans.find((p) => p.is_recommended) ?? result.plans[0];
+              if (!recommended) return;
+              createQuote.mutate(recommended.id, {
+                onSuccess: (priced) => setQuoteId(priced.id),
+                onError: (err) => {
+                  if (cartVersionConflict(err) !== null) {
+                    rescheduleFromScratch();
+                  }
+                },
+              });
+            },
+            onError: (err) => {
+              if (cartVersionConflict(err) !== null) {
+                rescheduleFromScratch();
+              }
+            },
+          },
+        );
+      }
+    }
   }
 
   function handleSchedule(chosen: Record<string, string>) {
@@ -164,13 +269,14 @@ export function CheckoutScreen() {
       {
         cartVersion: cart.version,
         addressId: effectiveAddressId,
+        bookingMode: "SCHEDULED",
         preferredStarts,
       },
       {
         onSuccess: (result) => {
           if (!result) return;
-          setPlanSetId((result as any).id);
-          const recommended = (result as any).plans.find((p: any) => p.is_recommended) ?? (result as any).plans[0];
+          setPlanSetId(result.id);
+          const recommended = result.plans.find((p) => p.is_recommended) ?? result.plans[0];
           if (!recommended) return;
           createQuote.mutate(recommended.id, {
             onSuccess: (priced) => setQuoteId(priced.id),
@@ -208,19 +314,20 @@ export function CheckoutScreen() {
     if (!cart || !effectiveAddressId || !isScheduled) return;
     const preferredStarts = groups.map((g) => ({
       groupKey: g.key,
-      startsAt: starts[g.key] ?? "",
+      startsAt: starts[g.key] ?? (instant?.earliestStartsAt || ""),
     }));
 
     createPlanSet.mutate(
       {
         cartVersion: cart.version,
         addressId: effectiveAddressId,
+        bookingMode,
         preferredStarts,
       },
       {
         onSuccess: (result) => {
           if (!result) return;
-          const chosen = (result as any).plans.find((p: any) => p.is_recommended) ?? (result as any).plans[0];
+          const chosen = result.plans.find((p) => p.is_recommended) ?? result.plans[0];
           if (!chosen) return;
           createQuote.mutate(chosen.id, {
             onSuccess: (priced) => {
@@ -299,18 +406,18 @@ export function CheckoutScreen() {
   if (cartQuery.isSuccess && cart && cart.items.length === 0) {
     if (isDesktop) {
       return (
-        <ScrollView className="flex-1 bg-[#FAF9F7]" contentContainerClassName="pb-0">
+        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="pb-0">
           <View className="mx-auto w-full max-w-[1216px] px-6 lg:px-8 pt-8 pb-16 min-h-[calc(100vh-180px)]">
-            <Text className="text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-[#0B1B3D]">
+            <Text className="text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-navy-950">
               Checkout
             </Text>
-            <View className="mt-8 rounded-2xl border border-[#F1EFEB] bg-white p-12 items-center justify-center shadow-xs">
-              <Text className="text-xl font-bold text-[#0B1B3D]">Your cart is empty</Text>
-              <Text className="mt-2 text-sm leading-relaxed text-[#64748B]">
+            <View className="mt-8 rounded-2xl border border-line bg-white p-12 items-center justify-center shadow-xs">
+              <Text className="text-xl font-bold text-navy-950">Your cart is empty</Text>
+              <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
                 There is nothing to check out. Nothing has been booked or charged.
               </Text>
               <View className="mt-6">
-                <Button size="lg" onPress={() => router.replace("/catalog" as never)} className="bg-[#EA580C]">
+                <Button size="lg" variant="primary" onPress={() => router.replace("/catalog" as never)}>
                   Browse services
                 </Button>
               </View>
@@ -353,7 +460,7 @@ export function CheckoutScreen() {
 
   const isPricing = createPlanSet.isPending || createQuote.isPending;
   const isConfirming = createCheckout.isPending || isPricing;
-  const phoneNumber = profileQuery.data?.phone_number ?? "+919640169854";
+  const phoneNumber = profileQuery.data?.phone_number ?? null;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -363,18 +470,18 @@ export function CheckoutScreen() {
 
   if (isDesktop) {
     return (
-      <View className="flex-1 bg-[#FAF9F7]">
+      <View className="flex-1 bg-canvas">
         <ScrollView
-          className="flex-1 bg-[#FAF9F7]"
+          className="flex-1 bg-canvas"
           contentContainerClassName="pb-0"
           showsVerticalScrollIndicator={true}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLOR_TOKENS.action]} tintColor={COLOR_TOKENS.action} />
           }
         >
           <View className="mx-auto w-full max-w-[1216px] px-6 lg:px-8 pt-8 pb-16 min-h-[calc(100vh-180px)]">
             {/* Title matching Image 3 */}
-            <Text className="text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-[#0B1B3D]">
+            <Text className="text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-navy-950">
               Checkout
             </Text>
 
@@ -383,36 +490,38 @@ export function CheckoutScreen() {
               {/* Left Column: Details Card + Cancellation policy */}
               <View className="min-w-0 flex-1">
                 {/* Details Card */}
-                <View className="overflow-hidden rounded-2xl border border-[#F1EFEB] bg-white shadow-xs">
+                <View className="overflow-hidden rounded-2xl border border-line bg-white shadow-xs">
                   {/* Phone Row */}
-                  <View className="flex-row items-center justify-between p-5">
-                    <View className="flex-row items-center gap-3.5 min-w-0 flex-1">
-                      <PhoneIcon />
-                      <View className="min-w-0 flex-1">
-                        <Text className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
-                          Send booking details to
-                        </Text>
-                        <Text className="mt-1 text-sm font-bold text-[#0B1B3D]">{phoneNumber}</Text>
+                  {phoneNumber ? (
+                    <View className="flex-row items-center justify-between p-5">
+                      <View className="flex-row items-center gap-3.5 min-w-0 flex-1">
+                        <PhoneIcon />
+                        <View className="min-w-0 flex-1">
+                          <Text className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                            Send booking details to
+                          </Text>
+                          <Text className="mt-1 text-sm font-bold text-navy-950">{phoneNumber}</Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
+                  ) : null}
 
                   {/* Address Row */}
-                  <View className="border-t border-[#F1EFEB] flex-row items-center justify-between p-5">
+                  <View className={cn("flex-row items-center justify-between p-5", phoneNumber ? "border-t border-line" : "")}>
                     <View className="flex-row items-center gap-3.5 min-w-0 flex-1 mr-4">
                       <PinIcon />
                       <View className="min-w-0 flex-1">
-                        <Text className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">Address</Text>
+                        <Text className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Address</Text>
                         {selectedAddress ? (
-                          <Text className="mt-1 text-sm font-semibold text-[#0B1B3D]">
+                          <Text className="mt-1 text-sm font-semibold text-navy-950">
                             {selectedAddress.label}
-                            <Text className="font-normal text-[#64748B]">
+                            <Text className="font-normal text-text-secondary">
                               {" — "}
                               {selectedAddress.line1}, {selectedAddress.locality}
                             </Text>
                           </Text>
                         ) : (
-                          <Text className="mt-1 text-sm text-[#64748B]">Choose where the work happens.</Text>
+                          <Text className="mt-1 text-sm text-text-secondary">Choose where the work happens.</Text>
                         )}
                         {!isServiceable && selectedAddress ? (
                           <Text className="mt-1 text-xs font-semibold text-danger-text">
@@ -424,58 +533,113 @@ export function CheckoutScreen() {
                     <Pressable
                       accessibilityRole="button"
                       onPress={() => setAddressSheetOpen(true)}
-                      className="rounded-lg border border-[#E5E7EB] bg-white px-3.5 py-1.5 active:bg-[#F2EFE9] hover:bg-[#F2EFE9]"
+                      className="rounded-lg border border-line bg-white px-3.5 py-1.5 active:bg-surface-sunken hover:bg-surface-sunken"
                     >
-                      <Text className="text-xs font-bold text-[#0B1B3D]">{selectedAddress ? "Edit" : "Add address"}</Text>
+                      <Text className="text-xs font-bold text-navy-950">{selectedAddress ? "Edit" : "Add address"}</Text>
                     </Pressable>
                   </View>
 
-                  {/* Slot Row */}
-                  <View className="border-t border-[#F1EFEB] flex-row items-center justify-between p-5">
-                    <View className="flex-row items-center gap-3.5 min-w-0 flex-1 mr-4">
-                      <ClockIcon />
-                      <View className="min-w-0 flex-1">
-                        <Text className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
-                          {groups.length > 1 ? "Slots" : "Slot"}
-                        </Text>
-                        {isScheduled ? (
-                          <View className="mt-1 gap-0.5">
+                  {/* Booking Mode Row */}
+                  <View className="border-t border-line p-5 bg-canvas/50">
+                    <View className="mb-2">
+                      <Text className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                        Booking Mode
+                      </Text>
+                    </View>
+                    <BookingModeToggle
+                      value={bookingMode}
+                      onChange={handleBookingModeChange}
+                      instant={instant}
+                      disabled={effectiveAddressId === null || groups.length === 0}
+                    />
+                  </View>
+
+                  {/* Arrival Time or Slot Row */}
+                  {bookingMode === "INSTANT" ? (
+                    <View className="border-t border-line flex-row items-center justify-between p-5">
+                      <View className="flex-row items-center gap-3.5 min-w-0 flex-1 mr-4">
+                        <ClockIcon />
+                        <View className="min-w-0 flex-1">
+                          <Text className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                            Arrival time
+                          </Text>
+                          <View className="mt-1 flex-row items-center gap-2">
+                            <Text className="text-sm font-bold text-navy-950">
+                              {instant?.etaMinutes ? `~${instant.etaMinutes} mins` : "30–45 mins"}
+                            </Text>
+                            <View className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5">
+                              <Text className="text-[11px] font-semibold text-emerald-700">Instant</Text>
+                            </View>
+                          </View>
+                          {instant?.earliestStartsAt ? (
+                            <Text className="mt-0.5 text-xs text-text-secondary">
+                              Starting around {formatChosen(instant.earliestStartsAt)}
+                            </Text>
+                          ) : null}
+                          <Text className="mt-1 text-xs text-text-secondary">
+                            Professional assigned immediately. Arrives in ~{instant?.etaMinutes ?? 35} mins.
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <View className="border-t border-line flex-row items-start justify-between p-5">
+                      <View className="flex-row items-start gap-3.5 min-w-0 flex-1 mr-4">
+                        <View className="mt-0.5">
+                          <ClockIcon />
+                        </View>
+                        <View className="min-w-0 flex-1">
+                          <Text className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                            {groups.length > 1 ? "Slots" : "Slot"}
+                          </Text>
+                          <View className="mt-3 gap-4">
                             {groups.map((group) => {
                               const startsAt = starts[group.key];
                               return (
-                                <Text key={group.key} className="text-sm font-bold text-[#0B1B3D]">
-                                  {startsAt ? formatChosen(startsAt) : "No time chosen"}
+                                <Text key={group.key} className="text-sm leading-snug">
+                                  {groups.length > 1 ? (
+                                    <Text className="font-semibold text-[#0B1B3D]">
+                                      {group.label}:{" "}
+                                    </Text>
+                                  ) : null}
+                                  <Text
+                                    className={
+                                      startsAt
+                                        ? "font-medium text-[#0B1B3D]"
+                                        : "text-[#4A453E]"
+                                    }
+                                  >
+                                    {startsAt ? formatChosen(startsAt) : "No time chosen"}
+                                  </Text>
                                 </Text>
                               );
                             })}
                           </View>
-                        ) : (
-                          <Text className="mt-1 text-sm text-[#64748B]">No time chosen</Text>
-                        )}
+                        </View>
                       </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={!effectiveAddressId || groups.length === 0}
+                        onPress={() => {
+                          if (effectiveAddressId && groups.length > 0) {
+                            setSlotsSheetOpen(true);
+                          }
+                        }}
+                        className="rounded-xl border border-[#D1D5DB] bg-white px-4 py-2 active:bg-surface-sunken hover:bg-surface-sunken disabled:opacity-40"
+                      >
+                        <Text className="text-xs font-bold text-[#0B1B3D]">
+                          {!effectiveAddressId || groups.length === 0
+                            ? "Select slot"
+                            : isScheduled
+                              ? "Edit"
+                              : "Select slot"}
+                        </Text>
+                      </Pressable>
                     </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      disabled={!effectiveAddressId || groups.length === 0 || groupsQuery.isError}
-                      onPress={() => {
-                        if (effectiveAddressId && groups.length > 0 && !groupsQuery.isError) {
-                          setSlotsSheetOpen(true);
-                        }
-                      }}
-                      className="rounded-lg border border-[#E5E7EB] bg-white px-3.5 py-1.5 active:bg-[#F2EFE9] hover:bg-[#F2EFE9] disabled:opacity-40"
-                    >
-                      <Text className="text-xs font-bold text-[#0B1B3D]">
-                        {!effectiveAddressId || groups.length === 0 || groupsQuery.isError
-                          ? "Select slots"
-                          : isScheduled
-                          ? "Edit"
-                          : "Select slots"}
-                      </Text>
-                    </Pressable>
-                  </View>
+                  )}
 
                   {/* Back to cart link */}
-                  <View className="border-t border-[#F1EFEB] px-5 py-4">
+                  <View className="border-t border-line px-5 py-4">
                     <Pressable
                       accessibilityRole="link"
                       onPress={() => {
@@ -486,7 +650,7 @@ export function CheckoutScreen() {
                         }
                       }}
                     >
-                      <Text className="text-sm font-semibold text-[#0B1B3D] hover:underline">
+                      <Text className="text-sm font-semibold text-navy-950 hover:underline">
                         Back to cart
                       </Text>
                     </Pressable>
@@ -494,13 +658,13 @@ export function CheckoutScreen() {
                 </View>
 
                 {/* Cancellation policy card matching Image 3 */}
-                <View className="mt-6 flex-row items-start gap-3 rounded-2xl border border-[#FFEDD5] bg-[#FFF9F5] p-5">
-                  <View className="mt-0.5 size-9 items-center justify-center rounded-full bg-[#FFE8D6]">
+                <View className="mt-6 flex-row items-start gap-3 rounded-2xl border border-warning-line bg-warning-surface p-5">
+                  <View className="mt-0.5 size-9 items-center justify-center rounded-full bg-amber-100">
                     <OrangeShieldIcon />
                   </View>
                   <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-bold text-[#0B1B3D]">Cancellation policy</Text>
-                    <Text className="mt-1 text-sm leading-relaxed text-[#64748B]">
+                    <Text className="text-sm font-bold text-navy-950">Cancellation policy</Text>
+                    <Text className="mt-1 text-sm leading-relaxed text-text-secondary">
                       Free cancellation before a professional is assigned. After that a fee may apply,
                       depending on how close the visit is.
                     </Text>
@@ -524,12 +688,12 @@ export function CheckoutScreen() {
               <View className="w-[380px] shrink-0 gap-4">
                 {/* Service Card */}
                 {cart ? (
-                  <View className="rounded-2xl border border-[#F1EFEB] bg-white p-5 shadow-xs">
-                    <View className="flex-row items-center justify-between pb-3 border-b border-[#F4F2EE]">
-                      <Text className="text-base font-bold text-[#0B1B3D]">
+                  <View className="rounded-2xl border border-line bg-white p-5 shadow-xs">
+                    <View className="flex-row items-center justify-between pb-3 border-b border-line">
+                      <Text className="text-base font-bold text-navy-950">
                         {groups[0]?.label || cart.items[0]?.service_name || "Home Cleaning"}
                       </Text>
-                      <Text className="text-xs text-[#64748B]">
+                      <Text className="text-xs text-text-secondary">
                         Approx. {Math.floor((groups[0]?.estimated_duration_minutes ?? 120) / 60)} hrs {((groups[0]?.estimated_duration_minutes ?? 120) % 60) > 0 ? `& ${(groups[0]?.estimated_duration_minutes ?? 120) % 60} mins` : ""}
                       </Text>
                     </View>
@@ -537,13 +701,13 @@ export function CheckoutScreen() {
                     <View className="mt-3 gap-3">
                       {cart.items.map((item) => (
                         <View key={item.id} className="flex-row items-center gap-3">
-                          <View className="size-14 rounded-xl bg-[#F4F1EC] items-center justify-center overflow-hidden shrink-0">
+                          <View className="size-14 rounded-xl bg-surface-sunken items-center justify-center overflow-hidden shrink-0">
                             <CheckoutItemCover slug={item.service_slug} />
                           </View>
                           <View className="min-w-0 flex-1">
-                            <Text className="text-sm font-bold text-[#0B1B3D]" numberOfLines={1}>{item.service_name}</Text>
+                            <Text className="text-sm font-bold text-navy-950" numberOfLines={1}>{item.service_name}</Text>
                             {item.variant_name ? (
-                              <Text className="mt-0.5 text-xs text-[#64748B]" numberOfLines={1}>{item.variant_name}</Text>
+                              <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>{item.variant_name}</Text>
                             ) : null}
                           </View>
                         </View>
@@ -553,27 +717,27 @@ export function CheckoutScreen() {
                 ) : null}
 
                 {/* Estimate Note Box */}
-                <View className="rounded-2xl border border-[#D0E2FF] bg-[#EDF4FC] p-4 flex-row items-start gap-3">
-                  <View className="mt-0.5 size-7 items-center justify-center rounded-full bg-[#DCEBFE]">
-                    <Svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#2563EB" strokeWidth={2}>
+                <View className="rounded-2xl border border-info-line bg-info-surface p-4 flex-row items-start gap-3">
+                  <View className="mt-0.5 size-7 items-center justify-center rounded-full bg-info-surface">
+                    <Svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke={COLOR_TOKENS.info} strokeWidth={2}>
                       <Path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                       <Circle cx="12" cy="7" r="4" />
                     </Svg>
                   </View>
-                  <Text className="text-xs leading-relaxed text-[#1E3A8A] flex-1">
+                  <Text className="text-xs leading-relaxed text-info-text flex-1">
                     We work out the price once every visit has a time — it depends on how many professionals your booking needs.
                   </Text>
                 </View>
 
                 {/* Confirm Booking Action Card */}
-                <View className="rounded-2xl border border-[#F1EFEB] bg-white p-5 shadow-xs">
+                <View className="rounded-2xl border border-line bg-white p-5 shadow-xs">
                   {quote !== null && quote.status === "ACTIVE" ? (
                     <Button
                       size="lg"
+                      variant="primary"
                       loading={isConfirming}
                       loadingLabel={isPricing ? "Working out your price" : "Confirming"}
                       onPress={handleConfirmBooking}
-                      className="bg-[#EA580C] hover:bg-[#D9480F]"
                     >
                       Confirm booking
                     </Button>
@@ -581,32 +745,32 @@ export function CheckoutScreen() {
                     <Pressable
                       disabled={!isScheduled || isPricing || groupsQuery.isError}
                       onPress={handleConfirmBooking}
-                      className="w-full items-center justify-center rounded-xl bg-[#E6E0D6] py-3.5"
+                      className="w-full items-center justify-center rounded-xl bg-surface-sunken py-3.5"
                     >
-                      <Text className="text-base font-semibold text-[#544D42]">
+                      <Text className="text-base font-semibold text-text-secondary">
                         {isPricing ? "Working out your price…" : "Confirm booking"}
                       </Text>
                     </Pressable>
                   )}
 
-                  <Text className="mt-3 text-center text-xs text-[#64748B]">
+                  <Text className="mt-3 text-center text-xs text-text-secondary">
                     You will pay after we have assigned your professionals.
                   </Text>
 
                   {quote === null && !isPricing ? (
-                    <Text className="mt-1 text-center text-xs text-[#64748B]">
+                    <Text className="mt-1 text-center text-xs text-text-secondary">
                       Pick an address and a time for every visit to continue.
                     </Text>
                   ) : null}
 
                   {/* Secure booking badge */}
-                  <View className="mt-4 flex-row items-start gap-2.5 pt-3 border-t border-[#F4F2EE]">
-                    <View className="mt-0.5 size-8 items-center justify-center rounded-full bg-[#FFF4EB]">
+                  <View className="mt-4 flex-row items-start gap-2.5 pt-3 border-t border-line">
+                    <View className="mt-0.5 size-8 items-center justify-center rounded-full bg-amber-50">
                       <OrangeShieldIcon />
                     </View>
                     <View className="min-w-0 flex-1">
-                      <Text className="text-xs font-bold text-[#0B1B3D]">Secure booking</Text>
-                      <Text className="text-[11px] text-[#64748B]">Your data is safe with us.</Text>
+                      <Text className="text-xs font-bold text-navy-950">Secure booking</Text>
+                      <Text className="text-[11px] text-text-secondary">Your data is safe with us.</Text>
                     </View>
                   </View>
                 </View>
@@ -618,13 +782,14 @@ export function CheckoutScreen() {
         </ScrollView>
 
         {/* Slots Sheet */}
-        {cart && effectiveAddressId ? (
+        {cart ? (
           <SlotsSheet
             open={slotsSheetOpen}
             onOpenChange={setSlotsSheetOpen}
-            groups={groups}
+            groups={groups.length > 0 ? groups : deriveSchedulingGroups(cart.items)}
             cartVersion={cart.version}
-            addressId={effectiveAddressId}
+            addressId={effectiveAddressId ?? ""}
+            initialStarts={starts}
             onConfirm={handleSchedule}
           />
         ) : null}
@@ -656,7 +821,7 @@ export function CheckoutScreen() {
         contentContainerClassName="gap-4 px-4 py-4 pb-20"
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLOR_TOKENS.action]} tintColor={COLOR_TOKENS.action} />
         }
       >
         {/* Top: Circular Back Button matching Image 1 */}
@@ -682,18 +847,21 @@ export function CheckoutScreen() {
         {/* Card 1: Details Card (Send booking details to, Address, Slot) */}
         <View className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
           {/* Phone */}
-          <DetailRow
-            icon={<PhoneIcon />}
-            label="Send booking details to"
-            isFirst
-          >
-            <Text className="text-sm font-normal text-text-secondary">{phoneNumber}</Text>
-          </DetailRow>
+          {phoneNumber ? (
+            <DetailRow
+              icon={<PhoneIcon />}
+              label="Send booking details to"
+              isFirst
+            >
+              <Text className="text-sm font-normal text-text-secondary">{phoneNumber}</Text>
+            </DetailRow>
+          ) : null}
 
           {/* Address */}
           <DetailRow
             icon={<PinIcon />}
             label="Address"
+            isFirst={!phoneNumber}
             actionLabel={selectedAddress ? "Edit" : "Add address"}
             actionVariant={selectedAddress ? "outline" : "primary"}
             onAction={() => setAddressSheetOpen(true)}
@@ -718,83 +886,132 @@ export function CheckoutScreen() {
             )}
           </DetailRow>
 
-          {/* Slot */}
-          <DetailRow
-            icon={<ClockIcon />}
-            label={groups.length > 1 ? "Slots" : "Slot"}
-            actionLabel={
-              !effectiveAddressId || groups.length === 0 || groupsQuery.isError
-                ? undefined
-                : isScheduled
-                ? "Edit"
-                : "Select slots"
-            }
-            actionVariant="outline"
-            onAction={() => {
-              if (effectiveAddressId && groups.length > 0 && !groupsQuery.isError) {
-                setSlotsSheetOpen(true);
-              }
-            }}
-          >
-            {!effectiveAddressId ? (
-              <Text className="text-sm text-text-secondary">Pick an address first — times depend on area.</Text>
-            ) : isAddressKnownUnserviceable ? (
-              <View className="rounded-lg bg-critical-50 p-2.5">
-                <Text className="text-xs font-semibold text-danger-text">
-                  Service not available in this pincode ({selectedAddress?.postal_code ?? ""})
-                </Text>
-                <Text className="mt-1 text-xs text-text-secondary leading-relaxed">
-                  We do not currently have verified technicians covering this address. Please choose a different address.
-                </Text>
-                <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
-                  <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
-                </Pressable>
-              </View>
-            ) : groupsQuery.isPending ? (
-              <View className="flex-row items-center gap-2 py-1">
-                <Spinner size="sm" />
-                <Text className="text-xs text-text-secondary">Finding available slots...</Text>
-              </View>
-            ) : groupsQuery.isError ? (
-              <View className="rounded-lg bg-critical-50 p-2.5">
-                <Text className="text-xs font-semibold text-danger-text">
-                  {describeError(groupsQuery.error, "read").message}
-                </Text>
-                {cartMergeConflict(groupsQuery.error) !== null ? (
-                  <View className="mt-1.5">
-                    <Text className="text-xs text-text-secondary leading-relaxed">
-                      You have overlapping items from a previous session. Please review your cart to continue.
-                    </Text>
-                    <Pressable onPress={() => router.replace("/cart" as never)} className="mt-1">
-                      <Text className="text-xs font-bold text-accent">Review cart &rarr;</Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <>
-                    <Text className="mt-1 text-xs text-text-secondary leading-relaxed">
-                      We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address.
-                    </Text>
-                    <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
-                      <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            ) : isScheduled ? (
+          {/* Booking Mode */}
+          <View className="border-t border-line px-4 py-3 bg-surface-muted/30">
+            <View className="mb-2">
+              <Text className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                Booking Mode
+              </Text>
+            </View>
+            <BookingModeToggle
+              value={bookingMode}
+              onChange={handleBookingModeChange}
+              instant={instant}
+              disabled={effectiveAddressId === null || groups.length === 0}
+            />
+          </View>
+
+          {/* Slot or Arrival time */}
+          {bookingMode === "INSTANT" ? (
+            <DetailRow icon={<ClockIcon />} label="Arrival time">
               <View className="gap-1">
-                {groups.map((group) => {
-                  const startsAt = starts[group.key];
-                  return (
-                    <Text key={group.key} className="text-sm font-medium text-text">
-                      {startsAt ? formatChosen(startsAt) : "No time chosen"}
-                    </Text>
-                  );
-                })}
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-sm font-semibold text-text">
+                    {instant?.etaMinutes ? `~${instant.etaMinutes} mins` : "30–45 mins"}
+                  </Text>
+                  <View className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5">
+                    <Text className="text-[11px] font-medium text-emerald-700">Instant</Text>
+                  </View>
+                </View>
+                {instant?.earliestStartsAt ? (
+                  <Text className="text-xs text-text-secondary">
+                    Starting around {formatChosen(instant.earliestStartsAt)}
+                  </Text>
+                ) : null}
+                <Text className="mt-0.5 text-xs text-text-secondary">
+                  Professional assigned immediately. Arrives in ~{instant?.etaMinutes ?? 35} mins.
+                </Text>
               </View>
-            ) : (
-              <Text className="text-sm text-text-secondary">No time chosen</Text>
-            )}
-          </DetailRow>
+            </DetailRow>
+          ) : (
+            <DetailRow
+              icon={<ClockIcon />}
+              label={groups.length > 1 ? "Slots" : "Slot"}
+              actionLabel={
+                !effectiveAddressId || groups.length === 0 || groupsQuery.isError
+                  ? undefined
+                  : isScheduled
+                    ? "Edit"
+                    : "Select slot"
+              }
+              actionVariant="outline"
+              onAction={() => {
+                if (effectiveAddressId && groups.length > 0 && !groupsQuery.isError) {
+                  setSlotsSheetOpen(true);
+                }
+              }}
+            >
+              {!effectiveAddressId ? (
+                <Text className="text-sm text-text-secondary">Pick an address first — times depend on area.</Text>
+              ) : isAddressKnownUnserviceable ? (
+                <View className="rounded-lg bg-critical-50 p-2.5">
+                  <Text className="text-xs font-semibold text-danger-text">
+                    Service not available in this pincode ({selectedAddress?.postal_code ?? ""})
+                  </Text>
+                  <Text className="mt-1 text-xs text-text-secondary leading-relaxed">
+                    We do not currently have verified technicians covering this address. Please choose a different address.
+                  </Text>
+                  <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
+                    <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
+                  </Pressable>
+                </View>
+              ) : groupsQuery.isPending && groups.length === 0 ? (
+                <View className="flex-row items-center gap-2 py-1">
+                  <Spinner size="sm" />
+                  <Text className="text-xs text-text-secondary">Finding available slots...</Text>
+                </View>
+              ) : groupsQuery.isError && groups.length === 0 ? (
+                <View className="rounded-lg bg-critical-50 p-2.5">
+                  <Text className="text-xs font-semibold text-danger-text">
+                    {describeError(groupsQuery.error, "read").message}
+                  </Text>
+                  {cartMergeConflict(groupsQuery.error) !== null ? (
+                    <View className="mt-1.5">
+                      <Text className="text-xs text-text-secondary leading-relaxed">
+                        You have overlapping items from a previous session. Please review your cart to continue.
+                      </Text>
+                      <Pressable onPress={() => router.replace("/cart" as never)} className="mt-1">
+                        <Text className="text-xs font-bold text-accent">Review cart &rarr;</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <>
+                      <Text className="mt-1 text-xs text-text-secondary leading-relaxed">
+                        We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address.
+                      </Text>
+                      <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
+                        <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              ) : (
+                <View className="gap-4 mt-3">
+                  {groups.map((group) => {
+                    const startsAt = starts[group.key];
+                    return (
+                      <Text key={group.key} className="text-sm leading-snug">
+                        {groups.length > 1 ? (
+                          <Text className="font-semibold text-[#0B1B3D]">
+                            {group.label}:{" "}
+                          </Text>
+                        ) : null}
+                        <Text
+                          className={
+                            startsAt
+                              ? "font-medium text-[#0B1B3D]"
+                              : "text-[#4A453E]"
+                          }
+                        >
+                          {startsAt ? formatChosen(startsAt) : "No time chosen"}
+                        </Text>
+                      </Text>
+                    );
+                  })}
+                </View>
+              )}
+            </DetailRow>
+          )}
         </View>
 
         {/* Card 2: Confirm Booking Action Card matching Image 1 */}
@@ -812,9 +1029,9 @@ export function CheckoutScreen() {
             <Pressable
               disabled={!isScheduled || isPricing || groupsQuery.isError}
               onPress={handleConfirmBooking}
-              className="w-full items-center justify-center rounded-xl bg-[#E6E0D6] py-3.5"
+              className="w-full items-center justify-center rounded-xl bg-surface-sunken py-3.5"
             >
-              <Text className="text-base font-semibold text-[#544D42]">
+              <Text className="text-base font-semibold text-text-secondary">
                 {isPricing ? "Working out your price…" : "Confirm booking"}
               </Text>
             </Pressable>
@@ -832,7 +1049,7 @@ export function CheckoutScreen() {
 
           {/* Secure booking badge */}
           <View className="mt-4 flex-row items-start gap-2.5 pt-1">
-            <View className="mt-0.5 size-9 items-center justify-center rounded-full bg-[#FFF4EB]">
+            <View className="mt-0.5 size-9 items-center justify-center rounded-full bg-amber-50">
               <OrangeShieldIcon />
             </View>
             <View className="min-w-0 flex-1">
@@ -843,8 +1060,8 @@ export function CheckoutScreen() {
         </View>
 
         {/* Card 3: Cancellation policy matching Image 1 */}
-        <View className="flex-row items-start gap-3 rounded-2xl border border-[#FDE6D5] bg-[#FFF7F0] p-4.5">
-          <View className="mt-0.5 size-9 items-center justify-center rounded-full bg-[#FFE8D6]">
+        <View className="flex-row items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4.5">
+          <View className="mt-0.5 size-9 items-center justify-center rounded-full bg-amber-100">
             <OrangeShieldIcon />
           </View>
           <View className="min-w-0 flex-1">
@@ -891,13 +1108,14 @@ export function CheckoutScreen() {
       ) : null}
 
       {/* Slots Sheet */}
-      {cart && effectiveAddressId ? (
+      {cart ? (
         <SlotsSheet
           open={slotsSheetOpen}
           onOpenChange={setSlotsSheetOpen}
-          groups={groups}
+          groups={groups.length > 0 ? groups : deriveSchedulingGroups(cart.items)}
           cartVersion={cart.version}
-          addressId={effectiveAddressId}
+          addressId={effectiveAddressId ?? ""}
+          initialStarts={starts}
           onConfirm={handleSchedule}
         />
       ) : null}

@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 import { useAddresses } from "@/features/addresses/queries";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useChooseVisitPlan } from "@/features/access/queries";
 import { useServiceDetail } from "@/features/catalog/client-queries";
 import {
@@ -67,6 +68,7 @@ const TIME_SLOTS = [
 ];
 
 export function NewRequestScreen({ serviceSlug }: { serviceSlug: string }) {
+  const insets = useSafeAreaInsets();
   const service = useServiceDetail(serviceSlug);
   const params = useLocalSearchParams<{ selected_service?: string }>();
   const variant = service.data?.requirement_variants[0];
@@ -85,7 +87,10 @@ export function NewRequestScreen({ serviceSlug }: { serviceSlug: string }) {
 
   if (service.isPending) {
     return (
-      <View className="flex-1 items-center justify-center bg-white p-6">
+      <View
+        style={{ paddingTop: Math.max(insets.top + 16, 32) }}
+        className="flex-1 items-center justify-center bg-white p-6"
+      >
         <Spinner size="md" />
         <Text className="mt-3 text-sm font-semibold text-slate-600">
           Loading service details…
@@ -133,6 +138,7 @@ function SimpleRequest({
   const submit = useSubmitRequirement();
   const choosePlan = useChooseVisitPlan();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [details, setDetails] = useState("");
   const [planSize, setPlanSize] = useState<number>(2);
   const [refreshing, setRefreshing] = useState(false);
@@ -216,7 +222,12 @@ function SimpleRequest({
     >
       <ScrollView
         className="flex-1 bg-white"
-        contentContainerClassName="gap-4 px-4 py-5 pb-20"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 16, 32),
+          paddingBottom: Math.max(insets.bottom + 24, 36),
+          paddingHorizontal: 16,
+        }}
+        contentContainerClassName="gap-4"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         refreshControl={
@@ -232,7 +243,7 @@ function SimpleRequest({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            hitSlop={8}
+            hitSlop={10}
             onPress={() => {
               if (router.canGoBack()) {
                 router.back();
@@ -240,7 +251,7 @@ function SimpleRequest({
                 router.push("/catalog");
               }
             }}
-            className="size-9 items-center justify-center rounded-full border border-slate-200 bg-white shadow-2xs active:bg-slate-100"
+            className="size-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-2xs active:bg-slate-100"
           >
             <ChevronLeft size={20} color="#0B1B3D" strokeWidth={2.4} />
           </Pressable>
@@ -388,6 +399,7 @@ function QuestionRequest({
   const choosePlan = useChooseVisitPlan();
   const addresses = useAddresses();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<"what" | "where" | "send">("what");
   const [answers, setAnswers] = useState<Record<string, string>>(
@@ -581,7 +593,12 @@ function QuestionRequest({
     >
       <ScrollView
         className="flex-1 bg-white"
-        contentContainerClassName="gap-4 px-4 pt-3 pb-24"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 16, 32),
+          paddingBottom: Math.max(insets.bottom + 24, 40),
+          paddingHorizontal: 16,
+        }}
+        contentContainerClassName="gap-4"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         refreshControl={
@@ -594,7 +611,7 @@ function QuestionRequest({
         }
       >
         {/* Header Row */}
-        <View className="flex-row items-center gap-3 pt-1">
+        <View className="flex-row items-center gap-3">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
@@ -610,7 +627,7 @@ function QuestionRequest({
                 router.push("/catalog");
               }
             }}
-            className="size-9 items-center justify-center rounded-full border border-slate-200 bg-white shadow-2xs active:bg-slate-100"
+            className="size-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-2xs active:bg-slate-100"
           >
             <ChevronLeft size={22} color="#0B1B3D" strokeWidth={2.4} />
           </Pressable>

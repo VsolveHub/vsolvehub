@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useVisitPlan } from "@/features/access/queries";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRequirement } from "@/features/requirement/queries";
 import { estimateConfirmHref, estimateQuestionsHref, requestEstimateHref, requestHref } from "@/lib/routes";
 
@@ -116,6 +117,7 @@ function SupportLink() {
 
 export function QuotesScreen({ requirementId, requestHref: requestHrefProp }: QuotesScreenProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const backHref = requestHrefProp ?? requestHref(requirementId);
   const access = useEntitledQuoteList(requirementId);
   const planQuery = useVisitPlan(requirementId);
@@ -170,7 +172,12 @@ export function QuotesScreen({ requirementId, requestHref: requestHrefProp }: Qu
     <View className="flex-1 bg-canvas">
       <ScrollView
         className="flex-1"
-        contentContainerClassName="mx-auto w-full max-w-[1180px] gap-4 px-4 pb-8 pt-5"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top + 16, 32),
+          paddingBottom: Math.max(insets.bottom + 24, 40),
+          paddingHorizontal: 16,
+        }}
+        contentContainerClassName="mx-auto w-full max-w-[1180px] gap-4"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
         }

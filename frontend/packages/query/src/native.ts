@@ -584,3 +584,7 @@ export type {
   TouchRollup,
   TouchVerdict,
 } from "./m2-ops";
+
+
+export { usePagedList, flattenPages } from "./paged-list";
+export type { Page } from "./paged-list";

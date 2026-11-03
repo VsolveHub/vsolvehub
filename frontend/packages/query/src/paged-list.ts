@@ -32,7 +32,8 @@ export function usePagedList<T>(
     queryKey,
     queryFn: ({ pageParam }) => fetchPage(pageParam || undefined),
     initialPageParam: "",
-    getNextPageParam: (last: Page<T>) => cursorFromNextUrl(last.next),
+    getNextPageParam: (last: Page<T> | undefined | null) =>
+      last && last.next ? cursorFromNextUrl(last.next) : undefined,
     enabled: options.enabled ?? true,
   });
   return {
@@ -52,12 +53,12 @@ export const BROWSE_PAGE_SIZE = 24;
 
 /** Where the next browse page starts, or `undefined` once a short page says there is no more. */
 export function nextBrowseOffset<T>(
-  last: readonly T[],
-  all: readonly (readonly T[])[],
+  last: readonly T[] | undefined | null,
+  all: readonly (readonly T[])[] | undefined | null,
   pageSize = BROWSE_PAGE_SIZE,
 ): number | undefined {
-  if (last.length < pageSize) return undefined;
-  return all.reduce((sum, page) => sum + page.length, 0);
+  if (!last || last.length < pageSize) return undefined;
+  return all ? all.reduce((sum, page) => sum + (page?.length ?? 0), 0) : undefined;
 }
 
 /**

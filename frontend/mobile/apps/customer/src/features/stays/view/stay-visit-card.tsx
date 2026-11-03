@@ -22,22 +22,24 @@ export function StayVisitCard({ visit }: { visit: StayVisit }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
 
+  const propObj = typeof visit.property === "object" ? visit.property : undefined;
+  const slotObj = typeof visit.slot === "object" ? visit.slot : undefined;
   const badge = getVisitStatusBadge(visit.status);
   const propertyTitle =
-    visit.property_title || visit.property?.title || "Property Visit";
+    visit.property_title || propObj?.title || "Property Visit";
   const unitName = visit.unit_name || (visit.property as any)?.units?.[0]?.name;
 
-  const startTime = visit.start_time || visit.slot?.start_time || "";
-  const endTime = visit.end_time || visit.slot?.end_time || "";
+  const startTime = visit.start_time || slotObj?.start_time || "";
+  const endTime = visit.end_time || slotObj?.end_time || "";
 
   const hostPhone =
     visit.host_phone ||
-    visit.property?.partner?.phone_number ||
-    (visit.property as any)?.partner?.phone;
+    propObj?.partner?.phone_number ||
+    (propObj as any)?.partner?.phone;
   const hostName =
     visit.host_name ||
-    visit.property?.host_name ||
-    visit.property?.partner?.full_name ||
+    propObj?.host_name ||
+    propObj?.partner?.full_name ||
     "Host";
 
   const cancel = useMutation({
@@ -59,9 +61,9 @@ export function StayVisitCard({ visit }: { visit: StayVisit }) {
 
           <Pressable
             onPress={() => {
-              if (visit.property_slug || visit.property?.slug || visit.property?.id) {
+              if (visit.property_slug || propObj?.slug || propObj?.id) {
                 router.push(
-                  `/stays/${visit.property_slug || visit.property?.slug || visit.property?.id}` as never,
+                  `/stays/${visit.property_slug || propObj?.slug || propObj?.id}` as never,
                 );
               }
             }}

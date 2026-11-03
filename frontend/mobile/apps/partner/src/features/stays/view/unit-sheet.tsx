@@ -23,6 +23,8 @@ import {
   uploadPartnerStayPhoto,
 } from "../queries";
 import { THEME_COLORS } from "../theme-colors";
+import { AddRoomSheet } from "./add-room-sheet";
+import { GuestPreview } from "./guest-preview";
 
 export const FALLBACK_ROOM_NAMES = [
   "Single Room",
@@ -115,6 +117,7 @@ function UnitSheetContent({
   const [offRoom, setOffRoom] = useState<StayRoom | null>(null);
   const [newRoomNumber, setNewRoomNumber] = useState("");
   const [addingRoomNum, setAddingRoomNum] = useState(false);
+  const [addRoomOpen, setAddRoomOpen] = useState(false);
 
   // Error & Status
   const [error, setError] = useState<string | null>(null);
@@ -462,11 +465,11 @@ function UnitSheetContent({
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xs font-bold text-text">Numbered Rooms</Text>
                   <Pressable
-                    onPress={() => setAddingRoomNum((prev) => !prev)}
-                    className="flex-row items-center gap-1"
+                    onPress={() => setAddRoomOpen(true)}
+                    className="flex-row items-center gap-1 rounded-lg bg-navy-50 px-2.5 py-1 border border-navy-200"
                   >
                     <Plus size={13} color={THEME_COLORS.navy900} />
-                    <Text className="text-xs font-semibold text-navy-900">Add Room</Text>
+                    <Text className="text-xs font-semibold text-navy-900">Add Room (Look)</Text>
                   </Pressable>
                 </View>
 
@@ -516,6 +519,13 @@ function UnitSheetContent({
                                 ? "🟢 Available"
                                 : "⚪ Switched off"}
                           </Text>
+                          {editingUnit?.looks && editingUnit.looks.length > 1 ? (
+                            <View className="self-start mt-1 rounded bg-navy-50 px-1.5 py-0.5 border border-navy-200">
+                              <Text className="text-[10px] font-semibold text-navy-800">
+                                {editingUnit.looks.find((l) => l.id === room.look)?.name || "Main look"}
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
 
                         <View className="flex-row items-center gap-2">
@@ -575,7 +585,7 @@ function UnitSheetContent({
                                   <Trash2 size={12} color={THEME_COLORS.rose600} />
                                 </Pressable>
                               ) : null}
-                            </>
+                              </>
                           )}
                         </View>
                       </View>
@@ -584,6 +594,10 @@ function UnitSheetContent({
                 </View>
               </View>
             )}
+
+            {isEditing && editingUnit && property ? (
+              <GuestPreview property={property} unit={editingUnit} />
+            ) : null}
 
             {error ? <Text className="text-xs text-rose-600">{error}</Text> : null}
 
@@ -700,6 +714,13 @@ function UnitSheetContent({
           </Button>
         </View>
       </Dialog>
+      {editingUnit ? (
+        <AddRoomSheet
+          unit={editingUnit}
+          open={addRoomOpen}
+          onOpenChange={setAddRoomOpen}
+        />
+      ) : null}
     </>
   );
 }

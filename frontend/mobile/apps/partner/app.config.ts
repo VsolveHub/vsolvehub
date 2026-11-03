@@ -33,6 +33,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         action: "VIEW",
         autoVerify: true,
         data: [
+          { scheme: "https", host: "partner.vsolvehub.com", pathPrefix: "/dispatch" },
           { scheme: "https", host: "partner.vsolvehub.com", pathPrefix: "/work" },
           { scheme: "https", host: "partner.vsolvehub.com", pathPrefix: "/me" },
           { scheme: "https", host: "partner.vsolvehub.com", pathPrefix: "/money" },

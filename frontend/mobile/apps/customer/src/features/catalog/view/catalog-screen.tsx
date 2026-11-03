@@ -4,9 +4,9 @@
 // while leaving the mobile version 100% unchanged.
 import { Button, EmptyState, Skeleton, Text, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { type ElementRef, useEffect, useRef, useState } from "react";
+import { DeviceEventEmitter, Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import { LOCAL_CATEGORY_TILES, getCategoryFallbackIcon, resolveImageUrl } from "@/features/catalog/category-artwork";
@@ -17,10 +17,42 @@ import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useIsDesktop } from "@/lib/responsive";
 
 export function CatalogScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ search?: string; q?: string; t?: string }>();
   const isDesktop = useIsDesktop();
   const categories = useCategories();
-  const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState(typeof params.q === "string" ? params.q : "");
+  const [searchOpen, setSearchOpen] = useState(params.search === "1" || params.search === "true" || !!params.t);
+  const scrollViewRef = useRef<ElementRef<typeof ScrollView>>(null);
+  const inputRef = useRef<ElementRef<typeof TextInput>>(null);
+
+  const focusInput = () => {
+    setSearchOpen(true);
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 80);
+  };
+
+  useEffect(() => {
+    if (params.search === "1" || params.search === "true" || params.t) {
+      focusInput();
+    }
+  }, [params.search, params.t]);
+
+  useEffect(() => {
+    if (typeof params.q === "string" && params.q !== query) {
+      setQuery(params.q);
+      setSearchOpen(true);
+    }
+  }, [params.q]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("open-catalog-search", () => {
+      focusInput();
+    });
+    return () => sub.remove();
+  }, []);
   const [refreshing, setRefreshing] = useState(false);
   const open = searchOpen || query.trim().length > 0;
 
@@ -32,6 +64,8 @@ export function CatalogScreen() {
 
   return (
     <ScrollView
+
+      ref={scrollViewRef}
       className="flex-1 bg-[#FAF9F7]"
       contentContainerClassName={isDesktop ? "pb-0 pt-0" : "px-4 pb-6 pt-4"}
       refreshControl={
@@ -49,8 +83,16 @@ export function CatalogScreen() {
             accessibilityLabel={open ? "Close search" : "Search services"}
             accessibilityState={{ expanded: open }}
             onPress={() => {
-              if (open) setQuery("");
-              setSearchOpen(!open);
+              if (open) {
+                setQuery("");
+                setSearchOpen(false);
+                if (params.search || params.q || params.t) {
+                  router.setParams({ search: undefined, q: undefined, t: undefined });
+                }
+                return;
+              }
+              focusInput();
+
             }}
             className="h-11 w-11 items-center justify-center rounded-control hover:bg-surface-hover"
           >
@@ -80,6 +122,8 @@ export function CatalogScreen() {
               placeholder="Search services..."
               placeholderTextColor="#756c5e"
               autoFocus
+              ref={inputRef}
+              style={{ outline: "none" } as never}
               className="ml-3 h-11 flex-1 text-sm font-medium text-navy-900"
             />
           </View>
@@ -150,6 +194,7 @@ function CategoryRows({ categories, isDesktop }: { categories: Category[]; isDes
             ) : null}
           </View>
           <ScrollView
+
             horizontal
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"

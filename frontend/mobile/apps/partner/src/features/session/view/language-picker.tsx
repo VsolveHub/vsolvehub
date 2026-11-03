@@ -1,11 +1,10 @@
 // Ported from frontend/apps/partner/features/session/view/language-picker.tsx
-import { DEFAULT_LOCALE, Button, Text, type Locale } from "@vsolve/mobile-ui";
-import { kvGet, kvSet } from "@vsolve/mobile-core";
+import { Button, Text, useT, type Locale } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 
-export const LOCALE_STORAGE_KEY = "vsh-partner-locale";
+import { useLocaleStore } from "@/i18n/locale-store";
 
 const OPTIONS: readonly { code: Locale; script: string }[] = [
   { code: "te-IN", script: "తెలుగు" },
@@ -15,17 +14,21 @@ const OPTIONS: readonly { code: Locale; script: string }[] = [
 
 export function LanguagePicker() {
   const router = useRouter();
-  const [selected, setSelected] = useState<Locale>(DEFAULT_LOCALE);
+  const t = useT();
+  const currentLocale = useLocaleStore((s) => s.locale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
+  const [selected, setSelected] = useState<Locale>(currentLocale);
 
-  useEffect(() => {
-    void kvGet(LOCALE_STORAGE_KEY).then((saved) => {
-      if (OPTIONS.some((option) => option.code === saved)) setSelected(saved as Locale);
-    });
-  }, []);
+  const handleConfirm = async () => {
+    await setLocale(selected);
+    router.back();
+  };
 
   return (
     <View className="flex-1 bg-navy-900 px-5">
-      <Text className="pb-8 pt-16 text-center text-xl font-bold text-white">App Language</Text>
+      <Text className="pb-8 pt-16 text-center text-xl font-bold text-white">
+        {t("me.language.title")}
+      </Text>
       <View className="flex-1 gap-3">
         {OPTIONS.map((option) => (
           <Pressable
@@ -45,12 +48,10 @@ export function LanguagePicker() {
       </View>
       <View className="pb-8 pt-6">
         <Button
-          accessibilityLabel="Confirm language"
-          onPress={() => {
-            void kvSet(LOCALE_STORAGE_KEY, selected).then(() => router.back());
-          }}
+          accessibilityLabel={t("me.language.confirm")}
+          onPress={handleConfirm}
         >
-          Confirm
+          {t("common.confirm")}
         </Button>
       </View>
     </View>

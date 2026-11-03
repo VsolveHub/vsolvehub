@@ -1,8 +1,8 @@
 import { Badge, Button, COLOR_TOKENS, Text } from "@vsolve/mobile-ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, ShieldCheck } from "lucide-react-native";
+import { Calendar, Clock, MapPin, Navigation, ShieldCheck, Truck } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, Platform, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, View } from "react-native";
 
 import {
   canCancelRentalBooking,
@@ -14,6 +14,7 @@ import {
 import { completeOrOpenRentalCheckout } from "../payment-handoff";
 import { formatReadableDate } from "../pickup-time";
 import { cancelRentalBooking } from "../queries";
+import { DeliveryRequest } from "./delivery-request";
 
 export function RentalBookingCard({
   booking,
@@ -35,6 +36,10 @@ export function RentalBookingCard({
   const canCancel = canCancelRentalBooking(booking.status);
   const pendingPayment = (booking.status ?? "").toUpperCase() === "PENDING_PAYMENT";
 
+  const isDelivery =
+    (booking.pickup_or_delivery_mode ?? "").toUpperCase() === "DELIVERY" ||
+    Boolean(booking.delivery_address);
+
   const paymentAttemptId = deposit?.payment_attempt_id ? String(deposit.payment_attempt_id) : null;
 
   const handoverPin =
@@ -42,7 +47,7 @@ export function RentalBookingCard({
       ? String(booking.handover_pin).trim()
       : null;
 
-  // W-054 / GAP-RNT-011: Inline cancellation mutation & error handling
+  // Inline cancellation mutation & error handling
   const cancelMutation = useMutation({
     mutationFn: () => cancelRentalBooking(booking.id),
     onSuccess: () => {
@@ -74,6 +79,28 @@ export function RentalBookingCard({
       setPayError(err instanceof Error ? err.message : "Could not open payment checkout.");
     } finally {
       setIsPaying(false);
+    }
+  };
+
+  const handleOpenDirections = () => {
+    if (booking.delivery_directions_url) {
+      void Linking.openURL(booking.delivery_directions_url);
+    } else if (
+      booking.delivery_address?.latitude != null &&
+      booking.delivery_address?.longitude != null
+    ) {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${booking.delivery_address.latitude},${booking.delivery_address.longitude}`;
+      void Linking.openURL(url);
+    }
+  };
+
+  const handleOpenPickupMaps = () => {
+    const pickup = booking.asset?.pickup_address;
+    if (pickup?.maps_url) {
+      void Linking.openURL(pickup.maps_url);
+    } else if (pickup?.latitude != null && pickup?.longitude != null) {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${pickup.latitude},${pickup.longitude}`;
+      void Linking.openURL(url);
     }
   };
 
@@ -117,7 +144,7 @@ export function RentalBookingCard({
         </View>
       </View>
 
-      <View className="my-3 gap-1.5 rounded-xl bg-canvas p-3">
+      <View className="my-3 gap-2 rounded-xl bg-canvas p-3">
         <View className="flex-row items-center gap-2">
           <Calendar size={13} color={COLOR_TOKENS.textMuted} />
           <Text className="text-xs text-text-secondary">
@@ -127,13 +154,91 @@ export function RentalBookingCard({
             </Text>
           </Text>
         </View>
+
         <View className="flex-row items-center gap-2">
-          <Clock size={13} color={COLOR_TOKENS.textMuted} />
+          {isDelivery ? (
+            <Truck size={13} color="#0284C7" />
+          ) : (
+            <Clock size={13} color={COLOR_TOKENS.textMuted} />
+          )}
           <Text className="text-xs text-text-secondary">
-            Handover: <Text className="font-bold text-navy-900">Self pickup</Text>
+            Handover:{" "}
+            <Text className="font-bold text-navy-900">
+              {isDelivery ? "Doorstep delivery" : "Self pickup"}
+            </Text>
           </Text>
         </View>
+
+        {isDelivery && booking.delivery_address ? (
+          <View className="mt-1 border-t border-line/40 pt-2">
+            <View className="flex-row items-start gap-1.5">
+              <MapPin size={13} color={COLOR_TOKENS.textMuted} className="mt-0.5 shrink-0" />
+              <Text className="flex-1 text-xs text-text-secondary">
+                Delivery Address:{" "}
+                <Text className="font-semibold text-navy-900">
+                  {[
+                    booking.delivery_address.line,
+                    booking.delivery_address.area,
+                    booking.delivery_address.city,
+                    booking.delivery_address.pincode,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </Text>
+              </Text>
+            </View>
+
+            {booking.delivery_directions_url ||
+            (booking.delivery_address.latitude != null &&
+              booking.delivery_address.longitude != null) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open delivery directions in maps"
+                onPress={handleOpenDirections}
+                className="mt-2 flex-row items-center gap-1.5 self-start rounded-lg bg-sky-50 px-3 py-1.5 active:bg-sky-100"
+              >
+                <Navigation size={13} color="#0284C7" />
+                <Text className="text-xs font-bold text-sky-700">Open Map Directions</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!isDelivery && booking.asset?.pickup_address ? (
+          <View className="mt-1 border-t border-line/40 pt-2">
+            <View className="flex-row items-start gap-1.5">
+              <MapPin size={13} color={COLOR_TOKENS.textMuted} className="mt-0.5 shrink-0" />
+              <Text className="flex-1 text-xs text-text-secondary">
+                Pickup Address:{" "}
+                <Text className="font-semibold text-navy-900">
+                  {[
+                    booking.asset.pickup_address.line,
+                    booking.asset.pickup_address.area,
+                    booking.asset.pickup_address.city,
+                    booking.asset.pickup_address.pincode,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </Text>
+              </Text>
+            </View>
+
+            {booking.asset.pickup_address.maps_url ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View pickup location on Google Maps"
+                onPress={handleOpenPickupMaps}
+                className="mt-2 flex-row items-center gap-1.5 self-start rounded-lg bg-orange-50 px-3 py-1.5 active:bg-orange-100"
+              >
+                <Navigation size={13} color="#EA580C" />
+                <Text className="text-xs font-bold text-primary">View on Google Maps</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
+
+      {isDelivery ? <DeliveryRequest booking={booking} /> : null}
 
       {/* Handover PIN Display Banner (Web W-021, Dev-10) */}
       {handoverPin ? (
@@ -150,7 +255,7 @@ export function RentalBookingCard({
             {handoverPin}
           </Text>
           <Text className="text-[11px] text-text-secondary">
-            Share this 4-digit PIN with the equipment partner when you collect the tool.
+            Share this 4-digit PIN with the equipment partner when you collect or receive the tool.
           </Text>
         </View>
       ) : null}
@@ -162,7 +267,7 @@ export function RentalBookingCard({
           <View className="flex-1">
             <Text className="text-xs font-bold text-navy-900">Handover & Protection Protocol:</Text>
             <Text className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">
-              Inspect equipment condition with the owner upon pickup. Return in good condition to
+              Inspect equipment condition with the owner upon handover. Return in good condition to
               trigger prompt security deposit release.
             </Text>
           </View>

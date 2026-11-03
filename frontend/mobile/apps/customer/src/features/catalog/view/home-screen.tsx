@@ -12,6 +12,7 @@ import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 import { CategoryArtwork } from "@/features/catalog/category-artwork";
 import { useCategories, type Category } from "@/features/catalog/client-queries";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
+import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useIsDesktop } from "@/lib/responsive";
 
@@ -62,9 +63,9 @@ function DesktopHomeScreen() {
     >
       <View className="mx-auto w-full max-w-[1216px] px-6 lg:px-8 pt-6">
         {/* 1. Desktop Hero Section */}
-        <View className="relative w-full min-h-[520px] mt-2 mb-20">
+        <View className="relative w-full min-h-[calc(100vh-5rem)] mt-2 mb-16" style={{ minHeight: "calc(100vh - 5rem)" }}>
           {/* Floating Vetted Badge */}
-          <View className="absolute -top-3.5 right-[8%] z-10 flex-row items-center gap-2 rounded-full border border-[#e7e2da] bg-white px-4 py-2 shadow-sm">
+          <View className="absolute -top-3.5 right-[10%] z-10 flex-row items-center gap-2 rounded-full border border-[#e7e2da] bg-white px-4 py-2 shadow-sm">
             <View className="size-5 items-center justify-center rounded-full bg-[#fdf3ec]">
               <Svg viewBox="0 0 20 20" width={14} height={14} fill="#EA580C">
                 <Path
@@ -74,11 +75,11 @@ function DesktopHomeScreen() {
                 />
               </Svg>
             </View>
-            <Text className="text-sm font-bold text-navy-900">100% Vetted Pros</Text>
+            <Text className="text-sm font-bold text-navy-900">ID-verified pros</Text>
           </View>
 
           {/* Right Image Container */}
-          <View className="ml-auto w-3/4 h-[520px] rounded-[1.5rem] overflow-hidden bg-navy-100 shadow-inner">
+          <View className="ml-auto w-3/4 rounded-[1.5rem] overflow-hidden bg-navy-100 shadow-inner" style={{ height: 550, maxHeight: "calc(100vh - 120px)", minHeight: 380 }}>
             <Image
               source={{ uri: HERO }}
               contentFit="cover"
@@ -87,10 +88,10 @@ function DesktopHomeScreen() {
           </View>
 
           {/* Left Dark Floating Card */}
-          <View className="absolute left-0 top-[10%] w-[480px] z-10 rounded-[1.5rem] bg-navy-900 p-10 shadow-2xl">
+          <View className="absolute left-0 top-[18%] w-[480px] z-10 rounded-[1.5rem] bg-navy-900 p-10 shadow-2xl" style={{ top: "18%" }}>
             <Text className="text-[2.75rem] font-extrabold leading-[1.1] text-white tracking-tight">
               Your Home,{"\n"}
-              <Text className="text-[#FFAE7B] font-extrabold">Masterfully</Text>{"\n"}
+              <Text className="text-[#EA580C] font-extrabold">Masterfully</Text>{"\n"}
               Handled.
             </Text>
             <Text className="mt-5 text-[1.05rem] leading-relaxed text-white/80 font-normal">
@@ -111,8 +112,8 @@ function DesktopHomeScreen() {
           </View>
         </View>
 
-        {/* 2. Curated Services Section */}
-        <View className="mb-20">
+        {/* 2. Curated Services Section (mt-16 pushes it below fold) */}
+        <View className="mt-16 mb-20">
           <View className="flex-row items-end justify-between mb-8">
             <View>
               <Text className="text-[2.75rem] font-extrabold tracking-tight text-navy-900">Curated Services</Text>
@@ -179,7 +180,7 @@ function DesktopHomeScreen() {
         </View>
 
         {/* 3. Rich Client Sections (Best Sellers, Electrical Safety Carousel, Electrician, Guides, Plumbing, Carpenter, Testimonials) */}
-        <View className="mb-20">
+        <View className="mt-16 mb-20">
           <HomepageClientSections />
         </View>
 
@@ -308,6 +309,9 @@ function MobileHomeScreen() {
           </Text>
         </LinearGradient>
       </View>
+
+      {/* Safety Stories Tray */}
+      <SafetyStoriesTray />
 
       <View className="gap-3.5">
         <View className="flex-row items-center justify-between">

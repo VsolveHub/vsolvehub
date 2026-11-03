@@ -25,7 +25,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchRentals, fetchRentalTaxonomy } from "../queries";
+import type { RentalTaxonomyService } from "../model";
 import { RentalCard } from "./rental-card";
+import { DesktopRentalsBrowse } from "./desktop-rentals-browse";
+import { useIsDesktop } from "@/lib/responsive";
+import { PlaceFilter } from "@/features/browse/place-filter";
+import {
+  EMPTY_PLACE,
+  NearbyNotice,
+  placeKey,
+  placeQuery,
+  type PlaceFilterValue,
+} from "@/features/browse/nearby";
 
 /** Paise range constants for the slider. 0 – ₹5,000/day */
 const SLIDER_MIN_PAISE = 0;
@@ -225,14 +236,22 @@ function PriceRangeSlider({
 }
 
 export function RentalsBrowseScreen() {
+  const isDesktop = useIsDesktop();
+  if (isDesktop) {
+    return <DesktopRentalsBrowse />;
+  }
+  return <MobileRentalsBrowseScreen />;
+}
+
+function MobileRentalsBrowseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string; service?: string }>();
 
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
+  const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
 
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(
     params.category ?? null,
@@ -274,7 +293,7 @@ export function RentalsBrowseScreen() {
     queryKey: [
       "rentals",
       appliedQuery,
-      appliedLocation,
+      placeKey(appliedPlace),
       selectedSubcategory,
       selectedService,
       minPrice,
@@ -283,7 +302,7 @@ export function RentalsBrowseScreen() {
     queryFn: () =>
       fetchRentals({
         q: appliedQuery || undefined,
-        location: appliedLocation || undefined,
+        ...placeQuery(appliedPlace),
         category: selectedSubcategory || undefined,
         service: selectedService || undefined,
         min_price: minPrice,
@@ -300,14 +319,22 @@ export function RentalsBrowseScreen() {
 
   const handleSearchSubmit = () => {
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
+    setAppliedPlace(draftPlace);
+  };
+
+  const handlePlaceChange = (nextPlace: PlaceFilterValue, applyNow: boolean) => {
+    setDraftPlace(nextPlace);
+    if (applyNow) {
+      setAppliedPlace(nextPlace);
+      setAppliedQuery(draftQuery);
+    }
   };
 
   const clearFilters = () => {
     setDraftQuery("");
-    setDraftLocation("");
+    setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
-    setAppliedLocation("");
+    setAppliedPlace(EMPTY_PLACE);
     setSelectedSubcategory(null);
     setSelectedService(null);
     setMinPrice(undefined);
@@ -318,7 +345,7 @@ export function RentalsBrowseScreen() {
 
   const isFiltering =
     appliedQuery !== "" ||
-    appliedLocation !== "" ||
+    appliedPlace.name !== "" ||
     selectedSubcategory !== null ||
     selectedService !== null ||
     minPrice !== undefined ||
@@ -376,7 +403,7 @@ export function RentalsBrowseScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push("/rentals/mine" as never)}
+          onPress={() => router.push("/activity?type=rentals" as never)}
           className="mt-4 flex-row items-center justify-between rounded-xl border border-white/20 bg-white/10 px-4 py-3 active:bg-white/20"
         >
           <View className="flex-row items-center gap-2">
@@ -402,18 +429,12 @@ export function RentalsBrowseScreen() {
           />
         </View>
 
-        <View className="flex-row items-center rounded-xl bg-canvas px-3 py-2 border border-line/60">
-          <MapPin size={16} color={COLOR_TOKENS.textMuted} />
-          <TextInput
-            placeholder="Location (e.g. Hyderabad, Ameerpet)"
-            placeholderTextColor={COLOR_TOKENS.placeholderText}
-            value={draftLocation}
-            onChangeText={setDraftLocation}
-            onSubmitEditing={handleSearchSubmit}
-            returnKeyType="search"
-            className="ml-2 flex-1 text-xs text-navy-900"
-          />
-        </View>
+        <PlaceFilter
+          value={draftPlace}
+          onChange={handlePlaceChange}
+          placeholder="Location (e.g. Hyderabad, Ameerpet)"
+          onSubmit={handleSearchSubmit}
+        />
 
         <Button
           variant="primary"
@@ -458,7 +479,7 @@ export function RentalsBrowseScreen() {
             >
               {currentCategory
                 ? selectedService
-                  ? `${currentCategory.name} • ${nestedServices.find((s) => s.slug === selectedService)?.name || ""}`
+                  ? `${currentCategory.name} • ${nestedServices.find((s: RentalTaxonomyService) => s.slug === selectedService)?.name || ""}`
                   : currentCategory.name
                 : "All Equipment"}
             </Text>
@@ -554,6 +575,12 @@ export function RentalsBrowseScreen() {
         />
       ) : (
         <View className="gap-4">
+          <NearbyNotice
+            place={appliedPlace}
+            noun="rentals"
+            count={rentals.length}
+            nearestKm={rentals[0]?.distance_km}
+          />
           {rentals.map((asset) => (
             <RentalCard key={asset.id} asset={asset} />
           ))}
@@ -681,7 +708,7 @@ export function RentalsBrowseScreen() {
                             </Text>
                             {selectedService === null && <Check size={14} color={COLOR_TOKENS.brand} />}
                           </Pressable>
-                          {catServices.map((svc) => {
+                          {catServices.map((svc: RentalTaxonomyService) => {
                             const isSvcSelected = selectedService === svc.slug;
                             return (
                               <Pressable

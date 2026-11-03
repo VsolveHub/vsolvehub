@@ -34,6 +34,8 @@ import {
 } from "react-native";
 
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
+import { useIsDesktop } from "@/lib/responsive";
+import { DesktopStayDetail } from "./desktop-stay-detail";
 import {
   formatPaise,
   formatRate,
@@ -43,6 +45,7 @@ import {
   type StayProperty,
   type StayReview,
   type StayUnit,
+  type StayEnquiry,
 } from "../model";
 import { addDaysIso, todayIso } from "../pickup-time";
 import {
@@ -56,6 +59,9 @@ import { THEME_COLORS } from "../theme-colors";
 import { getAmenityIcon } from "./amenity-icon";
 import { StayCard } from "./stay-card";
 import { StayReviewSheet } from "./stay-review-sheet";
+import { StayVisitSheet } from "./stay-visit-sheet";
+import { LookSwitcher } from "./look-switcher";
+import { pickLook, visibleLooks } from "../looks";
 
 const FALLBACK_STAY_IMAGE =
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop";
@@ -72,16 +78,22 @@ function formatToIndianDate(isoDate: string): string {
   return isoDate;
 }
 
+interface ApiErrorShape {
+  code?: string;
+  message?: string;
+  fieldErrors?: Record<string, string[]>;
+}
+
 function refusalMessage(err: unknown, minimumLabel: string): string {
   if (err && typeof err === "object") {
-    if ("fieldErrors" in err && (err as any).fieldErrors) {
-      const fieldErrors = (err as any).fieldErrors as Record<string, string[]>;
-      const firstField = Object.keys(fieldErrors)[0];
-      if (firstField && fieldErrors[firstField]?.length) {
-        return fieldErrors[firstField][0];
+    const apiErr = err as ApiErrorShape;
+    if (apiErr.fieldErrors) {
+      const firstField = Object.keys(apiErr.fieldErrors)[0];
+      if (firstField && apiErr.fieldErrors[firstField]?.length) {
+        return apiErr.fieldErrors[firstField][0];
       }
     }
-    const code = (err as any).code;
+    const code = apiErr.code;
     if (code === "duplicate_enquiry") {
       return "You already have an active enquiry for this stay.";
     }
@@ -109,12 +121,16 @@ function refusalMessage(err: unknown, minimumLabel: string): string {
     if (code === "room_required") {
       return "Please select a room.";
     }
+    if (typeof apiErr.message === "string") {
+      return apiErr.message;
+    }
   }
-  return (err as any)?.message || "Failed to send enquiry.";
+  return "Failed to send enquiry.";
 }
 
 export function StayDetailScreen({ slug }: { slug: string }) {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
 
   const {
     data: property,
@@ -163,6 +179,10 @@ export function StayDetailScreen({ slug }: { slug: string }) {
     );
   }
 
+  if (isDesktop) {
+    return <DesktopStayDetail property={property} />;
+  }
+
   return (
     <StayDetailLoaded
       property={property}
@@ -194,6 +214,8 @@ function StayDetailLoaded({
   const [selectedUnitId, setSelectedUnitId] = useState<string>(
     units[0]?.id || "",
   );
+  const [selectedLookId, setSelectedLookId] = useState<string>("");
+  const [visitSheetOpen, setVisitSheetOpen] = useState(false);
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -206,12 +228,19 @@ function StayDetailLoaded({
   // My enquiries query to check for existing active enquiries
   const authStatus = useAuthStore((s) => s.status);
   const myEnquiries = useQuery({
-    queryKey: ["my-stay-enquiries"],
+    queryKey: ["my-stay-enquiries-list"],
     queryFn: fetchMyStayEnquiries,
     enabled: authStatus === "signedIn",
   });
 
-  const existingEnquiry = (myEnquiries.data ?? []).find((e) => {
+  const rawEnquiries = myEnquiries.data;
+  const enquiriesList = Array.isArray(rawEnquiries)
+    ? rawEnquiries
+    : Array.isArray((rawEnquiries as unknown as { results?: StayEnquiry[] })?.results)
+      ? (rawEnquiries as unknown as { results: StayEnquiry[] }).results
+      : [];
+
+  const existingEnquiry = enquiriesList.find((e) => {
     const propId = typeof e.property === "string" ? e.property : e.property?.id;
     const propSlug =
       e.property_slug ||
@@ -233,15 +262,23 @@ function StayDetailLoaded({
 
   const currentUnitId = selectedUnitId || units[0]?.id || "";
   const currentUnit = units.find((u) => u.id === currentUnitId) || units[0];
+  const currentLook = currentUnit ? pickLook(currentUnit, selectedLookId) : undefined;
+  const switchableLooks = currentUnit ? visibleLooks(currentUnit) : [];
 
-  // Gallery media selection
+  // Gallery media selection (priority: chosen look photos -> unit photos -> property images)
+  const lookMediaUrls = currentLook?.media?.map((m) => m.url).filter(Boolean) ?? [];
   const unitMediaUrls =
-    (currentUnit as any)?.media?.map((m: any) => m.url).filter(Boolean) ?? [];
+    currentUnit?.media?.map((m) => m.url).filter(Boolean) ?? [];
   const propertyImages =
     property.image_urls && property.image_urls.length > 0
       ? property.image_urls
       : [FALLBACK_STAY_IMAGE];
-  const images = unitMediaUrls.length > 0 ? unitMediaUrls : propertyImages;
+  const images =
+    lookMediaUrls.length > 0
+      ? lookMediaUrls
+      : unitMediaUrls.length > 0
+        ? unitMediaUrls
+        : propertyImages;
 
   const prevPhoto = () => {
     if (images.length < 2) return;
@@ -255,12 +292,51 @@ function StayDetailLoaded({
 
   // Capacity calculations
   const maxGuests = Math.max(currentUnit?.max_guests ?? 1, 1);
-  const adults = Math.min(
-    Math.max(adultCount, 1),
-    Math.max(maxGuests - childCount, 1),
-  );
-  const children = Math.min(childCount, Math.max(maxGuests - adults, 0));
+  const adults = adultCount;
+  const children = childCount;
   const totalGuests = adults + children;
+
+  const handleAdultsIncrement = () => {
+    if (adultCount + childCount >= maxGuests) {
+      setError(
+        `${currentUnit?.name || "This room"} has a maximum capacity of ${maxGuests} guest${
+          maxGuests === 1 ? "" : "s"
+        }. Choose another room configuration for more guests.`
+      );
+      return;
+    }
+    setError(null);
+    setAdultCount((n) => n + 1);
+  };
+
+  const handleAdultsDecrement = () => {
+    if (adultCount <= 1) {
+      return;
+    }
+    setError(null);
+    setAdultCount((n) => Math.max(1, n - 1));
+  };
+
+  const handleChildrenIncrement = () => {
+    if (adultCount + childCount >= maxGuests) {
+      setError(
+        `${currentUnit?.name || "This room"} has a maximum capacity of ${maxGuests} guest${
+          maxGuests === 1 ? "" : "s"
+        }. Choose another room configuration for more guests.`
+      );
+      return;
+    }
+    setError(null);
+    setChildCount((n) => n + 1);
+  };
+
+  const handleChildrenDecrement = () => {
+    if (childCount <= 0) {
+      return;
+    }
+    setError(null);
+    setChildCount((n) => Math.max(0, n - 1));
+  };
 
   // Live Quote query
   const quoteQuery = useQuery({
@@ -304,6 +380,7 @@ function StayDetailLoaded({
         adult_count: adults,
         child_count: children,
         message,
+        look_id: selectedLookId || null,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["my-stay-enquiries"] });
@@ -311,11 +388,12 @@ function StayDetailLoaded({
       setIsSuccess(true);
     },
     onError: (err: unknown) => {
+      const apiErr = err as ApiErrorShape;
       const isDup =
         (isApiRequestError(err) && err.code === "duplicate_enquiry") ||
-        (err as any)?.code === "duplicate_enquiry" ||
-        (typeof (err as any)?.message === "string" &&
-          (err as any).message.toLowerCase().includes("active enquiry already exists"));
+        apiErr?.code === "duplicate_enquiry" ||
+        (typeof apiErr?.message === "string" &&
+          apiErr.message.toLowerCase().includes("active enquiry already exists"));
 
       void queryClient.invalidateQueries({ queryKey: ["my-stay-enquiries"] });
       if (isDup) {
@@ -338,6 +416,14 @@ function StayDetailLoaded({
     }
     if (quoteProblem) {
       setError(quoteProblem);
+      return;
+    }
+    if (totalGuests > maxGuests) {
+      setError(
+        `${currentUnit?.name || "This room"} fits up to ${maxGuests} guest${
+          maxGuests === 1 ? "" : "s"
+        }. Please reduce guests or choose another room.`
+      );
       return;
     }
     enquiryMutation.mutate();
@@ -468,6 +554,19 @@ function StayDetailLoaded({
             </ScrollView>
           ) : null}
         </View>
+
+        {/* Room Look Switcher */}
+        {currentLook && switchableLooks.length > 1 ? (
+          <LookSwitcher
+            looks={switchableLooks}
+            selectedId={currentLook.id}
+            roomStyle={property.room_style}
+            onSelect={(lookId) => {
+              setSelectedLookId(lookId);
+              setActivePhotoIdx(0);
+            }}
+          />
+        ) : null}
 
         {/* Main Property Info Card */}
         <View className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
@@ -818,7 +917,7 @@ function StayDetailLoaded({
 
             <View className="gap-2.5 pt-1">
               <Pressable
-                onPress={() => router.push("/stays/mine" as never)}
+                onPress={() => router.push("/activity?type=stays" as never)}
                 className="items-center justify-center rounded-xl bg-brand py-3.5 shadow-xs active:bg-brand/90"
               >
                 <Text className="text-sm font-bold text-white">
@@ -853,6 +952,18 @@ function StayDetailLoaded({
               </View>
             </View>
 
+            {property.visits_offered ? (
+              <Pressable
+                onPress={() => setVisitSheetOpen(true)}
+                className="flex-row items-center justify-center gap-2 rounded-xl border border-navy-200 bg-navy-50 py-2.5 px-4"
+              >
+                <Calendar size={14} color={THEME_COLORS.navy900} />
+                <Text className="text-xs font-bold text-navy-900">
+                  Schedule a Visit In-Person →
+                </Text>
+              </Pressable>
+            ) : null}
+
             {existingEnquiry ? (
               <View className="flex-row items-center justify-between rounded-xl border border-blue-200 bg-blue-50/70 p-3">
                 <View className="flex-1 pr-2">
@@ -886,6 +997,8 @@ function StayDetailLoaded({
                       key={unit.id}
                       onPress={() => {
                         setSelectedUnitId(unit.id);
+                        setSelectedLookId("");
+                        setActivePhotoIdx(0);
                         setError(null);
                       }}
                       className={`flex-row items-center justify-between rounded-xl border p-3 ${
@@ -964,27 +1077,23 @@ function StayDetailLoaded({
                 </View>
                 <View className="flex-row items-center gap-3">
                   <Pressable
-                    disabled={adultCount <= 1}
                     hitSlop={10}
-                    onPress={() => setAdultCount((n) => Math.max(1, n - 1))}
+                    onPress={handleAdultsDecrement}
                     className={`size-7 items-center justify-center rounded-full border border-line bg-surface ${
-                      adultCount <= 1 ? "opacity-40" : "active:bg-surface-hover"
+                      adultCount <= 1 ? "opacity-50" : "active:bg-surface-hover"
                     }`}
                   >
                     <Text className="text-sm font-bold text-navy-900">–</Text>
                   </Pressable>
-                  <Text className="w-5 text-center text-sm font-bold text-navy-900">
+                  <Text className="w-5 text-center text-sm font-bold text-navy-900 tabular-nums">
                     {adultCount}
                   </Text>
                   <Pressable
-                    disabled={adultCount + childCount >= maxGuests}
                     hitSlop={10}
-                    onPress={() =>
-                      setAdultCount((n) => Math.min(n + 1, maxGuests - childCount))
-                    }
+                    onPress={handleAdultsIncrement}
                     className={`size-7 items-center justify-center rounded-full border border-line bg-surface ${
-                      adultCount + childCount >= maxGuests
-                        ? "opacity-40"
+                      totalGuests >= maxGuests
+                        ? "opacity-50"
                         : "active:bg-surface-hover"
                     }`}
                   >
@@ -1001,27 +1110,23 @@ function StayDetailLoaded({
                 </View>
                 <View className="flex-row items-center gap-3">
                   <Pressable
-                    disabled={childCount <= 0}
                     hitSlop={10}
-                    onPress={() => setChildCount((n) => Math.max(0, n - 1))}
+                    onPress={handleChildrenDecrement}
                     className={`size-7 items-center justify-center rounded-full border border-line bg-surface ${
-                      childCount <= 0 ? "opacity-40" : "active:bg-surface-hover"
+                      childCount <= 0 ? "opacity-50" : "active:bg-surface-hover"
                     }`}
                   >
                     <Text className="text-sm font-bold text-navy-900">–</Text>
                   </Pressable>
-                  <Text className="w-5 text-center text-sm font-bold text-navy-900">
+                  <Text className="w-5 text-center text-sm font-bold text-navy-900 tabular-nums">
                     {childCount}
                   </Text>
                   <Pressable
-                    disabled={adultCount + childCount >= maxGuests}
                     hitSlop={10}
-                    onPress={() =>
-                      setChildCount((n) => Math.min(n + 1, maxGuests - adultCount))
-                    }
+                    onPress={handleChildrenIncrement}
                     className={`size-7 items-center justify-center rounded-full border border-line bg-surface ${
-                      adultCount + childCount >= maxGuests
-                        ? "opacity-40"
+                      totalGuests >= maxGuests
+                        ? "opacity-50"
                         : "active:bg-surface-hover"
                     }`}
                   >
@@ -1031,15 +1136,24 @@ function StayDetailLoaded({
               </View>
 
               {/* Total Headcount summary */}
-              <Text className="px-1 text-[11px] text-text-secondary">
-                <Text className="font-semibold text-navy-900">{totalGuests}</Text>{" "}
-                guest{totalGuests === 1 ? "" : "s"} total{" "}
-                {maxGuests > 1 ? (
-                  <Text className="text-text-secondary/70">
-                    · room fits up to {maxGuests}
-                  </Text>
-                ) : null}
-              </Text>
+              <View className="flex-row items-center justify-between px-1">
+                <Text className="text-[11px] text-text-secondary">
+                  <Text className="font-semibold text-navy-900">{totalGuests}</Text>{" "}
+                  guest{totalGuests === 1 ? "" : "s"} total{" "}
+                  {maxGuests > 1 ? (
+                    <Text className="text-text-secondary/70">
+                      · room fits up to {maxGuests}
+                    </Text>
+                  ) : null}
+                </Text>
+                {totalGuests >= maxGuests && (
+                  <View className="rounded-full bg-amber-50 px-2 py-0.5 border border-amber-200">
+                    <Text className="text-[10px] font-semibold text-amber-800">
+                      Max {maxGuests} guest{maxGuests === 1 ? "" : "s"}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* Message to host */}
@@ -1099,7 +1213,7 @@ function StayDetailLoaded({
                   (error.toLowerCase().includes("already") ||
                     error.toLowerCase().includes("active enquiry"))) ? (
                   <Pressable
-                    onPress={() => router.push("/stays/mine" as never)}
+                    onPress={() => router.push("/activity?type=stays" as never)}
                     className="self-start rounded-lg bg-rose-100 px-3 py-1.5 active:bg-rose-200"
                   >
                     <Text className="text-xs font-bold text-rose-900">
@@ -1164,6 +1278,15 @@ function StayDetailLoaded({
         onSuccess={() => void refetch()}
       />
 
+      {/* Schedule Visit Sheet */}
+      <StayVisitSheet
+        property={property}
+        initialUnitId={selectedUnitId}
+        initialLookId={selectedLookId}
+        open={visitSheetOpen}
+        onOpenChange={setVisitSheetOpen}
+      />
+
       {/* Fullscreen Photo Modal Viewer */}
       <Modal
         visible={Boolean(fullscreenPhoto)}
@@ -1212,7 +1335,7 @@ function StayDetailLoaded({
               <Pressable
                 onPress={() => {
                   setIsSuccess(false);
-                  router.push("/stays/mine" as never);
+                  router.push("/activity?type=stays" as never);
                 }}
                 className="items-center justify-center rounded-xl bg-brand py-3 active:bg-brand/90"
               >

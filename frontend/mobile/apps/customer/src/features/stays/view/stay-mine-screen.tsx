@@ -28,15 +28,15 @@ export function StayMineScreen() {
   };
 
   const enquiries = useQuery({
-    queryKey: ["my-stay-enquiries"],
+    queryKey: ["my-stay-enquiries-list"],
     queryFn: fetchMyStayEnquiries,
   });
   const visits = useQuery({
-    queryKey: ["my-stay-visits"],
+    queryKey: ["my-stay-visits-list"],
     queryFn: fetchMyStayVisits,
   });
   const reservations = useQuery({
-    queryKey: ["my-stay-reservations"],
+    queryKey: ["my-stay-reservations-list"],
     queryFn: fetchMyStayReservations,
   });
 

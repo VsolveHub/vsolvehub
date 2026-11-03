@@ -16,9 +16,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatPaise } from "../model";
 import { fetchRentalAsset } from "../queries";
 import { RentalBookPanel } from "./rental-book-panel";
+import { useIsDesktop } from "@/lib/responsive";
+import { DesktopRentalDetail } from "./desktop-rental-detail";
 
 export function RentalDetailScreen({ slug }: { slug: string }) {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -70,6 +73,32 @@ export function RentalDetailScreen({ slug }: { slug: string }) {
     );
   }
 
+  if (isDesktop && asset) {
+    return <DesktopRentalDetail asset={asset} />;
+  }
+
+  return (
+    <MobileRentalDetailContent
+      asset={asset}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      insets={insets}
+    />
+  );
+}
+
+function MobileRentalDetailContent({
+  asset,
+  onRefresh,
+  refreshing,
+  insets,
+}: {
+  asset: any;
+  onRefresh: () => Promise<void>;
+  refreshing: boolean;
+  insets: any;
+}) {
+  const router = useRouter();
   const structuredFields = asset.structured_fields || {};
   const fieldEntries = Object.entries(structuredFields).filter(
     ([_, val]) => val !== undefined && val !== null && val !== "",

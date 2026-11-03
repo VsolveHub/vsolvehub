@@ -17,7 +17,7 @@ import { useEffect } from "react";
 import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
 import { resolveCustomerPush } from "@/features/notifications/push-routing";
 
-import { LogBox } from "react-native";
+import { LogBox, Platform } from "react-native";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import "../global.css";
 
@@ -67,6 +67,7 @@ export default function RootLayout() {
 }
 
 function PushRouting() {
+  if (Platform.OS === "web") return null;
   const status = useAuthStore((state) => state.status);
   const router = useRouter();
   const queryClient = useQueryClient();

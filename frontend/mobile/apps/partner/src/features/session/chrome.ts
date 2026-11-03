@@ -32,7 +32,8 @@ export function routeRequiresPartnerRole(pathname: string): boolean {
 
 export function focusedHeaderTitle(pathname: string, titleOverride: string | null): string {
   let title = "Details";
-  if (pathname.startsWith("/work/offers")) title = "Work Offer";
+  if (pathname.startsWith("/dispatch")) title = "Instant Job Offer";
+  else if (pathname.startsWith("/work/offers")) title = "Work Offer";
   else if (pathname.endsWith("/arrival")) title = "Arrival code";
   else if (pathname.startsWith("/work/enquiries")) title = "Enquiry";
   else if (pathname.startsWith("/work/jobs")) title = "Job Details";

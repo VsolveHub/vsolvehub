@@ -3,6 +3,7 @@ import { Button, Skeleton, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import {
+  ArrowLeft,
   ArrowRight,
   Building2,
   Check,
@@ -23,6 +24,14 @@ import { useState } from "react";
 import { Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
+import { PlaceFilter } from "@/features/browse/place-filter";
+import {
+  EMPTY_PLACE,
+  NearbyNotice,
+  placeKey,
+  placeQuery,
+  type PlaceFilterValue,
+} from "@/features/browse/nearby";
 
 import {
   formatPaise,
@@ -69,9 +78,9 @@ export function DesktopStaysBrowse() {
 
   // Search & Filter State
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
+  const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
 
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | undefined>(undefined);
   const [selectedServiceSlug, setSelectedServiceSlug] = useState<string | undefined>(undefined);
@@ -103,7 +112,7 @@ export function DesktopStaysBrowse() {
     queryKey: [
       "stays",
       appliedQuery,
-      appliedLocation,
+      placeKey(appliedPlace),
       selectedCategorySlug,
       selectedServiceSlug,
       filterAc,
@@ -116,7 +125,7 @@ export function DesktopStaysBrowse() {
     queryFn: () =>
       fetchStays({
         q: appliedQuery,
-        location: appliedLocation,
+        ...placeQuery(appliedPlace),
         ac: filterAc,
         food: filterFood,
         min_price: minPrice,
@@ -130,17 +139,26 @@ export function DesktopStaysBrowse() {
     staleTime: 30_000,
   });
 
+  const handlePlaceChange = (nextPlace: PlaceFilterValue, applyNow: boolean) => {
+    setDraftPlace(nextPlace);
+    if (applyNow) {
+      setAppliedPlace(nextPlace);
+      setAppliedQuery(draftQuery);
+      setVisible(6);
+    }
+  };
+
   const handleSearchSubmit = () => {
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
+    setAppliedPlace(draftPlace);
     setVisible(6);
   };
 
   const clearFilters = () => {
     setDraftQuery("");
-    setDraftLocation("");
+    setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
-    setAppliedLocation("");
+    setAppliedPlace(EMPTY_PLACE);
     setSelectedCategorySlug(undefined);
     setSelectedServiceSlug(undefined);
     setFilterAc(undefined);
@@ -163,7 +181,22 @@ export function DesktopStaysBrowse() {
       contentContainerClassName="min-h-screen justify-between"
       showsVerticalScrollIndicator
     >
-      <View className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+      <View className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+        {/* Top Breadcrumb Navigation */}
+        <View className="flex-row items-center">
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Back to Home"
+            onPress={() => router.push("/")}
+            className="flex-row items-center gap-1.5 -ml-1 px-1 py-1 cursor-pointer group"
+          >
+            <ArrowLeft size={15} color="#6B6560" />
+            <Text className="text-sm font-bold text-[#6B6560] group-hover:text-navy-900">
+              Back to Home
+            </Text>
+          </Pressable>
+        </View>
+
         {/* 1. Hero / Header Banner */}
         <View
           style={{
@@ -206,7 +239,7 @@ export function DesktopStaysBrowse() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="My Enquiries"
-                onPress={() => router.push("/stays/mine")}
+                onPress={() => router.push("/activity?type=stays")}
                 className="flex-row items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 backdrop-blur-md transition hover:bg-white/20 cursor-pointer"
               >
                 <FileCheck2 size={16} color="#ffffff" />
@@ -231,15 +264,12 @@ export function DesktopStaysBrowse() {
             </View>
 
             {/* Input 2: Location */}
-            <View className="flex-1 md:max-w-[280px] flex-row items-center gap-3 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] px-3.5 py-2.5 focus-within:border-navy-900">
-              <MapPin size={16} color="#6B6560" />
-              <TextInput
-                value={draftLocation}
-                onChangeText={setDraftLocation}
-                onSubmitEditing={handleSearchSubmit}
+            <View className="flex-1 md:max-w-[280px]">
+              <PlaceFilter
+                value={draftPlace}
+                onChange={handlePlaceChange}
                 placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
-                placeholderTextColor="rgba(107,101,96,0.7)"
-                className="w-full bg-transparent text-sm text-navy-900 p-0 focus:outline-none"
+                onSubmit={handleSearchSubmit}
               />
             </View>
 
@@ -511,7 +541,7 @@ export function DesktopStaysBrowse() {
               <Text className="font-bold text-[#EA580C]">{displayedStays.length}</Text> of{" "}
               <Text className="font-bold text-navy-900">{stays.length}</Text>{" "}
               {stays.length === 1 ? "stay" : "stays"}
-              {appliedLocation ? ` in "${appliedLocation}"` : ""}
+              {appliedPlace.name ? ` in "${appliedPlace.name}"` : ""}
             </Text>
 
             <View className="relative flex-row items-center gap-2">

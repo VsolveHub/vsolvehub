@@ -1,5 +1,5 @@
-import { RentalMineScreen } from "@/features/rentals/view/rental-mine-screen";
+import { Redirect } from "expo-router";
 
 export default function MyRentalsPage() {
-  return <RentalMineScreen />;
+  return <Redirect href="/activity?type=rentals" />;
 }

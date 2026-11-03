@@ -138,6 +138,7 @@ const GUIDES = [
 ] as const;
 
 export function HomepageClientSections() {
+  const isDesktop = useIsDesktop();
   const queryClient = useQueryClient();
   const cartQuery = useCart();
   const addItem = useAddCartItem();
@@ -292,8 +293,6 @@ export function HomepageClientSections() {
       quantity: item.quantity + delta,
     });
   };
-
-  const isDesktop = useIsDesktop();
 
   return (
     <View className="gap-12">

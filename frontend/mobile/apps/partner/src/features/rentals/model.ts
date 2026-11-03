@@ -1,3 +1,45 @@
+export interface PickupDay {
+  weekday: number;
+  is_open: boolean;
+  opens_at: string;
+  closes_at: string;
+}
+
+export interface PickupHours {
+  is_set: boolean;
+  summary?: string;
+  days: PickupDay[];
+  closed_dates: string[];
+}
+
+export interface PickupDayInput {
+  weekday: number;
+  opens_at: string;
+  closes_at: string;
+}
+
+export type TransportTrip = "ONE_WAY" | "ROUND_TRIP";
+
+export interface RentalTransport {
+  status:
+    | "REQUESTED"
+    | "QUOTED"
+    | "ACCEPTED"
+    | "OUT_FOR_DELIVERY"
+    | "DELIVERED"
+    | "DECLINED"
+    | "EXPIRED"
+    | "CANCELLED"
+    | string;
+  trip?: TransportTrip;
+  amount_paise?: number;
+  max_quotes: number;
+  quote_count: number;
+  customer_note?: string;
+  reject_note?: string;
+  respond_by?: string;
+}
+
 export interface PartnerRentalAssetMedia {
   id: string;
   url: string;
@@ -43,6 +85,13 @@ export interface PartnerRentalAsset {
   media?: PartnerRentalAssetMedia[];
   image_urls?: string[];
   structured_fields?: Record<string, string | number | boolean>;
+  delivery_available?: boolean;
+  pickup_address?: {
+    line_1?: string;
+    area?: string;
+    city?: string;
+    pincode?: string;
+  } | null;
   created_at?: string;
 }
 
@@ -80,6 +129,17 @@ export interface PartnerRentalBooking {
     amount_paise?: number;
     payment_attempt_id?: string;
   };
+  transport?: RentalTransport | null;
+  transport_paise?: number | null;
+  transport_fee_percent?: number | null;
+  delivery_address?: {
+    line?: string;
+    area?: string;
+    city?: string;
+    pincode?: string;
+    contact_phone?: string;
+  } | null;
+  delivery_directions_url?: string | null;
   created_at?: string;
 }
 

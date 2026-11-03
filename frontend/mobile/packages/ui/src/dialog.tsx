@@ -81,9 +81,9 @@ function CloseButton({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Close"
       onPress={onPress}
       hitSlop={12}
-      className="h-8 w-8 items-center justify-center rounded-full bg-surface-sunken active:bg-surface-hover"
+      className="p-1 items-center justify-center rounded-full active:bg-surface-sunken"
     >
-      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#1E293B" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
         <Line x1={18} y1={6} x2={6} y2={18} />
         <Line x1={6} y1={6} x2={18} y2={18} />
       </Svg>

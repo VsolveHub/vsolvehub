@@ -48,7 +48,7 @@ export function VisitActionBar({
               <Text className="text-sm font-semibold text-action-text">Start OTP</Text>
             </Pressable>
           ) : (
-            <Button disabled={pending} onPress={() => controls.setAskingForCode(true)}>I've arrived</Button>
+            <Button disabled={pending} onPress={() => controls.setAskingForCode(true)}>I&apos;ve arrived</Button>
           )
         ) : null}
         {showFinish ? (

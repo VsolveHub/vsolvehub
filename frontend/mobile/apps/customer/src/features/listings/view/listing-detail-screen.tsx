@@ -44,6 +44,8 @@ import { ApplySheet } from "./apply-sheet";
 import { MatchCard } from "./match-card";
 import { QuickApplyCard } from "./quick-apply-card";
 import { ReportDialog } from "./report-dialog";
+import { useIsDesktop } from "@/lib/responsive";
+import { DesktopListingDetail } from "./desktop-listing-detail";
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return "08/10/2026";
@@ -61,17 +63,8 @@ function formatDate(dateStr?: string | null): string {
 
 export function ListingDetailScreen({ slug }: { slug: string }) {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-  const authStatus = useAuthStore((s) => s.status);
-  const isAuthenticated = authStatus === "signedIn";
-
-  const [applyOpen, setApplyOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("spam_or_abuse");
-  const [reportDetail, setReportDetail] = useState("");
-  const [reportError, setReportError] = useState<string | undefined>(undefined);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const {
     data: listing,
@@ -85,14 +78,84 @@ export function ListingDetailScreen({ slug }: { slug: string }) {
     enabled: Boolean(slug),
   });
 
-  const listingId = listing?.id ?? "";
-
   // Canonical slug redirect
   useEffect(() => {
     if (listing?.slug && slug !== listing.slug) {
       router.replace(`/(tabs)/listings/${listing.slug}` as never);
     }
   }, [listing?.slug, slug, router]);
+
+  if (isLoading) {
+    return (
+      <View
+        className="flex-1 bg-[#fcfbfa] p-4 gap-4"
+        style={{ paddingTop: Math.max(insets.top + 16, 36) }}
+      >
+        <Skeleton className="h-6 w-32 rounded-lg" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-2xl" />
+      </View>
+    );
+  }
+
+  if (error || !listing) {
+    return (
+      <View
+        className="flex-1 bg-[#fcfbfa] p-6 justify-center"
+        style={{ paddingTop: Math.max(insets.top + 16, 36) }}
+      >
+        <ErrorState
+          title="Job listing not found"
+          message="This opportunity may have expired, closed, or is temporarily under review."
+          actionLabel="Retry"
+          onAction={() => void refetch()}
+        />
+      </View>
+    );
+  }
+
+  if (isDesktop) {
+    return <DesktopListingDetail listing={listing} />;
+  }
+
+  return (
+    <MobileListingDetailContent
+      listing={listing}
+      refetch={refetch}
+      isRefetching={isRefetching}
+      insets={insets}
+      slug={slug}
+    />
+  );
+}
+
+function MobileListingDetailContent({
+  listing,
+  refetch,
+  isRefetching,
+  insets,
+  slug,
+}: {
+  listing: ListingDetail;
+  refetch: () => void;
+  isRefetching: boolean;
+  insets: ReturnType<typeof useSafeAreaInsets>;
+  slug: string;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const authStatus = useAuthStore((s) => s.status);
+  const isAuthenticated = authStatus === "signedIn";
+
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("spam_or_abuse");
+  const [reportDetail, setReportDetail] = useState("");
+  const [reportError, setReportError] = useState<string | undefined>(undefined);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  const listingId = listing.id ?? "";
 
   const profileQuery = useQuery({
     queryKey: ["my-job-profile"],
@@ -171,36 +234,6 @@ export function ListingDetailScreen({ slug }: { slug: string }) {
       setReportError(err?.message || "Failed to submit report. Please try again.");
     },
   });
-
-  if (isLoading) {
-    return (
-      <View
-        className="flex-1 bg-[#fcfbfa] p-4 gap-4"
-        style={{ paddingTop: Math.max(insets.top + 16, 36) }}
-      >
-        <Skeleton className="h-6 w-32 rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-2xl" />
-        <Skeleton className="h-32 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
-      </View>
-    );
-  }
-
-  if (error || !listing) {
-    return (
-      <View
-        className="flex-1 bg-[#fcfbfa] p-6 justify-center"
-        style={{ paddingTop: Math.max(insets.top + 16, 36) }}
-      >
-        <ErrorState
-          title="Job listing not found"
-          message="This opportunity may have expired, closed, or is temporarily under review."
-          actionLabel="Retry"
-          onAction={() => void refetch()}
-        />
-      </View>
-    );
-  }
 
   const myApplications = applicationsQuery.data ?? [];
   const existingApplication = myApplications.find(

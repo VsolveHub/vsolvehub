@@ -35,11 +35,13 @@ const LENGTH_CHOICES = { MONTH: 24, NIGHT: 90 } as const;
 export function StayEnquirySheet({
   property,
   unitId: initialUnitId,
+  lookId,
   open,
   onOpenChange,
 }: {
   property: StayProperty;
   unitId?: string | null;
+  lookId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -110,6 +112,7 @@ export function StayEnquirySheet({
         adult_count: adults,
         child_count: children,
         message,
+        look_id: lookId || null,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["my-stay-enquiries"] });
@@ -195,7 +198,7 @@ export function StayEnquirySheet({
             variant="primary"
             onPress={() => {
               handleClose();
-              router.push("/stays/mine" as never);
+              router.push("/activity?type=stays" as never);
             }}
             className="w-full rounded-xl py-3.5"
           >

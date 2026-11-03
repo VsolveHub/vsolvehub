@@ -1,3 +1,19 @@
+// Ported from frontend/apps/customer/features/rentals/model.ts
+import type { Schemas } from "@vsolve/api-client";
+
+export type DeliveryAddress = Schemas["DeliveryAddressRequest"];
+
+export interface PickupAddress {
+  partner_name?: string;
+  line: string;
+  area: string;
+  city: string;
+  pincode: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  maps_url?: string | null;
+}
+
 export interface RentalAssetMedia {
   id: string;
   url: string;
@@ -21,9 +37,12 @@ export interface RentalAsset {
   quantity_available?: number;
   thumbnail_url?: string;
   partner_name?: string;
+  delivery_available?: boolean;
+  pickup_address?: PickupAddress | null;
   media?: RentalAssetMedia[];
   structured_fields?: Record<string, string | number | boolean>;
   partner?: RentalPartner;
+  distance_km?: number | null;
   reserved_ranges?: Array<{ start_date: string; end_date: string }>;
 }
 
@@ -34,8 +53,22 @@ export interface RentalDeposit {
   consumed_paise?: number;
   requested_consume_paise?: number;
   provider_note?: string;
-  payment_attempt_id?: string | null;
+  paid_at?: string | null;
+  refunded_at?: string | null;
+  retained_at?: string | null;
+  payment_attempt_id?: string | number | null;
   simulated_capture_available?: boolean;
+}
+
+export interface RentalTransport {
+  id?: string;
+  status?: string;
+  quote_paise?: number;
+  trip?: string;
+  respond_by?: string;
+  quote_note?: string;
+  reject_note?: string;
+  decline_reason?: string;
 }
 
 export interface RentalBooking {
@@ -54,6 +87,12 @@ export interface RentalBooking {
   handover_pin?: string;
   asset?: RentalAsset;
   deposit?: RentalDeposit;
+  delivery_address?: DeliveryAddress;
+  delivery_note?: string;
+  delivery_directions_url?: string | null;
+  transport?: RentalTransport;
+  amount_due_paise?: number | null;
+  created_at?: string;
 }
 
 export function canCancelRentalBooking(status?: string): boolean {
@@ -71,6 +110,10 @@ export interface RentalFilterParams {
   max_deposit?: number;
   start_date?: string;
   end_date?: string;
+  lat?: number;
+  lng?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED" | "INACTIVE";
@@ -145,6 +188,8 @@ export interface CreateBookingRequest {
   end_date: string;
   quantity?: number;
   pickup_or_delivery_mode?: string;
+  delivery_address?: DeliveryAddress;
+  delivery_note?: string;
   notes?: string;
 }
 
@@ -168,4 +213,27 @@ export interface RentalTaxonomySubcategory {
   name: string;
   slug: string;
   services: RentalTaxonomyService[];
+}
+
+export interface RentalBookingFeedItem {
+  id: string;
+  asset_id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  quantity?: number;
+  pickup_or_delivery_mode?: string;
+  price_paise?: number;
+  platform_fee_paise?: number;
+  platform_fee_percent?: number;
+  total_charge_paise?: number;
+  deposit_paise?: number;
+  asset_title?: string;
+  asset_thumbnail_url?: string;
+  partner_name?: string;
+  handover_pin?: string;
+  deposit_status?: string;
+  delivery_address?: DeliveryAddress;
+  delivery_directions_url?: string | null;
+  created_at?: string;
 }

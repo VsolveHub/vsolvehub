@@ -1,13 +1,14 @@
 // Ported from frontend/apps/partner/features/earnings/view/earnings-panel.tsx
-import { Badge, Button, Card, ErrorState, Spinner, Text, cn, formatMoney } from "@vsolve/mobile-ui";
-import { ScrollView, View } from "react-native";
+import { Badge, Button, Card, ErrorState, Spinner, Text, cn, formatMoney, useT } from "@vsolve/mobile-ui";
+import { RefreshControl, ScrollView, View } from "react-native";
 
 import { Pictogram, type PictogramName } from "@/features/work-stack/view/pictogram";
 import { EarningsChart, toDailyEarnings } from "./earnings-chart";
+import { PayoutAccountCard } from "./payout-account-card";
+import { WithdrawCard } from "./withdraw-card";
 import {
   usePartnerBalance,
   usePartnerLedger,
-  usePartnerPayoutAccount,
   usePartnerPerformance,
 } from "../queries";
 
@@ -17,14 +18,6 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning"> = 
   RESERVED: "info",
   PAID: "success",
   RELEASED: "neutral",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "ON HOLD",
-  AVAILABLE: "READY",
-  RESERVED: "IN NEXT RUN",
-  PAID: "PAID",
-  RELEASED: "RELEASED",
 };
 
 const BALANCE_TONE = {
@@ -60,25 +53,51 @@ function BalanceTile({
 }
 
 export function EarningsPanel() {
+  const t = useT();
   const balance = usePartnerBalance();
   const ledger = usePartnerLedger();
-  const account = usePartnerPayoutAccount();
   const performance = usePartnerPerformance();
+
+  const isRefreshing =
+    balance.isRefetching || ledger.isRefetching || performance.isRefetching;
+
+  const handleRefresh = () => {
+    void balance.refetch();
+    void ledger.refetch();
+    void performance.refetch();
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return t("money.earnings.status.pending");
+      case "AVAILABLE":
+        return t("money.earnings.status.available");
+      case "RESERVED":
+        return t("money.earnings.status.reserved");
+      case "PAID":
+        return t("money.earnings.status.paid");
+      case "RELEASED":
+        return t("money.earnings.status.released");
+      default:
+        return status;
+    }
+  };
 
   if (balance.isPending) {
     return (
       <Card className="m-4 flex-row items-center gap-2 p-6">
         <Spinner size="sm" />
-        <Text className="text-text-secondary">Loading your earnings…</Text>
+        <Text className="text-text-secondary">{t("money.earnings.loading.ariaLabel")}…</Text>
       </Card>
     );
   }
   if (balance.isError || !balance.data) {
     return (
       <ErrorState
-        title="We could not load your earnings"
-        message="Nothing has changed. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("money.earnings.error.title")}
+        message={t("common.nothingChanged")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void balance.refetch()}
       />
     );
@@ -90,28 +109,49 @@ export function EarningsPanel() {
   const monthDirect = performance.data?.month_direct_paise ?? 0;
 
   return (
-    <ScrollView className="flex-1 bg-canvas" contentContainerClassName="gap-5 px-4 py-5">
+    <ScrollView
+      className="flex-1 bg-canvas"
+      contentContainerClassName="gap-5 px-4 py-5"
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          colors={["#EA580C"]}
+          tintColor="#EA580C"
+        />
+      }
+    >
       {/* Warning banner */}
       {data.pending_paise > 0 ? (
         <View className="flex-row gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
           <Pictogram name="later" size="sm" className="mt-0.5 shrink-0 text-warning-text" />
           <View className="min-w-0 flex-1">
-            <Text className="text-sm font-semibold text-warning-text">Some of your earnings are on hold</Text>
-            <Text className="mt-0.5 text-sm text-warning-text/80">Review the required documentation to release funds.</Text>
+            <Text className="text-sm font-semibold text-warning-text">
+              {t("money.earnings.onHold.title")}
+            </Text>
+            <Text className="mt-0.5 text-sm text-warning-text/80">
+              {t("money.earnings.onHold.body")}
+            </Text>
           </View>
         </View>
       ) : null}
 
       {/* Total earned this month */}
       <Card className="p-5">
-        <Text className="text-sm font-semibold text-text-secondary">Total earned this month</Text>
+        <Text className="text-sm font-semibold text-text-secondary">
+          {t("money.earnings.totalThisMonth.title")}
+        </Text>
         {performance.isPending ? (
           <View className="mt-3 flex-row items-center gap-2">
             <Spinner size="sm" />
-            <Text className="text-sm text-text-secondary">Loading this month…</Text>
+            <Text className="text-sm text-text-secondary">
+              {t("money.earnings.totalThisMonth.loading")}
+            </Text>
           </View>
         ) : performance.isError || !performance.data ? (
-          <Text className="mt-2 text-sm text-text-secondary">This total is temporarily unavailable.</Text>
+          <Text className="mt-2 text-sm text-text-secondary">
+            {t("money.earnings.totalThisMonth.unavailable")}
+          </Text>
         ) : (
           <>
             <Text className="mt-1 text-4xl font-bold leading-tight text-text">
@@ -119,8 +159,10 @@ export function EarningsPanel() {
             </Text>
             <Text className="mt-2 text-sm text-text-secondary">
               {monthDirect > 0
-                ? `${formatMoney(monthDirect)} was paid directly by customers.`
-                : "Includes direct customer payments and work paid through Vsolve."}
+                ? t("money.earnings.totalThisMonth.directNote", {
+                    amount: formatMoney(monthDirect),
+                  })
+                : t("money.earnings.totalThisMonth.genericNote")}
             </Text>
           </>
         )}
@@ -130,9 +172,11 @@ export function EarningsPanel() {
       <Card className="p-5">
         <View className="flex-row items-start justify-between gap-4">
           <View className="min-w-0 flex-1">
-            <Text className="text-sm font-semibold text-text-secondary">Vsolve payout balance</Text>
+            <Text className="text-sm font-semibold text-text-secondary">
+              {t("money.earnings.vsolveBalance.title")}
+            </Text>
             <Text className="mt-1 text-xs leading-5 text-text-secondary">
-              Money Vsolve collected and still has to pay you.
+              {t("money.earnings.vsolveBalance.subtitle")}
             </Text>
           </View>
           <Text className="shrink-0 text-2xl font-bold text-text">
@@ -142,32 +186,62 @@ export function EarningsPanel() {
 
         {vsolveOutstanding === 0 && monthDirect > 0 ? (
           <Text className="mt-3 rounded-plate bg-info-surface px-3 py-2 text-xs leading-5 text-info-text">
-            Nothing is due from Vsolve because this month’s {formatMoney(monthDirect)} was paid directly by customers.
+            {t("money.earnings.vsolveBalance.nothingDue", { amount: formatMoney(monthDirect) })}
           </Text>
         ) : null}
 
         <View className="mt-4 flex-row flex-wrap gap-2">
-          <BalanceTile label="Ready" amountPaise={data.available_paise} tone="info" icon="money" />
-          <BalanceTile label="Next run" amountPaise={data.reserved_paise} tone="info" icon="held" />
-          <BalanceTile label="On hold" amountPaise={data.pending_paise} tone="warning" icon="later" />
-          <BalanceTile label="Paid" amountPaise={data.paid_paise} tone="success" icon="done" />
+          <BalanceTile
+            label={t("money.earnings.tile.ready")}
+            amountPaise={data.available_paise}
+            tone="info"
+            icon="money"
+          />
+          <BalanceTile
+            label={t("money.earnings.tile.onTheWay")}
+            amountPaise={data.reserved_paise}
+            tone="info"
+            icon="held"
+          />
+          <BalanceTile
+            label={t("money.earnings.tile.onHold")}
+            amountPaise={data.pending_paise}
+            tone="warning"
+            icon="later"
+          />
+          <BalanceTile
+            label={t("money.earnings.status.paid")}
+            amountPaise={data.paid_paise}
+            tone="success"
+            icon="done"
+          />
         </View>
       </Card>
 
+      {/* Immediate Withdrawal Action Card */}
+      <WithdrawCard />
+
+      {/* Bank Account / Payout Method Card with Bottom Sheet */}
+      <PayoutAccountCard />
+
       {/* How you are doing */}
       <Card className="p-5">
-        <Text className="text-base font-bold text-text">How you are doing</Text>
+        <Text className="text-base font-bold text-text">
+          {t("money.earnings.howYouAreDoing")}
+        </Text>
         <View className="mt-3">
           {performance.isError ? (
             <View className="rounded-card border border-line bg-surface-sunken p-4">
               <Text className="text-sm text-text-secondary">
-                We could not load your last 7 days just now. Your balance above is still correct.
+                {t("money.earnings.trend.error")}
               </Text>
             </View>
           ) : performance.isPending || !performance.data ? (
             <View className="flex-row items-center gap-2 p-4">
               <Spinner size="sm" />
-              <Text className="text-sm text-text-secondary">Loading your last 7 days…</Text>
+              <Text className="text-sm text-text-secondary">
+                {t("money.earnings.trend.loading")}
+              </Text>
             </View>
           ) : (
             <EarningsChart days={toDailyEarnings(performance.data.daily)} />
@@ -175,38 +249,22 @@ export function EarningsPanel() {
         </View>
       </Card>
 
-      {/* Payout method */}
-      <Card className="flex-row items-center gap-3 p-4">
-        <View className="size-10 shrink-0 items-center justify-center rounded-lg bg-info-surface">
-          <Pictogram name="money" size="sm" className="text-info-text" />
-        </View>
-        <View className="min-w-0 flex-1">
-          <Text className="text-sm font-semibold text-text">Payout Method</Text>
-          {account.data ? (
-            <Text className="text-sm text-text-secondary">
-              Paying into ••••{account.data.account_last4}
-              {account.data.is_payable_now
-                ? ""
-                : ` — not usable until ${new Date(account.data.effective_from).toLocaleDateString("en-IN")}`}
-            </Text>
-          ) : (
-            <Text className="text-sm text-text-secondary">No payout account yet.</Text>
-          )}
-        </View>
-      </Card>
-
       {/* Recent Activity */}
       <View className="gap-2">
-        <Text className="text-base font-bold text-text">Recent Activity</Text>
+        <Text className="text-base font-bold text-text">
+          {t("money.earnings.recentActivity")}
+        </Text>
         {ledger.isPending ? (
           <View className="flex-row items-center gap-2 py-4">
             <Spinner size="sm" />
-            <Text className="text-sm text-text-secondary">Loading…</Text>
+            <Text className="text-sm text-text-secondary">
+              {t("money.earnings.loading")}
+            </Text>
           </View>
         ) : null}
         {!ledger.isPending && entries.length === 0 ? (
           <Text className="text-sm text-text-secondary">
-            No Vsolve payout activity yet. Direct customer payments are included in the earnings totals above.
+            {t("money.earnings.noActivity")}
           </Text>
         ) : null}
 
@@ -215,10 +273,10 @@ export function EarningsPanel() {
             {/* Table header */}
             <View className="flex-row items-center justify-between bg-surface-sunken px-4 py-2">
               <Text className="text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
-                Status
+                {t("money.earnings.table.status")}
               </Text>
               <Text className="text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
-                Amount
+                {t("money.earnings.table.amount")}
               </Text>
             </View>
 
@@ -229,13 +287,17 @@ export function EarningsPanel() {
                   <View className="min-w-0 flex-1">
                     <View className="self-start">
                       <Badge tone={STATUS_TONE[entry.status] ?? "neutral"}>
-                        {STATUS_LABEL[entry.status] ?? entry.status}
+                        {getStatusLabel(entry.status)}
                       </Badge>
                     </View>
                     <Text className="mt-1 text-sm text-text-secondary">
                       <Text className="font-medium text-text">{formatMoney(entry.gross_paise)}</Text>
-                      {" for the work"}
-                      {entry.commission_paise > 0 ? ` less ${formatMoney(entry.commission_paise)} commission` : ""}
+                      {" "}
+                      {entry.commission_paise > 0
+                        ? t("money.earnings.entry.lessCommission", {
+                            amount: formatMoney(entry.commission_paise),
+                          })
+                        : ""}
                     </Text>
                     {entry.reason ? <Text className="mt-0.5 text-xs text-text-muted">{entry.reason}</Text> : null}
                   </View>
@@ -247,8 +309,8 @@ export function EarningsPanel() {
         ) : null}
 
         {ledger.hasNextPage ? (
-          <Button variant="outline" loading={ledger.isFetchingNextPage} loadingLabel="Loading" onPress={() => void ledger.fetchNextPage()}>
-            Load more
+          <Button variant="outline" loading={ledger.isFetchingNextPage} loadingLabel={t("money.earnings.loading")} onPress={() => void ledger.fetchNextPage()}>
+            {t("money.earnings.loadMore")}
           </Button>
         ) : null}
       </View>

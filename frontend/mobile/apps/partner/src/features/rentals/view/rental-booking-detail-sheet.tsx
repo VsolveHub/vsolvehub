@@ -1,6 +1,7 @@
 import { Badge, Button, COLOR_TOKENS, Dialog, Text, Timeline, TimelineEvent } from "@vsolve/mobile-ui";
 import { Alert, Linking, ScrollView, View } from "react-native";
 import { Calendar, Clock, Phone, User } from "lucide-react-native";
+import { DeliverySection } from "./delivery-section";
 
 import {
   canCancelBooking,
@@ -173,6 +174,9 @@ export function RentalBookingDetailSheet({
             ) : null}
           </View>
         </View>
+
+        {/* Delivery Transport Request Section */}
+        {booking.transport ? <DeliverySection booking={booking} /> : null}
 
         {/* Schedule */}
         <View className="gap-2 rounded-2xl border border-line bg-canvas p-3.5">

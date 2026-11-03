@@ -6,11 +6,14 @@ import type {
   PartnerBookingActionRequest,
   PartnerRentalAsset,
   PartnerRentalBooking,
+  PickupDayInput,
+  PickupHours,
   TaxonomySubcategory,
+  TransportTrip,
   UpdateAssetRequest,
 } from "./model";
 
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 interface RequestParams {
   query?: Record<string, string | number | boolean | undefined>;
@@ -69,15 +72,23 @@ export async function fetchPartnerDefaultLocation(): Promise<string> {
 }
 
 export async function fetchPartnerRentalAssets(): Promise<PartnerRentalAsset[]> {
-  const data = await callRentalApi<PartnerRentalAsset[]>("GET", "/api/v1/partner/rentals/assets");
-  return Array.isArray(data) ? data : [];
+  const data = await callRentalApi<PartnerRentalAsset[] | { results?: PartnerRentalAsset[] }>("GET", "/api/v1/partner/rentals/assets");
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray((data as { results?: PartnerRentalAsset[] }).results)) {
+    return (data as { results: PartnerRentalAsset[] }).results;
+  }
+  return [];
 }
 
 export async function fetchPartnerRentalBookings(status?: string): Promise<PartnerRentalBooking[]> {
-  const data = await callRentalApi<PartnerRentalBooking[]>("GET", "/api/v1/partner/rentals/bookings", {
+  const data = await callRentalApi<PartnerRentalBooking[] | { results?: PartnerRentalBooking[] }>("GET", "/api/v1/partner/rentals/bookings", {
     params: status && status !== "ALL" ? { query: { status } } : undefined,
   });
-  return Array.isArray(data) ? data : [];
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray((data as { results?: PartnerRentalBooking[] }).results)) {
+    return (data as { results: PartnerRentalBooking[] }).results;
+  }
+  return [];
 }
 
 export async function uploadPartnerRentalPhoto(
@@ -222,6 +233,54 @@ export async function partnerRentalBookingAction(
 }
 
 export async function fetchRentalTaxonomy(): Promise<TaxonomySubcategory[]> {
-  const data = await callRentalApi<TaxonomySubcategory[]>("GET", "/api/v1/rentals/taxonomy");
-  return Array.isArray(data) ? data : [];
+  const data = await callRentalApi<TaxonomySubcategory[] | { results?: TaxonomySubcategory[] }>("GET", "/api/v1/rentals/taxonomy");
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray((data as { results?: TaxonomySubcategory[] }).results)) {
+    return (data as { results: TaxonomySubcategory[] }).results;
+  }
+  return [];
+}
+
+export async function fetchPartnerPickupHours(): Promise<PickupHours> {
+  const data = await callRentalApi<PickupHours>("GET", "/api/v1/partner/rentals/pickup-hours");
+  return data;
+}
+
+export async function savePartnerPickupHours(
+  days: PickupDayInput[],
+  closedDates: string[],
+): Promise<PickupHours> {
+  const data = await callRentalApi<PickupHours>("PUT", "/api/v1/partner/rentals/pickup-hours", {
+    body: { days, closed_dates: closedDates },
+  });
+  return data;
+}
+
+export async function partnerRentalTransportAction(
+  bookingId: string,
+  action: "quote" | "decline" | "out-for-delivery",
+  body: { amount_paise?: number; trip?: TransportTrip; note?: string } = {},
+): Promise<PartnerRentalBooking> {
+  const data = await callRentalApi<PartnerRentalBooking>(
+    "POST",
+    "/api/v1/partner/rentals/bookings/{booking_id}/transport/{action}",
+    {
+      params: { path: { booking_id: bookingId, action } },
+      body: {
+        amount_paise: body.amount_paise ?? 0,
+        trip: body.trip ?? "ONE_WAY",
+        note: body.note ?? "",
+      },
+    },
+  );
+  return data;
+}
+
+export async function fetchTransportFeePercent(): Promise<number> {
+  try {
+    const data = await callRentalApi<{ transport_fee_percent?: number }>("GET", "/api/v1/rentals/platform-fee");
+    return data?.transport_fee_percent ?? 0;
+  } catch {
+    return 0;
+  }
 }

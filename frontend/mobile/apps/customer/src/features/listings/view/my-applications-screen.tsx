@@ -34,6 +34,8 @@ import {
 import { THEME_COLORS } from "../theme-colors";
 import { HIRING_STEP_LABELS } from "../seeker-queries";
 import { HiringProgress } from "./hiring-progress";
+import { useIsDesktop } from "@/lib/responsive";
+import { DesktopMyApplications } from "./desktop-my-applications";
 
 const FILTER_TABS = [
   { key: "ALL", label: "All Applications" },
@@ -57,6 +59,14 @@ function formatDate(dateStr?: string | null): string {
 }
 
 export function MyApplicationsScreen() {
+  const isDesktop = useIsDesktop();
+  if (isDesktop) {
+    return <DesktopMyApplications />;
+  }
+  return <MobileMyApplicationsScreen />;
+}
+
+function MobileMyApplicationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();

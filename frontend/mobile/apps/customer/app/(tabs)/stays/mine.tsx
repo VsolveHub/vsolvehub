@@ -1,5 +1,5 @@
-import { StayMineScreen } from "@/features/stays/view/stay-mine-screen";
+import { Redirect } from "expo-router";
 
 export default function MyStaysPage() {
-  return <StayMineScreen />;
+  return <Redirect href="/activity?type=stays" />;
 }

@@ -22,8 +22,42 @@ function interpolate(template: string, params?: Record<string, string | number>)
 }
 
 export function createTranslator(locale: Locale, catalog: Catalog): Translator {
-  const pluralRules = new Intl.PluralRules(locale);
-  const numberFormat = new Intl.NumberFormat(locale);
+  let pluralRules: Intl.PluralRules | null = null;
+  if (typeof Intl !== "undefined" && typeof Intl.PluralRules === "function") {
+    try {
+      pluralRules = new Intl.PluralRules(locale);
+    } catch {
+      pluralRules = null;
+    }
+  }
+
+  let numberFormat: Intl.NumberFormat | null = null;
+  if (typeof Intl !== "undefined" && typeof Intl.NumberFormat === "function") {
+    try {
+      numberFormat = new Intl.NumberFormat(locale);
+    } catch {
+      numberFormat = null;
+    }
+  }
+
+  const selectPlural = (count: number): Intl.LDMLPluralRule => {
+    if (pluralRules) {
+      try {
+        return pluralRules.select(count);
+      } catch {
+        // fallback below
+      }
+    }
+    // Standard CLDR plural rule fallback for Indian locales (en-IN, te-IN, hi-IN)
+    // English (en): 1 -> 'one', otherwise -> 'other'
+    // Telugu (te): 1 -> 'one', otherwise -> 'other'
+    // Hindi (hi): 0, 1 -> 'one', otherwise -> 'other'
+    if (locale === "hi-IN") {
+      return count === 0 || count === 1 ? "one" : "other";
+    }
+    return count === 1 ? "one" : "other";
+  };
+
   const t: Translator["t"] = (key, params) => {
     const entry = catalog[key];
     if (entry === undefined) {
@@ -35,14 +69,30 @@ export function createTranslator(locale: Locale, catalog: Catalog): Translator {
     if (typeof entry === "string") return interpolate(entry, params);
     const count = params?.count;
     if (typeof count !== "number") return interpolate(entry.other, params);
-    const category = pluralRules.select(count);
+    const category = selectPlural(count);
     return interpolate(entry[category] ?? entry.other, params);
   };
+
   return {
     locale,
     t,
-    n: (value, options) =>
-      options ? new Intl.NumberFormat(locale, options).format(value) : numberFormat.format(value),
+    n: (value, options) => {
+      if (options && typeof Intl !== "undefined" && typeof Intl.NumberFormat === "function") {
+        try {
+          return new Intl.NumberFormat(locale, options).format(value);
+        } catch {
+          // fallback
+        }
+      }
+      if (numberFormat) {
+        try {
+          return numberFormat.format(value);
+        } catch {
+          // fallback
+        }
+      }
+      return typeof value.toLocaleString === "function" ? value.toLocaleString(locale) : String(value);
+    },
   };
 }
 

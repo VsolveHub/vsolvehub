@@ -5,7 +5,7 @@ import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { usePathname, useRouter, Slot } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { DeviceEventEmitter, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
@@ -182,18 +182,16 @@ export default function TabsLayout() {
                       }
                       router.push(link.href as never);
                     }}
-                    className={`rounded-lg px-3.5 py-1.5 cursor-pointer border ${
-                      active
+                    className={`rounded-lg px-3.5 py-1.5 cursor-pointer border ${active
                         ? "bg-[#FAF8F5] border-[#E5E1DC] shadow-xs"
                         : "border-transparent hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     <Text
-                      className={`text-sm ${
-                        active
+                      className={`text-sm ${active
                           ? "font-extrabold text-navy-900"
                           : "font-semibold text-[#475569] hover:text-navy-900"
-                      }`}
+                        }`}
                     >
                       {link.label}
                     </Text>
@@ -205,7 +203,23 @@ export default function TabsLayout() {
             <View className="flex-1" />
 
             {/* Right Side Actions */}
-            <View className="flex-row items-center gap-4">
+            <View className="flex-row items-center gap-3">
+              {/* Search button navigating to services search bar */}
+              <Pressable
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Search services"
+                onPress={() => {
+                  DeviceEventEmitter.emit("open-catalog-search");
+                  router.push({ pathname: "/catalog", params: { search: "1", t: Date.now().toString() } } as never);
+                }}
+                className="size-10 items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#1E293B" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                  <Circle cx={11} cy={11} r={7} />
+                  <Path d="m20 20-3.5-3.5" />
+                </Svg>
+              </Pressable>
               <Pressable
                 hitSlop={8}
                 accessibilityRole="button"
@@ -296,7 +310,22 @@ export default function TabsLayout() {
               V Solve <Text className="text-[1.2rem] font-extrabold text-[#EA580C]">Hub</Text>
             </Text>
           </Pressable>
-          <View className="flex-row items-center gap-2.5">
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Search services"
+              onPress={() => {
+                DeviceEventEmitter.emit("open-catalog-search");
+                router.push({ pathname: "/catalog", params: { search: "1", t: Date.now().toString() } } as never);
+              }}
+              className="h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100"
+            >
+              <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#6B6560" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                <Circle cx={11} cy={11} r={7} />
+                <Path d="m20 20-3.5-3.5" />
+              </Svg>
+            </Pressable>
             <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-9 w-9 items-center justify-center">
               <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                 <Circle cx={8} cy={21} r={1} />

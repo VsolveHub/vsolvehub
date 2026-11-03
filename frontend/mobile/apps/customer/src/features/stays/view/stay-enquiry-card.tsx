@@ -56,7 +56,7 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
   const propertyTitle =
     enquiry.property_title || propObj?.title || "Stay Property";
   const unitName =
-    enquiry.unit_name || enquiry.unit?.name || "Standard room";
+    enquiry.unit_name || (typeof enquiry.unit === "object" ? enquiry.unit?.name : undefined) || "Standard room";
   const guestCount = enquiry.guest_count ?? 1;
 
   const durationStr = enquiry.stay_length

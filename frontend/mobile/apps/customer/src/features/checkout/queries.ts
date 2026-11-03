@@ -168,6 +168,7 @@ export function useCreatePlanSet() {
     mutationFn: (input: {
       cartVersion: number;
       addressId: string;
+      bookingMode?: "INSTANT" | "SCHEDULED";
       preferredStarts: readonly { groupKey: string; startsAt: string }[];
     }) =>
       request(() =>
@@ -176,6 +177,7 @@ export function useCreatePlanSet() {
           body: {
             address_id: input.addressId,
             expected_cart_version: input.cartVersion,
+            booking_mode: input.bookingMode ?? "SCHEDULED",
             preferred_starts: input.preferredStarts.map((entry) => ({
               group_key: entry.groupKey,
               starts_at: entry.startsAt,
@@ -185,7 +187,7 @@ export function useCreatePlanSet() {
       ),
     onSuccess: (planSet) => {
       if (planSet) {
-        queryClient.setQueryData(queryKeys.booking.planSet((planSet as any).id), planSet);
+        queryClient.setQueryData(queryKeys.booking.planSet(planSet.id), planSet);
       }
     },
     onError: (error) => {

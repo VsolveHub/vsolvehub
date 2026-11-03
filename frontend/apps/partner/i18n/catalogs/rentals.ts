@@ -341,6 +341,13 @@ const en: Catalog = {
   "rentals.inventory.emptyDescription": "Post your first item with photos and a daily rate to start receiving bookings.",
   "rentals.inventory.emptyTabTitle": "No items in this tab",
   "rentals.inventory.emptyTabDescription": "Try switching to another tab or post a new item.",
+
+  "rentals.hours.open": "OPEN",
+  "rentals.hours.dateFormatError": "Enter date as YYYY-MM-DD",
+  "rentals.hours.daysOffHeading": "Days off / Holidays",
+  "rentals.hours.daysOffHelp": "Add specific dates when your store is closed.",
+  "rentals.delivery.statusUpdated": "Transport status updated.",
+  "rentals.delivery.actionFailed": "Transport action failed",
 };
 
 const te: Catalog = {
@@ -682,6 +689,13 @@ const te: Catalog = {
   "rentals.inventory.emptyDescription": "బుకింగ్‌లు రావడం మొదలవడానికి ఫోటోలు, రోజు ధరతో మీ మొదటి వస్తువు పోస్ట్ చేయండి.",
   "rentals.inventory.emptyTabTitle": "ఈ ట్యాబ్‌లో వస్తువులు లేవు",
   "rentals.inventory.emptyTabDescription": "వేరే ట్యాబ్‌కి మారండి లేదా కొత్త వస్తువు పోస్ట్ చేయండి.",
+
+  "rentals.hours.open": "తెరిచి ఉంది",
+  "rentals.hours.dateFormatError": "తేదీని YYYY-MM-DD రూపంలో నమోదు చేయండి",
+  "rentals.hours.daysOffHeading": "సెలవు దినాలు",
+  "rentals.hours.daysOffHelp": "మీ దుకాణం మూసివేయబడే నిర్దిష్ట తేదీలను జోడించండి.",
+  "rentals.delivery.statusUpdated": "రవాణా స్థితి నవీకరించబడింది.",
+  "rentals.delivery.actionFailed": "రవాణా చర్య విఫలమైంది",
 };
 
 const hi: Catalog = {
@@ -1023,6 +1037,13 @@ const hi: Catalog = {
   "rentals.inventory.emptyDescription": "बुकिंग पाना शुरू करने के लिए फ़ोटो और रोज़ के किराये के साथ अपना पहला सामान पोस्ट करें।",
   "rentals.inventory.emptyTabTitle": "इस टैब में कोई सामान नहीं",
   "rentals.inventory.emptyTabDescription": "दूसरे टैब पर जाएं या नया सामान पोस्ट करें।",
+
+  "rentals.hours.open": "खुला है",
+  "rentals.hours.dateFormatError": "तारीख YYYY-MM-DD के रूप में दर्ज करें",
+  "rentals.hours.daysOffHeading": "छुट्टियां",
+  "rentals.hours.daysOffHelp": "अपनी दुकान बंद रहने की विशिष्ट तिथियां जोड़ें।",
+  "rentals.delivery.statusUpdated": "परिवहन स्थिति अपडेट की गई।",
+  "rentals.delivery.actionFailed": "परिवहन कार्रवाई विफल रही",
 };
 
 export const catalogsByLocale: Record<Locale, Catalog> = {

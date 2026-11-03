@@ -14,6 +14,7 @@ export function resolvePartnerPush(target: PushTarget): PushDestination {
     const href = targetHref(target as Schemas["NotificationTarget"]);
     if (href) return { type: "route", href };
   }
+  if (target?.kind === "DISPATCH_OFFER" && "id" in target && target.id) return { type: "route", href: `/dispatch/${target.id}` };
   if (target?.kind === "PARTNER_OFFERS") return { type: "route", href: "/work/offers" };
   if (target?.kind === "PARTNER_WORK") return { type: "route", href: "/work/all" };
   return { type: "alerts" };

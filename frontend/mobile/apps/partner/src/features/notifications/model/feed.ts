@@ -134,6 +134,7 @@ export function targetHref(
   // detail route is keyed by — and the offer is on a two-minute clock, so this
   // is the one notice where landing anywhere but the answer button is a loss.
   if (target.kind === "CREW_OFFER") return `/work/offers/${target.id}`;
+  if ((target as { kind: string; id: string }).kind === "DISPATCH_OFFER") return `/dispatch/${target.id}`;
   return null;
 }
 

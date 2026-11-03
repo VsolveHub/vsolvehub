@@ -233,10 +233,9 @@ export function PresencePanel({
     clearStoredSession();
   }
 
-  useEffect(() => {
-    if (areaId !== "" || reference.serviceAreas.length === 0) return;
+  if (areaId === "" && reference.serviceAreas.length > 0) {
     setAreaId(reference.serviceAreas[0]!.id);
-  }, [areaId, reference.serviceAreas]);
+  }
 
   const copy = PRESENCE_COPY[status];
   const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending;

@@ -1,39 +1,38 @@
-import { formatMoney } from "@vsolve/mobile-ui";
+import { useState } from "react";
+import { Modal, Pressable, ScrollView, View } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { formatMoney, Text } from "@vsolve/mobile-ui";
 import {
-  CheckCircle2,
+  BadgeCheck,
+  ChevronLeft,
   ChevronRight,
-  Clock,
   Headphones,
   ShieldCheck,
   Tag,
+  X,
 } from "lucide-react-native";
-import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
-import { Text } from "@vsolve/mobile-ui";
 
 import { LOCAL_CATEGORY_TILES, resolveImageUrl } from "@/features/catalog/category-artwork";
 import type { Category, ServiceCard } from "@/features/catalog/client-queries";
 import { serviceHref } from "@/features/catalog/service-href";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
-import {
-  categoryHeadline,
-  displayCategoryStats,
-  displayRating,
-  earliestSlotLabel,
-} from "@/features/catalog/tile-desktop-rating";
+import { categoryHeadline } from "@/features/catalog/tile-desktop-rating";
 import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import type { TileGroup } from "./category-screen";
 
 const SIDEBAR_TILE_CAP = 6;
 
+/**
+ * Trust badges matching web customer portal 100%:
+ * - ID-verified professionals
+ * - Price confirmed before you pay
+ * - Extra work only with your approval
+ */
 const TRUST_BADGES = [
-  { label: "Verified Professionals", icon: ShieldCheck },
-  { label: "On-time Service", icon: Clock },
-  { label: "Transparent Pricing", icon: Tag },
-  { label: "Satisfaction Guarantee", icon: CheckCircle2 },
+  { label: "ID-verified professionals", icon: ShieldCheck },
+  { label: "Price confirmed before you pay", icon: Tag },
+  { label: "Extra work only with your approval", icon: BadgeCheck },
 ] as const;
 
 function sidebarTilesForDisplay(tiles: TileGroup[], activeSlug: string): TileGroup[] {
@@ -43,49 +42,6 @@ function sidebarTilesForDisplay(tiles: TileGroup[], activeSlug: string): TileGro
   const active = tiles.find((tile) => tile.slug === activeSlug);
   if (!active) return head;
   return [...head.slice(0, SIDEBAR_TILE_CAP - 1), active];
-}
-
-function SidebarEarliestBadge() {
-  return (
-    <View className="shrink-0 rounded-[0.9rem] bg-[#DEF7EC] px-2.5 py-1.5 items-center justify-center">
-      <View className="flex-row items-center gap-1">
-        <Clock size={11} color="#03543F" strokeWidth={2.4} />
-        <Text className="text-[10px] font-bold text-[#03543F]">Earliest</Text>
-      </View>
-      <Text className="mt-0.5 text-[11px] font-extrabold text-navy-900 leading-none">
-        {earliestSlotLabel()}
-      </Text>
-    </View>
-  );
-}
-
-function SidebarWarrantyCard() {
-  return (
-    <View className="mt-2.5 flex-row items-center gap-2 rounded-[1.15rem] bg-[#F3F4F6] px-3 py-2.5">
-      <View className="min-w-0 flex-1">
-        <View className="flex-row items-center gap-1.5">
-          <View className="size-3.5 items-center justify-center rounded-full bg-[#059669]">
-            <Svg viewBox="0 0 12 12" width={10} height={10} fill="none">
-              <Path
-                d="M2.5 6.2 4.8 8.5 9.5 3.5"
-                stroke="#FFFFFF"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </View>
-          <Text className="text-[10px] font-extrabold tracking-wide text-[#059669]">
-            V SOLVE COVER
-          </Text>
-        </View>
-        <Text className="mt-0.5 text-[12px] font-semibold text-navy-900 leading-snug">
-          Upto 30 days warranty on repairs
-        </Text>
-      </View>
-      <ChevronRight size={16} color="#94A3B8" strokeWidth={1.8} />
-    </View>
-  );
 }
 
 function TileItemGraphic({ tile, size = 48 }: { tile: TileGroup; size?: number }) {
@@ -135,6 +91,86 @@ function ServiceItemPhoto({ uri, iconKey }: { uri: string; iconKey: string }) {
   );
 }
 
+function DesktopTileServiceCard({
+  service,
+  tile,
+  categorySlug,
+  onOpenPanel,
+}: {
+  service: ServiceCard;
+  tile: TileGroup;
+  categorySlug: string;
+  onOpenPanel: () => void;
+}) {
+  const router = useRouter();
+  const pricePaise = service.starting_price?.amount_paise ?? null;
+  const photoUrl = service.cover?.url ?? tile.imageUrl;
+
+  return (
+    <View className="flex-row items-center gap-4 rounded-[1.25rem] border border-[#e7e2da] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      {/* Service Photo / Thumbnail */}
+      <ServiceItemPhoto uri={photoUrl} iconKey={service.icon_key} />
+
+      {/* Middle info */}
+      <View className="min-w-0 flex-1">
+        <Text className="text-[15px] font-extrabold leading-snug text-navy-900">
+          {service.name}
+        </Text>
+        {service.short_description ? (
+          <Text
+            numberOfLines={2}
+            className="mt-1 text-[13px] leading-5 text-text-secondary"
+          >
+            {service.short_description}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Right side: Price & Action buttons */}
+      <View className="flex-col items-end gap-2 pl-2 shrink-0">
+        {pricePaise !== null ? (
+          <View className="items-end">
+            <Text className="text-[11px] font-medium text-text-secondary">Starts at</Text>
+            <Text className="text-[15px] font-extrabold tabular-nums text-navy-900">
+              {formatMoney(pricePaise)}
+            </Text>
+          </View>
+        ) : (
+          <Text className="text-[12px] font-bold text-navy-900">Price on request</Text>
+        )}
+
+        <View className="flex-row items-center gap-2">
+          {/* View details */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View details for ${service.name}`}
+            onPress={() => router.push(serviceHref(service, categorySlug) as never)}
+            className="inline-flex h-9 items-center justify-center rounded-lg border border-navy-900 bg-white px-3.5 hover:bg-[#FAF9F7]"
+          >
+            <Text className="text-[13px] font-bold text-navy-900">View details</Text>
+          </Pressable>
+
+          {/* Add */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${service.name} to cart`}
+            onPress={() => {
+              if (service.request_archetypes.length > 0) {
+                router.push(serviceHref(service, categorySlug) as never);
+                return;
+              }
+              onOpenPanel();
+            }}
+            className="inline-flex h-9 items-center justify-center rounded-lg bg-[#0B192C] px-4 hover:bg-navy-900"
+          >
+            <Text className="text-[13px] font-bold text-white">Add</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function TileDesktopSplitPane({
   category,
   tiles,
@@ -149,104 +185,102 @@ export function TileDesktopSplitPane({
   onOpenAddModal: (service: ServiceCard) => void;
 }) {
   const router = useRouter();
+  const [seeAllOpen, setSeeAllOpen] = useState(false);
   const visibleTiles = sidebarTilesForDisplay(tiles, activeTile.slug);
+  const showSeeAll = tiles.length > SIDEBAR_TILE_CAP;
   const headline = categoryHeadline(category.name);
-  const stats = displayCategoryStats(category.slug);
 
   return (
     <ScrollView className="flex-1 bg-[#FAF9F7]" showsVerticalScrollIndicator={false}>
-      {/* Full-width 2-column split pane */}
-      <View className="w-full flex-row items-stretch border-b border-[#e7e2da] bg-white">
-        {/* Left Column (Sidebar) */}
+      {/* Full-width 2-column split pane matching web customer portal 100% */}
+      <View className="w-full flex-row items-stretch border-b border-[#e7e2da] bg-white min-h-[calc(100vh-64px)]">
+        {/* Left Column (Sidebar w-[22rem] matching Web) */}
         <View
-          style={{ width: 252 }}
-          className="shrink-0 border-r border-[#e7e2da] bg-white p-3.5 pb-6 gap-3.5"
+          style={{ width: 350 }}
+          className="shrink-0 border-r border-[#e7e2da] bg-white flex-col justify-between"
         >
-          {/* Top Category Header */}
+          {/* Top content of sidebar */}
           <View>
-            <View className="flex-row items-start justify-between gap-2">
-              <Text className="min-w-0 flex-1 text-[22px] font-extrabold leading-tight tracking-tight text-navy-900">
+            <View className="px-5 pb-1 pt-6">
+              <Text className="text-[2rem] font-extrabold leading-[1.05] tracking-tight text-navy-900">
                 {headline}
               </Text>
-              <SidebarEarliestBadge />
-            </View>
-
-            {/* Rating Line */}
-            <View className="mt-1 flex-row items-center gap-1 text-[13px] text-navy-900">
-              <Text className="text-[13px] leading-none text-navy-900">★</Text>
-              <Text className="font-semibold text-navy-900">{stats.score}</Text>
-              <Text className="underline decoration-navy-900/35 underline-offset-[3px] text-navy-900 font-normal">
-                ({stats.bookings})
-              </Text>
-            </View>
-
-            {/* V Solve Cover Banner */}
-            <SidebarWarrantyCard />
-
-            {/* Select a service Container */}
-            <View className="mt-3 rounded-[1.15rem] border border-[#e7e2da] px-2.5 pb-3 pt-2.5">
-              <View className="mb-2.5 flex-row items-center gap-2">
-                <Text className="shrink-0 text-[12px] font-medium text-text-secondary">
-                  Select a service
+              {category.description && category.description.trim() !== "" ? (
+                <Text className="mt-2 text-[13px] leading-snug text-text-secondary">
+                  {category.description}
                 </Text>
-                <View className="h-px flex-1 bg-[#e7e2da]" />
-              </View>
-
-              {/* 3-Column Grid */}
-              <View className="flex-row flex-wrap justify-between gap-y-2.5">
-                {visibleTiles.map((tile) => {
-                  const isActive = tile.slug === activeTile.slug;
-                  let displayName = tile.name;
-                  if (tile.slug === "computer-laptop-repair") {
-                    displayName = "Computer &\nLaptop...";
-                  } else if (tile.slug === "wifi-technician") {
-                    displayName = "Internet & WiFi\nTechnician";
-                  } else if (tile.slug === "gas-stove-technician") {
-                    displayName = "Gas Stove\nTechnician";
-                  } else if (tile.slug === "mobile-technician") {
-                    displayName = "Mobile\nTechnician";
-                  }
-                  return (
-                    <Pressable
-                      key={tile.slug}
-                      accessibilityRole="button"
-                      accessibilityLabel={tile.name}
-                      onPress={() => onSelectTile(tile.slug)}
-                      style={{ width: "31.5%" }}
-                      className="items-center cursor-pointer"
-                    >
-                      <View
-                        className={`w-full rounded-[1rem] p-1 items-center justify-center ${
-                          isActive
-                            ? "border-2 border-[#EA580C] bg-[#FFF8F3]"
-                            : "border-2 border-transparent bg-transparent hover:bg-slate-50"
-                        }`}
-                      >
-                        <TileItemGraphic tile={tile} size={38} />
-                      </View>
-                      <Text
-                        numberOfLines={2}
-                        className={`mt-1 text-center text-[10px] leading-tight px-0.5 ${
-                          isActive ? "font-bold text-navy-900" : "font-semibold text-navy-800"
-                        }`}
-                      >
-                        {displayName}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              ) : null}
             </View>
 
-            {/* Need Help Card */}
-            <View className="mt-3 rounded-2xl border border-[#e7e2da] bg-white p-3 shadow-xs">
-              <View className="flex-row items-start gap-2.5">
-                <View className="size-8 shrink-0 items-center justify-center rounded-full bg-[#FAF9F7] text-navy-900">
-                  <Headphones size={16} color="#0B1B3D" strokeWidth={1.8} />
+            {/* Select a service Card Container */}
+            <View className="px-4 pb-3 pt-3">
+              <View className="rounded-[1.25rem] border border-[#e7e2da] px-3.5 pb-4 pt-3.5">
+                <View className="mb-4 flex-row items-center gap-3">
+                  <Text className="shrink-0 text-[13px] font-medium text-text-secondary">
+                    Select a service
+                  </Text>
+                  <View className="h-px flex-1 bg-[#e7e2da]" />
+                </View>
+
+                {/* 3-Column Tile Grid matching Web */}
+                <View className="flex-row flex-wrap justify-between gap-y-4">
+                  {visibleTiles.map((tile) => {
+                    const active = tile.slug === activeTile.slug;
+                    return (
+                      <Pressable
+                        key={tile.slug}
+                        accessibilityRole="button"
+                        accessibilityLabel={tile.name}
+                        onPress={() => onSelectTile(tile.slug)}
+                        style={{ width: "31%" }}
+                        className="flex-col items-center gap-1.5 cursor-pointer"
+                      >
+                        <View
+                          className={`w-full rounded-[1.1rem] p-1 items-center justify-center ${
+                            active
+                              ? "border-2 border-[#EA580C] bg-[#FFF8F3]"
+                              : "border-2 border-transparent bg-transparent"
+                          }`}
+                        >
+                          <TileItemGraphic tile={tile} size={48} />
+                        </View>
+                        <Text
+                          numberOfLines={2}
+                          className={`text-center text-[11px] font-semibold leading-tight ${
+                            active ? "text-navy-900" : "text-navy-800"
+                          }`}
+                        >
+                          {tile.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* See all services button if > 6 subcategories */}
+              {showSeeAll ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setSeeAllOpen(true)}
+                  className="mt-4 flex-row h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-navy-900 bg-white hover:bg-[#FAF9F7]"
+                >
+                  <Text className="text-[13px] font-bold text-navy-900">See all services →</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Bottom "Need help?" card matching Web */}
+          <View className="p-4 pt-2">
+            <View className="rounded-2xl border border-[#e7e2da] bg-white p-4 shadow-xs">
+              <View className="flex-row items-start gap-3">
+                <View className="size-9 shrink-0 items-center justify-center rounded-full bg-[#FAF9F7] text-navy-900">
+                  <Headphones size={16} color="#0F172A" strokeWidth={1.8} />
                 </View>
                 <View className="min-w-0 flex-1">
-                  <Text className="text-[12px] font-extrabold text-navy-900">Need help?</Text>
-                  <Text className="mt-0.5 text-[10.5px] font-medium text-text-secondary">
+                  <Text className="text-[13px] font-extrabold text-navy-900">Need help?</Text>
+                  <Text className="mt-0.5 text-[11px] font-medium text-text-secondary">
                     Talk to our experts
                   </Text>
                 </View>
@@ -255,147 +289,126 @@ export function TileDesktopSplitPane({
                 accessibilityRole="button"
                 accessibilityLabel="Contact Us"
                 onPress={() => router.push("/catalog" as never)}
-                className="mt-2.5 flex h-8 items-center justify-center rounded-lg border border-navy-900 bg-white cursor-pointer hover:bg-[#FAF9F7]"
+                className="mt-3 flex-row h-9 items-center justify-center rounded-lg border border-navy-900 bg-white hover:bg-[#FAF9F7]"
               >
-                <Text className="text-[11.5px] font-bold text-navy-900">Contact Us</Text>
+                <Text className="text-[12px] font-bold text-navy-900">Contact Us</Text>
               </Pressable>
             </View>
           </View>
         </View>
 
-        {/* Right Column (Service Detail & Cards) */}
-        <View className="flex-1 min-w-0 bg-[#FAF9F7] px-8 py-5">
-          {/* Breadcrumb with explicit Left Chevron */}
+        {/* Right Column (Service Detail & Cards matching Web) */}
+        <View className="flex-1 min-w-0 bg-[#FAF9F7] px-8 py-6">
+          {/* Top Breadcrumb */}
           <Pressable
             accessibilityRole="link"
             accessibilityLabel={`Back to ${category.name}`}
             onPress={() => router.push("/catalog" as never)}
-            className="flex-row items-center gap-1 cursor-pointer"
+            className="flex-row items-center gap-1.5 self-start cursor-pointer"
           >
-            <Svg width={14} height={14} viewBox="0 0 20 20" fill="none">
-              <Path
-                d="M12.5 4.5 7 10l5.5 5.5"
-                stroke="#EA580C"
-                strokeWidth={2.4}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <ChevronLeft size={16} color="#EA580C" strokeWidth={2.4} />
             <Text className="text-[13px] font-bold text-[#EA580C]">{category.name}</Text>
           </Pressable>
 
-          {/* Hero Header */}
-          <View className="mt-2 flex-row items-start justify-between gap-6">
-            <View className="flex-1 min-w-0 max-w-xl">
+          {/* Hero Title & Right Thumbnail */}
+          <View className="mt-3 flex-row items-start justify-between gap-8">
+            <View className="min-w-0 max-w-xl">
               <Text className="text-[1.85rem] font-extrabold tracking-tight text-navy-900 leading-tight">
                 {activeTile.name}
               </Text>
-              <Text className="mt-1.5 text-[13px] leading-relaxed text-text-secondary">
-                {activeTile.description && activeTile.description.trim() !== ""
-                  ? activeTile.description
-                  : `Book expert ${activeTile.name} for installation, repair, service and maintenance at your doorstep.`}
-              </Text>
+              {activeTile.description && activeTile.description.trim() !== "" ? (
+                <Text className="mt-2 text-[14px] leading-relaxed text-text-secondary">
+                  {activeTile.description}
+                </Text>
+              ) : (
+                <Text className="mt-2 text-[14px] leading-relaxed text-text-secondary">
+                  {activeTile.services.length}{" "}
+                  {activeTile.services.length === 1 ? "service" : "services"} to choose from
+                </Text>
+              )}
             </View>
 
-            {/* 3D Artwork thumbnail on top-right */}
-            <View className="h-24 w-36 shrink-0 items-center justify-center">
-              <TileItemGraphic tile={activeTile} size={90} />
+            {/* Right 3D Artwork Graphic matching reference screenshot */}
+            <View className="flex-row h-28 w-40 shrink-0 items-center justify-end">
+              <TileItemGraphic tile={activeTile} size={110} />
             </View>
           </View>
 
-          {/* Trust Badges Row (clean without underline border) */}
-          <View className="mt-3.5 flex-row flex-wrap items-center gap-x-5 gap-y-1.5">
+          {/* Trust Badges matching Web: ID-verified professionals, Price confirmed before you pay, Extra work only with your approval */}
+          <View className="mt-5 flex-row flex-wrap items-center gap-x-5 gap-y-2">
             {TRUST_BADGES.map((badge) => {
               const Icon = badge.icon;
               return (
                 <View key={badge.label} className="flex-row items-center gap-1.5">
                   <Icon size={15} color="#1E293B" strokeWidth={1.8} />
-                  <Text className="text-[11.5px] font-semibold text-navy-800">{badge.label}</Text>
+                  <Text className="text-[12px] font-semibold text-navy-800">{badge.label}</Text>
                 </View>
               );
             })}
           </View>
 
           {/* Service Cards List */}
-          <View className="mt-5 gap-3 pb-8">
-            {activeTile.services.map((service) => {
-              const rating = displayRating(service.slug);
-              const pricePaise = service.starting_price?.amount_paise ?? null;
-              const photoUrl = service.cover?.url ?? activeTile.imageUrl;
-
-              return (
-                <View
-                  key={service.id}
-                  className="flex-row items-center gap-4 rounded-[1.25rem] border border-[#e7e2da] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
-                >
-                  {/* Left Thumbnail */}
-                  <ServiceItemPhoto uri={photoUrl} iconKey={service.icon_key} />
-
-                  {/* Middle Info */}
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-[15px] font-extrabold leading-snug text-navy-900">
-                      {service.name}
-                    </Text>
-                    <View className="mt-0.5 flex-row items-center gap-1">
-                      <Text className="text-[12px] text-[#F5A524] leading-none">★</Text>
-                      <Text className="text-[12px] font-semibold text-navy-900">{rating.score}</Text>
-                      <Text className="text-[12px] font-medium text-text-secondary">
-                        ({rating.count})
-                      </Text>
-                    </View>
-                    {service.short_description ? (
-                      <Text
-                        numberOfLines={2}
-                        className="mt-1 text-[13px] leading-5 text-text-secondary"
-                      >
-                        {service.short_description}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  {/* Right: Starts at Price & Buttons */}
-                  <View className="shrink-0 items-end gap-2 pl-2">
-                    <View className="items-end">
-                      <Text className="text-[11px] font-medium text-text-secondary">Starts at</Text>
-                      <Text className="text-[15px] font-extrabold tabular-nums text-navy-900">
-                        {pricePaise !== null ? formatMoney(pricePaise) : "Price on request"}
-                      </Text>
-                    </View>
-
-                    <View className="flex-row items-center gap-2">
-                      {/* View details */}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`View details for ${service.name}`}
-                        onPress={() => router.push(serviceHref(service, category.slug) as never)}
-                        className="inline-flex h-9 items-center justify-center rounded-lg border border-navy-900 bg-white px-3.5 cursor-pointer hover:bg-[#FAF9F7]"
-                      >
-                        <Text className="text-[13px] font-bold text-navy-900">View details</Text>
-                      </Pressable>
-
-                      {/* Add */}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Add ${service.name} to cart`}
-                        onPress={() => {
-                          if (service.request_archetypes.length > 0) {
-                            router.push(serviceHref(service, category.slug) as never);
-                            return;
-                          }
-                          onOpenAddModal(service);
-                        }}
-                        className="inline-flex h-9 items-center justify-center rounded-lg bg-navy-900 px-4 cursor-pointer hover:bg-navy-800"
-                      >
-                        <Text className="text-[13px] font-bold text-white">Add</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
+          <View className="mt-6 flex-col gap-3 pb-12">
+            {activeTile.services.map((service) => (
+              <DesktopTileServiceCard
+                key={service.id}
+                service={service}
+                tile={activeTile}
+                categorySlug={category.slug}
+                onOpenPanel={() => onOpenAddModal(service)}
+              />
+            ))}
           </View>
         </View>
       </View>
+
+      {/* See All Subcategories Modal */}
+      {showSeeAll ? (
+        <Modal
+          visible={seeAllOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSeeAllOpen(false)}
+        >
+          <View className="flex-1 items-center justify-center bg-black/50 p-4">
+            <View className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl gap-4 max-h-[80vh]">
+              <View className="flex-row items-center justify-between border-b border-line pb-3">
+                <Text className="text-lg font-bold text-navy-900">
+                  All {category.name} Services
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setSeeAllOpen(false)}
+                  className="rounded-full p-1 active:bg-surface-sunken"
+                >
+                  <X size={20} color="#64748B" />
+                </Pressable>
+              </View>
+
+              <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+                <View className="flex-row flex-wrap justify-between gap-y-4">
+                  {tiles.map((tile) => (
+                    <Pressable
+                      key={tile.slug}
+                      onPress={() => {
+                        setSeeAllOpen(false);
+                        onSelectTile(tile.slug);
+                      }}
+                      style={{ width: "31%" }}
+                      className="flex-col items-center gap-2 p-3 rounded-xl border border-line bg-surface active:bg-surface-sunken"
+                    >
+                      <TileItemGraphic tile={tile} size={48} />
+                      <Text className="text-center text-xs font-semibold text-navy-900" numberOfLines={2}>
+                        {tile.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
 
       {/* Desktop Site Footer */}
       <DesktopSiteFooter />

@@ -32,6 +32,7 @@ import {
   ReturnChoiceDialog,
 } from "./rental-action-dialogs";
 import { RentalBookingDetailSheet } from "./rental-booking-detail-sheet";
+import { PickupHoursCard } from "./pickup-hours-card";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -170,6 +171,9 @@ export function RentalHome() {
       contentContainerClassName="gap-5 p-4 pb-24"
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
     >
+      {/* Pickup Hours Management Banner */}
+      <PickupHoursCard />
+
       {/* 3 Top Tallies */}
       <View className="flex-row gap-2">
         <Tally label="Live pieces" value={pieces} />

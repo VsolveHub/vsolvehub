@@ -19,6 +19,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useAddresses } from "@/features/addresses/queries";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { toEngagementLists } from "@/features/engagement/adapters";
 import { useEngagements } from "@/features/engagement/queries";
 import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents, type RequestRowView, type TimelineEventView } from "@/features/requirement/adapters";
@@ -87,6 +88,7 @@ function isSameWords(a: string, b: string): boolean {
 
 export function RequestDetail({ requirementId }: { requirementId: string }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const requirementQuery = useRequirement(requirementId);
   const timelineQuery = useRequirementTimeline(requirementId);
   const draft = requirementQuery.data ?? null;
@@ -267,6 +269,7 @@ function RequestDetailLayout({
   children?: ReactNode;
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const countdown = useServerCountdown(request?.deadlineAt ?? null, 60_000);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
@@ -291,7 +294,12 @@ function RequestDetailLayout({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="gap-6 px-4 pb-28 pt-5"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 16, 32),
+        paddingBottom: Math.max(insets.bottom + 24, 40),
+        paddingHorizontal: 16,
+      }}
+      contentContainerClassName="gap-6"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }

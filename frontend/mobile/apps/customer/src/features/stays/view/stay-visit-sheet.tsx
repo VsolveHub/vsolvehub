@@ -38,11 +38,13 @@ function isoOf(date: Date): string {
 export function StayVisitSheet({
   property,
   initialUnitId,
+  initialLookId,
   open,
   onOpenChange,
 }: {
   property: StayProperty;
   initialUnitId?: string | null;
+  initialLookId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -84,6 +86,7 @@ export function StayVisitSheet({
         slot_id: slotId ?? "",
         visit_date: activeDay ?? "",
         unit_id: unitId || null,
+        look_id: initialLookId || null,
         message,
       }),
     onSuccess: async (res) => {
@@ -158,8 +161,8 @@ export function StayVisitSheet({
             <Text className="mt-1 text-center text-xs leading-relaxed text-emerald-900/90">
               {visitDayLabel(requested.visit_date)},{" "}
               {visitWindowLabel(
-                requested.start_time ?? requested.slot?.start_time ?? "",
-                requested.end_time ?? requested.slot?.end_time ?? "",
+                requested.start_time ?? (typeof requested.slot === "object" ? requested.slot?.start_time : undefined) ?? "",
+                requested.end_time ?? (typeof requested.slot === "object" ? requested.slot?.end_time : undefined) ?? "",
               )}.
             </Text>
 
@@ -183,7 +186,7 @@ export function StayVisitSheet({
             variant="primary"
             onPress={() => {
               handleClose();
-              router.push("/stays/mine?tab=visits" as never);
+              router.push("/activity?type=stays" as never);
             }}
             className="w-full rounded-xl py-3.5"
           >

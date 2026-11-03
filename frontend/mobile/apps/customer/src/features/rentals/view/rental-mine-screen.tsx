@@ -5,7 +5,7 @@ import { ArrowLeft, Plus } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
-import { rentalMineBucket, type RentalMineTab } from "../model";
+import { rentalMineBucket, type RentalBooking, type RentalMineTab } from "../model";
 import { fetchMyRentals } from "../queries";
 import { RentalBookingCard } from "./rental-booking-card";
 
@@ -23,15 +23,21 @@ export function RentalMineScreen() {
   const [activeTab, setActiveTab] = useState<RentalMineTab>("ALL");
 
   const {
-    data: bookings = [],
+    data: rawBookings,
     isLoading,
     error,
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ["my-rentals"],
+    queryKey: ["my-rentals-all"],
     queryFn: fetchMyRentals,
   });
+
+  const bookings: RentalBooking[] = Array.isArray(rawBookings)
+    ? rawBookings
+    : Array.isArray((rawBookings as unknown as { results?: RentalBooking[] })?.results)
+      ? (rawBookings as unknown as { results: RentalBooking[] }).results
+      : [];
 
   const filteredBookings = bookings.filter((b) => {
     const s = (b.status ?? "").toUpperCase();

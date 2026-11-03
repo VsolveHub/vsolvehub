@@ -109,7 +109,7 @@ export function OtpForm({
               onChangeText={onPhoneChange}
             />
           </Field>
-          <Button size="lg" block disabled={!canRequest} loading={isRequesting} loadingLabel="Sending code" onPress={onRequestCode}>
+          <Button size="lg" block disabled={!canRequest} loading={isRequesting} loadingLabel="Sending code" onPress={() => onRequestCode()}>
             Send code
           </Button>
         </View>
@@ -120,7 +120,7 @@ export function OtpForm({
             <Text className="text-sm text-text-secondary">
               Code sent to <Text className="font-semibold tabular-nums text-text">{phone}</Text>
             </Text>
-            <Button variant="ghost" size="sm" onPress={onChangeNumber}>
+            <Button variant="ghost" size="sm" onPress={() => onChangeNumber()}>
               Change number
             </Button>
           </View>
@@ -152,7 +152,7 @@ export function OtpForm({
               Code expires in <Text className="font-semibold tabular-nums">{formatDuration(expiresInSeconds * 1000)}</Text>
             </Text>
           ) : null}
-          <Button size="lg" block disabled={!canVerify} loading={isVerifying} loadingLabel="Verifying code" onPress={onVerifyCode}>
+          <Button size="lg" block disabled={!canVerify} loading={isVerifying} loadingLabel="Verifying code" onPress={() => onVerifyCode()}>
             {verifyLabel}
           </Button>
           {resendInSeconds > 0 ? (
@@ -160,7 +160,7 @@ export function OtpForm({
               {`Resend code in ${formatDuration(resendInSeconds * 1000)}`}
             </Button>
           ) : (
-            <Button variant="ghost" size="sm" onPress={onResendCode} loading={isRequesting} loadingLabel="Sending a new code">
+            <Button variant="ghost" size="sm" onPress={() => onResendCode()} loading={isRequesting} loadingLabel="Sending a new code">
               Resend code
             </Button>
           )}

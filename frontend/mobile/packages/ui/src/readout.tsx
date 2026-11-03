@@ -71,12 +71,19 @@ export function formatMoney(amountPaise: number, options: { showPaise?: boolean 
   const rupees = amountPaise / 100;
   const hasPaise = amountPaise % 100 !== 0;
   const showPaise = options.showPaise ?? hasPaise;
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: showPaise ? 2 : 0,
-    maximumFractionDigits: showPaise ? 2 : 0,
-  }).format(rupees);
+  try {
+    if (typeof Intl !== "undefined" && typeof Intl.NumberFormat === "function") {
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: showPaise ? 2 : 0,
+        maximumFractionDigits: showPaise ? 2 : 0,
+      }).format(rupees);
+    }
+  } catch {
+    // fallback below
+  }
+  return `₹${showPaise ? rupees.toFixed(2) : Math.round(rupees).toLocaleString("en-IN")}`;
 }
 
 export function formatDuration(totalMs: number): string {

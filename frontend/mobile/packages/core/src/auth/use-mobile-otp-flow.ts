@@ -128,10 +128,11 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
   }, [options?.intendedRole, phone]);
 
   const onVerifyCode = useCallback(
-    (codeOverride?: string) => {
-      const activeCode = sanitizeCodeInput(codeOverride ?? code, codeLength);
+    (codeOverride?: unknown) => {
+      const explicitCode = typeof codeOverride === "string" ? codeOverride : undefined;
+      const activeCode = sanitizeCodeInput(explicitCode ?? code, codeLength);
       if (!challengeId || activeCode.length !== codeLength || isVerifying) return;
-      if (codeOverride) {
+      if (explicitCode) {
         setCode(activeCode);
       }
       setVerifying(true);

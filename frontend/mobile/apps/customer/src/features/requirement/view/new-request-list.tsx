@@ -3,10 +3,12 @@ import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCategories, useCategoryServices } from "@/features/catalog/client-queries";
 
 export function NewRequestList() {
+  const insets = useSafeAreaInsets();
   const categories = useCategories();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -20,7 +22,12 @@ export function NewRequestList() {
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="gap-3 px-4 py-6"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 16, 32),
+        paddingBottom: Math.max(insets.bottom + 24, 40),
+        paddingHorizontal: 16,
+      }}
+      contentContainerClassName="gap-3"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }

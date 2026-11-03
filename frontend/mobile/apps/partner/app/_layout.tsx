@@ -8,7 +8,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { configureCore, MobileQueryProvider, registerForPush, useAuthStore, VersionGate } from "@vsolve/mobile-core";
-import { ToastProvider } from "@vsolve/mobile-ui";
+import { I18nProvider, ToastProvider } from "@vsolve/mobile-ui";
 import { queryKeys } from "@vsolve/query/native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
@@ -16,10 +16,12 @@ import * as Notifications from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
+import { catalogs } from "@/i18n/catalogs";
+import { useLocaleStore } from "@/i18n/locale-store";
 import { isOfferCreatedPush, resolvePartnerPush } from "@/features/notifications/push-routing";
 import { requestOpenAlerts } from "@/features/notifications/alerts-bus";
 
-import { LogBox } from "react-native";
+import { LogBox, Platform } from "react-native";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 
 import "../global.css";
@@ -36,6 +38,10 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const status = useAuthStore((state) => state.status);
   const hydrate = useAuthStore((state) => state.hydrate);
+  const locale = useLocaleStore((state) => state.locale);
+  const isLocaleHydrated = useLocaleStore((state) => state.isHydrated);
+  const hydrateLocale = useLocaleStore((state) => state.hydrate);
+
   const [loaded, error] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -46,55 +52,100 @@ export default function RootLayout() {
 
   useEffect(() => {
     void hydrate();
-  }, [hydrate]);
+    void hydrateLocale();
+  }, [hydrate, hydrateLocale]);
 
   useEffect(() => {
-    if ((loaded || error) && status !== "loading") {
+    if ((loaded || error) && status !== "loading" && isLocaleHydrated) {
       void SplashScreen.hideAsync();
     }
-  }, [loaded, error, status]);
+  }, [loaded, error, status, isLocaleHydrated]);
 
-  if ((!loaded && !error) || status === "loading") {
+  if ((!loaded && !error) || status === "loading" || !isLocaleHydrated) {
     return null;
   }
 
   return (
     <MobileQueryProvider>
-      <ToastProvider>
-        <VersionGate>
-          <PushRouting />
-          <Stack screenOptions={{ headerShown: false }} />
-        </VersionGate>
-      </ToastProvider>
+      <I18nProvider locale={locale} catalog={catalogs[locale] ?? catalogs["en-IN"]}>
+        <ToastProvider>
+          <VersionGate>
+            <PushRouting />
+            <Stack screenOptions={{ headerShown: false }} />
+          </VersionGate>
+        </ToastProvider>
+      </I18nProvider>
     </MobileQueryProvider>
   );
 }
 
 function PushRouting() {
+  if (Platform.OS === "web") return null;
+
   const status = useAuthStore((state) => state.status);
   const router = useRouter();
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
     if (status !== "signedIn") return;
     void registerForPush({ appKind: "partner" });
   }, [status]);
 
   useEffect(() => {
-    const response = Notifications.addNotificationResponseReceivedListener((event) => {
-      const data = event.notification.request.content.data as { target?: { kind: string; id?: string } | null };
-      const destination = resolvePartnerPush(data.target ?? null);
-      if (destination.type === "route") router.push(destination.href as never);
-      else requestOpenAlerts();
-    });
-    const received = Notifications.addNotificationReceivedListener((event) => {
-      const data = event.request.content.data as { purpose?: string };
-      if (!isOfferCreatedPush(data)) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
-    });
+    if (Platform.OS === "web") return;
+
+    // Handle cold start / killed app state from push tap
+    try {
+      void Notifications.getLastNotificationResponseAsync()
+        ?.then((response) => {
+          if (!response) return;
+          const data = response.notification.request.content.data as {
+            target?: { kind: string; id?: string } | null;
+            dispatch_offer_id?: string;
+          };
+          const target = data?.dispatch_offer_id
+            ? { kind: "DISPATCH_OFFER", id: data.dispatch_offer_id }
+            : (data?.target ?? null);
+          const destination = resolvePartnerPush(target);
+          if (destination.type === "route") router.push(destination.href as never);
+        })
+        ?.catch(() => {});
+    } catch {
+      // Unavailability on platforms where getLastNotificationResponse is not supported
+    }
+
+    let responseSub: { remove: () => void } | undefined;
+    let receivedSub: { remove: () => void } | undefined;
+
+    try {
+      responseSub = Notifications.addNotificationResponseReceivedListener((event) => {
+        const data = event.notification.request.content.data as {
+          target?: { kind: string; id?: string } | null;
+          dispatch_offer_id?: string;
+        };
+        const target = data?.dispatch_offer_id
+          ? { kind: "DISPATCH_OFFER", id: data.dispatch_offer_id }
+          : (data?.target ?? null);
+        const destination = resolvePartnerPush(target);
+        if (destination.type === "route") router.push(destination.href as never);
+        else requestOpenAlerts();
+      });
+
+      receivedSub = Notifications.addNotificationReceivedListener((event) => {
+        const data = event.request.content.data as { purpose?: string; dispatch_offer_id?: string };
+        if (isOfferCreatedPush(data) || data?.dispatch_offer_id) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
+          void queryClient.invalidateQueries({ queryKey: ["partner", "dispatch-offers"] });
+        }
+      });
+    } catch {
+      // Fallback if notification listeners fail to register
+    }
+
     return () => {
-      response.remove();
-      received.remove();
+      responseSub?.remove();
+      receivedSub?.remove();
     };
   }, [queryClient, router]);
 

@@ -41,6 +41,7 @@ export const PALETTE = {
 export const COLOR_TOKENS = {
   // Surfaces
   canvas: PALETTE.warm[50],
+  white: PALETTE.warm[0],
   surface: PALETTE.warm[0],
   surfaceSunken: PALETTE.warm[100],
   surfaceHover: PALETTE.warm[50],
@@ -91,5 +92,6 @@ export const COLOR_TOKENS = {
   dangerText: "#b3261e",
 
   brand: PALETTE.navy[700],
+  navy: PALETTE.navy[900],
   placeholderText: "rgba(107, 101, 96, 0.5)",
 } as const;

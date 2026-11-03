@@ -8,6 +8,7 @@ import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationPanel } from "@/features/notifications/view/notification-panel";
+import { JobAlertsBanner } from "@/features/notifications/view/job-alerts-banner";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
 import { subscribeOpenAlerts } from "@/features/notifications/alerts-bus";
 import { unreadBadgeDisplay, unreadBadgeLabel } from "@/features/notifications/model/feed";
@@ -15,7 +16,6 @@ import { useUnreadNotificationCount } from "@/features/notifications/queries";
 import { focusedHeaderTitle, getPartnerChromeMode } from "@/features/session/chrome";
 import { handleFocusedBack } from "@/features/session/focused-back";
 import {
-  TAP_FIRST_NAV,
   primaryShellNavFor,
   dockNavFor,
   resolveWorkspaces,
@@ -134,6 +134,9 @@ export default function TabsLayout() {
           </Pressable>
         </View>
       ) : null}
+
+      {/* Job Alerts Permission Banner */}
+      <JobAlertsBanner />
 
       {/* Main Content Area */}
       <View className="flex-1 pb-24">

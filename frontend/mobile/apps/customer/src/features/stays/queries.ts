@@ -1,5 +1,6 @@
 import { request } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
+import type { Page } from "@vsolve/query/native";
 
 import type {
   StayEnquiry,
@@ -15,6 +16,7 @@ import type {
 
 export type {
   StayEnquiry,
+  StayFilterParams,
   StayProperty,
   StayPropertySummary,
   StayQuote,
@@ -38,6 +40,8 @@ export function fetchStays(params?: StayFilterParams): Promise<StayPropertySumma
           min_price: params?.min_price,
           max_price: params?.max_price,
           tenant_preference: params?.tenant_preference,
+          lat: params?.lat,
+          lng: params?.lng,
           sort: params?.sort,
           limit: params?.limit,
           offset: params?.offset,
@@ -47,27 +51,27 @@ export function fetchStays(params?: StayFilterParams): Promise<StayPropertySumma
   ) as unknown as Promise<StayPropertySummary[]>;
 }
 
-export function fetchStayTaxonomy(): Promise<StayTaxonomyCategory[]> {
-  return request(() => getApiClient().GET("/api/v1/stays/taxonomy"));
-}
-
-/** `key` is the page slug; an old link's property id works too. */
-export function fetchStayProperty(key: string): Promise<StayProperty> {
+export function fetchStayProperty(propertyId: string): Promise<StayProperty> {
   return request(() =>
     getApiClient().GET("/api/v1/stays/{key}", {
-      params: {
-        path: { key },
-      },
+      params: { path: { key: propertyId } },
     }),
   ) as unknown as Promise<StayProperty>;
+}
+
+export function fetchStayTaxonomy(): Promise<StayTaxonomyCategory[]> {
+  return request(() => getApiClient().GET("/api/v1/stays/taxonomy"));
 }
 
 export function fetchStayQuote(params: {
   property_id: string;
   check_in: string;
   length: number;
+  guest_count?: number;
   unit_id?: string | null;
 }): Promise<StayQuote> {
+  const sanitizedUnitId =
+    params.unit_id === "" || params.unit_id === null ? undefined : params.unit_id;
   return request(() =>
     getApiClient().GET("/api/v1/stays/quote", {
       params: {
@@ -75,11 +79,11 @@ export function fetchStayQuote(params: {
           property_id: params.property_id,
           check_in: params.check_in,
           length: params.length,
-          unit_id: params.unit_id ?? undefined,
+          unit_id: sanitizedUnitId,
         },
       },
     }),
-  );
+  ) as unknown as Promise<StayQuote>;
 }
 
 export function createStayEnquiry(payload: {
@@ -91,10 +95,12 @@ export function createStayEnquiry(payload: {
   child_count?: number;
   message?: string;
   unit_id?: string | null;
+  look_id?: string | null;
 }): Promise<StayEnquiry> {
   const sanitizedUnitId =
-    payload.unit_id && payload.unit_id.trim() !== "" ? payload.unit_id.trim() : undefined;
-
+    payload.unit_id === "" || payload.unit_id === null ? undefined : payload.unit_id;
+  const sanitizedLookId =
+    payload.look_id === "" || payload.look_id === null ? undefined : payload.look_id;
   return request(() =>
     getApiClient().POST("/api/v1/stays/enquire", {
       body: {
@@ -106,6 +112,7 @@ export function createStayEnquiry(payload: {
         ...(payload.child_count !== undefined && { child_count: payload.child_count }),
         message: payload.message ?? "",
         unit_id: sanitizedUnitId,
+        look_id: sanitizedLookId,
       },
     }),
   ) as unknown as Promise<StayEnquiry>;
@@ -114,32 +121,46 @@ export function createStayEnquiry(payload: {
 export async function fetchMyStayEnquiries(): Promise<StayEnquiry[]> {
   const data = await request(() => getApiClient().GET("/api/v1/me/stay-enquiries"));
   if (Array.isArray(data)) return data as StayEnquiry[];
-  return ((data as unknown as { results?: StayEnquiry[] })?.results ?? []) as StayEnquiry[];
+  return (((data as unknown as { results?: unknown[] })?.results ?? []) as unknown) as StayEnquiry[];
+}
+
+export function fetchMyStayEnquiriesPage(cursor?: string): Promise<Page<StayEnquiry>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/stay-enquiries", { params: { query: { cursor } } }),
+  ) as unknown as Promise<Page<StayEnquiry>>;
 }
 
 export async function fetchMyStayReservations(): Promise<StayReservation[]> {
   const data = await request(() => getApiClient().GET("/api/v1/me/stay-reservations"));
   if (Array.isArray(data)) return data as StayReservation[];
-  return ((data as unknown as { results?: StayReservation[] })?.results ?? []) as StayReservation[];
+  return (((data as unknown as { results?: unknown[] })?.results ?? []) as unknown) as StayReservation[];
+}
+
+export function fetchMyStayReservationsPage(cursor?: string): Promise<Page<StayReservation>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/stay-reservations", { params: { query: { cursor } } }),
+  ) as unknown as Promise<Page<StayReservation>>;
 }
 
 export async function fetchMyStayVisits(): Promise<StayVisit[]> {
   const data = await request(() => getApiClient().GET("/api/v1/me/stay-visits"));
   if (Array.isArray(data)) return data as StayVisit[];
-  return ((data as unknown as { results?: StayVisit[] })?.results ?? []) as StayVisit[];
+  return (((data as unknown as { results?: unknown[] })?.results ?? []) as unknown) as StayVisit[];
+}
+
+export function fetchMyStayVisitsPage(cursor?: string): Promise<Page<StayVisit>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/stay-visits", { params: { query: { cursor } } }),
+  ) as unknown as Promise<Page<StayVisit>>;
 }
 
 export async function fetchVisitSlots(propertyId: string): Promise<StayVisitSlot[]> {
   const data = await request(() =>
-    getApiClient().GET("/api/v1/stays/{property_id}/visit-slots", {
-      params: { path: { property_id: propertyId } },
+    getApiClient().GET("/api/v1/stays/{key}/visit-slots", {
+      params: { path: { key: propertyId } },
     }),
   );
   if (Array.isArray(data)) {
-    const first = (data as any)[0];
-    if (first && Array.isArray(first.slots)) {
-      return (data as any).flatMap((d: any) => d.slots);
-    }
     return data as unknown as StayVisitSlot[];
   }
   return [];
@@ -150,6 +171,7 @@ export function createStayVisit(payload: {
   slot_id: string;
   visit_date: string;
   unit_id?: string | null;
+  look_id?: string | null;
   message?: string;
 }): Promise<StayVisit> {
   return request(() =>
@@ -159,6 +181,7 @@ export function createStayVisit(payload: {
         slot_id: payload.slot_id,
         visit_date: payload.visit_date,
         unit_id: payload.unit_id ?? undefined,
+        look_id: payload.look_id ?? undefined,
         message: payload.message ?? "",
       },
     }),
@@ -218,7 +241,6 @@ export function submitStayReview(payload: {
         property_id: payload.property_id,
         rating: payload.rating,
         comment: payload.comment ?? "",
-        body: payload.comment ?? "",
         enquiry_id: payload.enquiry_id ?? undefined,
         reservation_id: payload.reservation_id ?? undefined,
         image_urls: payload.image_urls ?? [],

@@ -116,8 +116,12 @@ function capIndianMobileDigits(digitsOnly: string, hasLeadingPlus = false): stri
 }
 
 /** Keeps only what a phone field can legally contain, so paste is forgiving. */
-export function sanitizePhoneInput(value: string): string {
-  const compact = value.replace(/[^\d+\s-]/g, "").trimStart();
+export function sanitizePhoneInput(value: unknown): string {
+  if (typeof value !== "string") {
+    if (typeof value === "number") value = String(value);
+    else return "";
+  }
+  const compact = (typeof value === "string" ? value : typeof value === "number" ? String(value) : "").replace(/[^\d+\s-]/g, "").trimStart();
   // A later plus is the person starting the number again, not a second country code.
   const restartedAt = compact.lastIndexOf("+");
   const focused = restartedAt > 0 ? compact.slice(restartedAt) : compact;
@@ -145,8 +149,13 @@ export function sanitizePhoneInput(value: string): string {
 }
 
 /** Codes are digits only. Autofill from an SMS often arrives with spaces. */
-export function sanitizeCodeInput(value: string, codeLength: number): string {
-  return (value.match(/\d/g) ?? []).join("").slice(0, codeLength);
+export function sanitizeCodeInput(value: unknown, codeLength: number): string {
+  if (typeof value !== "string") {
+    if (typeof value === "number") value = String(value);
+    else return "";
+  }
+  const str = typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+  return (str.match(/\d/g) ?? []).join("").slice(0, codeLength);
 }
 
 /**

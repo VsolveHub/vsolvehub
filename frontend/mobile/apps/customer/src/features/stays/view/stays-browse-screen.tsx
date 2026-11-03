@@ -38,6 +38,14 @@ import { fetchStays, fetchStayTaxonomy } from "../queries";
 import { THEME_COLORS } from "../theme-colors";
 import { DesktopStaysBrowse } from "./desktop-stays-browse";
 import { StayCard } from "./stay-card";
+import { PlaceFilter } from "@/features/browse/place-filter";
+import {
+  EMPTY_PLACE,
+  NearbyNotice,
+  placeKey,
+  placeQuery,
+  type PlaceFilterValue,
+} from "@/features/browse/nearby";
 
 const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
   { label: "All Rates" },
@@ -50,18 +58,21 @@ const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
 
 export function StaysBrowseScreen() {
   const isDesktop = useIsDesktop();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-
   if (isDesktop) {
     return <DesktopStaysBrowse />;
   }
+  return <MobileStaysBrowseContent />;
+}
+
+function MobileStaysBrowseContent() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Search State: Draft vs Applied
   const [draftQuery, setDraftQuery] = useState("");
-  const [draftLocation, setDraftLocation] = useState("");
+  const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [appliedLocation, setAppliedLocation] = useState("");
+  const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
 
   // Filters
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | undefined>(undefined);
@@ -101,7 +112,7 @@ export function StaysBrowseScreen() {
     queryKey: [
       "stays",
       appliedQuery,
-      appliedLocation,
+      placeKey(appliedPlace),
       selectedCategorySlug,
       selectedServiceSlug,
       filterAc,
@@ -114,7 +125,7 @@ export function StaysBrowseScreen() {
     queryFn: () =>
       fetchStays({
         q: appliedQuery || undefined,
-        location: appliedLocation || undefined,
+        ...placeQuery(appliedPlace),
         service: selectedServiceSlug || selectedCategorySlug || undefined,
         ac: filterAc,
         food: filterFood,
@@ -128,20 +139,29 @@ export function StaysBrowseScreen() {
     staleTime: 30_000,
   });
 
+  const handlePlaceChange = (nextPlace: PlaceFilterValue, applyNow: boolean) => {
+    setDraftPlace(nextPlace);
+    if (applyNow) {
+      setAppliedPlace(nextPlace);
+      setAppliedQuery(draftQuery);
+      setVisible(6);
+    }
+  };
+
   const stays = (staysQuery.data as StayPropertySummary[]) ?? [];
   const displayedStays = stays.slice(0, visible);
 
   const handleSearchSubmit = () => {
     setAppliedQuery(draftQuery);
-    setAppliedLocation(draftLocation);
+    setAppliedPlace(draftPlace);
     setVisible(6);
   };
 
   const clearAllFilters = () => {
     setDraftQuery("");
-    setDraftLocation("");
+    setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
-    setAppliedLocation("");
+    setAppliedPlace(EMPTY_PLACE);
     setSelectedCategorySlug(undefined);
     setSelectedServiceSlug(undefined);
     setFilterAc(undefined);
@@ -157,7 +177,7 @@ export function StaysBrowseScreen() {
 
   const hasActiveFilters = Boolean(
     appliedQuery ||
-      appliedLocation ||
+      appliedPlace.name ||
       selectedCategorySlug ||
       selectedServiceSlug ||
       filterAc !== undefined ||
@@ -233,7 +253,7 @@ export function StaysBrowseScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="View my enquiries and visits"
-              onPress={() => router.push("/stays/mine" as never)}
+              onPress={() => router.push("/activity?type=stays" as never)}
               className="mt-4 flex-row items-center justify-between rounded-xl border border-white/20 bg-white/10 px-4 py-3 active:bg-white/20"
             >
               <View className="flex-row items-center gap-2">
@@ -263,23 +283,12 @@ export function StaysBrowseScreen() {
                 ) : null}
               </View>
 
-              <View className="flex-row items-center rounded-xl border border-line bg-surface-sunken px-3 py-2">
-                <MapPin size={16} color={THEME_COLORS.muted} />
-                <TextInput
-                  placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
-                  placeholderTextColor="rgba(107,101,96,0.6)"
-                  value={draftLocation}
-                  onChangeText={setDraftLocation}
-                  onSubmitEditing={handleSearchSubmit}
-                  returnKeyType="search"
-                  className="ml-2 flex-1 text-xs text-navy-900"
-                />
-                {draftLocation ? (
-                  <Pressable onPress={() => setDraftLocation("")}>
-                    <X size={14} color={THEME_COLORS.muted} />
-                  </Pressable>
-                ) : null}
-              </View>
+              <PlaceFilter
+                value={draftPlace}
+                onChange={handlePlaceChange}
+                placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
+                onSubmit={handleSearchSubmit}
+              />
 
               <Button
                 variant="primary"
@@ -486,7 +495,7 @@ export function StaysBrowseScreen() {
               Showing <Text className="font-bold text-brand">{displayedStays.length}</Text> of{" "}
               <Text className="font-bold text-navy-900">{stays.length}</Text>{" "}
               {stays.length === 1 ? "stay" : "stays"}
-              {appliedLocation ? ` in "${appliedLocation}"` : ""}
+              {appliedPlace.name ? ` in "${appliedPlace.name}"` : ""}
             </Text>
 
             {hasActiveFilters ? (

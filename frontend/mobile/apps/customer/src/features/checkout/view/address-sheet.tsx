@@ -303,18 +303,20 @@ export function AddressSheet({
                 addresses.map((address) => {
                   const isSelected = address.id === pendingAddressId;
                   return (
-                    <Pressable
+                    <View
                       key={address.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isSelected }}
-                      onPress={() => setPendingAddressId(address.id)}
                       className={`flex-row items-start justify-between rounded-2xl border p-4 ${
                         isSelected
                           ? "border-[#EA580C] bg-[#FFF8F3]"
-                          : "border-line bg-surface active:bg-surface-sunken"
+                          : "border-line bg-surface"
                       }`}
                     >
-                      <View className="min-w-0 flex-1">
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => setPendingAddressId(address.id)}
+                        className="min-w-0 flex-1 cursor-pointer"
+                      >
                         <View className="flex-row items-center gap-2">
                           <Text className="text-sm font-bold text-navy-950">
                             {address.label}
@@ -330,10 +332,11 @@ export function AddressSheet({
                         <Text className="mt-0.5 text-xs font-semibold text-text-muted">
                           PIN {address.postal_code}
                         </Text>
-                      </View>
+                      </Pressable>
 
                       <Pressable
                         accessibilityRole="button"
+                        accessibilityLabel={`Edit ${address.label || "address"}`}
                         onPress={() => {
                           setEditingAddress(address);
                           setLabel(address.label || "Home");
@@ -346,11 +349,11 @@ export function AddressSheet({
                           setFormError(null);
                           setMode("edit");
                         }}
-                        className="px-2 py-1"
+                        className="px-2 py-1 ml-2 cursor-pointer rounded-lg hover:bg-surface-sunken active:bg-surface-sunken"
                       >
                         <Text className="text-sm font-semibold text-navy-900">Edit</Text>
                       </Pressable>
-                    </Pressable>
+                    </View>
                   );
                 })
               )}

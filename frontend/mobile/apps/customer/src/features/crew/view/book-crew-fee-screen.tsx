@@ -13,6 +13,7 @@ import { useState, type ReactNode } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { requestHref } from "@/lib/routes";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { confirmedCrewName, toBookingView, toRateTermsView } from "../adapters";
 import { useRateCardState, useStartBookingFeeCheckout } from "../queries";
@@ -26,6 +27,7 @@ export interface BookCrewFeeScreenProps {
 
 export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp }: BookCrewFeeScreenProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const backHref = requestHrefProp ?? requestHref(requirementId);
   const rateQuery = useRateCardState(requirementId);
   const checkout = useStartBookingFeeCheckout();
@@ -94,7 +96,12 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
   return (
     <ScrollView
       className="flex-1 bg-canvas"
-      contentContainerClassName="mx-auto w-full max-w-md gap-4 px-4 py-6"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top + 16, 32),
+        paddingBottom: Math.max(insets.bottom + 24, 40),
+        paddingHorizontal: 16,
+      }}
+      contentContainerClassName="mx-auto w-full max-w-md gap-4"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }
@@ -153,7 +160,19 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
 }
 
 function Wrapper({ children }: { children: ReactNode }) {
-  return <View className="mx-auto w-full max-w-md px-4 py-6">{children}</View>;
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={{
+        paddingTop: Math.max(insets.top + 16, 32),
+        paddingBottom: Math.max(insets.bottom + 24, 40),
+        paddingHorizontal: 16,
+      }}
+      className="mx-auto w-full max-w-md"
+    >
+      {children}
+    </View>
+  );
 }
 
 function CheckoutAction({

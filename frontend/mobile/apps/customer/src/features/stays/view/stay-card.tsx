@@ -77,7 +77,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
       className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs active:border-line-strong active:shadow-raised"
     >
       {/* Cover Image */}
-      <View className="relative aspect-[16/10] w-full bg-[#f0ede6]">
+      <View className="relative aspect-[16/10] w-full bg-surface-sunken">
         <Image
           source={{ uri: imageUrl }}
           contentFit="cover"
@@ -143,9 +143,14 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
         {property.location_text ? (
           <View className="flex-row items-center gap-1">
             <MapPin size={12} color={THEME_COLORS.muted} />
-            <Text className="flex-1 text-xs text-text-secondary" numberOfLines={1}>
+            <Text className="text-xs text-text-secondary" numberOfLines={1}>
               {property.location_text}
             </Text>
+            {property.distance_km != null ? (
+              <Text className="shrink-0 text-xs font-semibold text-navy-900">
+                · {property.distance_km} km away
+              </Text>
+            ) : null}
           </View>
         ) : null}
 

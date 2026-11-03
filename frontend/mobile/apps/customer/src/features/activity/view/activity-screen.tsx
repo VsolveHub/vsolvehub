@@ -1,23 +1,33 @@
 // Ported from frontend/apps/customer/features/activity/view/activity-screen.tsx
-import { describeError, useServerCountdown } from "@vsolve/query/native";
-import { Badge, Button, EmptyState, ErrorState, Input, Skeleton, Text, buttonStyles } from "@vsolve/mobile-ui";
-import { Link, useLocalSearchParams } from "expo-router";
-import { Search, X } from "lucide-react-native";
+import { describeError, usePagedList, useServerCountdown } from "@vsolve/query/native";
+import { Badge, Button, COLOR_TOKENS, EmptyState, ErrorState, Input, Skeleton, Text, buttonStyles } from "@vsolve/mobile-ui";
+import { type Href, Link, useLocalSearchParams, useRouter } from "expo-router";
+import { ArrowLeft, Search, X } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useIsDesktop } from "@/lib/responsive";
 
 import { filterBookingsBySearch } from "@/features/activity/model/booking-search";
 import {
   BOOKING_STATUS_COPY,
   BOOKING_STATUS_TABS,
+  BOOKING_TYPES,
+  BOOKING_TYPE_LABELS,
   bookingStatusHref,
   countByStatus,
   engagementSection,
   groupSection,
+  rentalSection,
   requestSection,
+  stayEnquirySection,
+  stayReservationSection,
+  stayVisitSection,
   toBookingStatusTab,
+  toBookingType,
   type BookingStatusTab,
+  type BookingType,
 } from "@/features/activity/model/booking-status";
 import { formatBookingWhen } from "@/features/bookings/view/booking-format";
 import { GroupStatusBadge } from "@/features/bookings/view/group-status";
@@ -30,6 +40,18 @@ import { toRequestRows, type RequestRowView } from "@/features/requirement/adapt
 import { requestState, showsQuoteDeadline, type RequestState } from "@/features/requirement/model/request-state";
 import { useMyRequests, type RequirementSummary } from "@/features/requirement/queries";
 import { RequestStateBadge } from "@/features/requirement/view/request-state";
+import type { RentalBooking } from "@/features/rentals/model";
+import { fetchMyRentalsPage } from "@/features/rentals/queries";
+import { RentalBookingCard } from "@/features/rentals/view";
+import {
+  fetchMyStayEnquiriesPage,
+  fetchMyStayReservationsPage,
+  fetchMyStayVisitsPage,
+  type StayEnquiry,
+  type StayReservation,
+  type StayVisit,
+} from "@/features/stays/queries";
+import { StayEnquiryCard, StayReservationCard, StayVisitCard } from "@/features/stays/view";
 import { requestHref } from "@/lib/routes";
 import { CatalogServiceThumbRow } from "@/features/catalog/view/catalog-service-thumb";
 import { serviceSlugFromLineCode } from "@/features/catalog/service-cover";
@@ -38,10 +60,75 @@ export function requestBelongsInBookings(requirement: RequirementSummary): boole
   return requirement.engagement_id === null;
 }
 
-type BookingItem =
-  | { kind: "request"; key: string; section: BookingStatusTab; sortAt: string; row: RequestRowView }
-  | { kind: "engagement"; key: string; section: BookingStatusTab; sortAt: string; row: EngagementRowView }
-  | { kind: "group"; key: string; section: BookingStatusTab; sortAt: string; group: BookingGroup };
+type ItemBase = { key: string; type: BookingType; section: BookingStatusTab; sortAt: string };
+
+/**
+ * One row of the hub. Services (visits, crew, projects) and, since stays and rentals joined
+ * this page, rental bookings and stay visits, enquiries and reservations.
+ */
+export type BookingItem = ItemBase &
+  (
+    | { kind: "request"; row: RequestRowView }
+    | { kind: "engagement"; row: EngagementRowView }
+    | { kind: "group"; group: BookingGroup }
+    | { kind: "rental"; booking: RentalBooking }
+    | { kind: "stay-enquiry"; enquiry: StayEnquiry }
+    | { kind: "stay-visit"; visit: StayVisit }
+    | { kind: "stay-reservation"; reservation: StayReservation }
+  );
+
+export interface MarketplaceRows {
+  rentals: readonly RentalBooking[];
+  enquiries: readonly StayEnquiry[];
+  visits: readonly StayVisit[];
+  reservations: readonly StayReservation[];
+}
+
+/** Rentals and stays as hub rows, sorted into the same three tabs as everything else. */
+export function marketplaceItems(rows: MarketplaceRows, now: Date = new Date()): BookingItem[] {
+  return [
+    ...rows.rentals.map(
+      (booking): BookingItem => ({
+        kind: "rental",
+        key: `rental:${booking.id}`,
+        type: "rentals",
+        section: rentalSection(booking),
+        sortAt: booking.created_at ?? "",
+        booking,
+      }),
+    ),
+    ...rows.visits.map(
+      (visit): BookingItem => ({
+        kind: "stay-visit",
+        key: `stay-visit:${visit.id}`,
+        type: "stays",
+        section: stayVisitSection(visit, now),
+        sortAt: visit.created_at ?? "",
+        visit,
+      }),
+    ),
+    ...rows.enquiries.map(
+      (enquiry): BookingItem => ({
+        kind: "stay-enquiry",
+        key: `stay-enquiry:${enquiry.id}`,
+        type: "stays",
+        section: stayEnquirySection(enquiry, now),
+        sortAt: enquiry.created_at ?? "",
+        enquiry,
+      }),
+    ),
+    ...rows.reservations.map(
+      (reservation): BookingItem => ({
+        kind: "stay-reservation",
+        key: `stay-reservation:${reservation.id}`,
+        type: "stays",
+        section: stayReservationSection(reservation),
+        sortAt: reservation.created_at ?? "",
+        reservation,
+      }),
+    ),
+  ];
+}
 
 function byNewest(a: BookingItem, b: BookingItem): number {
   return Date.parse(b.sortAt) - Date.parse(a.sortAt);
@@ -67,6 +154,7 @@ function itemsFrom(
         return {
           kind: "request",
           key: `request:${row.id}`,
+          type: "services",
           section: requestSection(row.status),
           sortAt: source?.last_activity_at ?? "",
           row,
@@ -76,6 +164,7 @@ function itemsFrom(
         (row): BookingItem => ({
           kind: "engagement",
           key: `engagement:${row.engagementId}`,
+          type: "services",
           section: engagementSection(row),
           sortAt: engagementById.get(row.engagementId)?.created_at ?? "",
           row,
@@ -85,6 +174,7 @@ function itemsFrom(
         (group): BookingItem => ({
           kind: "group",
           key: `group:${group.id}`,
+          type: "services",
           section: groupSection(group),
           sortAt: group.updated_at,
           group,
@@ -101,36 +191,108 @@ function titleForSlug(categorySlug: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+const BROWSE: Record<BookingType, { href: string; label: string }> = {
+  services: { href: "/catalog", label: "Browse services" },
+  rentals: { href: "/rentals", label: "Browse rentals" },
+  stays: { href: "/stays", label: "Browse stays" },
+};
+
+const MARKETPLACE_LABEL: Partial<Record<BookingItem["kind"], string>> = {
+  rental: "Rental",
+  "stay-visit": "Stay visit",
+  "stay-enquiry": "Stay enquiry",
+  "stay-reservation": "Stay reservation",
+};
+
 export function ActivityScreen() {
+  const router = useRouter();
+  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const requirementsQuery = useMyRequests();
   const engagementsQuery = useEngagements();
   const groupsQuery = useBookingGroups();
-  const searchParams = useLocalSearchParams<{ status?: string }>();
+
+  // The same cache keys as My Rentals and My Stays, so a card that refreshes
+  // its own list refreshes this one too.
+  const rentalsList = usePagedList(["my-rentals", ""], (cursor) => fetchMyRentalsPage(undefined, cursor));
+  const enquiriesList = usePagedList(["my-stay-enquiries"], (cursor) => fetchMyStayEnquiriesPage(cursor));
+  const visitsList = usePagedList(["my-stay-visits"], (cursor) => fetchMyStayVisitsPage(cursor));
+  const reservationsList = usePagedList(["my-stay-reservations"], (cursor) =>
+    fetchMyStayReservationsPage(cursor),
+  );
+  const marketplaceLists = [rentalsList, enquiriesList, visitsList, reservationsList];
+
+  const searchParams = useLocalSearchParams<{ status?: string; type?: string }>();
   const selectedTab = toBookingStatusTab(searchParams.status);
+  const selectedType = toBookingType(searchParams.type);
   const [searchQuery, setSearchQuery] = useState("");
 
   const requirements = requirementsQuery.data ?? [];
   const engagements = (engagementsQuery.data?.pages ?? []).flatMap((page) => page.results);
   const groups = (groupsQuery.data?.pages ?? []).flatMap((page) => page.results);
-  const { items, unknownEngagements } = itemsFrom(requirements, engagements, groups);
+  const services = itemsFrom(requirements, engagements, groups);
+  const unknownEngagements = services.unknownEngagements;
+
+  const allItems = [
+    ...services.items,
+    ...marketplaceItems({
+      rentals: rentalsList.items,
+      enquiries: enquiriesList.items,
+      visits: visitsList.items,
+      reservations: reservationsList.items,
+    }),
+  ].sort(byNewest);
+
+  const typesPresent = BOOKING_TYPES.filter((type) => allItems.some((item) => item.type === type));
+  const items = selectedType ? allItems.filter((item) => item.type === selectedType) : allItems;
   const counts = countByStatus(items);
   const tabItems = items.filter((item) => item.section === selectedTab);
   const visibleItems = filterBookingsBySearch(tabItems, searchQuery);
   const isSearching = searchQuery.trim().length > 0;
   const copy = BOOKING_STATUS_COPY[selectedTab];
+
   const isFirstLoad =
-    items.length === 0 &&
-    (requirementsQuery.isPending || engagementsQuery.isPending || groupsQuery.isPending);
-  const errors = [requirementsQuery.error, engagementsQuery.error, groupsQuery.error].filter(
-    (error): error is Error => error instanceof Error,
-  );
+    allItems.length === 0 &&
+    (requirementsQuery.isPending ||
+      engagementsQuery.isPending ||
+      groupsQuery.isPending ||
+      marketplaceLists.some((list) => list.isLoading));
+
+  const errors = [
+    requirementsQuery.error,
+    engagementsQuery.error,
+    groupsQuery.error,
+    ...marketplaceLists.map((list) => list.error),
+  ].filter((error): error is Error => error instanceof Error);
+
+  const hasOlder =
+    Boolean(engagementsQuery.hasNextPage || groupsQuery.hasNextPage) ||
+    marketplaceLists.some((list) => list.hasMore);
+
+  const loadingOlder =
+    engagementsQuery.isFetchingNextPage ||
+    groupsQuery.isFetchingNextPage ||
+    marketplaceLists.some((list) => list.loadingMore);
+
+  const loadOlder = () => {
+    if (engagementsQuery.hasNextPage) void engagementsQuery.fetchNextPage();
+    if (groupsQuery.hasNextPage) void groupsQuery.fetchNextPage();
+    for (const list of marketplaceLists) {
+      if (list.hasMore) list.loadMore();
+    }
+  };
+
   const hasDirectPay = items.some((item) => item.kind === "engagement" && item.row.mode === "lead_only");
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([requirementsQuery.refetch(), engagementsQuery.refetch(), groupsQuery.refetch()]);
+    await Promise.all([
+      requirementsQuery.refetch(),
+      engagementsQuery.refetch(),
+      groupsQuery.refetch(),
+      ...marketplaceLists.map((list) => list.refetch()),
+    ]);
     setRefreshing(false);
   };
 
@@ -140,9 +302,31 @@ export function ActivityScreen() {
       style={{ paddingTop: Math.max(insets.top, 20) }}
       contentContainerClassName="mx-auto w-full max-w-4xl px-4 pb-16 pt-2"
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLOR_TOKENS.action]} tintColor={COLOR_TOKENS.action} />
       }
     >
+      {/* Back button with text matching user request */}
+      <View className="mb-2.5">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isDesktop ? "Back to Home" : "Back"}
+          hitSlop={8}
+          onPress={() => {
+            if (!isDesktop && router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/" as never);
+            }
+          }}
+          className="flex-row items-center gap-1.5 self-start py-1 -ml-1 cursor-pointer active:opacity-70 group"
+        >
+          <ArrowLeft size={18} color="#0F172A" strokeWidth={2.4} />
+          <Text className="text-sm font-bold text-navy-900 group-hover:text-action">
+            {isDesktop ? "Back to Home" : "Back"}
+          </Text>
+        </Pressable>
+      </View>
+
       <View className="gap-3">
         <Text className="shrink-0 text-2xl font-extrabold tracking-tight text-navy-900">Your Bookings</Text>
         <BookingsSearchField value={searchQuery} onChange={setSearchQuery} />
@@ -176,12 +360,21 @@ export function ActivityScreen() {
               void requirementsQuery.refetch();
               void engagementsQuery.refetch();
               void groupsQuery.refetch();
+              for (const list of marketplaceLists) {
+                void list.refetch();
+              }
             }}
           />
         </View>
       ) : null}
 
-      {!isFirstLoad ? <BookingStatusTabs selected={selectedTab} counts={counts} /> : null}
+      {!isFirstLoad && typesPresent.length > 1 ? (
+        <BookingTypeFilter present={typesPresent} selected={selectedType} tab={selectedTab} />
+      ) : null}
+
+      {!isFirstLoad ? (
+        <BookingStatusTabs selected={selectedTab} counts={counts} type={selectedType} />
+      ) : null}
 
       {!isFirstLoad && !isSearching && tabItems.length === 0 && errors.length === 0 ? (
         <View className="mt-8">
@@ -190,9 +383,11 @@ export function ActivityScreen() {
             description={copy.emptyDescription}
             action={
               selectedTab === "active" ? (
-                <Link href="/catalog" asChild>
+                <Link href={BROWSE[selectedType ?? "services"].href as Href} asChild>
                   <Pressable className={buttonStyles({ variant: "outline" })}>
-                    <Text className="text-sm font-semibold text-text">Browse services</Text>
+                    <Text className="text-sm font-semibold text-text">
+                      {BROWSE[selectedType ?? "services"].label}
+                    </Text>
                   </Pressable>
                 </Link>
               ) : undefined
@@ -206,7 +401,7 @@ export function ActivityScreen() {
           <EmptyState
             title="No bookings found"
             description="Try searching with a different service name, booking ID, or keyword."
-            icon={<Search size={32} color="#756c5e" strokeWidth={1.6} />}
+            icon={<Search size={32} color={COLOR_TOKENS.textMuted} strokeWidth={1.6} />}
           />
         </View>
       ) : null}
@@ -225,53 +420,81 @@ export function ActivityScreen() {
         </Text>
       ) : null}
 
-      {engagementsQuery.hasNextPage || groupsQuery.hasNextPage ? (
-        <View className="mt-8 flex-row flex-wrap gap-3">
-          {engagementsQuery.hasNextPage ? (
-            <Button
-              variant="outline"
-              loading={engagementsQuery.isFetchingNextPage}
-              onPress={() => void engagementsQuery.fetchNextPage()}
-            >
-              Show older work
-            </Button>
-          ) : null}
-          {groupsQuery.hasNextPage ? (
-            <Button
-              variant="outline"
-              loading={groupsQuery.isFetchingNextPage}
-              onPress={() => void groupsQuery.fetchNextPage()}
-            >
-              Show older bookings
-            </Button>
-          ) : null}
+      {hasOlder ? (
+        <View className="mt-8">
+          <Button variant="outline" loading={loadingOlder} onPress={loadOlder}>
+            Show older bookings
+          </Button>
         </View>
       ) : null}
     </ScrollView>
   );
 }
 
+function BookingTypeFilter({
+  present,
+  selected,
+  tab,
+}: {
+  present: readonly BookingType[];
+  selected: BookingType | null;
+  tab: BookingStatusTab;
+}) {
+  const options: { type: BookingType | null; label: string }[] = [
+    { type: null, label: "All" },
+    ...present.map((type) => ({ type, label: BOOKING_TYPE_LABELS[type] })),
+  ];
+  return (
+    <View accessibilityRole="tablist" accessibilityLabel="Booking type" className="mt-4">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="flex-row gap-2">
+        {options.map(({ type, label }) => {
+          const active = selected === type;
+          return (
+            <Link key={label} href={bookingStatusHref(tab, type) as Href} asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                className={
+                  active
+                    ? "inline-flex min-h-9 items-center justify-center rounded-full bg-navy-900 px-4 py-1.5"
+                    : "inline-flex min-h-9 items-center justify-center rounded-full border border-line bg-surface px-4 py-1.5 active:bg-surface-sunken"
+                }
+              >
+                <Text className={active ? "text-sm font-bold text-white" : "text-sm font-semibold text-text-secondary"}>
+                  {label}
+                </Text>
+              </Pressable>
+            </Link>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 function BookingStatusTabs({
   selected,
   counts,
+  type,
 }: {
   selected: BookingStatusTab;
   counts: Record<BookingStatusTab, number>;
+  type: BookingType | null;
 }) {
   return (
-    <View className="mt-6 border-b border-line/80">
+    <View className="mt-5 border-b border-line/80">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="-mx-4 flex-row gap-1 px-4">
         {BOOKING_STATUS_TABS.map((tab) => {
           const isSelected = tab === selected;
           const tabCopy = BOOKING_STATUS_COPY[tab];
           return (
-            <Link key={tab} href={bookingStatusHref(tab)} asChild>
+            <Link key={tab} href={bookingStatusHref(tab, type) as Href} asChild>
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isSelected }}
                 accessibilityLabel={`${tabCopy.label} ${counts[tab]}`}
                 className={`min-h-11 flex-row items-center gap-2 border-b-2 px-2.5 pb-2.5 pt-1 ${
-                  isSelected ? "border-[#EA580C]" : "border-transparent"
+                  isSelected ? "border-action" : "border-transparent"
                 }`}
               >
                 <Text className={isSelected ? "text-sm font-extrabold text-navy-900" : "text-sm font-semibold text-text-secondary"}>
@@ -295,7 +518,7 @@ function BookingsSearchField({ value, onChange }: { value: string; onChange: (va
       <Text className="sr-only">Search bookings</Text>
       <View className="relative">
         <View className="absolute left-3.5 top-1/2 z-10 -translate-y-1/2">
-          <Search size={18} color="#756c5e" strokeWidth={1.8} />
+          <Search size={18} color={COLOR_TOKENS.textMuted} strokeWidth={1.8} />
         </View>
         <Input
           value={value}
@@ -314,7 +537,7 @@ function BookingsSearchField({ value, onChange }: { value: string; onChange: (va
             onPress={() => onChange("")}
             className="absolute right-2 top-1/2 size-8 -translate-y-1/2 items-center justify-center rounded-control"
           >
-            <X size={16} color="#756c5e" strokeWidth={2} />
+            <X size={16} color={COLOR_TOKENS.textMuted} strokeWidth={2} />
           </Pressable>
         ) : null}
       </View>
@@ -323,9 +546,34 @@ function BookingsSearchField({ value, onChange }: { value: string; onChange: (va
 }
 
 function BookingTimelineRow({ item }: { item: BookingItem }) {
-  if (item.kind === "group") return <BookingGroupRow group={item.group} />;
-  if (item.kind === "engagement") return <EngagementListRow row={item.row} />;
-  return <RequestRow request={item.row} href={requestHref(item.row.id)} />;
+  switch (item.kind) {
+    case "group":
+      return <BookingGroupRow group={item.group} />;
+    case "engagement":
+      return <EngagementListRow row={item.row} />;
+    case "request":
+      return (
+        <RequestRow
+          request={item.row}
+          href={requestHref(item.row.id)}
+          isClosed={item.section === "past" || item.section === "cancelled"}
+        />
+      );
+    default:
+      return (
+        <View className="gap-1.5" testID={`booking-${item.kind}`}>
+          <Text className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+            {MARKETPLACE_LABEL[item.kind]}
+          </Text>
+          {item.kind === "rental" ? <RentalBookingCard booking={item.booking} /> : null}
+          {item.kind === "stay-visit" ? <StayVisitCard visit={item.visit} /> : null}
+          {item.kind === "stay-enquiry" ? <StayEnquiryCard enquiry={item.enquiry} /> : null}
+          {item.kind === "stay-reservation" ? (
+            <StayReservationCard reservation={item.reservation} />
+          ) : null}
+        </View>
+      );
+  }
 }
 
 function BookingGroupRow({ group }: { group: BookingGroup }) {
@@ -422,7 +670,7 @@ function engagementListLine(row: EngagementRowView, nouns: ReturnType<typeof nou
   }
 }
 
-function RequestRow({ request, href }: { request: RequestRowView; href: string }) {
+function RequestRow({ request, href, isClosed }: { request: RequestRowView; href: string; isClosed?: boolean }) {
   const countdown = useServerCountdown(request.deadlineAt, 60_000);
   const state: RequestState = requestState({
     status: request.status,
@@ -443,7 +691,9 @@ function RequestRow({ request, href }: { request: RequestRowView; href: string }
           ? `Quotes promised in ${remaining}`
           : state === "UNLOCKED"
             ? "Compare them and choose one"
-            : request.serviceBy;
+            : isClosed
+              ? "Closed"
+              : request.serviceBy;
   return (
     <Link href={href} asChild>
       <Pressable className="overflow-hidden rounded-2xl border border-line bg-surface p-3.5 shadow-2xs active:bg-surface-sunken">

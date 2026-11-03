@@ -1,17 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, COLOR_TOKENS, Dialog, QuantityStepper, Text, TouchDatePicker } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import { AlertCircle, Calendar, ShieldCheck, Store } from "lucide-react-native";
+import {
+  AlertCircle,
+  Calendar,
+  Check,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  ShieldCheck,
+  Store,
+  Truck,
+} from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
 import { useAuthStore } from "@vsolve/mobile-core";
+import { useCustomerProfile } from "@/features/account/queries";
+import { preferredAddressId, useAddresses, type Address } from "@/features/addresses/queries";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
-import { calculateRentalDays, formatPaise, type RentalAsset } from "../model";
+import { calculateRentalDays, formatPaise, type RentalAsset, type RentalBooking } from "../model";
 import { completeOrOpenRentalCheckout } from "../payment-handoff";
+import { AddressSheet } from "@/features/checkout/view/address-sheet";
 import { addDaysIso, formatReadableDate, todayIso } from "../pickup-time";
 import { bookRental, fetchMyRentals, fetchRentalPlatformFee } from "../queries";
+import { deliveryAddressFrom, deliveryProblem, extractPhoneDigits } from "./delivery-helpers";
 
 function getInitialAvailableDates(
   minIso: string,
@@ -85,15 +99,43 @@ export function RentalBookSheet({
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
   const [returnPickerOpen, setReturnPickerOpen] = useState(false);
 
+  // Delivery vs Pickup selection
+  const deliveryOffered = Boolean(asset.delivery_available);
+  const [mode, setMode] = useState<"PICKUP" | "DELIVERY">("PICKUP");
+  const isDelivery = mode === "DELIVERY";
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [addressSheetOpen, setAddressSheetOpen] = useState(false);
+  const [contactPhone, setContactPhone] = useState<string>("");
+
+  const addressesQuery = useAddresses();
+  const profileQuery = useCustomerProfile(authStatus === "signedIn");
+
+  const addresses = addressesQuery.data ?? [];
+  const effectiveAddressId = preferredAddressId(addresses, selectedAddressId);
+  const selectedAddress = addresses.find((a) => a.id === effectiveAddressId) ?? null;
+
+  useEffect(() => {
+    if (profileQuery.data?.phone_number && !contactPhone) {
+      setContactPhone(extractPhoneDigits(profileQuery.data.phone_number));
+    }
+  }, [profileQuery.data?.phone_number, contactPhone]);
+
   // Check if current user already has an active or pending booking for this asset
   const myRentalsQuery = useQuery({
-    queryKey: ["my-rentals"],
+    queryKey: ["my-rentals-all"],
     queryFn: fetchMyRentals,
     enabled: authStatus === "signedIn",
     staleTime: 10_000,
   });
 
-  const existingBooking = (myRentalsQuery.data ?? []).find(
+  const rawRentals = myRentalsQuery.data;
+  const myRentalsList = Array.isArray(rawRentals)
+    ? rawRentals
+    : Array.isArray((rawRentals as unknown as { results?: RentalBooking[] })?.results)
+      ? (rawRentals as unknown as { results: RentalBooking[] }).results
+      : [];
+
+  const existingBooking = myRentalsList.find(
     (b) =>
       (b.asset_id === asset.id || b.asset?.id === asset.id || b.asset?.slug === asset.slug) &&
       (b.status === "PENDING_PAYMENT" || b.status === "CONFIRMED" || b.status === "HANDED_OVER"),
@@ -106,11 +148,9 @@ export function RentalBookSheet({
       setStartDate(fresh.start);
       setEndDate(fresh.end);
     }
-  }, [asset.reserved_ranges]);
+  }, [asset.reserved_ranges, minStart, startDate, endDate]);
 
-  // W-026 / GAP-RNT-002: Upfront out-of-stock guard
   const permanentlyOutOfStock = asset.quantity_available === 0;
-
   const maxQty = Math.max(1, asset.quantity_available ?? 1);
   const clampedQty = Math.min(Math.max(1, quantity), maxQty);
   const days = calculateRentalDays(startDate, endDate);
@@ -127,20 +167,44 @@ export function RentalBookSheet({
   const totalPaise = rentalFeePaise + platformFeePaise + depositPaise;
 
   const mutation = useMutation({
-    mutationFn: () =>
-      bookRental({
+    mutationFn: () => {
+      const deliveryAddress =
+        mode === "DELIVERY" && selectedAddress
+          ? deliveryAddressFrom(selectedAddress, contactPhone)
+          : undefined;
+
+      return bookRental({
         asset_id: asset.id,
         start_date: startDate,
         end_date: endDate,
-        pickup_or_delivery_mode: "PICKUP",
+        pickup_or_delivery_mode: mode,
+        ...(deliveryAddress ? { delivery_address: deliveryAddress } : {}),
         notes,
         quantity: clampedQty,
-      }),
+      });
+    },
     onSuccess: async (booking) => {
       setIsProcessing(true);
       try {
         await queryClient.invalidateQueries({ queryKey: ["rental-asset"] });
         await queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
+
+        if (isDelivery || booking.status === "AWAITING_TRANSPORT_QUOTE") {
+          setIsProcessing(false);
+          onOpenChange(false);
+          Alert.alert(
+            "Delivery Request Sent",
+            "The owner will review your delivery requirement and quote a transport price. Check My Rentals for updates.",
+            [
+              {
+                text: "View My Rentals",
+                onPress: () => router.push("/activity?type=rentals" as never),
+              },
+            ],
+          );
+          return;
+        }
+
         const deposit = booking.deposit;
         const attemptId = deposit?.payment_attempt_id;
 
@@ -148,7 +212,6 @@ export function RentalBookSheet({
           const result = await completeOrOpenRentalCheckout(String(attemptId), {
             businessName: "Vsolve Hub",
           });
-          // W-037: Exact handling for all payment modes matching web
           if (result.mode === "simulated") {
             Alert.alert(
               "Booking Confirmed",
@@ -169,10 +232,10 @@ export function RentalBookSheet({
           Alert.alert("Booking Confirmed", "Rental booking confirmed.");
         }
         onOpenChange(false);
-        router.push("/rentals/mine" as never);
+        router.push("/activity?type=rentals" as never);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Booking created. Please check My Rentals.");
-        router.push("/rentals/mine" as never);
+        router.push("/activity?type=rentals" as never);
       } finally {
         setIsProcessing(false);
       }
@@ -198,41 +261,22 @@ export function RentalBookSheet({
         );
         return;
       }
-      if (code === "insufficient_quantity") {
-        setError(
-          (err as Error)?.message ||
-            "Not enough quantity available for these dates. Try different dates.",
-        );
-        return;
-      }
-      if (isApiRequestError(err) && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        const firstField = Object.keys(err.fieldErrors)[0];
-        const firstMsg = err.fieldErrors[firstField]?.[0];
-        if (firstMsg) {
-          setError(firstMsg);
-          return;
-        }
-      }
-      setError(err instanceof Error ? err.message : "Failed to confirm rental booking.");
+
+      setError(
+        (err as Error)?.message || "Failed to create rental reservation. Please check your connection.",
+      );
     },
   });
 
   const overlap = checkDateOverlap(startDate, endDate, asset.reserved_ranges);
-  const isOutOfStockCode = (err: unknown): boolean => {
-    if (!err) return false;
-    const code = isApiRequestError(err) ? err.code : undefined;
-    return code === "out_of_stock" || code === "insufficient_quantity";
-  };
-  const dateAwareUnavailable = Boolean(overlap) || isOutOfStockCode(mutation.error);
+  const dateAwareUnavailable = Boolean(overlap) && !permanentlyOutOfStock;
   const blockBooking = permanentlyOutOfStock || dateAwareUnavailable;
 
   const handleStartDateChange = (nextStart: string) => {
     setStartDate(nextStart);
-    let nextEnd = addDaysIso(nextStart, Math.max(1, days));
-    if (checkDateOverlap(nextStart, nextEnd, asset.reserved_ranges)) {
-      nextEnd = addDaysIso(nextStart, 1);
+    if (endDate <= nextStart) {
+      setEndDate(addDaysIso(nextStart, 1));
     }
-    setEndDate(nextEnd);
     setError(null);
     mutation.reset();
   };
@@ -267,6 +311,13 @@ export function RentalBookSheet({
         )}. Please select dates after ${formatReadableDate(overlap.end_date)}.`,
       );
       return;
+    }
+    if (mode === "DELIVERY") {
+      const problem = deliveryProblem(selectedAddress, contactPhone);
+      if (problem) {
+        setError(problem);
+        return;
+      }
     }
     if (authStatus !== "signedIn") {
       setLoginOpen(true);
@@ -304,7 +355,7 @@ export function RentalBookSheet({
               accessibilityRole="button"
               onPress={() => {
                 onOpenChange(false);
-                router.push("/rentals/mine" as never);
+                router.push("/activity?type=rentals" as never);
               }}
               className="self-start rounded-lg bg-navy-900 px-3 py-1.5 active:bg-navy-800"
             >
@@ -323,7 +374,7 @@ export function RentalBookSheet({
             </Text>
           </View>
         ) : null}
-        {/* Out of stock banner (W-026) */}
+        {/* Out of stock banner */}
         {permanentlyOutOfStock ? (
           <View className="flex-row items-center gap-2 rounded-xl border border-danger-line bg-danger-surface p-3">
             <AlertCircle size={16} color={COLOR_TOKENS.danger} />
@@ -338,7 +389,7 @@ export function RentalBookSheet({
           </View>
         ) : null}
 
-        {/* Schedule dates (Decision D4: Touch Date Pickers with D-shortcut chips) */}
+        {/* Schedule dates */}
         <View className="gap-3 rounded-2xl border border-line bg-canvas p-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-xs font-bold uppercase tracking-wider text-text-secondary">
@@ -351,62 +402,51 @@ export function RentalBookSheet({
             </View>
           </View>
 
-          {/* Interactive Date Selection Cards */}
-          <View className="flex-row gap-3">
+          <View className="flex-row gap-2">
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Pickup date: ${formatReadableDate(startDate)}. Tap to select date.`}
+              accessibilityLabel="Select pickup date"
               onPress={() => setPickupPickerOpen(true)}
               disabled={permanentlyOutOfStock}
-              className="flex-1 rounded-xl border border-line bg-surface p-3 active:border-brand active:bg-surface-hover"
+              className="flex-1 rounded-xl border border-line bg-surface p-3 active:bg-canvas"
             >
-              <View className="flex-row items-center justify-between mb-1.5">
-                <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                  Pickup Date
+              <Text className="text-[10px] uppercase tracking-wider text-text-muted">
+                Pickup Date
+              </Text>
+              <View className="mt-1 flex-row items-center gap-1.5">
+                <Calendar size={14} color={COLOR_TOKENS.action} />
+                <Text className="text-xs font-bold text-navy-900">
+                  {formatReadableDate(startDate)}
                 </Text>
-                <Calendar size={13} color={COLOR_TOKENS.textMuted} />
               </View>
-              <Text className="text-sm font-extrabold text-navy-900" numberOfLines={1}>
-                {formatReadableDate(startDate)}
-              </Text>
-              <Text className="text-[11px] font-medium text-text-secondary tabular-nums mt-0.5">
-                {startDate}
-              </Text>
             </Pressable>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Return date: ${formatReadableDate(endDate)}. Tap to select date.`}
+              accessibilityLabel="Select return date"
               onPress={() => setReturnPickerOpen(true)}
               disabled={permanentlyOutOfStock}
-              className="flex-1 rounded-xl border border-line bg-surface p-3 active:border-brand active:bg-surface-hover"
+              className="flex-1 rounded-xl border border-line bg-surface p-3 active:bg-canvas"
             >
-              <View className="flex-row items-center justify-between mb-1.5">
-                <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                  Return Date
-                </Text>
-                <Calendar size={13} color={COLOR_TOKENS.textMuted} />
+              <Text className="text-[10px] uppercase tracking-wider text-text-muted">
+                Return Date
+              </Text>
+              <View className="mt-1 flex-row items-center gap-1.5">
+                <Calendar size={14} color={COLOR_TOKENS.action} />
+                <Text className="text-xs font-bold text-navy-900">{formatReadableDate(endDate)}</Text>
               </View>
-              <Text className="text-sm font-extrabold text-navy-900" numberOfLines={1}>
-                {formatReadableDate(endDate)}
-              </Text>
-              <Text className="text-[11px] font-medium text-text-secondary tabular-nums mt-0.5">
-                {endDate}
-              </Text>
             </Pressable>
           </View>
 
-          {/* Micro-adjusters for quick ±1 day changes */}
-          <View className="flex-row items-center justify-between px-0.5">
+          {/* Stepper buttons for dates */}
+          <View className="flex-row items-center justify-between pt-1">
             <View className="flex-row items-center gap-1.5">
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Previous pickup day"
                 onPress={() => {
                   const prev = addDaysIso(startDate, -1);
-                  if (prev >= minStart) {
-                    handleStartDateChange(prev);
-                  }
+                  if (prev >= minStart) handleStartDateChange(prev);
                 }}
                 disabled={startDate <= minStart || permanentlyOutOfStock}
                 className="rounded-lg border border-line bg-surface px-2.5 py-1 active:bg-canvas disabled:opacity-30"
@@ -496,7 +536,7 @@ export function RentalBookSheet({
           </View>
         </View>
 
-        {/* Date Picker Modals (Decision D4) */}
+        {/* Date Picker Modals */}
         <TouchDatePicker
           open={pickupPickerOpen}
           onOpenChange={setPickupPickerOpen}
@@ -523,16 +563,156 @@ export function RentalBookSheet({
           }}
         />
 
-        {/* Self pickup info banner */}
-        <View className="flex-row items-center gap-2 rounded-xl border border-line bg-surface p-3">
-          <Store size={18} color={COLOR_TOKENS.action} />
-          <View className="flex-1">
-            <Text className="text-xs font-bold text-navy-900">Self Pickup</Text>
-            <Text className="text-[11px] text-text-secondary">
-              Collect and return at the partner location. Doorstep delivery is not offered.
+        {/* Handover Mode Selector (Self Pickup vs Doorstep Delivery) */}
+        {deliveryOffered ? (
+          <View className="gap-2.5 rounded-2xl border border-line bg-surface p-3.5">
+            <Text className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+              Handover Method
             </Text>
+            <View className="flex-row gap-2">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose self pickup"
+                onPress={() => {
+                  setMode("PICKUP");
+                  setError(null);
+                }}
+                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border p-3 ${
+                  mode === "PICKUP"
+                    ? "border-primary bg-primary/10"
+                    : "border-line bg-canvas active:bg-surface"
+                }`}
+              >
+                <Store size={16} color={mode === "PICKUP" ? "#EA580C" : "#64748B"} />
+                <Text
+                  className={`text-xs font-bold ${
+                    mode === "PICKUP" ? "text-primary" : "text-text-secondary"
+                  }`}
+                >
+                  Self Pickup
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose doorstep delivery"
+                onPress={() => {
+                  setMode("DELIVERY");
+                  setError(null);
+                }}
+                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border p-3 ${
+                  mode === "DELIVERY"
+                    ? "border-primary bg-primary/10"
+                    : "border-line bg-canvas active:bg-surface"
+                }`}
+              >
+                <Truck size={16} color={mode === "DELIVERY" ? "#EA580C" : "#64748B"} />
+                <Text
+                  className={`text-xs font-bold ${
+                    mode === "DELIVERY" ? "text-primary" : "text-text-secondary"
+                  }`}
+                >
+                  Doorstep Delivery
+                </Text>
+              </Pressable>
+            </View>
+
+            {mode === "DELIVERY" ? (
+              <View className="mt-2 gap-3 border-t border-line/50 pt-3">
+                <Text className="text-xs font-semibold text-navy-900">
+                  Select Delivery Address
+                </Text>
+
+                {addresses.length === 0 ? (
+                  <View className="rounded-xl border border-line bg-canvas p-3.5 gap-2.5">
+                    <Text className="text-xs text-text-secondary">
+                      No saved addresses found. Add a delivery address to continue.
+                    </Text>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onPress={() => setAddressSheetOpen(true)}
+                      className="self-start"
+                    >
+                      <Text className="text-xs font-bold text-navy-900">+ Add Address</Text>
+                    </Button>
+                  </View>
+                ) : (
+                  <View className="gap-2">
+                    {addresses.map((address) => {
+                      const isSelected = address.id === effectiveAddressId;
+                      return (
+                        <Pressable
+                          key={address.id}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            setSelectedAddressId(address.id);
+                            setError(null);
+                          }}
+                          className={`flex-row items-start gap-2.5 rounded-xl border p-3 ${
+                            isSelected
+                              ? "border-primary bg-primary/5"
+                              : "border-line bg-canvas active:bg-surface"
+                          }`}
+                        >
+                          <View className="mt-0.5">
+                            {isSelected ? (
+                              <CheckCircle2 size={16} color="#EA580C" />
+                            ) : (
+                              <View className="size-4 rounded-full border border-line-strong" />
+                            )}
+                          </View>
+                          <View className="min-w-0 flex-1">
+                            <Text className="text-xs font-bold text-navy-900">
+                              {address.label || "Address"}
+                              {address.is_default ? " (Default)" : ""}
+                            </Text>
+                            <Text className="mt-0.5 text-[11px] text-text-secondary leading-snug">
+                              {[address.line1, address.line2, address.locality, address.city, address.postal_code]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <View className="gap-1">
+                  <Text className="text-xs font-semibold text-navy-900">
+                    Contact Phone for Delivery
+                  </Text>
+                  <TextInput
+                    placeholder="10-digit mobile number"
+                    placeholderTextColor={COLOR_TOKENS.placeholderText}
+                    value={contactPhone}
+                    onChangeText={setContactPhone}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    className="rounded-xl border border-line bg-canvas p-3 text-xs text-navy-900"
+                  />
+                </View>
+              </View>
+            ) : (
+              <View className="rounded-xl border border-line bg-canvas p-3">
+                <Text className="text-[11px] text-text-secondary">
+                  Collect and return at the partner location. Full address and contact info released upon booking.
+                </Text>
+              </View>
+            )}
           </View>
-        </View>
+        ) : (
+          <View className="flex-row items-center gap-2 rounded-xl border border-line bg-surface p-3">
+            <Store size={18} color={COLOR_TOKENS.action} />
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-navy-900">Self Pickup</Text>
+              <Text className="text-[11px] text-text-secondary">
+                Collect and return at the partner location. Doorstep delivery is not offered for this item.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Quantity Stepper */}
         {maxQty > 1 ? (
@@ -615,7 +795,7 @@ export function RentalBookSheet({
           </Text>
         </View>
 
-        {/* Submit Button (W-026, W-035, W-040: Spinner & dynamic mutated button labels) */}
+        {/* Submit Button */}
         <Button
           variant="primary"
           disabled={mutation.isPending || isProcessing || blockBooking}
@@ -647,6 +827,16 @@ export function RentalBookSheet({
         onOpenChange={setLoginOpen}
         onSuccess={() => {
           handleConfirm();
+        }}
+      />
+      <AddressSheet
+        open={addressSheetOpen}
+        onOpenChange={setAddressSheetOpen}
+        addresses={addresses}
+        selectedAddressId={effectiveAddressId}
+        onSelect={(id) => {
+          setSelectedAddressId(id);
+          setError(null);
         }}
       />
     </Dialog>

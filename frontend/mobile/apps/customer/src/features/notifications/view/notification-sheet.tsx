@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useIsDesktop } from "@/lib/responsive";
 import { isUnread, targetHref } from "@/features/notifications/model/feed";
 import {
   useMarkNotificationRead,
@@ -22,6 +23,7 @@ export interface NotificationSheetProps {
 }
 
 export function NotificationSheet({ open, onOpenChange, onRequireLogin }: NotificationSheetProps) {
+  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const status = useAuthStore((state) => state.status);
@@ -69,6 +71,272 @@ export function NotificationSheet({ open, onOpenChange, onRequireLogin }: Notifi
     }
   };
 
+  const renderFeedContent = () => {
+    if (!isAuthenticated) {
+      return (
+        <View className="flex-1 py-12 items-center justify-center px-6">
+          <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] mb-3.5">
+            <Bell size={26} color="#EA580C" />
+          </View>
+          <Text className="text-base font-bold text-navy-900">Sign in for notifications</Text>
+          <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed max-w-[260px]">
+            Sign in with your mobile number to view updates about your bookings and projects.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              onOpenChange(false);
+              onRequireLogin?.();
+            }}
+            className="mt-5 rounded-2xl bg-[#FF5500] px-6 py-3 active:bg-[#E04B00] cursor-pointer"
+          >
+            <Text className="text-sm font-bold text-white">Log in</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (feed.isPending) {
+      return (
+        <View className="gap-2.5">
+          {[1, 2, 3].map((k) => (
+            <View
+              key={k}
+              className="rounded-2xl border border-[#E5E7EB] bg-[#FAF8F5] p-3.5"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="h-4 w-36 rounded bg-gray-200 animate-pulse" />
+                <View className="h-3.5 w-3.5 rounded bg-gray-200 animate-pulse" />
+              </View>
+              <View className="mt-2.5 h-3.5 w-full rounded bg-gray-100 animate-pulse" />
+              <View className="mt-1.5 h-3.5 w-4/5 rounded bg-gray-100 animate-pulse" />
+              <View className="mt-2 h-3 w-16 rounded bg-gray-100 animate-pulse" />
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (feed.isError) {
+      return (
+        <View className="flex-1 py-10 items-center justify-center px-4">
+          <Text className="text-sm font-semibold text-danger-text">
+            Could not load notifications
+          </Text>
+          <Text className="mt-1 text-xs text-text-muted text-center">
+            Please check your connection and try again.
+          </Text>
+          <Pressable
+            onPress={() => void feed.refetch()}
+            className="mt-3 rounded-full bg-navy-900 px-4 py-2 cursor-pointer"
+          >
+            <Text className="text-xs font-semibold text-white">Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (rows.length === 0) {
+      return (
+        <View className="flex-1 py-16 items-center justify-center px-6">
+          <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] mb-3.5">
+            <Bell size={26} color="#EA580C" />
+          </View>
+          <Text className="text-base font-bold text-navy-900">Nothing new</Text>
+          <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed max-w-[260px]">
+            When a professional responds, work needs checking or a booking updates, it appears here.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {rows.map((notice) => {
+          const unread = isUnread(notice);
+          return (
+            <View
+              key={notice.id}
+              className={cn(
+                "rounded-2xl border p-3.5 mb-2.5 transition",
+                unread
+                  ? "border-[#E5E1DC] bg-[#FAF8F5]"
+                  : "border-[#E5E7EB] bg-white",
+              )}
+            >
+              <View className="flex-row items-start justify-between gap-2">
+                <Pressable
+                  onPress={() => handleOpenNotice(notice)}
+                  className="flex-1 min-w-0 cursor-pointer"
+                >
+                  {/* Card Header Row with Orange Bullet */}
+                  <View className="flex-row items-center gap-2">
+                    {unread ? (
+                      <View className="h-2 w-2 rounded-full bg-[#EA580C] shrink-0" />
+                    ) : null}
+                    <Text className="flex-1 text-sm font-bold text-navy-950">
+                      {notice.title}
+                    </Text>
+                  </View>
+
+                  {/* Card Body */}
+                  <Text className="mt-1 text-xs text-[#475569] leading-relaxed">
+                    {notice.body}
+                  </Text>
+
+                  {/* Card Timestamp */}
+                  <Text className="mt-1.5 text-[11px] text-[#94A3B8]">
+                    {relativeWhen(notice.created_at)}
+                  </Text>
+                </Pressable>
+
+                {/* Dismiss Button */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Dismiss notification: ${notice.title}`}
+                  onPress={() => handleDismiss(notice.id)}
+                  hitSlop={8}
+                  className="p-1 -mr-1 -mt-0.5 rounded-full hover:bg-slate-200 cursor-pointer active:scale-95"
+                >
+                  <X size={14} color="#94A3B8" />
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+
+        {feed.hasNextPage ? (
+          <View className="mt-2 mb-4">
+            <Button
+              variant="outline"
+              onPress={() => void feed.fetchNextPage()}
+              loading={feed.isFetchingNextPage}
+              loadingLabel="Loading older"
+            >
+              Show older
+            </Button>
+          </View>
+        ) : null}
+      </>
+    );
+  };
+
+  const renderFooter = () => (
+    <View className="flex-row items-center justify-between px-4 py-3 bg-white border-t border-[#F1F3F5]">
+      <View className="flex-row items-center gap-1.5">
+        {unreadTotal > 0 ? (
+          <Text className="text-xs font-medium text-text-secondary">
+            {unreadTotal} unread {unreadTotal === 1 ? "notice" : "notices"}
+          </Text>
+        ) : (
+          <Text className="text-xs text-text-muted">All caught up</Text>
+        )}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Mark all as read"
+        onPress={handleDismissAll}
+        disabled={!canMarkAll}
+        hitSlop={8}
+        className="py-1 px-2 flex-row items-center gap-1.5 cursor-pointer hover:opacity-80 active:opacity-60"
+      >
+        {markRead.isPending ? (
+          <ActivityIndicator size="small" color="#EA580C" />
+        ) : (
+          <CheckCheck size={15} color={canMarkAll ? "#EA580C" : "#9CA3AF"} />
+        )}
+        <Text
+          className={cn(
+            "text-xs font-semibold",
+            canMarkAll ? "text-[#EA580C]" : "text-[#9CA3AF]"
+          )}
+        >
+          Mark all read
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  // Desktop View: 100% pixel-accurate floating dropdown popover anchored below bell icon
+  if (isDesktop) {
+    return (
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => onOpenChange(false)}
+      >
+        <View className="flex-1">
+          {/* Subtle dimmed overlay backdrop */}
+          <Pressable
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.2)",
+            }}
+            onPress={() => onOpenChange(false)}
+            accessibilityLabel="Close notifications backdrop"
+          />
+
+          {/* Floating Popover Container Anchored Top-Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: 64,
+              right: 24,
+              width: 380,
+              maxHeight: 520,
+              height: 500,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 25,
+              elevation: 12,
+            }}
+            className="rounded-2xl border border-[#E5E1DC] bg-white overflow-hidden flex-col z-50"
+          >
+            {/* Header matching Web Customer Portal 100% */}
+            <View className="px-4 pt-3.5 pb-2.5 bg-white border-b border-[#F1F3F5]">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-bold text-navy-950">
+                  Notifications
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close notifications"
+                  onPress={() => onOpenChange(false)}
+                  hitSlop={8}
+                  className="p-1 rounded-md hover:bg-slate-100 cursor-pointer active:bg-slate-200"
+                >
+                  <X size={16} color="#475569" strokeWidth={2} />
+                </Pressable>
+              </View>
+              <Text className="mt-0.5 text-xs text-[#6B7280]" numberOfLines={1}>
+                Updates about your requests, bookings and projects.
+              </Text>
+            </View>
+
+            {/* Scrollable Feed List */}
+            <ScrollView
+              className="flex-1 px-3.5 pt-3"
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
+            >
+              {renderFeedContent()}
+            </ScrollView>
+
+            {/* Footer */}
+            {renderFooter()}
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Mobile Phone View: Bottom Sheet Modal
   return (
     <Modal
       visible={open}
@@ -91,8 +359,8 @@ export function NotificationSheet({ open, onOpenChange, onRequireLogin }: Notifi
             paddingBottom: Math.max(12, insets.bottom),
           }}
         >
-          {/* Header */}
-          <View className="px-5 pt-4 pb-3 bg-white">
+          {/* Mobile Header with Badge */}
+          <View className="px-5 pt-4 pb-3 bg-white border-b border-[#E5E7EB]">
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Text className="text-[19px] font-bold text-navy-900 tracking-tight">
@@ -121,184 +389,17 @@ export function NotificationSheet({ open, onOpenChange, onRequireLogin }: Notifi
             </Text>
           </View>
 
-          {/* Thin separator line below header */}
-          <View className="h-px w-full bg-[#E5E7EB]" />
-
-          {/* Content / Feed List */}
+          {/* Mobile Scrollable Feed List */}
           <ScrollView
             className="flex-1 px-4 pt-3.5"
             showsVerticalScrollIndicator={true}
             contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}
           >
-            {!isAuthenticated ? (
-              <View className="flex-1 py-12 items-center justify-center px-6">
-                <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] mb-3.5">
-                  <Bell size={26} color="#EA580C" />
-                </View>
-                <Text className="text-base font-bold text-navy-900">Sign in for notifications</Text>
-                <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed max-w-[260px]">
-                  Sign in with your mobile number to view updates about your bookings and projects.
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    onOpenChange(false);
-                    onRequireLogin?.();
-                  }}
-                  className="mt-5 rounded-2xl bg-[#FF5500] px-6 py-3 active:bg-[#E04B00]"
-                >
-                  <Text className="text-sm font-bold text-white">Log in</Text>
-                </Pressable>
-              </View>
-            ) : feed.isPending ? (
-              <View className="gap-3">
-                {[1, 2, 3].map((k) => (
-                  <View
-                    key={k}
-                    className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
-                  >
-                    <View className="flex-row items-center justify-between">
-                      <View className="h-4 w-36 rounded bg-gray-200" />
-                      <View className="h-3.5 w-3.5 rounded bg-gray-200" />
-                    </View>
-                    <View className="mt-2.5 h-3.5 w-full rounded bg-gray-100" />
-                    <View className="mt-1.5 h-3.5 w-4/5 rounded bg-gray-100" />
-                    <View className="mt-2.5 h-3 w-16 rounded bg-gray-100" />
-                  </View>
-                ))}
-              </View>
-            ) : feed.isError ? (
-              <View className="flex-1 py-10 items-center justify-center px-4">
-                <Text className="text-sm font-semibold text-danger-text">
-                  Could not load notifications
-                </Text>
-                <Text className="mt-1 text-xs text-text-muted text-center">
-                  Please check your connection and try again.
-                </Text>
-                <Pressable
-                  onPress={() => void feed.refetch()}
-                  className="mt-3 rounded-full bg-navy-900 px-4 py-2"
-                >
-                  <Text className="text-xs font-semibold text-white">Try again</Text>
-                </Pressable>
-              </View>
-            ) : rows.length === 0 ? (
-              <View className="flex-1 py-16 items-center justify-center px-6">
-                <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] mb-3.5">
-                  <Bell size={26} color="#EA580C" />
-                </View>
-                <Text className="text-base font-bold text-navy-900">Nothing new</Text>
-                <Text className="mt-1.5 text-center text-xs text-text-muted leading-relaxed max-w-[260px]">
-                  When a professional responds, work needs checking or a booking updates, it appears here.
-                </Text>
-              </View>
-            ) : (
-              rows.map((notice) => {
-                const unread = isUnread(notice);
-                return (
-                  <Pressable
-                    key={notice.id}
-                    onPress={() => handleOpenNotice(notice)}
-                    className={cn(
-                      "rounded-2xl border p-4 mb-3 active:bg-gray-50/60",
-                      unread
-                        ? "border-[#FED7AA] bg-[#FFFBF7]"
-                        : "border-[#E5E7EB] bg-white",
-                    )}
-                    style={{
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.04,
-                      shadowRadius: 2,
-                      elevation: 1,
-                    }}
-                  >
-                    {/* Card Header Row */}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-1 flex-row items-center gap-2 pr-2">
-                        {unread ? (
-                          <View className="h-2 w-2 rounded-full bg-[#EA580C]" />
-                        ) : null}
-                        <Text className="flex-1 text-[15px] font-bold text-[#1E293B]">
-                          {notice.title}
-                        </Text>
-                      </View>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Dismiss notification: ${notice.title}`}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDismiss(notice.id);
-                        }}
-                        hitSlop={8}
-                        className="h-6 w-6 items-center justify-center rounded-full active:bg-gray-100 -mr-1 -mt-0.5"
-                      >
-                        <X size={14} color="#6B7280" />
-                      </Pressable>
-                    </View>
-
-                    {/* Card Body */}
-                    <Text className="mt-1.5 text-sm text-[#4B5563] leading-[21px]">
-                      {notice.body}
-                    </Text>
-
-                    {/* Card Timestamp */}
-                    <Text className="mt-2 text-xs text-[#78716C]">
-                      {relativeWhen(notice.created_at)}
-                    </Text>
-                  </Pressable>
-                );
-              })
-            )}
-
-            {feed.hasNextPage ? (
-              <View className="mt-2 mb-4">
-                <Button
-                  variant="outline"
-                  onPress={() => void feed.fetchNextPage()}
-                  loading={feed.isFetchingNextPage}
-                  loadingLabel="Loading older"
-                >
-                  Show older
-                </Button>
-              </View>
-            ) : null}
+            {renderFeedContent()}
           </ScrollView>
 
-          {/* Footer */}
-          <View className="flex-row items-center justify-between px-5 py-3 bg-white border-t border-[#F1F3F5]">
-            <View className="flex-row items-center gap-1.5">
-              {unreadTotal > 0 ? (
-                <Text className="text-xs font-medium text-text-secondary">
-                  {unreadTotal} unread {unreadTotal === 1 ? "notice" : "notices"}
-                </Text>
-              ) : (
-                <Text className="text-xs text-text-muted">All caught up</Text>
-              )}
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Mark all as read"
-              onPress={handleDismissAll}
-              disabled={!canMarkAll}
-              hitSlop={8}
-              className="py-1 px-2 active:opacity-70 flex-row items-center gap-1.5"
-            >
-              {markRead.isPending ? (
-                <ActivityIndicator size="small" color="#EA580C" />
-              ) : (
-                <CheckCheck size={16} color={canMarkAll ? "#EA580C" : "#9CA3AF"} />
-              )}
-              <Text
-                className={cn(
-                  "text-sm font-semibold",
-                  canMarkAll ? "text-[#EA580C]" : "text-[#9CA3AF]"
-                )}
-              >
-                Mark all read
-              </Text>
-            </Pressable>
-          </View>
+          {/* Mobile Footer */}
+          {renderFooter()}
         </View>
       </View>
     </Modal>
