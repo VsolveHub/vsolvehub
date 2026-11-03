@@ -8,7 +8,7 @@ import { useAuthStore } from "./auth-store";
 import { readRegisteredPushToken } from "../push/register";
 
 /** Unregister this phone, end the Django session, then leave for home or login. */
-export function useMobileLogout(): () => Promise<void> {
+export function useMobileLogout(redirectPath?: string): () => Promise<void> {
   const queryClient = useQueryClient();
   return async () => {
     const api = getApiClient();
@@ -31,7 +31,9 @@ export function useMobileLogout(): () => Promise<void> {
     }
     await useAuthStore.getState().signOut();
     queryClient.clear();
-    if (appKind() === "customer") {
+    if (redirectPath) {
+      router.replace(redirectPath as never);
+    } else if (appKind() === "customer") {
       router.replace("/");
     } else {
       router.replace("/login");

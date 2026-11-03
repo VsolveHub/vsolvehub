@@ -22,7 +22,7 @@ import { homeForApplication } from "@/features/session/model/redirect";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ next?: string }>();
+  const params = useLocalSearchParams<{ next?: string; phone?: string; switch?: string }>();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
 
@@ -34,21 +34,103 @@ export default function LoginScreen() {
   const missing = application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || missing;
 
+  // Prefill phone if provided in query params
   useEffect(() => {
-    if (!signedIn || !knowsWhereToGo) return;
-    if (next) {
-      router.replace(next as never);
-      return;
+    if (params.phone && flow.phase === "phone") {
+      flow.onPhoneChange(params.phone);
     }
-    router.replace(homeForApplication(missing ? null : (application.data?.status ?? null)));
-  }, [application.data?.status, knowsWhereToGo, missing, next, router, signedIn]);
+  }, [flow, params.phone]);
 
-  if (status === "loading" || signedIn) {
+  // Handle account switch if switch=true is explicitly requested
+  useEffect(() => {
+    if (params.switch === "true" && signedIn) {
+      void useAuthStore.getState().signOut();
+    }
+  }, [params.switch, signedIn]);
+
+  // Handle redirect after sign in (with brief delay if already signed in so user can switch)
+  useEffect(() => {
+    if (!signedIn || !knowsWhereToGo || params.switch === "true") return;
+    const timer = setTimeout(() => {
+      if (next) {
+        router.replace(next as never);
+        return;
+      }
+      router.replace(homeForApplication(missing ? null : (application.data?.status ?? null)));
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [application.data?.status, knowsWhereToGo, missing, next, params.switch, router, signedIn]);
+
+  if (status === "loading") {
     return (
       <View className="flex-1 items-center justify-center bg-canvas">
-        <Text className="text-text-secondary">
-          {signedIn ? "Taking you to your account…" : "Checking your session…"}
-        </Text>
+        <Text className="text-text-secondary">Checking your session…</Text>
+      </View>
+    );
+  }
+
+  if (signedIn && params.switch !== "true") {
+    return (
+      <View className="flex-1 items-center justify-center bg-canvas px-4">
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: "#d3ccc0",
+            backgroundColor: "#ffffff",
+            padding: 24,
+            alignItems: "center",
+            boxShadow: "0 16px 40px rgba(0, 17, 46, 0.12)",
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: "900", color: "#00112e", marginBottom: 6 }}>
+            Already Signed In
+          </Text>
+          <Text style={{ fontSize: 13, color: "#756c5e", textAlign: "center", marginBottom: 20 }}>
+            Taking you to your application…
+          </Text>
+          <View style={{ width: "100%", rowGap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace((next ?? "/apply") as never)}
+              style={({ pressed }) => ({
+                width: "100%",
+                height: 44,
+                borderRadius: 12,
+                backgroundColor: pressed ? "#e06400" : "#f87000",
+                alignItems: "center",
+                justifyContent: "center",
+              })}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>
+                Continue to Application
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={async () => {
+                await useAuthStore.getState().signOut();
+                router.replace(`/login?next=${encodeURIComponent(next ?? "/apply")}&switch=true` as never);
+              }}
+              style={({ pressed }) => ({
+                width: "100%",
+                height: 44,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#e7e2da",
+                backgroundColor: pressed ? "#f1ede7" : "#f4f1ec",
+                alignItems: "center",
+                justifyContent: "center",
+              })}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#00112e" }}>
+                Sign in with a different number
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }
@@ -56,7 +138,7 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 bg-canvas">
       {/* Floating Dynamic-Island Navigation Matching Web Partner Portal */}
-      <MarketingHeader activeTab="home" />
+      <MarketingHeader />
 
       {/* Page Content */}
       <ScrollView
@@ -249,15 +331,17 @@ export default function LoginScreen() {
 
                 <View className="self-start rounded-full border border-white/10 bg-white/10 px-2.5 py-0.5 mb-3">
                   <Text className="text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
-                    Partner Sign In
+                    PARTNER SIGN IN
                   </Text>
                 </View>
 
                 <Text className="text-2xl font-extrabold tracking-tight text-white">
-                  Welcome Back
+                  Welcome back
                 </Text>
-                <Text className="mt-1.5 text-xs text-slate-300 leading-relaxed">
-                  Enter your registered 10-digit mobile number to access your Partner account and job offers.
+                <Text className="mt-1.5 text-sm text-slate-300 leading-relaxed">
+                  {flow.phase === "code"
+                    ? "We will send a 6-digit code by SMS."
+                    : "Sign in with the mobile number you registered with to see your account and job offers."}
                 </Text>
               </View>
 
@@ -265,8 +349,8 @@ export default function LoginScreen() {
               <View className="p-6 sm:p-7">
                 <OtpForm
                   {...flow}
-                  heading="Your Mobile Number"
-                  verifyLabel="Verify & Sign In"
+                  heading={flow.phase === "code" ? "Enter verification code" : "Your mobile number"}
+                  verifyLabel={flow.phase === "code" ? "Verify & Continue" : "Send code"}
                   footer={
                     <View className="mt-4 rounded-2xl border border-line bg-surface-sunken p-4 gap-1">
                       <Text className="text-sm font-bold text-navy-900">New to V Solve Hub?</Text>
@@ -274,6 +358,7 @@ export default function LoginScreen() {
                         Takes only 5 minutes. Free to join with weekly payouts.
                       </Text>
                       <Pressable
+                        accessibilityRole="link"
                         onPress={() => router.push("/apply")}
                         className="mt-1.5 self-start"
                       >

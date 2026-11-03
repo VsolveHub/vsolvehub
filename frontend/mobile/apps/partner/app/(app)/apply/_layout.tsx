@@ -32,7 +32,7 @@ import { usePartnerApplication } from "@/features/application/queries";
 export default function ApplyLayout() {
   const pathname = usePathname();
   const router = useRouter();
-  const signOut = useMobileLogout();
+  const signOut = useMobileLogout("/login?next=%2Fapply");
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const [sheetOpen, setSheetOpen] = useState(false);

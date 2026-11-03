@@ -50,8 +50,11 @@ export default function AppLayout() {
   const mustLeavePortal = needsApproval && applicationSettled && !applicationUnknown && !isApprovedPartner;
 
   useEffect(() => {
-    if (status === "signedOut") router.replace("/login");
-  }, [router, status]);
+    if (status === "signedOut") {
+      const fullUrl = pathname;
+      router.replace(`/login?next=${encodeURIComponent(fullUrl)}`);
+    }
+  }, [pathname, router, status]);
 
   useEffect(() => {
     if (!mustLeavePortal) return;
