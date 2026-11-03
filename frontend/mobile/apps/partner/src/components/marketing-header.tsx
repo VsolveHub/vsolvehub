@@ -4,7 +4,6 @@
 
 import { Logo, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { ArrowRight, Menu, Phone, X, Zap } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
@@ -17,8 +16,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const WEB_BASE = process.env.EXPO_PUBLIC_WEB_BASE_URL ?? "https://partner.vsolvehub.com";
 
 const NAV_ITEMS = [
   { href: "/how-it-works" as const, label: "How It Works", key: "how-it-works" },
@@ -93,7 +90,7 @@ export function MarketingHeader({
           {/* Brand & Live Demand Tag */}
           <View style={{ flexDirection: "row", alignItems: "center", columnGap: isTabletOrDesktop ? 12 : 10 }}>
             <Pressable
-              accessibilityRole="link"
+              accessibilityRole="button"
               accessibilityLabel="V Solve Hub Home"
               onPress={() => router.push("/")}
               style={({ pressed }) => ({
@@ -185,7 +182,7 @@ export function MarketingHeader({
                 return (
                   <Pressable
                     key={item.key}
-                    accessibilityRole="link"
+                    accessibilityRole="button"
                     accessibilityLabel={item.label}
                     onPress={() => router.push(item.href)}
                     style={({ pressed }) => ({
@@ -227,7 +224,7 @@ export function MarketingHeader({
             {/* Sign In link (hidden sm:inline-flex -> visible width >= 640) */}
             {isTabletOrDesktop ? (
               <Pressable
-                accessibilityRole="link"
+                accessibilityRole="button"
                 accessibilityLabel="Sign In"
                 onPress={() => router.push("/login")}
                 style={({ pressed }) => ({
@@ -585,9 +582,11 @@ export function MarketingHeader({
 
                 {/* Partner Helpline */}
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Partner Helpline"
                   onPress={() => {
                     setDrawerOpen(false);
-                    void WebBrowser.openBrowserAsync(`${WEB_BASE}/contact`);
+                    router.push("/contact");
                   }}
                   style={{
                     flexDirection: "row",
