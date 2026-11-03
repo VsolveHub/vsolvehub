@@ -182,6 +182,27 @@ class PartnerApplication(models.Model):
     def __str__(self) -> str:
         return f"{self.partner_id}:{self.status}"
 
+    @property
+    def is_editable(self) -> bool:
+        """The Partner may change the application and send it: a draft, or one sent back."""
+        return self.status in (self.Status.DRAFT, self.Status.CHANGES_REQUIRED)
+
+    def allows_document_change(self, latest_of_kind: "PartnerDocument | None") -> bool:
+        """Whether a new version of one document kind may be uploaded now.
+
+        The one rule behind both the upload guard and the `can_replace` flag the apps render, so
+        a screen can never offer an upload the API will refuse. While a reviewer holds the
+        application, only a document they rejected (or that failed its scan) may be replaced.
+        """
+        if self.is_editable:
+            return True
+        if self.status not in (self.Status.SUBMITTED, self.Status.UNDER_REVIEW):
+            return False
+        return latest_of_kind is not None and (
+            latest_of_kind.status == PartnerDocument.Status.REJECTED
+            or latest_of_kind.scan_status == PartnerDocument.ScanStatus.REJECTED
+        )
+
 
 class PartnerApplicationTransition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -2,16 +2,54 @@
 
 import logging
 from datetime import timedelta
-from typing import Any
 
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from apps.notifications.models import NotificationDelivery
+from apps.notifications.models import (
+    NotificationDelivery,
+    NotificationIntent,
+    PushNotificationPreference,
+)
 from apps.notifications.onesignal import get_notification_view_metrics
+from apps.notifications.templates_registry import render_notification
+from apps.notifications.transport import MessageTransportError, OneSignalMessageTransport
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task
+def send_partner_push_for_notice(intent_id: str, deep_link: str) -> None:
+    """Send a Partner's in-app notice to their browser by OneSignal web push.
+
+    The push carries the notice's own rendered title and body, so the feed and the banner can
+    never say two different things. It is filed under Account (`ACCOUNT_SECURITY`), which a
+    Partner cannot switch off. `OneSignalMessageTransport` records the attempt, and its
+    idempotency key stops a retried task from sending twice.
+    """
+    intent = NotificationIntent.objects.select_related("recipient").filter(id=intent_id).first()
+    if intent is None or intent.status != NotificationIntent.Status.SENT:
+        return
+    rendered = render_notification(template_code=intent.template_code, context=intent.context)
+    try:
+        OneSignalMessageTransport().send(
+            recipient=intent.recipient,
+            recipient_role="PARTNER",
+            template_code=intent.template_code,
+            title=rendered.title,
+            body=rendered.body,
+            context={
+                "category": PushNotificationPreference.Category.ACCOUNT_SECURITY,
+                "notification_id": str(intent.id),
+                "purpose": intent.purpose,
+            },
+            deep_link=deep_link,
+            purpose=intent.purpose,
+            idempotency_key=f"push:{intent.idempotency_key or intent.id}",
+        )
+    except MessageTransportError:
+        logger.warning("partner_notice_push_not_sent", extra={"intent_id": intent_id})
 
 
 @shared_task
@@ -27,7 +65,10 @@ def reconcile_onesignal_push_delivery_status_task(max_deliveries: int = 100) -> 
     deliveries = list(
         NotificationDelivery.objects.filter(
             provider="onesignal",
-            status__in=[NotificationDelivery.Status.ACCEPTED, NotificationDelivery.Status.DELIVERED],
+            status__in=[
+                NotificationDelivery.Status.ACCEPTED,
+                NotificationDelivery.Status.DELIVERED,
+            ],
             created_at__gte=lookback_cutoff,
         )
         .exclude(provider_message_id="")
@@ -118,7 +159,6 @@ def reconcile_onesignal_push_delivery_status_task(max_deliveries: int = 100) -> 
     }
 
 
-
 @shared_task
 def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str, int]:
     """Periodic task to reconcile stale, duplicate, or invalid push subscriptions.
@@ -144,6 +184,7 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
     invalid_delivery_count = 0
 
     from django.db.models import Count
+
     from apps.notifications.models import CustomerPushSubscription
     from apps.partners.models import PartnerPushSubscription
 
@@ -162,9 +203,9 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
         is_active=True,
         last_verified_at__lt=freshness_cutoff,
     )[:max_subscriptions]
-    for sub in stale_part_subs:
-        sub.is_active = False
-        sub.save(update_fields=["is_active", "updated_at"])
+    for partner_sub in stale_part_subs:
+        partner_sub.is_active = False
+        partner_sub.save(update_fields=["is_active", "updated_at"])
         stale_partner_count += 1
 
     # 2. Duplicate Active WEB Subscriptions (Customer)
@@ -210,9 +251,9 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
                 platform__iexact="web",
             ).order_by("-last_verified_at", "-created_at")
         )
-        for older in partner_subs[1:]:
-            older.is_active = False
-            older.save(update_fields=["is_active", "updated_at"])
+        for older_partner_sub in partner_subs[1:]:
+            older_partner_sub.is_active = False
+            older_partner_sub.save(update_fields=["is_active", "updated_at"])
             duplicate_partner_count += 1
 
     # 3. Invalidate Subscriptions from recent delivery errors (unsubscribed / invalid device)
@@ -227,7 +268,10 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
         code = deliv.failure_code
         is_unsub = (
             code in ["INVALID_SUBSCRIPTION", "UNSUBSCRIBED", "DEVICE_NOT_FOUND"]
-            or any("unsubscribed" in str(err).lower() or "invalid" in str(err).lower() for err in raw.get("errors", []))
+            or any(
+                "unsubscribed" in str(err).lower() or "invalid" in str(err).lower()
+                for err in raw.get("errors", [])
+            )
             or raw.get("http_status") in [404, 410]
         )
         if is_unsub and deliv.intent and deliv.intent.recipient_id:

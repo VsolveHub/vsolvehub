@@ -1,8 +1,7 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 import pytest
-from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -365,4 +364,3 @@ def test_customer_push_reachability(customer_user: User):
     assert res_stale["reachable"] is False
     assert res_stale["reason"] == CustomerPushReachabilityReason.STALE_SUBSCRIPTION
     assert res_stale["subscription_id"] == sub_id
-

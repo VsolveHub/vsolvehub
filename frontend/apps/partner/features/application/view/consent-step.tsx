@@ -1,167 +1,79 @@
 "use client";
 
-import { ErrorState, Spinner, useT } from "@vsolve/ui";
-import { useApplicationReference } from "../reference-queries";
-import { useApplicationEditor } from "./application-editor";
+import type { Schemas } from "@vsolve/api-client";
+import { useT } from "@vsolve/ui";
 
-export function ConsentStep() {
+type ConsentDocument = Schemas["PartnerConsentDocument"];
+
+export function consentKey(purpose: string, version: string): string {
+  return `${purpose}@${version}`;
+}
+
+/**
+ * The agreements to accept, as checkboxes. Accepted on the screen that sends the application.
+ *
+ * An agreement already on file is shown ticked and locked: receipts are append-only on the
+ * server, so offering to untick one would be a control that does nothing.
+ */
+export function ConsentList({
+  documents,
+  accepted,
+  locked,
+  disabled = false,
+  onToggle,
+}: {
+  documents: readonly ConsentDocument[];
+  /** Keys (`consentKey`) ticked now, saved or not. */
+  accepted: ReadonlySet<string>;
+  /** Keys already recorded on the server. */
+  locked: ReadonlySet<string>;
+  disabled?: boolean;
+  onToggle: (document: ConsentDocument) => void;
+}) {
   const t = useT();
-  const { draft, update, isReadOnly } = useApplicationEditor();
-  const reference = useApplicationReference();
 
-  if (reference.isPending) {
-    return (
-      <p className="flex items-center gap-2 py-6 text-sm text-text-secondary">
-        <Spinner size="sm" />
-        {t("apply.consent.loading")}
-      </p>
-    );
+  if (documents.length === 0) {
+    return <p className="text-sm text-text-secondary">{t("apply.consent.empty")}</p>;
   }
-
-  if (reference.isError) {
-    return (
-      <ErrorState
-        title={t("apply.consent.loadError.title")}
-        message={t("apply.common.checkConnectionAndRetry")}
-        actionLabel={t("common.tryAgain")}
-        onAction={reference.refetch}
-      />
-    );
-  }
-
-  if (reference.requiredConsents.length === 0) {
-    return (
-      <p
-        role="status"
-        className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary"
-      >
-        {t("apply.consent.empty")}
-      </p>
-    );
-  }
-
-  const isAccepted = (purpose: string, version: string) =>
-    draft.consents.some(
-      (consent) => consent.purpose === purpose && consent.documentVersion === version,
-    );
-
-  const requiredConsents = reference.requiredConsents.filter(
-    (c) => c.is_required_for_submission,
-  );
-  const allRequiredAccepted =
-    requiredConsents.length > 0 &&
-    requiredConsents.every((c) => isAccepted(c.purpose, c.document_version));
 
   return (
-    <fieldset className="border-0 p-0 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <legend className="text-sm font-bold text-navy-900">
-          {t("apply.consent.legend")} <span className="text-danger-text">*</span>
-        </legend>
-
-        {!isReadOnly && requiredConsents.length > 1 && (
-          <button
-            type="button"
-            onClick={() => {
-              if (allRequiredAccepted) {
-                const requiredKeys = new Set(
-                  requiredConsents.map((c) => `${c.purpose}@${c.document_version}`),
-                );
-                update({
-                  consents: draft.consents.filter(
-                    (c) => !requiredKeys.has(`${c.purpose}@${c.documentVersion}`),
-                  ),
-                });
-              } else {
-                const existing = [...draft.consents];
-                for (const doc of requiredConsents) {
-                  if (!isAccepted(doc.purpose, doc.document_version)) {
-                    existing.push({
-                      purpose: doc.purpose,
-                      documentVersion: doc.document_version,
-                    });
-                  }
-                }
-                update({ consents: existing });
-              }
-            }}
-            className="text-xs font-semibold text-navy-700 hover:text-signal-700"
+    <ul className="flex list-none flex-col gap-2 p-0">
+      {documents.map((document) => {
+        const key = consentKey(document.purpose, document.document_version);
+        const isAccepted = accepted.has(key);
+        const isLocked = locked.has(key);
+        return (
+          <li
+            key={key}
+            className={[
+              "flex items-start gap-3 rounded-control border p-3",
+              isAccepted ? "border-action bg-selected-surface" : "border-line bg-surface",
+            ].join(" ")}
           >
-            {allRequiredAccepted ? t("apply.areas.deselectAll") : t("apply.consent.acceptAllRequired")}
-          </button>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {reference.requiredConsents.map((document) => {
-          const accepted = isAccepted(document.purpose, document.document_version);
-
-          return (
-            <div
-              key={`${document.purpose}@${document.document_version}`}
-              className={[
-                "rounded-control border p-3.5 transition-colors",
-                accepted
-                  ? "border-action bg-selected-surface"
-                  : "border-line bg-surface hover:border-line-strong",
-              ].join(" ")}
-            >
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={accepted}
-                  disabled={isReadOnly}
-                  onChange={() =>
-                    update({
-                      consents: accepted
-                        ? draft.consents.filter(
-                            (consent) =>
-                              !(
-                                consent.purpose === document.purpose &&
-                                consent.documentVersion === document.document_version
-                              ),
-                          )
-                        : [
-                            ...draft.consents,
-                            {
-                              purpose: document.purpose,
-                              documentVersion: document.document_version,
-                            },
-                          ],
-                    })
-                  }
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-[var(--color-action)]"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-text flex-1 min-w-[12rem]">
-                      {t("apply.consent.iAgreeTo", { title: document.title })}
-                    </span>
-                    {document.is_required_for_submission ? (
-                      <span className="text-xs font-semibold text-danger-text shrink-0">* {t("common.required")}</span>
-                    ) : (
-                      <span className="text-xs text-text-muted shrink-0">{t("common.optional")}</span>
-                    )}
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 flex-wrap text-xs text-text-secondary">
-                    <span>{t("apply.consent.version", { version: document.document_version })}</span>
-                    <a
-                      href={document.document_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-xs font-bold text-navy-900 hover:bg-surface-sunken hover:border-line-strong transition-colors shadow-xs"
-                    >
-                      <span>{t("apply.consent.readDocument")}</span>
-                      <span>↗</span>
-                    </a>
-                  </div>
-                </div>
+            <input
+              id={`consent-${key}`}
+              type="checkbox"
+              checked={isAccepted}
+              disabled={disabled || isLocked}
+              onChange={() => onToggle(document)}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-line-strong accent-action cursor-pointer"
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label htmlFor={`consent-${key}`} className="text-sm font-medium text-text cursor-pointer break-words">
+                {t("apply.consent.iAgreeTo", { title: document.title })}
               </label>
+              <a
+                href={document.document_url}
+                target="_blank"
+                rel="noreferrer"
+                className="self-start text-xs font-semibold text-action underline underline-offset-2"
+              >
+                {t("apply.consent.readDocument")}
+              </a>
             </div>
-          );
-        })}
-      </div>
-    </fieldset>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -377,4 +377,3 @@ class DispatchOffer(models.Model):
 
     def __str__(self) -> str:
         return f"{self.booking_id}:{self.partner_id}:{self.status}"
-

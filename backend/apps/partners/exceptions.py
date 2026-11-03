@@ -293,6 +293,7 @@ class BusinessTypeInvalidError(PartnerDomainError):
         )
         self.field = field
 
+
 class PartnerAccessDeniedError(PartnerDomainError):
     def __init__(self, message: str = "Access denied.") -> None:
         super().__init__(
@@ -309,4 +310,3 @@ class PartnerPushSubscriptionConflictError(PartnerDomainError):
             message=message,
             status_code=409,
         )
-

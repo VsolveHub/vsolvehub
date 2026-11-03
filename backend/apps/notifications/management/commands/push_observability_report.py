@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandParser
 from django.utils import timezone
 
 from apps.assignments.models import DispatchOffer
@@ -14,8 +14,6 @@ from apps.notifications.models import (
     CustomerPushSubscription,
     KillSwitch,
     NotificationDelivery,
-    NotificationIntent,
-    PushNotificationPreference,
 )
 from apps.notifications.services import is_engaged
 from apps.partners.models import PartnerPushSubscription
@@ -24,7 +22,7 @@ from apps.partners.models import PartnerPushSubscription
 class Command(BaseCommand):
     help = "Generates a health and observability report for OneSignal push notifications."
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--hours",
             type=int,
@@ -42,7 +40,7 @@ class Command(BaseCommand):
             help="Exit with non-zero exit code if any critical alerts are triggered.",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         hours = options["hours"]
         as_json = options["json"]
         fail_on_alert = options["fail_on_alert"]
@@ -115,9 +113,11 @@ class Command(BaseCommand):
         # 3. Dispatch Health (Instant Booking Offers)
         offers_window = DispatchOffer.objects.filter(created_at__gte=window_start)
         total_offers = offers_window.count()
-        sent_offers = offers_window.filter(
-            status__in=["OFFERED", "ACCEPTED", "EXPIRED", "DECLINED"]
-        ).exclude(onesignal_notification_id="").count()
+        sent_offers = (
+            offers_window.filter(status__in=["OFFERED", "ACCEPTED", "EXPIRED", "DECLINED"])
+            .exclude(onesignal_notification_id="")
+            .count()
+        )
         failed_offers = offers_window.filter(status="FAILED").count()
         stuck_offers = DispatchOffer.objects.filter(
             status__in=["PENDING", "SENDING"],
@@ -136,9 +136,15 @@ class Command(BaseCommand):
         delivered_count = deliveries_window.filter(
             status__in=[NotificationDelivery.Status.ACCEPTED, NotificationDelivery.Status.DELIVERED]
         ).count()
-        failed_deliveries = deliveries_window.filter(status=NotificationDelivery.Status.FAILED).count()
-        blocked_deliveries = deliveries_window.filter(status=NotificationDelivery.Status.BLOCKED).count()
-        skipped_deliveries = deliveries_window.filter(status=NotificationDelivery.Status.SKIPPED).count()
+        failed_deliveries = deliveries_window.filter(
+            status=NotificationDelivery.Status.FAILED
+        ).count()
+        blocked_deliveries = deliveries_window.filter(
+            status=NotificationDelivery.Status.BLOCKED
+        ).count()
+        skipped_deliveries = deliveries_window.filter(
+            status=NotificationDelivery.Status.SKIPPED
+        ).count()
 
         rate_limited_429 = deliveries_window.filter(failure_code="RATE_LIMITED").count()
         server_error_5xx = deliveries_window.filter(failure_code="ONESIGNAL_SERVER_ERROR").count()
@@ -160,59 +166,77 @@ class Command(BaseCommand):
         alerts: list[dict[str, Any]] = []
 
         if cust_sync_failure_rate > 10.0:
-            alerts.append({
-                "severity": "CRITICAL",
-                "code": "CUSTOMER_SYNC_FAILURE_HIGH",
-                "message": f"Customer sync failure rate is {cust_sync_failure_rate}% (> 10%)",
-            })
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "code": "CUSTOMER_SYNC_FAILURE_HIGH",
+                    "message": f"Customer sync failure rate is {cust_sync_failure_rate}% (> 10%)",
+                }
+            )
         if part_sync_failure_rate > 10.0:
-            alerts.append({
-                "severity": "CRITICAL",
-                "code": "PARTNER_SYNC_FAILURE_HIGH",
-                "message": f"Partner sync failure rate is {part_sync_failure_rate}% (> 10%)",
-            })
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "code": "PARTNER_SYNC_FAILURE_HIGH",
+                    "message": f"Partner sync failure rate is {part_sync_failure_rate}% (> 10%)",
+                }
+            )
         if dispatch_failure_rate > 10.0:
-            alerts.append({
-                "severity": "CRITICAL",
-                "code": "DISPATCH_FAILURE_HIGH",
-                "message": f"Instant dispatch failure rate is {dispatch_failure_rate}% (> 10%)",
-            })
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "code": "DISPATCH_FAILURE_HIGH",
+                    "message": f"Instant dispatch failure rate is {dispatch_failure_rate}% (> 10%)",
+                }
+            )
         if rate_429 > 5.0:
-            alerts.append({
-                "severity": "CRITICAL",
-                "code": "ONESIGNAL_429_HIGH",
-                "message": f"OneSignal 429 rate limit rate is {rate_429}% (> 5%)",
-            })
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "code": "ONESIGNAL_429_HIGH",
+                    "message": f"OneSignal 429 rate limit rate is {rate_429}% (> 5%)",
+                }
+            )
         if rate_5xx > 1.0:
-            alerts.append({
-                "severity": "CRITICAL",
-                "code": "ONESIGNAL_5XX_HIGH",
-                "message": f"OneSignal 5xx server error rate is {rate_5xx}% (> 1%)",
-            })
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "code": "ONESIGNAL_5XX_HIGH",
+                    "message": f"OneSignal 5xx server error rate is {rate_5xx}% (> 1%)",
+                }
+            )
         if stuck_offers > 0:
-            alerts.append({
-                "severity": "CRITICAL",
-                "code": "STUCK_DISPATCH_OFFERS",
-                "message": f"{stuck_offers} dispatch offers stuck in SENDING > 5 minutes",
-            })
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "code": "STUCK_DISPATCH_OFFERS",
+                    "message": f"{stuck_offers} dispatch offers stuck in SENDING > 5 minutes",
+                }
+            )
         if push_kill_switch:
-            alerts.append({
-                "severity": "WARNING",
-                "code": "PUSH_KILL_SWITCH_ACTIVE",
-                "message": "Push notification kill switch is actively ENGAGED",
-            })
+            alerts.append(
+                {
+                    "severity": "WARNING",
+                    "code": "PUSH_KILL_SWITCH_ACTIVE",
+                    "message": "Push notification kill switch is actively ENGAGED",
+                }
+            )
         if not customer_app_id or not customer_key_set:
-            alerts.append({
-                "severity": "WARNING",
-                "code": "CUSTOMER_ONESIGNAL_UNCONFIGURED",
-                "message": "Customer OneSignal App ID or REST API Key is missing",
-            })
+            alerts.append(
+                {
+                    "severity": "WARNING",
+                    "code": "CUSTOMER_ONESIGNAL_UNCONFIGURED",
+                    "message": "Customer OneSignal App ID or REST API Key is missing",
+                }
+            )
         if not partner_app_id or not partner_key_set:
-            alerts.append({
-                "severity": "WARNING",
-                "code": "PARTNER_ONESIGNAL_UNCONFIGURED",
-                "message": "Partner OneSignal App ID or REST API Key is missing",
-            })
+            alerts.append(
+                {
+                    "severity": "WARNING",
+                    "code": "PARTNER_ONESIGNAL_UNCONFIGURED",
+                    "message": "Partner OneSignal App ID or REST API Key is missing",
+                }
+            )
 
         report_data = {
             "timestamp": now.isoformat(),

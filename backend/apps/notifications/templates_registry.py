@@ -485,6 +485,18 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     #: One notice per Operations decision on a Partner's application. The decline and
     #: suspension notices give no reason on purpose: Operations' reason can be a fraud finding,
     #: and it is kept on the transition for the audit trail, not sent to the applicant.
+    "partner_application_submitted": (
+        "We have your application",
+        "A reviewer will check it, usually within 24 hours. We will tell you when it is decided.",
+    ),
+    "partner_application_review_started": (
+        "Your application is being reviewed",
+        "Nothing to do now. We will tell you when it is decided.",
+    ),
+    "partner_document_rejected": (
+        "Replace your {document}",
+        "{reason}. Open your application to upload a new file.",
+    ),
     "partner_application_approved": (
         "You are approved",
         "Your Vsolve Hub partner account is active. Open the app to set up and start taking work.",

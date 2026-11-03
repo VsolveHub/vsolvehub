@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCurrentSession } from "@vsolve/query";
-import { Badge, Button, Dialog, ErrorState, Skeleton, usePushPermission } from "@vsolve/ui";
+import { Badge, Button, Dialog, ErrorState, Skeleton, usePushPermission, useT } from "@vsolve/ui";
 import {
   PUSH_NOTIFICATION_EVENTS,
   trackPushAnalyticsEvent,
@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Bell,
   CheckCircle,
-  ShieldAlert,
 } from "lucide-react";
 import { request } from "@vsolve/api-client";
 import { browserApiBaseUrl, getApiClient } from "@/lib/api/browser";
@@ -41,6 +40,7 @@ export function usePartnerPushPreferences() {
     queryKey: ["partner", "push-preferences"],
     queryFn: () =>
       request<PartnerPushPreferencesResponse>(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- this endpoint publishes no response schema yet
         (getApiClient() as any).GET("/api/v1/partner/notification-preferences/")
       ),
     staleTime: 60_000,
@@ -53,6 +53,7 @@ export function useUpdatePartnerPushPreference() {
   return useMutation({
     mutationFn: (input: { category: string; isEnabled: boolean }) =>
       request<PartnerPushPreferencesResponse>(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- this endpoint publishes no response schema yet
         (getApiClient() as any).PATCH("/api/v1/partner/notification-preferences/", {
           body: { category: input.category, is_enabled: input.isEnabled },
         })
@@ -344,5 +345,90 @@ export function PartnerPushPreferencesCard() {
         </div>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * Asks to send push notifications, at the moment it is worth something: before an applicant
+ * sends their application, so they hear about the decision. Also the Notifications row in the
+ * account menu.
+ *
+ * Never blocks anything. A blocked or unsupported browser is told so plainly, and every update
+ * still arrives in the app's own notices.
+ */
+export function PushOptInCard({ variant = "card" }: { variant?: "card" | "row" }) {
+  const t = useT();
+  const session = useCurrentSession(getApiClient());
+  const [isRequesting, setIsRequesting] = useState(false);
+  const { permissionState, requestPermission } = usePushPermission({
+    role: "PARTNER",
+    userId: session.data?.user?.id ?? null,
+    triggerEvent: variant === "card" ? "application_submit" : "account_menu",
+    apiBaseUrl: browserApiBaseUrl(),
+    appId: ONESIGNAL_APP_ID,
+  });
+
+  async function turnOn() {
+    setIsRequesting(true);
+    try {
+      await requestPermission();
+    } finally {
+      setIsRequesting(false);
+    }
+  }
+
+  const status =
+    permissionState === "granted"
+      ? { tone: "success" as const, label: t("apply.push.state.on") }
+      : permissionState === "denied"
+        ? { tone: "warning" as const, label: t("apply.push.state.blocked") }
+        : permissionState === "unsupported"
+          ? { tone: "neutral" as const, label: t("apply.push.state.unsupported") }
+          : { tone: "neutral" as const, label: t("apply.push.state.off") };
+
+  const note =
+    permissionState === "denied"
+      ? t("apply.push.blocked")
+      : permissionState === "unsupported"
+        ? t("apply.push.unsupported")
+        : null;
+
+  const action =
+    permissionState === "default" ? (
+      <Button size="sm" loading={isRequesting} onClick={() => void turnOn()} className="shrink-0">
+        {t("apply.push.turnOn")}
+      </Button>
+    ) : (
+      <Badge tone={status.tone}>{status.label}</Badge>
+    );
+
+  if (variant === "row") {
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-text">
+            <Bell className="h-4 w-4 text-text-secondary" aria-hidden />
+            {t("apply.push.rowLabel")}
+          </span>
+          {action}
+        </div>
+        {note ? <p className="text-xs text-text-secondary">{note}</p> : null}
+      </div>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-action-surface text-action">
+          <Bell className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-bold text-text">{t("apply.push.title")}</h2>
+          <p className="mt-0.5 text-sm text-text-secondary">{note ?? t("apply.push.body")}</p>
+        </div>
+      </div>
+      <div className="flex justify-end">{action}</div>
+    </section>
   );
 }

@@ -415,7 +415,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.89.0",
+    "VERSION": "1.90.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -1027,11 +1027,15 @@ CELERY_BEAT_SCHEDULE = {
     },
     "reconcile-onesignal-push-deliveries": {
         "task": "apps.notifications.tasks.reconcile_onesignal_push_delivery_status_task",
-        "schedule": env.float("RECONCILE_ONESIGNAL_PUSH_DELIVERIES_INTERVAL_SECONDS", default=900.0),
+        "schedule": env.float(
+            "RECONCILE_ONESIGNAL_PUSH_DELIVERIES_INTERVAL_SECONDS", default=900.0
+        ),
     },
     "reconcile-stale-push-subscriptions": {
         "task": "apps.notifications.tasks.reconcile_stale_push_subscriptions",
-        "schedule": env.float("RECONCILE_STALE_PUSH_SUBSCRIPTIONS_INTERVAL_SECONDS", default=3600.0),
+        "schedule": env.float(
+            "RECONCILE_STALE_PUSH_SUBSCRIPTIONS_INTERVAL_SECONDS", default=3600.0
+        ),
     },
     "reconcile-payments": {
         "task": "apps.commerce.tasks.reconcile_payments",
@@ -1353,7 +1357,9 @@ LOGGING = {
 ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
 ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
 ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default=ONESIGNAL_APP_ID)
-ONESIGNAL_PARTNER_REST_API_KEY = env("ONESIGNAL_PARTNER_REST_API_KEY", default=ONESIGNAL_REST_API_KEY)
+ONESIGNAL_PARTNER_REST_API_KEY = env(
+    "ONESIGNAL_PARTNER_REST_API_KEY", default=ONESIGNAL_REST_API_KEY
+)
 ONESIGNAL_CUSTOMER_APP_ID = env("ONESIGNAL_CUSTOMER_APP_ID", default="")
 ONESIGNAL_CUSTOMER_REST_API_KEY = env("ONESIGNAL_CUSTOMER_REST_API_KEY", default="")
 ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
@@ -1369,4 +1375,3 @@ PARTNER_LOCATION_MAX_AGE_MINUTES = env.int("PARTNER_LOCATION_MAX_AGE_MINUTES", d
 MAX_DISPATCH_ATTEMPTS = env.int("MAX_DISPATCH_ATTEMPTS", default=5)
 MAX_CONSECUTIVE_MISSED_OFFERS = env.int("MAX_CONSECUTIVE_MISSED_OFFERS", default=3)
 PUSH_SUBSCRIPTION_FRESHNESS_DAYS = env.int("PUSH_SUBSCRIPTION_FRESHNESS_DAYS", default=30)
-

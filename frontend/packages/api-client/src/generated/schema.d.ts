@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.89.0)
- * Checksum: 92df97ca122b727a
+ * Source:   contracts/openapi/v1.yaml (version 1.90.0)
+ * Checksum: 18e53819c2c598c1
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1006,6 +1006,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer/notification-preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["customer_notification_preferences_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["customer_notification_preferences_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/customer/push-subscriptions/{subscription_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["customer_push_subscriptions_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["customer_push_subscriptions_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/customer/push-subscriptions/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["customer_push_subscriptions_sync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer/referral/": {
         parameters: {
             query?: never;
@@ -1117,7 +1165,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Local development & testing endpoint to verify OneSignal push delivery to an external_id. */
+        /**
+         * @description Local development only: send a test push to yourself.
+         *
+         *     Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+         *     — and only to the signed-in caller, so it can never be used to push to someone else.
+         */
         post: operations["dev_onesignal_test_push_create"];
         delete?: never;
         options?: never;
@@ -6324,10 +6377,27 @@ export interface paths {
         /**
          * @description Changes what a Partner may change about themselves.
          *
-         *     Deliberately narrow. The phone number is the login credential and is not
-         *     accepted here — see `PartnerProfileUpdateSerializer`.
+         *     Deliberately narrow. Neither the phone number (the login credential) nor the
+         *     name (checked against the Partner's ID) is accepted here — see
+         *     `PartnerProfileUpdateSerializer`.
          */
         patch: operations["partner_me_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/notification-preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_notification_preferences_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["partner_notification_preferences_partial_update"];
         trace?: never;
     };
     "/api/v1/partner/offers/": {
@@ -8879,6 +8949,12 @@ export interface components {
          * @enum {string}
          */
         Action68eEnum: "APPROVE" | "REJECT" | "REMOVE" | "REINSTATE";
+        /**
+         * @description * `sync` - sync
+         *     * `deactivate` - deactivate
+         * @enum {string}
+         */
+        ActionC29Enum: "sync" | "deactivate";
         ActionReasonRequest: {
             reason?: string;
         };
@@ -9722,9 +9798,10 @@ export interface components {
         /**
          * @description * `SMS` - SMS
          *     * `EMAIL` - Email
+         *     * `PUSH` - Push
          * @enum {string}
          */
-        ChannelEnum: "SMS" | "EMAIL";
+        ChannelEnum: "SMS" | "EMAIL" | "PUSH";
         /**
          * @description `M2-BE-708`. The provider reference is required: a chargeback with no bank reference cannot
          *     be represented or reconciled, and recording one would be recording a rumour.
@@ -10818,6 +10895,44 @@ export interface components {
             readonly valid_until: string | null;
             /** Format: date-time */
             readonly submitted_at: string;
+        };
+        CustomerPushSubscriptionResponse: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description OneSignal Subscription ID (UUID). */
+            readonly onesignal_subscription_id: string;
+            /** @description OneSignal external_id alias (Customer User ID). */
+            readonly onesignal_external_id: string;
+            readonly platform: components["schemas"]["PlatformEnum"];
+            /** @description False if unsubscribed, permission revoked, or notification delivery bounced. */
+            readonly is_active: boolean;
+            /** @description OneSignal push subscription opt-in state. */
+            readonly opted_in: boolean;
+            /** @description Browser notification permission (granted, denied, default). */
+            readonly permission_state: string;
+            /** Format: date-time */
+            readonly last_verified_at: string;
+            /** @description Status of the last sync attempt (SUCCESS, FAILED). */
+            readonly last_sync_status: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        CustomerPushSubscriptionSyncRequest: {
+            onesignal_subscription_id: string;
+            /** @default WEB */
+            platform: components["schemas"]["PlatformEnum"];
+            /** @default  */
+            user_agent: string;
+            /** @default true */
+            is_active: boolean;
+            /** @default true */
+            opted_in: boolean;
+            /** @default  */
+            permission_state: components["schemas"]["PermissionStateEnum"] | components["schemas"]["BlankEnum"];
+            /** @default sync */
+            action: components["schemas"]["ActionC29Enum"];
         };
         CustomerQuoteList: {
             readonly quotes: components["schemas"]["CustomerProposal"][];
@@ -12064,6 +12179,7 @@ export interface components {
          *     * `SMS` - SMS channel
          *     * `WHATSAPP` - WhatsApp channel
          *     * `VOICE` - Voice call channel
+         *     * `PUSH` - Push channel
          *     * `PAYMENTS` - Payment collection
          *     * `PAYOUTS` - Partner payouts
          *     * `DISPATCH` - Partner dispatch
@@ -12072,7 +12188,7 @@ export interface components {
          *     * `M2_PURCHASES` - New M2 purchases
          * @enum {string}
          */
-        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE" | "M2_PURCHASES";
+        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PUSH" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE" | "M2_PURCHASES";
         /**
          * @description * `EARN_PROMISE` - Earn promise
          *     * `UNLOCK` - Unlock
@@ -13472,6 +13588,9 @@ export interface components {
             readonly consents: components["schemas"]["PartnerConsent"][];
             readonly documents: components["schemas"]["PartnerDocument"][];
             readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            readonly can_edit: boolean;
+            readonly required_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly consents_complete: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -13832,6 +13951,8 @@ export interface components {
             readonly uploaded_at: string;
             /** Format: date-time */
             readonly reviewed_at: string | null;
+            readonly file_name: string;
+            readonly can_replace: boolean;
         };
         PartnerDocumentApplicantAccess: {
             readonly document: components["schemas"]["PartnerDocumentDetailMetadata"];
@@ -14255,6 +14376,12 @@ export interface components {
             user_agent: string;
             /** @default true */
             is_active: boolean;
+            /** @default true */
+            opted_in: boolean;
+            /** @default  */
+            permission_state: components["schemas"]["PermissionStateEnum"] | components["schemas"]["BlankEnum"];
+            /** @default sync */
+            action: components["schemas"]["ActionC29Enum"];
         };
         PartnerRateItem: {
             /** Format: uuid */
@@ -14663,6 +14790,12 @@ export interface components {
             /** Format: email */
             email?: string;
         };
+        PatchedCustomerPushSubscriptionUpdateRequest: {
+            is_active?: boolean;
+            opted_in?: boolean;
+            permission_state?: components["schemas"]["PermissionStateEnum"] | components["schemas"]["BlankEnum"];
+            user_agent?: string;
+        };
         /**
          * @description A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
          *     the service; free text is limited to skills, duties, benefits, title, city and area.
@@ -14761,9 +14894,12 @@ export interface components {
         /**
          * @description What a Partner may change about themselves without a review.
          *
-         *     `display_name` is the name Customers see. `default_location_text` is the
-         *     registered pickup / address used to prefill A7 rental ads (still editable
-         *     per asset).
+         *     `default_location_text` is the registered pickup / address used to prefill A7
+         *     rental ads (still editable per asset).
+         *
+         *     **Not** `display_name`. It is the name on the application Operations checked
+         *     against the Partner's ID, so it is fixed once the application is sent; before
+         *     that it is edited on the application itself.
          *
          *     **Not** `phone_number`. That is the login credential: changing it moves who
          *     can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -14775,7 +14911,6 @@ export interface components {
          *     reviewed them, and a field here would silently reopen a reviewed decision.
          */
         PatchedPartnerProfileUpdateRequest: {
-            display_name?: string;
             default_location_text?: string;
         };
         /**
@@ -15074,6 +15209,14 @@ export interface components {
          * @enum {string}
          */
         PeriodEnum: "this_month" | "last_month" | "all";
+        /**
+         * @description * `` -
+         *     * `granted` - granted
+         *     * `denied` - denied
+         *     * `default` - default
+         * @enum {string}
+         */
+        PermissionStateEnum: "granted" | "denied" | "default";
         /** @description Where a Self Pickup customer collects the item. ``maps_url`` opens Google Maps. */
         PickupAddress: {
             partner_name: string;
@@ -21959,6 +22102,209 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CoinTransactionPage"];
+                };
+            };
+        };
+    };
+    customer_notification_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User push notification preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    customer_notification_preferences_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preferences updated successfully. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or attempt to disable immutable category. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    customer_push_subscriptions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription deactivated successfully. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    customer_push_subscriptions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCustomerPushSubscriptionUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCustomerPushSubscriptionUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCustomerPushSubscriptionUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPushSubscriptionResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    customer_push_subscriptions_sync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerPushSubscriptionSyncRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomerPushSubscriptionSyncRequest"];
+                "multipart/form-data": components["schemas"]["CustomerPushSubscriptionSyncRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPushSubscriptionResponse"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPushSubscriptionResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -34057,6 +34403,49 @@ export interface operations {
             };
         };
     };
+    partner_notification_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User push notification preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_notification_preferences_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preferences updated successfully. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or attempt to disable immutable category. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     partner_offer_list: {
         parameters: {
             query?: {
@@ -34546,7 +34935,22 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The subscription was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -34563,6 +34967,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

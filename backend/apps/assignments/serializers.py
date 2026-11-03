@@ -2,7 +2,12 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.assignments.models import DispatchCommandAudit, PartnerOffer, Reservation
+from apps.assignments.models import (
+    DispatchCommandAudit,
+    DispatchOffer,
+    PartnerOffer,
+    Reservation,
+)
 from common.serializers import MoneySerializer
 
 
@@ -211,14 +216,12 @@ class FulfilmentUnitDispatchSerializer(serializers.Serializer[dict[str, object]]
     server_now = serializers.DateTimeField()
 
 
-class DispatchOfferSerializer(serializers.ModelSerializer):
+class DispatchOfferSerializer(serializers.ModelSerializer[DispatchOffer]):
     remaining_seconds = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
     booking = serializers.SerializerMethodField()
 
     class Meta:
-        from apps.assignments.models import DispatchOffer
-
         model = DispatchOffer
         fields = (
             "id",
@@ -269,11 +272,12 @@ class DispatchOfferSerializer(serializers.ModelSerializer):
             "id": str(booking.id),
             "status": str(booking.status),
             "booking_mode": booking_mode,
-            "scheduled_start": booking.scheduled_start.isoformat() if getattr(booking, "scheduled_start", None) else None,
+            "scheduled_start": booking.scheduled_start.isoformat()
+            if getattr(booking, "scheduled_start", None)
+            else None,
             "estimated_duration_minutes": getattr(booking, "estimated_duration_minutes", 60),
             "service_title": service_title,
             "service_category": service_category,
             "location_area": location_area,
             "customer_notes": "",
         }
-

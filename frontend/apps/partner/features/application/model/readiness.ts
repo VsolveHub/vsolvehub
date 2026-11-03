@@ -1,5 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
 
+import { documentLabelKey, isDocumentRejected } from "./status";
+
 /**
  * What is still missing before an application can be submitted.
  *
@@ -39,18 +41,16 @@ export interface Requirement {
 }
 
 /**
- * Document kinds M1 requires before review.
+ * The document kinds the onboarding flow offers, and the requirement each one satisfies.
  *
- * `TAX` and `BANK` are deliberately absent: payout details are collected before
- * the first payout runs, not before a Partner may be reviewed. Requiring a bank
- * account to apply turns a five-minute form into an errand and loses people who
- * would have been approved.
+ * Which of them are *required* is the server's answer (`required_document_kinds`), never a list
+ * kept here: a copy here once demanded proof of address that Django does not require, and
+ * blocked applicants who had finished. Kinds the server does not require are offered as optional.
  */
-const REQUIRED_DOCUMENTS: readonly { kind: DocumentKind; code: RequirementCode; labelKey: string }[] =
-  [
-    { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID", labelKey: "apply.requirements.governmentId" },
-    { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF", labelKey: "apply.requirements.addressProof" },
-  ];
+export const OFFERED_DOCUMENTS: readonly { kind: DocumentKind; code: RequirementCode }[] = [
+  { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID" },
+  { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF" },
+];
 
 /**
  * A document counts when it exists and has not been rejected.
@@ -117,7 +117,7 @@ export function requirements(
     {
       code: "SERVICE_AREAS",
       labelKey: "apply.requirements.serviceAreas",
-      href: "/apply/areas",
+      href: "/apply/work",
       isMet: (application?.service_area_ids.length ?? 0) > 0,
     },
     {
@@ -133,17 +133,17 @@ export function requirements(
           ),
         ),
     },
-    ...REQUIRED_DOCUMENTS.map((required) => ({
-      code: required.code,
-      labelKey: required.labelKey,
+    ...requiredDocumentKinds(application).map((kind) => ({
+      code: OFFERED_DOCUMENTS.find((offered) => offered.kind === kind)?.code ?? "GOVERNMENT_ID",
+      labelKey: documentLabelKey(kind),
       href: "/apply/documents",
-      isMet: hasUsableDocument(application, required.kind),
+      isMet: hasUsableDocument(application, kind),
     })),
     {
       code: "CONSENTS",
       labelKey: "apply.requirements.consents",
-      href: "/apply/consent",
-      isMet: (application?.consents.length ?? 0) > 0,
+      href: "/apply/review",
+      isMet: application?.consents_complete ?? false,
     },
   ];
 
@@ -164,6 +164,14 @@ const SERVICE_ONLY_REQUIREMENTS: ReadonlySet<RequirementCode> = new Set([
   "WORKING_HOURS",
 ]);
 
+/**
+ * What the server requires before review. Before an application exists there is no answer to
+ * read, so the one kind every track has always needed stands in until the first save.
+ */
+export function requiredDocumentKinds(application: Application | null): readonly DocumentKind[] {
+  return application?.required_document_kinds ?? ["GOVERNMENT_ID"];
+}
+
 export function outstandingRequirements(
   application: Application | null,
   availability?: Schedule | null,
@@ -171,20 +179,25 @@ export function outstandingRequirements(
   return requirements(application, availability).filter((requirement) => !requirement.isMet);
 }
 
-/** Documents Operations rejected, which the Partner must replace. */
-export function rejectedDocuments(application: Application): Schemas["PartnerDocument"][] {
-  return application.documents.filter((document) => document.status === "REJECTED");
+/**
+ * Rejected documents the Partner can replace right now.
+ *
+ * Read from the server's `can_replace`, the same rule the upload endpoint enforces. A rejected
+ * document on a declined application is not here: offering a replacement the API refuses is the
+ * bug this exists to prevent.
+ */
+export function replaceableRejectedDocuments(application: Application): Schemas["PartnerDocument"][] {
+  return application.documents.filter(
+    (document) => document.can_replace && isDocumentRejected(document),
+  );
 }
 
 /**
- * Whether the application is still the Partner's to edit.
- *
- * `SUBMITTED` and `UNDER_REVIEW` are read-only: editing underneath a reviewer is
- * how two people end up looking at different versions of the same document set.
- * `CHANGES_REQUIRED` reopens it, which is the whole point of that state.
+ * Whether the application is still the Partner's to edit: a draft, or one sent back for changes.
+ * The server's own answer (`can_edit`).
  */
 export function isEditable(application: Application): boolean {
-  return application.status === "DRAFT" || application.status === "CHANGES_REQUIRED";
+  return application.can_edit;
 }
 
 /** Whether the Partner may act on the submit button at all. */

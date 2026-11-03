@@ -150,8 +150,9 @@ class PartnerMeView(APIView):
     def patch(self, request: Request) -> Response:
         """Changes what a Partner may change about themselves.
 
-        Deliberately narrow. The phone number is the login credential and is not
-        accepted here — see `PartnerProfileUpdateSerializer`.
+        Deliberately narrow. Neither the phone number (the login credential) nor the
+        name (checked against the Partner's ID) is accepted here — see
+        `PartnerProfileUpdateSerializer`.
         """
         serializer = PartnerProfileUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -159,18 +160,13 @@ class PartnerMeView(APIView):
         if profile is None:
             raise NotFound("No Partner profile exists for this account.")
         updates = ["updated_at"]
-        if "display_name" in serializer.validated_data:
-            profile.display_name = cast(str, serializer.validated_data["display_name"])
-            updates.append("display_name")
         if "default_location_text" in serializer.validated_data:
             profile.default_location_text = cast(
                 str, serializer.validated_data["default_location_text"]
             )
             updates.append("default_location_text")
         if len(updates) == 1:
-            raise ValidationError(
-                {"non_field_errors": ["Provide display_name and/or default_location_text."]}
-            )
+            raise ValidationError({"non_field_errors": ["Provide default_location_text."]})
         profile.save(update_fields=updates)
         profile = (
             PartnerProfile.objects.select_related("user", "application")

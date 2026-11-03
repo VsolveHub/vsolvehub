@@ -38,7 +38,6 @@ import {
 } from "@/features/support/contact";
 import { isNoProfileYet, usePartnerProfile, type PartnerProfile } from "../queries";
 import { EditLocationDialog } from "./edit-location-dialog";
-import { EditNameDialog } from "./edit-name-dialog";
 
 function approvalCopyFor(
   status: string,
@@ -121,7 +120,6 @@ function Page({ children }: { children: ReactNode }) {
 export function ProfilePanel() {
   const t = useT();
   const profileQuery = usePartnerProfile();
-  const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingLocation, setIsEditingLocation] = useState(false);
 
   if (profileQuery.isPending) {
@@ -248,16 +246,6 @@ export function ProfilePanel() {
               </div>
             </div>
 
-            {/* Edit Action Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditingName(true)}
-              className="rounded-xl border-line-strong/30 hover:border-navy-400 font-semibold gap-1.5 shadow-2xs shrink-0 min-h-9 px-3"
-            >
-              <Edit3 className="size-3.5 text-navy-700" aria-hidden />
-              <span className="text-xs">{t("common.edit")}</span>
-            </Button>
           </div>
 
           {/* Trade & Experience Row (spanning full width cleanly) */}
@@ -616,11 +604,6 @@ export function ProfilePanel() {
       </div>
 
       {/* Modals */}
-      <EditNameDialog
-        open={isEditingName}
-        currentName={profile.display_name}
-        onClose={() => setIsEditingName(false)}
-      />
       <EditLocationDialog
         open={isEditingLocation}
         currentLocation={profile.default_location_text ?? ""}

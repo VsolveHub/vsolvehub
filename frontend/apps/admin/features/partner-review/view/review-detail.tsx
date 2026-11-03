@@ -562,7 +562,7 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           ) : rejectedDocs.length > 0 ? (
             <p className="mt-2 text-xs font-medium text-danger-text flex items-center gap-1.5 bg-danger-bg p-2.5 rounded-control border border-danger-border">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>One or more documents were rejected. Click &quot;Request changes&quot; below to send reasons to the applicant.</span>
+              <span>A document was rejected. The Partner was notified and can upload a new one while you hold this review, or use &quot;Request changes&quot; to send it back. Declining closes the application for good.</span>
             </p>
           ) : !hasDocuments ? (
             <p className="mt-2 text-xs font-medium text-warning-text flex items-center gap-1.5 bg-warning-surface p-2.5 rounded-control border border-warning-line">
@@ -653,9 +653,9 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
               <Field
                 label={`Reason for ${action.label.toLowerCase()}`}
                 description={
-                  action.requiresReason
-                    ? "This note is sent directly to the Partner, so state clearly what needs correction."
-                    : "Optional note recorded in the audit trail."
+                  action.target === "CHANGES_REQUIRED"
+                    ? "Sent to the Partner. Say exactly what to fix."
+                    : "Kept in the record. Not shown to the Partner."
                 }
                 required={action.requiresReason}
                 error={undefined}

@@ -49,9 +49,9 @@ export function usePartnerProfile({ enabled = true }: { enabled?: boolean } = {}
 /**
  * Changes what a Partner may change about themselves.
  *
- * Accepts `display_name` and/or `default_location_text`. The phone number is
- * the login credential — moving it moves who can sign in — so it belongs behind
- * an OTP challenge on the new number rather than behind a field on this form.
+ * Accepts `default_location_text`. The name is fixed once the application is
+ * sent (Operations checked it against the Partner's ID), and the phone number is
+ * the login credential — moving it moves who can sign in.
  *
  * No optimistic write: the response is the authoritative profile.
  */
@@ -70,4 +70,44 @@ export function useUpdatePartnerProfile() {
     },
     retry: false,
   });
+}
+
+
+export type PrivacyRequest = Schemas["PrivacyRequest"];
+
+/** The account's own privacy requests, newest first. Same endpoint the customer app uses. */
+export function usePrivacyRequests({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({
+    enabled,
+    queryKey: queryKeys.privacy.requests(),
+    queryFn: () => request(() => getApiClient().GET("/api/v1/auth/privacy/requests/")),
+    ...SESSION_STATE,
+  });
+}
+
+/**
+ * Asks for the account and its data to be deleted. Operations completes it: records the law
+ * requires us to keep stay until they expire.
+ */
+export function useRequestAccountDeletion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      request(() =>
+        getApiClient().POST("/api/v1/auth/privacy/requests/", { body: { kind: "ERASURE" } }),
+      ),
+    onSuccess: (created) => {
+      queryClient.setQueryData<PrivacyRequest[]>(queryKeys.privacy.requests(), (current = []) => [
+        created,
+        ...current.filter((item) => item.id !== created.id),
+      ]);
+    },
+    retry: false,
+  });
+}
+
+/** Still being worked on, so the same request cannot be filed again yet. */
+export function isPrivacyRequestOpen(privacyRequest: PrivacyRequest): boolean {
+  return privacyRequest.status === "RECEIVED" || privacyRequest.status === "IN_REVIEW";
 }

@@ -60,7 +60,7 @@ export const EXPRESS_PATH: readonly ExpressStep[] = [
   { key: "PHONE", href: "/login" },
   { key: "IDENTITY", href: "/apply/about" },
   { key: "SERVICE", href: "/apply/work" },
-  { key: "AREA", href: "/apply/areas" },
+  { key: "AREA", href: "/apply/work" },
 ] as const;
 
 const STEP_TEXT_KEYS: Record<ExpressStepKey, { label: string; ask: string }> = {

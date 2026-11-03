@@ -1,5 +1,37 @@
 # API Contract Changelog
 
+## 1.90.0 - Partner onboarding: one rule for documents, private reviewer notes, every step notified
+
+Partner and Operations. The partner portal and the admin console are updated with this change.
+
+- **Added** to `PartnerDocument`: `can_replace` (the Partner may upload a new version of this
+  document now; only the newest version of a kind, and only while the application allows it) and
+  `file_name`. This is the same rule `POST /partner/application/documents/uploads/` enforces, so a
+  client that renders Replace from `can_replace` can never offer an upload that is refused.
+- **Added** to `PartnerApplication`: `can_edit` (`DRAFT` or `CHANGES_REQUIRED`),
+  `required_document_kinds` (what submission and approval require, today `GOVERNMENT_ID`) and
+  `consents_complete` (every currently required agreement is accepted at its current version).
+- **Changed** `GET /partner/application/` (the applicant's own record): a transition `reason` is
+  returned only for `CHANGES_REQUIRED`; it is `""` otherwise. Reviewer hand-backs to the queue
+  (`reason_code` `application_review_released`) are left out, and `review_assigned_to_id` is
+  `null`. Operations reads (`/operations/partner-applications/...`) are unchanged.
+- **Changed** a resubmission from `CHANGES_REQUIRED` now records `reason_code`
+  `application_resubmitted` (was `application_submitted`).
+- **Changed** approval refuses (`409 partner_application_incomplete`) a services application
+  with an active service area that has no working hours. Approval no longer adds default hours.
+- **Removed** `display_name` from `PATCH /partner/me/` (`PartnerProfileUpdateRequest`). The name
+  is the one Operations checked against the Partner's ID; before submission it is edited on the
+  application. A `display_name` in the body is ignored.
+- **Notifications**: the Partner gets an in-app notice when the application is sent or resent,
+  when review starts, when a document is rejected, and on every decision. All except review
+  start are also sent by OneSignal web push under the Account category, which cannot be muted.
+- **Published**: the push preference and customer push subscription endpoints that were already
+  live (`/customer/notification-preferences/`, `/partner/notification-preferences/`,
+  `/customer/push-subscriptions/sync/`, `/customer/push-subscriptions/{subscription_id}/`) are
+  now in this contract.
+- `POST /dev/onesignal/test-push/` (not in the contract) answers only while `DEBUG` is on, needs a
+  session, and pushes only to the caller.
+
 ## 1.89.0 - Operations reports an admin can use without knowing codes
 
 Operations only. The Reports page is the only consumer and is updated with this change.

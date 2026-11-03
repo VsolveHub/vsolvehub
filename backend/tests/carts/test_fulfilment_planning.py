@@ -708,4 +708,3 @@ def test_selected_plan_set_with_active_quote_allows_checkout() -> None:
     checkout = create_checkout(customer=customer, quote=quote)
     assert checkout is not None
     assert checkout.status == "CREATED"
-

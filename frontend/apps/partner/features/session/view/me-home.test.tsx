@@ -14,7 +14,7 @@ vi.mock("@vsolve/query", async (importOriginal) => ({
 vi.mock("@/features/presence/view/partner-presence", () => ({
   PartnerPresence: () => <div data-testid="presence" />,
 }));
-vi.mock("@/lib/api/browser", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/browser", () => ({ getApiClient: vi.fn(), browserApiBaseUrl: () => "" }));
 /*
   `MeHome` reads the profile now, to put the Partner's own name on the one
   screen that is about them. Mocked here rather than left to hit a stubbed API

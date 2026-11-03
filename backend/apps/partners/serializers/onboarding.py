@@ -11,6 +11,9 @@ management directory lives in `directory`; the M2 capability, insurance, gate an
 crew contracts live in `m2`.
 """
 
+from typing import Any
+
+from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -23,7 +26,12 @@ from apps.partners.models import (
     PartnerProfile,
     Skill,
 )
+from apps.partners.selectors import partner_has_required_consents
 from apps.payouts.models import PartnerPayoutAccount
+
+#: Serializer context value for the applicant reading their own application. Without it the
+#: payload is the Operations view, with every reason and the reviewer's id.
+APPLICANT_AUDIENCE = "applicant"
 
 
 class PartnerConsentInputSerializer(serializers.Serializer[dict[str, object]]):
@@ -235,6 +243,9 @@ class PartnerSkillOptionSerializer(serializers.ModelSerializer[Skill]):
 
 
 class PartnerDocumentSerializer(serializers.ModelSerializer[PartnerDocument]):
+    file_name = serializers.CharField(read_only=True)
+    can_replace = serializers.SerializerMethodField()
+
     class Meta:
         model = PartnerDocument
         fields = (
@@ -250,8 +261,29 @@ class PartnerDocumentSerializer(serializers.ModelSerializer[PartnerDocument]):
             "review_reason",
             "uploaded_at",
             "reviewed_at",
+            "file_name",
+            "can_replace",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_can_replace(document: PartnerDocument) -> bool:
+        """Whether the Partner may upload a new version of this document right now.
+
+        Only the newest version of a kind can be replaced, and only when the application allows
+        it (`PartnerApplication.allows_document_change`, the rule the upload endpoint enforces).
+        Clients render a Replace action from this flag and nothing else.
+        """
+        application = document.application
+        latest = max(
+            (other for other in application.documents.all() if other.kind == document.kind),
+            key=lambda other: other.version,
+            default=None,
+        )
+        if latest is None or latest.pk != document.pk:
+            return False
+        return application.allows_document_change(latest)
 
 
 class OperationsApplicationQueueItemSerializer(
@@ -301,9 +333,12 @@ class PartnerApplicationTransitionSerializer(
 class PartnerProfileUpdateSerializer(serializers.Serializer[dict[str, object]]):
     """What a Partner may change about themselves without a review.
 
-    `display_name` is the name Customers see. `default_location_text` is the
-    registered pickup / address used to prefill A7 rental ads (still editable
-    per asset).
+    `default_location_text` is the registered pickup / address used to prefill A7
+    rental ads (still editable per asset).
+
+    **Not** `display_name`. It is the name on the application Operations checked
+    against the Partner's ID, so it is fixed once the application is sent; before
+    that it is edited on the application itself.
 
     **Not** `phone_number`. That is the login credential: changing it moves who
     can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -315,16 +350,9 @@ class PartnerProfileUpdateSerializer(serializers.Serializer[dict[str, object]]):
     reviewed them, and a field here would silently reopen a reviewed decision.
     """
 
-    display_name = serializers.CharField(max_length=120, trim_whitespace=True, required=False)
     default_location_text = serializers.CharField(
         max_length=240, required=False, allow_blank=True, trim_whitespace=True
     )
-
-    @staticmethod
-    def validate_display_name(value: str) -> str:
-        if not value.strip():
-            raise serializers.ValidationError("Enter the name Customers should see.")
-        return value.strip()
 
     @staticmethod
     def validate_default_location_text(value: str) -> str:
@@ -422,6 +450,9 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     consents = PartnerConsentSerializer(source="partner.consents", many=True, read_only=True)
     documents = PartnerDocumentSerializer(many=True, read_only=True)
     transitions = PartnerApplicationTransitionSerializer(many=True, read_only=True)
+    can_edit = serializers.BooleanField(source="is_editable", read_only=True)
+    required_document_kinds = serializers.SerializerMethodField()
+    consents_complete = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerApplication
@@ -445,10 +476,50 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "consents",
             "documents",
             "transitions",
+            "can_edit",
+            "required_document_kinds",
+            "consents_complete",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(
+        serializers.ListField(child=serializers.ChoiceField(choices=PartnerDocument.Kind.choices))
+    )
+    def get_required_document_kinds(_application: PartnerApplication) -> list[str]:
+        """The document kinds submission and approval require — the server's list, not a copy."""
+        return list(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_consents_complete(application: PartnerApplication) -> bool:
+        """Every agreement currently required for submission is accepted, at its current version."""
+        return partner_has_required_consents(application.partner)
+
+    def to_representation(self, instance: PartnerApplication) -> dict[str, Any]:
+        """The applicant's own view drops what belongs to Operations.
+
+        A reviewer's words reach the applicant only when they were written for them — a request
+        for changes. Decline, suspension and approval notes stay in the audit trail, as does a
+        reviewer handing the application back to the queue and who that reviewer is.
+        """
+        data = super().to_representation(instance)
+        if self.context.get("audience") != APPLICANT_AUDIENCE:
+            return data
+        data["review_assigned_to_id"] = None
+        data["transitions"] = [
+            {
+                **transition,
+                "reason": transition["reason"]
+                if transition["to_status"] == PartnerApplication.Status.CHANGES_REQUIRED
+                else "",
+            }
+            for transition in data["transitions"]
+            if transition["reason_code"] != "application_review_released"
+        ]
+        return data
 
     def get_skill_codes(self, application: PartnerApplication) -> list[str]:
         return [link.skill.code for link in application.partner.skill_links.all() if link.is_active]

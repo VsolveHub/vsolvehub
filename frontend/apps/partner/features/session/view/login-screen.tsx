@@ -106,7 +106,6 @@ export function LoginScreen() {
   const isMissing =
     application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || isMissing;
-  const hasRejectedDocs = (application.data?.documents ?? []).some((d) => d.status === "REJECTED");
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -117,8 +116,8 @@ export function LoginScreen() {
     }
 
     if (!knowsWhereToGo) return;
-    router.replace(homeForApplication(application.data?.status ?? null, hasRejectedDocs));
-  }, [application.data?.status, hasRejectedDocs, isAuthenticated, knowsWhereToGo, next, router]);
+    router.replace(homeForApplication(application.data?.status ?? null));
+  }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
 
   if (!hydrated || guard.status === "checking") {
     return (

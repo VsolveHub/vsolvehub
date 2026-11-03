@@ -18,6 +18,7 @@ from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
+    PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
     PartnerLocation,
@@ -71,6 +72,26 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
         "is_required_for_submission",
         "published_at",
     )
+
+
+def partner_has_required_consents(partner: PartnerProfile) -> bool:
+    """Whether the Partner holds a live receipt for every agreement submission requires.
+
+    Compared by document id, so a receipt for a superseded version does not count: republishing
+    the legal text re-prompts every applicant. No published requirement means nobody can submit,
+    rather than everybody — an empty legal set is a deployment fault, not a waiver.
+    """
+    required_ids = set(required_partner_consent_documents().values_list("id", flat=True))
+    if not required_ids:
+        return False
+    accepted_ids = set(
+        PartnerConsent.objects.filter(
+            partner=partner,
+            document_id__in=required_ids,
+            withdrawn_at__isnull=True,
+        ).values_list("document_id", flat=True),
+    )
+    return required_ids.issubset(accepted_ids)
 
 
 def partner_application_for_user(user: User) -> PartnerApplication | None:

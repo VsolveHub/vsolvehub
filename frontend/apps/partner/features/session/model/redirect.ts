@@ -17,25 +17,26 @@ export { safeNextPath };
 
 type Status = Schemas["PartnerApplicationStatusEnum"];
 
-/** Statuses whose remaining work or waiting review lives in the onboarding tree. */
+/**
+ * Statuses whose page is the onboarding tree: remaining work, a review to wait on, or — for a
+ * declined application — the decision itself and how to contact support.
+ */
 const ONBOARDING_STATUSES: readonly Status[] = [
   "DRAFT",
   "CHANGES_REQUIRED",
   "SUBMITTED",
   "UNDER_REVIEW",
+  "DECLINED",
 ];
 
 /**
  * The signed-in landing page for an application in this state.
  *
- * An applicant with an unfinished or submitted application belongs in the
- * onboarding registration flow (/apply). Only fully APPROVED partners belong on
+ * An applicant whose application is unfinished, waiting or declined belongs in
+ * the onboarding tree (/apply). Approved, suspended and closed accounts belong on
  * the portal home (/home).
  */
-export function homeForApplication(
-  status: Status | null,
-  hasRejectedDocs = false,
-): "/apply" | "/home" {
-  if (status === null || ONBOARDING_STATUSES.includes(status) || hasRejectedDocs) return "/apply";
+export function homeForApplication(status: Status | null): "/apply" | "/home" {
+  if (status === null || ONBOARDING_STATUSES.includes(status)) return "/apply";
   return "/home";
 }

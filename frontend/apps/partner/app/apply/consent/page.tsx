@@ -1,18 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { ApplicationEditor } from "@/features/application/view/application-editor";
-import { ConsentStep } from "@/features/application/view/consent-step";
-
-export const metadata: Metadata = { title: "Agreements" };
-
+/** The agreements are accepted on the step that sends the application. */
 export default function ConsentPage() {
-  return (
-    <ApplicationEditor
-      title="apply.consent.pageTitle"
-      description="apply.consent.pageDescription"
-      saveLabel="apply.consent.saveLabel"
-    >
-      <ConsentStep />
-    </ApplicationEditor>
-  );
+  redirect("/apply/review");
 }

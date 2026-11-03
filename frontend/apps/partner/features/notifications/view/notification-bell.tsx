@@ -67,7 +67,7 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
         aria-expanded={open}
         aria-label={unreadBadgeLabel(unread, t)}
         className={cn(
-          "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-control",
+          "relative inline-flex h-10 w-10 sm:h-11 sm:w-11 min-h-10 min-w-10 sm:min-h-11 sm:min-w-11 items-center justify-center rounded-control",
           "text-text-secondary hover:bg-surface-hover hover:text-text",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
           className,

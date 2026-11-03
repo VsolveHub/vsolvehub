@@ -1,6 +1,7 @@
 """Celery tasks for assignment dispatch, OneSignal push delivery, and periodic reconciliation."""
 
 import logging
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -44,9 +45,11 @@ def reconcile_booking_group_dispatch() -> int:
 def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, Any]:
     """Start sequential Instant dispatch for a booking."""
     from datetime import timedelta
+
     from django.conf import settings
     from django.db import transaction
     from django.utils import timezone
+
     from apps.assignments.models import DispatchOffer
     from apps.assignments.ranking import evaluate_unit_candidates
     from apps.commerce.models import Booking
@@ -61,7 +64,11 @@ def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, A
         if not booking:
             return {"skipped": True, "reason": "Booking not found"}
 
-        if booking.status in (Booking.Status.COMPLETED, Booking.Status.CANCELLED, Booking.Status.ABORTED):
+        if booking.status in (
+            Booking.Status.COMPLETED,
+            Booking.Status.CANCELLED,
+            Booking.Status.ABORTED,
+        ):
             return {"skipped": True, "reason": f"Terminal booking status {booking.status}"}
 
         # Verify no PENDING DispatchOffer already exists
@@ -70,7 +77,10 @@ def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, A
             status=DispatchOffer.Status.PENDING,
         ).first()
         if existing_pending:
-            return {"skipped": True, "reason": f"Pending offer {existing_pending.id} already exists"}
+            return {
+                "skipped": True,
+                "reason": f"Pending offer {existing_pending.id} already exists",
+            }
 
         unit = getattr(booking, "fulfilment_unit", None)
         if not unit:
@@ -79,9 +89,7 @@ def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, A
         ranking = evaluate_unit_candidates(unit)
         candidates = ranking.ordered
         if not candidates:
-            transaction.on_commit(
-                lambda: reassign_or_downgrade_booking_task.delay(str(booking.id))
-            )
+            transaction.on_commit(lambda: reassign_or_downgrade_booking_task.delay(str(booking.id)))
             return {"skipped": True, "reason": "No eligible candidates found"}
 
         candidate = candidates[0]
@@ -108,11 +116,11 @@ def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, A
             },
         )
 
+        transaction.on_commit(lambda: send_dispatch_offer_push_task.delay(str(offer.id)))
         transaction.on_commit(
-            lambda: send_dispatch_offer_push_task.delay(str(offer.id))
-        )
-        transaction.on_commit(
-            lambda: expire_dispatch_offer_task.apply_async(args=[str(offer.id)], countdown=expiry_seconds)
+            lambda: expire_dispatch_offer_task.apply_async(
+                args=[str(offer.id)], countdown=expiry_seconds
+            )
         )
 
         return {"offer_id": str(offer.id), "partner_id": str(candidate.id), "attempt_number": 1}
@@ -125,8 +133,9 @@ def _handle_dispatch_send_retry(
     is_rate_limit: bool,
     response_data: dict[str, Any],
 ) -> dict[str, Any]:
-    from apps.assignments.models import DispatchOffer
     from django.db import transaction
+
+    from apps.assignments.models import DispatchOffer
 
     max_retries = 5
     with transaction.atomic():
@@ -137,7 +146,15 @@ def _handle_dispatch_send_retry(
 
         if offer.retry_count >= max_retries:
             offer.status = DispatchOffer.Status.FAILED
-            offer.save(update_fields=["status", "retry_count", "failure_reason", "onesignal_response", "updated_at"])
+            offer.save(
+                update_fields=[
+                    "status",
+                    "retry_count",
+                    "failure_reason",
+                    "onesignal_response",
+                    "updated_at",
+                ]
+            )
             logger.error(
                 "dispatch_offer_send_failed",
                 extra={
@@ -151,9 +168,17 @@ def _handle_dispatch_send_retry(
 
         # Return offer to PENDING so next worker or retry can process it
         offer.status = DispatchOffer.Status.PENDING
-        offer.save(update_fields=["status", "retry_count", "failure_reason", "onesignal_response", "updated_at"])
+        offer.save(
+            update_fields=[
+                "status",
+                "retry_count",
+                "failure_reason",
+                "onesignal_response",
+                "updated_at",
+            ]
+        )
 
-    countdown = max(5 if is_rate_limit else 2, 2 ** offer.retry_count)
+    countdown = max(5 if is_rate_limit else 2, 2**offer.retry_count)
     logger.warning(
         "dispatch_offer_retry_scheduled",
         extra={
@@ -169,7 +194,12 @@ def _handle_dispatch_send_retry(
             self.retry(countdown=countdown, max_retries=max_retries)
         except Exception:
             pass
-    return {"success": False, "retry_scheduled": True, "countdown": countdown, "reason": failure_reason}
+    return {
+        "success": False,
+        "retry_scheduled": True,
+        "countdown": countdown,
+        "reason": failure_reason,
+    }
 
 
 @shared_task(
@@ -187,13 +217,15 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
     - Deduplication: never re-sends if onesignal_notification_id exists or status in (SENT, EXPIRED, SKIPPED)
     """
     from datetime import timedelta
+
+    from django.conf import settings
+    from django.db import transaction
+    from django.utils import timezone
+
     from apps.assignments.models import DispatchOffer
     from apps.notifications.models import NotificationDelivery, NotificationIntent
     from apps.notifications.transport import OneSignalMessageTransport
     from apps.partners.models import PartnerPushSubscription
-    from django.conf import settings
-    from django.db import transaction
-    from django.utils import timezone
 
     offer_uuid = UUID(offer_id)
     now = timezone.now()
@@ -207,7 +239,10 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
             .first()
         )
         if not offer:
-            logger.info("dispatch_offer_claim_skipped", extra={"offer_id": offer_id, "skip_reason": "dispatch_offer_not_found"})
+            logger.info(
+                "dispatch_offer_claim_skipped",
+                extra={"offer_id": offer_id, "skip_reason": "dispatch_offer_not_found"},
+            )
             return {"skipped": True, "reason": "Offer missing"}
 
         # If already sent, exit
@@ -291,15 +326,23 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
     freshness_cutoff = now - timedelta(days=freshness_days)
 
     if getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False):
-        active_sub = PartnerPushSubscription.objects.filter(
-            partner=partner,
-            is_active=True,
-            opted_in=True,
-            last_verified_at__gte=freshness_cutoff,
-        ).exclude(permission_state__iexact="denied").first()
+        active_sub = (
+            PartnerPushSubscription.objects.filter(
+                partner=partner,
+                is_active=True,
+                opted_in=True,
+                last_verified_at__gte=freshness_cutoff,
+            )
+            .exclude(permission_state__iexact="denied")
+            .first()
+        )
 
         if not active_sub:
-            latest_sub = PartnerPushSubscription.objects.filter(partner=partner).order_by("-updated_at").first()
+            latest_sub = (
+                PartnerPushSubscription.objects.filter(partner=partner)
+                .order_by("-updated_at")
+                .first()
+            )
             if not latest_sub:
                 exclusion_reason = "NO_ACTIVE_PUSH_SUBSCRIPTION"
             elif latest_sub.permission_state.lower() == "denied":
@@ -372,7 +415,7 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
         return _handle_dispatch_send_retry(
             self=self,
             offer=offer,
-            failure_reason=f"network_exception: {str(exc)}",
+            failure_reason=f"network_exception: {exc!s}",
             is_rate_limit=False,
             response_data={"exception": str(exc)},
         )
@@ -400,7 +443,15 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
             offer.onesignal_notification_id = str(notification_id)
             offer.sent_at = timezone.now()
             offer.onesignal_response = raw_response
-            offer.save(update_fields=["status", "onesignal_notification_id", "sent_at", "onesignal_response", "updated_at"])
+            offer.save(
+                update_fields=[
+                    "status",
+                    "onesignal_notification_id",
+                    "sent_at",
+                    "onesignal_response",
+                    "updated_at",
+                ]
+            )
 
         logger.info(
             "dispatch_offer_send_succeeded",
@@ -434,13 +485,19 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
         return _handle_dispatch_send_retry(
             self=self,
             offer=offer,
-            failure_reason=f"server_error_{http_status}" if http_status >= 500 else "network_timeout",
+            failure_reason=f"server_error_{http_status}"
+            if http_status >= 500
+            else "network_timeout",
             is_rate_limit=False,
             response_data=raw_response,
         )
 
     # 400 / 401 / 403 / 404 Client errors: mark FAILED, do not retry
-    if 400 <= http_status < 500 and status != NotificationDelivery.Status.SKIPPED and failure_code != "NO_VALID_RECIPIENTS":
+    if (
+        400 <= http_status < 500
+        and status != NotificationDelivery.Status.SKIPPED
+        and failure_code != "NO_VALID_RECIPIENTS"
+    ):
         logger.error(
             "dispatch_offer_send_failed",
             extra={
@@ -455,7 +512,9 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
             offer.status = DispatchOffer.Status.FAILED
             offer.failure_reason = f"client_error_{http_status}"
             offer.onesignal_response = raw_response
-            offer.save(update_fields=["status", "failure_reason", "onesignal_response", "updated_at"])
+            offer.save(
+                update_fields=["status", "failure_reason", "onesignal_response", "updated_at"]
+            )
 
         expire_dispatch_offer_task.delay(str(offer.id))
         return {
@@ -493,9 +552,11 @@ send_dispatch_offer_task = send_dispatch_offer_push_task
 def reconcile_stuck_dispatch_offers_task() -> dict[str, int]:
     """Finds offers stuck in SENDING for > 5 minutes and reconciles them."""
     from datetime import timedelta
-    from apps.assignments.models import DispatchOffer
+
     from django.db import transaction
     from django.utils import timezone
+
+    from apps.assignments.models import DispatchOffer
 
     now = timezone.now()
     cutoff = now - timedelta(minutes=5)
@@ -557,18 +618,19 @@ def reconcile_stuck_dispatch_offers_task() -> dict[str, int]:
 @shared_task
 def expire_dispatch_offer_task(offer_id: str) -> bool:
     """Check if the dispatch offer has expired, transition status, and trigger reassignment."""
-    from apps.assignments.models import DispatchOffer
     from django.db import transaction
     from django.utils import timezone
 
+    from apps.assignments.models import DispatchOffer
+
     now = timezone.now()
     with transaction.atomic():
-        offer = (
-            DispatchOffer.objects.select_for_update()
-            .filter(id=UUID(offer_id))
-            .first()
-        )
-        if not offer or offer.status not in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT):
+        offer = DispatchOffer.objects.select_for_update().filter(id=UUID(offer_id)).first()
+        if not offer or offer.status not in (
+            DispatchOffer.Status.PENDING,
+            DispatchOffer.Status.SENDING,
+            DispatchOffer.Status.SENT,
+        ):
             return False
 
         if offer.expires_at > now:
@@ -604,13 +666,15 @@ def reassign_or_downgrade_booking_task(
 ) -> str | None:
     """Reassign an instant booking to the next eligible partner, or downgrade to SCHEDULED."""
     from datetime import timedelta
+
     from django.conf import settings
     from django.db import transaction
     from django.utils import timezone
+
     from apps.assignments.models import DispatchOffer
     from apps.assignments.ranking import evaluate_unit_candidates
-    from apps.commerce.models import Booking
     from apps.carts.models import BookingGroup
+    from apps.commerce.models import Booking
 
     with transaction.atomic():
         booking = (
@@ -634,7 +698,11 @@ def reassign_or_downgrade_booking_task(
             status=DispatchOffer.Status.ACCEPTED,
         ).first()
         if accepted_offer:
-            logger.info("[Dispatch] Booking %s has accepted offer %s; skipping reassignment", booking.id, accepted_offer.id)
+            logger.info(
+                "[Dispatch] Booking %s has accepted offer %s; skipping reassignment",
+                booking.id,
+                accepted_offer.id,
+            )
             return None
 
         # Terminal or active service execution statuses should not receive dispatches
@@ -646,7 +714,11 @@ def reassign_or_downgrade_booking_task(
             Booking.Status.CANCELLED,
             Booking.Status.ABORTED,
         ):
-            logger.info("[Dispatch] Booking %s in status %s; skipping reassignment", booking.id, booking.status)
+            logger.info(
+                "[Dispatch] Booking %s in status %s; skipping reassignment",
+                booking.id,
+                booking.status,
+            )
             return None
 
         # Verify no active PENDING offer exists
@@ -655,7 +727,11 @@ def reassign_or_downgrade_booking_task(
             status=DispatchOffer.Status.PENDING,
         ).first()
         if pending_offer and pending_offer.expires_at > timezone.now():
-            logger.info("[Dispatch] Booking %s already has active pending offer %s", booking.id, pending_offer.id)
+            logger.info(
+                "[Dispatch] Booking %s already has active pending offer %s",
+                booking.id,
+                pending_offer.id,
+            )
             return str(pending_offer.id)
 
         attempted_partner_ids = set(
@@ -698,11 +774,11 @@ def reassign_or_downgrade_booking_task(
                 },
             )
 
+            transaction.on_commit(lambda: send_dispatch_offer_push_task.delay(str(new_offer.id)))
             transaction.on_commit(
-                lambda: send_dispatch_offer_push_task.delay(str(new_offer.id))
-            )
-            transaction.on_commit(
-                lambda: expire_dispatch_offer_task.apply_async(args=[str(new_offer.id)], countdown=expiry_seconds)
+                lambda: expire_dispatch_offer_task.apply_async(
+                    args=[str(new_offer.id)], countdown=expiry_seconds
+                )
             )
             return str(new_offer.id)
 
@@ -749,14 +825,19 @@ reassignment_or_downgrade_task = reassign_or_downgrade_booking_task
 @shared_task
 def reconcile_expired_dispatch_offers() -> int:
     """Periodic Celery Beat task to expire timed-out dispatch offers and trigger rotation."""
-    from apps.assignments.models import DispatchOffer
     from django.db import transaction
     from django.utils import timezone
+
+    from apps.assignments.models import DispatchOffer
 
     now = timezone.now()
     expired_offers = list(
         DispatchOffer.objects.filter(
-            status__in=[DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT],
+            status__in=[
+                DispatchOffer.Status.PENDING,
+                DispatchOffer.Status.SENDING,
+                DispatchOffer.Status.SENT,
+            ],
             expires_at__lte=now,
         ).values_list("id", "booking_id", "partner_id", "attempt_number")
     )
@@ -766,7 +847,11 @@ def reconcile_expired_dispatch_offers() -> int:
         with transaction.atomic():
             updated = DispatchOffer.objects.filter(
                 id=offer_id,
-                status__in=[DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT],
+                status__in=[
+                    DispatchOffer.Status.PENDING,
+                    DispatchOffer.Status.SENDING,
+                    DispatchOffer.Status.SENT,
+                ],
                 expires_at__lte=now,
             ).update(
                 status=DispatchOffer.Status.EXPIRED,
@@ -785,7 +870,7 @@ def reconcile_expired_dispatch_offers() -> int:
                     },
                 )
                 transaction.on_commit(
-                    lambda b_id=booking_id: reassign_or_downgrade_booking_task.delay(str(b_id))
+                    partial(reassign_or_downgrade_booking_task.delay, str(booking_id))
                 )
 
     return reconciled_count

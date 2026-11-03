@@ -27,7 +27,6 @@ def _seed_booking_and_partner(*, suffix: str = "1") -> tuple[Booking, PartnerPro
     return booked.booking, booked.partner, booked.partner.user
 
 
-
 def _seed_second_partner(*, suffix: str = "2") -> tuple[PartnerProfile, User]:
     user = User.objects.create_user(phone_number=f"+9198333{int(suffix):05d}")
     role, _ = Role.objects.get_or_create(code="partner", defaults={"name": "Partner"})

@@ -1,9 +1,12 @@
 """Tests for OneSignal REST API client service."""
 
 from unittest.mock import MagicMock, patch
-import pytest
-from apps.notifications.onesignal import send_push_to_external_ids
 
+import pytest
+from rest_framework.test import APIClient
+
+from apps.identity.models import User
+from apps.notifications.onesignal import send_push_to_external_ids
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +120,9 @@ def test_send_push_api_error_response_handled():
 def test_send_push_network_exception_handled():
     import requests
 
-    with patch("requests.Session.post", side_effect=requests.exceptions.ConnectTimeout("Network timeout")):
+    with patch(
+        "requests.Session.post", side_effect=requests.exceptions.ConnectTimeout("Network timeout")
+    ):
         result = send_push_to_external_ids(
             external_ids=["partner-1"],
             heading="Test",
@@ -158,3 +163,39 @@ def test_send_push_with_collapse_id_web_push_topic_ttl_priority():
         assert payload["web_push_topic"] == "dispatch_off-1"
         assert payload["ttl"] == 45
         assert payload["priority"] == 10
+
+
+# --- the local test-push endpoint ---------------------------------------------------------------
+
+DEV_PUSH_URL = "/api/v1/dev/onesignal/test-push/"
+
+
+@pytest.mark.django_db
+def test_dev_test_push_is_gone_without_debug_whatever_onesignal_env_says(settings):
+    settings.DEBUG = False
+    settings.ONESIGNAL_ENV = "local"
+    user = User.objects.create_user(phone_number="+919900000901", full_name="Anyone")
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    with patch("apps.notifications.onesignal.send_push_to_external_ids") as send:
+        response = client.post(DEV_PUSH_URL, {"external_id": "someone-else"}, format="json")
+
+    assert response.status_code == 404
+    send.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_dev_test_push_needs_a_session_and_only_reaches_the_caller(settings):
+    settings.DEBUG = True
+    anonymous = APIClient().post(DEV_PUSH_URL, {"external_id": "someone-else"}, format="json")
+    assert anonymous.status_code in (401, 403)
+
+    user = User.objects.create_user(phone_number="+919900000902", full_name="Developer")
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with patch("apps.notifications.onesignal.send_push_to_external_ids") as send:
+        send.return_value = {"success": True, "notification_id": "x", "errors": []}
+        client.post(DEV_PUSH_URL, {"external_id": "someone-else"}, format="json")
+
+    assert send.call_args.kwargs["external_ids"] == [str(user.id)]

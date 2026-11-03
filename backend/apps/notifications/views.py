@@ -21,20 +21,22 @@ The audit lives in the row itself: actor, reason and timestamp for both directio
 """
 
 import logging
+import uuid
 from typing import cast
 
-logger = logging.getLogger(__name__)
-
+from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.identity.models import User
+from apps.notifications import onesignal
 from apps.notifications.feed import (
     NotificationNotFoundError,
     mark_all_read,
@@ -42,7 +44,11 @@ from apps.notifications.feed import (
     notification_feed,
     unread_count,
 )
-from apps.notifications.models import KillSwitch, PushNotificationPreference
+from apps.notifications.models import (
+    CustomerPushSubscription,
+    KillSwitch,
+    PushNotificationPreference,
+)
 from apps.notifications.serializers import (
     CustomerPushSubscriptionResponseSerializer,
     CustomerPushSubscriptionSyncSerializer,
@@ -52,6 +58,8 @@ from apps.notifications.serializers import (
     MarkNotificationReadRequestSerializer,
     NotificationPageSerializer,
     NotificationSerializer,
+    PushPreferencesSerializer,
+    PushPreferenceUpdateSerializer,
     ReleaseKillSwitchRequestSerializer,
     UnreadNotificationCountSerializer,
 )
@@ -68,6 +76,8 @@ from common.pagination import (
     reject_invalid_cursor_query,
 )
 from common.throttling import ThrottledWriteMixin
+
+logger = logging.getLogger(__name__)
 
 OPERATIONS_TAG = "Operations"
 NOTIFICATIONS_TAG = "Notifications"
@@ -240,40 +250,35 @@ class NotificationReadView(ThrottledWriteMixin, APIView):
 
 
 class DevOneSignalTestPushView(APIView):
-    """Local development & testing endpoint to verify OneSignal push delivery to an external_id."""
+    """Local development only: send a test push to yourself.
 
-    authentication_classes = ()
-    permission_classes = ()
+    Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+    — and only to the signed-in caller, so it can never be used to push to someone else.
+    """
+
+    permission_classes = (IsAuthenticated,)
 
     def post(self, request: Request) -> Response:
-        from django.conf import settings
-        from apps.notifications.onesignal import send_push_to_external_ids
 
-        is_dev_enabled = settings.DEBUG or getattr(settings, "ONESIGNAL_ENV", "") == "local"
-
-        if not is_dev_enabled:
+        if not settings.DEBUG:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        external_id = request.data.get("external_id")
         heading = request.data.get("heading", "Test job alert")
         body = request.data.get("body", "This is a test Instant booking notification.")
         data = request.data.get("data", {"type": "DEV_TEST"})
         url = request.data.get("url")
 
-        if not external_id:
-            return Response(
-                {"error": "external_id is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        result = send_push_to_external_ids(
-            external_ids=[str(external_id)],
+        result = onesignal.send_push_to_external_ids(
+            external_ids=[str(request.user.id)],
             heading=heading,
             body=body,
             data=data,
             url=url,
         )
-        return Response(result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST)
+        return Response(
+            result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST
+        )
+
 
 class CustomerPushSubscriptionSyncView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -305,10 +310,7 @@ class CustomerPushSubscriptionSyncView(APIView):
 class CustomerPushSubscriptionDetailView(APIView):
     permission_classes = (IsAuthenticated,)
 
-    def _get_subscription(self, request: Request, subscription_id: str):
-        import uuid
-        from rest_framework.exceptions import NotFound, PermissionDenied
-        from apps.notifications.models import CustomerPushSubscription
+    def _get_subscription(self, request: Request, subscription_id: str) -> CustomerPushSubscription:
 
         is_uuid = False
         try:
@@ -318,12 +320,13 @@ class CustomerPushSubscriptionDetailView(APIView):
             pass
 
         if is_uuid:
-            from django.db.models import Q
             sub = CustomerPushSubscription.objects.filter(
                 Q(id=subscription_id) | Q(onesignal_subscription_id=subscription_id)
             ).first()
         else:
-            sub = CustomerPushSubscription.objects.filter(onesignal_subscription_id=subscription_id).first()
+            sub = CustomerPushSubscription.objects.filter(
+                onesignal_subscription_id=subscription_id
+            ).first()
 
         if sub is None:
             raise NotFound("Customer push subscription was not found.")
@@ -378,17 +381,20 @@ class CustomerPushSubscriptionDetailView(APIView):
                 update_fields.append("is_active")
 
         # If becoming active WEB, deactivate other active WEB subscriptions for same customer
-        from apps.notifications.models import CustomerPushSubscription
         if sub.is_active and sub.platform == CustomerPushSubscription.Platform.WEB:
             CustomerPushSubscription.objects.filter(
-                user=request.user,
+                user=cast(User, request.user),
                 platform=CustomerPushSubscription.Platform.WEB,
                 is_active=True,
             ).exclude(id=sub.id).update(is_active=False, updated_at=now)
 
         sub.save(update_fields=update_fields)
 
-        event = "customer_push_subscription_updated" if sub.is_active else "customer_push_subscription_deactivated"
+        event = (
+            "customer_push_subscription_updated"
+            if sub.is_active
+            else "customer_push_subscription_deactivated"
+        )
         logger.info(
             event,
             extra={
@@ -401,7 +407,9 @@ class CustomerPushSubscriptionDetailView(APIView):
                 "failure_reason": "",
             },
         )
-        return Response(CustomerPushSubscriptionResponseSerializer(sub).data, status=status.HTTP_200_OK)
+        return Response(
+            CustomerPushSubscriptionResponseSerializer(sub).data, status=status.HTTP_200_OK
+        )
 
     @extend_schema(
         tags=["Customer push subscriptions"],
@@ -420,7 +428,6 @@ class CustomerPushSubscriptionDetailView(APIView):
         sub.last_verified_at = now
         sub.save(update_fields=["is_active", "opted_in", "last_verified_at", "updated_at"])
 
-        import logging
         logger.info(
             "customer_push_subscription_deactivated",
             extra={
@@ -436,48 +443,57 @@ class CustomerPushSubscriptionDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-
 class BasePushNotificationPreferencesView(APIView):
     permission_classes = [IsAuthenticated]
     role: str = ""
 
     @extend_schema(
         tags=["Notification preferences"],
-        responses={200: OpenApiResponse(description="User push notification preferences.")},
+        responses={200: PushPreferencesSerializer},
     )
     def get(self, request: Request) -> Response:
         role = self.role
+        user = cast(User, request.user)
         metadata = PushNotificationPreference.CATEGORY_METADATA.get(role, {})
         existing = {
             p.category: p.is_enabled
-            for p in PushNotificationPreference.objects.filter(user=request.user, role=role)
+            for p in PushNotificationPreference.objects.filter(user=user, role=role)
         }
 
         preferences = []
         for cat_key, meta in metadata.items():
             is_enabled = existing.get(cat_key, meta.get("default_enabled", True))
-            preferences.append({
-                "category": cat_key,
-                "label": meta.get("label", cat_key),
-                "description": meta.get("description", ""),
-                "is_enabled": is_enabled,
-                "is_mutable": meta.get("is_mutable", True),
-            })
+            preferences.append(
+                {
+                    "category": cat_key,
+                    "label": meta.get("label", cat_key),
+                    "description": meta.get("description", ""),
+                    "is_enabled": is_enabled,
+                    "is_mutable": meta.get("is_mutable", True),
+                }
+            )
 
-        return Response({
-            "role": role,
-            "preferences": preferences,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "role": role,
+                "preferences": preferences,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=["Notification preferences"],
+        request=PushPreferenceUpdateSerializer,
         responses={
-            200: OpenApiResponse(description="Preferences updated successfully."),
-            400: OpenApiResponse(description="Invalid request or attempt to disable immutable category."),
+            200: PushPreferencesSerializer,
+            400: OpenApiResponse(
+                description="Invalid request or attempt to disable immutable category."
+            ),
         },
     )
     def patch(self, request: Request) -> Response:
         role = self.role
+        user = cast(User, request.user)
         metadata = PushNotificationPreference.CATEGORY_METADATA.get(role, {})
         data = request.data
 
@@ -519,13 +535,16 @@ class BasePushNotificationPreferencesView(APIView):
             meta = metadata[cat]
             if not meta.get("is_mutable", True) and not enabled:
                 return Response(
-                    {"error": f"Category '{cat}' is critical and cannot be disabled.", "category": cat},
+                    {
+                        "error": f"Category '{cat}' is critical and cannot be disabled.",
+                        "category": cat,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         for cat, enabled in updates.items():
             PushNotificationPreference.objects.update_or_create(
-                user=request.user,
+                user=user,
                 role=role,
                 category=cat,
                 defaults={"is_enabled": enabled},
@@ -534,7 +553,7 @@ class BasePushNotificationPreferencesView(APIView):
         logger.info(
             "push_notification_preferences_updated",
             extra={
-                "user_id": str(request.user.id),
+                "user_id": str(user.id),
                 "role": role,
                 "updates": updates,
             },
