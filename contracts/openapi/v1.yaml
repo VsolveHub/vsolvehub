@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.89.0
+  version: 1.90.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -2495,6 +2495,165 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CoinTransactionPage'
+          description: ''
+  /api/v1/customer/notification-preferences/:
+    get:
+      operationId: customer_notification_preferences_retrieve
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: User push notification preferences.
+    patch:
+      operationId: customer_notification_preferences_partial_update
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Preferences updated successfully.
+        '400':
+          description: Invalid request or attempt to disable immutable category.
+  /api/v1/customer/push-subscriptions/{subscription_id}/:
+    patch:
+      operationId: customer_push_subscriptions_partial_update
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Customer push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: customer_push_subscriptions_destroy
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Customer push subscriptions
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: Subscription deactivated successfully.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/customer/push-subscriptions/sync/:
+    post:
+      operationId: customer_push_subscriptions_sync_create
+      tags:
+      - Customer push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/customer/referral/:
     get:
@@ -15361,6 +15520,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/notification-preferences/:
+    get:
+      operationId: partner_notification_preferences_retrieve
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: User push notification preferences.
+    patch:
+      operationId: partner_notification_preferences_partial_update
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Preferences updated successfully.
+        '400':
+          description: Invalid request or attempt to disable immutable category.
   /api/v1/partner/offers/:
     get:
       operationId: partner_offer_list
@@ -15849,7 +16029,15 @@ paths:
       responses:
         '200':
           description: The subscription was synced.
+        '201':
+          description: The subscription was created.
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
           content:
             application/json:
               schema:
@@ -15862,6 +16050,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -17449,50 +17643,6 @@ paths:
                 $ref: '#/components/schemas/PaymentAttempt'
           description: ''
         '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/payment-attempts/{attempt_id}/simulate-capture/:
-    post:
-      operationId: payment_attempt_simulate_capture
-      description: |-
-        Marks a payment captured with no gateway. Development only.
-
-        Published so the flow is drivable end to end without provider credentials.
-        It is fail-closed three ways — a settings flag off by default, a production
-        start-up guard that refuses to boot with it on, and a check that the attempt's
-        own provider is `fake` — and it runs the *real* capture path rather than
-        setting a status, so everything capture triggers actually happens.
-
-        `404` rather than `403` when disabled: an environment that does not do this
-        should not advertise that the door exists.
-      parameters:
-      - in: path
-        name: attempt_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - Payments
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentAttempt'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
           content:
             application/json:
               schema:
@@ -21592,6 +21742,14 @@ components:
         * `REJECT` - REJECT
         * `REMOVE` - REMOVE
         * `REINSTATE` - REINSTATE
+    ActionC29Enum:
+      enum:
+      - sync
+      - deactivate
+      type: string
+      description: |-
+        * `sync` - sync
+        * `deactivate` - deactivate
     ActionReasonRequest:
       type: object
       properties:
@@ -22437,9 +22595,6 @@ components:
           format: uuid
           nullable: true
           readOnly: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         activated_at:
           type: string
           format: date-time
@@ -22467,7 +22622,6 @@ components:
       - receipt_series
       - settled_at
       - settlement_reason_code
-      - simulated_capture_available
       - status
       - travel_compensation_paise
     BookingFeeStatusEnum:
@@ -23653,10 +23807,12 @@ components:
       enum:
       - SMS
       - EMAIL
+      - PUSH
       type: string
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
+        * `PUSH` - Push
     ChargebackRequest:
       type: object
       description: |-
@@ -26419,6 +26575,98 @@ components:
       - vendor
       - warranty_terms
       - worker_count
+    CustomerPushSubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        onesignal_subscription_id:
+          type: string
+          readOnly: true
+          description: OneSignal Subscription ID (UUID).
+        onesignal_external_id:
+          type: string
+          readOnly: true
+          description: OneSignal external_id alias (Customer User ID).
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          description: False if unsubscribed, permission revoked, or notification
+            delivery bounced.
+        opted_in:
+          type: boolean
+          readOnly: true
+          description: OneSignal push subscription opt-in state.
+        permission_state:
+          type: string
+          readOnly: true
+          description: Browser notification permission (granted, denied, default).
+        last_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_sync_status:
+          type: string
+          readOnly: true
+          description: Status of the last sync attempt (SUCCESS, FAILED).
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_active
+      - last_sync_status
+      - last_verified_at
+      - onesignal_external_id
+      - onesignal_subscription_id
+      - opted_in
+      - permission_state
+      - platform
+      - updated_at
+    CustomerPushSubscriptionSyncRequest:
+      type: object
+      properties:
+        onesignal_subscription_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          default: WEB
+        user_agent:
+          type: string
+          default: ''
+          maxLength: 500
+        is_active:
+          type: boolean
+          default: true
+        opted_in:
+          type: boolean
+          default: true
+        permission_state:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionC29Enum'
+          default: sync
+      required:
+      - onesignal_subscription_id
     CustomerQuoteList:
       type: object
       properties:
@@ -29609,6 +29857,7 @@ components:
       - SMS
       - WHATSAPP
       - VOICE
+      - PUSH
       - PAYMENTS
       - PAYOUTS
       - DISPATCH
@@ -29621,6 +29870,7 @@ components:
         * `SMS` - SMS channel
         * `WHATSAPP` - WhatsApp channel
         * `VOICE` - Voice call channel
+        * `PUSH` - Push channel
         * `PAYMENTS` - Payment collection
         * `PAYOUTS` - Partner payouts
         * `DISPATCH` - Partner dispatch
@@ -35326,6 +35576,18 @@ components:
         is_active:
           type: boolean
           default: true
+        opted_in:
+          type: boolean
+          default: true
+        permission_state:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionC29Enum'
+          default: sync
       required:
       - onesignal_subscription_id
     PartnerRateItem:
@@ -36337,6 +36599,20 @@ components:
           type: string
           format: email
           maxLength: 254
+    PatchedCustomerPushSubscriptionUpdateRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+        opted_in:
+          type: boolean
+        permission_state:
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        user_agent:
+          type: string
+          maxLength: 500
     PatchedJobUpdateRequest:
       type: object
       description: |-
@@ -36881,9 +37157,6 @@ components:
           type: string
           nullable: true
           readOnly: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         provider_order_id:
           type: string
           readOnly: true
@@ -36954,7 +37227,6 @@ components:
       - quote_id
       - razorpay_amount_paise
       - reconciliation_state
-      - simulated_capture_available
       - status
       - updated_at
       - version
@@ -37354,6 +37626,14 @@ components:
         * `this_month` - this_month
         * `last_month` - last_month
         * `all` - all
+    PermissionStateEnum:
+      enum:
+      - granted
+      - denied
+      - default
+      type: string
+      description: "* `` - \n* `granted` - granted\n* `denied` - denied\n* `default`\
+        \ - default"
     PickupAddress:
       type: object
       description: Where a Self Pickup customer collects the item. ``maps_url`` opens
@@ -42324,14 +42604,10 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
       required:
       - amount_paise
       - id
       - payment_attempt_id
-      - simulated_capture_available
     RentalDepositStatusEnum:
       enum:
       - REQUESTED
@@ -47342,9 +47618,6 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         shares:
           type: array
           items:
@@ -47390,7 +47663,6 @@ components:
       - receipt_series
       - settled_at
       - shares
-      - simulated_capture_available
       - status
     VisitPlanChooseRequest:
       type: object

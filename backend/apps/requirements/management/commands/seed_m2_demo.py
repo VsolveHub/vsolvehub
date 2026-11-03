@@ -18,8 +18,7 @@ editing `pricing.py`, that is the change this command exists to avoid.
 
 ## Three doors, all of which must be open
 
-1. `settings.DEBUG` must be true. `production.py` never sets it, and the precedent is
-   `PAYMENTS_ALLOW_SIMULATED_CAPTURE`, which production refuses to boot with.
+1. `settings.DEBUG` must be true. `production.py` never sets it.
 2. `--i-understand-this-is-dev-only` must be passed. Required *even under* `DEBUG`, because a
    shared development database can already hold prices somebody loaded on purpose, and this
    command writes money values into the table those live in.

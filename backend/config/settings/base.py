@@ -415,7 +415,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.89.0",
+    "VERSION": "1.90.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -691,12 +691,6 @@ FIREBASE_TOKEN_MAX_AGE_SECONDS = env.int("FIREBASE_TOKEN_MAX_AGE_SECONDS", defau
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
-#: Lets a caller mark their own payment captured without a real provider.
-#:
-#: Fail-closed, and `production.py` refuses it outright. It exists so a developer
-#: can drive a booking through capture — and everything capture triggers — with no
-#: gateway credentials. Mirrors `PAYOUTS_ALLOW_FAKE_PROVIDER` on the payouts side.
-PAYMENTS_ALLOW_SIMULATED_CAPTURE = env.bool("PAYMENTS_ALLOW_SIMULATED_CAPTURE", default=False)
 RAZORPAY_API_BASE_URL = env("RAZORPAY_API_BASE_URL", default="https://api.razorpay.com/v1")
 RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")

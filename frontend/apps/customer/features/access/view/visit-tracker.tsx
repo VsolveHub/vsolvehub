@@ -110,8 +110,8 @@ export interface VisitTrackerProps {
   checkoutPriceLabel: string | null;
   isStartingCheckout: boolean;
   checkoutError: unknown;
-  canSimulatePendingCapture: boolean;
-  onSimulatePendingCapture: () => void;
+  canResumePayment: boolean;
+  onResumePayment: () => void;
 
   /** Where the delivered estimates are read. Shown once any visit has completed. */
   estimatesHref: string;
@@ -197,8 +197,8 @@ export function VisitTracker({
   onStartCheckout,
   isStartingCheckout,
   checkoutError,
-  canSimulatePendingCapture,
-  onSimulatePendingCapture,
+  canResumePayment,
+  onResumePayment,
   estimatesHref,
   visitHref,
   supportAction,
@@ -252,8 +252,8 @@ export function VisitTracker({
           onStartCheckout={onStartCheckout}
           isStartingCheckout={isStartingCheckout}
           checkoutError={checkoutError}
-          canSimulatePendingCapture={canSimulatePendingCapture}
-          onSimulatePendingCapture={onSimulatePendingCapture}
+          canResumePayment={canResumePayment}
+          onResumePayment={onResumePayment}
           planSwitcher={planSwitcher}
           brief={brief}
         />
@@ -313,8 +313,8 @@ export function VisitTracker({
               onStartCheckout={onStartCheckout}
               isStartingCheckout={isStartingCheckout}
               checkoutError={checkoutError}
-              canSimulatePendingCapture={canSimulatePendingCapture}
-              onSimulatePendingCapture={onSimulatePendingCapture}
+              canResumePayment={canResumePayment}
+              onResumePayment={onResumePayment}
               planSwitcher={planSwitcher}
               brief={brief}
             />
@@ -489,8 +489,8 @@ export function VisitTracker({
             onStartCheckout={onStartCheckout}
             isStartingCheckout={isStartingCheckout}
             checkoutError={checkoutError}
-            canSimulatePendingCapture={canSimulatePendingCapture}
-            onSimulatePendingCapture={onSimulatePendingCapture}
+            canResumePayment={canResumePayment}
+            onResumePayment={onResumePayment}
             planSwitcher={planSwitcher}
             brief={brief}
           />
@@ -623,8 +623,8 @@ function VisitPlanRail({
   onStartCheckout,
   isStartingCheckout,
   checkoutError,
-  canSimulatePendingCapture,
-  onSimulatePendingCapture,
+  canResumePayment,
+  onResumePayment,
   planSwitcher,
   brief,
   embedded = false,
@@ -636,8 +636,8 @@ function VisitPlanRail({
   onStartCheckout: () => void;
   isStartingCheckout: boolean;
   checkoutError: unknown;
-  canSimulatePendingCapture: boolean;
-  onSimulatePendingCapture: () => void;
+  canResumePayment: boolean;
+  onResumePayment: () => void;
   planSwitcher?: ReactNode;
   brief?: ReactNode;
   embedded?: boolean;
@@ -722,14 +722,14 @@ function VisitPlanRail({
           <p className="text-sm font-medium leading-5 text-text-secondary">
             Your bank is responding. This page updates automatically.
           </p>
-          {canSimulatePendingCapture ? (
+          {canResumePayment ? (
             <Button
               className="mt-3"
-              onClick={onSimulatePendingCapture}
+              onClick={onResumePayment}
               loading={isStartingCheckout}
-              loadingLabel="Marking as paid"
+              loadingLabel="Opening payment"
             >
-              Mark as paid
+              Continue payment
             </Button>
           ) : null}
         </div>

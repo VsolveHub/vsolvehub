@@ -1,7 +1,6 @@
 """Visit-plan projections used by the Customer payment screen."""
 
 from datetime import timedelta
-from http import HTTPStatus
 
 import pytest
 from django.test import override_settings
@@ -11,6 +10,7 @@ from psycopg.types.range import Range
 from apps.assignments.models import Reservation
 from apps.catalog.models import ServiceVariant
 from apps.commerce.models import PaymentAttempt
+from apps.commerce.services.simulation import simulate_capture
 from apps.requirements.models import (
     M2AccessPrice,
     SiteVisit,
@@ -24,8 +24,7 @@ from .conftest import M2World, draft_requirement, invitation_for
 pytestmark = pytest.mark.django_db
 
 
-@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
-def test_pending_visit_plan_publishes_its_development_capture_attempt(world: M2World) -> None:
+def test_pending_visit_plan_publishes_its_payment_attempt(world: M2World) -> None:
     requirement = draft_requirement(
         world=world,
         archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
@@ -58,10 +57,10 @@ def test_pending_visit_plan_publishes_its_development_capture_attempt(world: M2W
     data = VisitPlanSerializer(plan).data
 
     assert data["payment_attempt_id"] == str(attempt.id)
-    assert data["simulated_capture_available"] is True
+    assert "simulated_capture_available" not in data
 
 
-@override_settings(PAYMENT_PROVIDER="fake", PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+@override_settings(PAYMENT_PROVIDER="fake")
 def test_simulated_visit_plan_capture_creates_missing_fake_provider_order(
     world: M2World,
 ) -> None:
@@ -121,17 +120,12 @@ def test_simulated_visit_plan_capture_creates_missing_fake_provider_order(
         expires_at=timezone.now() + timedelta(minutes=10),
     )
 
-    response = world.customer_client.post(
-        f"/api/v1/payment-attempts/{attempt.id}/simulate-capture/"
-    )
+    simulate_capture(attempt_id=attempt.id, customer_id=world.customer.id)
 
     attempt.refresh_from_db()
     plan.refresh_from_db()
     visit.refresh_from_db()
     reservation.refresh_from_db()
-    assert response.status_code == HTTPStatus.OK
-    assert response.json()["id"] == str(attempt.id)
-    assert response.json()["status"] == PaymentAttempt.Status.CAPTURED
     assert attempt.provider_order_id
     assert attempt.status == PaymentAttempt.Status.CAPTURED
     assert plan.status == VisitPlan.Status.ACTIVE

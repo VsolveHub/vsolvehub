@@ -1150,17 +1150,10 @@ function StageMoneyDetails({ summary, detail }: { summary: string; detail: strin
  *
  * ## The two steps, and why the Customer sees one
  *
- * Funding is genuinely two server calls — create the checkout, then capture it —
- * and there is no honest way to collapse them, because the second is what a
- * payment provider would do. So the dialog runs both behind one confirmation:
- * the checkout is created, and if it came back on the **fake** provider the
- * capture is simulated immediately.
- *
- * `provider` is the server's own field on the checkout, not a guess. On any
- * real provider this stops after the checkout and says so plainly, rather than
- * pretending money moved — and `simulate-capture` answers `404` wherever it is
- * switched off, which is production, so the panel cannot be talked into working
- * there either.
+ * Funding is genuinely two steps — create the checkout, then pay it in
+ * Razorpay Checkout — run behind one confirmation. Capture is confirmed only by
+ * the provider's webhook, so once Checkout closes the dialog says the charge is
+ * with the provider rather than pretending money moved.
  *
  * ## Why the confirmation is not optional
  *
@@ -1180,7 +1173,7 @@ function FundStageDialog({
   onClose: () => void;
 }) {
   const fund = useFundStage();
-  const [settled, setSettled] = useState<"paid" | "awaiting-provider" | null>(null);
+  const [settled, setSettled] = useState<"awaiting-provider" | null>(null);
   const [handoffError, setHandoffError] = useState<unknown>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
 
@@ -1201,13 +1194,9 @@ function FundStageDialog({
 
     setIsHandingOff(true);
     try {
-      const result = await completeOrOpenCheckout(String(attemptId), {
+      await completeOrOpenCheckout(String(attemptId), {
         businessName: "Vsolve Hub",
       });
-      if (result.mode === "simulated") {
-        setSettled("paid");
-        return;
-      }
       // Razorpay Checkout closed (or still preparing). Capture only comes from
       // the webhook — never from the widget callback.
       setSettled("awaiting-provider");
@@ -1224,12 +1213,8 @@ function FundStageDialog({
       onOpenChange={(next) => {
         if (!next && !isWorking) onClose();
       }}
-      title={settled === "paid" ? `${nouns.stage} funded` : `Fund this ${nouns.stage}?`}
-      description={
-        settled === "paid"
-          ? undefined
-          : `${stage.label} — the professional is told to start once this clears.`
-      }
+      title={`Fund this ${nouns.stage}?`}
+      description={`${stage.label} — the professional is told to start once this clears.`}
       footer={
         settled !== null ? (
           <Button onClick={onClose}>Done</Button>
@@ -1249,13 +1234,7 @@ function FundStageDialog({
         )
       }
     >
-      {settled === "paid" ? (
-        <p className="text-sm leading-6 text-text-secondary">
-          {stage.amountLabel} is funded and held against this {nouns.stage}. It
-          reaches the professional only after you accept the work — you are not
-          paying them yet.
-        </p>
-      ) : settled === "awaiting-provider" ? (
+      {settled === "awaiting-provider" ? (
         <p className="text-sm leading-6 text-text-secondary" role="status">
           The charge has been created and is with the payment provider. Your bank
           or UPI app tells us the outcome and that can take a few minutes — do

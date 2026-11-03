@@ -1,5 +1,17 @@
 # API Contract Changelog
 
+## 1.90.0 - Every payment goes through Razorpay Checkout
+
+Breaking for clients that used the development "Mark as paid" shortcut. The Customer and Partner
+apps are updated with this change.
+
+- **Removed** `POST /payment-attempts/{attempt_id}/simulate-capture/`.
+- **Removed** `simulated_capture_available` from `PaymentAttempt`, `RentalDeposit`, `BookingFee`
+  and `VisitPlan`. A pending payment is always paid by opening Razorpay Checkout; locally that is
+  Razorpay test mode.
+- **Published**: the customer and partner `notification-preferences` endpoints, which were in
+  the code but missing from this document.
+
 ## 1.89.0 - Operations reports an admin can use without knowing codes
 
 Operations only. The Reports page is the only consumer and is updated with this change.

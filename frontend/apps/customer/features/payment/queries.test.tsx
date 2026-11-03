@@ -27,7 +27,6 @@ const {
   paymentIntentKey,
   useCheckoutPayment,
   useReconcilePayment,
-  useSimulateCapture,
   useStartPayment,
 } = await import("./queries");
 
@@ -51,7 +50,6 @@ const ATTEMPT = {
   amount: { amount_paise: 250000, currency: "INR" },
   expires_at: null,
   allocations: [],
-  simulated_capture_available: false,
   created_at: "2026-08-04T11:55:00.000Z",
   updated_at: "2026-08-04T11:55:00.000Z",
 };
@@ -185,35 +183,5 @@ describe("useReconcilePayment", () => {
     expect(queryClient.getQueryData(queryKeys.payment.attempt("attempt-1"))).toEqual(captured);
     // A resolved payment can move the group to BOOKED, so the group is stale.
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.booking.group("group-1") });
-  });
-});
-
-describe("useSimulateCapture", () => {
-  it("marks a fake-provider payment captured through Django and refreshes booking state", async () => {
-    const captured = {
-      ...ATTEMPT,
-      provider: "fake",
-      provider_public_key: null,
-      status: "CAPTURED",
-      reconciliation_state: "IN_SYNC",
-      simulated_capture_available: true,
-    };
-    client.POST.mockResolvedValue(ok(captured));
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useSimulateCapture(), { wrapper });
-    result.current.mutate("attempt-1");
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    const [path, options] = client.POST.mock.calls[0];
-    expect(path).toBe("/api/v1/payment-attempts/{attempt_id}/simulate-capture/");
-    expect(options.params.path).toEqual({ attempt_id: "attempt-1" });
-    expect(queryClient.getQueryData(queryKeys.payment.attempt("attempt-1"))).toEqual(captured);
-    expect(queryClient.getQueryData(queryKeys.payment.forCheckout("checkout-1"))).toEqual(
-      captured,
-    );
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.booking.group("group-1") });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.booking.cart() });
   });
 });
