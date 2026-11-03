@@ -462,10 +462,26 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
             : "space-y-4 pb-20 lg:pb-12"
         }
       >
-        <BackToBookingsLink />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <BackToBookingsLink />
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
+              <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+              Booking Confirmed
+            </span>
+            <span className="text-xs text-text-secondary font-mono">
+              Ref #{group.id.slice(0, 8)}
+            </span>
+          </div>
+        </div>
 
         {isMultiPaidVisit ? (
-          <h1 className="text-2xl font-bold text-text">Your visits</h1>
+          <div className="rounded-2xl border border-line/80 bg-gradient-to-r from-orange-50/40 via-warm-50/20 to-surface p-5 sm:p-6 shadow-xs">
+            <h1 className="text-2xl sm:text-3xl font-black text-navy-900 tracking-tight">Your visits</h1>
+            <p className="mt-1 text-sm text-text-secondary">
+              {group.units.length} visits scheduled · All professionals assigned and confirmed for your services.
+            </p>
+          </div>
         ) : null}
 
         {/* The status card, on the states that still have something to say. `showBookingSummaryCard`
