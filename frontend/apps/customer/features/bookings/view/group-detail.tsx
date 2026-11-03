@@ -705,18 +705,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
             {isAwaitingPayment ? (
               <>
-                {canRefresh || canCancel ? (
+                {canCancel ? (
                   <div className="mt-6 flex flex-wrap gap-3">
-                    {canRefresh ? (
-                      <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
-                        Refresh now
-                      </Button>
-                    ) : null}
-                    {canCancel ? (
-                      <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
-                        Cancel this booking
-                      </Button>
-                    ) : null}
+                    <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
+                      Cancel this booking
+                    </Button>
                   </div>
                 ) : null}
 
