@@ -1,16 +1,25 @@
 // Ported faithfully from frontend/apps/partner/features/application/view/apply-shell.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
-import { Logo, Sheet, Text, cn } from "@vsolve/mobile-ui";
+import { Logo, Text, cn } from "@vsolve/mobile-ui";
 import { Slot, usePathname, useRouter } from "expo-router";
 import {
   Check,
   ChevronLeft,
   ListChecks,
   LogOut,
+  X,
 } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
 import {
   previousStep,
@@ -268,101 +277,239 @@ export default function ApplyLayout() {
         <Slot />
       </ScrollView>
 
-      {/* Steps List Sheet Modal */}
-      <Sheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        title="Your application"
-        description="Fill these in any order. Everything saves as you go."
+      {/* Centered Steps Pop-up Dialog Matching Web Exact UI */}
+      <Modal
+        visible={sheetOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSheetOpen(false)}
       >
-        <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ rowGap: 6, paddingBottom: 16 }}>
-          {steps.map((step) => {
-            const isCurrent = pathname === step.href;
-            return (
-              <Pressable
-                key={step.href}
-                accessibilityRole="button"
-                accessibilityLabel={step.label}
-                onPress={() => {
-                  setSheetOpen(false);
-                  router.push(step.href as never);
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  columnGap: 12,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: isCurrent ? "#00112e" : "#e2e8f0",
-                  backgroundColor: isCurrent ? "#f1f5f9" : "#ffffff",
-                  padding: 12,
-                }}
-              >
-                <StepMark state={step.state} />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: isCurrent ? "800" : "600",
-                      color: "#00112e",
-                    }}
-                  >
-                    {step.label}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-                    {describe(step, isCurrent)}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 16,
+            paddingVertical: 24,
+            backgroundColor: "rgba(0, 17, 46, 0.45)",
+            ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
+          }}
+        >
+          {/* Backdrop dismiss */}
+          <Pressable
+            accessibilityLabel="Close dialog backdrop"
+            onPress={() => setSheetOpen(false)}
+            style={StyleSheet.absoluteFill}
+          />
 
-          <View style={{ marginTop: 16, borderTopWidth: 1, borderColor: "#e2e8f0", paddingTop: 12 }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setSheetOpen(false);
-                void signOut();
-              }}
+          {/* Centered Modal Card */}
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 440,
+              maxHeight: "90%",
+              borderRadius: 24,
+              backgroundColor: "#ffffff",
+              borderWidth: 1,
+              borderColor: "rgba(226, 232, 240, 0.9)",
+              padding: 24,
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              zIndex: 10,
+              flexDirection: "column",
+            }}
+          >
+            {/* Modal Header */}
+            <View
               style={{
-                width: "100%",
-                height: 44,
-                borderRadius: 12,
-                backgroundColor: "#fff1f2",
-                borderWidth: 1,
-                borderColor: "#fecdd3",
-                alignItems: "center",
-                justifyContent: "center",
                 flexDirection: "row",
-                columnGap: 8,
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                marginBottom: 16,
               }}
             >
-              <LogOut size={16} color="#be123c" />
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#be123c" }}>
-                Sign Out
-              </Text>
-            </Pressable>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "800",
+                    color: "#00112e",
+                    fontFamily: "system-ui, -apple-system, sans-serif",
+                  }}
+                >
+                  Your application
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    color: "#64748b",
+                    marginTop: 3,
+                    fontFamily: "system-ui, -apple-system, sans-serif",
+                  }}
+                >
+                  Fill these in any order. Everything saves as you go.
+                </Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={12}
+                onPress={() => setSheetOpen(false)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 9999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#f8fafc",
+                }}
+              >
+                <X size={16} color="#64748b" />
+              </Pressable>
+            </View>
+
+            {/* Steps List */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ rowGap: 4, paddingBottom: 6 }}
+            >
+              {steps.map((step) => {
+                const isCurrent = pathname === step.href;
+                return (
+                  <Pressable
+                    key={step.href}
+                    accessibilityRole="button"
+                    accessibilityLabel={step.label}
+                    onPress={() => {
+                      setSheetOpen(false);
+                      router.push(step.href as never);
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      columnGap: 14,
+                      borderRadius: 14,
+                      borderWidth: isCurrent ? 1.5 : 1,
+                      borderColor: isCurrent ? "#93c5fd" : "transparent",
+                      backgroundColor: isCurrent
+                        ? "#eff6ff"
+                        : pressed
+                        ? "#f8fafc"
+                        : "transparent",
+                      paddingVertical: isCurrent ? 11 : 9,
+                      paddingHorizontal: 12,
+                    })}
+                  >
+                    <StepMark state={step.state} isCurrent={isCurrent} />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: isCurrent ? "800" : "600",
+                          color: "#00112e",
+                          fontFamily: "system-ui, -apple-system, sans-serif",
+                        }}
+                      >
+                        {step.label}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: "#64748b",
+                          marginTop: 1,
+                          fontFamily: "system-ui, -apple-system, sans-serif",
+                        }}
+                      >
+                        {describe(step, isCurrent)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Bottom Sign Out Button */}
+            <View style={{ marginTop: 14, borderTopWidth: 1, borderColor: "#f1f5f9", paddingTop: 14 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sign Out"
+                onPress={() => {
+                  setSheetOpen(false);
+                  void signOut();
+                }}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  height: 42,
+                  borderRadius: 14,
+                  backgroundColor: pressed ? "#ffe4e6" : "#fff1f2",
+                  borderWidth: 1,
+                  borderColor: "rgba(254, 205, 211, 0.9)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  columnGap: 8,
+                })}
+              >
+                <LogOut size={15} color="#be123c" />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#be123c",
+                    fontFamily: "system-ui, -apple-system, sans-serif",
+                  }}
+                >
+                  Sign Out
+                </Text>
+              </Pressable>
+            </View>
           </View>
-        </ScrollView>
-      </Sheet>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function StepMark({ state }: { state: StepProgress["state"] }) {
+function StepMark({ state, isCurrent }: { state: StepProgress["state"]; isCurrent?: boolean }) {
   if (state === "done") {
     return (
       <View
         style={{
-          width: 24,
-          height: 24,
+          width: 22,
+          height: 22,
           borderRadius: 9999,
           backgroundColor: "#10b981",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Check size={14} color="#ffffff" strokeWidth={3} />
+        <Check size={13} color="#ffffff" strokeWidth={3} />
+      </View>
+    );
+  }
+
+  if (isCurrent || state === "waypoint") {
+    return (
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 9999,
+          borderWidth: 2,
+          borderColor: isCurrent ? "#64748b" : "#94a3b8",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "transparent",
+        }}
+      >
+        <View
+          style={{
+            width: isCurrent ? 6 : 5,
+            height: isCurrent ? 6 : 5,
+            borderRadius: 9999,
+            backgroundColor: isCurrent ? "#00112e" : "#64748b",
+          }}
+        />
       </View>
     );
   }
@@ -371,11 +518,12 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
     return (
       <View
         style={{
-          width: 24,
-          height: 24,
+          width: 22,
+          height: 22,
           borderRadius: 9999,
           borderWidth: 2,
-          borderColor: "#f87000",
+          borderColor: "#f59e0b",
+          backgroundColor: "transparent",
         }}
       />
     );
@@ -384,8 +532,8 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
   return (
     <View
       style={{
-        width: 24,
-        height: 24,
+        width: 22,
+        height: 22,
         borderRadius: 9999,
         borderWidth: 2,
         borderColor: "#cbd5e1",
@@ -406,11 +554,9 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
 }
 
 function describe(step: StepProgress, isCurrent: boolean): string {
-  if (step.state === "waypoint") {
-    return step.href === "/apply" ? "Where everything stands" : "Check it, then send it";
-  }
+  if (step.href === "/apply") return "Where everything stands";
+  if (step.href === "/apply/review") return "Check it, then send it";
   if (step.state === "optional") return "Optional — you can set this later";
   if (step.state === "done") return "Done";
-  if (isCurrent) return "You are here";
   return step.outstanding === 1 ? "1 thing needed" : `${step.outstanding} things needed`;
 }
