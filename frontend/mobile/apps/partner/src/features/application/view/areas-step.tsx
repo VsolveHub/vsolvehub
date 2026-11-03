@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/areas-step.tsx
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, useWindowDimensions, View } from "react-native";
 
 import { toggle } from "../model/draft";
 import { useApplicationReference } from "../reference-queries";
@@ -10,12 +10,14 @@ import { SelectableRow } from "./selectable-row";
 export function AreasStep() {
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 768;
 
   if (reference.isPending) {
     return (
-      <View className="flex-row items-center gap-2 py-8">
+      <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8, paddingVertical: 32 }}>
         <Spinner size="sm" />
-        <Text className="text-sm text-text-secondary">Loading service areas…</Text>
+        <Text style={{ fontSize: 14, color: "#64748b" }}>Loading service areas…</Text>
       </View>
     );
   }
@@ -33,7 +35,18 @@ export function AreasStep() {
 
   if (reference.serviceAreas.length === 0) {
     return (
-      <Text accessibilityLiveRegion="polite" className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
+      <Text
+        accessibilityLiveRegion="polite"
+        style={{
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#e2e8f0",
+          backgroundColor: "#ffffff",
+          padding: 16,
+          fontSize: 14,
+          color: "#64748b",
+        }}
+      >
         No service areas are currently available for registration.
       </Text>
     );
@@ -44,10 +57,10 @@ export function AreasStep() {
   const selectedCount = draft.serviceAreaIds.length;
 
   return (
-    <View className="flex-col gap-4">
-      <View className="flex-row items-center justify-between">
-        <Text className="text-sm font-bold text-navy-900">
-          Service Locations <Text className="text-danger-text">*</Text>
+    <View style={{ flexDirection: "column", rowGap: 16 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: "#00112e" }}>
+          Service Locations <Text style={{ color: "#be123c" }}>*</Text>
         </Text>
 
         {!isReadOnly && reference.serviceAreas.length > 1 ? (
@@ -58,26 +71,35 @@ export function AreasStep() {
               else update({ serviceAreaIds: allAreaIds });
             }}
           >
-            <Text className="text-xs font-semibold text-navy-700">{allSelected ? "Deselect all" : "Select all"}</Text>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#00204d" }}>
+              {allSelected ? "Deselect all" : "Select all"}
+            </Text>
           </Pressable>
         ) : null}
       </View>
 
-      <View className="flex-col gap-3">
+      <View
+        style={{
+          flexDirection: isDesktop ? "row" : "column",
+          flexWrap: isDesktop ? "wrap" : "nowrap",
+          gap: 12,
+        }}
+      >
         {reference.serviceAreas.map((area) => (
-          <SelectableRow
-            key={area.id}
-            checked={draft.serviceAreaIds.includes(area.id)}
-            disabled={isReadOnly}
-            onChange={() => update({ serviceAreaIds: toggle(draft.serviceAreaIds, area.id) })}
-            label={area.name}
-            caption={area.timezone || undefined}
-          />
+          <View key={area.id} style={{ width: isDesktop ? "48.5%" : "100%" }}>
+            <SelectableRow
+              checked={draft.serviceAreaIds.includes(area.id)}
+              disabled={isReadOnly}
+              onChange={() => update({ serviceAreaIds: toggle(draft.serviceAreaIds, area.id) })}
+              label={area.name}
+              caption={area.timezone || undefined}
+            />
+          </View>
         ))}
       </View>
 
       {selectedCount === 0 ? (
-        <Text className="mt-1 text-xs font-semibold text-danger-text">
+        <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: "#be123c" }}>
           * Please select at least one service location.
         </Text>
       ) : null}

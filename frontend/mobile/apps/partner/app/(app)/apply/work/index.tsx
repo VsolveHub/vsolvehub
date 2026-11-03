@@ -1,5 +1,4 @@
 import { ErrorState, Text } from "@vsolve/mobile-ui";
-import { View } from "react-native";
 
 import { ApplicationEditor } from "@/features/application/view/application-editor";
 import { WorkStep } from "@/features/application/view/work-step";
@@ -19,13 +18,11 @@ export default function WorkPage() {
     );
   }
   return (
-    <View className="px-4 py-4">
-      <ApplicationEditor
-        title="Your trades"
-        description="Choose your main categories and the job types you want under each one."
-      >
-        <WorkStep mainCategories={catalog.data.mainCategories} services={catalog.data.services} />
-      </ApplicationEditor>
-    </View>
+    <ApplicationEditor
+      title="Your trades"
+      description="Choose your main categories and the job types you want under each one."
+    >
+      <WorkStep mainCategories={catalog.data.mainCategories} services={catalog.data.services} />
+    </ApplicationEditor>
   );
 }

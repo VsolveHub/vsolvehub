@@ -10,8 +10,9 @@ import {
   LogOut,
   X,
 } from "lucide-react-native";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -21,6 +22,7 @@ import {
   View,
 } from "react-native";
 
+import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
 import {
   previousStep,
   progressSummary,
@@ -36,6 +38,31 @@ export default function ApplyLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [dockConfig, setDockConfig] = useState<DockConfig | null>(null);
+
+  const registerDock = useCallback((config: DockConfig | null) => {
+    setDockConfig((prev) => {
+      if (prev === null && config === null) return prev;
+      if (
+        prev !== null &&
+        config !== null &&
+        prev.label === config.label &&
+        prev.backHref === config.backHref &&
+        prev.nextStepName === config.nextStepName &&
+        prev.isSaving === config.isSaving &&
+        prev.proceedDisabled === config.proceedDisabled &&
+        prev.saved === config.saved &&
+        prev.conflict === config.conflict &&
+        prev.failed === config.failed &&
+        prev.requestId === config.requestId &&
+        prev.fieldMessages.join(",") === config.fieldMessages.join(",") &&
+        prev.onCommit === config.onCommit
+      ) {
+        return prev;
+      }
+      return config;
+    });
+  }, []);
 
   const query = usePartnerApplication();
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
@@ -47,7 +74,8 @@ export default function ApplyLayout() {
   const currentStepIdx = steps.findIndex((s) => s.href === pathname);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fbf9f6", minHeight: "100%" }}>
+    <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
+      <View style={{ flex: 1, backgroundColor: "#fbf9f6", minHeight: "100%" }}>
       {/* Floating Dynamic-Island Navigation Bar Matching Web */}
       <View
         pointerEvents="box-none"
@@ -286,13 +314,160 @@ export default function ApplyLayout() {
           marginHorizontal: "auto",
           paddingHorizontal: isDesktop ? 32 : 16,
           paddingTop: isDesktop ? 128 : 96,
-          paddingBottom: 64,
+          paddingBottom: dockConfig ? 140 : 64,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <Slot />
       </ScrollView>
+
+      {/* Fixed Bottom Action Dock Matching Web Reference UI */}
+      {dockConfig ? (
+        <View
+          style={{
+            position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 40,
+            backgroundColor: "rgba(255, 255, 255, 0.96)",
+            borderTopWidth: 1,
+            borderColor: "#e7e2da",
+            ...(Platform.OS === "web"
+              ? ({
+                  backdropFilter: "blur(16px)",
+                  WebkitBackdropFilter: "blur(16px)",
+                  boxShadow: "0 -4px 20px rgba(0, 17, 46, 0.08)",
+                } as any)
+              : {
+                  elevation: 16,
+                  shadowColor: "#00112e",
+                  shadowOffset: { width: 0, height: -4 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 16,
+                }),
+          }}
+        >
+          <View
+            style={{
+              maxWidth: width >= 1280 ? 1152 : isDesktop ? 1024 : 672,
+              width: "100%",
+              marginHorizontal: "auto",
+              paddingHorizontal: isDesktop ? 32 : 16,
+              paddingTop: 12,
+              paddingBottom: Platform.OS === "web" ? "calc(env(safe-area-inset-bottom, 0px) + 12px)" : 16,
+              flexDirection: "column",
+              rowGap: 8,
+            }}
+          >
+            {dockConfig.conflict ? (
+              <View style={{ borderRadius: 8, backgroundColor: "#fffbeb", padding: 10, borderWidth: 1, borderColor: "#fef3c7" }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#92400e" }}>
+                  Someone else changed this application
+                </Text>
+                <Text style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>
+                  We have reloaded the latest version so you can see it before saving again.
+                </Text>
+              </View>
+            ) : null}
+
+            {dockConfig.failed ? (
+              <View style={{ borderRadius: 8, backgroundColor: "#fef2f2", padding: 10, borderWidth: 1, borderColor: "#fee2e2" }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#991b1b" }}>
+                  We could not save this
+                </Text>
+                <Text style={{ fontSize: 12, color: "#b91c1c", marginTop: 2 }}>
+                  Nothing was changed. Check your connection and try again.
+                </Text>
+              </View>
+            ) : null}
+
+            {dockConfig.fieldMessages.length > 0 ? (
+              <View style={{ flexDirection: "column", rowGap: 4 }}>
+                {dockConfig.fieldMessages.map((msg) => (
+                  <Text key={msg} style={{ fontSize: 13, fontWeight: "600", color: "#be123c" }}>
+                    {msg}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+
+            {dockConfig.saved && !dockConfig.conflict && !dockConfig.failed ? (
+              <Text style={{ textAlign: "center", fontSize: 13, fontWeight: "700", color: "#15803d" }}>
+                ✓ Changes saved securely.
+              </Text>
+            ) : null}
+
+            {/* Buttons Row */}
+            <View style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                onPress={() => router.push(dockConfig.backHref as any)}
+                style={({ pressed }) => ({
+                  height: 48,
+                  paddingHorizontal: 24,
+                  borderRadius: 12,
+                  backgroundColor: pressed ? "#f4f1ec" : "#ffffff",
+                  borderWidth: 1,
+                  borderColor: "#d3ccc0",
+                  alignItems: "center",
+                  justifyContent: "center",
+                })}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+                  Back
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={dockConfig.label}
+                disabled={dockConfig.proceedDisabled || dockConfig.isSaving}
+                onPress={dockConfig.onCommit}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 48,
+                  borderRadius: 12,
+                  backgroundColor: dockConfig.proceedDisabled
+                    ? "#fed7aa"
+                    : pressed
+                    ? "#ea580c"
+                    : "#ff6a00",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 2px 4px rgba(255, 106, 0, 0.25)",
+                  opacity: dockConfig.proceedDisabled ? 0.6 : 1,
+                })}
+              >
+                {dockConfig.isSaving ? (
+                  <ActivityIndicator color="#00112e" size="small" />
+                ) : (
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+                    {dockConfig.label}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+
+            {dockConfig.nextStepName ? (
+              <Text
+                style={{
+                  textAlign: "center",
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: "#78716c",
+                  marginTop: 4,
+                  fontFamily: "system-ui, -apple-system, sans-serif",
+                }}
+              >
+                Auto-saves as you type • Tap to proceed to {dockConfig.nextStepName}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
 
       {/* Centered Steps Pop-up Dialog Matching Web Exact UI */}
       <Modal
@@ -482,6 +657,7 @@ export default function ApplyLayout() {
         </View>
       </Modal>
     </View>
+    </ApplyDockContext.Provider>
   );
 }
 

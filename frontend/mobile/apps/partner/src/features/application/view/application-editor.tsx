@@ -1,10 +1,19 @@
 // Ported from frontend/apps/partner/features/application/view/application-editor.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { usePathname, useRouter } from "expo-router";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { View } from "react-native";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { Platform, useWindowDimensions, View } from "react-native";
 
+import { useApplyDock } from "../model/dock-context";
 import {
   changedFields,
   draftFromApplication,
@@ -62,12 +71,12 @@ export function ApplicationEditor(props: ApplicationEditorProps) {
 
   if (query.isPending) {
     return (
-      <View accessibilityLabel="Loading your application" className="flex-col gap-4">
-        <View className="flex-col gap-2">
+      <View accessibilityLabel="Loading your application" style={{ flexDirection: "column", rowGap: 16 }}>
+        <View style={{ flexDirection: "column", rowGap: 8 }}>
           <Skeleton className="h-7 w-2/3" />
           <Skeleton className="h-4 w-full" />
         </View>
-        <View className="mt-2 flex-col gap-3">
+        <View style={{ marginTop: 8, flexDirection: "column", rowGap: 12 }}>
           <Skeleton className="h-12 w-full rounded-control" />
           <Skeleton className="h-12 w-full rounded-control" />
           <Skeleton className="h-24 w-full rounded-control" />
@@ -106,6 +115,9 @@ function Editor({
   const save = useUpdateApplication();
   const router = useRouter();
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 768;
+  const { registerDock } = useApplyDock();
 
   const following = continueOnSave ? nextStep(pathname) : null;
   const isReadOnly = application !== null && !isEditable(application);
@@ -116,23 +128,26 @@ function Editor({
     messages.map((message) => `${field}: ${message}`),
   );
 
-  function update(patch: Partial<ApplicationDraft>) {
+  const update = useCallback((patch: Partial<ApplicationDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
     save.reset();
-  }
+  }, [save]);
 
-  const editor: ApplicationEditorRenderProps = {
-    draft,
-    update,
-    application,
-    isReadOnly,
-    setProceedDisabled: setChildProceedDisabled,
-  };
+  const editor: ApplicationEditorRenderProps = useMemo(
+    () => ({
+      draft,
+      update,
+      application,
+      isReadOnly,
+      setProceedDisabled: setChildProceedDisabled,
+    }),
+    [draft, update, application, isReadOnly],
+  );
 
   const nextStepName = following ? following.label : null;
   const primaryLabel = saveLabel ?? "Save and Continue";
 
-  function commit() {
+  const commit = useCallback(() => {
     if (!dirty) {
       if (following !== null) router.push(following.href as never);
       return;
@@ -143,27 +158,124 @@ function Editor({
         if (following !== null) router.push(following.href as never);
       },
     });
-  }
+  }, [dirty, following, router, save, draft, application]);
 
   const previous = previousStep(pathname);
   const backHref = previous ? previous.href : "/apply";
 
+  const isSaving = save.isPending;
+  const isConflict = isVersionConflict(save.error);
+  const isFailed = save.isError && !isConflict && fieldMessages.length === 0;
+  const requestId = save.error instanceof ApiRequestError ? save.error.requestId : null;
+  const isSaved = save.isSuccess && !dirty;
+  const isProceedBlocked = proceedDisabled || childProceedDisabled;
+
+  // Register dock with fixed footer at root of ApplyLayout
+  useEffect(() => {
+    if (isReadOnly) {
+      registerDock(null);
+      return;
+    }
+
+    registerDock({
+      label: primaryLabel,
+      backHref,
+      nextStepName,
+      onCommit: commit,
+      isSaving,
+      proceedDisabled: isProceedBlocked,
+      saved: isSaved,
+      conflict: isConflict,
+      failed: isFailed,
+      requestId,
+      fieldMessages,
+    });
+
+    return () => {
+      registerDock(null);
+    };
+  }, [
+    isReadOnly,
+    primaryLabel,
+    backHref,
+    nextStepName,
+    commit,
+    isSaving,
+    isProceedBlocked,
+    isSaved,
+    isConflict,
+    isFailed,
+    requestId,
+    fieldMessages,
+    registerDock,
+  ]);
+
   return (
-    <View className="flex-col gap-5">
-      <View className="flex-col gap-5 rounded-2xl border border-line bg-surface p-5 shadow-sm">
-        <View className="flex-col gap-1 border-b border-line pb-4">
-          <Text accessibilityRole="header" className="text-xl font-extrabold tracking-tight text-navy-900">
+    <View style={{ flexDirection: "column", width: "100%" }}>
+      {/* Main Form White Card Matching Web Exact UI */}
+      <View
+        style={{
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: "#e7e2da",
+          backgroundColor: "#ffffff",
+          padding: isDesktop ? 36 : 22,
+          ...(Platform.OS === "web"
+            ? ({
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+              } as any)
+            : {
+                elevation: 2,
+                shadowColor: "#00112e",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.04,
+                shadowRadius: 3,
+              }),
+        }}
+      >
+        {/* Header with Title and Description */}
+        <View style={{ borderBottomWidth: 1, borderColor: "#f0ece4", paddingBottom: 18, marginBottom: 20 }}>
+          <Text
+            accessibilityRole="header"
+            style={{
+              fontSize: isDesktop ? 28 : 24,
+              fontWeight: "800",
+              letterSpacing: -0.5,
+              color: "#00112e",
+              fontFamily: "system-ui, -apple-system, sans-serif",
+            }}
+          >
             {title}
           </Text>
           {description ? (
-            <Text className="text-xs leading-relaxed text-text-secondary">{description}</Text>
+            <Text
+              style={{
+                fontSize: 13,
+                lineHeight: 20,
+                color: "#524d45",
+                marginTop: 4,
+                fontFamily: "system-ui, -apple-system, sans-serif",
+              }}
+            >
+              {description}
+            </Text>
           ) : null}
         </View>
 
         {isReadOnly ? (
           <Text
             accessibilityLiveRegion="polite"
-            className="rounded-card border border-info-line bg-info-surface p-4 text-[0.9375rem] leading-relaxed text-info-text"
+            style={{
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#bae6fd",
+              backgroundColor: "#f0f9ff",
+              padding: 16,
+              fontSize: 14,
+              lineHeight: 20,
+              color: "#0369a1",
+              marginBottom: 16,
+            }}
           >
             Your application is with a reviewer, so it cannot be changed right now. If something needs
             correcting, we will tell you what and reopen it.
@@ -173,113 +285,6 @@ function Editor({
         <ProceedDisabledSetterContext.Provider value={setChildProceedDisabled}>
           <EditorContext.Provider value={editor}>{children}</EditorContext.Provider>
         </ProceedDisabledSetterContext.Provider>
-      </View>
-
-      {isReadOnly ? null : (
-        <EditorDock
-          label={primaryLabel}
-          backHref={backHref}
-          nextStepName={nextStepName}
-          onCommit={commit}
-          isSaving={save.isPending}
-          proceedDisabled={proceedDisabled || childProceedDisabled}
-          saved={save.isSuccess && !dirty}
-          conflict={isVersionConflict(save.error)}
-          failed={save.isError && !isVersionConflict(save.error) && fieldMessages.length === 0}
-          requestId={save.error instanceof ApiRequestError ? save.error.requestId : null}
-          fieldMessages={fieldMessages}
-        />
-      )}
-    </View>
-  );
-}
-
-function EditorDock({
-  label,
-  backHref,
-  nextStepName,
-  onCommit,
-  isSaving,
-  proceedDisabled,
-  saved,
-  conflict,
-  failed,
-  requestId,
-  fieldMessages,
-}: {
-  label: string;
-  backHref: string;
-  nextStepName: string | null;
-  onCommit: () => void;
-  isSaving: boolean;
-  proceedDisabled: boolean;
-  saved: boolean;
-  conflict: boolean;
-  failed: boolean;
-  requestId: string | null;
-  fieldMessages: readonly string[];
-}) {
-  const router = useRouter();
-
-  return (
-    <View className="shrink-0 border-t border-line bg-surface shadow-lg">
-      <View className="w-full flex-col gap-2 px-4 py-3">
-        {conflict ? (
-          <ErrorState
-            inline
-            severity="warning"
-            title="Someone else changed this application"
-            message="We have reloaded the latest version so you can see it before saving again. Your last change was not applied."
-          />
-        ) : null}
-
-        {failed ? (
-          <ErrorState
-            inline
-            title="We could not save this"
-            message="Nothing was changed. Check your connection and try again."
-            reference={requestId}
-          />
-        ) : null}
-
-        {fieldMessages.length > 0 ? (
-          <View accessibilityRole="alert" className="flex-col gap-1">
-            {fieldMessages.map((message) => (
-              <Text key={message} className="text-[0.8125rem] font-semibold text-danger-text">
-                {message}
-              </Text>
-            ))}
-          </View>
-        ) : null}
-
-        {saved && !conflict && !failed ? (
-          <Text accessibilityLiveRegion="polite" className="text-center text-[0.8125rem] font-bold text-success-text">
-            ✓ Changes saved securely.
-          </Text>
-        ) : null}
-
-        <View className="flex-row items-center gap-2.5">
-          <Button variant="outline" size="lg" className="h-12 px-5" onPress={() => router.push(backHref as never)}>
-            Back
-          </Button>
-          <Button
-            size="lg"
-            block
-            loading={isSaving}
-            loadingLabel="Saving..."
-            disabled={proceedDisabled}
-            onPress={onCommit}
-            className="h-12 flex-1 shadow-md"
-          >
-            {label}
-          </Button>
-        </View>
-
-        {nextStepName ? (
-          <Text className="text-center text-[11px] font-semibold text-text-muted">
-            Auto-saves as you type • Tap to proceed to {nextStepName}
-          </Text>
-        ) : null}
       </View>
     </View>
   );

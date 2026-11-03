@@ -1,7 +1,7 @@
 // Ported from frontend/apps/partner/features/application/view/consent-step.tsx
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
-import * as WebBrowser from "expo-web-browser";
-import { Pressable, View } from "react-native";
+import { Check } from "lucide-react-native";
+import { Linking, Platform, Pressable, View } from "react-native";
 
 import { useApplicationReference } from "../reference-queries";
 import { useApplicationEditor } from "./application-editor";
@@ -12,9 +12,9 @@ export function ConsentStep() {
 
   if (reference.isPending) {
     return (
-      <View className="flex-row items-center gap-2 py-6">
+      <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8, paddingVertical: 32 }}>
         <Spinner size="sm" />
-        <Text className="text-sm text-text-secondary">Loading agreements…</Text>
+        <Text style={{ fontSize: 14, color: "#64748b" }}>Loading agreements…</Text>
       </View>
     );
   }
@@ -32,7 +32,18 @@ export function ConsentStep() {
 
   if (reference.requiredConsents.length === 0) {
     return (
-      <Text accessibilityLiveRegion="polite" className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
+      <Text
+        accessibilityLiveRegion="polite"
+        style={{
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#e2e8f0",
+          backgroundColor: "#ffffff",
+          padding: 16,
+          fontSize: 14,
+          color: "#64748b",
+        }}
+      >
         No agreements are required at this time.
       </Text>
     );
@@ -47,10 +58,10 @@ export function ConsentStep() {
     requiredConsents.every((consent) => isAccepted(consent.purpose, consent.document_version));
 
   return (
-    <View className="flex-col gap-4">
-      <View className="flex-row items-center justify-between">
-        <Text className="text-sm font-bold text-navy-900">
-          Required Agreements <Text className="text-danger-text">*</Text>
+    <View style={{ flexDirection: "column", rowGap: 16 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: "#00112e" }}>
+          Required Agreements <Text style={{ color: "#be123c" }}>*</Text>
         </Text>
 
         {!isReadOnly && requiredConsents.length > 1 ? (
@@ -80,82 +91,139 @@ export function ConsentStep() {
               }
             }}
           >
-            <Text className="text-xs font-semibold text-navy-700">
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#00204d" }}>
               {allRequiredAccepted ? "Deselect all" : "Accept all required"}
             </Text>
           </Pressable>
         ) : null}
       </View>
 
-      <View className="flex-col gap-3">
+      <View style={{ flexDirection: "column", rowGap: 12 }}>
         {reference.requiredConsents.map((document) => {
           const accepted = isAccepted(document.purpose, document.document_version);
           return (
-            <View
+            <Pressable
               key={`${document.purpose}@${document.document_version}`}
-              className={
-                accepted
-                  ? "rounded-control border border-action bg-selected-surface p-3.5"
-                  : "rounded-control border border-line bg-surface p-3.5"
-              }
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: accepted, disabled: isReadOnly }}
+              disabled={isReadOnly}
+              onPress={() => {
+                if (isReadOnly) return;
+                update({
+                  consents: accepted
+                    ? draft.consents.filter(
+                        (consent) =>
+                          !(
+                            consent.purpose === document.purpose &&
+                            consent.documentVersion === document.document_version
+                          ),
+                      )
+                    : [
+                        ...draft.consents,
+                        {
+                          purpose: document.purpose,
+                          documentVersion: document.document_version,
+                        },
+                      ],
+                });
+              }}
+              style={({ pressed }) => ({
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: accepted ? "#ff6a00" : pressed ? "#cbd5e1" : "#e2e8f0",
+                backgroundColor: accepted ? "#fffbf5" : "#ffffff",
+                padding: 16,
+                flexDirection: "row",
+                alignItems: "flex-start",
+                columnGap: 12,
+              })}
             >
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: accepted, disabled: isReadOnly }}
-                disabled={isReadOnly}
-                onPress={() =>
-                  update({
-                    consents: accepted
-                      ? draft.consents.filter(
-                          (consent) =>
-                            !(
-                              consent.purpose === document.purpose &&
-                              consent.documentVersion === document.document_version
-                            ),
-                        )
-                      : [
-                          ...draft.consents,
-                          {
-                            purpose: document.purpose,
-                            documentVersion: document.document_version,
-                          },
-                        ],
-                  })
-                }
-                className="flex-row items-start gap-3"
+              {/* Checkbox Square */}
+              <View
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 4,
+                  borderWidth: 1.5,
+                  borderColor: accepted ? "#ff6a00" : "#94a3b8",
+                  backgroundColor: accepted ? "#ff6a00" : "#ffffff",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: 2,
+                }}
               >
+                {accepted ? <Check size={12} color="#ffffff" strokeWidth={3} /> : null}
+              </View>
+
+              {/* Document Details */}
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <View
-                  className={
-                    accepted
-                      ? "mt-0.5 h-4 w-4 items-center justify-center rounded border border-action bg-action"
-                      : "mt-0.5 h-4 w-4 rounded border border-line-strong bg-surface"
-                  }
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 6,
+                  }}
                 >
-                  {accepted ? <Text className="text-[10px] font-bold text-action-text">✓</Text> : null}
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e", flex: 1, minWidth: 180 }}>
+                    I agree to the {document.title}
+                  </Text>
+                  {document.is_required_for_submission ? (
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#be123c" }}>
+                      * Required
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: "#64748b" }}>
+                      Optional
+                    </Text>
+                  )}
                 </View>
-                <View className="min-w-0 flex-1">
-                  <View className="flex-row items-center justify-between gap-2">
-                    <Text className="flex-1 text-sm font-medium text-text">I agree to the {document.title}</Text>
-                    {document.is_required_for_submission ? (
-                      <Text className="text-xs font-semibold text-danger-text">* Required</Text>
-                    ) : (
-                      <Text className="text-xs text-text-muted">Optional</Text>
-                    )}
-                  </View>
-                  <View className="mt-2 flex-row items-center justify-between">
-                    <Text className="text-xs text-text-secondary">Version {document.document_version}</Text>
-                    <Pressable
-                      accessibilityRole="link"
-                      onPress={() => void WebBrowser.openBrowserAsync(document.document_url)}
-                      className="flex-row items-center gap-1 rounded-full border border-line bg-surface px-3 py-1"
-                    >
-                      <Text className="text-xs font-bold text-navy-900">Read document</Text>
-                      <Text className="text-xs font-bold text-navy-900">↗</Text>
-                    </Pressable>
-                  </View>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748b" }}>
+                    Version {document.document_version}
+                  </Text>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Read ${document.title}`}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      if (document.document_url) {
+                        if (Platform.OS === "web") {
+                          window.open(document.document_url, "_blank", "noopener,noreferrer");
+                        } else {
+                          void Linking.openURL(document.document_url);
+                        }
+                      }
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      columnGap: 4,
+                      borderRadius: 9999,
+                      borderWidth: 1,
+                      borderColor: "#e2e8f0",
+                      backgroundColor: pressed ? "#f1f5f9" : "#ffffff",
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                    })}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
+                      Read document ↗
+                    </Text>
+                  </Pressable>
                 </View>
-              </Pressable>
-            </View>
+              </View>
+            </Pressable>
           );
         })}
       </View>
