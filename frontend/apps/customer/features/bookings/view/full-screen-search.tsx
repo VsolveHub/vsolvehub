@@ -1,11 +1,11 @@
 "use client";
 
-import { Logo, buttonStyles } from "@vsolve/ui";
+import { Button, Logo } from "@vsolve/ui";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
+import { useBookingPayment } from "@/features/payment/use-booking-payment";
 import { claimViewport } from "@/lib/focus-mode";
 import type { BookingGroup } from "../queries";
 import { heldUnitCount } from "./group-status";
@@ -84,6 +84,7 @@ const VERIFICATION_CHECKS = [
 export function FullScreenPartnerSearch({
   group,
 }: FullScreenPartnerSearchProps) {
+  const { handlePay, isPaying, payError, profileDialog } = useBookingPayment(group);
   const [stepIndex, setStepIndex] = useState(0);
   const held = heldUnitCount(group);
   const total = group.units.length;
@@ -308,15 +309,21 @@ export function FullScreenPartnerSearch({
                 </div>
 
                 {/* Pay Now CTA */}
-                <div className="mt-4">
-                  <Link
-                    href={`/bookings/${group.id}/pay`}
-                    className={buttonStyles({
-                      className: "w-full justify-center h-11 text-sm font-bold shadow-md bg-orange-600 hover:bg-orange-700",
-                    })}
+                <div className="mt-4 space-y-2">
+                  {payError ? (
+                    <p className="text-xs text-rose-600 font-medium" role="alert">
+                      {payError}
+                    </p>
+                  ) : null}
+                  <Button
+                    loading={isPaying}
+                    loadingLabel="Opening payment..."
+                    onClick={handlePay}
+                    className="w-full justify-center h-11 text-sm font-bold shadow-md bg-orange-600 hover:bg-orange-700"
                   >
                     Pay Now →
-                  </Link>
+                  </Button>
+                  {profileDialog}
                 </div>
 
                 {/* Trust & Guarantee */}

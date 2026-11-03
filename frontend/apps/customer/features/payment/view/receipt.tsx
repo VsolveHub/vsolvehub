@@ -73,7 +73,7 @@ function TaxDocumentCard({ document }: { document: TaxDocument }) {
 
 function DownloadInvoiceButton({ document }: { document: TaxDocument }) {
   const [state, setState] = useState<"idle" | "working" | "failed">("idle");
-  const name = document.title.toLowerCase();
+  const name = (document.title ?? "invoice").toLowerCase();
 
   async function download() {
     setState("working");

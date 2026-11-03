@@ -56,7 +56,7 @@ export function AssignmentProgress({ group }: AssignmentProgressProps) {
       {group.recovery_action === "PAYMENT_REQUIRED" && group.checkout_id !== null ? (
         <div className="lg:hidden">
           <Link
-            href={`/bookings/${group.id}/pay`}
+            href={`/bookings/${group.id}`}
             className={buttonStyles({
               className: "w-full justify-center text-sm font-bold bg-orange-600 hover:bg-orange-700",
             })}

@@ -1,10 +1,11 @@
 "use client";
 
-import { Dialog, buttonStyles } from "@vsolve/ui";
-import Link from "next/link";
+import { Button, Dialog } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
+import { useBookingPayment } from "@/features/payment/use-booking-payment";
+import { CheckoutLoyaltyOptions } from "@/features/payment/view/checkout-loyalty-options";
 import { claimViewport } from "@/lib/focus-mode";
 import type { BookingGroup } from "../queries";
 import { GroupStatusBadge } from "./group-status";
@@ -24,6 +25,7 @@ function formatWhen(instant: string): string {
 }
 
 export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
+  const { handlePay, isPaying, payError, profileDialog, loyalty } = useBookingPayment(group);
   const currency = group.units[0]?.total?.currency ?? "INR";
   const totalPaise = group.units.reduce((acc, u) => acc + (u.total?.amount_paise ?? 0), 0);
   const itemChargesPaise = group.units.reduce(
@@ -109,17 +111,29 @@ export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
         </span>
       </div>
 
+      {loyalty.show ? (
+        <div className="mt-4 border-t border-line/60 pt-3">
+          <CheckoutLoyaltyOptions loyalty={loyalty} />
+        </div>
+      ) : null}
+
       {/* Pay Now CTA */}
-      <div className="mt-5">
-        <Link
-          href={`/bookings/${group.id}/pay`}
-          className={buttonStyles({
-            className: "w-full justify-center h-12 text-base font-bold shadow-md bg-orange-600 hover:bg-orange-700",
-          })}
+      <div className="mt-5 space-y-2">
+        {payError ? (
+          <p className="text-xs text-critical font-medium" role="alert">
+            {payError}
+          </p>
+        ) : null}
+        <Button
+          loading={isPaying}
+          loadingLabel="Opening payment..."
+          onClick={handlePay}
+          className="w-full justify-center h-12 text-base font-bold shadow-md bg-orange-600 hover:bg-orange-700"
         >
           Pay Now →
-        </Link>
+        </Button>
       </div>
+      {profileDialog}
 
       {/* Trust & Guarantee */}
       <div className="mt-5 pt-4 border-t border-line/60 space-y-2 text-[11px] text-text-secondary">
@@ -142,6 +156,7 @@ export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
 
 export function MobilePaymentBottomBar({ group }: PaymentSummaryProps) {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const { handlePay, isPaying, payError, profileDialog, loyalty } = useBookingPayment(group);
 
   useEffect(() => {
     return claimViewport();
@@ -182,16 +197,17 @@ export function MobilePaymentBottomBar({ group }: PaymentSummaryProps) {
             </button>
           </div>
 
-          <Link
-            href={`/bookings/${group.id}/pay`}
-            className={buttonStyles({
-              className: "shrink-0 px-6 font-bold shadow-md bg-orange-600 hover:bg-orange-700",
-            })}
+          <Button
+            loading={isPaying}
+            loadingLabel="Opening..."
+            onClick={handlePay}
+            className="shrink-0 px-6 font-bold shadow-md bg-orange-600 hover:bg-orange-700 text-sm"
           >
             Pay Now →
-          </Link>
+          </Button>
         </div>
       </div>
+      {profileDialog}
       {/* Background bleeder to guarantee zero gap on any mobile viewport bounce/scroll */}
       <div className="fixed inset-x-0 -bottom-16 h-16 bg-white z-[60] lg:hidden pointer-events-none" />
 
@@ -239,15 +255,30 @@ export function MobilePaymentBottomBar({ group }: PaymentSummaryProps) {
             </span>
           </div>
 
+          {loyalty.show ? (
+            <div className="border-t border-line/40 pt-3">
+              <CheckoutLoyaltyOptions loyalty={loyalty} />
+            </div>
+          ) : null}
+
+          {payError ? (
+            <p className="text-xs text-critical font-medium" role="alert">
+              {payError}
+            </p>
+          ) : null}
+
           <div className="pt-2">
-            <Link
-              href={`/bookings/${group.id}/pay`}
-              className={buttonStyles({
-                className: "w-full justify-center text-base font-bold bg-orange-600 hover:bg-orange-700",
-              })}
+            <Button
+              loading={isPaying}
+              loadingLabel="Opening payment..."
+              onClick={() => {
+                setIsDetailsOpen(false);
+                handlePay();
+              }}
+              className="w-full justify-center text-base font-bold bg-orange-600 hover:bg-orange-700"
             >
               Proceed to Pay →
-            </Link>
+            </Button>
           </div>
         </div>
       </Dialog>
