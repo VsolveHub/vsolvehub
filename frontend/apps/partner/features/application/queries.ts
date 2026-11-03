@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { SESSION_STATE, queryKeys } from "@vsolve/query";

@@ -1,4 +1,4 @@
-﻿"""The Partner's own surface: application, profile, documents, availability, presence.
+"""The Partner's own surface: application, profile, documents, availability, presence.
 
 Everything a signed-in Partner reads or writes about themselves before Operations is involved — the
 applicant option lists, `GET`/`PATCH` on their own profile, the application and its document

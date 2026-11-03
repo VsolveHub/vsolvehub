@@ -1,4 +1,4 @@
-﻿// Ported from frontend/apps/partner/features/application/queries.ts
+// Ported from frontend/apps/partner/features/application/queries.ts
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { SESSION_STATE, queryKeys } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
