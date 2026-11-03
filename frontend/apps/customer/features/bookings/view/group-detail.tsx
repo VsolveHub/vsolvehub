@@ -523,7 +523,13 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         }
       >
         {isAwaitingPayment ? (
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <BackToBookingsLink />
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+            </div>
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-xl sm:text-2xl font-bold text-text">
@@ -538,15 +544,15 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
                 Every visit has a verified professional reserved. Complete payment to confirm.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+          </div>
+        ) : isMultiPaidVisit ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <BackToBookingsLink />
               <span className="text-xs text-text-secondary font-mono">
                 Ref #{group.id.slice(0, 8)}
               </span>
-              <BackToBookingsLink />
             </div>
-          </div>
-        ) : isMultiPaidVisit ? (
-          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-xl sm:text-2xl font-bold text-text">
@@ -560,12 +566,6 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
               <p className="mt-1 text-sm text-text-secondary">
                 {group.units.length} visits scheduled · All professionals assigned and confirmed.
               </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-text-secondary font-mono">
-                Ref #{group.id.slice(0, 8)}
-              </span>
-              <BackToBookingsLink />
             </div>
           </div>
         ) : (
@@ -729,14 +729,13 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           </div>
 
           {isAwaitingPayment ? (
-            <PaymentSummarySideCard
-              group={group}
-              className="hidden min-w-0 lg:col-span-4 lg:block lg:sticky lg:top-24 lg:z-10 lg:self-start"
-            />
+            <div className="hidden min-w-0 lg:col-span-4 lg:block lg:sticky lg:top-24 lg:self-start">
+              <PaymentSummarySideCard group={group} />
+            </div>
           ) : null}
 
           {isSinglePaidVisit && group.units[0] !== undefined ? (
-            <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-24 lg:z-10 lg:self-start">
+            <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-24 lg:self-start">
               <PaidVisitPaymentCard
                 unit={group.units[0]}
                 groupId={group.id}
@@ -746,7 +745,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           ) : null}
 
           {isMultiPaidVisit ? (
-            <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-24 lg:z-10 lg:self-start">
+            <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-24 lg:self-start">
               <PaidGroupPaymentCard group={group} />
             </div>
           ) : null}

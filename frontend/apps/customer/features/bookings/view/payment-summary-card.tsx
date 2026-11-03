@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Dialog, cn } from "@vsolve/ui";
+import { Button, Dialog } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
@@ -13,10 +13,9 @@ import { GroupStatusBadge } from "./group-status";
 
 interface PaymentSummaryProps {
   group: BookingGroup;
-  className?: string;
 }
 
-export function PaymentSummarySideCard({ group, className }: PaymentSummaryProps) {
+export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
   const { handlePay, isPaying, payError, profileDialog, loyalty } = useBookingPayment(group);
   const currency = group.units[0]?.total?.currency ?? "INR";
   const totalPaise = group.units.reduce((acc, u) => acc + (u.total?.amount_paise ?? 0), 0);
@@ -32,10 +31,7 @@ export function PaymentSummarySideCard({ group, className }: PaymentSummaryProps
   return (
     <aside
       aria-labelledby="payment-summary-heading"
-      className={cn(
-        "rounded-2xl border border-line bg-surface p-6 shadow-card",
-        className,
-      )}
+      className="rounded-2xl border border-line bg-surface p-6 shadow-card max-h-[calc(100vh-7rem)] overflow-y-auto"
     >
       {/* Header section with booking count and status */}
       <div className="flex items-center justify-between border-b border-line pb-4">

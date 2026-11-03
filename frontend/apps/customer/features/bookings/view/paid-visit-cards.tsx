@@ -377,7 +377,7 @@ export function PaidVisitPaymentCard({
     (line) => (line.amount?.amount_paise ?? 0) > 0 || line.kind === "SERVICE",
   );
   return (
-    <aside className="sticky top-24 rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm space-y-5">
+    <aside className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm space-y-5 max-h-[calc(100vh-7rem)] overflow-y-auto">
       <div className="flex items-center justify-between border-b border-line pb-3">
         <div>
           <h2 className="text-base font-bold text-navy-900">
@@ -421,7 +421,7 @@ export function PaidGroupPaymentCard({ group }: { group: BookingGroup }) {
   const totalPaise = group.units.reduce((sum, unit) => sum + unit.total.amount_paise, 0);
 
   return (
-    <aside className="sticky top-24 rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm space-y-5">
+    <aside className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm space-y-5 max-h-[calc(100vh-7rem)] overflow-y-auto">
       <div className="flex items-center justify-between border-b border-line pb-3">
         <div>
           <h2 className="text-base font-bold text-navy-900">
