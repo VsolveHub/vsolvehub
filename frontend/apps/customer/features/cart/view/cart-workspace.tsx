@@ -129,7 +129,7 @@ export function CartWorkspace() {
 
   return (
     // `pb-28` below `lg` keeps the last summary line clear of the pinned continue bar.
-    <div className={`${CART_PAGE_FRAME} min-w-0 overflow-x-clip pb-28 pt-6 lg:pb-16`}>
+    <div className={`${CART_PAGE_FRAME} min-w-0 pb-28 pt-6 lg:pb-16`}>
       <h1 className="text-xl font-bold text-text">Your cart</h1>
 
       {cartQuery.isPending ? (

@@ -26,7 +26,7 @@ export default async function VisitPage({
   const { groupId, bookingId } = await params;
 
   return (
-    <main className={`${BOOKING_PAGE_FRAME} min-w-0 overflow-x-clip pb-28 pt-6 lg:pb-16`}>
+    <main className={`${BOOKING_PAGE_FRAME} min-w-0 pb-28 pt-6 lg:pb-16`}>
       <BookingVisitScreen groupId={groupId} bookingId={bookingId} />
     </main>
   );
