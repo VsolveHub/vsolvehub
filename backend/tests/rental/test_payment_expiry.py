@@ -16,7 +16,8 @@ from apps.catalog.models import (
     Subcategory,
 )
 from apps.commerce.models import PaymentAttempt
-from apps.commerce.tasks import expire_abandoned_payment_attempts
+from apps.commerce.providers import ProviderPayment
+from apps.commerce.tasks import expire_abandoned_payment_attempts, reconcile_payments
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.rental.models import AssetReservation, RentalBooking
@@ -192,3 +193,84 @@ def test_expire_skips_corrupt_window_and_provider_pending_grace(rental_world):
     attempt.refresh_from_db()
     assert attempt.status == PaymentAttempt.Status.PROVIDER_PENDING
     assert booking.status == RentalBooking.Status.PENDING_PAYMENT
+
+
+class _CapturedProvider:
+    """A provider whose order already has a captured payment the webhook never reported."""
+
+    def __init__(self, attempt: PaymentAttempt) -> None:
+        self._attempt = attempt
+
+    def fetch_order_payments(self, *, provider_order_id: str) -> tuple[ProviderPayment, ...]:
+        return (
+            ProviderPayment(
+                provider_payment_id="pay_missed_webhook",
+                provider_order_id=provider_order_id,
+                amount_paise=self._attempt.amount_paise,
+                currency=self._attempt.currency,
+                status="captured",
+            ),
+        )
+
+
+@pytest.mark.django_db
+def test_a_paid_payment_is_confirmed_by_the_provider_not_expired(rental_world, monkeypatch):
+    """Regression: with no webhook (local Razorpay) a paid rental expired and was cancelled."""
+    asset = _published_asset(rental_world)
+    start = timezone.localdate() + timedelta(days=1)
+    booking = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=2),
+    )
+    attempt = booking.deposit.payment_attempt
+    PaymentAttempt.objects.filter(id=attempt.id).update(
+        created_at=timezone.now() - timedelta(minutes=5),
+        expires_at=timezone.now() - timedelta(seconds=1),
+        provider_order_id="order_paid_no_webhook",
+        status=PaymentAttempt.Status.CREATED,
+        reconciliation_state=PaymentAttempt.ReconciliationState.IN_SYNC,
+    )
+    attempt.refresh_from_db()
+    monkeypatch.setattr(
+        "apps.commerce.services.reconciliation.get_payment_provider",
+        lambda **_kwargs: _CapturedProvider(attempt),
+    )
+
+    assert expire_abandoned_payment_attempts() == 0
+
+    booking.refresh_from_db()
+    attempt.refresh_from_db()
+    assert attempt.status == PaymentAttempt.Status.CAPTURED
+    assert booking.status == RentalBooking.Status.CONFIRMED
+
+
+@pytest.mark.django_db
+def test_reconcile_sweep_asks_about_open_payments_that_already_have_an_order(
+    rental_world, monkeypatch
+):
+    """Regression: `IN_SYNC` open payments were skipped, so a missed capture was never found."""
+    asset = _published_asset(rental_world)
+    start = timezone.localdate() + timedelta(days=1)
+    booking = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=2),
+    )
+    attempt = booking.deposit.payment_attempt
+    PaymentAttempt.objects.filter(id=attempt.id).update(
+        provider_order_id="order_in_sync",
+        status=PaymentAttempt.Status.CREATED,
+        reconciliation_state=PaymentAttempt.ReconciliationState.IN_SYNC,
+    )
+    queued: list[str] = []
+    monkeypatch.setattr(
+        "apps.commerce.tasks.reconcile_one_payment.delay",
+        queued.append,
+    )
+
+    reconcile_payments()
+
+    assert str(attempt.id) in queued
