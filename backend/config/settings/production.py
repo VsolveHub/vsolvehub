@@ -75,6 +75,11 @@ if not PARTNER_LEGAL_BASE_URL.startswith("https://"):
         "PARTNER_LEGAL_BASE_URL must be the Partner site's https origin, where /terms and "
         "/privacy are published as the agreements applicants accept."
     )
+if not CUSTOMER_SITE_URL.startswith("https://"):
+    raise ImproperlyConfigured(
+        "CUSTOMER_SITE_URL must be the Customer site's https origin; referral share links "
+        "are built on it."
+    )
 if DOCUMENT_STORAGE_PROVIDER not in {"r2", "supabase"}:
     raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be r2 or supabase in production.")
 if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_STORAGE_URL.startswith("https://"):

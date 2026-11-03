@@ -809,6 +809,10 @@ DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="unconfigured")
 # release publishes those as the agreements every applicant accepts. Empty outside production,
 # where placeholder agreements at a `.test` host are used instead.
 PARTNER_LEGAL_BASE_URL = env("PARTNER_LEGAL_BASE_URL", default="")
+# The Customer site's origin. Referral share links are built on it (`/signup?ref=CODE`) each time
+# they are read, so a local stack shares localhost links and production its real domain.
+# Defaults to localhost only in local settings; production refuses to start without https.
+CUSTOMER_SITE_URL = env("CUSTOMER_SITE_URL", default="")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
 PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")
