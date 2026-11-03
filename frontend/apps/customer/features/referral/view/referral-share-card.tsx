@@ -3,7 +3,8 @@
 import { Button } from "@vsolve/ui";
 import { Check, Copy, Gift, MessageCircle, Share2 } from "lucide-react";
 import { useState } from "react";
-import { rewardLabel } from "../model";
+import { SITE_URL } from "@/lib/site";
+import { referralLink, rewardLabel, shareMessageWith } from "../model";
 import type { CustomerReferralSummary } from "../queries";
 
 interface ReferralShareCardProps {
@@ -12,10 +13,12 @@ interface ReferralShareCardProps {
 
 export function ReferralShareCard({ summary }: ReferralShareCardProps) {
   const [copied, setCopied] = useState(false);
+  const shareLink = referralLink(SITE_URL, summary.code);
+  const shareMessage = shareMessageWith(summary.share_message, summary.share_url, shareLink);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(summary.share_url || summary.code);
+      await navigator.clipboard.writeText(shareLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -23,12 +26,12 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
     }
   };
 
-  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary.share_message)}`;
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareMessage)}`;
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   const handleShare = async () => {
     try {
-      await navigator.share({ text: summary.share_message, url: summary.share_url });
+      await navigator.share({ text: shareMessage, url: shareLink });
     } catch {
       // Dismissed or unsupported; the copy and WhatsApp buttons remain.
     }

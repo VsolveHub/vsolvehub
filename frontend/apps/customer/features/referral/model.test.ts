@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { holdExplanation, referralRewardLine, rewardLabel, welcomeRewardLine } from "./model";
+import {
+  holdExplanation,
+  referralLink,
+  referralRewardLine,
+  rewardLabel,
+  shareMessageWith,
+  welcomeRewardLine,
+} from "./model";
 
 describe("referral reward copy", () => {
   it("names the reward", () => {
@@ -35,5 +42,25 @@ describe("referral reward copy", () => {
   it("explains the wait", () => {
     expect(holdExplanation(7)).toContain("7 days after");
     expect(holdExplanation(0)).toContain("as soon as");
+  });
+});
+
+describe("the shared referral link", () => {
+  it("points at the site this app runs on, not the server's fixed domain", () => {
+    expect(referralLink("http://localhost:3000/", "VS1234AB")).toBe("http://localhost:3000/signup?ref=VS1234AB");
+  });
+
+  it("swaps the server's link inside the share message", () => {
+    const server = "https://vsolvehub.com/signup?ref=VS1234AB";
+    const local = "http://localhost:3000/signup?ref=VS1234AB";
+    expect(shareMessageWith(`Join V Solve Hub using my link. Get ₹50. ${server}`, server, local)).toBe(
+      `Join V Solve Hub using my link. Get ₹50. ${local}`,
+    );
+  });
+
+  it("adds the link when the message has none", () => {
+    expect(shareMessageWith("Join V Solve Hub.", "", "http://localhost:3000/signup?ref=X")).toBe(
+      "Join V Solve Hub. http://localhost:3000/signup?ref=X",
+    );
   });
 });

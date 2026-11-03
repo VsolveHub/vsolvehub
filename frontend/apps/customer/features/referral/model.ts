@@ -62,3 +62,18 @@ export function holdExplanation(days: number): string {
   if (days <= 0) return "Rewards are added as soon as your friend completes their first booking.";
   return `Rewards are added ${days} day${days === 1 ? "" : "s"} after your friend's first completed booking, in case it is cancelled or refunded.`;
 }
+
+/**
+ * The link a referrer shares, on the site this app is served from (`NEXT_PUBLIC_SITE_URL`):
+ * localhost in development, the real domain in production. The server's stored `share_url`
+ * carries one fixed domain, so a local test would otherwise send friends to production.
+ */
+export function referralLink(siteUrl: string, code: string): string {
+  return `${siteUrl.replace(/\/$/, "")}/signup?ref=${encodeURIComponent(code)}`;
+}
+
+/** The server's share message, with its link swapped for `link`; the link is appended if absent. */
+export function shareMessageWith(message: string, serverUrl: string, link: string): string {
+  if (serverUrl && message.includes(serverUrl)) return message.split(serverUrl).join(link);
+  return message.includes(link) ? message : `${message} ${link}`.trim();
+}
