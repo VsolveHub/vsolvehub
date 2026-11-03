@@ -24,7 +24,7 @@ export default async function BookingGroupPage({
   const { groupId } = await params;
 
   return (
-    <main className={`${BOOKING_PAGE_FRAME} min-w-0 overflow-x-clip pb-28 pt-6 lg:pb-16`}>
+    <main className={`${BOOKING_PAGE_FRAME} min-w-0 overflow-x-clip pb-28 pt-6 lg:pb-8`}>
       <BookingGroupDetail groupId={groupId} />
     </main>
   );

@@ -518,72 +518,58 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
       <div
         className={
           isAwaitingPayment
-            ? "space-y-4 pb-28 lg:pb-12"
-            : "space-y-4 pb-20 lg:pb-12"
+            ? "space-y-4 pb-28 lg:pb-8"
+            : "space-y-4 pb-20 lg:pb-8"
         }
       >
-        {isAwaitingPayment ? (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl sm:text-2xl font-bold text-text">
-                  Your booking
-                </h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
-                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-                  Awaiting Payment
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-text-secondary">
-                Every visit has a verified professional reserved. Complete payment to confirm.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-text-secondary font-mono">
-                Ref #{group.id.slice(0, 8)}
+        {/* Navigation row: Back button on the left, reference number on the right */}
+        <div className="flex items-center justify-between gap-3">
+          <BackToBookingsLink />
+          <div className="flex items-center gap-2">
+            {isPaid && !isMultiPaidVisit ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
+                <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                Booking Confirmed
               </span>
-              <BackToBookingsLink />
+            ) : null}
+            <span className="text-xs text-text-secondary font-mono">
+              Ref #{group.id.slice(0, 8)}
+            </span>
+          </div>
+        </div>
+
+        {/* Heading & Subtitle Block */}
+        {isAwaitingPayment ? (
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl font-bold text-text">
+                Your booking
+              </h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                Awaiting Payment
+              </span>
             </div>
+            <p className="mt-1 text-sm text-text-secondary">
+              Every visit has a verified professional reserved. Complete payment to confirm.
+            </p>
           </div>
         ) : isMultiPaidVisit ? (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl sm:text-2xl font-bold text-text">
-                  Your visits
-                </h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-200">
-                  <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
-                  Booking Confirmed
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-text-secondary">
-                {group.units.length} visits scheduled · All professionals assigned and confirmed.
-              </p>
-            </div>
+          <div>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-text-secondary font-mono">
-                Ref #{group.id.slice(0, 8)}
-              </span>
-              <BackToBookingsLink />
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <BackToBookingsLink />
-            <div className="flex items-center gap-2">
-              {isPaid ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
-                  <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
-                  Booking Confirmed
-                </span>
-              ) : null}
-              <span className="text-xs text-text-secondary font-mono">
-                Ref #{group.id.slice(0, 8)}
+              <h1 className="text-xl sm:text-2xl font-bold text-text">
+                Your visits
+              </h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-200">
+                <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                Booking Confirmed
               </span>
             </div>
+            <p className="mt-1 text-sm text-text-secondary">
+              {group.units.length} visits scheduled · All professionals assigned and confirmed.
+            </p>
           </div>
-        )}
+        ) : null}
 
         {/* The status card, on the states that still have something to say. `showBookingSummaryCard`
             narrows what used to be `!isAwaitingPayment`: on a live or finished booking the visit
@@ -661,7 +647,13 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
               : "mt-6 space-y-4"
           }
         >
-          <div className={usesTwoColumn ? "lg:col-span-8 min-w-0 space-y-4" : "space-y-4"}>
+          <div
+            className={
+              usesTwoColumn
+                ? "lg:col-span-8 min-w-0 space-y-4 lg:max-h-[calc(100dvh-14rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-3 lg:pb-8 sleek-scrollbar"
+                : "space-y-4"
+            }
+          >
             {isAwaitingPayment ? (
               <div className="sr-only">
                 <AssignmentProgress group={group} />
