@@ -134,7 +134,7 @@ export function FullScreenPartnerSearch({
       />
 
       {/* Top Bar: Brand & Matching Indicator */}
-      <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between">
+      <header className="relative z-10 mx-auto flex w-full max-w-[1216px] items-center justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Logo className="shrink-0" />
@@ -158,7 +158,7 @@ export function FullScreenPartnerSearch({
       </header>
 
       {/* 2-Column Balanced Stage */}
-      <main className="relative z-10 my-auto max-w-5xl mx-auto w-full py-6">
+      <main className="relative z-10 my-auto max-w-[1216px] mx-auto w-full py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           
           {/* Left Column: Lottie Animation / Match Secured Status */}
@@ -391,7 +391,7 @@ export function FullScreenPartnerSearch({
       </main>
 
       {/* Clean Bottom Booking Summary Card */}
-      <footer className="relative z-20 max-w-5xl mx-auto w-full">
+      <footer className="relative z-20 max-w-[1216px] mx-auto w-full">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
             <div className="size-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-lg shrink-0">
