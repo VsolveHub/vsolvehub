@@ -49,3 +49,8 @@ export type StatusGroupKey = (typeof STATUS_GROUPS)[number]["key"];
 export function statusForGroup(key: StatusGroupKey): string {
   return STATUS_GROUPS.find((group) => group.key === key)?.status ?? "";
 }
+
+/** A `?stage=` value as a known stage, or all visits, so a link can open the list filtered. */
+export function groupFromParam(value: string | null): StatusGroupKey {
+  return STATUS_GROUPS.find((entry) => entry.key === value)?.key ?? "";
+}

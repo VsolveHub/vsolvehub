@@ -12,6 +12,7 @@ import {
 } from "@vsolve/ui";
 import { ChevronRight, Phone } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { useListingCounts } from "@/features/money/money-tab";
@@ -22,6 +23,7 @@ import { VISIT_STATUS_LABEL } from "@/features/visits/queries";
 import {
   STATUS_GROUPS,
   fetchHomeBookingsPage,
+  groupFromParam,
   statusForGroup,
   type HomeBookingRow,
   type StatusGroupKey,
@@ -114,8 +116,10 @@ function BookingCard({ row }: { row: HomeBookingRow }) {
  * to the visit page, where the partner can be swapped or the visit started.
  */
 export function HomeBookings() {
-  const [group, setGroup] = useState<StatusGroupKey>("");
-  const [late, setLate] = useState(false);
+  // `?stage=` and `?late=true` let the home page open this list already filtered.
+  const params = useSearchParams();
+  const [group, setGroup] = useState<StatusGroupKey>(() => groupFromParam(params.get("stage")));
+  const [late, setLate] = useState(() => params.get("late") === "true");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");

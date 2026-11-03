@@ -208,9 +208,14 @@ export function BusinessSnapshot({ today: todayProp }: { today?: Date }) {
   return (
     <section aria-labelledby="business-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="business-heading" className="text-base font-bold text-text">
-          Business
-        </h2>
+        <div>
+          <h2 id="business-heading" className="text-base font-bold text-text">
+            Business
+          </h2>
+          <p className="text-xs text-text-secondary">
+            Across every service. Each service&apos;s own money is on its Money tab.
+          </p>
+        </div>
         <div role="group" aria-label="Period" className="inline-flex rounded-control border border-line bg-surface p-0.5">
           {(Object.keys(PERIOD_LABELS) as HomePeriod[]).map((key) => (
             <button

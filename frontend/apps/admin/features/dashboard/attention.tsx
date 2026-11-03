@@ -16,6 +16,7 @@ import {
   fetchOpsStaysPage,
 } from "@/features/moderation/queries";
 import { useApplicationQueue } from "@/features/partner-review/queries";
+import { useListingCounts } from "@/features/money/money-tab";
 import { useWithdrawals } from "@/features/payouts/queries";
 
 import { useDashboardAggregates } from "./queries";
@@ -88,6 +89,8 @@ export function AttentionStrip(): ReactNode {
   const lateVisits = useDashboardAggregates("booking");
   const stuck = useStuckQueues();
   const withdrawals = useWithdrawals("PENDING_APPROVAL");
+  // True totals by stage, the same counts the Home services filter chips show.
+  const visitCounts = useListingCounts("home-services");
   const applications = useApplicationQueue({ status: "SUBMITTED" });
   const crew = useCrewVerificationQueue("PENDING");
   const customItems = useCustomItemReviews();
@@ -124,8 +127,15 @@ export function AttentionStrip(): ReactNode {
       tone: "urgent",
       label: "Visits running late",
       hint: "Start time passed and the professional hasn't started",
-      href: "/operations/home-services",
+      href: "/operations/home-services?late=true",
       count: typeof overdueVisits === "number" ? overdueVisits : null,
+    },
+    {
+      tone: "urgent",
+      label: "Visits disputed or needing a new partner",
+      hint: "A customer is waiting on Operations to sort it out",
+      href: "/operations/home-services?stage=needs_help",
+      count: visitCounts ? (visitCounts.needs_help ?? 0) : null,
     },
     {
       tone: "urgent",
