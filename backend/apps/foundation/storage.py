@@ -12,6 +12,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any, NoReturn, Protocol, cast
 from urllib.parse import parse_qs, quote, urlparse
 
@@ -336,6 +337,75 @@ def r2_client() -> Any:
     )
 
 
+class LocalDocumentStorage:
+    """Local disk document storage for development environments."""
+
+    def __init__(self, *, bucket: str) -> None:
+        self.bucket = bucket
+        self.base_dir = (settings.BASE_DIR / "private-media" / bucket).resolve()
+
+    def _file_path(self, object_key: str) -> Path:
+        clean = Path(object_key)
+        path = (self.base_dir / clean).resolve()
+        if not str(path).startswith(str(self.base_dir)):
+            raise DocumentStorageError("Invalid object key.")
+        return path
+
+    def create_signed_upload(self, *, object_key: str) -> SignedUpload:
+        backend_url = getattr(settings, "LOCAL_DEV_BACKEND_URL", "http://localhost:8000")
+        upload_url = f"{backend_url}/api/v1/dev-storage/{self.bucket}/{object_key}"
+        return SignedUpload(
+            upload_url=upload_url,
+            upload_token="local-dev-token",
+            resumable_url=upload_url,
+            expires_at=timezone.now() + SIGNED_UPLOAD_LIFETIME,
+        )
+
+    def verify_object(self, *, object_key: str, maximum_size_bytes: int) -> VerifiedObject:
+        path = self._file_path(object_key)
+        if not path.is_file():
+            raise DocumentStorageError("The uploaded document was not found.")
+        size = path.stat().st_size
+        if size > maximum_size_bytes:
+            raise DocumentStorageError("The uploaded document exceeds the allowed size.")
+
+        hasher = hashlib.sha256()
+        with open(path, "rb") as f:
+            while chunk := f.read(DOWNLOAD_CHUNK_SIZE):
+                hasher.update(chunk)
+        sha256 = hasher.hexdigest()
+
+        meta_path = path.with_suffix(path.suffix + ".meta")
+        content_type = "application/octet-stream"
+        if meta_path.is_file():
+            try:
+                content_type = meta_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+
+        return VerifiedObject(
+            size_bytes=size,
+            content_type=content_type,
+            sha256=sha256,
+        )
+
+    def create_signed_review(self, *, object_key: str, expires_in_seconds: int) -> SignedReview:
+        backend_url = getattr(settings, "LOCAL_DEV_BACKEND_URL", "http://localhost:8000")
+        review_url = f"{backend_url}/api/v1/dev-storage/{self.bucket}/{object_key}"
+        return SignedReview(
+            review_url=review_url,
+            expires_at=timezone.now() + timedelta(seconds=expires_in_seconds),
+        )
+
+    def delete_object(self, *, object_key: str) -> None:
+        path = self._file_path(object_key)
+        if path.is_file():
+            path.unlink(missing_ok=True)
+        meta_path = path.with_suffix(path.suffix + ".meta")
+        if meta_path.is_file():
+            meta_path.unlink(missing_ok=True)
+
+
 def get_document_storage(*, bucket: str) -> DocumentStorage:
     if settings.DOCUMENT_STORAGE_PROVIDER == "r2" and settings.R2_PRIVATE_ENABLED:
         return R2DocumentStorage(
@@ -349,6 +419,10 @@ def get_document_storage(*, bucket: str) -> DocumentStorage:
             connect_timeout_seconds=settings.DOCUMENT_STORAGE_CONNECT_TIMEOUT_SECONDS,
             read_timeout_seconds=settings.DOCUMENT_STORAGE_READ_TIMEOUT_SECONDS,
         )
+    if settings.DOCUMENT_STORAGE_PROVIDER in ("development", "local") or (
+        settings.DEBUG and settings.DOCUMENT_STORAGE_PROVIDER == "unconfigured"
+    ):
+        return LocalDocumentStorage(bucket=bucket)
     return UnconfiguredDocumentStorage()
 
 

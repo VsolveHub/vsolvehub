@@ -43,5 +43,16 @@ if settings.API_DOCS_ENABLED:
         ),
     ]
 
+if settings.DEBUG or getattr(settings, "DOCUMENT_STORAGE_PROVIDER", "") in ("development", "local"):
+    from apps.foundation.views import DevStorageView
+
+    urlpatterns += [
+        path(
+            "api/v1/dev-storage/<str:bucket>/<path:object_key>",
+            DevStorageView.as_view(),
+            name="dev-storage",
+        ),
+    ]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

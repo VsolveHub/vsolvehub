@@ -23,6 +23,7 @@ OTP_PROVIDER = env("OTP_PROVIDER", default="development")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=True)
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="google")
 DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="development")
+DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="development")
 
 # ngrok tunnels for Razorpay (and similar) webhooks hit Django with a public Host
 # header. Leading-dot entries are subdomain wildcards (Django ALLOWED_HOSTS).

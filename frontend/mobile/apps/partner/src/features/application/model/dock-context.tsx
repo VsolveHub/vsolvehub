@@ -27,3 +27,4 @@ export const ApplyDockContext = createContext<DockContextValue>({
 export function useApplyDock(): DockContextValue {
   return useContext(ApplyDockContext);
 }
+
