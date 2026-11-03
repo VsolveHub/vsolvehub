@@ -1,5 +1,22 @@
 # API Contract Changelog
 
+## 1.91.0 - Operations lists for home services, crew and projects, and job applicants
+
+Additive, Operations only. The Operations console is the only consumer.
+
+- **Added** `GET /operations/bookings/`: every home-service visit, newest first. Filters
+  `status` (one or a comma list), `q` (customer or partner name or phone, booking, order or
+  booking-group id), `late=true`, `date_from` / `date_to` (visit day). Rows are
+  `OperationsBookingRow`: who, what (`services`), where (`area`), `total_paise`, `is_late`.
+- **Added** `GET /ops/home-services/money` and `/money/payments`: the shared `MoneySummary` and
+  `MoneyPayment` shapes, for visit payments and scope changes. Commission and partner earnings
+  are counted when the earning is written (at completion).
+- **Added** `GET /operations/requests/`: every crew (A3) and project (A5) request, not only stuck
+  ones. Filters `status`, `open=true`, `archetype`, `q`. Rows carry the engaged vendor and value.
+- **Added** `GET /ops/workforce/money` and `/money/payments`: Vsolve's fees, visit charges and
+  project money held for vendors, reported separately.
+- **Added** `GET /ops/listings/{listing_id}/applications`: who applied to one job.
+
 ## 1.90.0 - Every payment goes through Razorpay Checkout
 
 Breaking for clients that used the development "Mark as paid" shortcut. The Customer and Partner

@@ -124,14 +124,14 @@ export function AttentionStrip(): ReactNode {
       tone: "urgent",
       label: "Visits running late",
       hint: "Start time passed and the professional hasn't started",
-      href: "/operations/dispatch",
+      href: "/operations/home-services",
       count: typeof overdueVisits === "number" ? overdueVisits : null,
     },
     {
       tone: "urgent",
       label: "Stuck crew and project requests",
       hint: "Past a deadline with no next step",
-      href: "/operations/requests",
+      href: "/operations/requests?tab=stuck",
       count: stuckRequests,
     },
     {
@@ -155,7 +155,7 @@ export function AttentionStrip(): ReactNode {
       more: Boolean(applicationsPage?.next),
     },
     { label: "Crew documents to check", href: "/operations/crew-documents", count: crew.data?.memberships.length ?? null },
-    { label: "Custom work items to review", href: "/operations/work-items", count: customItems.data?.reviews.length ?? null },
+    { label: "Custom work items to review", href: "/operations/requests?tab=work-items", count: customItems.data?.reviews.length ?? null },
     {
       label: "Rental listings to review",
       href: "/operations/rentals?tab=listings",

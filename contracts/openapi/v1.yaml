@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.90.0
+  version: 1.91.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -6224,6 +6224,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/bookings/:
+    get:
+      operationId: operations_bookings_list
+      description: Every home-service visit, newest first, so Operations can find
+        one without its id.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: late
+        schema:
+          type: boolean
+        description: Only visits past their start time that have not started.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBookingPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/bookings/{booking_id}/:
     get:
       operationId: operations_booking_retrieve
@@ -9710,6 +9768,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/requests/:
+    get:
+      operationId: operations_requests_list
+      description: Every crew and project request, newest first.
+      parameters:
+      - in: query
+        name: archetype
+        schema:
+          type: string
+          enum:
+          - A3_TIME_BLOCK
+          - A5_CUSTOM_PROJECT
+        description: Crew hire (A3_TIME_BLOCK) or custom project (A5_CUSTOM_PROJECT).
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: open
+        schema:
+          type: boolean
+        description: Only requests that are not closed.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsRequestPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/requests/{requirement_id}/deadline/:
     post:
       operationId: m2_operations_extend_deadline
@@ -10773,6 +10886,64 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/ops/home-services/money:
+    get:
+      operationId: ops_home_services_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/home-services/money/payments:
+    get:
+      operationId: ops_home_services_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
+          description: ''
   /api/v1/ops/listings:
     get:
       operationId: ops_listings_retrieve
@@ -10807,6 +10978,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsListingPage'
+          description: ''
+  /api/v1/ops/listings/{listing_id}/applications:
+    get:
+      operationId: ops_listing_applications_list
+      description: Who applied to one job, as the poster sees it, so Operations can
+        answer either side.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsListingApplicationPage'
           description: ''
   /api/v1/ops/listings/{listing_id}/moderate:
     post:
@@ -12389,6 +12593,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsWalletTopUpPolicy'
+          description: ''
+  /api/v1/ops/workforce/money:
+    get:
+      operationId: ops_workforce_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/workforce/money/payments:
+    get:
+      operationId: ops_workforce_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
           description: ''
   /api/v1/orders/{order_id}/:
     get:
@@ -22268,6 +22530,24 @@ components:
           $ref: '#/components/schemas/StatusD32Enum'
       required:
       - status
+    ArchetypeEnum:
+      enum:
+      - LEGACY
+      - A1_TASK_VISIT
+      - A3_TIME_BLOCK
+      - A5_CUSTOM_PROJECT
+      - A7_RENTAL
+      - A9_STAY
+      - A10_LISTING
+      type: string
+      description: |-
+        * `LEGACY` - Legacy
+        * `A1_TASK_VISIT` - A1 task visit
+        * `A3_TIME_BLOCK` - A3 time block
+        * `A5_CUSTOM_PROJECT` - A5 custom project
+        * `A7_RENTAL` - A7 rental
+        * `A9_STAY` - A9 stay
+        * `A10_LISTING` - A10 listing
     AssignedProfessional:
       type: object
       description: |-
@@ -31174,6 +31454,98 @@ components:
       - status_history
       - version
       - work_tasks
+    OperationsBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBookingRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsBookingRow:
+      type: object
+      description: |-
+        One home-service visit in the Operations bookings list: enough to find it and see if it
+        needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        partner_phone:
+          type: string
+          readOnly: true
+        services:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        is_late:
+          type: boolean
+          readOnly: true
+        payout_hold:
+          type: boolean
+          readOnly: true
+        needs_redispatch:
+          type: boolean
+          readOnly: true
+      required:
+      - area
+      - created_at
+      - customer_name
+      - customer_phone
+      - estimated_duration_minutes
+      - id
+      - is_late
+      - needs_redispatch
+      - partner_display_name
+      - partner_phone
+      - payout_hold
+      - scheduled_start
+      - services
+      - status
+      - total_paise
     OperationsCase:
       type: object
       description: |-
@@ -32084,6 +32456,110 @@ components:
       required:
       - decision
       - reason
+    OperationsRequestPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsRequestRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsRequestRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RequirementStatusEnum'
+          readOnly: true
+        archetype:
+          allOf:
+          - $ref: '#/components/schemas/ArchetypeEnum'
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        quotes_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        engagement_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        engagement_status:
+          type: string
+          nullable: true
+          readOnly: true
+        vendor_display_name:
+          type: string
+          nullable: true
+          readOnly: true
+        engagement_total_paise:
+          type: integer
+          nullable: true
+          readOnly: true
+      required:
+      - archetype
+      - area
+      - closed_at
+      - created_at
+      - customer_name
+      - customer_phone
+      - engagement_id
+      - engagement_status
+      - engagement_total_paise
+      - id
+      - quotes_due_at
+      - requested_start
+      - service_name
+      - status
+      - submitted_at
+      - vendor_display_name
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -32506,6 +32982,25 @@ components:
         pinned_tiles:
           description: List of tile IDs pinned by the operator. e.g. ['open_cases',
             'overdue_bookings', 'captured_today', 'wallet_liability']
+    OpsListingApplicationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+      required:
+      - next
+      - previous
+      - results
     OpsListingPage:
       type: object
       properties:

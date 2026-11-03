@@ -1,7 +1,9 @@
+import { Skeleton } from "@vsolve/ui";
 import type { Metadata } from "next";
 
 import { AttentionStrip } from "@/features/dashboard/attention";
 import { BusinessSnapshot, KillSwitchBanner, MyCases, QuickActions } from "@/features/dashboard/home-view";
+import { DeferUntilVisible } from "@/features/shared/defer-until-visible";
 
 export const metadata: Metadata = {
   title: "Home",
@@ -21,8 +23,13 @@ export default function OperationsHomePage() {
         </div>
         <QuickActions />
       </div>
-      <BusinessSnapshot />
-      <MyCases />
+      {/* Below the fold on most screens: fetched when scrolled near, not on first paint. */}
+      <DeferUntilVisible placeholder={<Skeleton className="h-64 w-full" />}>
+        <BusinessSnapshot />
+      </DeferUntilVisible>
+      <DeferUntilVisible placeholder={<Skeleton className="h-40 w-full" />}>
+        <MyCases />
+      </DeferUntilVisible>
     </div>
   );
 }

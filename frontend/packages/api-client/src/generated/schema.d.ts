@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.90.0)
- * Checksum: dbf9b8a2c3bea353
+ * Source:   contracts/openapi/v1.yaml (version 1.91.0)
+ * Checksum: 2af4062ad49437bf
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2725,6 +2725,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/bookings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every home-service visit, newest first, so Operations can find one without its id. */
+        get: operations["operations_bookings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/bookings/{booking_id}/": {
         parameters: {
             query?: never;
@@ -3996,6 +4013,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/requests/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every crew and project request, newest first. */
+        get: operations["operations_requests_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/requests/{requirement_id}/deadline/": {
         parameters: {
             query?: never;
@@ -4377,6 +4411,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/home-services/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_home_services_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/home-services/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_home_services_money_payments_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/listings": {
         parameters: {
             query?: never;
@@ -4385,6 +4451,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["ops_listings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/listings/{listing_id}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Who applied to one job, as the poster sees it, so Operations can answer either side. */
+        get: operations["ops_listing_applications_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5146,6 +5229,38 @@ export interface paths {
         get: operations["ops_wallet_policies_list"];
         put?: never;
         post: operations["ops_wallet_policies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/workforce/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_workforce_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/workforce/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_workforce_money_payments_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9113,6 +9228,17 @@ export interface components {
             status: components["schemas"]["StatusD32Enum"];
         };
         /**
+         * @description * `LEGACY` - Legacy
+         *     * `A1_TASK_VISIT` - A1 task visit
+         *     * `A3_TIME_BLOCK` - A3 time block
+         *     * `A5_CUSTOM_PROJECT` - A5 custom project
+         *     * `A7_RENTAL` - A7 rental
+         *     * `A9_STAY` - A9 stay
+         *     * `A10_LISTING` - A10 listing
+         * @enum {string}
+         */
+        ArchetypeEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT" | "A7_RENTAL" | "A9_STAY" | "A10_LISTING";
+        /**
          * @description The person coming, as the Customer may see them.
          *
          *     Deliberately thin. A Partner's phone number, documents and application are
@@ -12689,6 +12815,37 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        OperationsBookingPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsBookingRow"][];
+        };
+        /**
+         * @description One home-service visit in the Operations bookings list: enough to find it and see if it
+         *     needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`.
+         */
+        OperationsBookingRow: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["BookingStatusEnum"];
+            /** Format: date-time */
+            readonly scheduled_start: string;
+            readonly estimated_duration_minutes: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
+            readonly partner_display_name: string;
+            readonly partner_phone: string;
+            readonly services: string[];
+            readonly area: string;
+            readonly total_paise: number;
+            readonly is_late: boolean;
+            readonly payout_hold: boolean;
+            readonly needs_redispatch: boolean;
+        };
         /**
          * @description One case, with the vocabulary a reviewer needs to close it.
          *
@@ -13047,6 +13204,38 @@ export interface components {
             reason: string;
             decision: components["schemas"]["OperationsRefundReviewDecisionEnum"];
         };
+        OperationsRequestPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsRequestRow"][];
+        };
+        OperationsRequestRow: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RequirementStatusEnum"];
+            readonly archetype: components["schemas"]["ArchetypeEnum"];
+            readonly service_name: string;
+            readonly area: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
+            /** Format: date-time */
+            readonly requested_start: string | null;
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: date-time */
+            readonly quotes_due_at: string | null;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: uuid */
+            readonly engagement_id: string | null;
+            readonly engagement_status: string | null;
+            readonly vendor_display_name: string | null;
+            readonly engagement_total_paise: number | null;
+        };
         OperationsTaxProfileVerifyRequest: {
             /** @default  */
             registered_state_code: string;
@@ -13195,6 +13384,13 @@ export interface components {
         OpsDashboardPreferenceRequest: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
+        };
+        OpsListingApplicationPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["Application"][];
         };
         OpsListingPage: {
             /** Format: uri */
@@ -25495,6 +25691,51 @@ export interface operations {
             };
         };
     };
+    operations_bookings_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                date_from?: string;
+                date_to?: string;
+                /** @description Only visits past their start time that have not started. */
+                late?: boolean;
+                q?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBookingPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_booking_retrieve: {
         parameters: {
             query?: never;
@@ -28849,6 +29090,51 @@ export interface operations {
             };
         };
     };
+    operations_requests_list: {
+        parameters: {
+            query?: {
+                /** @description Crew hire (A3_TIME_BLOCK) or custom project (A5_CUSTOM_PROJECT). */
+                archetype?: "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description Only requests that are not closed. */
+                open?: boolean;
+                q?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsRequestPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_operations_extend_deadline: {
         parameters: {
             query?: never;
@@ -29840,6 +30126,52 @@ export interface operations {
             };
         };
     };
+    ops_home_services_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_home_services_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
+                };
+            };
+        };
+    };
     ops_listings_retrieve: {
         parameters: {
             query?: {
@@ -29864,6 +30196,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpsListingPage"];
+                };
+            };
+        };
+    };
+    ops_listing_applications_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsListingApplicationPage"];
                 };
             };
         };
@@ -31351,6 +31709,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpsWalletTopUpPolicy"];
+                };
+            };
+        };
+    };
+    ops_workforce_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_workforce_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
                 };
             };
         };

@@ -1096,3 +1096,80 @@ class AmendmentApprovalResultSerializer(serializers.Serializer[dict[str, Any]]):
     payment_attempt_id = serializers.UUIDField()
     amount_paise = serializers.IntegerField()
     currency = serializers.CharField()
+
+
+#: A visit is late once its start time has passed and the professional has not started.
+LATE_STATUSES = (Booking.Status.CONFIRMED, Booking.Status.EN_ROUTE)
+
+
+class OperationsBookingRowSerializer(serializers.ModelSerializer[Booking]):
+    """One home-service visit in the Operations bookings list: enough to find it and see if it
+    needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`."""
+
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    partner_display_name = serializers.SerializerMethodField()
+    partner_phone = serializers.SerializerMethodField()
+    services = serializers.SerializerMethodField()
+    area = serializers.SerializerMethodField()
+    total_paise = serializers.SerializerMethodField()
+    is_late = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Booking
+        fields = (
+            "id",
+            "status",
+            "scheduled_start",
+            "estimated_duration_minutes",
+            "created_at",
+            "customer_name",
+            "customer_phone",
+            "partner_display_name",
+            "partner_phone",
+            "services",
+            "area",
+            "total_paise",
+            "is_late",
+            "payout_hold",
+            "needs_redispatch",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_name(self, instance: Booking) -> str:
+        return instance.customer.full_name
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_phone(self, instance: Booking) -> str:
+        return instance.customer.phone_number
+
+    @extend_schema_field(serializers.CharField())
+    def get_partner_display_name(self, instance: Booking) -> str:
+        return instance.partner.display_name
+
+    @extend_schema_field(serializers.CharField())
+    def get_partner_phone(self, instance: Booking) -> str:
+        return instance.partner.user.phone_number
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_services(self, instance: Booking) -> list[str]:
+        """What is being done: the service lines, never the fee or minimum-visit lines."""
+        unit = instance.fulfilment_unit
+        if unit is None:
+            return []
+        return [line.label for line in unit.lines.all() if line.kind == QuoteLine.Kind.SERVICE]
+
+    @extend_schema_field(serializers.CharField())
+    def get_area(self, instance: Booking) -> str:
+        unit = instance.fulfilment_unit
+        return "" if unit is None else unit.service_area.name
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total_paise(self, instance: Booking) -> int:
+        unit = instance.fulfilment_unit
+        return 0 if unit is None else int(unit.total_paise)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_late(self, instance: Booking) -> bool:
+        return instance.status in LATE_STATUSES and instance.scheduled_start < timezone.now()

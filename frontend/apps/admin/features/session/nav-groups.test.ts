@@ -22,6 +22,7 @@ describe("operations navigation", () => {
 
   it("keeps a section lit on its sub-pages", () => {
     expect(isNavLinkActive(link("/operations/requests"), "/operations/requests/abc/assisted-quote")).toBe(true);
+    expect(isNavLinkActive(link("/operations/home-services"), "/operations/visits")).toBe(true);
     expect(isNavLinkActive(link("/operations/cases"), "/operations/cases/money")).toBe(true);
     expect(isNavLinkActive(link("/operations/dashboards/overview"), "/operations/dashboards/vendor")).toBe(true);
   });

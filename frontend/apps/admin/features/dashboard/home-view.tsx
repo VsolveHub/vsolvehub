@@ -74,8 +74,8 @@ export function KillSwitchBanner() {
 /* -------------------------------------------------------------------------- */
 
 const ACTIONS: { href: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
-  { href: "/operations/visits", label: "Find a booking", icon: Search },
-  { href: "/operations/assisted-checkouts", label: "Book for a customer", icon: ShoppingCart },
+  { href: "/operations/home-services", label: "Find a booking", icon: Search },
+  { href: "/operations/home-services?tab=book", label: "Book for a customer", icon: ShoppingCart },
   { href: "/finance", label: "Refund a payment", icon: RotateCcw },
   { href: "/operations/loyalty", label: "Credit a customer's wallet", icon: Wallet },
   { href: "/reviews", label: "Approve partners", icon: UserCheck },
