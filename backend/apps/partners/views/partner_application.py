@@ -21,10 +21,11 @@ from rest_framework.views import APIView
 from apps.identity.models import User
 from apps.locations.serializers import PartnerServiceAreaOptionSerializer
 from apps.partners.exceptions import PartnerDomainError
-from apps.partners.models import PartnerProfile
+from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import (
     applicant_service_areas,
+    partner_application_for_user,
     applicant_skills,
     partner_profile_for_user,
     partner_schedule,
@@ -52,6 +53,8 @@ from apps.partners.serializers import (
     PartnerSkillOptionSerializer,
 )
 from apps.partners.services import (
+    _ensure_partner_role,
+    _record_transition,
     ScheduleExceptionInput,
     ScheduleRuleInput,
     create_partner_document_applicant_access,
@@ -191,7 +194,30 @@ class PartnerApplicationView(APIView):
         responses={200: PartnerApplicationSerializer, 404: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
-        return _application_response(cast(User, request.user))
+        user = cast(User, request.user)
+        application = partner_application_for_user(user)
+        if application is None:
+            partner = PartnerProfile.objects.filter(user=user).first()
+            if partner is None:
+                partner = PartnerProfile.objects.create(
+                    user=user,
+                    display_name=user.full_name or "",
+                    biography="",
+                    experience_years=0,
+                )
+                application = PartnerApplication.objects.create(partner=partner)
+                _ensure_partner_role(user)
+                _record_transition(
+                    application=application,
+                    from_status="",
+                    actor=user,
+                    reason_code="application_created",
+                )
+            else:
+                application = PartnerApplication.objects.filter(partner=partner).first()
+                if application is None:
+                    application = PartnerApplication.objects.create(partner=partner)
+        return Response(PartnerApplicationSerializer(application).data)
 
     @extend_schema(
         tags=["Partner application"],

@@ -172,7 +172,10 @@ def _draft_application_for_update(
 
     application = PartnerApplication.objects.select_for_update().get(partner=partner)
     if expected_version is None:
-        raise PartnerVersionConflictError
+        if application.version == 1 and application.status == PartnerApplication.Status.DRAFT:
+            expected_version = 1
+        else:
+            raise PartnerVersionConflictError
     _assert_version(application, expected_version)
     if application.status not in {
         PartnerApplication.Status.DRAFT,
