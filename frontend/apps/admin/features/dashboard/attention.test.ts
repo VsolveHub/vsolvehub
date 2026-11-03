@@ -22,4 +22,13 @@ describe("home attention strip", () => {
     ]);
     expect(shown.map((item) => item.href)).toEqual(["/d", "/c"]);
   });
+
+  it("puts urgent items above review queues, whatever their size", () => {
+    const shown = itemsToShow([
+      { label: "applications", href: "/reviews", count: 9 },
+      { label: "late cases", href: "/operations/cases", count: 1, tone: "urgent" },
+      { label: "late visits", href: "/operations/dispatch", count: 3, tone: "urgent" },
+    ]);
+    expect(shown.map((item) => item.label)).toEqual(["late visits", "late cases", "applications"]);
+  });
 });
