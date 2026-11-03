@@ -156,7 +156,7 @@ describe("StayQuotePanel", () => {
     const body = client.POST.mock.calls[0]![1].body;
     expect(body).toMatchObject({ property_id: "prop-1", unit_id: "unit-1", length: 1 });
     expect(body).not.toHaveProperty("check_out");
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/stays/mine"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/activity?type=stays"));
   });
 
   it("explains a minimum stay in the property's unit", async () => {

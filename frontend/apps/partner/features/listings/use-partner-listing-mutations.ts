@@ -184,10 +184,6 @@ export function usePartnerListingMutations({
             notify(t("listings.mutations.completePayment")),
         });
 
-        if (result.mode === "simulated") {
-          notify(t(SUCCESS_MESSAGES.subscribe));
-          return sub;
-        }
         if (result.mode === "pending") {
           notify(t("listings.mutations.paymentPreparing"));
           return sub;

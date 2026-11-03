@@ -75,6 +75,11 @@ if not PARTNER_LEGAL_BASE_URL.startswith("https://"):
         "PARTNER_LEGAL_BASE_URL must be the Partner site's https origin, where /terms and "
         "/privacy are published as the agreements applicants accept."
     )
+if not CUSTOMER_SITE_URL.startswith("https://"):
+    raise ImproperlyConfigured(
+        "CUSTOMER_SITE_URL must be the Customer site's https origin; referral share links "
+        "are built on it."
+    )
 if DOCUMENT_STORAGE_PROVIDER not in {"r2", "supabase"}:
     raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be r2 or supabase in production.")
 if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_STORAGE_URL.startswith("https://"):
@@ -105,15 +110,6 @@ if MESSAGE_TRANSPORT == "fake" or NOTIFICATIONS_ALLOW_FAKE_TRANSPORT:
         "accepted without sending it."
     )
 
-# Refused at start-up rather than checked at the endpoint. A flag that lets a caller
-# mark their own money received is the single most valuable switch in this codebase to
-# flip by accident, and the cheapest place to make that impossible is a deploy that
-# will not boot with it on.
-if PAYMENTS_ALLOW_SIMULATED_CAPTURE:
-    raise ImproperlyConfigured(
-        "PAYMENTS_ALLOW_SIMULATED_CAPTURE must stay off in production. It lets a caller "
-        "mark a payment captured without a provider."
-    )
 if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
     raise ImproperlyConfigured("Razorpay server credentials must be configured in production.")
 if len(PAYMENT_WEBHOOK_SECRET) < MINIMUM_WEBHOOK_SECRET_LENGTH:

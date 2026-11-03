@@ -201,11 +201,12 @@ export function PresencePanel({
         const position = await currentPosition().catch(() => null);
         await heartbeat.mutateAsync({
           session_id: id,
-          ...(position
+          ...(position && consentVersion
             ? {
                 latitude: position.coords.latitude.toFixed(6),
                 longitude: position.coords.longitude.toFixed(6),
                 accuracy_m: Math.round(position.coords.accuracy),
+                consent_version: consentVersion,
               }
             : {}),
         });
@@ -217,7 +218,7 @@ export function PresencePanel({
         // succeeded is the one thing this screen must not do.
       }
     },
-    [heartbeat],
+    [heartbeat, consentVersion],
   );
 
   const sendHeartbeatRef = useRef(sendHeartbeat);
@@ -297,7 +298,7 @@ export function PresencePanel({
     };
   }, [sessionId]);
 
-  async function handleGoOnline() {
+  async function executeGoOnline() {
     setLocationDenied(false);
 
     let position: GeolocationPosition;
@@ -328,6 +329,22 @@ export function PresencePanel({
       setLastBeatAt(Date.now());
       writeStoredSession(session.id);
       announceHeartbeat();
+    }
+  }
+
+  async function handleGoOnline(): Promise<void> {
+    if (typeof window !== "undefined") {
+      const detail = { onProceed: executeGoOnline, intercepted: false };
+      window.dispatchEvent(
+        new CustomEvent("vsh:open-job-alerts-prompt", {
+          detail,
+        }),
+      );
+      if (!detail.intercepted) {
+        await executeGoOnline();
+      }
+    } else {
+      await executeGoOnline();
     }
   }
 

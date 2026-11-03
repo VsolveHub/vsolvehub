@@ -3,6 +3,7 @@
 import uuid
 from datetime import timedelta
 from http import HTTPStatus
+from typing import Any
 
 import pytest
 from django.utils import timezone
@@ -15,6 +16,7 @@ from apps.loyalty.models import (
     CustomerCompletion,
     LoyaltySettings,
     ReferralAttribution,
+    ReferralCode,
     ReferralReward,
 )
 from apps.loyalty.services.coins import get_customer_coin_balances
@@ -187,7 +189,7 @@ def test_customer_referral_api() -> None:
     assert res.status_code == HTTPStatus.OK
     data = res.json()
     assert data["code"] == ref_code.code
-    assert data["share_url"] == ref_code.share_url
+    assert data["share_url"] == f"https://customer.example.test/signup?ref={ref_code.code}"
     assert "active_program" in data
     assert len(data["active_program"]["tiers"]) >= 1
 
@@ -237,3 +239,22 @@ def test_referral_summary_reports_counts_and_next_tier() -> None:
     assert data["next_tier_min"] == 4
     assert data["referrals_to_next_tier"] == 4
     assert data["share_url"] in data["share_message"]
+
+
+def test_share_link_follows_customer_site_url_even_for_old_codes(settings: Any) -> None:
+    """Regression: links were stored with a fixed production domain, so local tests shared prod."""
+    user = _user("317")
+    ref_code = get_or_create_referral_code(user)
+    ReferralCode.objects.filter(id=ref_code.id).update(
+        share_url=f"https://vsolvehub.com/signup?ref={ref_code.code}"
+    )
+    settings.CUSTOMER_SITE_URL = "http://localhost:3000/"
+
+    client = APIClient()
+    client.force_authenticate(user)
+    data = client.get("/api/v1/customer/referral/").json()
+
+    local = f"http://localhost:3000/signup?ref={ref_code.code}"
+    assert data["share_url"] == local
+    assert data["share_message"].endswith(local)
+    assert "vsolvehub.com" not in data["share_message"]

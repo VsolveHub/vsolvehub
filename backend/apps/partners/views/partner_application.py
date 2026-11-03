@@ -492,16 +492,19 @@ class PartnerPushSubscriptionSyncView(APIView):
         request=PartnerPushSubscriptionSyncSerializer,
         responses={
             200: OpenApiResponse(description="The subscription was synced."),
+            201: OpenApiResponse(description="The subscription was created."),
             400: ApiErrorSerializer,
+            401: ApiErrorSerializer,
             403: ApiErrorSerializer,
             404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
         },
     )
     def post(self, request: Request) -> Response:
         serializer = PartnerPushSubscriptionSyncSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            subscription, instant_eligible = sync_partner_push_subscription(
+            subscription, instant_eligible, created = sync_partner_push_subscription(
                 user=cast(User, request.user),
                 **serializer.validated_data,
             )
@@ -513,8 +516,11 @@ class PartnerPushSubscriptionSyncView(APIView):
                 "onesignal_subscription_id": subscription.onesignal_subscription_id,
                 "platform": subscription.platform,
                 "is_active": subscription.is_active,
+                "opted_in": subscription.opted_in,
+                "permission_state": subscription.permission_state,
                 "last_verified_at": subscription.last_verified_at.isoformat(),
+                "last_sync_status": subscription.last_sync_status,
                 "instant_eligible": instant_eligible,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )

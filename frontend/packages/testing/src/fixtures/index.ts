@@ -507,6 +507,8 @@ export function bookingWindows(
     estimated_duration_minutes: 60,
     availability_is_preliminary: false,
     timezone: "Asia/Kolkata",
+    // No partner is free to start now: the fixture is a scheduled booking unless a test says not.
+    instant: { is_available: false, earliest_starts_at: null, eta_minutes: null, unavailable_reason: null },
     days: [bookingWindowDay()],
     ...overrides,
   };

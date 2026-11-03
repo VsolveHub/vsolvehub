@@ -168,11 +168,29 @@ class PartnerPresenceSerializer(serializers.ModelSerializer[PartnerOnlineSession
 
 
 class PartnerPushSubscriptionSyncSerializer(serializers.Serializer[dict[str, object]]):
-    onesignal_subscription_id = serializers.CharField(max_length=64)
+    onesignal_subscription_id = serializers.CharField(max_length=64, min_length=1)
     platform = serializers.ChoiceField(
         choices=PartnerPushSubscription.Platform.choices,
         default=PartnerPushSubscription.Platform.WEB,
         required=False,
     )
     user_agent = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
-    is_active = serializers.BooleanField(default=True)
+    is_active = serializers.BooleanField(required=False, default=True)
+    opted_in = serializers.BooleanField(required=False, default=True)
+    permission_state = serializers.ChoiceField(
+        choices=["", "granted", "denied", "default"],
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+    action = serializers.ChoiceField(
+        choices=["sync", "deactivate"],
+        required=False,
+        default="sync",
+    )
+
+    def validate_onesignal_subscription_id(self, value: str) -> str:
+        val = value.strip()
+        if not val:
+            raise serializers.ValidationError("onesignal_subscription_id cannot be blank.")
+        return val

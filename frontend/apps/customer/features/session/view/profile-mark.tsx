@@ -13,12 +13,15 @@ export function profileInitials(identity: ProfileIdentity): string | null {
   const name = profileName(identity);
   if (name === null) return null;
 
-  return name
+  // First letter or digit of each word, so punctuation never becomes an initial:
+  // "Operations (dev)" -> "OD", not "O(".
+  const initials = name
     .split(/\s+/)
+    .map((part) => part.match(/[\p{L}\p{N}]/u)?.[0]?.toUpperCase() ?? "")
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+  return initials || null;
 }
 
 export function ProfileMark({

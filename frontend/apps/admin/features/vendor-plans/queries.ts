@@ -104,5 +104,5 @@ export async function updateOpsVendorPlan(
 ): Promise<OpsVendorPlan> {
   return request(() =>
     looseApi().PATCH(`/api/v1/ops/vendor-subscription-plans/${planId}`, { body }),
-  ) as Promise<OpsVendorPlan>;
+  ) as unknown as Promise<OpsVendorPlan>;
 }

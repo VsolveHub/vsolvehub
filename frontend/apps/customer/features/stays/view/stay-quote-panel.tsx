@@ -137,7 +137,7 @@ export function StayQuotePanel({
         child_count: children,
         message,
       }),
-    onSuccess: () => router.push("/stays/mine"),
+    onSuccess: () => router.push("/activity?type=stays"),
     // A 401 shows as the "session ended" card, not as a message.
     onError: (err: unknown) => {
       if (!isSignInError(err)) setError(refusalMessage(err, minimumLabel));

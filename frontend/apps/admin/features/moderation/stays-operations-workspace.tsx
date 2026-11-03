@@ -15,13 +15,10 @@ import {
   formatMoney,
 } from "@vsolve/ui";
 import {
-  Building2,
-  Calendar,
   CheckCircle2,
   Eye,
   Home,
   MapPin,
-  MessageSquare,
   PowerOff,
   RefreshCw,
   Search,
@@ -40,8 +37,17 @@ import {
 } from "./queries";
 import { PartnerProfileDrawer } from "./partner-profile-drawer";
 import { useDebounced } from "@/features/shared/use-debounced";
+import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
+import { StayPlans } from "./stay-plans";
 
-type StayTab = "PROPERTIES" | "ENQUIRIES" | "RESERVATIONS";
+const TABS = [
+  { key: "properties", label: "Properties" },
+  { key: "enquiries", label: "Enquiries" },
+  { key: "reservations", label: "Reservations" },
+  { key: "money", label: "Money" },
+  { key: "plans", label: "Plans" },
+] as const;
 type StatusFilter = "ALL" | "ACTIVE" | "REMOVED" | "PENDING";
 
 const ACTION_COPY: Record<
@@ -92,7 +98,9 @@ function propertyStatusBadge(item: OpsStayProperty) {
 
 export function StaysOperationsWorkspace() {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<StayTab>("PROPERTIES");
+  const [activeTab, setActiveTab] = useServiceTab(TABS);
+  // True totals from the server: the list below holds only the pages loaded so far.
+  const serverCounts = useListingCounts("stays");
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search.trim().toLowerCase());
@@ -194,14 +202,14 @@ export function StaysOperationsWorkspace() {
       else live++;
     }
     return {
-      total: staysPage.items.length,
-      live,
-      removed,
-      pending,
+      total: serverCounts?.total ?? staysPage.items.length,
+      live: serverCounts?.live ?? live,
+      removed: serverCounts?.removed ?? removed,
+      pending: serverCounts?.pending ?? pending,
       enquiries: enquiries.data?.length ?? 0,
       reservations: reservations.data?.length ?? 0,
     };
-  }, [staysPage.items, enquiries.data, reservations.data]);
+  }, [staysPage.items, enquiries.data, reservations.data, serverCounts]);
 
   const openDecision = (item: OpsStayProperty, action: ModerationAction) => {
     setDecisionReason("");
@@ -224,58 +232,24 @@ export function StaysOperationsWorkspace() {
             Manage stay properties, turn listings off or reinstate them, inspect hosts, and oversee guest enquiries & bookings.
           </p>
         </div>
-
-        {/* Workspace Sub-tabs */}
-        <div className="flex items-center rounded-xl border border-line bg-surface p-1 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setActiveTab("PROPERTIES")}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-              activeTab === "PROPERTIES"
-                ? "bg-navy-900 text-white"
-                : "text-text-secondary hover:text-navy-900"
-            }`}
-          >
-            <Building2 className="size-3.5" />
-            Properties ({counts.total})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("ENQUIRIES")}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-              activeTab === "ENQUIRIES"
-                ? "bg-navy-900 text-white"
-                : "text-text-secondary hover:text-navy-900"
-            }`}
-          >
-            <MessageSquare className="size-3.5" />
-            Enquiries ({counts.enquiries})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("RESERVATIONS")}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-              activeTab === "RESERVATIONS"
-                ? "bg-navy-900 text-white"
-                : "text-text-secondary hover:text-navy-900"
-            }`}
-          >
-            <Calendar className="size-3.5" />
-            Reservations ({counts.reservations})
-          </button>
-        </div>
       </div>
 
-      {/* Metrics Row */}
+      <ServiceTabs tabs={TABS} active={activeTab} onChange={setActiveTab} label="Stays sections" />
+
+      {activeTab === "money" ? <MoneyTab service="stays" /> : null}
+      {activeTab === "plans" ? <StayPlans /> : null}
+
+      {/* Count cards belong to the property list, so they show on that tab only. */}
+      {activeTab === "properties" ? (
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <button
           type="button"
           onClick={() => {
-            setActiveTab("PROPERTIES");
+            setActiveTab("properties");
             setFilter("ALL");
           }}
           className={`flex flex-col rounded-xl border p-3 text-left transition ${
-            activeTab === "PROPERTIES" && filter === "ALL"
+            activeTab === "properties" && filter === "ALL"
               ? "border-brand-500 bg-brand-50/50 shadow-sm"
               : "border-line bg-surface hover:bg-surface-sunken"
           }`}
@@ -287,11 +261,11 @@ export function StaysOperationsWorkspace() {
         <button
           type="button"
           onClick={() => {
-            setActiveTab("PROPERTIES");
+            setActiveTab("properties");
             setFilter("ACTIVE");
           }}
           className={`flex flex-col rounded-xl border p-3 text-left transition ${
-            activeTab === "PROPERTIES" && filter === "ACTIVE"
+            activeTab === "properties" && filter === "ACTIVE"
               ? "border-success-500 bg-success-50/50 shadow-sm"
               : "border-line bg-surface hover:bg-surface-sunken"
           }`}
@@ -303,11 +277,11 @@ export function StaysOperationsWorkspace() {
         <button
           type="button"
           onClick={() => {
-            setActiveTab("PROPERTIES");
+            setActiveTab("properties");
             setFilter("REMOVED");
           }}
           className={`flex flex-col rounded-xl border p-3 text-left transition ${
-            activeTab === "PROPERTIES" && filter === "REMOVED"
+            activeTab === "properties" && filter === "REMOVED"
               ? "border-danger-500 bg-danger-50/50 shadow-sm"
               : "border-line bg-surface hover:bg-surface-sunken"
           }`}
@@ -319,11 +293,11 @@ export function StaysOperationsWorkspace() {
         <button
           type="button"
           onClick={() => {
-            setActiveTab("PROPERTIES");
+            setActiveTab("properties");
             setFilter("PENDING");
           }}
           className={`flex flex-col rounded-xl border p-3 text-left transition ${
-            activeTab === "PROPERTIES" && filter === "PENDING"
+            activeTab === "properties" && filter === "PENDING"
               ? "border-brand-500 bg-brand-50/50 shadow-sm"
               : "border-line bg-surface hover:bg-surface-sunken"
           }`}
@@ -334,20 +308,17 @@ export function StaysOperationsWorkspace() {
 
         <button
           type="button"
-          onClick={() => setActiveTab("RESERVATIONS")}
-          className={`flex flex-col rounded-xl border p-3 text-left transition ${
-            activeTab === "RESERVATIONS"
-              ? "border-brand-500 bg-brand-50/50 shadow-sm"
-              : "border-line bg-surface hover:bg-surface-sunken"
-          }`}
+          onClick={() => setActiveTab("reservations")}
+          className="flex flex-col rounded-xl border border-line bg-surface p-3 text-left transition hover:bg-surface-sunken"
         >
           <span className="text-xs font-medium text-text-secondary">Bookings / Stays</span>
           <span className="mt-1 text-xl font-bold text-navy-900">{counts.reservations}</span>
         </button>
       </div>
+      ) : null}
 
       {/* PROPERTIES TAB */}
-      {activeTab === "PROPERTIES" && (
+      {activeTab === "properties" && (
         <>
           {/* Search & Filters */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -590,7 +561,7 @@ export function StaysOperationsWorkspace() {
       )}
 
       {/* ENQUIRIES TAB */}
-      {activeTab === "ENQUIRIES" && (
+      {activeTab === "enquiries" && (
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-bold text-navy-900">Guest Enquiries & Messages</h2>
@@ -640,7 +611,7 @@ export function StaysOperationsWorkspace() {
       )}
 
       {/* RESERVATIONS TAB */}
-      {activeTab === "RESERVATIONS" && (
+      {activeTab === "reservations" && (
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-bold text-navy-900">Confirmed Reservations & Bookings</h2>

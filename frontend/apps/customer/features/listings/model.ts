@@ -99,6 +99,34 @@ export function parseSkills(text: string): string[] {
 }
 
 /**
+ * Skills to offer while the seeker types the last, unfinished entry. `pool` is in priority
+ * order (the job's own skills first), and skills already entered are never offered again.
+ */
+export function skillSuggestions(text: string, pool: readonly string[], limit = 6): string[] {
+  const parts = text.split(",");
+  const typed = (parts.pop() ?? "").trim().toLowerCase();
+  const entered = new Set(parts.map((p) => p.trim().toLowerCase()).filter(Boolean));
+  const seen = new Set<string>();
+  const starts: string[] = [];
+  const contains: string[] = [];
+  for (const raw of pool) {
+    const skill = raw.trim();
+    const key = skill.toLowerCase();
+    if (!skill || seen.has(key) || entered.has(key) || key === typed) continue;
+    seen.add(key);
+    if (!typed || key.startsWith(typed)) starts.push(skill);
+    else if (key.includes(typed)) contains.push(skill);
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
+
+/** Replace the unfinished last entry with `skill`, ready for the next one: "Py" -> "Python, ". */
+export function applySkillSuggestion(text: string, skill: string): string {
+  const parts = text.split(",").slice(0, -1).map((p) => p.trim()).filter(Boolean);
+  return [...parts, skill].join(", ") + ", ";
+}
+
+/**
  * Resolves a human-readable label for a structured field, prioritizing
  * the server-published schema title, falling back to canonical defaults or title-casing.
  */

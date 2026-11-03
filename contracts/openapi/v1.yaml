@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.87.0
+  version: 1.90.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -2496,6 +2496,165 @@ paths:
               schema:
                 $ref: '#/components/schemas/CoinTransactionPage'
           description: ''
+  /api/v1/customer/notification-preferences/:
+    get:
+      operationId: customer_notification_preferences_retrieve
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: User push notification preferences.
+    patch:
+      operationId: customer_notification_preferences_partial_update
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Preferences updated successfully.
+        '400':
+          description: Invalid request or attempt to disable immutable category.
+  /api/v1/customer/push-subscriptions/{subscription_id}/:
+    patch:
+      operationId: customer_push_subscriptions_partial_update
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Customer push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: customer_push_subscriptions_destroy
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Customer push subscriptions
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: Subscription deactivated successfully.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/customer/push-subscriptions/sync/:
+    post:
+      operationId: customer_push_subscriptions_sync_create
+      tags:
+      - Customer push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/customer/referral/:
     get:
       operationId: customer_referral_retrieve
@@ -2623,6 +2782,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/WalletTransactionPage'
           description: ''
+  /api/v1/dev/onesignal/test-push/:
+    post:
+      operationId: dev_onesignal_test_push_create
+      description: Local development & testing endpoint to verify OneSignal push delivery
+        to an external_id.
+      tags:
+      - dev
+      responses:
+        '200':
+          description: No response body
   /api/v1/engagement-amendments/{engagement_amendment_id}/accept/:
     post:
       operationId: m2_engagement_amendment_decide
@@ -10736,6 +10905,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerListing'
           description: ''
+  /api/v1/ops/listings/money:
+    get:
+      operationId: ops_listings_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/listings/money/payments:
+    get:
+      operationId: ops_listings_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
+          description: ''
   /api/v1/ops/loyalty/burn-policies/:
     get:
       operationId: ops_loyalty_burn_policies_list
@@ -11234,6 +11461,64 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/ops/rentals/money:
+    get:
+      operationId: ops_rentals_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/rentals/money/payments:
+    get:
+      operationId: ops_rentals_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
+          description: ''
   /api/v1/ops/rentals/platform-fee:
     get:
       operationId: ops_rentals_platform_fee_retrieve
@@ -11293,13 +11578,45 @@ paths:
   /api/v1/ops/reports/{report_id}/:
     get:
       operationId: ops_reports_retrieve
+      description: One page of the report. Filters are the catalog's filter keys;
+        a `choice` value outside its options is refused (`invalid_filter`).
       summary: Preview operations report data
       parameters:
+      - in: query
+        name: date_end
+        schema:
+          type: string
+          format: date
+        description: Includes the whole day.
+      - in: query
+        name: date_start
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Search names and references.
       - in: path
         name: report_id
         schema:
           type: string
         required: true
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: A sortable column key; prefix `-` for descending. Default newest
+          first.
       tags:
       - operations
       security:
@@ -11310,6 +11627,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsReportPreviewResponse'
+          description: ''
+  /api/v1/ops/reports/partner-options/:
+    get:
+      operationId: ops_reports_partner_options_list
+      summary: Partners for a report's partner filter
+      parameters:
+      - in: query
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Name an already chosen partner (from a link or saved filter).
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Name or phone.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpsReportOption'
           description: ''
   /api/v1/ops/reports/presets/:
     get:
@@ -11634,6 +11980,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsStayEnquiryPage'
+          description: ''
+  /api/v1/ops/stays/money:
+    get:
+      operationId: ops_stays_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/stays/money/payments:
+    get:
+      operationId: ops_stays_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
           description: ''
   /api/v1/ops/stays/reservations:
     get:
@@ -13974,6 +14378,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/dispatch-offers/{offer_id}/:
+    get:
+      operationId: partner_dispatch_offers_retrieve
+      description: Retrieve details of an instant booking dispatch offer.
+      parameters:
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/partner/dispatch-offers/{offer_id}/accept/:
+    post:
+      operationId: partner_dispatch_offers_accept_create
+      description: Accept an instant booking dispatch offer.
+      parameters:
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/partner/dispatch-offers/{offer_id}/decline/:
+    post:
+      operationId: partner_dispatch_offers_decline_create
+      description: Decline an instant booking dispatch offer.
+      parameters:
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/partner/earnings/:
     get:
       operationId: partner_earnings_retrieve
@@ -15062,6 +15520,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/notification-preferences/:
+    get:
+      operationId: partner_notification_preferences_retrieve
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: User push notification preferences.
+    patch:
+      operationId: partner_notification_preferences_partial_update
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Preferences updated successfully.
+        '400':
+          description: Invalid request or attempt to disable immutable category.
   /api/v1/partner/offers/:
     get:
       operationId: partner_offer_list
@@ -15510,6 +15989,60 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`rate_outside_band` when the rate sits outside the allowed
             range for this item in this city.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/push-subscriptions/sync/:
+    post:
+      operationId: partner_push_subscriptions_sync_create
+      tags:
+      - Partner push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPushSubscriptionSyncRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPushSubscriptionSyncRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPushSubscriptionSyncRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: The subscription was synced.
+        '201':
+          description: The subscription was created.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
         '403':
           content:
             application/json:
@@ -17110,50 +17643,6 @@ paths:
                 $ref: '#/components/schemas/PaymentAttempt'
           description: ''
         '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/payment-attempts/{attempt_id}/simulate-capture/:
-    post:
-      operationId: payment_attempt_simulate_capture
-      description: |-
-        Marks a payment captured with no gateway. Development only.
-
-        Published so the flow is drivable end to end without provider credentials.
-        It is fail-closed three ways — a settings flag off by default, a production
-        start-up guard that refuses to boot with it on, and a check that the attempt's
-        own provider is `fake` — and it runs the *real* capture path rather than
-        setting a status, so everything capture triggers actually happens.
-
-        `404` rather than `403` when disabled: an environment that does not do this
-        should not advertise that the door exists.
-      parameters:
-      - in: path
-        name: attempt_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - Payments
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentAttempt'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
           content:
             application/json:
               schema:
@@ -21253,6 +21742,14 @@ components:
         * `REJECT` - REJECT
         * `REMOVE` - REMOVE
         * `REINSTATE` - REINSTATE
+    ActionC29Enum:
+      enum:
+      - sync
+      - deactivate
+      type: string
+      description: |-
+        * `sync` - sync
+        * `deactivate` - deactivate
     ActionReasonRequest:
       type: object
       properties:
@@ -22098,9 +22595,6 @@ components:
           format: uuid
           nullable: true
           readOnly: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         activated_at:
           type: string
           format: date-time
@@ -22128,7 +22622,6 @@ components:
       - receipt_series
       - settled_at
       - settlement_reason_code
-      - simulated_capture_available
       - status
       - travel_compensation_paise
     BookingFeeStatusEnum:
@@ -22161,6 +22654,10 @@ components:
         status:
           allOf:
           - $ref: '#/components/schemas/BookingGroupStatusEnum'
+          readOnly: true
+        booking_mode:
+          allOf:
+          - $ref: '#/components/schemas/BookingGroupBookingModeEnum'
           readOnly: true
         version:
           type: integer
@@ -22214,6 +22711,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - booking_mode
       - checkout_id
       - checkout_version
       - confirmation_policy
@@ -22228,6 +22726,14 @@ components:
       - units
       - updated_at
       - version
+    BookingGroupBookingModeEnum:
+      enum:
+      - INSTANT
+      - SCHEDULED
+      type: string
+      description: |-
+        * `INSTANT` - Instant
+        * `SCHEDULED` - Scheduled
     BookingGroupCancelRequest:
       type: object
       properties:
@@ -22405,6 +22911,10 @@ components:
         timezone:
           type: string
           readOnly: true
+        instant:
+          allOf:
+          - $ref: '#/components/schemas/InstantAvailability'
+          readOnly: true
         days:
           type: array
           items:
@@ -22414,6 +22924,7 @@ components:
       - availability_is_preliminary
       - days
       - estimated_duration_minutes
+      - instant
       - server_now
       - timezone
     BookingWindowsRequestRequest:
@@ -22823,6 +23334,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+          default: ''
         service_slug:
           type: string
           readOnly: true
@@ -22856,6 +23371,7 @@ components:
           readOnly: true
       required:
       - amount
+      - category_slug
       - created_at
       - id
       - quantity
@@ -23291,10 +23807,12 @@ components:
       enum:
       - SMS
       - EMAIL
+      - PUSH
       type: string
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
+        * `PUSH` - Push
     ChargebackRequest:
       type: object
       description: |-
@@ -26057,6 +26575,98 @@ components:
       - vendor
       - warranty_terms
       - worker_count
+    CustomerPushSubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        onesignal_subscription_id:
+          type: string
+          readOnly: true
+          description: OneSignal Subscription ID (UUID).
+        onesignal_external_id:
+          type: string
+          readOnly: true
+          description: OneSignal external_id alias (Customer User ID).
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          description: False if unsubscribed, permission revoked, or notification
+            delivery bounced.
+        opted_in:
+          type: boolean
+          readOnly: true
+          description: OneSignal push subscription opt-in state.
+        permission_state:
+          type: string
+          readOnly: true
+          description: Browser notification permission (granted, denied, default).
+        last_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_sync_status:
+          type: string
+          readOnly: true
+          description: Status of the last sync attempt (SUCCESS, FAILED).
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_active
+      - last_sync_status
+      - last_verified_at
+      - onesignal_external_id
+      - onesignal_subscription_id
+      - opted_in
+      - permission_state
+      - platform
+      - updated_at
+    CustomerPushSubscriptionSyncRequest:
+      type: object
+      properties:
+        onesignal_subscription_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          default: WEB
+        user_agent:
+          type: string
+          default: ''
+          maxLength: 500
+        is_active:
+          type: boolean
+          default: true
+        opted_in:
+          type: boolean
+          default: true
+        permission_state:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionC29Enum'
+          default: sync
+      required:
+      - onesignal_subscription_id
     CustomerQuoteList:
       type: object
       properties:
@@ -27978,6 +28588,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/FulfilmentPlanSetStatusEnum'
           readOnly: true
+        booking_mode:
+          type: string
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -27996,6 +28609,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - booking_mode
       - cart_version
       - created_at
       - expires_at
@@ -28003,6 +28617,14 @@ components:
       - plans
       - server_now
       - status
+    FulfilmentPlanSetCreateBookingModeEnum:
+      enum:
+      - INSTANT
+      - SCHEDULED
+      type: string
+      description: |-
+        * `INSTANT` - INSTANT
+        * `SCHEDULED` - SCHEDULED
     FulfilmentPlanSetCreateRequest:
       type: object
       description: |-
@@ -28022,6 +28644,10 @@ components:
         expected_cart_version:
           type: integer
           minimum: 1
+        booking_mode:
+          allOf:
+          - $ref: '#/components/schemas/FulfilmentPlanSetCreateBookingModeEnum'
+          default: SCHEDULED
         preferred_starts:
           type: array
           items:
@@ -28029,7 +28655,6 @@ components:
       required:
       - address_id
       - expected_cart_version
-      - preferred_starts
     FulfilmentPlanSetStatusEnum:
       enum:
       - ACTIVE
@@ -28655,6 +29280,30 @@ components:
         * `pet-photography` - Pet photography
         * `workforce` - Workforce
         * `custom-project` - Custom project
+    InstantAvailability:
+      type: object
+      properties:
+        is_available:
+          type: boolean
+          readOnly: true
+        earliest_starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        eta_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        unavailable_reason:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - earliest_starts_at
+      - eta_minutes
+      - is_available
+      - unavailable_reason
     IntendedRoleEnum:
       enum:
       - customer
@@ -29208,6 +29857,7 @@ components:
       - SMS
       - WHATSAPP
       - VOICE
+      - PUSH
       - PAYMENTS
       - PAYOUTS
       - DISPATCH
@@ -29220,6 +29870,7 @@ components:
         * `SMS` - SMS channel
         * `WHATSAPP` - WhatsApp channel
         * `VOICE` - Voice call channel
+        * `PUSH` - Push channel
         * `PAYMENTS` - Payment collection
         * `PAYOUTS` - Partner payouts
         * `DISPATCH` - Partner dispatch
@@ -29321,6 +29972,19 @@ components:
       required:
       - label
       - value
+    ListingCount:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - key
+      - label
     ListingDetail:
       type: object
       properties:
@@ -29870,6 +30534,132 @@ components:
       required:
       - amount_paise
       - currency
+    MoneyPayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        paid_at:
+          type: string
+          format: date-time
+        payer_name:
+          type: string
+        payer_phone:
+          type: string
+        item:
+          type: string
+        amount_paise:
+          type: integer
+        refunded_paise:
+          type: integer
+        platform_paise:
+          type: integer
+        status:
+          type: string
+      required:
+      - amount_paise
+      - id
+      - item
+      - paid_at
+      - payer_name
+      - payer_phone
+      - platform_paise
+      - refunded_paise
+      - status
+    MoneyPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        price_paise:
+          type: integer
+        duration_days:
+          type: integer
+        is_active:
+          type: boolean
+        purchases:
+          type: integer
+        active_now:
+          type: integer
+        revenue_paise:
+          type: integer
+      required:
+      - active_now
+      - duration_days
+      - id
+      - is_active
+      - name
+      - price_paise
+      - purchases
+      - revenue_paise
+    MoneySummary:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/PeriodEnum'
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        model:
+          type: string
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/MoneyTotal'
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/MoneyPlan'
+        listing_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingCount'
+      required:
+      - ends_at
+      - listing_counts
+      - model
+      - period
+      - plans
+      - starts_at
+      - totals
+    MoneyTotal:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        kind:
+          $ref: '#/components/schemas/MoneyTotalKindEnum'
+        value:
+          type: integer
+        note:
+          type: string
+      required:
+      - key
+      - kind
+      - label
+      - note
+      - value
+    MoneyTotalKindEnum:
+      enum:
+      - money
+      - count
+      - percent
+      type: string
+      description: |-
+        * `money` - money
+        * `count` - count
+        * `percent` - percent
     Notification:
       type: object
       description: |-
@@ -31997,19 +32787,98 @@ components:
           type: string
         name:
           type: string
+        group:
+          type: string
+        description:
+          type: string
         filters:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/OpsReportFilter'
         columns:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/OpsReportColumn'
       required:
       - columns
+      - description
       - filters
+      - group
       - id
       - name
+    OpsReportColumn:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        kind:
+          $ref: '#/components/schemas/OpsReportColumnKindEnum'
+        sortable:
+          type: boolean
+      required:
+      - key
+      - kind
+      - label
+      - sortable
+    OpsReportColumnKindEnum:
+      enum:
+      - text
+      - ref
+      - date
+      - money
+      - number
+      - status
+      type: string
+      description: |-
+        * `text` - text
+        * `ref` - ref
+        * `date` - date
+        * `money` - money
+        * `number` - number
+        * `status` - status
+    OpsReportFilter:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        kind:
+          $ref: '#/components/schemas/OpsReportFilterKindEnum'
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsReportOption'
+      required:
+      - key
+      - kind
+      - label
+      - options
+    OpsReportFilterKindEnum:
+      enum:
+      - date
+      - choice
+      - partner
+      type: string
+      description: |-
+        * `date` - date
+        * `choice` - choice
+        * `partner` - partner
+    OpsReportOption:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+        group:
+          type: string
+      required:
+      - group
+      - label
+      - value
     OpsReportPreset:
       type: object
       properties:
@@ -32063,16 +32932,14 @@ components:
           type: string
         name:
           type: string
-        filters_applied:
-          type: object
-          additionalProperties: {}
         columns:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/OpsReportColumn'
         totals:
-          type: object
-          additionalProperties: {}
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsReportTotal'
         rows:
           type: array
           items:
@@ -32080,14 +32947,46 @@ components:
             additionalProperties: {}
         total_rows_count:
           type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        export_row_limit:
+          type: integer
       required:
       - columns
-      - filters_applied
+      - export_row_limit
+      - limit
       - name
+      - offset
       - report_id
       - rows
       - total_rows_count
       - totals
+    OpsReportTotal:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        kind:
+          $ref: '#/components/schemas/OpsReportTotalKindEnum'
+        value:
+          type: integer
+      required:
+      - key
+      - kind
+      - label
+      - value
+    OpsReportTotalKindEnum:
+      enum:
+      - money
+      - number
+      type: string
+      description: |-
+        * `money` - money
+        * `number` - number
     OpsSafetyStory:
       type: object
       properties:
@@ -34659,6 +35558,38 @@ components:
       - visit_blocked_dates
       - visit_slots
       - visits_offered
+    PartnerPushSubscriptionSyncRequest:
+      type: object
+      properties:
+        onesignal_subscription_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          default: WEB
+        user_agent:
+          type: string
+          default: ''
+          maxLength: 500
+        is_active:
+          type: boolean
+          default: true
+        opted_in:
+          type: boolean
+          default: true
+        permission_state:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionC29Enum'
+          default: sync
+      required:
+      - onesignal_subscription_id
     PartnerRateItem:
       type: object
       properties:
@@ -35668,6 +36599,20 @@ components:
           type: string
           format: email
           maxLength: 254
+    PatchedCustomerPushSubscriptionUpdateRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+        opted_in:
+          type: boolean
+        permission_state:
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        user_agent:
+          type: string
+          maxLength: 500
     PatchedJobUpdateRequest:
       type: object
       description: |-
@@ -36212,9 +37157,6 @@ components:
           type: string
           nullable: true
           readOnly: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         provider_order_id:
           type: string
           readOnly: true
@@ -36285,7 +37227,6 @@ components:
       - quote_id
       - razorpay_amount_paise
       - reconciliation_state
-      - simulated_capture_available
       - status
       - updated_at
       - version
@@ -36675,6 +37616,24 @@ components:
       required:
       - accepted
       - applied
+    PeriodEnum:
+      enum:
+      - this_month
+      - last_month
+      - all
+      type: string
+      description: |-
+        * `this_month` - this_month
+        * `last_month` - last_month
+        * `all` - all
+    PermissionStateEnum:
+      enum:
+      - granted
+      - denied
+      - default
+      type: string
+      description: "* `` - \n* `granted` - granted\n* `denied` - denied\n* `default`\
+        \ - default"
     PickupAddress:
       type: object
       description: Where a Self Pickup customer collects the item. ``maps_url`` opens
@@ -36915,6 +37874,16 @@ components:
       - quantity
       - scope_snapshot
       - variant_snapshot
+    PlatformEnum:
+      enum:
+      - WEB
+      - ANDROID
+      - IOS
+      type: string
+      description: |-
+        * `WEB` - Web Browser
+        * `ANDROID` - Android
+        * `IOS` - iOS
     PlatformFeeTreatmentEnum:
       enum:
       - NONE
@@ -41635,14 +42604,10 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
       required:
       - amount_paise
       - id
       - payment_attempt_id
-      - simulated_capture_available
     RentalDepositStatusEnum:
       enum:
       - REQUESTED
@@ -46653,9 +47618,6 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         shares:
           type: array
           items:
@@ -46701,7 +47663,6 @@ components:
       - receipt_series
       - settled_at
       - shares
-      - simulated_capture_available
       - status
     VisitPlanChooseRequest:
       type: object

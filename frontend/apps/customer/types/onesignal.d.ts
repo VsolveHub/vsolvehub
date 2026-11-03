@@ -31,6 +31,20 @@ interface OneSignalSlidedown {
 export interface IOneSignal {
   init(options: {
     appId: string;
+    safari_web_id?: string;
+    notifyButton?: {
+      enable: boolean;
+      position?: "bottom-left" | "bottom-right";
+      theme?: "default" | "inverse";
+      size?: "small" | "medium" | "large";
+      showCredit?: boolean;
+      offset?: {
+        bottom?: string;
+        left?: string;
+        right?: string;
+      };
+      [key: string]: unknown;
+    };
     allowLocalhostAsSecureOrigin?: boolean;
     serviceWorkerPath?: string;
     serviceWorkerParam?: { scope: string };

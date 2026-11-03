@@ -415,7 +415,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.87.0",
+    "VERSION": "1.90.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -691,12 +691,6 @@ FIREBASE_TOKEN_MAX_AGE_SECONDS = env.int("FIREBASE_TOKEN_MAX_AGE_SECONDS", defau
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
-#: Lets a caller mark their own payment captured without a real provider.
-#:
-#: Fail-closed, and `production.py` refuses it outright. It exists so a developer
-#: can drive a booking through capture — and everything capture triggers — with no
-#: gateway credentials. Mirrors `PAYOUTS_ALLOW_FAKE_PROVIDER` on the payouts side.
-PAYMENTS_ALLOW_SIMULATED_CAPTURE = env.bool("PAYMENTS_ALLOW_SIMULATED_CAPTURE", default=False)
 RAZORPAY_API_BASE_URL = env("RAZORPAY_API_BASE_URL", default="https://api.razorpay.com/v1")
 RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
@@ -809,6 +803,10 @@ DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="unconfigured")
 # release publishes those as the agreements every applicant accepts. Empty outside production,
 # where placeholder agreements at a `.test` host are used instead.
 PARTNER_LEGAL_BASE_URL = env("PARTNER_LEGAL_BASE_URL", default="")
+# The Customer site's origin. Referral share links are built on it (`/signup?ref=CODE`) each time
+# they are read, so a local stack shares localhost links and production its real domain.
+# Defaults to localhost only in local settings; production refuses to start without https.
+CUSTOMER_SITE_URL = env("CUSTOMER_SITE_URL", default="")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
 PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")
@@ -1020,6 +1018,18 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-expired-dispatch-offers": {
         "task": "apps.assignments.tasks.reconcile_expired_dispatch_offers",
         "schedule": 30.0,
+    },
+    "reconcile-stuck-dispatch-offers": {
+        "task": "apps.assignments.tasks.reconcile_stuck_dispatch_offers_task",
+        "schedule": env.float("RECONCILE_STUCK_DISPATCH_OFFERS_INTERVAL_SECONDS", default=300.0),
+    },
+    "reconcile-onesignal-push-deliveries": {
+        "task": "apps.notifications.tasks.reconcile_onesignal_push_delivery_status_task",
+        "schedule": env.float("RECONCILE_ONESIGNAL_PUSH_DELIVERIES_INTERVAL_SECONDS", default=900.0),
+    },
+    "reconcile-stale-push-subscriptions": {
+        "task": "apps.notifications.tasks.reconcile_stale_push_subscriptions",
+        "schedule": env.float("RECONCILE_STALE_PUSH_SUBSCRIPTIONS_INTERVAL_SECONDS", default=3600.0),
     },
     "reconcile-payments": {
         "task": "apps.commerce.tasks.reconcile_payments",
@@ -1340,6 +1350,10 @@ LOGGING = {
 # OneSignal Push & Instant Dispatch settings
 ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
 ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
+ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default=ONESIGNAL_APP_ID)
+ONESIGNAL_PARTNER_REST_API_KEY = env("ONESIGNAL_PARTNER_REST_API_KEY", default=ONESIGNAL_REST_API_KEY)
+ONESIGNAL_CUSTOMER_APP_ID = env("ONESIGNAL_CUSTOMER_APP_ID", default="")
+ONESIGNAL_CUSTOMER_REST_API_KEY = env("ONESIGNAL_CUSTOMER_REST_API_KEY", default="")
 ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
 ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
 DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
@@ -1352,4 +1366,5 @@ PARTNER_SHIFT_MAX_IDLE_MINUTES = env.int("PARTNER_SHIFT_MAX_IDLE_MINUTES", defau
 PARTNER_LOCATION_MAX_AGE_MINUTES = env.int("PARTNER_LOCATION_MAX_AGE_MINUTES", default=30)
 MAX_DISPATCH_ATTEMPTS = env.int("MAX_DISPATCH_ATTEMPTS", default=5)
 MAX_CONSECUTIVE_MISSED_OFFERS = env.int("MAX_CONSECUTIVE_MISSED_OFFERS", default=3)
+PUSH_SUBSCRIPTION_FRESHNESS_DAYS = env.int("PUSH_SUBSCRIPTION_FRESHNESS_DAYS", default=30)
 

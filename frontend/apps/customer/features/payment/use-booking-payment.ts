@@ -8,9 +8,7 @@ import { useProfileCompletionGate } from "@/features/account/view/profile-comple
 import type { BookingGroup } from "@/features/bookings/queries";
 import { handoffTarget, openProviderCheckout } from "./model/provider-handoff";
 import {
-  isSimulatedCaptureUnavailable,
   useCheckoutPayment,
-  useSimulateCapture,
   useStartPayment,
   type PaymentAttempt,
 } from "./queries";
@@ -26,7 +24,6 @@ export function useBookingPayment(group: BookingGroup) {
 
   const attemptQuery = useCheckoutPayment(checkoutId);
   const startPayment = useStartPayment();
-  const simulateCapture = useSimulateCapture();
 
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -43,32 +40,10 @@ export function useBookingPayment(group: BookingGroup) {
   }, [qc, group.id, checkoutId]);
 
   async function handlePayAttempt(current: PaymentAttempt) {
-    if (
-      current.simulated_capture_available &&
-      !isSimulatedCaptureUnavailable(simulateCapture.error)
-    ) {
-      setPayError(null);
-      try {
-        await simulateCapture.mutateAsync(current.id);
-      } catch (err) {
-        setPayError(describeError(err, "mutation").message);
-      } finally {
-        refreshBooking();
-      }
-      return;
-    }
-
     setPayError(null);
     setIsHandingOff(true);
     try {
       const readyAttempt = await waitForPaymentHandoff(current.id);
-      if (
-        readyAttempt.simulated_capture_available &&
-        !isSimulatedCaptureUnavailable(simulateCapture.error)
-      ) {
-        await simulateCapture.mutateAsync(readyAttempt.id);
-        return;
-      }
       const target = handoffTarget(readyAttempt);
       if (target === null) {
         setPayError("This payment is still preparing. Please try again in a moment.");
@@ -126,7 +101,6 @@ export function useBookingPayment(group: BookingGroup) {
 
   const isPaying =
     startPayment.isPending ||
-    simulateCapture.isPending ||
     isHandingOff;
 
   return {

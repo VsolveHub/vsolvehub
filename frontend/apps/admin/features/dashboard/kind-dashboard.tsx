@@ -111,9 +111,9 @@ export const METRIC_KEY_HREF: Record<string, string> = {
   active_vendors: "/operations/partners",
 
   // Subscriptions & vendor plans
-  active_subscriptions: "/operations/vendor-plans",
-  subscriptions: "/operations/vendor-plans",
-  vendor_plans: "/operations/vendor-plans",
+  active_subscriptions: "/operations/listings?tab=plans",
+  subscriptions: "/operations/listings?tab=plans",
+  vendor_plans: "/operations/listings?tab=plans",
 
   // Listings & moderation
   live_listings: "/operations/listings",

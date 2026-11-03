@@ -8,14 +8,18 @@ import {
   BOOKING_STATUS_TABS,
   bookingStatusHref,
   type BookingStatusTab,
+  type BookingType,
 } from "../model/booking-status";
 
 export function BookingStatusTabs({
   selected,
   counts,
+  type = null,
 }: {
   selected: BookingStatusTab;
   counts: Record<BookingStatusTab, number>;
+  /** The type filter, kept when switching tabs. */
+  type?: BookingType | null;
 }) {
   return (
     <nav aria-label="Booking status" className="mt-6 border-b border-line/80">
@@ -30,7 +34,7 @@ export function BookingStatusTabs({
             <li key={tab} role="presentation" className="shrink-0">
               <Link
                 id={`booking-tab-${tab}`}
-                href={bookingStatusHref(tab)}
+                href={bookingStatusHref(tab, type)}
                 scroll={false}
                 role="tab"
                 aria-selected={isSelected}

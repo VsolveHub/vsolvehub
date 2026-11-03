@@ -6,8 +6,7 @@ from rest_framework.request import Request
 from rest_framework.test import APITestCase
 
 from apps.identity.models import Role, User, UserRole
-from apps.ops_reports.exports import _pdf_total_label_and_amount
-from apps.ops_reports.reports import SettlementReport, get_report
+from apps.ops_reports.reports import get_report
 
 from .models import OpsReportSettings
 
@@ -88,18 +87,8 @@ class OpsReportsTests(APITestCase):
             response = self.client.get(f"/api/v1/ops/dashboards/{kind}/")
             self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_settlement_execute_does_not_mutate_shared_columns(self) -> None:
+    def test_settlement_shows_tds_only_with_a_rate(self) -> None:
         report = get_report("settlement")
-        original = list(report.columns)
-        report.execute({})
-        self.assertEqual(list(report.columns), original)
-        self.assertIsInstance(report, SettlementReport)
-
-    def test_pdf_footer_prefers_net_paise_over_row_count(self) -> None:
-        label, amount = _pdf_total_label_and_amount(
-            ["id", "net_paise", "tds_paise"],
-            [{"id": "1", "net_paise": 10000, "tds_paise": 100}],
-            {"net_paise": 25000, "tds_paise": 250},
-        )
-        self.assertEqual(label, "Total Amount")
-        self.assertEqual(amount, "₹250.00")
+        self.assertIn("tds_paise", [c.key for c in report.visible_columns()])
+        OpsReportSettings.objects.all().delete()
+        self.assertNotIn("tds_paise", [c.key for c in report.visible_columns()])

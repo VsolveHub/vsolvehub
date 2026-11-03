@@ -24,6 +24,7 @@ OTP_PROVIDER = "development"
 OTP_DEVELOPMENT_CODE_ENABLED = True
 GEOCODING_PROVIDER = "unconfigured"
 PAYMENT_PROVIDER = "fake"
+CUSTOMER_SITE_URL = "https://customer.example.test"
 PAYMENT_WEBHOOK_SECRET = SECRET_KEY
 PAYMENT_LEGAL_ENTITY_CODE = "vsolve-test"
 PAYMENT_LIVE_COLLECTIONS_APPROVED = False
@@ -32,3 +33,8 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 MESSAGE_TRANSPORT = "fake"
 NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = True
+
+ONESIGNAL_PARTNER_APP_ID = "test-partner-app-id"
+ONESIGNAL_PARTNER_REST_API_KEY = "test-partner-rest-key"
+ONESIGNAL_CUSTOMER_APP_ID = "test-customer-app-id"
+ONESIGNAL_CUSTOMER_REST_API_KEY = "test-customer-rest-key"

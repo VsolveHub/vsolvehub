@@ -1,10 +1,10 @@
 /**
- * Shared helpers for opening Razorpay (or simulating capture) after a
- * checkout-free payment attempt is created.
+ * Shared helpers for opening Razorpay Checkout after a checkout-free payment
+ * attempt is created.
  *
  * Domain create endpoints often return only `payment_attempt_id`. Handoff needs
- * `provider`, `provider_public_key`, `provider_order_id`, and
- * `simulated_capture_available` from `GET /payment-attempts/{id}/`. The provider
+ * `provider`, `provider_public_key` and `provider_order_id` from
+ * `GET /payment-attempts/{id}/`. The provider
  * order is stamped asynchronously via outbox, so callers poll briefly.
  */
 
@@ -26,14 +26,6 @@ export function fetchPaymentAttempt(attemptId: string): Promise<PaymentAttemptDe
   );
 }
 
-export function simulatePaymentCapture(attemptId: string): Promise<PaymentAttemptDetail> {
-  return request(() =>
-    getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-      params: { path: { attempt_id: attemptId } },
-    }),
-  );
-}
-
 const TERMINAL_HANDOFF_STATUSES = new Set([
   "AUTHORIZED",
   "CAPTURED",
@@ -44,7 +36,6 @@ const TERMINAL_HANDOFF_STATUSES = new Set([
 ]);
 
 function isHandoffReady(attempt: PaymentAttemptDetail): boolean {
-  if (attempt.simulated_capture_available) return true;
   return handoffTarget(attempt) !== null;
 }
 
@@ -53,7 +44,7 @@ function isHandoffTerminal(attempt: PaymentAttemptDetail): boolean {
 }
 
 /**
- * Poll until simulate-capture is available or Razorpay Checkout can open.
+ * Poll until Razorpay Checkout can open.
  * Stops early on terminal statuses (EXPIRED/FAILED/…) so callers do not wait
  * the full timeout when the outbox lost the race to expiry.
  * Returns the last read even on timeout so the caller can toast / navigate.
@@ -83,13 +74,8 @@ export async function completeOrOpenCheckout(
     businessName: string;
     onAwaitingCapture?: () => void;
   },
-): Promise<{ mode: "simulated" | "checkout" | "pending"; attempt: PaymentAttemptDetail }> {
+): Promise<{ mode: "checkout" | "pending"; attempt: PaymentAttemptDetail }> {
   const attempt = await waitForPaymentHandoff(attemptId);
-
-  if (attempt.simulated_capture_available) {
-    await simulatePaymentCapture(attemptId);
-    return { mode: "simulated", attempt };
-  }
 
   const target: HandoffTarget | null = handoffTarget(attempt);
   if (target === null) {

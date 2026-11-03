@@ -1,7 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -356,7 +355,6 @@ class UpdateAssetSerializer(PickupPinFields):
 
 class RentalDepositSerializer(serializers.ModelSerializer[RentalDeposit]):
     payment_attempt_id = serializers.UUIDField(read_only=True, allow_null=True)
-    simulated_capture_available = serializers.SerializerMethodField()
 
     class Meta:
         model = RentalDeposit
@@ -368,15 +366,7 @@ class RentalDepositSerializer(serializers.ModelSerializer[RentalDeposit]):
             "requested_consume_paise",
             "provider_note",
             "payment_attempt_id",
-            "simulated_capture_available",
         )
-
-    def get_simulated_capture_available(self, deposit: RentalDeposit) -> bool:
-
-        attempt = deposit.payment_attempt
-        if attempt is None:
-            return False
-        return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and attempt.provider == "fake"
 
 
 class RentalBookingSerializer(serializers.ModelSerializer[RentalBooking]):

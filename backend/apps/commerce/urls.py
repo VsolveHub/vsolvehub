@@ -13,7 +13,6 @@ from apps.commerce.views import (
     RazorpayWebhookView,
     RefundDetailView,
     SampleReceiptView,
-    SimulatedCaptureView,
     TaxDocumentDetailView,
     TaxDocumentDownloadView,
 )
@@ -24,10 +23,6 @@ urlpatterns = [
     path("legal/sample-receipt/", SampleReceiptView.as_view()),
     path("payment-attempts/", PaymentAttemptCollectionView.as_view()),
     path("payment-attempts/<uuid:attempt_id>/", PaymentAttemptDetailView.as_view()),
-    path(
-        "payment-attempts/<uuid:attempt_id>/simulate-capture/",
-        SimulatedCaptureView.as_view(),
-    ),
     path(
         "payment-attempts/<uuid:attempt_id>/reconcile/",
         PaymentAttemptReconcileView.as_view(),

@@ -37,6 +37,7 @@ class KillSwitch(models.Model):
         SMS = "SMS", "SMS channel"
         WHATSAPP = "WHATSAPP", "WhatsApp channel"
         VOICE = "VOICE", "Voice call channel"
+        PUSH = "PUSH", "Push channel"
         PAYMENTS = "PAYMENTS", "Payment collection"
         PAYOUTS = "PAYOUTS", "Partner payouts"
         DISPATCH = "DISPATCH", "Partner dispatch"
@@ -137,6 +138,7 @@ class NotificationIntent(models.Model):
     #: one channel out of five is a column that eventually gets filled in on the other four. The
     #: check constraint below refuses that rather than trusting every future caller to remember.
     read_at = models.DateTimeField(null=True, blank=True)
+    deep_link = models.CharField(max_length=255, blank=True, default="")
     idempotency_key = models.CharField(max_length=128, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -177,15 +179,25 @@ class NotificationDelivery(models.Model):
         ACCEPTED = "ACCEPTED", "Accepted by provider"
         DELIVERED = "DELIVERED", "Delivered"
         FAILED = "FAILED", "Failed"
+        SKIPPED = "SKIPPED", "Skipped"
+        BLOCKED = "BLOCKED", "Blocked by kill switch"
+        RATE_LIMITED = "RATE_LIMITED", "Rate limited"
+        RETRYABLE = "RETRYABLE", "Retryable failure"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     intent = models.ForeignKey(
         NotificationIntent, on_delete=models.PROTECT, related_name="deliveries"
     )
     provider = models.CharField(max_length=40)
-    status = models.CharField(max_length=12, choices=Status.choices)
+    status = models.CharField(max_length=20, choices=Status.choices)
     provider_message_id = models.CharField(max_length=140, blank=True)
     failure_code = models.SlugField(max_length=80, blank=True)
+    app_id = models.CharField(max_length=64, blank=True, default="")
+    request_payload = models.JSONField(default=dict, blank=True)
+    response_status = models.IntegerField(null=True, blank=True)
+    response_body = models.JSONField(default=dict, blank=True)
+    metrics = models.JSONField(default=dict, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     attempted_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -200,3 +212,205 @@ class NotificationDelivery(models.Model):
         if not self._state.adding:
             raise ValueError("Notification delivery attempts are immutable.")
         super().save(*args, **kwargs)
+
+class CustomerPushSubscription(models.Model):
+    """Stores the verified OneSignal Web Push subscription state for customers."""
+
+    class Platform(models.TextChoices):
+        WEB = "WEB", "Web Browser"
+        ANDROID = "ANDROID", "Android"
+        IOS = "IOS", "iOS"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="customer_push_subscriptions",
+    )
+    onesignal_subscription_id = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text="OneSignal Subscription ID (UUID).",
+    )
+    onesignal_external_id = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text="OneSignal external_id alias (Customer User ID).",
+    )
+    platform = models.CharField(
+        max_length=16,
+        choices=Platform.choices,
+        default=Platform.WEB,
+    )
+    user_agent = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="False if unsubscribed, permission revoked, or notification delivery bounced.",
+    )
+    opted_in = models.BooleanField(
+        default=True,
+        help_text="OneSignal push subscription opt-in state.",
+    )
+    permission_state = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Browser notification permission (granted, denied, default).",
+    )
+    last_verified_at = models.DateTimeField(default=timezone.now)
+    last_sync_attempt_at = models.DateTimeField(default=timezone.now)
+    last_sync_status = models.CharField(
+        max_length=20,
+        default="SUCCESS",
+        help_text="Status of the last sync attempt (SUCCESS, FAILED).",
+    )
+    last_sync_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        indexes = [
+            models.Index(fields=("user", "is_active")),
+            models.Index(fields=("onesignal_external_id", "is_active")),
+            models.Index(fields=("user", "is_active", "opted_in", "last_verified_at")),
+        ]
+
+    def __str__(self) -> str:
+        state = "ACTIVE" if self.is_active else "INACTIVE"
+        return f"{self.user_id}:{self.onesignal_subscription_id}:{state}"
+
+
+
+class PushNotificationPreference(models.Model):
+    """User preference per push notification category.
+
+    Maintains whether a Customer or Partner has opted in or out of specific push categories.
+    Critical operational/security categories (e.g. ACCOUNT_SECURITY) are marked immutable
+    and cannot be suppressed by the user.
+    """
+
+    class Role(models.TextChoices):
+        CUSTOMER = "CUSTOMER", "Customer"
+        PARTNER = "PARTNER", "Partner"
+
+    class Category(models.TextChoices):
+        # Customer categories
+        BOOKING_UPDATES = "BOOKING_UPDATES", "Booking Updates"
+        DISPATCH_AND_ASSIGNMENT_UPDATES = "DISPATCH_AND_ASSIGNMENT_UPDATES", "Dispatch & Assignment Updates"
+        ARRIVAL_AND_OTP_ALERTS = "ARRIVAL_AND_OTP_ALERTS", "Arrival & OTP Alerts"
+        ACCOUNT_SECURITY = "ACCOUNT_SECURITY", "Account Security"
+        OFFERS_AND_PROMOTIONS = "OFFERS_AND_PROMOTIONS", "Offers & Promotions"
+
+        # Partner categories
+        JOB_AND_DISPATCH_ALERTS = "JOB_AND_DISPATCH_ALERTS", "Job & Dispatch Alerts"
+        SHIFT_AND_AVAILABILITY_REMINDERS = "SHIFT_AND_AVAILABILITY_REMINDERS", "Shift & Availability Reminders"
+        PRODUCT_UPDATES = "PRODUCT_UPDATES", "Product Updates"
+
+    CATEGORY_METADATA = {
+        "CUSTOMER": {
+            "BOOKING_UPDATES": {
+                "label": "Booking Updates",
+                "description": "Confirmations, rescheduling, and status changes for your active bookings.",
+                "is_mutable": True,
+                "default_enabled": True,
+            },
+            "DISPATCH_AND_ASSIGNMENT_UPDATES": {
+                "label": "Dispatch & Assignment Updates",
+                "description": "Real-time alerts when a professional accepts and is assigned to your job.",
+                "is_mutable": True,
+                "default_enabled": True,
+            },
+            "ARRIVAL_AND_OTP_ALERTS": {
+                "label": "Arrival & OTP Alerts",
+                "description": "Immediate notifications when your professional arrives with the start-work code.",
+                "is_mutable": True,
+                "default_enabled": True,
+            },
+            "ACCOUNT_SECURITY": {
+                "label": "Account Security",
+                "description": "Critical login alerts, password changes, and security notices.",
+                "is_mutable": False,
+                "default_enabled": True,
+            },
+            "OFFERS_AND_PROMOTIONS": {
+                "label": "Offers & Promotions",
+                "description": "Discounts, seasonal deals, and service recommendations.",
+                "is_mutable": True,
+                "default_enabled": False,
+            },
+        },
+        "PARTNER": {
+            "JOB_AND_DISPATCH_ALERTS": {
+                "label": "Job & Dispatch Alerts",
+                "description": "Instant booking dispatch offers nearby. Disabling may make you ineligible for Instant dispatch.",
+                "is_mutable": True,
+                "default_enabled": True,
+            },
+            "SHIFT_AND_AVAILABILITY_REMINDERS": {
+                "label": "Shift & Availability Reminders",
+                "description": "Reminders to go online before peak demand windows.",
+                "is_mutable": True,
+                "default_enabled": True,
+            },
+            "ACCOUNT_SECURITY": {
+                "label": "Account Security",
+                "description": "Critical login alerts, bank detail updates, and account verification notices.",
+                "is_mutable": False,
+                "default_enabled": True,
+            },
+            "PRODUCT_UPDATES": {
+                "label": "Product Updates",
+                "description": "New partner features, app improvements, and operational guidelines.",
+                "is_mutable": True,
+                "default_enabled": True,
+            },
+        },
+    }
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_preferences",
+    )
+    role = models.CharField(max_length=20, choices=Role.choices)
+    category = models.CharField(max_length=64, choices=Category.choices)
+    is_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "role", "category"),
+                name="unique_user_role_push_preference",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("user", "role", "category")),
+        ]
+
+    def __str__(self) -> str:
+        state = "ENABLED" if self.is_enabled else "DISABLED"
+        return f"{self.user_id}:{self.role}:{self.category}:{state}"
+
+    @classmethod
+    def is_category_enabled(cls, user, role: str, category: str) -> bool:
+        """Return whether a category is enabled for a user and role.
+        
+        ACCOUNT_SECURITY cannot be disabled.
+        If a record does not exist, return the default for that category.
+        """
+        if category == cls.Category.ACCOUNT_SECURITY:
+            return True
+
+        role_meta = cls.CATEGORY_METADATA.get(role, {})
+        cat_meta = role_meta.get(category, {})
+        default_val = cat_meta.get("default_enabled", True)
+
+        pref = cls.objects.filter(user=user, role=role, category=category).first()
+        if pref is not None:
+            return pref.is_enabled
+        return default_val
+

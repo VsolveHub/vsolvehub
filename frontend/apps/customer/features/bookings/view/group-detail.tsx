@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
 import { bookingVisitHref } from "@/lib/routes";
+import { CustomerPushPromptCard } from "@/features/notifications/view/CustomerPushPromptCard";
 
 import { cleanServiceLabel, formatBookingWhen } from "./booking-format";
 import {
@@ -522,6 +523,8 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
             : "space-y-4 pb-20 lg:pb-12"
         }
       >
+        <CustomerPushPromptCard bookingId={groupId} />
+
         {isAwaitingPayment ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">

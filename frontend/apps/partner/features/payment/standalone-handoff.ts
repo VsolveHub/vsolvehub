@@ -21,16 +21,7 @@ export function fetchPaymentAttempt(attemptId: string): Promise<PaymentAttemptDe
   );
 }
 
-export function simulatePaymentCapture(attemptId: string): Promise<PaymentAttemptDetail> {
-  return request(() =>
-    getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-      params: { path: { attempt_id: attemptId } },
-    }),
-  );
-}
-
 function isHandoffReady(attempt: PaymentAttemptDetail): boolean {
-  if (attempt.simulated_capture_available) return true;
   return (
     handoffTarget({
       id: attempt.id,
@@ -38,7 +29,6 @@ function isHandoffReady(attempt: PaymentAttemptDetail): boolean {
       provider_public_key: attempt.provider_public_key,
       provider_order_id: attempt.provider_order_id,
       amount_paise: attempt.razorpay_amount_paise ?? attempt.amount.amount_paise,
-      simulated_capture_available: attempt.simulated_capture_available,
     }) !== null
   );
 }
@@ -77,13 +67,8 @@ export async function completeOrOpenCheckout(
     businessName: string;
     onAwaitingCapture?: () => void;
   },
-): Promise<{ mode: "simulated" | "checkout" | "pending"; attempt: PaymentAttemptDetail }> {
+): Promise<{ mode: "checkout" | "pending"; attempt: PaymentAttemptDetail }> {
   const attempt = await waitForPaymentHandoff(attemptId);
-
-  if (attempt.simulated_capture_available) {
-    await simulatePaymentCapture(attemptId);
-    return { mode: "simulated", attempt };
-  }
 
   const target = handoffTarget({
     id: attempt.id,
@@ -91,7 +76,6 @@ export async function completeOrOpenCheckout(
     provider_public_key: attempt.provider_public_key,
     provider_order_id: attempt.provider_order_id,
     amount_paise: attempt.razorpay_amount_paise ?? attempt.amount.amount_paise,
-    simulated_capture_available: attempt.simulated_capture_available,
   });
 
   if (target === null) {

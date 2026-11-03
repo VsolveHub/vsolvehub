@@ -132,7 +132,7 @@ def test_top_up_policy_validation() -> None:
     validate_top_up_amount(policy.max_paise)
 
 
-@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+@override_settings(PAYMENT_PROVIDER="fake")
 def test_top_up_api_flow() -> None:
     user = _user("105")
     client = APIClient()

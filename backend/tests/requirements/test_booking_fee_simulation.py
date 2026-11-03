@@ -6,7 +6,6 @@ engagement for either side to open.
 """
 
 from datetime import timedelta
-from http import HTTPStatus
 
 import pytest
 from django.test import override_settings
@@ -14,6 +13,7 @@ from django.utils import timezone
 
 from apps.commerce.models import PaymentAttempt
 from apps.commerce.providers import FakePaymentProvider
+from apps.commerce.services.simulation import simulate_capture
 from apps.requirements.models import (
     BookingFee,
     Engagement,
@@ -27,7 +27,7 @@ from .conftest import M2World, submitted_requirement
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-@override_settings(PAYMENT_PROVIDER="fake", PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+@override_settings(PAYMENT_PROVIDER="fake")
 def test_one_simulated_capture_confirms_the_crew_and_opens_the_engagement(
     world: M2World,
 ) -> None:
@@ -88,12 +88,8 @@ def test_one_simulated_capture_confirms_the_crew_and_opens_the_engagement(
         payment_attempt=attempt,
     )
 
-    response = world.customer_client.post(
-        f"/api/v1/payment-attempts/{attempt.id}/simulate-capture/"
-    )
+    simulate_capture(attempt_id=attempt.id, customer_id=world.customer.id)
 
-    assert response.status_code == HTTPStatus.OK
-    assert response.json()["status"] == PaymentAttempt.Status.CAPTURED
     attempt.refresh_from_db()
     fee.refresh_from_db()
     booking.refresh_from_db()

@@ -71,6 +71,7 @@ function humanise(slug: string): string {
 const CHANNEL_LABEL: Record<PreferenceChannel, string> = {
   SMS: "SMS",
   EMAIL: "Email",
+  PUSH: "Push",
 };
 
 function PreferenceRow({

@@ -328,7 +328,24 @@ class PartnerPushSubscription(models.Model):
         default=True,
         help_text="False if unsubscribed, permission revoked, or notification delivery bounced.",
     )
+    opted_in = models.BooleanField(
+        default=True,
+        help_text="OneSignal push subscription opt-in state.",
+    )
+    permission_state = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Browser notification permission (granted, denied, default).",
+    )
     last_verified_at = models.DateTimeField(default=timezone.now)
+    last_sync_attempt_at = models.DateTimeField(default=timezone.now)
+    last_sync_status = models.CharField(
+        max_length=20,
+        default="SUCCESS",
+        help_text="Status of the last sync attempt (SUCCESS, FAILED).",
+    )
+    last_sync_error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -338,6 +355,7 @@ class PartnerPushSubscription(models.Model):
             models.Index(fields=("partner", "is_active")),
             models.Index(fields=("user", "is_active")),
             models.Index(fields=("onesignal_external_id", "is_active")),
+            models.Index(fields=("user", "is_active", "opted_in", "last_verified_at")),
         ]
 
     def __str__(self) -> str:

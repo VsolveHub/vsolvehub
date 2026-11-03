@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CommunicationPreferences } from "@/features/account/view/communication-preferences";
+import { CustomerPushPreferencesSection } from "@/features/account/view/push-preferences";
 import { AccountSection } from "@/features/account/view/chrome";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function AccountMessagesPage() {
       description="Choose what we send you, and where it goes."
     >
       <CommunicationPreferences />
+      <CustomerPushPreferencesSection />
     </AccountSection>
   );
 }

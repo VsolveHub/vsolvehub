@@ -363,8 +363,8 @@ function A5Access({
           onStartCheckout={checkoutFlow.openPayment}
           isStartingCheckout={checkoutFlow.isPending}
           checkoutError={checkoutFlow.error}
-          canSimulatePendingCapture={checkoutFlow.canSimulatePendingCapture}
-          onSimulatePendingCapture={checkoutFlow.simulatePendingCapture}
+          canResumePayment={checkoutFlow.canResumePayment}
+          onResumePayment={checkoutFlow.resumePayment}
           estimatesHref={quotesHref}
           // The visit-day commands moved with the prose, onto the visit's own page.
           // A destructive control repeated once per row on a list somebody is

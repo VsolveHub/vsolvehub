@@ -19,6 +19,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => router,
 }));
 
+/** Razorpay Checkout itself; the screen's job is to hand the attempt to it. */
+const checkout = vi.hoisted(() => ({ open: vi.fn() }));
+vi.mock("../model/provider-handoff", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../model/provider-handoff")>()),
+  handoffTarget: () => ({ providerOrderId: "order_1", publicKey: "rzp_test_key" }),
+  openProviderCheckout: checkout.open,
+}));
+
 const { PaymentWorkspace } = await import("./payment-workspace");
 
 function ok<T>(data: T, status = 200) {
@@ -64,7 +72,6 @@ function paymentAttempt(
     razorpay_amount_paise: 250000,
     expires_at: null,
     allocations: [],
-    simulated_capture_available: true,
     created_at: "2026-08-04T11:55:00.000Z",
     updated_at: "2026-08-04T11:55:00.000Z",
     ...overrides,
@@ -91,8 +98,10 @@ afterEach(() => {
   queryClient.clear();
 });
 
-describe("PaymentWorkspace development payment", () => {
-  it("starts a fake payment and marks it paid from the primary button click", async () => {
+describe("PaymentWorkspace payment", () => {
+  it("starts the payment and opens Razorpay Checkout, never a hand capture", async () => {
+    // Regression: a development "Mark as paid" captured the charge without any provider.
+    checkout.open.mockResolvedValue("closed");
     const payableGroup = group({
       status: "PAYMENT_PENDING",
       recovery_action: "PAYMENT_REQUIRED",
@@ -101,11 +110,6 @@ describe("PaymentWorkspace development payment", () => {
       units: [unit({ status: "PAYMENT_PENDING" })],
     });
     const created = paymentAttempt();
-    const captured = paymentAttempt({
-      status: "CAPTURED",
-      reconciliation_state: "IN_SYNC",
-      simulated_capture_available: false,
-    });
 
     client.GET.mockImplementation((path: string) => {
       if (path === "/api/v1/identity/session/" || path === "/api/v1/auth/session/") {
@@ -126,13 +130,11 @@ describe("PaymentWorkspace development payment", () => {
       }
       if (path === "/api/v1/booking-groups/{group_id}/") return Promise.resolve(ok(payableGroup));
       if (path === "/api/v1/checkouts/{checkout_id}/payment/") return Promise.resolve(notFound());
+      if (path === "/api/v1/payment-attempts/{attempt_id}/") return Promise.resolve(ok(created));
       return Promise.resolve(notFound());
     });
     client.POST.mockImplementation((path: string) => {
       if (path === "/api/v1/payment-attempts/") return Promise.resolve(ok(created, 202));
-      if (path === "/api/v1/payment-attempts/{attempt_id}/simulate-capture/") {
-        return Promise.resolve(ok(captured));
-      }
       return Promise.resolve(notFound());
     });
 
@@ -140,19 +142,14 @@ describe("PaymentWorkspace development payment", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Continue to payment" }));
 
-    await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-1" } } },
-      ),
-    );
+    await waitFor(() => expect(checkout.open).toHaveBeenCalledTimes(1));
+    expect(client.POST).toHaveBeenCalledTimes(1);
     expect(client.POST).toHaveBeenCalledWith(
       "/api/v1/payment-attempts/",
       expect.objectContaining({
         body: expect.objectContaining({ checkout_id: "checkout-1", expected_checkout_version: 7 }),
       }),
     );
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/bookings/group-1"));
   });
 
   it("names amount lines from the booking, not visit positions", async () => {
@@ -253,7 +250,6 @@ describe("PaymentWorkspace development payment", () => {
     const captured = paymentAttempt({
       status: "CAPTURED",
       reconciliation_state: "IN_SYNC",
-      simulated_capture_available: false,
     });
 
     client.GET.mockImplementation((path: string) => {

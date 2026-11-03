@@ -123,7 +123,11 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
 
 @transaction.atomic
 def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
-    """Marks a payment captured with no gateway involved. Development only.
+    """Marks a fake-provider payment captured with no gateway involved. Automated tests only.
+
+    No endpoint exposes this: every app pays through Razorpay Checkout (test mode locally). It
+    stays as the deterministic capture the backend suites drive flows with, since they must never
+    call a real payment network.
 
     ## The decorator is load-bearing
 
@@ -150,9 +154,8 @@ def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
 
     ## Three independent locks
 
-    The settings flag is fail-closed and `production.py` refuses to boot with it
-    on. Beyond that, the attempt's own provider must be `fake`: even if the flag
-    were somehow enabled against a real environment, a Razorpay attempt cannot be
+    The configured `PAYMENT_PROVIDER` must be the fake, which `production.py` refuses to boot
+    with. Beyond that, the attempt's own provider must be `fake`, so a Razorpay attempt cannot be
     captured through here. And the attempt must belong to the caller.
 
     ## Checkout-free purposes
@@ -166,8 +169,8 @@ def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
     undrivable by hand. `_standalone_attempt_belongs_to` resolves the same
     question against the aggregate that actually records a customer.
     """
-    if not settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE:
-        raise PermissionError("Simulated capture is disabled in this environment.")
+    if FakePaymentProvider.code != settings.PAYMENT_PROVIDER:
+        raise PermissionError("Simulated capture runs only against the fake payment provider.")
 
     attempt = (
         PaymentAttempt.objects.select_for_update(of=("self",))

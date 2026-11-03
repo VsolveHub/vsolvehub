@@ -1,9 +1,9 @@
-"""The development-only capture door, and the transaction it must open for itself.
+"""The test-only capture helper, and the transaction it must open for itself.
 
 `simulate_capture` takes a `select_for_update` lock on the `PaymentAttempt` as its very first
-statement, and nothing above it supplies a transaction: the view does not wrap it and
+statement, and nothing above it supplies a transaction: callers do not wrap it and
 `ATOMIC_REQUESTS` is off. Django raises `TransactionManagementError` for a row lock taken outside
-a transaction, so a missing `@transaction.atomic` turns every "Mark as paid" press into a `500`.
+a transaction, so a missing `@transaction.atomic` turns every capture into an error.
 
 **These tests take `transaction=True` deliberately.** Under the ordinary `django_db` mark each test
 body already runs inside a transaction, which silently satisfies the lock and hides exactly this
@@ -23,7 +23,7 @@ from apps.commerce.services import simulate_capture
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+@override_settings(PAYMENT_PROVIDER="fake")
 def test_simulate_capture_opens_its_own_transaction() -> None:
     """It must reach the lookup, not die on the lock.
 
@@ -35,14 +35,14 @@ def test_simulate_capture_opens_its_own_transaction() -> None:
         simulate_capture(attempt_id=uuid.uuid4(), customer_id=uuid.uuid4())
 
 
-@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=False)
-def test_simulate_capture_stays_shut_when_disabled() -> None:
-    """The settings flag is checked before the database is touched at all."""
+@override_settings(PAYMENT_PROVIDER="razorpay")
+def test_simulate_capture_stays_shut_against_a_real_provider() -> None:
+    """Only the fake provider can be captured by hand; checked before the database is touched."""
     with pytest.raises(PermissionError):
         simulate_capture(attempt_id=uuid.uuid4(), customer_id=uuid.uuid4())
 
 
-@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+@override_settings(PAYMENT_PROVIDER="fake")
 def test_lock_failure_is_never_the_reason_a_capture_refuses() -> None:
     """Guards the specific failure mode rather than only its symptom.
 

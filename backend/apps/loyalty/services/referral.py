@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -102,12 +103,20 @@ def get_or_create_referral_code(user: User) -> ReferralCode:
     unique_hex = user.id.hex[:4].upper()
     code = f"VS{phone_part}{unique_hex}"
 
-    share_url = f"https://vsolvehub.com/signup?ref={code}"
     return ReferralCode.objects.create(
         user=user,
         code=code,
-        share_url=share_url,
+        share_url=referral_share_url(code),
     )
+
+
+def referral_share_url(code: str) -> str:
+    """The link a referrer shares, on `CUSTOMER_SITE_URL`.
+
+    Built on every read rather than taken from `ReferralCode.share_url`, which keeps whatever
+    domain was current when the code was created (older rows carry a fixed production domain).
+    """
+    return f"{str(settings.CUSTOMER_SITE_URL).rstrip('/')}/signup?ref={code}"
 
 
 def referee_reward_summary(program: ReferralProgramVersion) -> str:

@@ -31,6 +31,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => router,
 }));
 
+/** Razorpay handoff; defaults to "the customer closed Checkout". */
+const handoff = vi.hoisted(() => ({ complete: vi.fn() }));
+vi.mock("../../payment/standalone-handoff", () => ({
+  completeOrOpenCheckout: handoff.complete,
+}));
+
 const { RentalBookPanel } = await import("./rental-book-panel");
 
 function ok<T>(data: T, status = 200) {
@@ -119,7 +125,6 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
       amount_paise: 200000,
       status: "HELD",
       payment_attempt_id: "attempt-1",
-      simulated_capture_available: true,
     },
     handover_pin: "4821",
     created_at: "2026-09-01T10:00:00Z",
@@ -142,6 +147,8 @@ beforeEach(() => {
   session.refetch.mockReset();
   router.push.mockReset();
   router.replace.mockReset();
+  handoff.complete.mockReset();
+  handoff.complete.mockResolvedValue({ mode: "checkout", attempt: {} });
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -241,7 +248,6 @@ describe("RentalBookPanel", () => {
         amount_paise: 200000,
         status: "HELD",
         payment_attempt_id: null,
-        simulated_capture_available: false,
       },
     });
     client.POST.mockResolvedValue(ok(bookingWithoutPayment, 201));
@@ -251,9 +257,39 @@ describe("RentalBookPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith("/rentals/mine");
+      expect(router.push).toHaveBeenCalledWith("/activity?type=rentals");
     });
     expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("stays on the page with Pay now when Razorpay isn't ready, instead of leaving unpaid", async () => {
+    // Regression: a slow payment order sent the customer to My Rentals to pay from there.
+    handoff.complete.mockResolvedValueOnce({ mode: "pending", attempt: {} });
+    client.POST.mockResolvedValue(ok(mockBooking({ status: "PENDING_PAYMENT" }), 201));
+
+    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+
+    const payNow = await screen.findByRole("button", { name: "Pay now" });
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Confirm Rental Booking" })).toBeNull();
+
+    fireEvent.click(payNow);
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/activity?type=rentals"));
+    expect(handoff.complete).toHaveBeenCalledTimes(2);
+    expect(handoff.complete).toHaveBeenLastCalledWith("attempt-1", expect.anything());
+    expect(client.POST).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Pay now when Razorpay fails to open", async () => {
+    handoff.complete.mockRejectedValueOnce(new Error("The payment provider did not load correctly."));
+    client.POST.mockResolvedValue(ok(mockBooking({ status: "PENDING_PAYMENT" }), 201));
+
+    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+
+    expect(await screen.findByRole("button", { name: "Pay now" })).toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it("shows the pickup address with a View Location link to Google Maps", () => {
@@ -423,7 +459,7 @@ describe("RentalBookPanel", () => {
     // The user doesn't have to type anything! Just click "Send delivery request"
     fireEvent.click(screen.getByRole("button", { name: "Send delivery request" }));
 
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/rentals/mine"));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/activity?type=rentals"));
     const body = client.POST.mock.calls[0]![1].body;
     expect(body.pickup_or_delivery_mode).toBe("DELIVERY");
     expect(body.delivery_address).toEqual({
