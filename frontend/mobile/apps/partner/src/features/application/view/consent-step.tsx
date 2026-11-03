@@ -20,6 +20,21 @@ export function ConsentStep() {
   const reference = useApplicationReference();
   const [selectedDoc, setSelectedDoc] = useState<RequiredConsent | null>(null);
 
+  const isAccepted = (purpose: string, version: string) =>
+    draft.consents.some(
+      (consent) => consent.purpose === purpose && consent.documentVersion === version,
+    );
+
+  const requiredConsents = (reference.requiredConsents ?? []).filter(
+    (consent) => consent.is_required_for_submission,
+  );
+  const allRequiredAccepted =
+    requiredConsents.length > 0 &&
+    requiredConsents.every((consent) => isAccepted(consent.purpose, consent.document_version));
+
+  // Disable proceed until all required agreements are accepted (unconditional hook call)
+  useProceedDisabled(!allRequiredAccepted || reference.isPending);
+
   if (reference.isPending) {
     return (
       <View style={styles.loadingContainer}>
@@ -39,21 +54,6 @@ export function ConsentStep() {
       />
     );
   }
-
-  const isAccepted = (purpose: string, version: string) =>
-    draft.consents.some(
-      (consent) => consent.purpose === purpose && consent.documentVersion === version,
-    );
-
-  const requiredConsents = reference.requiredConsents.filter(
-    (consent) => consent.is_required_for_submission,
-  );
-  const allRequiredAccepted =
-    requiredConsents.length > 0 &&
-    requiredConsents.every((consent) => isAccepted(consent.purpose, consent.document_version));
-
-  // Disable proceed until all required agreements are accepted
-  useProceedDisabled(!allRequiredAccepted);
 
   const handleToggle = (purpose: string, version: string) => {
     if (isReadOnly) return;
