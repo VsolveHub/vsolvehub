@@ -7,12 +7,14 @@ import { CheckCircle2 } from "lucide-react";
 import { SaveHeart, useSavedItems } from "@/features/part-a";
 import { SignInCard } from "@/features/session/view/sign-in-gate";
 import { AlreadyAppliedCard } from "./view/already-applied-card";
+import { SkillsInput } from "./view/skills-input";
 import { uploadListingResume } from "./queries";
 import { applySchema, issuesToFieldErrors, type ApplyFormState } from "./model";
 
 export function ApplySteps({
   listingId,
   posterName,
+  jobSkills,
   isAuthenticated,
   isSuccess,
   activeApplication,
@@ -26,6 +28,8 @@ export function ApplySteps({
 }: {
   listingId: string;
   posterName?: string;
+  /** This job's must-have and good-to-have skills, offered first in the skills field. */
+  jobSkills?: readonly string[];
   isAuthenticated: boolean;
   isSuccess?: boolean;
   activeApplication?: { status?: string };
@@ -157,16 +161,16 @@ export function ApplySteps({
             />
           </label>
           {fieldErrors.experience ? <p className="text-xs text-danger-text">{fieldErrors.experience}</p> : null}
-          <label className="block text-xs font-semibold">
-            Your skills
-            <input
-              className="mt-1 h-10 w-full rounded-control border border-line px-3 text-sm"
-              placeholder="e.g. Python, React, Customer support"
+          <div className="text-xs font-semibold">
+            <label htmlFor="apply-skills">Your skills</label>
+            <SkillsInput
+              id="apply-skills"
               value={form.skills}
-              onChange={(e) => onFieldChange("skills", e.target.value)}
+              jobSkills={jobSkills}
+              onChange={(next) => onFieldChange("skills", next)}
             />
             <span className="mt-1 block font-normal text-text-secondary">Separate skills with commas.</span>
-          </label>
+          </div>
           {fieldErrors.skills ? <p className="text-xs text-danger-text">{fieldErrors.skills}</p> : null}
           <label className="block text-xs font-semibold">
             Cover note
