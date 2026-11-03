@@ -3,7 +3,7 @@ import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Spinner } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { Check, RefreshCw } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
@@ -49,12 +49,16 @@ export function DocumentsStep() {
   const hasAddressProof = addressProofDoc !== null && addressProofDoc.status !== "REJECTED";
   const allUploaded = hasGovtId && hasAddressProof;
 
+  const onCommit = useCallback(() => {
+    router.push("/apply/review");
+  }, [router]);
+
   useEffect(() => {
     registerDock({
       label: "Continue",
       backHref: "/apply/consent",
       nextStepName: "Review and send",
-      onCommit: () => router.push("/apply/review"),
+      onCommit,
       isSaving: false,
       proceedDisabled: !allUploaded,
       saved: false,
@@ -64,11 +68,13 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
+  }, [registerDock, onCommit, allUploaded]);
 
+  useEffect(() => {
     return () => {
       registerDock(null);
     };
-  }, [registerDock, router, allUploaded]);
+  }, [registerDock]);
 
   if (query.isPending) {
     return (

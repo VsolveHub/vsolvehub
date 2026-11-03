@@ -3,7 +3,7 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { ErrorState, Spinner } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { Check, CheckCircle2, ChevronRight, Edit3 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
@@ -24,6 +24,19 @@ export function ReviewStep() {
   const ready = application !== null && canSubmit(application);
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
 
+  const submitMutateRef = useRef(submit.mutate);
+  submitMutateRef.current = submit.mutate;
+  const refetchRef = useRef(query.refetch);
+  refetchRef.current = query.refetch;
+
+  const onCommit = useCallback(() => {
+    submitMutateRef.current(undefined, {
+      onSuccess: () => {
+        void refetchRef.current();
+      },
+    });
+  }, []);
+
   useEffect(() => {
     if (!editable) {
       registerDock(null);
@@ -34,13 +47,7 @@ export function ReviewStep() {
       label: "Submit application",
       backHref: "/apply/documents",
       nextStepName: null,
-      onCommit: () => {
-        submit.mutate(undefined, {
-          onSuccess: () => {
-            void query.refetch();
-          },
-        });
-      },
+      onCommit,
       isSaving: submit.isPending,
       proceedDisabled: !ready || submit.isPending,
       saved: submit.isSuccess,
@@ -50,11 +57,22 @@ export function ReviewStep() {
       requestId: null,
       fieldMessages: [],
     });
+  }, [
+    editable,
+    ready,
+    submit.isPending,
+    submit.isSuccess,
+    submit.isError,
+    submit.error,
+    registerDock,
+    onCommit,
+  ]);
 
+  useEffect(() => {
     return () => {
       registerDock(null);
     };
-  }, [editable, ready, submit.isPending, submit.isSuccess, submit.isError, registerDock, query]);
+  }, [registerDock]);
 
   if (query.isPending || reference.isPending) {
     return (

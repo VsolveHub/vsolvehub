@@ -215,10 +215,6 @@ function Editor({
       requestId,
       fieldMessages,
     });
-
-    return () => {
-      registerDock(null);
-    };
   }, [
     isReadOnly,
     primaryLabel,
@@ -236,6 +232,12 @@ function Editor({
     fieldMessagesStr,
     registerDock,
   ]);
+
+  useEffect(() => {
+    return () => {
+      registerDock(null);
+    };
+  }, [registerDock]);
 
   return (
     <View style={{ flexDirection: "column", width: "100%" }}>
