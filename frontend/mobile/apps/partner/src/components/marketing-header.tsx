@@ -67,8 +67,9 @@ export function MarketingHeader({
             backgroundColor: "rgba(255, 255, 255, 0.95)",
             borderWidth: 1,
             borderColor: "rgba(231, 226, 218, 0.9)", // border-line-strong / line
-            paddingHorizontal: isTabletOrDesktop ? 20 : 14, // px-3.5 sm:px-5
-            paddingVertical: 10, // py-2.5
+            paddingHorizontal: isTabletOrDesktop ? 22 : 16, // px-3.5 sm:px-5
+            paddingVertical: isTabletOrDesktop ? 14 : 12, // py-2.5 -> comfortable height
+            minHeight: isTabletOrDesktop ? 60 : 54,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",

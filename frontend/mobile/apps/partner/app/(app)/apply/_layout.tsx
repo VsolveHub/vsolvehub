@@ -104,8 +104,9 @@ export default function ApplyLayout() {
             backgroundColor: "rgba(255, 255, 255, 0.95)",
             borderWidth: 1,
             borderColor: "#d3ccc0", // border-line-strong
-            paddingHorizontal: isDesktop ? 20 : 14,
-            paddingVertical: 10,
+            paddingHorizontal: isDesktop ? 22 : 16,
+            paddingVertical: isDesktop ? 14 : 12,
+            minHeight: isDesktop ? 60 : 54,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
@@ -133,8 +134,8 @@ export default function ApplyLayout() {
                 accessibilityLabel="Go back"
                 onPress={() => router.push(back.href as any)}
                 style={{
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   borderRadius: 9999,
                   backgroundColor: "#f4f1ec",
                   borderWidth: 1,
@@ -151,7 +152,7 @@ export default function ApplyLayout() {
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/apply")}
-              style={{ flexDirection: "row", alignItems: "center" }}
+              style={{ flexDirection: "row", alignItems: "center", minHeight: 36 }}
             >
               <Logo />
             </Pressable>
@@ -167,8 +168,8 @@ export default function ApplyLayout() {
                   backgroundColor: "#f4f1ec", // bg-surface-sunken
                   borderWidth: 1,
                   borderColor: "#e7e2da", // border-line
-                  paddingHorizontal: 10,
-                  paddingVertical: 4,
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
                   marginLeft: 12,
                 }}
               >
@@ -213,7 +214,7 @@ export default function ApplyLayout() {
                 borderWidth: 1,
                 borderColor: "#d3ccc0", // border-line-strong
                 paddingHorizontal: 16,
-                paddingVertical: 6,
+                paddingVertical: 7,
               }}
             >
               <Text style={{ fontSize: 12, fontWeight: "800", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -240,9 +241,9 @@ export default function ApplyLayout() {
                 accessibilityLabel="Steps"
                 onPress={() => setSheetOpen(true)}
                 style={({ pressed }) => ({
-                  height: 32,
-                  paddingHorizontal: isDesktop ? 12 : 8,
-                  width: isDesktop ? undefined : 32,
+                  height: 36,
+                  paddingHorizontal: isDesktop ? 14 : 10,
+                  width: isDesktop ? undefined : 36,
                   borderRadius: 9999,
                   backgroundColor: pressed ? "#ffffff" : "#f4f1ec", // bg-surface-sunken
                   borderWidth: 1,
@@ -254,7 +255,7 @@ export default function ApplyLayout() {
                   boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                 })}
               >
-                <ListChecks size={14} color="#00112e" />
+                <ListChecks size={15} color="#00112e" />
                 {isDesktop ? (
                   <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                     Steps
@@ -269,8 +270,8 @@ export default function ApplyLayout() {
                 accessibilityLabel="Overview"
                 onPress={() => router.push("/apply")}
                 style={({ pressed }) => ({
-                  height: 32,
-                  paddingHorizontal: 14,
+                  height: 36,
+                  paddingHorizontal: 16,
                   borderRadius: 9999,
                   backgroundColor: pressed ? "#ffffff" : "#f4f1ec", // bg-surface-sunken
                   borderWidth: 1,
@@ -291,19 +292,19 @@ export default function ApplyLayout() {
               accessibilityLabel="Sign Out"
               onPress={() => void signOut()}
               style={({ pressed }) => ({
-                height: 32,
-                paddingHorizontal: 12,
+                height: 36,
+                paddingHorizontal: 14,
                 borderRadius: 9999,
                 backgroundColor: pressed ? "#ffe4e6" : "#fff1f2", // bg-rose-50
                 borderWidth: 1,
                 borderColor: "rgba(254, 205, 211, 0.9)", // border-rose-200/90
                 flexDirection: "row",
                 alignItems: "center",
-                columnGap: 5,
+                columnGap: 6,
                 boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
               })}
             >
-              <LogOut size={13} color="#be123c" />
+              <LogOut size={14} color="#be123c" />
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#be123c", fontFamily: "system-ui, -apple-system, sans-serif" }}>
                 Sign Out
               </Text>
