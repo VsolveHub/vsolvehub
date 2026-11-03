@@ -32,7 +32,7 @@ import { ApplyDockContext, type DockConfig } from "@/features/application/model/
 import {
   previousStep,
 } from "@/features/application/model/progress";
-import { APPLICATION_STEPS } from "@/features/application/model/steps";
+import { APPLICATION_STEPS, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
 
 const logoMark = require("@vsolve/mobile-ui/src/logo-mark.png");
@@ -95,6 +95,7 @@ export default function ApplyLayout() {
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
   const back = isSubmitted ? null : previousStep(pathname);
+  const shouldShowDock = !isSubmitted;
 
   // Find current step index in the 4-step sequence
   const currentStepIdx = Math.max(
@@ -105,6 +106,24 @@ export default function ApplyLayout() {
 
   // User initial (defaults to "W" matching mockup)
   const initialLetter = (application?.display_name || "webaura").trim()[0]?.toUpperCase() || "W";
+
+  // Primary action button configuration with robust fallbacks
+  const defaultLabel = currentStepIdx === 3 ? "Submit application" : "Continue";
+  const primaryLabel = dockConfig?.label || defaultLabel;
+  const isProceedDisabled = dockConfig ? Boolean(dockConfig.proceedDisabled) : false;
+  const isSaving = dockConfig ? Boolean(dockConfig.isSaving) : false;
+
+  const handlePrimaryPress = () => {
+    if (isProceedDisabled || isSaving) return;
+    if (onCommitRef.current) {
+      onCommitRef.current();
+      return;
+    }
+    const next = nextStep(pathname);
+    if (next) {
+      router.push(next.href as any);
+    }
+  };
 
   return (
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
@@ -186,7 +205,7 @@ export default function ApplyLayout() {
             styles.scrollContent,
             {
               maxWidth: isDesktop ? 672 : "100%",
-              paddingBottom: dockConfig ? bottomInset + 100 : 50,
+              paddingBottom: shouldShowDock ? bottomInset + 88 : 40,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -195,12 +214,12 @@ export default function ApplyLayout() {
           <Slot />
         </ScrollView>
 
-        {/* Fixed Bottom Action Dock */}
-        {dockConfig ? (
+        {/* Fixed Bottom Action Dock Matching Mockups */}
+        {shouldShowDock ? (
           <View style={[styles.dockContainer, { paddingBottom: bottomInset + 12 }]}>
             <View style={[styles.dockInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
               {/* Conflict / Error alerts if any */}
-              {dockConfig.conflict ? (
+              {dockConfig?.conflict ? (
                 <View style={styles.conflictBanner}>
                   <Text style={styles.conflictTitle}>Someone else changed this application</Text>
                   <Text style={styles.conflictSubtitle}>
@@ -209,7 +228,7 @@ export default function ApplyLayout() {
                 </View>
               ) : null}
 
-              {dockConfig.failed ? (
+              {dockConfig?.failed ? (
                 <View style={styles.failedBanner}>
                   <Text style={styles.failedTitle}>We could not save this</Text>
                   <Text style={styles.failedSubtitle}>
@@ -232,28 +251,31 @@ export default function ApplyLayout() {
                   <Text style={styles.helpButtonText}>Need help?</Text>
                 </Pressable>
 
-                {/* Right: Continue -> (or Submit) */}
+                {/* Right: Continue -> (or Submit application) */}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={dockConfig.label}
-                  disabled={dockConfig.proceedDisabled || dockConfig.isSaving}
-                  onPress={() => onCommitRef.current?.()}
+                  accessibilityLabel={primaryLabel}
+                  disabled={isProceedDisabled || isSaving}
+                  onPress={handlePrimaryPress}
                   style={({ pressed }) => [
                     styles.continueButton,
-                    dockConfig.proceedDisabled
-                      ? styles.continueButtonDisabled
-                      : pressed
-                      ? styles.continueButtonPressed
-                      : styles.continueButtonActive,
+                    {
+                      backgroundColor: isProceedDisabled
+                        ? "#cbd5e1"
+                        : pressed
+                        ? "#c2410c"
+                        : "#ea580c",
+                      opacity: isProceedDisabled ? 0.95 : 1,
+                    },
                   ]}
                 >
-                  {dockConfig.isSaving ? (
+                  {isSaving ? (
                     <ActivityIndicator color="#ffffff" size="small" />
                   ) : (
-                    <>
-                      <Text style={styles.continueButtonText}>{dockConfig.label}</Text>
+                    <View style={styles.continueButtonContent}>
+                      <Text style={styles.continueButtonText}>{primaryLabel}</Text>
                       <Text style={styles.continueButtonArrow}>{"->"}</Text>
-                    </>
+                    </View>
                   )}
                 </Pressable>
               </View>
@@ -554,7 +576,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: "#f1f5f9",
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 12,
     ...(Platform.OS === "web"
       ? ({
           boxShadow: "0 -4px 16px rgba(0, 17, 46, 0.05)",
@@ -569,7 +591,7 @@ const styles = StyleSheet.create({
   },
   dockInner: {
     width: "100%",
-    marginHorizontal: "auto",
+    alignSelf: "center",
     flexDirection: "column",
     rowGap: 8,
   },
@@ -608,6 +630,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dockActionRow: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -624,33 +647,28 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     height: 48,
+    minWidth: 128,
     paddingHorizontal: 28,
     borderRadius: 9999,
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    columnGap: 8,
-  },
-  continueButtonActive: {
-    backgroundColor: "#ea580c",
     ...(Platform.OS === "web"
       ? ({
-          boxShadow: "0 4px 12px rgba(234, 88, 12, 0.3)",
+          boxShadow: "0 4px 14px rgba(234, 88, 12, 0.35)",
         } as any)
       : {
           elevation: 4,
           shadowColor: "#ea580c",
           shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.3,
+          shadowOpacity: 0.35,
           shadowRadius: 8,
         }),
   },
-  continueButtonPressed: {
-    backgroundColor: "#c2410c",
-  },
-  continueButtonDisabled: {
-    backgroundColor: "#94a3b8",
-    opacity: 0.85,
+  continueButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 8,
   },
   continueButtonText: {
     fontSize: 15,
