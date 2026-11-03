@@ -1,10 +1,12 @@
 """Periodic reconciliation for provider ambiguity and in-flight refunds."""
 
+import logging
 from datetime import timedelta
 from uuid import UUID
 
 from celery import shared_task
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.commerce.models import PaymentAttempt, Refund
@@ -13,19 +15,35 @@ from apps.commerce.services.loyalty_funding import release_checkout_funding
 from apps.rental.services import release_booking_for_expired_payment
 from apps.stay.services import release_reservation_for_expired_payment
 
+logger = logging.getLogger(__name__)
+
+
+#: A payment the customer may still be paying, or may already have paid without our hearing.
+_OPEN_PAYMENT_STATUSES = (
+    PaymentAttempt.Status.PROVIDER_PENDING,
+    PaymentAttempt.Status.CREATED,
+    PaymentAttempt.Status.AUTHORIZED,
+)
+
 
 @shared_task
 def reconcile_payments() -> int:
+    """Ask the provider about every open payment, not only the ones already flagged.
+
+    An attempt whose order was created is `IN_SYNC`, but that only says the order exists. If the
+    capture webhook never arrives (a local stack Razorpay cannot reach, a dropped delivery), the
+    provider is the only place the capture is recorded, so open attempts with an order are asked
+    too. Open attempts live minutes (the payment window), so this stays a short list.
+    """
     attempt_ids = PaymentAttempt.objects.filter(
-        reconciliation_state__in=(
-            PaymentAttempt.ReconciliationState.PENDING,
-            PaymentAttempt.ReconciliationState.NEEDS_ATTENTION,
-        ),
-        status__in=(
-            PaymentAttempt.Status.PROVIDER_PENDING,
-            PaymentAttempt.Status.CREATED,
-            PaymentAttempt.Status.AUTHORIZED,
-        ),
+        Q(
+            reconciliation_state__in=(
+                PaymentAttempt.ReconciliationState.PENDING,
+                PaymentAttempt.ReconciliationState.NEEDS_ATTENTION,
+            )
+        )
+        | ~Q(provider_order_id=""),
+        status__in=_OPEN_PAYMENT_STATUSES,
     ).values_list("id", flat=True)
     count = 0
     for attempt_id in attempt_ids.iterator(chunk_size=100):
@@ -89,6 +107,16 @@ def expire_abandoned_payment_attempts() -> int:
     )
     expired = 0
     for attempt_id in attempt_ids:
+        # Never expire a payment the customer has paid. Ask the provider first; a capture found
+        # here confirms the booking and the status check below then leaves it alone. If the
+        # provider cannot be reached, skip it this round rather than cancel what may be paid.
+        if PaymentAttempt.objects.filter(id=attempt_id).exclude(provider_order_id="").exists():
+            try:
+                reconcile_payment_attempt(attempt_id=attempt_id)
+            except Exception:
+                # Any failure means "unknown", and unknown is not expired. Only the id is logged.
+                logger.warning("Skipped expiring payment %s: provider check failed", attempt_id)
+                continue
         with transaction.atomic():
             attempt = PaymentAttempt.objects.select_for_update().get(id=attempt_id)
             if attempt.status not in (
