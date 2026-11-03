@@ -4,7 +4,8 @@
 // and the test runner's JSX transform resolves elements through the `React` binding.
 import * as React from "react";
 import { useState, useEffect } from "react";
-import { useLogout, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLogout, useAuthGuard, usePhoneAuthFlow, queryKeys } from "@vsolve/query";
 import { Button, Logo, Dialog, OtpForm, cn, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -37,11 +38,14 @@ export function SiteHeader() {
 
   // Global login dialog state
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const queryClient = useQueryClient();
   const guard = useAuthGuard(getApiClient());
   const flow = usePhoneAuthFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     onAuthenticated: () => {
       setIsLoginOpen(false);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session.all });
       router.refresh();
     },
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
+import { useEffect } from "react";
 import {
   EXPIRING_STATE,
   SESSION_STATE,
@@ -299,7 +300,9 @@ export interface WindowsInput {
  * stopped standing behind.
  */
 export function useCandidateStarts(input: WindowsInput | null) {
-  return useQuery<WindowsView>({
+  const queryClient = useQueryClient();
+
+  const query = useQuery<WindowsView>({
     queryKey: queryKeys.booking.windows({
       cartVersion: input?.cartVersion ?? 0,
       addressId: input?.addressId ?? "",
@@ -319,6 +322,14 @@ export function useCandidateStarts(input: WindowsInput | null) {
     enabled: input !== null,
     ...VOLATILE_STATE,
   });
+
+  useEffect(() => {
+    if (query.error && cartVersionConflict(query.error) !== null) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+    }
+  }, [query.error, queryClient]);
+
+  return query;
 }
 
 /* -------------------------------------------------------------------------
@@ -347,7 +358,9 @@ export interface SchedulingGroupsInput {
  * plan-set command will refuse.
  */
 export function useSchedulingGroups(input: SchedulingGroupsInput | null) {
-  return useQuery({
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
     queryKey: queryKeys.booking.schedulingGroups({
       cartVersion: input?.cartVersion ?? 0,
       addressId: input?.addressId ?? "",
@@ -370,6 +383,14 @@ export function useSchedulingGroups(input: SchedulingGroupsInput | null) {
         ? false
         : failureCount < 2,
   });
+
+  useEffect(() => {
+    if (query.error && cartVersionConflict(query.error) !== null) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+    }
+  }, [query.error, queryClient]);
+
+  return query;
 }
 
 /* -------------------------------------------------------------------------
@@ -419,7 +440,7 @@ export function useCreatePlanSet() {
               group_key: entry.groupKey,
               starts_at: entry.startsAt,
             })),
-          } as any,
+          } as unknown as Schemas["FulfilmentPlanSetCreateRequest"],
         }),
       ),
     onSuccess: (planSet) => {
