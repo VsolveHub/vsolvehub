@@ -6,6 +6,7 @@ import { ChevronRight, FileText, Globe, Phone, Power, ShieldCheck, User, Users, 
 import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { PartnerPushPreferencesCard } from "@/features/notifications/view/partner-push-preferences";
 import {
   PARTNER_SUPPORT_HOURS_KEY,
   PARTNER_SUPPORT_PHONE,
@@ -87,6 +88,14 @@ export function MeHome() {
               iconClass="text-purple-600"
             />
           </div>
+        </section>
+
+        {/* Push Notification Preferences Section */}
+        <section className="flex flex-col gap-1.5">
+          <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+            Notifications
+          </p>
+          <PartnerPushPreferencesCard />
         </section>
 
         {/* Work & Financials Section */}

@@ -7,11 +7,7 @@ import { useProfileCompletionGate } from "@/features/account/view/profile-comple
 import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 
 import { toPlanCheckoutView, toVisitTrackerView } from "../adapters";
-import {
-  useSimulateVisitPlanCapture,
-  useStartVisitPlanCheckout,
-  type VisitPlanState,
-} from "../queries";
+import { useStartVisitPlanCheckout, type VisitPlanState } from "../queries";
 import { VisitPaymentDialog } from "./visit-payment-dialog";
 
 export interface VisitPlanCheckoutControls {
@@ -19,8 +15,9 @@ export interface VisitPlanCheckoutControls {
   chargeableLabel: string | null;
   isPending: boolean;
   error: unknown;
-  canSimulatePendingCapture: boolean;
-  simulatePendingCapture: () => void;
+  /** A charge was started but not finished (e.g. the page reloaded): reopen Razorpay for it. */
+  canResumePayment: boolean;
+  resumePayment: () => void;
 }
 
 export interface VisitPlanCheckoutProps {
@@ -45,7 +42,6 @@ export function VisitPlanCheckout({
 }: VisitPlanCheckoutProps) {
   const profileGate = useProfileCompletionGate("payment");
   const checkout = useStartVisitPlanCheckout();
-  const simulateCapture = useSimulateVisitPlanCapture();
   const [paying, setPaying] = useState(false);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [handoffError, setHandoffError] = useState<unknown>(null);
@@ -54,13 +50,8 @@ export function VisitPlanCheckout({
   const view = state === null ? null : toPlanCheckoutView(state);
   const tracker = state === null ? null : toVisitTrackerView(state);
   const paymentAttemptId = state?.plan?.payment_attempt_id ?? null;
-  const canSimulatePendingCapture =
-    state?.plan?.simulated_capture_available === true && paymentAttemptId !== null;
-  const isPending = checkout.isPending || simulateCapture.isPending || isHandingOff;
-
-  function markVisitPlanPaid(attemptId: string) {
-    simulateCapture.mutate({ requirementId, paymentAttemptId: attemptId });
-  }
+  const canResumePayment = state?.plan?.status === "PENDING" && paymentAttemptId !== null;
+  const isPending = checkout.isPending || isHandingOff;
 
   async function handOffAttempt(attemptId: string) {
     setHandoffError(null);
@@ -99,11 +90,11 @@ export function VisitPlanCheckout({
     },
     chargeableLabel: view?.chargeableLabel ?? null,
     isPending,
-    error: checkout.error ?? simulateCapture.error ?? handoffError,
-    canSimulatePendingCapture,
-    simulatePendingCapture: () => {
+    error: checkout.error ?? handoffError,
+    canResumePayment,
+    resumePayment: () => {
       if (paymentAttemptId !== null) {
-        profileGate.run(() => markVisitPlanPaid(paymentAttemptId));
+        profileGate.run(() => void handOffAttempt(paymentAttemptId));
       }
     },
   };

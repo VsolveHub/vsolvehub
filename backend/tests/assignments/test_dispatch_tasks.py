@@ -13,7 +13,6 @@ from apps.assignments.tasks import (
     send_dispatch_offer_task,
 )
 from apps.carts.models import BookingGroup
-from apps.commerce.models import Booking
 from tests.fulfilment.conftest import create_booked_group
 
 pytestmark = [
@@ -57,6 +56,37 @@ def test_send_dispatch_offer_task_sends_targeted_push() -> None:
         assert call_kwargs["data"]["type"] == "DISPATCH_OFFER"
         assert call_kwargs["data"]["offer_id"] == str(offer.id)
         assert f"/dispatch/{offer.id}" in call_kwargs["url"]
+        assert call_kwargs["collapse_id"] == f"dispatch_offer_{offer.id}"
+        assert call_kwargs["web_push_topic"] == f"dispatch_{offer.id}"
+        assert call_kwargs["ttl"] > 0
+        assert call_kwargs["priority"] == 10
+
+        offer.refresh_from_db()
+        assert offer.onesignal_notification_id == "push-test-123"
+
+
+def test_send_dispatch_offer_task_celery_retry_duplicate_suppression() -> None:
+    booked = create_booked_group(key_prefix="cel-dup")
+    booking = booked.booking
+    partner = booked.partner
+
+    now = timezone.now()
+    offer = DispatchOffer.objects.create(
+        booking=booking,
+        partner=partner,
+        status=DispatchOffer.Status.PENDING,
+        offered_at=now,
+        expires_at=now + timedelta(seconds=60),
+        onesignal_notification_id="already-sent-push-id-456",
+    )
+
+    with patch("apps.notifications.onesignal.send_push_to_external_ids") as mock_send_push:
+        result = send_dispatch_offer_task(str(offer.id))
+
+        assert result["skipped"] is True
+        assert result["reason"] == "Push already sent"
+        assert result["notification_id"] == "already-sent-push-id-456"
+        mock_send_push.assert_not_called()
 
 
 def test_expire_dispatch_offer_task_expires_and_triggers_reassignment() -> None:
@@ -85,6 +115,9 @@ def test_expire_dispatch_offer_task_expires_and_triggers_reassignment() -> None:
 
 
 def test_reassignment_or_downgrade_task_downgrades_when_no_partner_available() -> None:
+    from apps.notifications.models import NotificationIntent
+    from apps.notifications.templates_registry import render_notification
+
     booked = create_booked_group(key_prefix="cel-down")
     booking = booked.booking
     partner = booked.partner
@@ -103,9 +136,22 @@ def test_reassignment_or_downgrade_task_downgrades_when_no_partner_available() -
         booked.unit.booking_group.booking_mode = BookingGroup.BookingMode.INSTANT
         booked.unit.booking_group.save(update_fields=["booking_mode"])
 
-    with patch("apps.notifications.services.request_notification"):
-        reassignment_or_downgrade_task(str(booking.id))
+    reassignment_or_downgrade_task(str(booking.id))
 
     if booked.unit and booked.unit.booking_group:
         booked.unit.booking_group.refresh_from_db()
         assert booked.unit.booking_group.booking_mode == BookingGroup.BookingMode.SCHEDULED
+
+    # Verify customer received the downgrade notification with valid template
+    intent = NotificationIntent.objects.filter(
+        recipient_id=booking.customer_id,
+        purpose="booking.downgraded_to_scheduled",
+    ).first()
+    assert intent is not None
+    assert intent.template_code == "booking_downgraded_to_scheduled"
+    assert intent.status == NotificationIntent.Status.SENT
+    assert intent.deliveries.filter(provider="in_app").exists()
+
+    rendered = render_notification(template_code=intent.template_code, context=intent.context)
+    assert str(booking.id) in rendered.body
+    assert "Instant booking moved to scheduled" in rendered.title

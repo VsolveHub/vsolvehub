@@ -57,7 +57,6 @@ export interface RentalDeposit {
   refunded_at?: string | null;
   retained_at?: string | null;
   payment_attempt_id?: string | number | null;
-  simulated_capture_available?: boolean;
 }
 
 export interface RentalTransport {

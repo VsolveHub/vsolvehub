@@ -57,6 +57,9 @@ const APPLICATION = {
   consents: [],
   documents: [],
   transitions: [],
+  can_edit: true,
+  required_document_kinds: ["GOVERNMENT_ID"],
+  consents_complete: false,
   change_request_message: null,
   submitted_at: null,
   reviewed_at: null,
@@ -148,7 +151,7 @@ describe("save and continue", () => {
   });
 
   it("follows the shared sequence rather than a per-page destination", async () => {
-    pathname = "/apply/areas";
+    pathname = "/apply/work";
     client.GET.mockResolvedValue(ok(APPLICATION));
     client.PATCH.mockResolvedValue(ok({ ...APPLICATION, version: 3 }));
 
@@ -158,7 +161,7 @@ describe("save and continue", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/apply/consent"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/apply/schedule"));
   });
 
   it("stays put when the save is refused", async () => {
@@ -278,7 +281,7 @@ describe("a step the applicant has already finished", () => {
 
 describe("an application that is not the applicant's to edit", () => {
   it("hides the save action rather than disabling it mysteriously", async () => {
-    client.GET.mockResolvedValue(ok({ ...APPLICATION, status: "UNDER_REVIEW" }));
+    client.GET.mockResolvedValue(ok({ ...APPLICATION, status: "UNDER_REVIEW", can_edit: false }));
 
     renderEditor();
 

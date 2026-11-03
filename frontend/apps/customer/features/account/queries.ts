@@ -219,3 +219,49 @@ export function useCreatePrivacyRequest() {
 export function isRequestOpen(privacyRequest: PrivacyRequest): boolean {
   return privacyRequest.status === "RECEIVED" || privacyRequest.status === "IN_REVIEW";
 }
+
+
+/* -----------------------------------------------------------------------------
+   Push notification preferences (Milestone 6)
+   -------------------------------------------------------------------------- */
+
+export interface PushPreferenceItem {
+  category: string;
+  label: string;
+  description: string;
+  is_enabled: boolean;
+  is_mutable: boolean;
+}
+
+export interface PushPreferencesResponse {
+  role: "CUSTOMER" | "PARTNER";
+  preferences: PushPreferenceItem[];
+}
+
+export function usePushNotificationPreferences() {
+  return useQuery<PushPreferencesResponse>({
+    queryKey: ["privacy", "push-preferences"],
+    queryFn: () =>
+      request<PushPreferencesResponse>(() =>
+        (getApiClient() as any).GET("/api/v1/customer/notification-preferences/")
+      ),
+    ...SESSION_STATE,
+  });
+}
+
+export function useUpdatePushNotificationPreference() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { category: string; isEnabled: boolean }) =>
+      request<PushPreferencesResponse>(() =>
+        (getApiClient() as any).PATCH("/api/v1/customer/notification-preferences/", {
+          body: { category: input.category, is_enabled: input.isEnabled },
+        })
+      ),
+    onSuccess: (data: PushPreferencesResponse) => {
+      queryClient.setQueryData(["privacy", "push-preferences"], data);
+    },
+    retry: false,
+  });
+}

@@ -104,6 +104,9 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
+  // Set once a booking exists but Razorpay hasn't opened yet: the page stays here and offers
+  // to pay, instead of creating a second booking or leaving for My Rentals unpaid.
+  const [unpaidAttemptId, setUnpaidAttemptId] = useState<string | null>(null);
   const [mode, setMode] = useState<RentalMode>("PICKUP");
   /** Pre-filled from the account; the only thing a customer might change for a delivery. */
   const [deliveryPhone, setDeliveryPhone] = useState("");
@@ -173,6 +176,26 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const platformFeePaise = Math.floor((rentalChargePaise * feePercent) / 100);
   const totalDuePaise = rentalChargePaise + platformFeePaise + depositPaise;
 
+  const payForBooking = async (attemptId: string) => {
+    setError(null);
+    setIsHandingOff(true);
+    try {
+      const result = await completeOrOpenCheckout(attemptId, {
+        businessName: BUSINESS_NAME,
+      });
+      if (result.mode === "pending") {
+        setError("Payment is still getting ready. Try Pay now again in a moment.");
+        return;
+      }
+      // Razorpay closed (paid or dismissed): My Rentals shows the booking's real status.
+      router.push(MY_RENTALS);
+    } catch (err) {
+      setError(friendlyErrorMessage(err, "Razorpay could not be opened. Try Pay now again."));
+    } finally {
+      setIsHandingOff(false);
+    }
+  };
+
   const mutation = useMutation({
     mutationFn: () =>
       bookRental({
@@ -204,42 +227,15 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
       const attemptId = deposit?.payment_attempt_id;
 
       if (!attemptId) {
-        toast.notify("Rental booking confirmed.");
+        // A pickup booking is always paid at booking; no payment means something went wrong,
+        // never that it is confirmed.
+        toast.notify("Your booking was saved, but its payment could not be started. It is in My Rentals.");
         router.push(MY_RENTALS);
         return;
       }
 
-      setIsHandingOff(true);
-      try {
-        const result = await completeOrOpenCheckout(String(attemptId), {
-          businessName: BUSINESS_NAME,
-          onAwaitingCapture: () =>
-            toast.notify("Complete payment in Razorpay. Booking stays Pending until capture."),
-        });
-
-        if (result.mode === "simulated") {
-          toast.notify(
-            "Rental fee and deposit recorded. Razorpay is not configured, so payment was simulated.",
-          );
-        } else if (result.mode === "pending") {
-          toast.notify(
-            "Booking created and unpaid (Pending). Payment is still preparing — open My Rentals shortly to pay.",
-          );
-        } else {
-          toast.notify("Payment submitted. Waiting for Razorpay capture — booking stays Pending until then.");
-        }
-        router.push(MY_RENTALS);
-      } catch (err) {
-        setError(
-          friendlyErrorMessage(
-            err,
-            "The payment provider could not be opened. Booking is Pending until paid.",
-          ),
-        );
-        router.push(MY_RENTALS);
-      } finally {
-        setIsHandingOff(false);
-      }
+      setUnpaidAttemptId(String(attemptId));
+      await payForBooking(String(attemptId));
     },
     onError: (err: unknown) => {
       // Shown as the "session ended" sign-in card instead of the raw message.
@@ -623,6 +619,30 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
               createAddress.reset();
             }}
           />
+        ) : unpaidAttemptId ? (
+          <div className="space-y-2">
+            <p className="text-xs text-text-secondary">
+              Your dates are held. Pay to confirm the booking.
+            </p>
+            <Button
+              type="button"
+              onClick={() => void payForBooking(unpaidAttemptId)}
+              disabled={isHandingOff}
+              loading={isHandingOff}
+              loadingLabel="Opening payment…"
+              className="w-full py-3 text-sm font-bold"
+            >
+              Pay now
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-xs"
+              onClick={() => router.push(MY_RENTALS)}
+            >
+              Pay later from My Rentals
+            </Button>
+          </div>
         ) : (
         <Button
           type="submit"

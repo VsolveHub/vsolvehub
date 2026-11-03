@@ -70,12 +70,12 @@ describe("homeForApplication", () => {
     expect(homeForApplication("CHANGES_REQUIRED")).toBe("/apply");
     expect(homeForApplication("SUBMITTED")).toBe("/apply");
     expect(homeForApplication("UNDER_REVIEW")).toBe("/apply");
+    expect(homeForApplication("DECLINED")).toBe("/apply");
   });
 
   it("sends approved and terminal accounts to the signed-in home", () => {
     expect(homeForApplication("APPROVED")).toBe("/home");
     expect(homeForApplication("SUSPENDED")).toBe("/home");
     expect(homeForApplication("OFFBOARDED")).toBe("/home");
-    expect(homeForApplication("DECLINED")).toBe("/home");
   });
 });

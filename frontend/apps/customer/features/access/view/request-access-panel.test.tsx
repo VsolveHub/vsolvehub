@@ -14,6 +14,12 @@ vi.mock("@/features/account/view/profile-completion-dialog", () => ({
   }),
 }));
 
+/** Razorpay Checkout handoff; the panel's job is to hand the attempt to it. */
+const handoff = vi.hoisted(() => ({ complete: vi.fn() }));
+vi.mock("@/features/payment/standalone-handoff", () => ({
+  completeOrOpenCheckout: handoff.complete,
+}));
+
 const { RequestAccessPanel } = await import("./request-access-panel");
 
 function ok<T>(data: T, status = 200) {
@@ -50,7 +56,6 @@ function plan(overrides: Partial<Schemas["VisitPlan"]> = {}): Schemas["VisitPlan
     credit_paise: 0,
     chargeable_paise: 9900,
     payment_attempt_id: null,
-    simulated_capture_available: false,
     shares: [share(0), share(1)],
     receipt_series: "",
     receipt_sequence: null,
@@ -126,6 +131,8 @@ function renderPanel() {
 }
 
 beforeEach(() => {
+  handoff.complete.mockReset();
+  handoff.complete.mockResolvedValue({ mode: "checkout", attempt: {} });
   window.sessionStorage.clear();
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -153,26 +160,11 @@ describe("request-detail visit payment", () => {
     expect(client.POST).not.toHaveBeenCalled();
   });
 
-  it("starts checkout and captures a fake-provider payment after confirmation", async () => {
-    client.GET.mockImplementation((path: string) => {
-      if (path === "/api/v1/payment-attempts/{attempt_id}/") {
-        return Promise.resolve(
-          ok({
-            id: "attempt-1",
-            status: "CREATED",
-            provider: "fake",
-            simulated_capture_available: true,
-          }),
-        );
-      }
-      return Promise.resolve(ok(visitPlanState()));
-    });
+  it("starts checkout and opens Razorpay for it after confirmation", async () => {
+    client.GET.mockResolvedValue(ok(visitPlanState()));
     client.POST.mockImplementation((path: string) => {
       if (path === "/api/v1/requirements/{requirement_id}/visit-plan/checkout/") {
         return Promise.resolve(ok(checkout, 201));
-      }
-      if (path === "/api/v1/payment-attempts/{attempt_id}/simulate-capture/") {
-        return Promise.resolve(ok({}));
       }
       return Promise.resolve(ok({}));
     });
@@ -185,11 +177,9 @@ describe("request-detail visit payment", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Pay ₹99" }));
 
     await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-1" } } },
-      ),
+      expect(handoff.complete).toHaveBeenCalledWith("attempt-1", expect.anything()),
     );
+    expect(client.POST).toHaveBeenCalledTimes(1);
   });
 
   it("shows the server-provided share for every visit", async () => {
@@ -206,30 +196,28 @@ describe("request-detail visit payment", () => {
     expect(within(dialog).getByText(/refunds on its own/)).toBeInTheDocument();
   });
 
-  it("keeps an already-pending fake payment recoverable on the request page", async () => {
+  it("reopens Razorpay for an already-pending payment instead of marking it paid", async () => {
+    // Regression: a development "Mark as paid" captured the charge without any provider.
     client.GET.mockResolvedValue(
       ok(
         visitPlanState({
           plan: plan({
             status: "PENDING",
             payment_attempt_id: "attempt-1",
-            simulated_capture_available: true,
           }),
           checkout_available: false,
         }),
       ),
     );
-    client.POST.mockResolvedValue(ok({}));
     renderPanel();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Mark as paid" }));
+    expect(screen.queryByRole("button", { name: "Mark as paid" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Continue payment" }));
 
     await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-1" } } },
-      ),
+      expect(handoff.complete).toHaveBeenCalledWith("attempt-1", expect.anything()),
     );
+    expect(client.POST).not.toHaveBeenCalled();
   });
 });
 

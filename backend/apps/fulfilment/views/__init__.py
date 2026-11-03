@@ -81,6 +81,7 @@ from .customer import (
 )
 from .operations import (
     OperationsAssistedStartView,
+    OperationsBookingCollectionView,
     OperationsBookingDetailView,
     OperationsRecoverBookingView,
 )
@@ -126,6 +127,7 @@ __all__ = [
     "CustomerQualityDisputeView",
     "CustomerStartOtpView",
     "OperationsAssistedStartView",
+    "OperationsBookingCollectionView",
     "OperationsBookingDetailView",
     "OperationsRecoverBookingView",
     "PartnerAbortView",

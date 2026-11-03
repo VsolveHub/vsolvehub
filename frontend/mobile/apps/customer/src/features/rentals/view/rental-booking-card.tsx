@@ -67,9 +67,7 @@ export function RentalBookingCard({
       const result = await completeOrOpenRentalCheckout(paymentAttemptId, {
         businessName: "Vsolve Hub",
       });
-      if (result.mode === "simulated") {
-        Alert.alert("Success", "Rental fee and deposit recorded.");
-      } else if (result.mode === "pending") {
+      if (result.mode === "pending") {
         Alert.alert("Notice", "Payment is still preparing — try Pay Now again in a moment.");
       } else {
         Alert.alert("Payment Initiated", "Waiting for payment capture.");

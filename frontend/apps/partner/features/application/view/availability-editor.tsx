@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { WEEKDAY_KEYS, scheduleProblems, weeklyHours, type DraftPeriod, type PeriodProblem } from "../model/schedule";
+import { ApplyDock } from "./apply-shell";
 
 /** Catalogue keys, resolved with `t` at render time. */
 const PROBLEM_MESSAGE_KEYS: Record<PeriodProblem, string> = {
@@ -27,6 +28,9 @@ export interface AvailabilityEditorProps {
   onSave: (periods: readonly DraftPeriod[]) => Promise<void> | void;
   isSaving?: boolean;
   saveError?: string | null;
+  /** Where Back and Continue go: the steps either side of hours, for this Partner's track. */
+  backHref: string;
+  nextHref: string;
 }
 
 type ModalShiftState = {
@@ -46,6 +50,8 @@ export function AvailabilityEditor({
   onSave,
   isSaving = false,
   saveError = null,
+  backHref,
+  nextHref,
 }: AvailabilityEditorProps) {
   const router = useRouter();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
@@ -239,7 +245,7 @@ export function AvailabilityEditor({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-navy-900 w-24 sm:w-28">
+                  <span className="text-sm font-bold text-navy-900 w-20 sm:w-28 truncate">
                     {weekdayLabel}
                   </span>
                   {isActive ? (
@@ -421,21 +427,20 @@ export function AvailabilityEditor({
         </p>
       ) : null}
 
-      {/* Save & Navigation Action Dock */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg">
-        <div className="mx-auto max-w-[560px] flex items-center justify-between gap-2.5">
+      <ApplyDock>
+        <div className="flex items-center justify-between gap-2 sm:gap-2.5">
           <Button
             variant="outline"
             size="lg"
-            onClick={() => void handleNavigate("/apply/documents")}
+            onClick={() => void handleNavigate(backHref)}
             disabled={isSaving || navigatingTo !== null}
-            loading={navigatingTo === "/apply/documents"}
-            className="shrink-0 font-bold text-sm px-4"
+            loading={navigatingTo === backHref}
+            className="shrink-0 font-bold text-sm px-3.5 sm:px-4"
           >
             {t("common.back")}
           </Button>
 
-          <div className="flex items-center gap-2 flex-1 justify-end">
+          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
             {hasChanges ? (
               <Button
                 variant="outline"
@@ -451,17 +456,17 @@ export function AvailabilityEditor({
             ) : null}
             <Button
               size="lg"
-              onClick={() => void handleNavigate("/apply/review")}
+              onClick={() => void handleNavigate(nextHref)}
               disabled={hasProblems || isSaving || navigatingTo !== null}
-              loading={navigatingTo === "/apply/review"}
-              loadingLabel={hasChanges ? t("apply.schedule.savingAndReviewing") : undefined}
-              className="font-bold text-xs sm:text-sm px-4 sm:px-5 shadow-md flex-1 sm:flex-initial"
+              loading={navigatingTo === nextHref}
+              loadingLabel={hasChanges ? t("common.saving") : undefined}
+              className="font-bold text-xs sm:text-sm px-3 sm:px-5 shadow-md flex-1 sm:flex-initial"
             >
-              {t("apply.schedule.reviewApplication")}
+              {hasChanges ? t("apply.editor.saveAndContinue") : t("apply.editor.continue")}
             </Button>
           </div>
         </div>
-      </div>
+      </ApplyDock>
     </div>
   );
 }

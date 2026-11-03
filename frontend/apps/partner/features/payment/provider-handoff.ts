@@ -54,8 +54,6 @@ export interface PaymentAttemptHandoff {
   provider_public_key: string | null;
   provider_order_id: string;
   amount_paise?: number;
-  /** Set to true when the backend is running in fake-provider mode. */
-  simulated_capture_available?: boolean;
 }
 
 export function handoffTarget(attempt: PaymentAttemptHandoff): HandoffTarget | null {

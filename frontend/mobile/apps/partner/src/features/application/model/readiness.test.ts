@@ -25,6 +25,8 @@ function document(overrides: Partial<Document> = {}): Document {
     review_reason: "",
     uploaded_at: "2026-07-30T09:00:00Z",
     reviewed_at: null,
+    file_name: "government_id_v1.jpg",
+    can_replace: false,
     ...overrides,
   };
 }

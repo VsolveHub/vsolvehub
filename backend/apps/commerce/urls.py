@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.commerce import home_money
 from apps.commerce.views import (
     CheckoutPaymentView,
     FinanceRefundCollectionView,
@@ -13,21 +14,23 @@ from apps.commerce.views import (
     RazorpayWebhookView,
     RefundDetailView,
     SampleReceiptView,
-    SimulatedCaptureView,
     TaxDocumentDetailView,
     TaxDocumentDownloadView,
 )
 
 urlpatterns = [
+    # Operations: the Home services Money tab.
+    path("ops/home-services/money", home_money.MoneySummaryView.as_view(), name="ops-home-money"),
+    path(
+        "ops/home-services/money/payments",
+        home_money.MoneyPaymentsView.as_view(),
+        name="ops-home-money-payments",
+    ),
     # Public: what the Refund & Cancellation page states, and the receipt reviewers ask to see.
     path("legal/cancellation-policy/", PublishedCancellationPolicyView.as_view()),
     path("legal/sample-receipt/", SampleReceiptView.as_view()),
     path("payment-attempts/", PaymentAttemptCollectionView.as_view()),
     path("payment-attempts/<uuid:attempt_id>/", PaymentAttemptDetailView.as_view()),
-    path(
-        "payment-attempts/<uuid:attempt_id>/simulate-capture/",
-        SimulatedCaptureView.as_view(),
-    ),
     path(
         "payment-attempts/<uuid:attempt_id>/reconcile/",
         PaymentAttemptReconcileView.as_view(),

@@ -1,7 +1,8 @@
 "use client";
 
-import { safeNextPath, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
+import { queryKeys, safeNextPath, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { ErrorState, Spinner } from "@vsolve/ui";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
@@ -38,6 +39,7 @@ import { CustomerLoginExperience } from "./customer-login-experience";
 export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const guard = useAuthGuard(getApiClient());
   const flow = usePhoneAuthFlow(getApiClient(), { getReferralCode: readPendingReferral });
 
@@ -49,8 +51,10 @@ export function LoginScreen() {
 
     // Django applied the code (if any) during OTP verification of a new account.
     clearPendingReferral();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.session.all });
     router.replace(next ?? "/bookings");
-  }, [isAuthenticated, next, router]);
+  }, [isAuthenticated, next, queryClient, router]);
 
   if (guard.status === "checking") {
     return (

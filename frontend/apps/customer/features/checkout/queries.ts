@@ -1,6 +1,7 @@
 "use client";
 
-import { isApiRequestError, ApiRequestError, request, type Schemas } from "@vsolve/api-client";
+import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
+import { useEffect } from "react";
 import {
   EXPIRING_STATE,
   SESSION_STATE,
@@ -299,7 +300,9 @@ export interface WindowsInput {
  * stopped standing behind.
  */
 export function useCandidateStarts(input: WindowsInput | null) {
-  return useQuery<WindowsView>({
+  const queryClient = useQueryClient();
+
+  const query = useQuery<WindowsView>({
     queryKey: queryKeys.booking.windows({
       cartVersion: input?.cartVersion ?? 0,
       addressId: input?.addressId ?? "",
@@ -319,6 +322,14 @@ export function useCandidateStarts(input: WindowsInput | null) {
     enabled: input !== null,
     ...VOLATILE_STATE,
   });
+
+  useEffect(() => {
+    if (query.error && cartVersionConflict(query.error) !== null) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+    }
+  }, [query.error, queryClient]);
+
+  return query;
 }
 
 /* -------------------------------------------------------------------------
@@ -348,65 +359,38 @@ export interface SchedulingGroupsInput {
  */
 export function useSchedulingGroups(input: SchedulingGroupsInput | null) {
   const queryClient = useQueryClient();
-  return useQuery({
+
+  const query = useQuery({
     queryKey: queryKeys.booking.schedulingGroups({
       cartVersion: input?.cartVersion ?? 0,
       addressId: input?.addressId ?? "",
     }),
-    queryFn: async () => {
-      try {
-        const response = await request(() =>
+    queryFn: async () =>
+      (
+        await request(() =>
           getApiClient().POST("/api/v1/cart/scheduling-groups/", {
             body: {
               address_id: input!.addressId,
               expected_cart_version: input!.cartVersion,
             },
           }),
-        );
-        return response.groups;
-      } catch (error) {
-        // Only attempt recovery if the server explicitly raised a cart_version_conflict.
-        // Other 409 codes (e.g. fulfilment_plan_unavailable, cart_merge_conflict)
-        // are semantic refusals that must be surfaced without blind retries.
-        const versionConflict = cartVersionConflict(error);
-        if (versionConflict !== null) {
-          // Stale cart version detected (e.g. after session cart merge).
-          // Refetch authoritative cart, update the cache, and retry with the updated version.
-          const freshCart = await request(() => getApiClient().GET("/api/v1/cart/"));
-          queryClient.setQueryData(queryKeys.booking.cart(), freshCart);
-
-          const targetVersion = versionConflict.currentVersion ?? freshCart.version;
-          const retryResponse = await request(() =>
-            getApiClient().POST("/api/v1/cart/scheduling-groups/", {
-              body: {
-                address_id: input!.addressId,
-                expected_cart_version: targetVersion,
-              },
-            }),
-          );
-          queryClient.setQueryData(
-            queryKeys.booking.schedulingGroups({
-              cartVersion: targetVersion,
-              addressId: input!.addressId,
-            }),
-            retryResponse.groups,
-          );
-          return retryResponse.groups;
-        }
-        throw error;
-      }
-    },
-    enabled: Boolean(input && input.addressId),
+        )
+      ).groups,
+    enabled: input !== null,
     ...VOLATILE_STATE,
-    retry: (failureCount, error: any) => {
-      const isRefusal =
-        (isApiRequestError(error) && (error.status === 409 || error.status === 404 || error.status === 400)) ||
-        error?.status === 409 ||
-        error?.status === 404 ||
-        error?.status === 400;
-      return isRefusal ? false : failureCount < 2;
-    },
+    retry: (failureCount, error) =>
+      error instanceof ApiRequestError && (error.status === 409 || error.status === 404)
+        ? false
+        : failureCount < 2,
   });
+
+  useEffect(() => {
+    if (query.error && cartVersionConflict(query.error) !== null) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+    }
+  }, [query.error, queryClient]);
+
+  return query;
 }
 
 /* -------------------------------------------------------------------------
@@ -456,7 +440,7 @@ export function useCreatePlanSet() {
               group_key: entry.groupKey,
               starts_at: entry.startsAt,
             })),
-          } as any,
+          } as unknown as Schemas["FulfilmentPlanSetCreateRequest"],
         }),
       ),
     onSuccess: (planSet) => {

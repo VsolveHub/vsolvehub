@@ -304,19 +304,6 @@ export function useInitiateWalletTopUp() {
         }),
       )) as unknown as WalletTopUpResponse;
 
-      // Settle payment attempt in development/simulated environment so balance updates immediately
-      if (attempt?.payment_attempt_id) {
-        try {
-          await request(() =>
-            getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-              params: { path: { attempt_id: attempt.payment_attempt_id } },
-            }),
-          );
-        } catch {
-          // If simulate-capture is unavailable (e.g. production), attempt stays pending until webhook
-        }
-      }
-
       return attempt;
     },
     onSuccess: () => {

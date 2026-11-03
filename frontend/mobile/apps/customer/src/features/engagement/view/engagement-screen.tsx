@@ -16,12 +16,10 @@ import {
 } from "@/features/engagement/adapters";
 import { leadOnlyHubPhase } from "@/features/engagement/model/booking-record";
 import {
-  isSimulatedCaptureUnavailable,
   useEngagement,
   useEngagementAmendments,
   useEngagementEvents,
   useFundStage,
-  useSimulateStageCapture,
 } from "@/features/engagement/queries";
 import { AgreementHistory } from "@/features/engagement/view/agreement-history";
 import { CompletionPanel } from "@/features/engagement/view/completion-panel";
@@ -721,25 +719,15 @@ function FundStageDialog({
   onClose: () => void;
 }) {
   const fund = useFundStage();
-  const capture = useSimulateStageCapture();
-  const [settled, setSettled] = useState<"paid" | "awaiting-provider" | null>(null);
-  const isWorking = fund.isPending || capture.isPending;
-  const failure = fund.error ?? (isSimulatedCaptureUnavailable(capture.error) ? null : capture.error);
+  // Capture is confirmed only by the provider's webhook, so once the checkout exists the
+  // dialog says the charge is with the provider rather than pretending money moved.
+  const [settled, setSettled] = useState<"awaiting-provider" | null>(null);
+  const isWorking = fund.isPending;
+  const failure = fund.error;
 
   async function pay() {
-    const checkout = await fund.mutateAsync({ engagementId, stageId: stage.stageId });
-    const attemptId = checkout?.payment_attempt_id ?? null;
-    if (attemptId === null || checkout?.provider !== "fake") {
-      setSettled("awaiting-provider");
-      return;
-    }
-    try {
-      await capture.mutateAsync({ engagementId, paymentAttemptId: attemptId });
-      setSettled("paid");
-    } catch (error) {
-      if (isSimulatedCaptureUnavailable(error)) setSettled("awaiting-provider");
-      else throw error;
-    }
+    await fund.mutateAsync({ engagementId, stageId: stage.stageId });
+    setSettled("awaiting-provider");
   }
 
   return (
@@ -748,14 +736,10 @@ function FundStageDialog({
       onOpenChange={(next) => {
         if (!next && !isWorking) onClose();
       }}
-      title={settled === "paid" ? `${nouns.stage} funded` : `Fund this ${nouns.stage}?`}
-      description={settled === "paid" ? undefined : `${stage.label} — the professional is told to start once this clears.`}
+      title={`Fund this ${nouns.stage}?`}
+      description={`${stage.label} — the professional is told to start once this clears.`}
     >
-      {settled === "paid" ? (
-        <Text className="text-sm leading-6 text-text-secondary">
-          {stage.amountLabel} is funded and held against this {nouns.stage}. It reaches the professional only after you accept the work — you are not paying them yet.
-        </Text>
-      ) : settled === "awaiting-provider" ? (
+      {settled === "awaiting-provider" ? (
         <Text className="text-sm leading-6 text-text-secondary">
           The charge has been created and is with the payment provider. Your bank or UPI app tells us the outcome and that can take a few minutes — do not pay again.
         </Text>

@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
-  ExternalLink,
   Eye,
   FileCheck2,
   FileSpreadsheet,
@@ -26,6 +25,8 @@ import {
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import { trackLabelKey } from "@/features/application/model/status";
+import { formatBytes } from "@/features/application/model/upload";
 import { usePartnerApplication } from "@/features/application/queries";
 import { usePartnerDocumentAccess } from "@/features/application/upload-queries";
 import {
@@ -41,28 +42,6 @@ function Page({ children }: { children: ReactNode }) {
       <div className="flex flex-col gap-5 sm:gap-6">{children}</div>
     </main>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return "1 KB";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function trackLabel(track: string): string {
-  switch (track) {
-    case "SERVICES":
-      return "Services & Skilled Trades";
-    case "RENTAL_OWNER":
-      return "Equipment & Tool Rentals";
-    case "STAY_HOST":
-      return "Accommodation & Stay Host";
-    case "EMPLOYER":
-      return "Employer & Job Listings";
-    default:
-      return "Partner Registration";
-  }
 }
 
 function documentKindMeta(kind: string): {
@@ -252,7 +231,7 @@ export function PartnerDocumentsView() {
                 </span>
               </div>
               <p className="text-xs text-text-secondary mt-1">
-                {trackLabel(app.track)} • Reference #{app.id.slice(0, 8).toUpperCase()}
+                {t(trackLabelKey(app.track))} • Reference #{app.id.slice(0, 8).toUpperCase()}
               </p>
             </div>
           </div>
@@ -271,7 +250,7 @@ export function PartnerDocumentsView() {
             <p className="font-semibold uppercase tracking-wider text-text-muted text-[10px]">
               Track
             </p>
-            <p className="font-bold text-navy-900 mt-0.5">{trackLabel(app.track)}</p>
+            <p className="font-bold text-navy-900 mt-0.5">{t(trackLabelKey(app.track))}</p>
           </div>
           <div>
             <p className="font-semibold uppercase tracking-wider text-text-muted text-[10px]">

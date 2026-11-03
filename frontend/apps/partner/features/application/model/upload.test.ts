@@ -36,7 +36,7 @@ describe("file validation", () => {
     // rejected.
     const problem = rejectFile({ size: MAX_UPLOAD_BYTES + 1, type: "image/jpeg" }, t);
     expect(problem?.code).toBe("too_large");
-    expect(problem?.message).toContain("20.0 MB");
+    expect(problem?.message).toContain("20 MB");
   });
 
   it("accepts exactly the ceiling", () => {
@@ -94,6 +94,6 @@ describe("byte formatting", () => {
   it("reads naturally at each scale", () => {
     expect(formatBytes(512)).toBe("512 B");
     expect(formatBytes(2048)).toBe("2 KB");
-    expect(formatBytes(5 * 1024 * 1024)).toBe("5.0 MB");
+    expect(formatBytes(5 * 1024 * 1024)).toBe("5 MB");
   });
 });

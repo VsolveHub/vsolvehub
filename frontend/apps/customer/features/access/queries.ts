@@ -502,37 +502,6 @@ export function useStartVisitPlanCheckout() {
   });
 }
 
-export interface SimulateVisitPlanCaptureInput {
-  requirementId: string;
-  paymentAttemptId: string;
-}
-
-/**
- * Development-only capture for the checkout-free A5 visit-plan charge.
- *
- * The server remains the gatekeeper: production returns 404 because simulated
- * capture is disabled, and non-fake providers are refused. After the command,
- * the visit-plan aggregate is the read that says whether payment became active.
- */
-export function useSimulateVisitPlanCapture() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: SimulateVisitPlanCaptureInput) =>
-      request(() =>
-        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-          params: { path: { attempt_id: input.paymentAttemptId } },
-        }),
-      ),
-    onSettled: (_data, _error, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: m2AccessKeys.visitPlan(input.requirementId),
-      });
-    },
-    retry: false,
-  });
-}
-
 /* --------------------------------------------------------------------------
    Visit day — `M2-FE-422`
    -------------------------------------------------------------------------- */

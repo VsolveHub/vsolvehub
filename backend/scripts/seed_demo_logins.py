@@ -219,7 +219,7 @@ def setup_customer(phone: str, full_name: str, wallet_balance_inr: int = 5000, c
         code_str = f"REF{str(user.id)[:6].upper()}"
         ReferralCode.objects.get_or_create(
             code=code_str,
-            defaults={"user": user, "share_url": f"http://localhost:3000?ref={code_str}"},
+            defaults={"user": user, "share_url": f"http://localhost:3000/signup?ref={code_str}"},
         )
 
     # V Coins

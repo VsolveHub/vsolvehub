@@ -38,43 +38,25 @@ from apps.partners.storage import (
 from .base import (
     DOCUMENT_CONTENT_TYPE_SUFFIXES,
     MAX_PARTNER_DOCUMENT_SIZE_BYTES,
+    PARTNER_APPLICATION_DECISION_PURPOSE,
     SHA256_PATTERN,
     PartnerDocumentUploadGrant,
     _application_for_update,
     _assert_version,
+    _notify_application_event,
 )
 
 
-def _assert_application_editable(
-    application: PartnerApplication,
-    kind: str | None = None,
-) -> None:
-    if application.status in {
-        PartnerApplication.Status.DRAFT,
-        PartnerApplication.Status.CHANGES_REQUIRED,
-    }:
-        return
-
-    # In SUBMITTED or UNDER_REVIEW states, an applicant can replace a document
-    # that was rejected by an Operations reviewer or failed scanning.
-    if application.status in {
-        PartnerApplication.Status.SUBMITTED,
-        PartnerApplication.Status.UNDER_REVIEW,
-    } and kind is not None:
-        latest_doc = (
-            PartnerDocument.objects.filter(application=application, kind=kind)
-            .order_by("-version")
-            .first()
-        )
-        if latest_doc is not None and (
-            latest_doc.status == PartnerDocument.Status.REJECTED
-            or latest_doc.scan_status == PartnerDocument.ScanStatus.REJECTED
-        ):
-            return
-
-    raise PartnerTransitionError(
-        "Documents cannot be changed in the current application state."
+def _assert_application_editable(application: PartnerApplication, kind: str) -> None:
+    latest = (
+        PartnerDocument.objects.filter(application=application, kind=kind)
+        .order_by("-version")
+        .first()
     )
+    if not application.allows_document_change(latest):
+        raise PartnerTransitionError(
+            "Documents cannot be changed in the current application state."
+        )
 
 
 @transaction.atomic
@@ -483,4 +465,12 @@ def review_partner_document(
         version=document.application.version + 1,
         updated_at=timezone.now(),
     )
+    if decision == PartnerDocument.Status.REJECTED:
+        _notify_application_event(
+            application=document.application,
+            template_code="partner_document_rejected",
+            purpose=PARTNER_APPLICATION_DECISION_PURPOSE,
+            context={"document": document.label, "reason": reason.strip().rstrip(".")},
+            idempotency_key=f"partner-document:{document.id}:rejected",
+        )
     return document

@@ -89,3 +89,17 @@ export async function reinstateOpsListing(
     }),
   );
 }
+
+export type OpsListingApplication = Schemas["Application"];
+
+/** Who applied to one job, newest first, as the poster sees them. */
+export function fetchOpsListingApplicationsPage(
+  listingId: string,
+  cursor?: string,
+): Promise<Schemas["OpsListingApplicationPage"]> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/listings/{listing_id}/applications", {
+      params: { path: { listing_id: listingId }, query: cursor ? { cursor } : {} },
+    }),
+  );
+}

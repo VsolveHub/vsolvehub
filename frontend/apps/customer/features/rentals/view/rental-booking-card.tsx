@@ -68,9 +68,7 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
         onAwaitingCapture: () =>
           toast.notify("Complete payment in Razorpay. Booking stays Pending until capture."),
       });
-      if (result.mode === "simulated") {
-        toast.notify("Payment recorded.");
-      } else if (result.mode === "pending") {
+      if (result.mode === "pending") {
         toast.notify("Payment is still preparing — try Pay Now again in a moment.");
       } else {
         toast.notify("Payment submitted. Waiting for capture.");

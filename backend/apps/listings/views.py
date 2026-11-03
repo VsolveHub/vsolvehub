@@ -724,6 +724,23 @@ class VendorSubscriptionPurchaseView(APIView):
         )
 
 
+class OpsListingApplicationsView(APIView):
+    """Who applied to one job, as the poster sees it, so Operations can answer either side."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="ops_listing_applications_list",
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(ApplicationSerializer, "OpsListingApplicationPage"),
+    )
+    def get(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(Listing, id=listing_id)
+        rows = Application.objects.select_related("listing").filter(listing=listing)
+        rows = filter_statuses(rows, request, Application.Status.values)
+        return paginated(request, self, rows, ApplicationSerializer)
+
+
 class OpsListingCollectionView(APIView):
     permission_classes = (IsOperationsUser,)
 

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePagedList } from "@vsolve/query";
@@ -33,12 +34,25 @@ import {
   type OpsRentalAsset,
 } from "./queries";
 import { PartnerProfileDrawer } from "./partner-profile-drawer";
-import { RentalPlatformFeeForm } from "./rental-platform-fee";
-import { RentalDisputeQueue } from "./rental-disputes";
 import { useDebounced } from "@/features/shared/use-debounced";
-import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { useListingCounts } from "@/features/money/money-tab";
+import { TabLoading } from "@/features/money/service-workspace";
 import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
-import { RentalBookings } from "./rental-bookings";
+
+// Each tab other than Listings is fetched only when opened.
+const RentalBookings = dynamic(() => import("./rental-bookings").then((m) => m.RentalBookings), {
+  loading: TabLoading,
+});
+const MoneyTab = dynamic(() => import("@/features/money/money-tab").then((m) => m.MoneyTab), {
+  loading: TabLoading,
+});
+const RentalDisputeQueue = dynamic(() => import("./rental-disputes").then((m) => m.RentalDisputeQueue), {
+  loading: TabLoading,
+});
+const RentalPlatformFeeForm = dynamic(
+  () => import("./rental-platform-fee").then((m) => m.RentalPlatformFeeForm),
+  { loading: TabLoading },
+);
 
 const TABS = [
   { key: "listings", label: "Listings" },
@@ -122,8 +136,11 @@ export function RentalsOperationsWorkspace() {
   const serverCounts = useListingCounts("rentals");
 
   // Fetch items from ops endpoint
-  const query = usePagedList(["ops-rentals", filter === "PENDING" ? "PENDING" : undefined], (cursor) =>
-    fetchOpsRentalsPage(cursor, filter === "PENDING" ? "PENDING" : undefined),
+  // The listing list belongs to the Listings tab, so it loads only there.
+  const query = usePagedList(
+    ["ops-rentals", filter === "PENDING" ? "PENDING" : undefined],
+    (cursor) => fetchOpsRentalsPage(cursor, filter === "PENDING" ? "PENDING" : undefined),
+    { enabled: tab === "listings" },
   );
 
   const moderateMutation = useMutation({

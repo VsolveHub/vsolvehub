@@ -1,5 +1,67 @@
 # API Contract Changelog
 
+## 1.93.0 - Mobile app sign-in, push devices and version check
+
+Additive. Published from the `mobile-expo-apps` branch's backend, which already served these
+routes; the mobile apps were calling them outside the contract.
+
+- **Added** `POST /auth/mobile/otp/verify/` (`MobileOtpVerifyRequest` → `MobileAuthenticatedSession`):
+  the web OTP body plus a required `device_identifier` (and optional `device_label`). Returns
+  `session_token` for bearer auth instead of setting a cookie.
+- **Added** `POST /mobile/devices/` (`PushDeviceRegisterRequest` → `PushDevice`): register an Expo
+  push token for the signed-in session (`app`, `platform` `ios`/`android`, `app_version`).
+- **Added** `POST /mobile/devices/unregister/` (`PushDeviceUnregisterRequest`, `204`).
+- **Added** `GET /mobile/app-config/` (`AppConfig`): `minimum_version`, `latest_version`,
+  `update_required`, `store_url`, for the "please update" screen.
+- **Development only** (mounted only under `DEBUG` or development storage; production refuses
+  both): `POST /dev/mobile/test-push/` and `GET`/`PUT /dev-storage/{bucket}/{object_key}`.
+- **Fixed**: `GET`/`PATCH /customer/notification-preferences/` and
+  `/partner/notification-preferences/` now publish their real bodies (`PushPreferences`,
+  `PatchedPushPreferenceUpdateRequest`); 1.90.0 described them in prose only.
+- Removed: none. Renamed: none (`PlatformEnum` is pinned so the new `platform` choice set does
+  not rename it).
+
+## 1.92.0 - Cases say who they are about, and can be searched
+
+Additive, Operations only.
+
+- **Added** `people` on `OperationsCase` and `OperationsCaseList`: `[{role, name, phone}]` for
+  everyone the case's subject names (customer, partner, vendor, employer, applicant).
+- **Added** `owner_name` on both: who claimed it, by name. `owner_id` is unchanged.
+- **Added** `q` and `severity` filters on `GET /operations/cases/`. `q` matches the summary, a
+  customer's or partner's name or phone, or a case, booking, order, request or engagement id.
+
+## 1.91.0 - Operations lists for home services, crew and projects, and job applicants
+
+Additive, Operations only. The Operations console is the only consumer.
+
+- **Added** `GET /operations/bookings/`: every home-service visit, newest first. Filters
+  `status` (one or a comma list), `q` (customer or partner name or phone, booking, order or
+  booking-group id), `late=true`, `date_from` / `date_to` (visit day). Rows are
+  `OperationsBookingRow`: who, what (`services`), where (`area`), `total_paise`, `is_late`.
+- **Added** `GET /ops/home-services/money` and `/money/payments`: the shared `MoneySummary` and
+  `MoneyPayment` shapes, for visit payments and scope changes. Commission and partner earnings
+  are counted when the earning is written (at completion).
+- **Added** `GET /operations/requests/`: every crew (A3) and project (A5) request, not only stuck
+  ones. Filters `status`, `open=true`, `archetype`, `q`. Rows carry the engaged vendor and value.
+- **Added** `GET /ops/workforce/money` and `/money/payments`: Vsolve's fees, visit charges and
+  project money held for vendors, reported separately.
+- **Added** `GET /ops/listings/{listing_id}/applications`: who applied to one job.
+
+## 1.90.0 - Every payment goes through Razorpay Checkout; Partner onboarding updates
+
+Breaking for clients that used the development "Mark as paid" shortcut. The Customer and Partner
+apps are updated with this change.
+
+- **Removed** `POST /payment-attempts/{attempt_id}/simulate-capture/`.
+- **Removed** `simulated_capture_available` from `PaymentAttempt`, `RentalDeposit`, `BookingFee`
+  and `VisitPlan`. A pending payment is always paid by opening Razorpay Checkout; locally that is
+  Razorpay test mode.
+- **Added** to `PartnerDocument`: `can_replace` and `file_name`.
+- **Added** to `PartnerApplication`: `can_edit`, `required_document_kinds`, and `consents_complete`.
+- **Notifications**: in-app notices and OneSignal web push for partner application milestones.
+- **Published**: the customer and partner `notification-preferences` and push subscription endpoints.
+
 ## 1.89.0 - Operations reports an admin can use without knowing codes
 
 Operations only. The Reports page is the only consumer and is updated with this change.

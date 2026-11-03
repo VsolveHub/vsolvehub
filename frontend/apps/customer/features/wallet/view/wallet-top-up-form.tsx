@@ -64,18 +64,6 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
           toast.notify("Complete payment in Razorpay. Wallet updates when capture is confirmed."),
       });
 
-      if (result.mode === "simulated") {
-        setCreatedAttempt(null);
-        topUpMutation.reset();
-        setCustomInput("");
-        setAmountPaise(null);
-        refreshWallet();
-        toast.notify(
-          `${formatMoney(attempt.amount_paise)} added to your wallet. Razorpay isn’t configured, so this was recorded here.`,
-        );
-        return;
-      }
-
       setCreatedAttempt(attempt);
       if (result.mode === "pending") {
         toast.notify("Top-up started. Payment is still preparing — try again in a moment.");

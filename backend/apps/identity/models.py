@@ -268,6 +268,7 @@ class CommunicationPreference(models.Model):
     class Channel(models.TextChoices):
         SMS = "SMS", "SMS"
         EMAIL = "EMAIL", "Email"
+        PUSH = "PUSH", "Push"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

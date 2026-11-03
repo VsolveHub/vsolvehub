@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.89.0)
- * Checksum: 92df97ca122b727a
+ * Source:   contracts/openapi/v1.yaml (version 1.93.0)
+ * Checksum: cab736246df7824a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -158,6 +158,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth_logout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mobile/otp/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth_mobile_otp_verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1006,6 +1022,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer/notification-preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["customer_notification_preferences_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["customer_notification_preferences_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/customer/push-subscriptions/{subscription_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["customer_push_subscriptions_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["customer_push_subscriptions_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/customer/push-subscriptions/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["customer_push_subscriptions_sync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer/referral/": {
         parameters: {
             query?: never;
@@ -1108,6 +1172,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dev-storage/{bucket}/{object_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Local development storage endpoint for signed PUT uploads and GET downloads.
+         *
+         *     Enabled only in development/local mode when settings.DEBUG is True.
+         */
+        get: operations["dev_storage_retrieve"];
+        /**
+         * @description Local development storage endpoint for signed PUT uploads and GET downloads.
+         *
+         *     Enabled only in development/local mode when settings.DEBUG is True.
+         */
+        put: operations["dev_storage_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/mobile/test-push/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Local development only: verify mobile Expo push delivery to a user's devices. */
+        post: operations["dev_mobile_test_push_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dev/onesignal/test-push/": {
         parameters: {
             query?: never;
@@ -1117,7 +1224,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Local development & testing endpoint to verify OneSignal push delivery to an external_id. */
+        /**
+         * @description Local development only: send a test push to yourself.
+         *
+         *     Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+         *     — and only to the signed-in caller, so it can never be used to push to someone else.
+         */
         post: operations["dev_onesignal_test_push_create"];
         delete?: never;
         options?: never;
@@ -2520,6 +2632,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mobile/app-config/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mobile_app_config_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/devices/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mobile_devices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/devices/unregister/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mobile_devices_unregister_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/interviews/{interview_id}/{action}": {
         parameters: {
             query?: never;
@@ -2671,6 +2831,23 @@ export interface paths {
          *     The wage floor is derived and enforced here identically to a vendor's own submission.
          */
         post: operations["m2_operations_assisted_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/bookings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every home-service visit, newest first, so Operations can find one without its id. */
+        get: operations["operations_bookings_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3948,6 +4125,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/requests/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every crew and project request, newest first. */
+        get: operations["operations_requests_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/requests/{requirement_id}/deadline/": {
         parameters: {
             query?: never;
@@ -4329,6 +4523,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/home-services/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_home_services_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/home-services/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_home_services_money_payments_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/listings": {
         parameters: {
             query?: never;
@@ -4337,6 +4563,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["ops_listings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/listings/{listing_id}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Who applied to one job, as the poster sees it, so Operations can answer either side. */
+        get: operations["ops_listing_applications_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5098,6 +5341,38 @@ export interface paths {
         get: operations["ops_wallet_policies_list"];
         put?: never;
         post: operations["ops_wallet_policies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/workforce/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_workforce_money_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/workforce/money/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_workforce_money_payments_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6324,10 +6599,27 @@ export interface paths {
         /**
          * @description Changes what a Partner may change about themselves.
          *
-         *     Deliberately narrow. The phone number is the login credential and is not
-         *     accepted here — see `PartnerProfileUpdateSerializer`.
+         *     Deliberately narrow. Neither the phone number (the login credential) nor the
+         *     name (checked against the Partner's ID) is accepted here — see
+         *     `PartnerProfileUpdateSerializer`.
          */
         patch: operations["partner_me_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/notification-preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_notification_preferences_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["partner_notification_preferences_partial_update"];
         trace?: never;
     };
     "/api/v1/partner/offers/": {
@@ -7325,34 +7617,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["payment_attempts_reconcile_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/payment-attempts/{attempt_id}/simulate-capture/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Marks a payment captured with no gateway. Development only.
-         *
-         *     Published so the flow is drivable end to end without provider credentials.
-         *     It is fail-closed three ways — a settings flag off by default, a production
-         *     start-up guard that refuses to boot with it on, and a check that the attempt's
-         *     own provider is `fake` — and it runs the *real* capture path rather than
-         *     setting a status, so everything capture triggers actually happens.
-         *
-         *     `404` rather than `403` when disabled: an environment that does not do this
-         *     should not advertise that the door exists.
-         */
-        post: operations["payment_attempt_simulate_capture"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8879,6 +9143,12 @@ export interface components {
          * @enum {string}
          */
         Action68eEnum: "APPROVE" | "REJECT" | "REMOVE" | "REINSTATE";
+        /**
+         * @description * `sync` - sync
+         *     * `deactivate` - deactivate
+         * @enum {string}
+         */
+        ActionC29Enum: "sync" | "deactivate";
         ActionReasonRequest: {
             reason?: string;
         };
@@ -8997,6 +9267,12 @@ export interface components {
             readonly retryable: boolean;
             readonly request_id: string | null;
         };
+        AppConfig: {
+            minimum_version: string;
+            latest_version: string;
+            update_required: boolean;
+            store_url: string;
+        };
         Application: {
             readonly interview: components["schemas"]["Interview"] | null;
             readonly employer_name: string;
@@ -9070,6 +9346,17 @@ export interface components {
         ApplicationStatusRequest: {
             status: components["schemas"]["StatusD32Enum"];
         };
+        /**
+         * @description * `LEGACY` - Legacy
+         *     * `A1_TASK_VISIT` - A1 task visit
+         *     * `A3_TIME_BLOCK` - A3 time block
+         *     * `A5_CUSTOM_PROJECT` - A5 custom project
+         *     * `A7_RENTAL` - A7 rental
+         *     * `A9_STAY` - A9 stay
+         *     * `A10_LISTING` - A10 listing
+         * @enum {string}
+         */
+        ArchetypeEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT" | "A7_RENTAL" | "A9_STAY" | "A10_LISTING";
         /**
          * @description The person coming, as the Customer may see them.
          *
@@ -9216,7 +9503,6 @@ export interface components {
             readonly failure_code: string;
             /** Format: uuid */
             readonly payment_attempt_id: string | null;
-            readonly simulated_capture_available: boolean;
             /** Format: date-time */
             readonly activated_at: string | null;
             /** Format: date-time */
@@ -9657,6 +9943,11 @@ export interface components {
             resolution: string;
             note: string;
         };
+        CasePerson: {
+            role: string;
+            name: string;
+            phone: string;
+        };
         /**
          * @description The Operations home screen, counted over the whole queue rather than one page.
          *
@@ -9722,9 +10013,10 @@ export interface components {
         /**
          * @description * `SMS` - SMS
          *     * `EMAIL` - Email
+         *     * `PUSH` - Push
          * @enum {string}
          */
-        ChannelEnum: "SMS" | "EMAIL";
+        ChannelEnum: "SMS" | "EMAIL" | "PUSH";
         /**
          * @description `M2-BE-708`. The provider reference is required: a chargeback with no bank reference cannot
          *     be represented or reconciled, and recording one would be recording a rumour.
@@ -10818,6 +11110,44 @@ export interface components {
             readonly valid_until: string | null;
             /** Format: date-time */
             readonly submitted_at: string;
+        };
+        CustomerPushSubscriptionResponse: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description OneSignal Subscription ID (UUID). */
+            readonly onesignal_subscription_id: string;
+            /** @description OneSignal external_id alias (Customer User ID). */
+            readonly onesignal_external_id: string;
+            readonly platform: components["schemas"]["PlatformEnum"];
+            /** @description False if unsubscribed, permission revoked, or notification delivery bounced. */
+            readonly is_active: boolean;
+            /** @description OneSignal push subscription opt-in state. */
+            readonly opted_in: boolean;
+            /** @description Browser notification permission (granted, denied, default). */
+            readonly permission_state: string;
+            /** Format: date-time */
+            readonly last_verified_at: string;
+            /** @description Status of the last sync attempt (SUCCESS, FAILED). */
+            readonly last_sync_status: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        CustomerPushSubscriptionSyncRequest: {
+            onesignal_subscription_id: string;
+            /** @default WEB */
+            platform: components["schemas"]["PlatformEnum"];
+            /** @default  */
+            user_agent: string;
+            /** @default true */
+            is_active: boolean;
+            /** @default true */
+            opted_in: boolean;
+            /** @default  */
+            permission_state: components["schemas"]["PermissionStateEnum"] | components["schemas"]["BlankEnum"];
+            /** @default sync */
+            action: components["schemas"]["ActionC29Enum"];
         };
         CustomerQuoteList: {
             readonly quotes: components["schemas"]["CustomerProposal"][];
@@ -12064,6 +12394,7 @@ export interface components {
          *     * `SMS` - SMS channel
          *     * `WHATSAPP` - WhatsApp channel
          *     * `VOICE` - Voice call channel
+         *     * `PUSH` - Push channel
          *     * `PAYMENTS` - Payment collection
          *     * `PAYOUTS` - Partner payouts
          *     * `DISPATCH` - Partner dispatch
@@ -12072,7 +12403,7 @@ export interface components {
          *     * `M2_PURCHASES` - New M2 purchases
          * @enum {string}
          */
-        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE" | "M2_PURCHASES";
+        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PUSH" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE" | "M2_PURCHASES";
         /**
          * @description * `EARN_PROMISE` - Earn promise
          *     * `UNLOCK` - Unlock
@@ -12333,6 +12664,24 @@ export interface components {
          * @enum {string}
          */
         MediaTypeEnum: "IMAGE" | "VIDEO";
+        MobileAuthenticatedSession: {
+            readonly user: components["schemas"]["User"];
+            readonly active_role: string;
+            /** Format: date-time */
+            readonly session_expires_at: string;
+            readonly session_token: string;
+        };
+        /** @description Same OTP body as the web, with a required installation id. */
+        MobileOtpVerifyRequest: {
+            /** Format: uuid */
+            challenge_id: string;
+            phone_number: string;
+            code: string;
+            device_identifier: string;
+            device_label?: string;
+            /** @description Applied only when this verification creates a new account. */
+            referral_code?: string;
+        };
         /**
          * @description * `IN_PERSON` - In person
          *     * `PHONE` - Phone call
@@ -12608,6 +12957,37 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        OperationsBookingPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsBookingRow"][];
+        };
+        /**
+         * @description One home-service visit in the Operations bookings list: enough to find it and see if it
+         *     needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`.
+         */
+        OperationsBookingRow: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["BookingStatusEnum"];
+            /** Format: date-time */
+            readonly scheduled_start: string;
+            readonly estimated_duration_minutes: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
+            readonly partner_display_name: string;
+            readonly partner_phone: string;
+            readonly services: string[];
+            readonly area: string;
+            readonly total_paise: number;
+            readonly is_late: boolean;
+            readonly payout_hold: boolean;
+            readonly needs_redispatch: boolean;
+        };
         /**
          * @description One case, with the vocabulary a reviewer needs to close it.
          *
@@ -12671,6 +13051,8 @@ export interface components {
             readonly source_kind: string | null;
             /** Format: uuid */
             readonly source_id: string | null;
+            readonly people: components["schemas"]["CasePerson"][];
+            readonly owner_name: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12766,6 +13148,7 @@ export interface components {
             readonly owner_team: components["schemas"]["OperationsCaseTeamEnum"];
             /** Format: uuid */
             readonly owner_id: string | null;
+            readonly owner_name: string | null;
             /** Format: uuid */
             readonly booking_id: string | null;
             /** Format: uuid */
@@ -12776,6 +13159,7 @@ export interface components {
             readonly is_overdue: boolean;
             readonly version: number;
             readonly holds_payout: boolean;
+            readonly people: components["schemas"]["CasePerson"][];
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12966,6 +13350,38 @@ export interface components {
             reason: string;
             decision: components["schemas"]["OperationsRefundReviewDecisionEnum"];
         };
+        OperationsRequestPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsRequestRow"][];
+        };
+        OperationsRequestRow: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RequirementStatusEnum"];
+            readonly archetype: components["schemas"]["ArchetypeEnum"];
+            readonly service_name: string;
+            readonly area: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
+            /** Format: date-time */
+            readonly requested_start: string | null;
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: date-time */
+            readonly quotes_due_at: string | null;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: uuid */
+            readonly engagement_id: string | null;
+            readonly engagement_status: string | null;
+            readonly vendor_display_name: string | null;
+            readonly engagement_total_paise: number | null;
+        };
         OperationsTaxProfileVerifyRequest: {
             /** @default  */
             registered_state_code: string;
@@ -13114,6 +13530,13 @@ export interface components {
         OpsDashboardPreferenceRequest: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
+        };
+        OpsListingApplicationPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["Application"][];
         };
         OpsListingPage: {
             /** Format: uri */
@@ -13472,6 +13895,9 @@ export interface components {
             readonly consents: components["schemas"]["PartnerConsent"][];
             readonly documents: components["schemas"]["PartnerDocument"][];
             readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            readonly can_edit: boolean;
+            readonly required_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly consents_complete: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -13832,6 +14258,8 @@ export interface components {
             readonly uploaded_at: string;
             /** Format: date-time */
             readonly reviewed_at: string | null;
+            readonly file_name: string;
+            readonly can_replace: boolean;
         };
         PartnerDocumentApplicantAccess: {
             readonly document: components["schemas"]["PartnerDocumentDetailMetadata"];
@@ -14255,6 +14683,12 @@ export interface components {
             user_agent: string;
             /** @default true */
             is_active: boolean;
+            /** @default true */
+            opted_in: boolean;
+            /** @default  */
+            permission_state: components["schemas"]["PermissionStateEnum"] | components["schemas"]["BlankEnum"];
+            /** @default sync */
+            action: components["schemas"]["ActionC29Enum"];
         };
         PartnerRateItem: {
             /** Format: uuid */
@@ -14663,6 +15097,12 @@ export interface components {
             /** Format: email */
             email?: string;
         };
+        PatchedCustomerPushSubscriptionUpdateRequest: {
+            is_active?: boolean;
+            opted_in?: boolean;
+            permission_state?: components["schemas"]["PermissionStateEnum"] | components["schemas"]["BlankEnum"];
+            user_agent?: string;
+        };
         /**
          * @description A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
          *     the service; free text is limited to skills, duties, benefits, title, city and area.
@@ -14761,9 +15201,12 @@ export interface components {
         /**
          * @description What a Partner may change about themselves without a review.
          *
-         *     `display_name` is the name Customers see. `default_location_text` is the
-         *     registered pickup / address used to prefill A7 rental ads (still editable
-         *     per asset).
+         *     `default_location_text` is the registered pickup / address used to prefill A7
+         *     rental ads (still editable per asset).
+         *
+         *     **Not** `display_name`. It is the name on the application Operations checked
+         *     against the Partner's ID, so it is fixed once the application is sent; before
+         *     that it is edited on the application itself.
          *
          *     **Not** `phone_number`. That is the login credential: changing it moves who
          *     can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -14775,8 +15218,12 @@ export interface components {
          *     reviewed them, and a field here would silently reopen a reviewed decision.
          */
         PatchedPartnerProfileUpdateRequest: {
-            display_name?: string;
             default_location_text?: string;
+        };
+        /** @description Switch one category. The endpoint also takes a list of these, or `{preferences: ...}`. */
+        PatchedPushPreferenceUpdateRequest: {
+            category?: string;
+            is_enabled?: boolean;
         };
         /**
          * @description Partial update, one screen at a time, for save-and-resume.
@@ -14887,7 +15334,6 @@ export interface components {
             readonly purpose: components["schemas"]["PurposeEnum"];
             readonly provider: string;
             readonly provider_public_key: string | null;
-            readonly simulated_capture_available: boolean;
             readonly provider_order_id: string;
             readonly status: components["schemas"]["PaymentAttemptStatusEnum"];
             readonly reconciliation_state: components["schemas"]["ReconciliationStateEnum"];
@@ -15074,6 +15520,14 @@ export interface components {
          * @enum {string}
          */
         PeriodEnum: "this_month" | "last_month" | "all";
+        /**
+         * @description * `` -
+         *     * `granted` - granted
+         *     * `denied` - denied
+         *     * `default` - default
+         * @enum {string}
+         */
+        PermissionStateEnum: "granted" | "denied" | "default";
         /** @description Where a Self Pickup customer collects the item. ``maps_url`` opens Google Maps. */
         PickupAddress: {
             partner_name: string;
@@ -16239,6 +16693,60 @@ export interface components {
          * @enum {string}
          */
         PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING" | "A9_STAY_SUBSCRIPTION";
+        PushDevice: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly app: components["schemas"]["PushDeviceAppEnum"];
+            readonly platform: components["schemas"]["PushDevicePlatformEnum"];
+            readonly app_version: string;
+            /** Format: date-time */
+            readonly last_registered_at: string;
+        };
+        /**
+         * @description * `customer` - Customer
+         *     * `partner` - Partner
+         * @enum {string}
+         */
+        PushDeviceAppEnum: "customer" | "partner";
+        /**
+         * @description * `ios` - iOS
+         *     * `android` - Android
+         * @enum {string}
+         */
+        PushDevicePlatformEnum: "ios" | "android";
+        /**
+         * @description * `customer` - customer
+         *     * `partner` - partner
+         * @enum {string}
+         */
+        PushDeviceRegisterAppEnum: "customer" | "partner";
+        /**
+         * @description * `ios` - ios
+         *     * `android` - android
+         * @enum {string}
+         */
+        PushDeviceRegisterPlatformEnum: "ios" | "android";
+        PushDeviceRegisterRequest: {
+            expo_push_token: string;
+            app: components["schemas"]["PushDeviceRegisterAppEnum"];
+            platform: components["schemas"]["PushDeviceRegisterPlatformEnum"];
+            app_version: string;
+        };
+        PushDeviceUnregisterRequest: {
+            expo_push_token: string;
+        };
+        /** @description One push category the signed-in person can see, and whether it is on. */
+        PushPreferenceItem: {
+            readonly category: string;
+            readonly label: string;
+            readonly description: string;
+            readonly is_enabled: boolean;
+            readonly is_mutable: boolean;
+        };
+        PushPreferences: {
+            readonly role: string;
+            readonly preferences: components["schemas"]["PushPreferenceItem"][];
+        };
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -16876,6 +17384,9 @@ export interface components {
             readonly variant: string;
             readonly structured_fields: unknown;
             readonly media: components["schemas"]["RentalAssetMedia"][];
+            readonly reserved_ranges: {
+                [key: string]: string;
+            }[];
             readonly pickup_address_line: string;
             readonly pickup_area: string;
             readonly pickup_city: string;
@@ -16914,6 +17425,9 @@ export interface components {
             readonly variant: string;
             readonly structured_fields: unknown;
             readonly media: components["schemas"]["RentalAssetMedia"][];
+            readonly reserved_ranges: {
+                [key: string]: string;
+            }[];
             readonly pickup_address_line: string;
             readonly pickup_area: string;
             readonly pickup_city: string;
@@ -17023,7 +17537,6 @@ export interface components {
             provider_note?: string;
             /** Format: uuid */
             readonly payment_attempt_id: string | null;
-            readonly simulated_capture_available: boolean;
         };
         /**
          * @description * `REQUESTED` - Requested
@@ -19173,7 +19686,6 @@ export interface components {
             readonly chargeable_paise: number;
             /** Format: uuid */
             readonly payment_attempt_id: string | null;
-            readonly simulated_capture_available: boolean;
             readonly shares: components["schemas"]["VisitPlanShare"][];
             readonly receipt_series: string;
             readonly receipt_sequence: number | null;
@@ -20010,6 +20522,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    auth_mobile_otp_verify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileOtpVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MobileOtpVerifyRequest"];
+                "multipart/form-data": components["schemas"]["MobileOtpVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobileAuthenticatedSession"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
             };
         };
     };
@@ -21963,6 +22508,217 @@ export interface operations {
             };
         };
     };
+    customer_notification_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushPreferences"];
+                };
+            };
+        };
+    };
+    customer_notification_preferences_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPushPreferenceUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPushPreferenceUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPushPreferenceUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushPreferences"];
+                };
+            };
+            /** @description Invalid request or attempt to disable immutable category. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    customer_push_subscriptions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription deactivated successfully. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    customer_push_subscriptions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCustomerPushSubscriptionUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCustomerPushSubscriptionUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCustomerPushSubscriptionUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPushSubscriptionResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    customer_push_subscriptions_sync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerPushSubscriptionSyncRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomerPushSubscriptionSyncRequest"];
+                "multipart/form-data": components["schemas"]["CustomerPushSubscriptionSyncRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPushSubscriptionResponse"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPushSubscriptionResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     customer_referral_retrieve: {
         parameters: {
             query?: never;
@@ -22092,6 +22848,66 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WalletTransactionPage"];
                 };
+            };
+        };
+    };
+    dev_storage_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucket: string;
+                object_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dev_storage_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucket: string;
+                object_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dev_mobile_test_push_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -24917,6 +25733,110 @@ export interface operations {
             };
         };
     };
+    mobile_app_config_retrieve: {
+        parameters: {
+            query: {
+                /**
+                 * @description * `customer` - customer
+                 *     * `partner` - partner
+                 */
+                app: "customer" | "partner";
+                /**
+                 * @description * `ios` - ios
+                 *     * `android` - android
+                 */
+                platform: "ios" | "android";
+                version: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppConfig"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    mobile_devices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushDeviceRegisterRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushDeviceRegisterRequest"];
+                "multipart/form-data": components["schemas"]["PushDeviceRegisterRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushDevice"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    mobile_devices_unregister_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushDeviceUnregisterRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushDeviceUnregisterRequest"];
+                "multipart/form-data": components["schemas"]["PushDeviceUnregisterRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     my_interview_answer: {
         parameters: {
             query?: never;
@@ -25194,6 +26114,51 @@ export interface operations {
             };
         };
     };
+    operations_bookings_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                date_from?: string;
+                date_to?: string;
+                /** @description Only visits past their start time that have not started. */
+                late?: boolean;
+                q?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBookingPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_booking_retrieve: {
         parameters: {
             query?: never;
@@ -25368,7 +26333,11 @@ export interface operations {
                 owner?: string;
                 /** @description Filter by owning team. */
                 owner_team?: string;
-                /** @description Filter by case status. */
+                /** @description The summary, a customer's or partner's name or phone, or a case, booking or request id. */
+                q?: string;
+                /** @description Filter by severity. */
+                severity?: string;
+                /** @description One case status, or several separated by commas. */
                 status?: string;
             };
             header?: never;
@@ -28548,6 +29517,51 @@ export interface operations {
             };
         };
     };
+    operations_requests_list: {
+        parameters: {
+            query?: {
+                /** @description Crew hire (A3_TIME_BLOCK) or custom project (A5_CUSTOM_PROJECT). */
+                archetype?: "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description Only requests that are not closed. */
+                open?: boolean;
+                q?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsRequestPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_operations_extend_deadline: {
         parameters: {
             query?: never;
@@ -29539,6 +30553,52 @@ export interface operations {
             };
         };
     };
+    ops_home_services_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_home_services_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
+                };
+            };
+        };
+    };
     ops_listings_retrieve: {
         parameters: {
             query?: {
@@ -29563,6 +30623,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpsListingPage"];
+                };
+            };
+        };
+    };
+    ops_listing_applications_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsListingApplicationPage"];
                 };
             };
         };
@@ -31050,6 +32136,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpsWalletTopUpPolicy"];
+                };
+            };
+        };
+    };
+    ops_workforce_money_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneySummary"];
+                };
+            };
+        };
+    };
+    ops_workforce_money_payments_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Captured in this calendar month (default), last month, or ever. */
+                period?: "all" | "last_month" | "this_month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoneyPayment"][];
                 };
             };
         };
@@ -34057,6 +35189,57 @@ export interface operations {
             };
         };
     };
+    partner_notification_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushPreferences"];
+                };
+            };
+        };
+    };
+    partner_notification_preferences_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPushPreferenceUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPushPreferenceUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPushPreferenceUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushPreferences"];
+                };
+            };
+            /** @description Invalid request or attempt to disable immutable category. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     partner_offer_list: {
         parameters: {
             query?: {
@@ -34546,7 +35729,22 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The subscription was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -34563,6 +35761,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35998,43 +37204,6 @@ export interface operations {
                 };
             };
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    payment_attempt_simulate_capture: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                attempt_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentAttempt"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -39238,6 +40407,7 @@ export interface operations {
                 service?: string;
                 sharing_count?: number;
                 sort?: string;
+                tenant_preference?: string;
             };
             header?: never;
             path?: never;

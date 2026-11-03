@@ -20,11 +20,11 @@ export interface ApplicationStep {
 export const APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply", labelKey: "apply.steps.overview" },
   { href: "/apply/about", labelKey: "apply.steps.about" },
+  // Trades, job types and service areas on one screen: the server validates them together.
   { href: "/apply/work", labelKey: "apply.steps.work" },
-  { href: "/apply/areas", labelKey: "apply.steps.areas" },
-  { href: "/apply/consent", labelKey: "apply.steps.consent" },
-  { href: "/apply/documents", labelKey: "apply.steps.documents" },
   { href: "/apply/schedule", labelKey: "apply.steps.schedule" },
+  { href: "/apply/documents", labelKey: "apply.steps.documents" },
+  // The agreements are accepted on the screen that sends the application.
   { href: "/apply/review", labelKey: "apply.steps.review" },
 ] as const;
 
@@ -37,7 +37,7 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
  */
 export type ApplicationTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
 
-const LISTING_STEPS = new Set(["/apply", "/apply/about", "/apply/consent", "/apply/documents", "/apply/review"]);
+const LISTING_STEPS = new Set(["/apply", "/apply/about", "/apply/documents", "/apply/review"]);
 
 /** Stays and rentals share the short application. Services walk the full list. */
 export function isListingTrack(track?: string | null): boolean {
@@ -50,26 +50,6 @@ export function applicationSteps(track?: string | null): readonly ApplicationSte
     ? APPLICATION_STEPS.filter((step) => LISTING_STEPS.has(step.href))
     : APPLICATION_STEPS;
 }
-
-/**
- * The specialist-work routes added by M2 (`M2-FE-103..106`, `M2-FE-109`).
- *
- * A separate list, and deliberately **not** appended to `APPLICATION_STEPS`.
- * Those eight steps are the path every applicant walks; these four are asked for
- * only when a Partner applies for workforce or project work, and putting them in
- * the main strip would show four extra tabs to the overwhelming majority of
- * Partners who will never need one. That is the up-front wall `M2-FE-105`
- * exists to remove, rebuilt as navigation.
- *
- * `ApplyShell` renders this strip only while the reader is inside it, so it
- * orients somebody who is here and stays invisible to everybody else.
- */
-export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
-  { href: "/apply/capabilities", labelKey: "apply.steps.capabilities" },
-  { href: "/apply/business", labelKey: "apply.steps.business" },
-  { href: "/apply/insurance", labelKey: "apply.steps.insurance" },
-  { href: "/apply/demand", labelKey: "apply.steps.demand" },
-] as const;
 
 /**
  * Which step a path is on, or -1.
@@ -86,18 +66,9 @@ function normalise(pathname: string): string {
   return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
 
-/** Which specialist step a path is on, or -1. */
-export function capabilityStepIndexOf(pathname: string): number {
-  return CAPABILITY_STEPS.findIndex((step) => step.href === normalise(pathname));
-}
-
 /** The step after `pathname`, or null at the end of the sequence or off it. */
 export function nextStep(pathname: string, track?: string | null): ApplicationStep | null {
   const index = stepIndexOf(pathname, track);
   if (index === -1) return null;
   return applicationSteps(track)[index + 1] ?? null;
-}
-
-export function isLastStep(pathname: string, track?: string | null): boolean {
-  return stepIndexOf(pathname, track) === applicationSteps(track).length - 1;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { BookingGroupDetail } from "@/features/bookings/view/group-detail";
+import { BOOKING_PAGE_FRAME } from "@/features/bookings/view/booking-layout";
 
 /**
  * One Booking Group.
@@ -23,7 +24,7 @@ export default async function BookingGroupPage({
   const { groupId } = await params;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-24 lg:pb-16 pt-6">
+    <main className={`${BOOKING_PAGE_FRAME} min-w-0 pb-28 pt-6 lg:pb-16`}>
       <BookingGroupDetail groupId={groupId} />
     </main>
   );

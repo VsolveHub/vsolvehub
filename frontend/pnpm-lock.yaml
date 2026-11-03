@@ -113,6 +113,9 @@ importers:
       '@vsolve/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@vsolve/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@vsolve/query':
         specifier: workspace:*
         version: link:../../packages/query
@@ -803,6 +806,9 @@ importers:
       '@vis.gl/react-google-maps':
         specifier: 1.10.1
         version: 1.10.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@vsolve/config':
+        specifier: workspace:*
+        version: link:../config
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

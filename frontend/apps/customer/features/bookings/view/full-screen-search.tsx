@@ -1,14 +1,15 @@
 "use client";
 
-import { Logo, buttonStyles } from "@vsolve/ui";
+import { Button, Logo } from "@vsolve/ui";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
+import { useBookingPayment } from "@/features/payment/use-booking-payment";
 import { claimViewport } from "@/lib/focus-mode";
 import type { BookingGroup } from "../queries";
 import { heldUnitCount } from "./group-status";
+import { MockProfessionalCard } from "./mock-professional-card";
 import searchAnimationData from "./search-lottie.json";
 
 const LottiePlayer = dynamic(
@@ -74,16 +75,10 @@ const SEARCH_STEPS = [
   },
 ];
 
-const VERIFICATION_CHECKS = [
-  { label: "ID & document checks", status: "Verified" },
-  { label: "Skills for this service", status: "Matched" },
-  { label: "Serves your area", status: "Checked" },
-  { label: "Free in your time window", status: "Checked" },
-];
-
 export function FullScreenPartnerSearch({
   group,
 }: FullScreenPartnerSearchProps) {
+  const { handlePay, isPaying, payError, profileDialog } = useBookingPayment(group);
   const [stepIndex, setStepIndex] = useState(0);
   const held = heldUnitCount(group);
   const total = group.units.length;
@@ -139,7 +134,7 @@ export function FullScreenPartnerSearch({
       />
 
       {/* Top Bar: Brand & Matching Indicator */}
-      <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between">
+      <header className="relative z-10 mx-auto flex w-full max-w-[1216px] items-center justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Logo className="shrink-0" />
@@ -163,7 +158,7 @@ export function FullScreenPartnerSearch({
       </header>
 
       {/* 2-Column Balanced Stage */}
-      <main className="relative z-10 my-auto max-w-5xl mx-auto w-full py-6">
+      <main className="relative z-10 my-auto max-w-[1216px] mx-auto w-full py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           
           {/* Left Column: Lottie Animation / Match Secured Status */}
@@ -308,15 +303,21 @@ export function FullScreenPartnerSearch({
                 </div>
 
                 {/* Pay Now CTA */}
-                <div className="mt-4">
-                  <Link
-                    href={`/bookings/${group.id}/pay`}
-                    className={buttonStyles({
-                      className: "w-full justify-center h-11 text-sm font-bold shadow-md bg-orange-600 hover:bg-orange-700",
-                    })}
+                <div className="mt-4 space-y-2">
+                  {payError ? (
+                    <p className="text-xs text-rose-600 font-medium" role="alert">
+                      {payError}
+                    </p>
+                  ) : null}
+                  <Button
+                    loading={isPaying}
+                    loadingLabel="Opening payment..."
+                    onClick={handlePay}
+                    className="w-full justify-center h-11 text-sm font-bold shadow-md bg-orange-600 hover:bg-orange-700"
                   >
                     Pay Now →
-                  </Link>
+                  </Button>
+                  {profileDialog}
                 </div>
 
                 {/* Trust & Guarantee */}
@@ -332,36 +333,55 @@ export function FullScreenPartnerSearch({
                 </div>
               </div>
             ) : (
-              /* Safety & Quality Trust Words while Searching */
-              <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              /* Verified Professional Profile Card while Searching */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Safety & Quality Standards
+                    Assigned Professional
                   </span>
                   <span className="text-emerald-700 bg-emerald-50 text-[11px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                    Dispatch Checks
+                    Verified Network
                   </span>
                 </div>
 
-                <div className="space-y-2.5">
-                  {VERIFICATION_CHECKS.map((check) => (
-                    <div
-                      key={check.label}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3"
-                    >
-                      <span className="text-xs font-medium text-slate-700">
-                        {check.label}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
-                        ✓ {check.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                {group.units.length > 0 ? (
+                  group.units.map((unit, idx) => {
+                    const isUnitHeld =
+                      unit.status === "HELD" ||
+                      unit.status === "PAYMENT_PENDING" ||
+                      unit.professional !== null;
+                    return (
+                      <div key={unit.id} className="space-y-1.5">
+                        {group.units.length > 1 ? (
+                          <div className="flex items-center justify-between text-xs px-1 text-slate-600 font-semibold">
+                            <span>
+                              Visit {idx + 1} of {group.units.length}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-normal">
+                              {isUnitHeld ? "Slot reserved" : "Searching…"}
+                            </span>
+                          </div>
+                        ) : null}
+                        <MockProfessionalCard
+                          professional={unit.professional}
+                          isHeld={isUnitHeld}
+                        />
+                      </div>
+                    );
+                  })
+                ) : (
+                  <MockProfessionalCard professional={null} isHeld={false} />
+                )}
 
-                <div className="rounded-xl bg-orange-50/70 border border-orange-200/60 p-3 text-[11px] text-orange-900 flex items-center gap-2 mt-2">
-                  <span className="text-sm">🔒</span>
-                  <span>Partner contact details unlock immediately upon payment.</span>
+                {/* Dispatch Assurance Notice */}
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-3.5 text-xs text-slate-600 space-y-1.5">
+                  <div className="flex items-center gap-2 font-semibold text-slate-900">
+                    <span className="text-emerald-600 font-bold">🛡️</span>
+                    <span>Verified Professional Dispatch</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-slate-500">
+                    Your request is actively broadcasting to verified technicians in your area. All professionals are identity checked, skill matched, and background verified.
+                  </p>
                 </div>
               </div>
             )}
@@ -371,7 +391,7 @@ export function FullScreenPartnerSearch({
       </main>
 
       {/* Clean Bottom Booking Summary Card */}
-      <footer className="relative z-20 max-w-5xl mx-auto w-full">
+      <footer className="relative z-20 max-w-[1216px] mx-auto w-full">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
             <div className="size-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-lg shrink-0">

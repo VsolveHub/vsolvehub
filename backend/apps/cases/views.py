@@ -13,6 +13,7 @@ from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -27,6 +28,7 @@ from rest_framework.views import APIView
 from apps.cases.models import OperationsCase
 from apps.cases.selectors import case_queue_summary
 from apps.cases.serializers import (
+    CASE_PEOPLE_RELATED,
     CONTACT_TOPICS,
     CaseAppealDecisionRequestSerializer,
     CaseNoteRequestSerializer,
@@ -94,7 +96,11 @@ def _required_key(request: Request) -> str:
 
 
 def _projection(case_id: UUID) -> ResponseBody:
-    case = OperationsCase.objects.prefetch_related("events").get(id=case_id)
+    case = (
+        OperationsCase.objects.select_related(*CASE_PEOPLE_RELATED)
+        .prefetch_related("events")
+        .get(id=case_id)
+    )
     return cast(ResponseBody, OperationsCaseSerializer(case).data)
 
 
@@ -145,6 +151,34 @@ class OperationsCaseSummaryView(APIView):
         )
 
 
+def _case_search(query: str) -> Q:
+    """What an operator types: words from the summary, a phone, a name, or an id they were sent."""
+    match = (
+        Q(summary__icontains=query)
+        | Q(booking__customer__phone_number__icontains=query)
+        | Q(booking__customer__full_name__icontains=query)
+        | Q(booking__partner__display_name__icontains=query)
+        | Q(booking__partner__user__phone_number__icontains=query)
+        | Q(partner__display_name__icontains=query)
+        | Q(partner__user__phone_number__icontains=query)
+        | Q(requirement__customer__phone_number__icontains=query)
+        | Q(requirement__customer__full_name__icontains=query)
+        | Q(engagement__partner__display_name__icontains=query)
+    )
+    try:
+        identifier = UUID(query)
+    except ValueError:
+        return match
+    return (
+        match
+        | Q(id=identifier)
+        | Q(booking_id=identifier)
+        | Q(order_id=identifier)
+        | Q(requirement_id=identifier)
+        | Q(engagement_id=identifier)
+    )
+
+
 class OperationsCaseListView(APIView):
     """The queue, filtered the way somebody actually works it.
 
@@ -159,7 +193,9 @@ class OperationsCaseListView(APIView):
         tags=[OPERATIONS_TAG],
         operation_id="operations_cases_list",
         parameters=[
-            OpenApiParameter("status", str, description="Filter by case status."),
+            OpenApiParameter(
+                "status", str, description="One case status, or several separated by commas."
+            ),
             OpenApiParameter("owner_team", str, description="Filter by owning team."),
             OpenApiParameter("kind", str, description="Filter by case kind."),
             OpenApiParameter("overdue", bool, description="Only cases past their SLA deadline."),
@@ -171,15 +207,29 @@ class OperationsCaseListView(APIView):
                     "Resolved against the session, never a caller-supplied id."
                 ),
             ),
+            OpenApiParameter(
+                "q",
+                str,
+                description=(
+                    "The summary, a customer's or partner's name or phone, or a case, booking or "
+                    "request id."
+                ),
+            ),
+            OpenApiParameter("severity", str, description="Filter by severity."),
             OpenApiParameter("cursor", str, description="Opaque page cursor."),
         ],
         responses={200: OperationsCasePageSerializer, 403: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
-        queryset = OperationsCase.objects.all()
+        queryset = OperationsCase.objects.select_related(*CASE_PEOPLE_RELATED)
         params = request.query_params
+        if value := params.get("severity"):
+            queryset = queryset.filter(severity=value)
+        if query := (params.get("q") or "").strip():
+            queryset = queryset.filter(_case_search(query))
         if value := params.get("status"):
-            queryset = queryset.filter(status=value)
+            # One state or a comma list, so "still open" is one request: OPEN,IN_PROGRESS,WAITING.
+            queryset = queryset.filter(status__in=[part.strip() for part in value.split(",")])
         if value := params.get("owner_team"):
             queryset = queryset.filter(owner_team=value)
         if value := params.get("kind"):
@@ -254,7 +304,10 @@ class OperationsCaseDetailView(APIView):
         responses={200: OperationsCaseSerializer, 403: ApiErrorSerializer, 404: ApiErrorSerializer},
     )
     def get(self, _request: Request, case_id: UUID) -> Response:
-        case = get_object_or_404(OperationsCase.objects.prefetch_related("events"), id=case_id)
+        case = get_object_or_404(
+            OperationsCase.objects.select_related(*CASE_PEOPLE_RELATED).prefetch_related("events"),
+            id=case_id,
+        )
         return Response(OperationsCaseSerializer(case).data)
 
 

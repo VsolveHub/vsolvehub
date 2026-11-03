@@ -65,7 +65,7 @@ export function DashboardPinStrip() {
       {editing ? (
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-2 text-sm text-text-secondary">
-            Choose the numbers to keep on Home. {draft.length} selected.
+            Choose the numbers to keep at the top of Dashboards. {draft.length} selected.
           </legend>
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
             {choices.map((key) => {

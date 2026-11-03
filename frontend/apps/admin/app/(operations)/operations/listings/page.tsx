@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
@@ -23,9 +24,18 @@ import {
   ModerationDialog,
 } from "@/features/listings/view";
 import { useDebounced } from "@/features/shared/use-debounced";
-import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { useListingCounts } from "@/features/money/money-tab";
+import { TabLoading } from "@/features/money/service-workspace";
 import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
-import { VendorPlansWorkspace } from "@/features/vendor-plans/view/vendor-plans-workspace";
+
+// Money and Plans are fetched only when opened.
+const MoneyTab = dynamic(() => import("@/features/money/money-tab").then((m) => m.MoneyTab), {
+  loading: TabLoading,
+});
+const VendorPlansWorkspace = dynamic(
+  () => import("@/features/vendor-plans/view/vendor-plans-workspace").then((m) => m.VendorPlansWorkspace),
+  { loading: TabLoading },
+);
 
 const TABS = [
   { key: "listings", label: "Listings" },
@@ -62,8 +72,12 @@ function AdminListingsContent() {
   const [isApproving, setIsApproving] = useState(true);
 
   const q = useDebounced(searchQuery.trim());
-  const listingsPage = usePagedList(["ops-listings", filter, q], (cursor) =>
-    fetchOpsListingsPage(cursor, filter, q),
+  // The list and its count tiles belong to the Listings tab, so they load only there.
+  const onListings = tab === "listings";
+  const listingsPage = usePagedList(
+    ["ops-listings", filter, q],
+    (cursor) => fetchOpsListingsPage(cursor, filter, q),
+    { enabled: onListings },
   );
   const { items: listings, isLoading: loading, error, refetch } = listingsPage;
   const isFetching = loading || listingsPage.loadingMore;
@@ -72,6 +86,7 @@ function AdminListingsContent() {
     queries: ["ALL", "PENDING", "ACTIVE", "REMOVED"].map((name) => ({
       queryKey: ["ops-listings", name, "", "count"],
       queryFn: () => fetchOpsListingsPage(undefined, name, ""),
+      enabled: onListings,
     })),
   }).map((query) => query.data);
 

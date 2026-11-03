@@ -16,12 +16,10 @@ import { handoffTarget } from "@/features/payment/model/provider-handoff";
 import {
   isNoAttemptStarted,
   isProviderUnreachable,
-  isSimulatedCaptureUnavailable,
   serverNow,
   useCheckoutPayment,
   usePaymentAttempt,
   useReconcilePayment,
-  useSimulateCapture,
   useStartPayment,
   type PaymentAllocation,
 } from "@/features/payment/queries";
@@ -109,7 +107,6 @@ export function PayScreen({ groupId }: { groupId: string }) {
   const attemptId = startedId ?? checkoutPayment.data?.id ?? (startPayment.data as any)?.id ?? null;
   const attemptQuery = usePaymentAttempt(attemptId);
   const reconcile = useReconcilePayment();
-  const simulateCapture = useSimulateCapture();
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const profileGate = useProfileCompletionGate("payment");
@@ -144,16 +141,7 @@ export function PayScreen({ groupId }: { groupId: string }) {
     return () => subscription.remove();
   }, [refreshAttempt]);
 
-  async function handlePay(current: PaymentAttempt) {
-    if (current.simulated_capture_available && !isSimulatedCaptureUnavailable(simulateCapture.error)) {
-      setHandoffError(null);
-      try {
-        await simulateCapture.mutateAsync(current.id);
-      } catch {
-        // The mutation owns the visible error while the screen stays retryable.
-      }
-      return;
-    }
+  function handlePay(current: PaymentAttempt) {
     const target = handoffTarget(current);
     if (target === null) {
       setHandoffError(
@@ -175,9 +163,6 @@ export function PayScreen({ groupId }: { groupId: string }) {
         groupId: group.id,
       });
       setStartedId(created.id);
-      if (created.simulated_capture_available && !isSimulatedCaptureUnavailable(simulateCapture.error)) {
-        await simulateCapture.mutateAsync(created.id);
-      }
     } catch {
       // The relevant mutation owns the visible error while the screen stays retryable.
     }
@@ -260,15 +245,10 @@ export function PayScreen({ groupId }: { groupId: string }) {
             {describeError(startPayment.error, "mutation").message}
           </Text>
         ) : null}
-        {simulateCapture.isError && !isSimulatedCaptureUnavailable(simulateCapture.error) ? (
-          <Text className="mt-4 text-sm text-critical" accessibilityRole="alert">
-            {describeError(simulateCapture.error, "mutation").message}
-          </Text>
-        ) : null}
         <View className="mt-5">
           <Button
-            loading={startPayment.isPending || simulateCapture.isPending}
-            loadingLabel={simulateCapture.isPending ? "Marking as paid" : "Opening payment"}
+            loading={startPayment.isPending}
+            loadingLabel="Opening payment"
             onPress={() => profileGate.run(() => void handleStartPayment())}
           >
             Continue to payment
@@ -368,7 +348,7 @@ export function PayScreen({ groupId }: { groupId: string }) {
         <Text className="mt-4 text-sm text-text-secondary">We are setting up your payment. This takes a moment.</Text>
       ) : null}
 
-      {phase === "awaiting-provider" && !attempt.simulated_capture_available ? (
+      {phase === "awaiting-provider" ? (
         <Text className="mt-4 text-sm text-text-secondary">
           This payment cannot be completed in the browser on this environment.
         </Text>
@@ -380,27 +360,16 @@ export function PayScreen({ groupId }: { groupId: string }) {
         </Text>
       ) : null}
 
-      {simulateCapture.isError && !isSimulatedCaptureUnavailable(simulateCapture.error) ? (
-        <Text className="mt-4 text-sm text-critical" accessibilityRole="alert">
-          {describeError(simulateCapture.error, "mutation").message}
-        </Text>
-      ) : null}
-
-      {(attempt.simulated_capture_available && phase === "preparing") ||
-      phase === "awaiting-customer" ||
+      {phase === "awaiting-customer" ||
       phase === "awaiting-provider" ||
       phase === "not-charged" ? (
         <View className="mt-5">
           <Button
-            loading={isHandingOff || simulateCapture.isPending}
-            loadingLabel={attempt.simulated_capture_available ? "Marking as paid" : "Opening payment"}
-            onPress={() => profileGate.run(() => void handlePay(attempt))}
+            loading={isHandingOff}
+            loadingLabel="Opening payment"
+            onPress={() => profileGate.run(() => handlePay(attempt))}
           >
-            {attempt.simulated_capture_available
-              ? "Mark as paid"
-              : phase === "not-charged"
-                ? "Try payment again"
-                : "Continue to payment"}
+            {phase === "not-charged" ? "Try payment again" : "Continue to payment"}
           </Button>
         </View>
       ) : null}

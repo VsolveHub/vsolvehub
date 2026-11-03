@@ -49,8 +49,7 @@ export function DeliveryRequest({ booking }: { booking: RentalBooking }) {
           onAwaitingCapture: () =>
             toast.notify("Complete payment in Razorpay. Booking stays Pending until capture."),
         });
-        if (result.mode === "simulated") toast.notify("Payment recorded.");
-        else if (result.mode === "pending")
+        if (result.mode === "pending")
           toast.notify("Payment is still preparing — use Pay Now on this booking in a moment.");
         else toast.notify("Payment submitted. Waiting for capture.");
       } catch (err) {

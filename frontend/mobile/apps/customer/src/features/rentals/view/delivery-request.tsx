@@ -83,9 +83,7 @@ export function DeliveryRequest({ booking }: { booking: RentalBooking }) {
         const result = await completeOrOpenRentalCheckout(String(attemptId), {
           businessName: "Vsolve Hub",
         });
-        if (result.mode === "simulated") {
-          Alert.alert("Payment Recorded", "Rental fee, deposit and transport recorded (simulated).");
-        } else if (result.mode === "pending") {
+        if (result.mode === "pending") {
           Alert.alert("Payment Preparing", "Payment is still preparing — open My Rentals shortly to pay.");
         } else {
           Alert.alert("Payment Submitted", "Payment submitted. Waiting for Razorpay capture.");

@@ -48,7 +48,6 @@ import {
   useChooseQuotesInstead,
   useRateCardState,
   useRetryCrewSearch,
-  useSimulateBookingFeeCapture,
   useStartBookingFeeCheckout,
 } from "../queries";
 import { CascadeStrip } from "./cascade-strip";
@@ -127,7 +126,6 @@ export function CrewDispatchPanel({
   const chooseQuotes = useChooseQuotesInstead();
   const cancelUnmatched = useCancelUnmatchedRequest();
   const feeCheckout = useStartBookingFeeCheckout();
-  const simulateFeeCapture = useSimulateBookingFeeCapture();
 
   const [confirming, setConfirming] = useState<"cancel" | null>(null);
 
@@ -160,12 +158,22 @@ export function CrewDispatchPanel({
   const fee = state.booking_fee === null ? null : toFeeMoneyView(state.booking_fee);
   const crewName = confirmedCrewName(state);
   const feeAttemptId = state.booking_fee?.payment_attempt_id ?? null;
-  const canSimulatePendingFee =
-    state.booking_fee?.simulated_capture_available === true && feeAttemptId !== null;
-  const feePaymentPending = feeCheckout.isPending || simulateFeeCapture.isPending;
+  // A fee charge was started but not finished (e.g. the page reloaded): Razorpay can reopen it.
+  const canResumePendingFee = feeAttemptId !== null;
+  const feePaymentPending = feeCheckout.isPending;
 
-  const simulateCapture = (paymentAttemptId: string) => {
-    simulateFeeCapture.mutate({ requirementId, paymentAttemptId });
+  const handOffFee = async (paymentAttemptId: string) => {
+    try {
+      const result = await completeOrOpenCheckout(paymentAttemptId, {
+        businessName: "Vsolve Hub",
+      });
+      if (result.mode === "pending") {
+        // Order not ready yet — recovery screen can retry Checkout.
+        router.push(bookCrewFeeHref);
+      }
+    } catch {
+      router.push(bookCrewFeeHref);
+    }
   };
 
   const startFeePayment = () => {
@@ -177,19 +185,7 @@ export function CrewDispatchPanel({
       },
       {
         onSuccess: (checkout) => {
-          void (async () => {
-            try {
-              const result = await completeOrOpenCheckout(String(checkout.payment_attempt_id), {
-                businessName: "Vsolve Hub",
-              });
-              if (result.mode === "pending") {
-                // Order not ready yet — recovery screen can retry Checkout.
-                router.push(bookCrewFeeHref);
-              }
-            } catch {
-              router.push(bookCrewFeeHref);
-            }
-          })();
+          void handOffFee(String(checkout.payment_attempt_id));
         },
       },
     );
@@ -300,11 +296,11 @@ export function CrewDispatchPanel({
           holdExpiresAt={booking.holdExpiresAt}
           canCheckOut={canCheckOutBookingFee(state)}
           feePhase={feePhase}
-          canSimulatePendingFee={canSimulatePendingFee}
+          canResumePendingFee={canResumePendingFee}
           isPaymentPending={feePaymentPending}
           onPay={startFeePayment}
-          onSimulatePending={() => {
-            if (feeAttemptId !== null) simulateCapture(feeAttemptId);
+          onResumePending={() => {
+            if (feeAttemptId !== null) void handOffFee(feeAttemptId);
           }}
         />
       ) : null}
@@ -361,9 +357,9 @@ export function CrewDispatchPanel({
       ) : null}
 
       <AccessRefusal
-        error={feeCheckout.error ?? simulateFeeCapture.error ?? cancel.error}
+        error={feeCheckout.error ?? cancel.error}
         attempting={
-          feeCheckout.error !== null || simulateFeeCapture.error !== null
+          feeCheckout.error !== null
             ? "confirm this payment"
             : "update this booking"
         }
@@ -600,19 +596,19 @@ function OfferHeld({
   holdExpiresAt,
   canCheckOut,
   feePhase,
-  canSimulatePendingFee,
+  canResumePendingFee,
   isPaymentPending,
   onPay,
-  onSimulatePending,
+  onResumePending,
 }: {
   booking: BookingView;
   holdExpiresAt: string | null;
   canCheckOut: boolean;
   feePhase: BookingFeePhase;
-  canSimulatePendingFee: boolean;
+  canResumePendingFee: boolean;
   isPaymentPending: boolean;
   onPay: () => void;
-  onSimulatePending: () => void;
+  onResumePending: () => void;
 }) {
   const countdown = useServerCountdown(holdExpiresAt);
   const terms = toRateTermsView(booking);
@@ -642,18 +638,20 @@ function OfferHeld({
         by you each evening.
       </p>
 
-      {feePhase === "pending" && canSimulatePendingFee ? (
+      {feePhase === "pending" && canResumePendingFee ? (
         <div className="mt-3">
-          <Button
-            onClick={onSimulatePending}
-            loading={isPaymentPending}
-            loadingLabel="Marking payment as paid"
-          >
-            Mark as paid
-          </Button>
-          <p className="mt-2 text-xs leading-5 text-text-secondary">
-            Development payment simulator
+          <p className="text-sm leading-6 text-text" role="status">
+            Confirming your payment… don&rsquo;t pay again.
           </p>
+          <Button
+            className="mt-2"
+            variant="secondary"
+            onClick={onResumePending}
+            loading={isPaymentPending}
+            loadingLabel="Opening payment"
+          >
+            Continue payment
+          </Button>
         </div>
       ) : feePhase === "pending" ? (
         <p className="mt-3 text-sm leading-6 text-text" role="status">

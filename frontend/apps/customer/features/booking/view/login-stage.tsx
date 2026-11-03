@@ -1,7 +1,8 @@
 "use client";
 
-import { usePhoneAuthFlow } from "@vsolve/query";
+import { queryKeys, usePhoneAuthFlow } from "@vsolve/query";
 import { Button, ErrorState, OtpForm, Spinner } from "@vsolve/ui";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
@@ -33,12 +34,17 @@ export interface LoginStageProps {
 export function LoginStage({ summary }: LoginStageProps) {
   const { state, dispatch } = useWorkspace();
   const session = useCustomerSession();
+  const queryClient = useQueryClient();
 
   const flow = usePhoneAuthFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     // The verify mutation writes the session into the cache and tells sibling
     // tabs; this returns the customer to what they were doing.
-    onAuthenticated: () => dispatch({ type: "LOGIN_COMPLETED" }),
+    onAuthenticated: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session.all });
+      dispatch({ type: "LOGIN_COMPLETED" });
+    },
   });
 
   const returnTo: Stage = state.resumeStage ?? "address";

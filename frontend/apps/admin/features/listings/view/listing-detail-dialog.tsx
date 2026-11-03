@@ -1,6 +1,7 @@
 import { Button, Dialog, formatMoney, formatMoneyText } from "@vsolve/ui";
 
 import { listingFields, type AdminListing } from "../queries";
+import { ListingApplicants } from "./listing-applicants";
 
 export interface ListingDetailDialogProps {
   listing: AdminListing | null;
@@ -106,6 +107,8 @@ export function ListingDetailDialog({ listing, onClose }: ListingDetailDialogPro
               </div>
             </div>
           </div>
+
+          <ListingApplicants listingId={listing.id} />
         </div>
 
     </Dialog>

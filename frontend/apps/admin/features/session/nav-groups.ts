@@ -10,17 +10,11 @@ import {
   HardHat,
   Home,
   Inbox,
-  IndianRupee,
   MessageSquareHeart,
   Percent,
   RotateCcw,
-  Search,
   ShieldCheck,
-  ShoppingCart,
-  Sliders,
-  Tag,
   ToggleLeft,
-  Truck,
   Upload,
   User,
   UserCheck,
@@ -56,26 +50,17 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Home services",
+    // One page per service, each with the same tabs: its bookings, its money, its settings.
+    label: "Services",
     links: [
-      { href: "/operations/visits", label: "Visit lookup", icon: Search },
-      { href: "/operations/dispatch", label: "Dispatch", icon: Truck },
-      { href: "/operations/manual-offers", label: "Manual offers", icon: Tag },
-      { href: "/operations/assisted-checkouts", label: "Book for a customer", icon: ShoppingCart },
-      { href: "/operations/compatibility-rules", label: "Service rules", icon: Sliders },
-    ],
-  },
-  {
-    label: "Workforce & projects",
-    links: [
-      { href: "/operations/requests", label: "Requests", icon: Inbox, badgeKey: "requests_open" },
-      { href: "/operations/work-items", label: "Work items", icon: Wrench },
-      { href: "/operations/rate-cards", label: "Crew rate cards", icon: IndianRupee },
-    ],
-  },
-  {
-    label: "Marketplace",
-    links: [
+      {
+        href: "/operations/home-services",
+        label: "Home services",
+        icon: Wrench,
+        // A visit opened from the bookings list keeps Home services lit.
+        activePrefix: "/operations/visits",
+      },
+      { href: "/operations/requests", label: "Crew & projects", icon: Inbox, badgeKey: "requests_open" },
       { href: "/operations/rentals", label: "Rentals", icon: HardHat },
       { href: "/operations/stays", label: "Stays", icon: Building2 },
       { href: "/operations/listings", label: "Jobs", icon: BriefcaseBusiness },

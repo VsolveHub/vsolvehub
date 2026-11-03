@@ -25,6 +25,18 @@ export type { QuantityStepperProps } from "./quantity-stepper";
 // need different DOM. See the hook's own note before reaching for it.
 export { useMediaQuery, useIsWideScreen } from "./use-media-query";
 export { useHydrated } from "./use-hydrated";
+export {
+  usePushPermission,
+  PARTNER_DISMISS_KEY,
+  CUSTOMER_DISMISS_KEY,
+  PARTNER_PROMPT_COUNT_KEY,
+  CUSTOMER_PROMPT_COUNT_KEY,
+} from "./usePushPermission";
+export type {
+  PushPermissionState,
+  UsePushPermissionOptions,
+  UsePushPermissionReturn,
+} from "./usePushPermission";
 export { ChoiceChips } from "./choice-chips";
 export type { ChoiceChipOption, ChoiceChipsProps } from "./choice-chips";
 

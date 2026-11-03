@@ -245,7 +245,7 @@ export function Dialog({
         if (dismissable && event.target === event.currentTarget) onOpenChange(false);
       }}
       className={cn(
-        "fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[85dvh] overflow-hidden rounded-card p-0",
+        "fixed inset-0 m-auto box-border w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[85dvh] overflow-hidden rounded-card p-0",
         "bg-surface text-text shadow-overlay border border-line/60",
         "backdrop:bg-navy-900/50 backdrop:backdrop-blur-sm",
         className,

@@ -445,6 +445,7 @@ export function useVerifyFirebase(
         session_expires_at: session.session_expires_at,
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.session.devices() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
       publishToTabs({ type: "session.authenticated" });
     },
     retry: false,

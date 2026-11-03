@@ -7,6 +7,7 @@ tells a reader which role a route belongs to before they open the view.
 
 from django.urls import path
 
+from apps.requirements import ops_money
 from apps.requirements.views import (
     CancellationDecisionView,
     CaseAppealView,
@@ -141,6 +142,7 @@ from apps.requirements.views import (
     SiteVisitNoShowView,
     SiteVisitScheduleView,
 )
+from apps.requirements.views.operations_overview import OperationsRequestCollectionView
 
 urlpatterns = [
     # Customer
@@ -727,6 +729,17 @@ urlpatterns = [
     ),
     # The Operations workspace. Everything under `operations/` is staff-only by permission, and
     # every command on it takes a reason and writes an `OperationsTouch` the metric counts.
+    path(
+        "operations/requests/",
+        OperationsRequestCollectionView.as_view(),
+        name="m2-operations-requests",
+    ),
+    path("ops/workforce/money", ops_money.MoneySummaryView.as_view(), name="ops-workforce-money"),
+    path(
+        "ops/workforce/money/payments",
+        ops_money.MoneyPaymentsView.as_view(),
+        name="ops-workforce-money-payments",
+    ),
     path(
         "operations/requests/<uuid:requirement_id>/timeline/",
         OperationsRequestTimelineView.as_view(),

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   APPLICATION_STEPS,
   applicationSteps,
-  isLastStep,
   nextStep,
   stepIndexOf,
 } from "./steps";
@@ -29,7 +28,7 @@ describe("finding the current step", () => {
     // the overview as current on every page — which is how a nav ends up
     // highlighting the wrong tab everywhere.
     expect(stepIndexOf("/apply/work")).not.toBe(stepIndexOf("/apply"));
-    expect(stepIndexOf("/apply/consent")).toBe(4);
+    expect(stepIndexOf("/apply/documents")).toBe(4);
   });
 
   it("tolerates the trailing slash Next can produce", () => {
@@ -57,8 +56,6 @@ describe("what comes next", () => {
 
   it("stops at the end rather than wrapping round", () => {
     expect(nextStep("/apply/review")).toBeNull();
-    expect(isLastStep("/apply/review")).toBe(true);
-    expect(isLastStep("/apply/about")).toBe(false);
   });
 
   it("has no next step for a path off the sequence", () => {
@@ -69,9 +66,9 @@ describe("what comes next", () => {
 
   it("sends each editable step to the one after it", () => {
     expect(nextStep("/apply/about")?.href).toBe("/apply/work");
-    expect(nextStep("/apply/work")?.href).toBe("/apply/areas");
-    expect(nextStep("/apply/areas")?.href).toBe("/apply/consent");
-    expect(nextStep("/apply/consent")?.href).toBe("/apply/documents");
+    expect(nextStep("/apply/work")?.href).toBe("/apply/schedule");
+    expect(nextStep("/apply/schedule")?.href).toBe("/apply/documents");
+    expect(nextStep("/apply/documents")?.href).toBe("/apply/review");
   });
 });
 
@@ -94,15 +91,14 @@ describe("the stay host path", () => {
     expect(applicationSteps("STAY_HOST").map((step) => step.href)).toEqual([
       "/apply",
       "/apply/about",
-      "/apply/consent",
       "/apply/documents",
       "/apply/review",
     ]);
   });
 
-  it("continues from About you straight to the agreements", () => {
-    expect(nextStep("/apply/about", "STAY_HOST")?.href).toBe("/apply/consent");
-    expect(isLastStep("/apply/review", "STAY_HOST")).toBe(true);
+  it("continues from About you straight to the documents", () => {
+    expect(nextStep("/apply/about", "STAY_HOST")?.href).toBe("/apply/documents");
+    expect(nextStep("/apply/review", "STAY_HOST")).toBeNull();
   });
 
   it("leaves the services path unchanged", () => {
@@ -116,6 +112,6 @@ describe("the rental owner path", () => {
     expect(applicationSteps("RENTAL_OWNER").map((step) => step.href)).toEqual(
       applicationSteps("STAY_HOST").map((step) => step.href),
     );
-    expect(nextStep("/apply/about", "RENTAL_OWNER")?.href).toBe("/apply/consent");
+    expect(nextStep("/apply/about", "RENTAL_OWNER")?.href).toBe("/apply/documents");
   });
 });

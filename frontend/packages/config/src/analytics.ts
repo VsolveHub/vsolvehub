@@ -101,6 +101,38 @@ export const M2_EVENTS = {
 
 export type M2EventName = (typeof M2_EVENTS)[keyof typeof M2_EVENTS];
 
+/**
+ * OneSignal Web Push permission and subscription lifecycle analytics events.
+ */
+export const PUSH_NOTIFICATION_EVENTS = {
+  // Partner events
+  partnerPromptViewed: "partner_push_prompt_viewed",
+  partnerPromptDismissed: "partner_push_prompt_dismissed",
+  partnerManualEnableClicked: "partner_push_manual_enable_clicked",
+  partnerPermissionRequested: "partner_push_permission_requested",
+  partnerPermissionGranted: "partner_push_permission_granted",
+  partnerPermissionDenied: "partner_push_permission_denied",
+  partnerPermissionDeniedRecoveryViewed: "partner_push_permission_denied_recovery_viewed",
+  partnerUnsupported: "partner_push_unsupported",
+  partnerSubscriptionSynced: "partner_push_subscription_synced",
+  partnerSubscriptionSyncFailed: "partner_push_subscription_sync_failed",
+
+  // Customer events
+  customerPromptViewed: "customer_push_prompt_viewed",
+  customerPromptDismissed: "customer_push_prompt_dismissed",
+  customerManualEnableClicked: "customer_push_manual_enable_clicked",
+  customerPermissionRequested: "customer_push_permission_requested",
+  customerPermissionGranted: "customer_push_permission_granted",
+  customerPermissionDenied: "customer_push_permission_denied",
+  customerPermissionDeniedRecoveryViewed: "customer_push_permission_denied_recovery_viewed",
+  customerUnsupported: "customer_push_unsupported",
+  customerSubscriptionSynced: "customer_push_subscription_synced",
+  customerSubscriptionSyncFailed: "customer_push_subscription_sync_failed",
+} as const;
+
+export type PushNotificationEventName =
+  (typeof PUSH_NOTIFICATION_EVENTS)[keyof typeof PUSH_NOTIFICATION_EVENTS];
+
 /* ---------------------------------------------------------------------------
    Payload allow-list
    --------------------------------------------------------------------------- */
@@ -161,6 +193,17 @@ export const ALLOWED_PROPERTIES = [
   "actor_role",
   "action",
   "assisted",
+
+  // OneSignal push permission & subscription lifecycle properties.
+  "user_id",
+  "role",
+  "platform",
+  "permission_state",
+  "trigger_event",
+  "prompt_count",
+  "days_since_signup",
+  "subscription_sync_status",
+  "app_id_present",
 ] as const;
 
 export type AllowedProperty = (typeof ALLOWED_PROPERTIES)[number];
@@ -213,4 +256,41 @@ export function sanitizeProperties(properties: AnalyticsProperties): Record<stri
  */
 export function isAllowedProperty(key: string): key is AllowedProperty {
   return ALLOWED.has(key);
+}
+
+
+export interface PushAnalyticsPayload {
+  user_id?: string | null;
+  role?: string;
+  platform?: string;
+  permission_state?: string;
+  trigger_event?: string;
+  prompt_count?: number;
+  days_since_signup?: number | null;
+  subscription_sync_status?: string;
+  app_id_present?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Dispatches an analytics event for OneSignal push notification permission & subscription flows.
+ * Properties are sanitized strictly against ALLOWED_PROPERTIES.
+ */
+export function trackPushAnalyticsEvent(
+  eventName: PushNotificationEventName | string,
+  properties: PushAnalyticsPayload = {},
+): Record<string, AnalyticsValue> {
+  const sanitized = sanitizeProperties(properties as AnalyticsProperties);
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('vsh:analytics', {
+          detail: { event: eventName, properties: sanitized },
+        }),
+      );
+    } catch {
+      // ignore DOM event failure
+    }
+  }
+  return sanitized;
 }

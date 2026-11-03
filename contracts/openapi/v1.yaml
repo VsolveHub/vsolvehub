@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.89.0
+  version: 1.93.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -412,6 +412,53 @@ paths:
       responses:
         '204':
           description: The current session was revoked.
+  /api/v1/auth/mobile/otp/verify/:
+    post:
+      operationId: auth_mobile_otp_verify_create
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileOtpVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MobileOtpVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MobileOtpVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAuthenticatedSession'
+              examples:
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      display_name: Gopal Rao
+                      full_name: ''
+                      email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/auth/otp/request/:
     post:
       operationId: auth_otp_request_create
@@ -2496,6 +2543,184 @@ paths:
               schema:
                 $ref: '#/components/schemas/CoinTransactionPage'
           description: ''
+  /api/v1/customer/notification-preferences/:
+    get:
+      operationId: customer_notification_preferences_retrieve
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
+    patch:
+      operationId: customer_notification_preferences_partial_update
+      tags:
+      - Notification preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
+        '400':
+          description: Invalid request or attempt to disable immutable category.
+  /api/v1/customer/push-subscriptions/{subscription_id}/:
+    patch:
+      operationId: customer_push_subscriptions_partial_update
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Customer push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerPushSubscriptionUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: customer_push_subscriptions_destroy
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Customer push subscriptions
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: Subscription deactivated successfully.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/customer/push-subscriptions/sync/:
+    post:
+      operationId: customer_push_subscriptions_sync_create
+      tags:
+      - Customer push subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerPushSubscriptionSyncRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/customer/referral/:
     get:
       operationId: customer_referral_retrieve
@@ -2623,13 +2848,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/WalletTransactionPage'
           description: ''
+  /api/v1/dev-storage/{bucket}/{object_key}:
+    get:
+      operationId: dev_storage_retrieve
+      description: |-
+        Local development storage endpoint for signed PUT uploads and GET downloads.
+
+        Enabled only in development/local mode when settings.DEBUG is True.
+      parameters:
+      - in: path
+        name: bucket
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: object_key
+        schema:
+          type: string
+        required: true
+      tags:
+      - dev-storage
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: dev_storage_update
+      description: |-
+        Local development storage endpoint for signed PUT uploads and GET downloads.
+
+        Enabled only in development/local mode when settings.DEBUG is True.
+      parameters:
+      - in: path
+        name: bucket
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: object_key
+        schema:
+          type: string
+        required: true
+      tags:
+      - dev-storage
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dev/mobile/test-push/:
+    post:
+      operationId: dev_mobile_test_push_create
+      description: 'Local development only: verify mobile Expo push delivery to a
+        user''s devices.'
+      tags:
+      - dev
+      responses:
+        '200':
+          description: No response body
   /api/v1/dev/onesignal/test-push/:
     post:
       operationId: dev_onesignal_test_push_create
-      description: Local development & testing endpoint to verify OneSignal push delivery
-        to an external_id.
+      description: |-
+        Local development only: send a test push to yourself.
+
+        Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+        — and only to the signed-in caller, so it can never be used to push to someone else.
       tags:
       - dev
+      security:
+      - cookieAuth: []
       responses:
         '200':
           description: No response body
@@ -5761,6 +6052,118 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayVisit'
           description: ''
+  /api/v1/mobile/app-config/:
+    get:
+      operationId: mobile_app_config_retrieve
+      parameters:
+      - in: query
+        name: app
+        schema:
+          enum:
+          - customer
+          - partner
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+        required: true
+      - in: query
+        name: platform
+        schema:
+          enum:
+          - ios
+          - android
+          type: string
+          minLength: 1
+        description: |-
+          * `ios` - ios
+          * `android` - android
+        required: true
+      - in: query
+        name: version
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 32
+        required: true
+      tags:
+      - Mobile
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/mobile/devices/:
+    post:
+      operationId: mobile_devices_create
+      tags:
+      - Mobile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRegisterRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/mobile/devices/unregister/:
+    post:
+      operationId: mobile_devices_unregister_create
+      tags:
+      - Mobile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushDeviceUnregisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PushDeviceUnregisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PushDeviceUnregisterRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/my/interviews/{interview_id}/{action}:
     post:
       operationId: my_interview_answer
@@ -6065,6 +6468,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/bookings/:
+    get:
+      operationId: operations_bookings_list
+      description: Every home-service visit, newest first, so Operations can find
+        one without its id.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: late
+        schema:
+          type: boolean
+        description: Only visits past their start time that have not started.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBookingPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/bookings/{booking_id}/:
     get:
       operationId: operations_booking_retrieve
@@ -6273,10 +6734,21 @@ paths:
           type: string
         description: Filter by owning team.
       - in: query
+        name: q
+        schema:
+          type: string
+        description: The summary, a customer's or partner's name or phone, or a case,
+          booking or request id.
+      - in: query
+        name: severity
+        schema:
+          type: string
+        description: Filter by severity.
+      - in: query
         name: status
         schema:
           type: string
-        description: Filter by case status.
+        description: One case status, or several separated by commas.
       tags:
       - Operations
       security:
@@ -9551,6 +10023,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/requests/:
+    get:
+      operationId: operations_requests_list
+      description: Every crew and project request, newest first.
+      parameters:
+      - in: query
+        name: archetype
+        schema:
+          type: string
+          enum:
+          - A3_TIME_BLOCK
+          - A5_CUSTOM_PROJECT
+        description: Crew hire (A3_TIME_BLOCK) or custom project (A5_CUSTOM_PROJECT).
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: open
+        schema:
+          type: boolean
+        description: Only requests that are not closed.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsRequestPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/requests/{requirement_id}/deadline/:
     post:
       operationId: m2_operations_extend_deadline
@@ -10614,6 +11141,64 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/ops/home-services/money:
+    get:
+      operationId: ops_home_services_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/home-services/money/payments:
+    get:
+      operationId: ops_home_services_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
+          description: ''
   /api/v1/ops/listings:
     get:
       operationId: ops_listings_retrieve
@@ -10648,6 +11233,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsListingPage'
+          description: ''
+  /api/v1/ops/listings/{listing_id}/applications:
+    get:
+      operationId: ops_listing_applications_list
+      description: Who applied to one job, as the poster sees it, so Operations can
+        answer either side.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsListingApplicationPage'
           description: ''
   /api/v1/ops/listings/{listing_id}/moderate:
     post:
@@ -12230,6 +12848,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsWalletTopUpPolicy'
+          description: ''
+  /api/v1/ops/workforce/money:
+    get:
+      operationId: ops_workforce_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/workforce/money/payments:
+    get:
+      operationId: ops_workforce_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
           description: ''
   /api/v1/orders/{order_id}/:
     get:
@@ -15325,8 +16001,9 @@ paths:
       description: |-
         Changes what a Partner may change about themselves.
 
-        Deliberately narrow. The phone number is the login credential and is not
-        accepted here — see `PartnerProfileUpdateSerializer`.
+        Deliberately narrow. Neither the phone number (the login credential) nor the
+        name (checked against the Partner's ID) is accepted here — see
+        `PartnerProfileUpdateSerializer`.
       tags:
       - Partner
       requestBody:
@@ -15361,6 +16038,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/notification-preferences/:
+    get:
+      operationId: partner_notification_preferences_retrieve
+      tags:
+      - Notification preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
+    patch:
+      operationId: partner_notification_preferences_partial_update
+      tags:
+      - Notification preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
+        '400':
+          description: Invalid request or attempt to disable immutable category.
   /api/v1/partner/offers/:
     get:
       operationId: partner_offer_list
@@ -15849,7 +16566,15 @@ paths:
       responses:
         '200':
           description: The subscription was synced.
+        '201':
+          description: The subscription was created.
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '401':
           content:
             application/json:
               schema:
@@ -15862,6 +16587,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -17449,50 +18180,6 @@ paths:
                 $ref: '#/components/schemas/PaymentAttempt'
           description: ''
         '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/payment-attempts/{attempt_id}/simulate-capture/:
-    post:
-      operationId: payment_attempt_simulate_capture
-      description: |-
-        Marks a payment captured with no gateway. Development only.
-
-        Published so the flow is drivable end to end without provider credentials.
-        It is fail-closed three ways — a settings flag off by default, a production
-        start-up guard that refuses to boot with it on, and a check that the attempt's
-        own provider is `fake` — and it runs the *real* capture path rather than
-        setting a status, so everything capture triggers actually happens.
-
-        `404` rather than `403` when disabled: an environment that does not do this
-        should not advertise that the door exists.
-      parameters:
-      - in: path
-        name: attempt_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - Payments
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentAttempt'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
           content:
             application/json:
               schema:
@@ -21115,6 +21802,10 @@ paths:
         name: sort
         schema:
           type: string
+      - in: query
+        name: tenant_preference
+        schema:
+          type: string
       tags:
       - stays
       security:
@@ -21592,6 +22283,14 @@ components:
         * `REJECT` - REJECT
         * `REMOVE` - REMOVE
         * `REINSTATE` - REINSTATE
+    ActionC29Enum:
+      enum:
+      - sync
+      - deactivate
+      type: string
+      description: |-
+        * `sync` - sync
+        * `deactivate` - deactivate
     ActionReasonRequest:
       type: object
       properties:
@@ -21906,6 +22605,22 @@ components:
       - message
       - request_id
       - retryable
+    AppConfig:
+      type: object
+      properties:
+        minimum_version:
+          type: string
+        latest_version:
+          type: string
+        update_required:
+          type: boolean
+        store_url:
+          type: string
+      required:
+      - latest_version
+      - minimum_version
+      - store_url
+      - update_required
     Application:
       type: object
       properties:
@@ -22110,6 +22825,24 @@ components:
           $ref: '#/components/schemas/StatusD32Enum'
       required:
       - status
+    ArchetypeEnum:
+      enum:
+      - LEGACY
+      - A1_TASK_VISIT
+      - A3_TIME_BLOCK
+      - A5_CUSTOM_PROJECT
+      - A7_RENTAL
+      - A9_STAY
+      - A10_LISTING
+      type: string
+      description: |-
+        * `LEGACY` - Legacy
+        * `A1_TASK_VISIT` - A1 task visit
+        * `A3_TIME_BLOCK` - A3 time block
+        * `A5_CUSTOM_PROJECT` - A5 custom project
+        * `A7_RENTAL` - A7 rental
+        * `A9_STAY` - A9 stay
+        * `A10_LISTING` - A10 listing
     AssignedProfessional:
       type: object
       description: |-
@@ -22437,9 +23170,6 @@ components:
           format: uuid
           nullable: true
           readOnly: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         activated_at:
           type: string
           format: date-time
@@ -22467,7 +23197,6 @@ components:
       - receipt_series
       - settled_at
       - settlement_reason_code
-      - simulated_capture_available
       - status
       - travel_compensation_paise
     BookingFeeStatusEnum:
@@ -23502,6 +24231,19 @@ components:
       - expected_version
       - note
       - resolution
+    CasePerson:
+      type: object
+      properties:
+        role:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+      required:
+      - name
+      - phone
+      - role
     CaseQueueSummary:
       type: object
       description: |-
@@ -23653,10 +24395,12 @@ components:
       enum:
       - SMS
       - EMAIL
+      - PUSH
       type: string
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
+        * `PUSH` - Push
     ChargebackRequest:
       type: object
       description: |-
@@ -26419,6 +27163,98 @@ components:
       - vendor
       - warranty_terms
       - worker_count
+    CustomerPushSubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        onesignal_subscription_id:
+          type: string
+          readOnly: true
+          description: OneSignal Subscription ID (UUID).
+        onesignal_external_id:
+          type: string
+          readOnly: true
+          description: OneSignal external_id alias (Customer User ID).
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          description: False if unsubscribed, permission revoked, or notification
+            delivery bounced.
+        opted_in:
+          type: boolean
+          readOnly: true
+          description: OneSignal push subscription opt-in state.
+        permission_state:
+          type: string
+          readOnly: true
+          description: Browser notification permission (granted, denied, default).
+        last_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_sync_status:
+          type: string
+          readOnly: true
+          description: Status of the last sync attempt (SUCCESS, FAILED).
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_active
+      - last_sync_status
+      - last_verified_at
+      - onesignal_external_id
+      - onesignal_subscription_id
+      - opted_in
+      - permission_state
+      - platform
+      - updated_at
+    CustomerPushSubscriptionSyncRequest:
+      type: object
+      properties:
+        onesignal_subscription_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          default: WEB
+        user_agent:
+          type: string
+          default: ''
+          maxLength: 500
+        is_active:
+          type: boolean
+          default: true
+        opted_in:
+          type: boolean
+          default: true
+        permission_state:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionC29Enum'
+          default: sync
+      required:
+      - onesignal_subscription_id
     CustomerQuoteList:
       type: object
       properties:
@@ -29609,6 +30445,7 @@ components:
       - SMS
       - WHATSAPP
       - VOICE
+      - PUSH
       - PAYMENTS
       - PAYOUTS
       - DISPATCH
@@ -29621,6 +30458,7 @@ components:
         * `SMS` - SMS channel
         * `WHATSAPP` - WhatsApp channel
         * `VOICE` - Voice call channel
+        * `PUSH` - Push channel
         * `PAYMENTS` - Payment collection
         * `PAYOUTS` - Partner payouts
         * `DISPATCH` - Partner dispatch
@@ -30229,6 +31067,63 @@ components:
       description: |-
         * `IMAGE` - Image
         * `VIDEO` - Video
+    MobileAuthenticatedSession:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        active_role:
+          type: string
+          readOnly: true
+        session_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        session_token:
+          type: string
+          readOnly: true
+      required:
+      - active_role
+      - session_expires_at
+      - session_token
+      - user
+    MobileOtpVerifyRequest:
+      type: object
+      description: Same OTP body as the web, with a required installation id.
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 32
+        code:
+          type: string
+          writeOnly: true
+          minLength: 6
+          maxLength: 6
+        device_identifier:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+        device_label:
+          type: string
+          writeOnly: true
+          maxLength: 100
+        referral_code:
+          type: string
+          writeOnly: true
+          description: Applied only when this verification creates a new account.
+          maxLength: 32
+      required:
+      - challenge_id
+      - code
+      - device_identifier
+      - phone_number
     Mode074Enum:
       enum:
       - IN_PERSON
@@ -30924,6 +31819,98 @@ components:
       - status_history
       - version
       - work_tasks
+    OperationsBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBookingRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsBookingRow:
+      type: object
+      description: |-
+        One home-service visit in the Operations bookings list: enough to find it and see if it
+        needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        partner_phone:
+          type: string
+          readOnly: true
+        services:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        is_late:
+          type: boolean
+          readOnly: true
+        payout_hold:
+          type: boolean
+          readOnly: true
+        needs_redispatch:
+          type: boolean
+          readOnly: true
+      required:
+      - area
+      - created_at
+      - customer_name
+      - customer_phone
+      - estimated_duration_minutes
+      - id
+      - is_late
+      - needs_redispatch
+      - partner_display_name
+      - partner_phone
+      - payout_hold
+      - scheduled_start
+      - services
+      - status
+      - total_paise
     OperationsCase:
       type: object
       description: |-
@@ -31085,6 +32072,15 @@ components:
           format: uuid
           nullable: true
           readOnly: true
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/CasePerson'
+          readOnly: true
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31113,8 +32109,10 @@ components:
       - listing_id
       - order_id
       - owner_id
+      - owner_name
       - owner_team
       - partner_id
+      - people
       - requirement_id
       - resolution
       - resolution_note
@@ -31317,6 +32315,10 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
         booking_id:
           type: string
           format: uuid
@@ -31343,6 +32345,11 @@ components:
         holds_payout:
           type: boolean
           readOnly: true
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/CasePerson'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31356,8 +32363,10 @@ components:
       - is_overdue
       - kind
       - owner_id
+      - owner_name
       - owner_team
       - partner_id
+      - people
       - severity
       - status
       - summary
@@ -31834,6 +32843,110 @@ components:
       required:
       - decision
       - reason
+    OperationsRequestPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsRequestRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsRequestRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RequirementStatusEnum'
+          readOnly: true
+        archetype:
+          allOf:
+          - $ref: '#/components/schemas/ArchetypeEnum'
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        quotes_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        engagement_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        engagement_status:
+          type: string
+          nullable: true
+          readOnly: true
+        vendor_display_name:
+          type: string
+          nullable: true
+          readOnly: true
+        engagement_total_paise:
+          type: integer
+          nullable: true
+          readOnly: true
+      required:
+      - archetype
+      - area
+      - closed_at
+      - created_at
+      - customer_name
+      - customer_phone
+      - engagement_id
+      - engagement_status
+      - engagement_total_paise
+      - id
+      - quotes_due_at
+      - requested_start
+      - service_name
+      - status
+      - submitted_at
+      - vendor_display_name
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -32256,6 +33369,25 @@ components:
         pinned_tiles:
           description: List of tile IDs pinned by the operator. e.g. ['open_cases',
             'overdue_bookings', 'captured_today', 'wallet_liability']
+    OpsListingApplicationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+      required:
+      - next
+      - previous
+      - results
     OpsListingPage:
       type: object
       properties:
@@ -33227,6 +34359,17 @@ components:
           items:
             $ref: '#/components/schemas/PartnerApplicationTransition'
           readOnly: true
+        can_edit:
+          type: boolean
+          readOnly: true
+        required_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        consents_complete:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -33237,14 +34380,17 @@ components:
           readOnly: true
       required:
       - biography
+      - can_edit
       - change_request_message
       - consents
+      - consents_complete
       - created_at
       - display_name
       - documents
       - experience_years
       - id
       - partner_id
+      - required_document_kinds
       - review_assigned_at
       - review_assigned_to_id
       - reviewed_at
@@ -34170,8 +35316,16 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        file_name:
+          type: string
+          readOnly: true
+        can_replace:
+          type: boolean
+          readOnly: true
       required:
+      - can_replace
       - content_type
+      - file_name
       - id
       - kind
       - review_reason
@@ -35326,6 +36480,18 @@ components:
         is_active:
           type: boolean
           default: true
+        opted_in:
+          type: boolean
+          default: true
+        permission_state:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionC29Enum'
+          default: sync
       required:
       - onesignal_subscription_id
     PartnerRateItem:
@@ -36337,6 +37503,20 @@ components:
           type: string
           format: email
           maxLength: 254
+    PatchedCustomerPushSubscriptionUpdateRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+        opted_in:
+          type: boolean
+        permission_state:
+          oneOf:
+          - $ref: '#/components/schemas/PermissionStateEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        user_agent:
+          type: string
+          maxLength: 500
     PatchedJobUpdateRequest:
       type: object
       description: |-
@@ -36603,9 +37783,12 @@ components:
       description: |-
         What a Partner may change about themselves without a review.
 
-        `display_name` is the name Customers see. `default_location_text` is the
-        registered pickup / address used to prefill A7 rental ads (still editable
-        per asset).
+        `default_location_text` is the registered pickup / address used to prefill A7
+        rental ads (still editable per asset).
+
+        **Not** `display_name`. It is the name on the application Operations checked
+        against the Partner's ID, so it is fixed once the application is sent; before
+        that it is edited on the application itself.
 
         **Not** `phone_number`. That is the login credential: changing it moves who
         can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -36616,13 +37799,19 @@ components:
         Skills and service areas are absent for a different reason: Operations
         reviewed them, and a field here would silently reopen a reviewed decision.
       properties:
-        display_name:
-          type: string
-          minLength: 1
-          maxLength: 120
         default_location_text:
           type: string
           maxLength: 240
+    PatchedPushPreferenceUpdateRequest:
+      type: object
+      description: 'Switch one category. The endpoint also takes a list of these,
+        or `{preferences: ...}`.'
+      properties:
+        category:
+          type: string
+          minLength: 1
+        is_enabled:
+          type: boolean
     PatchedRequirementUpdateRequest:
       type: object
       description: |-
@@ -36881,9 +38070,6 @@ components:
           type: string
           nullable: true
           readOnly: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         provider_order_id:
           type: string
           readOnly: true
@@ -36954,7 +38140,6 @@ components:
       - quote_id
       - razorpay_amount_paise
       - reconciliation_state
-      - simulated_capture_available
       - status
       - updated_at
       - version
@@ -37354,6 +38539,14 @@ components:
         * `this_month` - this_month
         * `last_month` - last_month
         * `all` - all
+    PermissionStateEnum:
+      enum:
+      - granted
+      - denied
+      - default
+      type: string
+      description: "* `` - \n* `granted` - granted\n* `denied` - denied\n* `default`\
+        \ - default"
     PickupAddress:
       type: object
       description: Where a Self Pickup customer collects the item. ``maps_url`` opens
@@ -40268,6 +41461,135 @@ components:
         * `A9_STAY_RESERVATION` - A9 stay reservation
         * `A7_RENTAL_BOOKING` - A7 rental booking
         * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+    PushDevice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        app:
+          allOf:
+          - $ref: '#/components/schemas/PushDeviceAppEnum'
+          readOnly: true
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PushDevicePlatformEnum'
+          readOnly: true
+        app_version:
+          type: string
+          readOnly: true
+        last_registered_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - app
+      - app_version
+      - id
+      - last_registered_at
+      - platform
+    PushDeviceAppEnum:
+      enum:
+      - customer
+      - partner
+      type: string
+      description: |-
+        * `customer` - Customer
+        * `partner` - Partner
+    PushDevicePlatformEnum:
+      enum:
+      - ios
+      - android
+      type: string
+      description: |-
+        * `ios` - iOS
+        * `android` - Android
+    PushDeviceRegisterAppEnum:
+      enum:
+      - customer
+      - partner
+      type: string
+      description: |-
+        * `customer` - customer
+        * `partner` - partner
+    PushDeviceRegisterPlatformEnum:
+      enum:
+      - ios
+      - android
+      type: string
+      description: |-
+        * `ios` - ios
+        * `android` - android
+    PushDeviceRegisterRequest:
+      type: object
+      properties:
+        expo_push_token:
+          type: string
+          minLength: 1
+          maxLength: 200
+        app:
+          $ref: '#/components/schemas/PushDeviceRegisterAppEnum'
+        platform:
+          $ref: '#/components/schemas/PushDeviceRegisterPlatformEnum'
+        app_version:
+          type: string
+          minLength: 1
+          maxLength: 32
+      required:
+      - app
+      - app_version
+      - expo_push_token
+      - platform
+    PushDeviceUnregisterRequest:
+      type: object
+      properties:
+        expo_push_token:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - expo_push_token
+    PushPreferenceItem:
+      type: object
+      description: One push category the signed-in person can see, and whether it
+        is on.
+      properties:
+        category:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        is_enabled:
+          type: boolean
+          readOnly: true
+        is_mutable:
+          type: boolean
+          readOnly: true
+      required:
+      - category
+      - description
+      - is_enabled
+      - is_mutable
+      - label
+    PushPreferences:
+      type: object
+      properties:
+        role:
+          type: string
+          readOnly: true
+        preferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushPreferenceItem'
+          readOnly: true
+      required:
+      - preferences
+      - role
     QuestionAnswerRequest:
       type: object
       properties:
@@ -41880,6 +43202,13 @@ components:
           items:
             $ref: '#/components/schemas/RentalAssetMedia'
           readOnly: true
+        reserved_ranges:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+          readOnly: true
         pickup_address_line:
           type: string
           readOnly: true
@@ -41945,6 +43274,7 @@ components:
       - pickup_pincode
       - public_state
       - quantity_available
+      - reserved_ranges
       - slug
       - structured_fields
       - title
@@ -42014,6 +43344,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
+        reserved_ranges:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
           readOnly: true
         pickup_address_line:
           type: string
@@ -42085,6 +43422,7 @@ components:
       - pickup_pincode
       - public_state
       - quantity_available
+      - reserved_ranges
       - slug
       - structured_fields
       - title
@@ -42324,14 +43662,10 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
       required:
       - amount_paise
       - id
       - payment_attempt_id
-      - simulated_capture_available
     RentalDepositStatusEnum:
       enum:
       - REQUESTED
@@ -47342,9 +48676,6 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-        simulated_capture_available:
-          type: boolean
-          readOnly: true
         shares:
           type: array
           items:
@@ -47390,7 +48721,6 @@ components:
       - receipt_series
       - settled_at
       - shares
-      - simulated_capture_available
       - status
     VisitPlanChooseRequest:
       type: object

@@ -189,12 +189,7 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
           const result = await completeOrOpenRentalCheckout(String(attemptId), {
             businessName: "Vsolve Hub",
           });
-          if (result.mode === "simulated") {
-            Alert.alert(
-              "Booking Confirmed",
-              "Rental fee and deposit recorded. Razorpay is not configured, so payment was simulated.",
-            );
-          } else if (result.mode === "pending") {
+          if (result.mode === "pending") {
             Alert.alert(
               "Pending Payment",
               "Booking created and unpaid (Pending). Payment is still preparing — open My Rentals shortly to pay.",

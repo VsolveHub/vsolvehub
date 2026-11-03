@@ -48,8 +48,7 @@ import { getApiClient } from "@vsolve/mobile-core";
  * There cannot be one. `GET /api/v1/payment-attempts/{id}/` resolves ownership
  * through `checkout__customer`, and an M2 access attempt is created with
  * `checkout=None` — so the endpoint answers `404` for every unlock, plan and
- * stage charge this app creates, and `POST .../simulate-capture/` refuses them
- * with a `PermissionError` for the same reason. The `AccessCheckout` response is
+ * stage charge this app creates. The `AccessCheckout` response is
  * therefore used for exactly what it is: proof that an attempt exists, and the
  * provider handoff values. Logged in `frontend-execution-plan.md` §7.
  */
@@ -456,10 +455,6 @@ export function visitPlanCheckoutKey(planId: string): string {
   return getStableIdempotencyKey(`${PLAN_CHECKOUT_SCOPE}:${planId}`);
 }
 
-export function canSimulateAccessCheckout(checkout: Schemas["AccessCheckout"]): boolean {
-  return checkout.provider === "fake";
-}
-
 export interface StartVisitPlanCheckoutInput {
   requirementId: string;
   planId: string;
@@ -492,37 +487,6 @@ export function useStartVisitPlanCheckout() {
         }),
       );
     },
-    onSettled: (_data, _error, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: m2AccessKeys.visitPlan(input.requirementId),
-      });
-    },
-    retry: false,
-  });
-}
-
-export interface SimulateVisitPlanCaptureInput {
-  requirementId: string;
-  paymentAttemptId: string;
-}
-
-/**
- * Development-only capture for the checkout-free A5 visit-plan charge.
- *
- * The server remains the gatekeeper: production returns 404 because simulated
- * capture is disabled, and non-fake providers are refused. After the command,
- * the visit-plan aggregate is the read that says whether payment became active.
- */
-export function useSimulateVisitPlanCapture() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: SimulateVisitPlanCaptureInput) =>
-      request(() =>
-        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-          params: { path: { attempt_id: input.paymentAttemptId } },
-        }),
-      ),
     onSettled: (_data, _error, input) => {
       void queryClient.invalidateQueries({
         queryKey: m2AccessKeys.visitPlan(input.requirementId),

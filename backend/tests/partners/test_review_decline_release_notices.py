@@ -9,6 +9,7 @@ Gaps from the partner onboarding audit:
 
 from http import HTTPStatus
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +17,7 @@ from apps.identity.models import Role, User, UserRole
 from apps.notifications.models import NotificationIntent
 from apps.partners.models import PartnerApplication, PartnerApplicationTransition
 from tests.helpers import force_role_client
-from tests.partners.conftest import PartnerSetup
+from tests.partners.conftest import PartnerSetup, upload_partner_document
 from tests.partners.test_operations_and_presence import (
     _approve_application,
     _submitted_application,
@@ -198,3 +199,181 @@ def test_approval_suspension_and_reinstatement_each_send_one_notice(
         "partner_account_suspended",
         "partner_account_reinstated",
     ]
+
+
+# --- what the applicant sees ---------------------------------------------------------------------
+
+
+def _own_application(setup: PartnerSetup) -> dict[str, Any]:
+    response = setup.client.get("/api/v1/partner/application/")
+    assert response.status_code == HTTPStatus.OK
+    return response.json()
+
+
+def test_the_applicant_never_sees_a_decline_reason_or_who_reviewed(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    application, client = _under_review(partner_setup, operations_user)
+    _transition(client, application, "DECLINED", "Suspected forged document.")
+
+    body = _own_application(partner_setup)
+
+    assert body["review_assigned_to_id"] is None
+    assert "forged" not in str(body["transitions"])
+    assert all(transition["reason"] == "" for transition in body["transitions"])
+    # Operations still reads the whole record.
+    detail = client.get(f"/api/v1/operations/partner-applications/{application.id}/").json()
+    assert "Suspected forged document." in [t["reason"] for t in detail["transitions"]]
+
+
+def test_the_applicant_sees_the_change_request_but_not_queue_handoffs(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    application, _client = _under_review(partner_setup, operations_user)
+    other = _ops()
+    assert _release(other, application).status_code == HTTPStatus.OK
+    assert _transition(other, application, "UNDER_REVIEW").status_code == HTTPStatus.OK
+    _transition(other, application, "CHANGES_REQUIRED", "Upload a clearer ID photo.")
+
+    transitions = _own_application(partner_setup)["transitions"]
+
+    assert "application_review_released" not in [t["reason_code"] for t in transitions]
+    assert transitions[-1]["reason"] == "Upload a clearer ID photo."
+
+
+# --- every event notifies -----------------------------------------------------------------------
+
+
+def test_sending_and_review_start_each_tell_the_partner(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    _under_review(partner_setup, operations_user)
+
+    templates = [notice.template_code for notice in _notices(partner_setup)]
+
+    assert templates == ["partner_application_submitted", "partner_application_review_started"]
+
+
+def test_a_rejected_document_tells_the_partner_what_to_replace(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    application, client = _under_review(partner_setup, operations_user)
+    document = application.documents.get()
+
+    response = client.post(
+        f"/api/v1/operations/partner-documents/{document.id}/review/",
+        {"decision": "REJECTED", "reason": "Expired document."},
+        format="json",
+    )
+
+    assert response.status_code == HTTPStatus.OK, response.json()
+    notice = _notices(partner_setup)[-1]
+    assert notice.template_code == "partner_document_rejected"
+    assert notice.purpose == "partner_application_decision"
+    assert notice.context["reason"] == "Expired document"
+
+
+def test_a_decision_is_pushed_after_it_commits(
+    partner_setup: PartnerSetup,
+    operations_user: User,
+    django_capture_on_commit_callbacks: Any,
+    settings: Any,
+) -> None:
+    # No subscription row in this test: send to the alias rather than refusing for want of one.
+    settings.FEATURE_PUSH_GATED_INSTANT = False
+    application, client = _under_review(partner_setup, operations_user)
+
+    with patch("apps.notifications.transport.send_push_to_external_ids") as send:
+        send.return_value = {
+            "success": True,
+            "notification_id": "os-1",
+            "errors": [],
+            "raw_response": {"id": "os-1"},
+            "http_status": 200,
+        }
+        with django_capture_on_commit_callbacks(execute=True):
+            _transition(client, application, "CHANGES_REQUIRED", "Upload a clearer ID photo.")
+
+    send.assert_called_once()
+    kwargs = send.call_args.kwargs
+    assert kwargs["external_ids"] == [str(partner_setup.user.id)]
+    assert kwargs["heading"] == "Changes needed on your application"
+    assert kwargs["url"].endswith("/apply")
+    assert kwargs["data"]["category"] == "ACCOUNT_SECURITY"
+
+
+def test_review_start_is_not_pushed(
+    partner_setup: PartnerSetup,
+    operations_user: User,
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    application, _document = _submitted_application(partner_setup)
+    client = force_role_client(user=operations_user, role_code="operations")
+
+    with (
+        patch("apps.notifications.transport.send_push_to_external_ids") as send,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        _transition(client, application, "UNDER_REVIEW")
+
+    send.assert_not_called()
+
+
+# --- replacing a rejected document ---------------------------------------------------------------
+
+
+def _reject_document(client: Any, application: PartnerApplication) -> None:
+    document = application.documents.get()
+    response = client.post(
+        f"/api/v1/operations/partner-documents/{document.id}/review/",
+        {"decision": "REJECTED", "reason": "Expired document."},
+        format="json",
+    )
+    assert response.status_code == HTTPStatus.OK, response.json()
+
+
+def test_a_rejected_document_can_be_replaced_while_in_review(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    application, client = _under_review(partner_setup, operations_user)
+    _reject_document(client, application)
+
+    body = _own_application(partner_setup)
+    assert body["can_edit"] is False
+    assert [document["can_replace"] for document in body["documents"]] == [True]
+
+    replaced = upload_partner_document(
+        partner_setup.client, expected_version=body["version"], sha256="d" * 64
+    )
+    assert replaced.status_code == HTTPStatus.CREATED, replaced.json()
+    documents = _own_application(partner_setup)["documents"]
+    assert [(d["version"], d["status"], d["can_replace"]) for d in documents] == [
+        (2, "PENDING", False),
+        (1, "SUPERSEDED", False),
+    ]
+
+
+def test_a_declined_application_offers_no_replacement_and_refuses_one(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    application, client = _under_review(partner_setup, operations_user)
+    _reject_document(client, application)
+    _transition(client, application, "DECLINED", "The ID photo does not match.")
+
+    body = _own_application(partner_setup)
+    assert body["can_edit"] is False
+    assert [document["can_replace"] for document in body["documents"]] == [False]
+
+    refused = partner_setup.client.post(
+        "/api/v1/partner/application/documents/uploads/",
+        {
+            "expected_version": body["version"],
+            "kind": "GOVERNMENT_ID",
+            "content_type": "image/jpeg",
+            "size_bytes": 1024,
+            "sha256": "d" * 64,
+        },
+        format="json",
+    )
+    assert refused.status_code == HTTPStatus.CONFLICT
+    assert refused.json()["error"]["code"] == "partner_transition_not_allowed"

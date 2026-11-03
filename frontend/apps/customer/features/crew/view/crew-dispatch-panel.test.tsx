@@ -11,6 +11,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));
 
+/** Razorpay Checkout handoff; the panel's job is to hand the attempt to it. */
+const handoff = vi.hoisted(() => ({ complete: vi.fn() }));
+vi.mock("@/features/payment/standalone-handoff", () => ({
+  completeOrOpenCheckout: handoff.complete,
+}));
+
 const { CrewDispatchPanel } = await import("./crew-dispatch-panel");
 
 function ok<T>(data: T, status = 200) {
@@ -56,7 +62,6 @@ function fee(
     settlement_reason_code: "",
     failure_code: "",
     payment_attempt_id: null,
-    simulated_capture_available: false,
     activated_at: null,
     earned_at: null,
     settled_at: null,
@@ -126,6 +131,8 @@ function renderPanel() {
 }
 
 beforeEach(() => {
+  handoff.complete.mockReset();
+  handoff.complete.mockResolvedValue({ mode: "checkout", attempt: {} });
   window.sessionStorage.clear();
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -138,7 +145,7 @@ afterEach(() => {
 });
 
 describe("request-detail crew payment", () => {
-  it("starts checkout and captures a fake payment in one click", async () => {
+  it("starts checkout and opens Razorpay in one click", async () => {
     client.GET.mockImplementation((path: string) => {
       if (path === "/api/v1/payment-attempts/{attempt_id}/") {
         return Promise.resolve(
@@ -146,7 +153,6 @@ describe("request-detail crew payment", () => {
             id: "attempt-new",
             status: "CREATED",
             provider: "fake",
-            simulated_capture_available: true,
           }),
         );
       }
@@ -165,20 +171,16 @@ describe("request-detail crew payment", () => {
     fireEvent.click(confirm);
 
     await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-new" } } },
-      ),
+      expect(handoff.complete).toHaveBeenCalledWith("attempt-new", expect.anything()),
     );
   });
 
-  it("recovers an already-pending fake payment on the request page", async () => {
+  it("reopens Razorpay for an already-pending fee instead of marking it paid", async () => {
     client.GET.mockResolvedValue(
       ok(
         state({
           booking_fee: fee("PENDING", {
             payment_attempt_id: "attempt-existing",
-            simulated_capture_available: true,
           }),
           checkout_available: false,
         }),
@@ -187,13 +189,11 @@ describe("request-detail crew payment", () => {
     client.POST.mockResolvedValue(ok({}));
     renderPanel();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Mark as paid" }));
+    expect(screen.queryByRole("button", { name: "Mark as paid" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Continue payment" }));
 
     await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-existing" } } },
-      ),
+      expect(handoff.complete).toHaveBeenCalledWith("attempt-existing", expect.anything()),
     );
     expect(client.POST).not.toHaveBeenCalledWith(
       "/api/v1/requirements/{requirement_id}/booking-fee/checkout/",
@@ -201,7 +201,7 @@ describe("request-detail crew payment", () => {
     );
   });
 
-  it("shows Pay again after failure and captures the replacement attempt", async () => {
+  it("shows Pay again after failure and opens Razorpay for the replacement attempt", async () => {
     const failedState = state({
       booking_fee: fee("FAILED", {
         payment_attempt_id: "attempt-failed",
@@ -215,7 +215,6 @@ describe("request-detail crew payment", () => {
             id: "attempt-new",
             status: "CREATED",
             provider: "fake",
-            simulated_capture_available: true,
           }),
         );
       }
@@ -232,10 +231,7 @@ describe("request-detail crew payment", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Pay again" }));
 
     await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-new" } } },
-      ),
+      expect(handoff.complete).toHaveBeenCalledWith("attempt-new", expect.anything()),
     );
   });
 });

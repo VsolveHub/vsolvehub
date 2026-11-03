@@ -213,6 +213,7 @@ export default function ListingDetailPage() {
         <ApplySteps
           listingId={listingId}
           posterName={listing.poster_name}
+          jobSkills={[...asStringList(listing.required_skills), ...asStringList(listing.preferred_skills)]}
           isAuthenticated={session.isAuthenticated}
           isSuccess={apply.isSuccess}
           activeApplication={activeApplication}

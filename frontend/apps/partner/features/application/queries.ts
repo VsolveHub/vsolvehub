@@ -128,16 +128,7 @@ export function useUpdateApplication() {
   });
 }
 
-/*
- * Document upload intentionally has no hook yet.
- *
- * Contract 1.5.0 replaced single-shot metadata registration with a server-owned
- * signed upload: request an upload, PUT the bytes to storage, then finalize with
- * `{expected_version, upload_id}`. The previous hook posted `object_key`,
- * `content_type`, `size_bytes` and `sha256` directly — a request shape that no
- * longer exists — so it was removed rather than half-migrated. Building the real
- * two-step flow, with retry, progress and expired-URL recovery, is FE-07.
- */
+// Document upload lives in `upload-queries.ts`: request, PUT to storage, finalize.
 
 export function useSubmitApplication() {
   const queryClient = useQueryClient();

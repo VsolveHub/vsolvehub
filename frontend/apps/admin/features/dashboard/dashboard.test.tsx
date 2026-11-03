@@ -97,6 +97,12 @@ describe("hrefForMetric and METRIC_KEY_HREF route coverage", () => {
     expect(METRIC_KEY_HREF.open_cases).toBe("/operations/cases");
   });
 
+  it("sends home-service booking figures to Home services, not the crew requests", () => {
+    expect(hrefForMetric("", "overdue_bookings")).toBe("/operations/home-services");
+    expect(hrefForMetric("booking", "anything")).toBe("/operations/home-services");
+    expect(hrefForMetric("", "requests")).toBe("/operations/requests");
+  });
+
   it("covers rentals routes", () => {
     expect(hrefForMetric("", "rentals")).toBe("/operations/rentals");
     expect(hrefForMetric("", "rental")).toBe("/operations/rentals");

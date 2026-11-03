@@ -9,8 +9,9 @@ import { useState } from "react";
 import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
 import { bookingVisitHref } from "@/lib/routes";
+import { CustomerPushPromptCard } from "@/features/notifications/view/CustomerPushPromptCard";
 
-import { formatBookingWhen } from "./booking-format";
+import { cleanServiceLabel, formatBookingWhen } from "./booking-format";
 import {
   canShowVisitFeedback,
   CompletedVisitsFeedback,
@@ -113,103 +114,163 @@ function UnitCard({
   isPaid: boolean;
 }) {
   const deadline = useServerCountdown(unit.state_deadline, 1000);
+  const displayLines = unit.lines.filter(
+    (line) => (line.amount?.amount_paise ?? 0) > 0 || line.kind === "SERVICE",
+  );
 
   return (
-    <li className="rounded-card border border-line bg-surface p-4 transition-all hover:border-line-strong shadow-xs">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-text">
-          Visit {index + 1} of {total}
-        </h3>
+    <li className="rounded-2xl border border-line bg-surface shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden">
+      {/* Header bar with numeric visit indicator & status */}
+      <div className="bg-surface-sunken/60 border-b border-line/60 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex size-6 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white shadow-xs">
+            {index + 1}
+          </span>
+          <h3 className="text-base font-bold text-navy-900">
+            Visit {index + 1} of {total}
+          </h3>
+        </div>
         <UnitStatusBadge unit={unit} />
       </div>
 
-      <p className="mt-1 text-sm text-text-secondary">
-        <time dateTime={unit.starts_at}>{formatBookingWhen(unit.starts_at)}</time>
-        {" · arrival window "}
-        {unit.arrival_window_minutes} min · about {unit.estimated_duration_minutes} min of work
-      </p>
-
-      {deadline && !deadline.isExpired ? (
-        <p className="mt-1 text-sm text-text-secondary">
-          <span aria-hidden data-numeric>
-            {deadline.display}
-          </span>
-          <span className="sr-only">{deadline.announce}</span>
-          <span> until the next step on this visit</span>
-        </p>
-      ) : null}
-
-      {/* Where the visit has got to, and who is bringing it. */}
-      {unit.booking_status ? (
-        <div className="mt-3">
-          <VisitProgress status={unit.booking_status} />
-        </div>
-      ) : null}
-
-      {unit.booking_id && unit.booking_status ? (
-        <div className="mt-3">
-          <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
-        </div>
-      ) : null}
-
-      {/* Professional details: generic Mock card pre-payment, Real partner details post-payment */}
-      {unit.professional && isPaid ? (
-        <div className="mt-3 space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
-            <span>✓</span>
-            <span>Real Partner Details Unlocked</span>
+      <div className="p-5 space-y-4">
+        {/* Schedule Grid */}
+        <div className="rounded-xl border border-line/70 bg-surface-sunken/40 p-3.5 sm:p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="flex items-start gap-2.5">
+            <span className="text-base shrink-0 p-1.5 rounded-lg bg-orange-50">📅</span>
+            <div>
+              <p className="font-bold uppercase tracking-wider text-text-secondary text-[10px]">Date & Time</p>
+              <p className="font-semibold text-text text-xs sm:text-sm mt-0.5">
+                <time dateTime={unit.starts_at}>{formatBookingWhen(unit.starts_at)}</time>
+              </p>
+            </div>
           </div>
-          <ProfessionalCard professional={unit.professional} />
+          <div className="flex items-start gap-2.5">
+            <span className="text-base shrink-0 p-1.5 rounded-lg bg-blue-50">⏱️</span>
+            <div>
+              <p className="font-bold uppercase tracking-wider text-text-secondary text-[10px]">Arrival Window</p>
+              <p className="font-semibold text-text text-xs sm:text-sm mt-0.5">{unit.arrival_window_minutes} min</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <span className="text-base shrink-0 p-1.5 rounded-lg bg-emerald-50">⏳</span>
+            <div>
+              <p className="font-bold uppercase tracking-wider text-text-secondary text-[10px]">Estimated Work</p>
+              <p className="font-semibold text-text text-xs sm:text-sm mt-0.5">about {unit.estimated_duration_minutes} min</p>
+            </div>
+          </div>
         </div>
-      ) : unit.professional || unit.status === "HELD" || unit.status === "PAYMENT_PENDING" ? (
-        <div className="mt-3">
-          <MockProfessionalCard professional={unit.professional} />
-        </div>
-      ) : null}
 
-      {/*
-        Django sends no `professional` while a replacement is being found, because the one on
-        the Booking row is whoever stepped back. This says so rather than leaving the space
-        blank, and it is where the empty card used to contradict the badge above it.
-      */}
-      {unit.status === "RECOVERY_REQUIRED" ? (
-        <p className="mt-3 rounded-control bg-surface-sunken p-3 text-sm leading-6 text-text-secondary">
-          Your professional had to step back. We are assigning someone else now — if we cannot,
-          this visit is cancelled and refunded in full automatically.
-        </p>
-      ) : null}
+        {/* Hold deadline banner */}
+        {deadline && !deadline.isExpired ? (
+          <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2 text-xs text-amber-900 border border-amber-200">
+            <span className="text-base">⏱️</span>
+            <p className="font-medium">
+              Slot held for{" "}
+              <span aria-hidden data-numeric className="font-bold text-amber-950">
+                {deadline.display}
+              </span>
+              <span className="sr-only">{deadline.announce}</span>
+              <span> until the next step on this visit</span>
+            </p>
+          </div>
+        ) : null}
 
-      <ul className="mt-4 flex flex-col gap-1 border-t border-line pt-3 text-sm">
-        {unit.lines.map((line) => (
-          <li key={line.id} className="flex justify-between gap-3">
-            <span className="text-text">
-              {line.label}
-              {line.quantity > 1 ? (
-                <span className="text-text-secondary"> × {line.quantity}</span>
-              ) : null}
-            </span>
-            <span className="shrink-0 tabular-nums text-text-secondary">
-              <Money value={line.amount} />
-            </span>
-          </li>
-        ))}
-      </ul>
+        {/* Where the visit has got to, and who is bringing it. */}
+        {unit.booking_status ? (
+          <div className="mt-3">
+            <VisitProgress status={unit.booking_status} />
+          </div>
+        ) : null}
 
-      <p className="mt-3 flex justify-between text-sm font-semibold text-text">
-        <span>Visit total</span>
-        <Money value={unit.total} className="tabular-nums" />
-      </p>
+        {unit.booking_id && unit.booking_status ? (
+          <div className="rounded-xl border border-orange-200/80 bg-orange-50/50 p-4">
+            <p className="text-xs font-semibold text-orange-950 mb-2">
+              🔐 Start Code for Visit {index + 1}
+            </p>
+            <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
+          </div>
+        ) : null}
 
-      {/* Only once the unit has become a real Booking. */}
-      {unit.booking_id ? (
-        <Link
-          href={bookingVisitHref(groupId, unit.booking_id)}
-          prefetch={false}
-          className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-text-link hover:underline"
-        >
-          Track this visit
-        </Link>
-      ) : null}
+        {/* Professional details: generic Mock card pre-payment, Real partner details post-payment */}
+        {unit.professional && isPaid ? (
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+              <span>✓</span>
+              <span>Real Partner Details Unlocked</span>
+            </div>
+            <ProfessionalCard professional={unit.professional} />
+          </div>
+        ) : unit.professional || unit.status === "HELD" || unit.status === "PAYMENT_PENDING" ? (
+          <div>
+            <MockProfessionalCard
+              professional={unit.professional}
+              isHeld={unit.status === "HELD" || unit.status === "PAYMENT_PENDING"}
+            />
+          </div>
+        ) : null}
+
+        {/*
+          Django sends no `professional` while a replacement is being found, because the one on
+          the Booking row is whoever stepped back. This says so rather than leaving the space
+          blank, and it is where the empty card used to contradict the badge above it.
+        */}
+        {unit.status === "RECOVERY_REQUIRED" ? (
+          <p className="rounded-control bg-surface-sunken p-3 text-sm leading-6 text-text-secondary">
+            Your professional had to step back. We are assigning someone else now — if we cannot,
+            this visit is cancelled and refunded in full automatically.
+          </p>
+        ) : null}
+
+        {/* Booked Services */}
+        {displayLines.length > 0 ? (
+          <div className="rounded-xl border border-line/70 bg-white p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-text-secondary mb-2.5">
+              Booked Services
+            </p>
+            <ul className="divide-y divide-line/40 text-xs">
+              {displayLines.map((line) => {
+                const label = cleanServiceLabel(line.label, line.quantity);
+                return (
+                  <li key={line.id} className="py-2 first:pt-0 last:pb-0 flex justify-between items-center gap-3">
+                    <span className="font-medium text-slate-800">
+                      {label}
+                      {line.quantity > 1 ? (
+                        <span className="ml-1.5 inline-flex items-center rounded bg-warm-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                          Qty: {line.quantity}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 tabular-nums font-semibold text-slate-900">
+                      <Money value={line.amount} />
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="flex justify-between items-baseline pt-2.5 mt-2 border-t border-line/60 text-sm font-bold text-text">
+              <span>Visit total</span>
+              <span className="tabular-nums font-extrabold text-navy-950">
+                <Money value={unit.total} />
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Only once the unit has become a real Booking. */}
+        {unit.booking_id ? (
+          <div className="pt-1">
+            <Link
+              href={bookingVisitHref(groupId, unit.booking_id)}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-text-link hover:underline"
+            >
+              Track this visit →
+            </Link>
+          </div>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -462,11 +523,70 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
             : "space-y-4 pb-20 lg:pb-12"
         }
       >
-        <BackToBookingsLink />
+        <CustomerPushPromptCard bookingId={groupId} />
 
-        {isMultiPaidVisit ? (
-          <h1 className="text-2xl font-bold text-text">Your visits</h1>
-        ) : null}
+        {isAwaitingPayment ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <BackToBookingsLink />
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-text">
+                  Your booking
+                </h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                  Awaiting Payment
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-text-secondary">
+                Every visit has a verified professional reserved. Complete payment to confirm.
+              </p>
+            </div>
+          </div>
+        ) : isMultiPaidVisit ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <BackToBookingsLink />
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-text">
+                  Your visits
+                </h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-200">
+                  <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                  Booking Confirmed
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-text-secondary">
+                {group.units.length} visits scheduled · All professionals assigned and confirmed.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <BackToBookingsLink />
+            <div className="flex items-center gap-2">
+              {isPaid ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
+                  <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                  Booking Confirmed
+                </span>
+              ) : null}
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* The status card, on the states that still have something to say. `showBookingSummaryCard`
             narrows what used to be `!isAwaitingPayment`: on a live or finished booking the visit
@@ -540,11 +660,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         <div
           className={
             usesTwoColumn
-              ? "lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-4 lg:space-y-0"
-              : undefined
+              ? "mt-6 lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-6 lg:space-y-0"
+              : "mt-6 space-y-4"
           }
         >
-          <div className={usesTwoColumn ? (isAwaitingPayment ? "lg:col-span-7 min-w-0 space-y-4" : "lg:col-span-8 min-w-0 space-y-4") : "space-y-4"}>
+          <div className={usesTwoColumn ? "lg:col-span-8 min-w-0 space-y-4" : "space-y-4"}>
             {isAwaitingPayment ? (
               <div className="sr-only">
                 <AssignmentProgress group={group} />
@@ -588,18 +708,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
             {isAwaitingPayment ? (
               <>
-                {canRefresh || canCancel ? (
+                {canCancel ? (
                   <div className="mt-6 flex flex-wrap gap-3">
-                    {canRefresh ? (
-                      <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
-                        Refresh now
-                      </Button>
-                    ) : null}
-                    {canCancel ? (
-                      <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
-                        Cancel this booking
-                      </Button>
-                    ) : null}
+                    <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
+                      Cancel this booking
+                    </Button>
                   </div>
                 ) : null}
 
@@ -619,13 +732,13 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           </div>
 
           {isAwaitingPayment ? (
-            <div className="hidden min-w-0 lg:col-span-5 lg:block">
+            <div className="hidden min-w-0 lg:col-span-4 lg:block lg:sticky lg:top-24 lg:self-start">
               <PaymentSummarySideCard group={group} />
             </div>
           ) : null}
 
           {isSinglePaidVisit && group.units[0] !== undefined ? (
-            <div className="min-w-0 lg:col-span-4">
+            <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-24 lg:self-start">
               <PaidVisitPaymentCard
                 unit={group.units[0]}
                 groupId={group.id}
@@ -635,7 +748,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           ) : null}
 
           {isMultiPaidVisit ? (
-            <div className="min-w-0 lg:col-span-4">
+            <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-24 lg:self-start">
               <PaidGroupPaymentCard group={group} />
             </div>
           ) : null}

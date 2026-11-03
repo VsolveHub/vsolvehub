@@ -23,7 +23,6 @@ const baseState: Schemas["VisitPlanState"] = {
     credit_paise: 0,
     chargeable_paise: 4950,
     payment_attempt_id: "payment-1",
-    simulated_capture_available: false,
     shares: [
       {
         id: "share-1",

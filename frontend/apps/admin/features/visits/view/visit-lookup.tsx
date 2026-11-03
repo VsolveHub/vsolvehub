@@ -47,7 +47,10 @@ export function VisitLookup() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6">
       <header>
-        <h1 className="text-2xl font-bold text-navy-900">Visit lookup</h1>
+        <Link href="/operations/home-services" className="text-sm font-semibold text-text-link hover:underline">
+          ← All home-service bookings
+        </Link>
+        <h1 className="mt-2 text-2xl font-bold text-navy-900">Visit lookup</h1>
         <p className="mt-1 text-sm text-text-secondary">
           Paste a booking id from a case or a customer message to see where a home-service visit
           stands and act on it.
@@ -206,7 +209,7 @@ function VisitRecord({ booking }: { booking: OperationsBooking }) {
         <Card className="border-warning-line bg-warning-surface p-5 text-sm text-warning-text">
           <p className="font-semibold">This visit needs a new partner.</p>
           <p className="mt-1">
-            Open <Link className="underline" href="/operations/dispatch">Dispatch</Link>, paste the
+            Open <Link className="underline" href="/operations/home-services?tab=dispatch">Dispatch</Link>, paste the
             fulfilment unit id above and run recovery. Once a replacement accepts, come back here to
             confirm them.
           </p>

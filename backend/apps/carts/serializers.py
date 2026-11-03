@@ -530,7 +530,7 @@ class FulfilmentPlanSetSerializer(serializers.ModelSerializer[FulfilmentPlanSet]
     @extend_schema_field(serializers.CharField())
     def get_booking_mode(plan_set: FulfilmentPlanSet) -> str:
         snapshot = plan_set.planning_snapshot or {}
-        return snapshot.get("booking_mode", "SCHEDULED")
+        return str(snapshot.get("booking_mode", "SCHEDULED"))
 
 
 class PlanQuoteCreateSerializer(serializers.Serializer[dict[str, object]]):

@@ -73,11 +73,13 @@ export function useTOrDefault(): (
   fallback: string,
   params?: Record<string, string | number>,
 ) => string {
-  const { t } = useTranslator();
+  const translator = useTranslator();
   return (key, fallback, params) => {
-    const resolved = t(key, params);
+    if (translator.has(key)) {
+      return translator.t(key, params);
+    }
     // The fallback carries the same `{placeholders}` as a catalogue entry would, so it is
     // interpolated the same way — otherwise an app with no entry shows "{codeLength}-digit code".
-    return resolved === key ? interpolate(fallback, params) : resolved;
+    return interpolate(fallback, params);
   };
 }

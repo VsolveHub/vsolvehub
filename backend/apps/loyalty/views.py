@@ -33,6 +33,7 @@ from apps.loyalty.services.referral import (
     get_active_referral_program,
     get_or_create_referral_code,
     referee_reward_summary,
+    referral_share_url,
     referrer_rewards_for,
     validate_referral_code,
     welcome_reward_for,
@@ -160,12 +161,12 @@ class CustomerReferralView(APIView):
         current = max((m for m in tier_minimums if m <= next_payout), default=None)
         upcoming = min((m for m in tier_minimums if m > next_payout), default=None)
 
+        share_url = referral_share_url(ref_code.code)
         data = {
             "code": ref_code.code,
-            "share_url": ref_code.share_url,
+            "share_url": share_url,
             "share_message": (
-                "Join V Solve Hub using my link. "
-                f"{referee_reward_summary(program)} {ref_code.share_url}"
+                f"Join V Solve Hub using my link. {referee_reward_summary(program)} {share_url}"
             ),
             "total_earned_paise": earned["paise"] or 0,
             "total_earned_coins": earned["coins"] or 0,

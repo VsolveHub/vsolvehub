@@ -18,8 +18,7 @@ editing `pricing.py`, that is the change this command exists to avoid.
 
 ## Three doors, all of which must be open
 
-1. `settings.DEBUG` must be true. `production.py` never sets it, and the precedent is
-   `PAYMENTS_ALLOW_SIMULATED_CAPTURE`, which production refuses to boot with.
+1. `settings.DEBUG` must be true. `production.py` never sets it.
 2. `--i-understand-this-is-dev-only` must be passed. Required *even under* `DEBUG`, because a
    shared development database can already hold prices somebody loaded on purpose, and this
    command writes money values into the table those live in.
@@ -3014,7 +3013,7 @@ class Command(BaseCommand):
         """Mirrors `seed_trade_partners._accept_current_consents`.
 
         The receipt points at the document row rather than repeating its version, because
-        `_required_consents_exist` compares document ids. `request_ip_hash` and `device_hash` stay
+        `partner_has_required_consents` compares document ids. `request_ip_hash` and `device_hash` stay
         blank on purpose: those record where a real acceptance came from, and inventing them would
         forge the provenance of a legal receipt.
         """

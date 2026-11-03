@@ -46,6 +46,7 @@ export function useTabSync(options: TabSyncOptions = {}): void {
         case "session.authenticated":
           void queryClient.invalidateQueries({ queryKey: queryKeys.session.all });
           void queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
           break;
 
         case "checkout.started":

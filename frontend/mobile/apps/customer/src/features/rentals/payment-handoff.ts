@@ -7,7 +7,7 @@ export type PaymentAttempt = Schemas["PaymentAttempt"] & {
 };
 
 export type PaymentHandoffResult = {
-  mode: "simulated" | "checkout" | "pending";
+  mode: "checkout" | "pending";
   attempt: PaymentAttempt;
 };
 
@@ -16,14 +16,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function fetchPaymentAttempt(attemptId: string): Promise<PaymentAttempt> {
   return request(() =>
     getApiClient().GET("/api/v1/payment-attempts/{attempt_id}/", {
-      params: { path: { attempt_id: attemptId } },
-    }),
-  );
-}
-
-export function simulatePaymentCapture(attemptId: string): Promise<PaymentAttempt> {
-  return request(() =>
-    getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
       params: { path: { attempt_id: attemptId } },
     }),
   );
@@ -39,7 +31,7 @@ const TERMINAL_STATUSES = new Set([
 ]);
 
 /**
- * Polls until simulate capture or checkout is available, matching web's waitForPaymentHandoff.
+ * Polls until Razorpay Checkout can open, matching web's waitForPaymentHandoff.
  */
 export async function waitForPaymentHandoff(
   attemptId: string,
@@ -51,7 +43,6 @@ export async function waitForPaymentHandoff(
   let attempt = await fetchPaymentAttempt(attemptId);
 
   while (
-    !attempt.simulated_capture_available &&
     !attempt.provider_order_id &&
     !TERMINAL_STATUSES.has(attempt.status) &&
     Date.now() - started < timeoutMs
@@ -63,7 +54,7 @@ export async function waitForPaymentHandoff(
 }
 
 /**
- * Completes payment attempt via simulated capture or provider handoff, matching web completeOrOpenCheckout.
+ * Opens Razorpay Checkout for the payment attempt, matching web completeOrOpenCheckout.
  */
 export async function completeOrOpenRentalCheckout(
   attemptId: string,
@@ -73,11 +64,6 @@ export async function completeOrOpenRentalCheckout(
   },
 ): Promise<PaymentHandoffResult> {
   const attempt = await waitForPaymentHandoff(attemptId);
-
-  if (attempt.simulated_capture_available) {
-    await simulatePaymentCapture(attemptId);
-    return { mode: "simulated", attempt };
-  }
 
   // If Razorpay checkout order is stamped, open checkout URL or redirect
   if (attempt.checkout_url) {

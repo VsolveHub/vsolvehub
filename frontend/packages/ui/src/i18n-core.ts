@@ -29,6 +29,8 @@ export interface Translator {
   t: (key: string, params?: Record<string, string | number>) => string;
   /** Locale-aware number formatting, so Indian grouping is applied. */
   n: (value: number, options?: Intl.NumberFormatOptions) => string;
+  /** Checks whether the catalog contains a defined entry for the key. */
+  has: (key: string) => boolean;
 }
 
 /** Fill `{name}` placeholders from `params`; an unknown placeholder is left as written. */
@@ -119,5 +121,6 @@ export function createTranslator(locale: Locale, catalog: Catalog): Translator {
       }
       return typeof value.toLocaleString === "function" ? value.toLocaleString(locale) : String(value);
     },
+    has: (key: string) => key in catalog && catalog[key] !== undefined,
   };
 }

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 import { useIsViewportClaimed } from "@/lib/focus-mode";
+import { isBrowsingPath, WelcomeRewardStrip } from "@/features/referral/view/welcome-reward-strip";
 
 import { BottomNav, SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
@@ -97,6 +98,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         }`}
       >
         <div className={chromeLayout.contentMinHeightClass}>
+          {isBrowsingPath(pathname) ? <WelcomeRewardStrip /> : null}
           {children}
         </div>
         {chromeLayout.showFooter ? (

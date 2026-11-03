@@ -67,6 +67,7 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
       public_state: "PUBLISHED",
       structured_fields: {},
       media: [],
+      reserved_ranges: [],
       pickup_address_line: "Shop 4, Main Road",
       pickup_area: "Koramangala",
       pickup_city: "Bengaluru",
@@ -92,7 +93,6 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
       amount_paise: 150000,
       status: "HELD",
       payment_attempt_id: "attempt-1",
-      simulated_capture_available: true,
     },
     handover_pin: "7492",
     created_at: "2026-09-05T10:00:00Z",
@@ -269,7 +269,6 @@ describe("RentalBookingCard", () => {
         amount_paise: 150000,
         status: "REQUESTED",
         payment_attempt_id: null,
-        simulated_capture_available: false,
       },
       transport: transport(t),
     });
