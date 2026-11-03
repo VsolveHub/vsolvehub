@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.92.0)
- * Checksum: 21ee22b0411156ae
+ * Checksum: 30f4c896be06fadd
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
