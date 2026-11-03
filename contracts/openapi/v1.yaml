@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.91.0
+  version: 1.92.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -6490,10 +6490,21 @@ paths:
           type: string
         description: Filter by owning team.
       - in: query
+        name: q
+        schema:
+          type: string
+        description: The summary, a customer's or partner's name or phone, or a case,
+          booking or request id.
+      - in: query
+        name: severity
+        schema:
+          type: string
+        description: Filter by severity.
+      - in: query
         name: status
         schema:
           type: string
-        description: Filter by case status.
+        description: One case status, or several separated by commas.
       tags:
       - Operations
       security:
@@ -23936,6 +23947,19 @@ components:
       - expected_version
       - note
       - resolution
+    CasePerson:
+      type: object
+      properties:
+        role:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+      required:
+      - name
+      - phone
+      - role
     CaseQueueSummary:
       type: object
       description: |-
@@ -31707,6 +31731,15 @@ components:
           format: uuid
           nullable: true
           readOnly: true
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/CasePerson'
+          readOnly: true
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31735,8 +31768,10 @@ components:
       - listing_id
       - order_id
       - owner_id
+      - owner_name
       - owner_team
       - partner_id
+      - people
       - requirement_id
       - resolution
       - resolution_note
@@ -31939,6 +31974,10 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
         booking_id:
           type: string
           format: uuid
@@ -31965,6 +32004,11 @@ components:
         holds_payout:
           type: boolean
           readOnly: true
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/CasePerson'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31978,8 +32022,10 @@ components:
       - is_overdue
       - kind
       - owner_id
+      - owner_name
       - owner_team
       - partner_id
+      - people
       - severity
       - status
       - summary

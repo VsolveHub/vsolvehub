@@ -1,5 +1,15 @@
 # API Contract Changelog
 
+## 1.92.0 - Cases say who they are about, and can be searched
+
+Additive, Operations only.
+
+- **Added** `people` on `OperationsCase` and `OperationsCaseList`: `[{role, name, phone}]` for
+  everyone the case's subject names (customer, partner, vendor, employer, applicant).
+- **Added** `owner_name` on both: who claimed it, by name. `owner_id` is unchanged.
+- **Added** `q` and `severity` filters on `GET /operations/cases/`. `q` matches the summary, a
+  customer's or partner's name or phone, or a case, booking, order, request or engagement id.
+
 ## 1.91.0 - Operations lists for home services, crew and projects, and job applicants
 
 Additive, Operations only. The Operations console is the only consumer.

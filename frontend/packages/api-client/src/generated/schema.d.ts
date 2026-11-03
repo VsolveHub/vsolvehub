@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.91.0)
- * Checksum: 2af4062ad49437bf
+ * Source:   contracts/openapi/v1.yaml (version 1.92.0)
+ * Checksum: 21ee22b0411156ae
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -9824,6 +9824,11 @@ export interface components {
             resolution: string;
             note: string;
         };
+        CasePerson: {
+            role: string;
+            name: string;
+            phone: string;
+        };
         /**
          * @description The Operations home screen, counted over the whole queue rather than one page.
          *
@@ -12909,6 +12914,8 @@ export interface components {
             readonly source_kind: string | null;
             /** Format: uuid */
             readonly source_id: string | null;
+            readonly people: components["schemas"]["CasePerson"][];
+            readonly owner_name: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -13004,6 +13011,7 @@ export interface components {
             readonly owner_team: components["schemas"]["OperationsCaseTeamEnum"];
             /** Format: uuid */
             readonly owner_id: string | null;
+            readonly owner_name: string | null;
             /** Format: uuid */
             readonly booking_id: string | null;
             /** Format: uuid */
@@ -13014,6 +13022,7 @@ export interface components {
             readonly is_overdue: boolean;
             readonly version: number;
             readonly holds_payout: boolean;
+            readonly people: components["schemas"]["CasePerson"][];
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -25910,7 +25919,11 @@ export interface operations {
                 owner?: string;
                 /** @description Filter by owning team. */
                 owner_team?: string;
-                /** @description Filter by case status. */
+                /** @description The summary, a customer's or partner's name or phone, or a case, booking or request id. */
+                q?: string;
+                /** @description Filter by severity. */
+                severity?: string;
+                /** @description One case status, or several separated by commas. */
                 status?: string;
             };
             header?: never;
