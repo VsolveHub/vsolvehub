@@ -129,7 +129,7 @@ export function CartWorkspace() {
 
   return (
     // `pb-28` below `lg` keeps the last summary line clear of the pinned continue bar.
-    <div className={`${CART_PAGE_FRAME} min-w-0 max-w-full overflow-x-clip pb-28 pt-6 lg:pb-16`}>
+    <div className={`${CART_PAGE_FRAME} min-w-0 pb-28 pt-6 lg:pb-16`}>
       <h1 className="text-xl font-bold text-text">Your cart</h1>
 
       {cartQuery.isPending ? (
@@ -169,8 +169,8 @@ export function CartWorkspace() {
 
           {/* Items on the left, money and the single action on the right. Stacked below `lg`,
               where a sticky side panel would eat the screen the list needs. */}
-          <div className="mt-6 grid w-full min-w-0 max-w-full gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start">
-            <div className="w-full min-w-0 max-w-full overflow-hidden">
+          <div className="mt-6 grid w-full min-w-0 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+            <div className="w-full min-w-0 overflow-hidden">
           <div>
             <CartItems
               cart={cart}

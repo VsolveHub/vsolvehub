@@ -32,41 +32,53 @@ export function ProfessionalCard({
   embedded?: boolean;
 }) {
   const initial = professional.display_name.trim().charAt(0).toUpperCase() || "?";
+  const cleanedHeadline = professional.headline
+    ? professional.headline.replace(/\+\d+\s*more/i, "& multi-service specialist").trim()
+    : null;
 
   return (
     <div
       className={
         embedded
-          ? "flex items-start gap-4"
-          : "flex items-start gap-4 rounded-card border border-line bg-surface p-4"
+          ? "flex items-start gap-3.5"
+          : "flex items-start gap-3.5 rounded-xl border border-line bg-surface p-4 shadow-2xs"
       }
     >
       <span
         aria-hidden
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-selected-surface text-lg font-bold text-text-link"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-navy-800 to-navy-950 text-white font-bold text-lg shadow-sm"
       >
         {initial}
       </span>
 
       <div className="min-w-0 flex-1">
-        {/* Wrapped, not truncated: a clipped name is the one thing a customer checks at the door. */}
-        <p className="break-words font-semibold text-text">{professional.display_name}</p>
-        {professional.headline ? (
-          <p className="text-sm text-text-secondary">{professional.headline}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="break-words font-bold text-navy-900 text-sm sm:text-base">
+            {professional.display_name}
+          </p>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+            ✓ Verified Pro
+          </span>
+        </div>
+        {cleanedHeadline ? (
+          <p className="text-xs sm:text-sm text-text-secondary mt-0.5">{cleanedHeadline}</p>
         ) : null}
         {professional.experience_years > 0 ? (
-          <p className="text-sm text-text-secondary">
-            {professional.experience_years}{" "}
-            {professional.experience_years === 1 ? "year" : "years"} of experience
+          <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
+            <span>💼</span>
+            <span>
+              {professional.experience_years}{" "}
+              {professional.experience_years === 1 ? "year" : "years"} of experience
+            </span>
           </p>
         ) : null}
         {/* True of everyone the platform assigns: a Partner is only offered work after the
             identity review and the per-skill approval. Nothing per-person is claimed here. */}
-        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Checks">
+        <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Checks">
           {["ID verified", "Approved for this work"].map((check) => (
             <li
               key={check}
-              className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-xs font-semibold text-success-text"
+              className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2.5 py-0.5 text-xs font-semibold text-success-text border border-success-line/60"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5" aria-hidden>
                 <path

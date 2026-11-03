@@ -2,7 +2,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { Button, ErrorState, Skeleton, buttonStyles, useHydrated } from "@vsolve/ui";
+import { Button, ErrorState, Spinner, buttonStyles, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -189,6 +189,17 @@ export function CheckoutWorkspace() {
       : null,
   );
   const groups = groupsQuery.data ?? [];
+
+  // Auto-heal: If scheduling-groups fails with a cart version conflict (e.g. from session cart merge upon login),
+  // refetch the authoritative cart to sync the version and re-run scheduling groups.
+  useEffect(() => {
+    if (groupsQuery.error && cartVersionConflict(groupsQuery.error) !== null) {
+      void cartQuery.refetch();
+    }
+  }, [groupsQuery.error, cartQuery]);
+
+  const isCartConflict = cartVersionConflict(groupsQuery.error) !== null;
+  const isSlotChecking = groupsQuery.isPending || cartQuery.isFetching || isCartConflict;
 
   /**
    * Candidate windows query to evaluate instant availability and earliest ETA.
@@ -573,37 +584,58 @@ export function CheckoutWorkspace() {
                   icon={<ClockIcon />}
                   label={groups.length > 1 ? "Slots" : "Slot"}
                   actionLabel={
-                    effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
+                    effectiveAddressId === null ||
+                    groups.length === 0 ||
+                    groupsQuery.isError ||
+                    isSlotChecking
                       ? undefined
                       : isScheduled
                         ? "Edit"
                         : "Select slot"
                   }
                   onAction={
-                    effectiveAddressId === null || groups.length === 0 || groupsQuery.isError
+                    effectiveAddressId === null ||
+                    groups.length === 0 ||
+                    groupsQuery.isError ||
+                    isSlotChecking
                       ? undefined
                       : () => setSlotsOverride(true)
                   }
                 >
                   {effectiveAddressId === null ? (
                     <span>Pick an address first — times depend on the area.</span>
-                  ) : groupsQuery.isPending ? (
-                    <Skeleton className="h-5 w-40" />
+                  ) : isSlotChecking ? (
+                    <div className="flex items-center gap-2 py-1 text-xs text-text-secondary">
+                      <Spinner size="sm" />
+                      <span>Checking slot availability…</span>
+                    </div>
                   ) : groupsQuery.isError ? (
                     <div className="mt-1 rounded-xl border border-critical/20 bg-critical-surface/30 p-3 text-xs text-text-secondary">
                       <p className="font-semibold text-critical">
                         {describeError(groupsQuery.error, "read").message}
                       </p>
-                      <p className="mt-1 leading-relaxed">
-                        We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address in Hyderabad.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={openAddressPicker}
-                        className="mt-2.5 inline-flex items-center gap-1 font-bold text-action hover:underline cursor-pointer"
-                      >
-                        Change address &rarr;
-                      </button>
+                      {planUnavailable(groupsQuery.error) !== null ? (
+                        <p className="mt-1 leading-relaxed">
+                          We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address in Hyderabad.
+                        </p>
+                      ) : null}
+                      {planUnavailable(groupsQuery.error) !== null ? (
+                        <button
+                          type="button"
+                          onClick={openAddressPicker}
+                          className="mt-2.5 inline-flex items-center gap-1 font-bold text-action hover:underline cursor-pointer"
+                        >
+                          Change address &rarr;
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void groupsQuery.refetch()}
+                          className="mt-2.5 inline-flex items-center gap-1 font-bold text-action hover:underline cursor-pointer"
+                        >
+                          Try again
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <ul className="flex flex-col gap-1">

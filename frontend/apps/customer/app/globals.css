@@ -113,6 +113,31 @@ body {
 }
 
 /*
+ * Custom sleek scrollbar for desktop scrollable panes
+ */
+.sleek-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.sleek-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sleek-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sleek-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.sleek-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+/*
  * Printing.
  *
  * The M1 order receipt has offered a Print button since Milestone 1 and marks

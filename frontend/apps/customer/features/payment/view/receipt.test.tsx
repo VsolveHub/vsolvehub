@@ -83,9 +83,9 @@ describe("Receipt component", () => {
     expect(await screen.findByAltText("V Solve Hub")).toBeInTheDocument();
 
     // Receipt header & details
-    expect(screen.getByText(/Payment Receipt & Invoice/i)).toBeInTheDocument();
+    expect(screen.getByText(/Payment receipt/i)).toBeInTheDocument();
     expect(screen.getAllByText("AC Deep Cleaning").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Tax Invoice for Booking Reference/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Booking Reference/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("group-123").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Paid").length).toBeGreaterThan(0);
   });

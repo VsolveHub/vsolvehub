@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { BookingVisitScreen } from "@/features/bookings/view/booking-visit-screen";
+import { BOOKING_PAGE_FRAME } from "@/features/bookings/view/booking-layout";
 
 /**
  * One visit inside a Booking Group.
@@ -25,7 +26,7 @@ export default async function VisitPage({
   const { groupId, bookingId } = await params;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-24 lg:pb-16 pt-6">
+    <main className={`${BOOKING_PAGE_FRAME} min-w-0 pb-28 pt-6 lg:pb-16`}>
       <BookingVisitScreen groupId={groupId} bookingId={bookingId} />
     </main>
   );

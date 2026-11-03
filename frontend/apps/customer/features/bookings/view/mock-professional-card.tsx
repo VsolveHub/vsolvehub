@@ -1,7 +1,7 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Badge } from "@vsolve/ui";
+import { Badge, cn } from "@vsolve/ui";
 
 /**
  * The professional, as far as the Customer may see them before payment.
@@ -18,8 +18,12 @@ import { Badge } from "@vsolve/ui";
  */
 export function MockProfessionalCard({
   professional,
+  isHeld = false,
+  className,
 }: {
   professional?: Schemas["AssignedProfessional"] | null;
+  isHeld?: boolean;
+  className?: string;
 }) {
   const facts = professional
     ? [
@@ -31,12 +35,21 @@ export function MockProfessionalCard({
     : [];
 
   return (
-    <div className="rounded-xl border border-line bg-gradient-to-r from-surface to-[#FFFDF9] p-4 shadow-2xs">
+    <div
+      className={cn(
+        "rounded-xl border border-line bg-gradient-to-r from-surface to-[#FFFDF9] p-4 shadow-2xs",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-3">
         <div className="flex items-center gap-2">
           <span className="size-2 rounded-full bg-success animate-pulse" />
           <span className="text-xs font-bold uppercase tracking-wider text-text">
-            {professional ? "Professional Held & Assigned" : "Finding your professional"}
+            {professional
+              ? "Professional Held & Assigned"
+              : isHeld
+                ? "Professional Reserved & Held"
+                : "Finding your professional"}
           </span>
         </div>
         <Badge tone="success">Verified Pro</Badge>

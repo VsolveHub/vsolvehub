@@ -46,3 +46,12 @@ export function linePresentationLabel(line: FulfilmentUnit["lines"][number]): st
 export function serviceLinesOf(unit: FulfilmentUnit): FulfilmentUnit["lines"] {
   return unit.lines.filter((line) => line.kind === "SERVICE");
 }
+
+/** Strips duplicate trailing "x {qty}" or "× {qty}" from labels that already included it in database */
+export function cleanServiceLabel(label: string, quantity: number): string {
+  if (!label) return "";
+  let cleaned = label.trim();
+  const regex = new RegExp(`[x×]\\s*${quantity}$`, "i");
+  cleaned = cleaned.replace(regex, "").trim();
+  return cleaned;
+}

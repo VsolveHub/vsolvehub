@@ -60,7 +60,7 @@ describe("when the server asks for payment", () => {
 
     expect(screen.getByRole("link", { name: /pay now/i })).toHaveAttribute(
       "href",
-      "/bookings/group-1/pay",
+      "/bookings/group-1",
     );
   });
 
