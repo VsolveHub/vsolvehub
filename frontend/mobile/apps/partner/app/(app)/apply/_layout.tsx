@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   HelpCircle,
-  LogOut,
   Phone,
   Send,
   X,
@@ -29,11 +28,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
-import {
-  previousStep,
-} from "@/features/application/model/progress";
+import { previousStep } from "@/features/application/model/progress";
 import { APPLICATION_STEPS, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
+import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
+import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
 
 const logoMark = require("@vsolve/mobile-ui/src/logo-mark.png");
 
@@ -175,26 +174,19 @@ export default function ApplyLayout() {
             </Pressable>
           </View>
 
-          {/* Segmented 4-Step Progress Bar */}
-          <View style={[styles.progressRow, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            {APPLICATION_STEPS.map((step, idx) => (
-              <View
-                key={step.href}
-                style={[
-                  styles.progressBarSegment,
-                  {
-                    backgroundColor: idx <= currentStepIdx ? "#ea580c" : "#e2e8f0",
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Step Counter Label */}
-          <View style={[styles.stepLabelRow, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            <Text style={styles.stepLabelText}>
-              Step {currentStepIdx + 1} of {APPLICATION_STEPS.length} • {currentStep.label}
-            </Text>
+          {/* Stepper: Circles variant for Steps 1-3, Segmented variant for Mixed Documents & Step 4 */}
+          <View style={[styles.stepperWrapper, { maxWidth: isDesktop ? 672 : "100%" }]}>
+            <OnboardingStepper
+              currentStep={currentStepIdx}
+              totalSteps={4}
+              stepLabel={currentStep.label}
+              variant={
+                currentStepIdx < 2 ||
+                (currentStepIdx === 2 && (application?.documents?.length ?? 0) === 0)
+                  ? "circles"
+                  : "segmented"
+              }
+            />
           </View>
         </View>
 
@@ -248,6 +240,10 @@ export default function ApplyLayout() {
                     pressed ? { opacity: 0.7 } : null,
                   ]}
                 >
+                  {(currentStepIdx < 2 ||
+                    (currentStepIdx === 2 && (application?.documents?.length ?? 0) === 0)) ? (
+                    <HelpCircle size={16} color="#00112e" strokeWidth={2.2} style={{ marginRight: 6 }} />
+                  ) : null}
                   <Text style={styles.helpButtonText}>Need help?</Text>
                 </Pressable>
 
@@ -273,8 +269,14 @@ export default function ApplyLayout() {
                     <ActivityIndicator color="#ffffff" size="small" />
                   ) : (
                     <View style={styles.continueButtonContent}>
-                      <Text style={styles.continueButtonText}>{primaryLabel}</Text>
-                      <Text style={styles.continueButtonArrow}>{"->"}</Text>
+                      <Text style={styles.continueButtonText}>
+                        {primaryLabel.includes("Submit application")
+                          ? "Submit application"
+                          : (currentStepIdx < 2 ||
+                              (currentStepIdx === 2 && (application?.documents?.length ?? 0) === 0))
+                          ? (primaryLabel.includes("→") ? primaryLabel : `${primaryLabel} →`)
+                          : primaryLabel.replace("→", "").trim()}
+                      </Text>
                     </View>
                   )}
                 </Pressable>
@@ -347,116 +349,14 @@ export default function ApplyLayout() {
           </View>
         </Modal>
 
-        {/* User Profile / Steps Sheet Modal */}
-        <Modal
+        {/* Screen 11: Profile Menu Bottom Sheet */}
+        <ProfileMenuSheet
           visible={profileModalOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setProfileModalOpen(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.profileModalCard}>
-              <View style={styles.modalHeader}>
-                <View style={styles.profileHeaderInfo}>
-                  <View style={styles.avatarBadgeLarge}>
-                    <Text style={styles.avatarTextLarge}>{initialLetter}</Text>
-                  </View>
-                  <View style={{ marginLeft: 12 }}>
-                    <Text style={styles.profileNameText}>
-                      {application?.display_name || "webaura"}
-                    </Text>
-                    <Text style={styles.profileStatusText}>
-                      Status: {application?.status || "DRAFT"}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setProfileModalOpen(false)}
-                  style={styles.modalCloseIcon}
-                >
-                  <X size={20} color="#64748b" />
-                </Pressable>
-              </View>
-
-              <Text style={styles.sheetSectionTitle}>Onboarding Steps</Text>
-
-              <View style={styles.stepsList}>
-                {APPLICATION_STEPS.map((step, idx) => {
-                  const isCurrent = idx === currentStepIdx;
-                  return (
-                    <Pressable
-                      key={step.href}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        setProfileModalOpen(false);
-                        router.push(step.href as any);
-                      }}
-                      style={[
-                        styles.stepItem,
-                        isCurrent ? styles.stepItemCurrent : null,
-                      ]}
-                    >
-                      <View style={styles.stepItemLeft}>
-                        <View
-                          style={[
-                            styles.stepNumberBadge,
-                            isCurrent
-                              ? styles.stepNumberBadgeCurrent
-                              : idx < currentStepIdx
-                              ? styles.stepNumberBadgeDone
-                              : styles.stepNumberBadgeFuture,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepNumberText,
-                              isCurrent
-                                ? { color: "#ffffff" }
-                                : idx < currentStepIdx
-                                ? { color: "#ffffff" }
-                                : { color: "#64748b" },
-                            ]}
-                          >
-                            {idx + 1}
-                          </Text>
-                        </View>
-                        <Text
-                          style={[
-                            styles.stepItemLabel,
-                            isCurrent ? { fontWeight: "700", color: "#00112e" } : null,
-                          ]}
-                        >
-                          {step.label}
-                        </Text>
-                      </View>
-                      <ChevronRight size={16} color="#94a3b8" />
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* Sign Out Button */}
-              <View style={styles.profileModalFooter}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Sign Out"
-                  onPress={() => {
-                    setProfileModalOpen(false);
-                    void signOut();
-                  }}
-                  style={({ pressed }) => [
-                    styles.signOutButton,
-                    pressed ? { backgroundColor: "#ffe4e6" } : null,
-                  ]}
-                >
-                  <LogOut size={16} color="#be123c" />
-                  <Text style={styles.signOutButtonText}>Sign Out</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          onClose={() => setProfileModalOpen(false)}
+          partnerName={application?.display_name || "webaura"}
+          partnerPhone="+91 98765 43210"
+          partnerInitial={initialLetter}
+        />
       </View>
     </ApplyDockContext.Provider>
   );
@@ -529,6 +429,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#ea580c",
+  },
+  stepperWrapper: {
+    width: "100%",
+    alignSelf: "center",
   },
   progressRow: {
     width: "100%",

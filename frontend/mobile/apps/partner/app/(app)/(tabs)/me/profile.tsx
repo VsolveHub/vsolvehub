@@ -1,5 +1,5 @@
-import { ProfilePanel } from "@/features/profile/view/profile-panel";
+import { ProfileScreen } from "@/features/profile/view/profile-screen";
 
 export default function Screen() {
-  return <ProfilePanel />;
+  return <ProfileScreen />;
 }

@@ -2,27 +2,56 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { ErrorState, Spinner } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import { Check, CheckCircle2, ChevronRight, Edit3 } from "lucide-react-native";
+import {
+  Bell,
+  CheckCircle2,
+  FileCheck2,
+  FileText,
+  User,
+} from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 
+import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
 import { useApplyDock } from "../model/dock-context";
-import { canSubmit, isEditable, outstandingRequirements } from "../model/readiness";
+import { canSubmit, isEditable } from "../model/readiness";
 import { isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
-import { useApplicationReference } from "../reference-queries";
 
 export function ReviewStep() {
   const router = useRouter();
   const query = usePartnerApplication();
-  const reference = useApplicationReference();
   const submit = useSubmitApplication();
   const { registerDock } = useApplyDock();
-  const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [permissionSheetOpen, setPermissionSheetOpen] = useState(false);
+
+  const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = query.data ?? null;
   const editable = application !== null && isEditable(application);
   const ready = application !== null && canSubmit(application);
-  const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
+  const appStatus = (application?.status as string) || "";
+  const isSubmitted =
+    appStatus === "SUBMITTED" ||
+    appStatus === "UNDER_REVIEW" ||
+    appStatus === "APPROVED" ||
+    appStatus === "CHANGES_REQUIRED" ||
+    appStatus === "REJECTED" ||
+    appStatus === "DECLINED";
+
+  // If already submitted, navigate directly to status screen
+  useEffect(() => {
+    if (isSubmitted) {
+      router.replace("/apply/status" as any);
+    }
+  }, [isSubmitted, router]);
 
   const submitMutateRef = useRef(submit.mutate);
   submitMutateRef.current = submit.mutate;
@@ -33,9 +62,10 @@ export function ReviewStep() {
     submitMutateRef.current(undefined, {
       onSuccess: () => {
         void refetchRef.current();
+        router.replace("/apply/status" as any);
       },
     });
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!editable) {
@@ -74,7 +104,14 @@ export function ReviewStep() {
     };
   }, [registerDock]);
 
-  if (query.isPending || reference.isPending) {
+  const handleToggleNotifications = (value: boolean) => {
+    setNotificationsEnabled(value);
+    if (value) {
+      setPermissionSheetOpen(true);
+    }
+  };
+
+  if (query.isPending) {
     return (
       <View style={styles.loadingContainer}>
         <Spinner size="sm" />
@@ -97,7 +134,7 @@ export function ReviewStep() {
   if (application === null) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.title}>Review and send</Text>
+        <Text style={styles.title}>Review & Submit</Text>
         <Text style={styles.subtitle}>You have not started your application yet.</Text>
         <Pressable
           accessibilityRole="button"
@@ -110,150 +147,115 @@ export function ReviewStep() {
     );
   }
 
-  const outstanding = outstandingRequirements(application);
+  const displayName = application.display_name || "webaura";
+  const bioLength = application.biography?.length ?? 0;
+  const agreedCount = application.consents?.length ?? 2;
+  const documentsCount = application.documents?.length ?? 2;
 
   return (
     <View style={styles.container}>
       {/* Title */}
       <View style={styles.header}>
-        <Text style={styles.title}>Review and send</Text>
-        <Text style={styles.subtitle}>
-          {isSubmitted
-            ? "Your application has been received and is being processed."
-            : "Please review your details before submitting for approval."}
-        </Text>
+        <Text style={styles.title}>Review & Submit</Text>
       </View>
 
-      {/* Submitted Status Banner */}
-      {isSubmitted ? (
-        <View style={styles.submittedBanner}>
-          <CheckCircle2 size={24} color="#15803d" />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.submittedTitle}>Application Under Review</Text>
-            <Text style={styles.submittedBody}>
-              Our partner operations team is reviewing your documents. We will notify you once your account is activated.
-            </Text>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Outstanding Items Banner */}
-      {!ready && editable ? (
-        <View style={styles.outstandingBanner}>
-          <Text style={styles.outstandingTitle}>Missing information to complete:</Text>
-          {outstanding.map((item) => (
-            <Pressable
-              key={item.code}
-              accessibilityRole="button"
-              onPress={() => router.push(item.href as any)}
-              style={styles.outstandingItem}
-            >
-              <Text style={styles.outstandingItemText}>• {item.label}</Text>
-              <ChevronRight size={14} color="#c2410c" />
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {/* Summary Cards */}
+      {/* 3 Summary Cards matching Screen 5 */}
       <View style={styles.cardsContainer}>
         {/* Card 1: About you */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>1. About you</Text>
-            {editable ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/apply/about")}
-                style={styles.editButton}
-              >
-                <Edit3 size={13} color="#2563eb" />
-                <Text style={styles.editText}>Edit</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Full Name</Text>
-            <Text style={styles.fieldValue}>{application.display_name || "Not entered"}</Text>
-          </View>
-          {application.biography ? (
-            <View style={[styles.fieldRow, { marginTop: 8 }]}>
-              <Text style={styles.fieldLabel}>Bio</Text>
-              <Text style={styles.fieldValue}>{application.biography}</Text>
+        <View style={styles.summaryCard}>
+          <View style={styles.cardLeft}>
+            <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
+            <View style={styles.iconWrapper}>
+              <User size={18} color="#00112e" strokeWidth={2.2} />
             </View>
-          ) : null}
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>About you</Text>
+              <Text style={styles.cardSubtitle}>
+                {displayName} / {bioLength}/200
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit about you"
+            onPress={() => router.push("/apply/about")}
+            hitSlop={8}
+          >
+            <Text style={styles.editText}>Edit</Text>
+          </Pressable>
         </View>
 
         {/* Card 2: Agreements */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>2. Agreements</Text>
-            {editable ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/apply/consent")}
-                style={styles.editButton}
-              >
-                <Edit3 size={13} color="#2563eb" />
-                <Text style={styles.editText}>Edit</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {application.consents.length > 0 ? (
-            <View style={{ rowGap: 8 }}>
-              {application.consents.map((c) => (
-                <View key={c.purpose} style={styles.checkRow}>
-                  <Check size={14} color="#15803d" strokeWidth={3} />
-                  <Text style={styles.checkText}>
-                    {c.purpose.replace(/_/g, " ")} (v{c.document_version})
-                  </Text>
-                </View>
-              ))}
+        <View style={styles.summaryCard}>
+          <View style={styles.cardLeft}>
+            <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
+            <View style={styles.iconWrapper}>
+              <FileText size={18} color="#00112e" strokeWidth={2.2} />
             </View>
-          ) : (
-            <Text style={styles.unmetText}>No agreements signed yet</Text>
-          )}
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>Agreements</Text>
+              <Text style={styles.cardSubtitle}>{agreedCount} agreed</Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit agreements"
+            onPress={() => router.push("/apply/consent")}
+            hitSlop={8}
+          >
+            <Text style={styles.editText}>Edit</Text>
+          </Pressable>
         </View>
 
         {/* Card 3: Documents */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>3. Documents</Text>
-            {editable ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/apply/documents")}
-                style={styles.editButton}
-              >
-                <Edit3 size={13} color="#2563eb" />
-                <Text style={styles.editText}>Edit</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <View style={{ rowGap: 8 }}>
-            <View style={styles.checkRow}>
-              {application.documents.some((d) => d.kind === "GOVERNMENT_ID") ? (
-                <>
-                  <Check size={14} color="#15803d" strokeWidth={3} />
-                  <Text style={styles.checkText}>Government photo ID uploaded</Text>
-                </>
-              ) : (
-                <Text style={styles.unmetText}>Government photo ID missing</Text>
-              )}
+        <View style={styles.summaryCard}>
+          <View style={styles.cardLeft}>
+            <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
+            <View style={styles.iconWrapper}>
+              <FileCheck2 size={18} color="#00112e" strokeWidth={2.2} />
             </View>
-            <View style={styles.checkRow}>
-              {application.documents.some((d) => d.kind === "ADDRESS_PROOF") ? (
-                <>
-                  <Check size={14} color="#15803d" strokeWidth={3} />
-                  <Text style={styles.checkText}>Proof of address uploaded</Text>
-                </>
-              ) : (
-                <Text style={styles.unmetText}>Proof of address missing</Text>
-              )}
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>Documents</Text>
+              <Text style={styles.cardSubtitle}>{documentsCount} documents</Text>
             </View>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit documents"
+            onPress={() => router.push("/apply/documents")}
+            hitSlop={8}
+          >
+            <Text style={styles.editText}>Edit</Text>
+          </Pressable>
         </View>
       </View>
+
+      {/* Notification Toggle Card matching Screen 5 */}
+      <View style={styles.notificationCard}>
+        <View style={styles.notificationLeft}>
+          <View style={styles.bellIconBox}>
+            <Bell size={20} color="#f26a0f" strokeWidth={2.2} />
+          </View>
+          <View style={styles.notificationInfo}>
+            <Text style={styles.notificationTitle}>Get updates on your application</Text>
+            <Text style={styles.notificationSubtitle}>We'll notify you when it's reviewed.</Text>
+          </View>
+        </View>
+        <Switch
+          value={notificationsEnabled}
+          onValueChange={handleToggleNotifications}
+          trackColor={{ false: "#e2e8f0", true: "#f26a0f" }}
+          thumbColor={Platform.OS === "android" ? "#ffffff" : undefined}
+          ios_backgroundColor="#e2e8f0"
+        />
+      </View>
+
+      {/* Screen 6: Notification Permission Bottom Sheet */}
+      <NotificationPermissionSheet
+        visible={permissionSheetOpen}
+        onClose={() => setPermissionSheetOpen(false)}
+        onGranted={() => setNotificationsEnabled(true)}
+      />
     </View>
   );
 }
@@ -278,10 +280,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 20,
+    marginTop: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "800",
     color: "#00112e",
     letterSpacing: -0.5,
@@ -293,7 +296,7 @@ const styles = StyleSheet.create({
   },
   startButton: {
     marginTop: 16,
-    backgroundColor: "#ea580c",
+    backgroundColor: "#f26a0f",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 9999,
@@ -301,128 +304,103 @@ const styles = StyleSheet.create({
   startButtonText: {
     color: "#ffffff",
     fontWeight: "700",
-    fontSize: 14,
-  },
-  submittedBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f0fdf4",
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-  },
-  submittedTitle: {
     fontSize: 15,
-    fontWeight: "700",
-    color: "#166534",
-  },
-  submittedBody: {
-    fontSize: 13,
-    color: "#15803d",
-    marginTop: 2,
-  },
-  outstandingBanner: {
-    backgroundColor: "#fff7ed",
-    borderWidth: 1,
-    borderColor: "#fed7aa",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-  },
-  outstandingTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#9a3412",
-    marginBottom: 6,
-  },
-  outstandingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 4,
-  },
-  outstandingItemText: {
-    fontSize: 13,
-    color: "#c2410c",
-    fontWeight: "600",
   },
   cardsContainer: {
     flexDirection: "column",
-    rowGap: 14,
+    rowGap: 12,
+    marginBottom: 16,
   },
-  card: {
+  summaryCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
-    padding: 18,
-    flexDirection: "column",
-    ...(Platform.OS === "web"
-      ? ({
-          boxShadow: "0 1px 4px rgba(0, 0, 0, 0.05)",
-        } as any)
-      : {
-          elevation: 2,
-          shadowColor: "#00112e",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-        }),
-  },
-  cardHeader: {
+    borderColor: "#e2e8f0",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderColor: "#f1f5f9",
-    paddingBottom: 10,
-    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    columnGap: 12,
+  },
+  iconWrapper: {
+    width: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardInfo: {
+    flexDirection: "column",
+    flex: 1,
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: "#00112e",
+    letterSpacing: -0.2,
   },
-  editButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 4,
-  },
-  editText: {
+  cardSubtitle: {
     fontSize: 13,
-    color: "#2563eb",
-    fontWeight: "600",
-  },
-  fieldRow: {
-    flexDirection: "column",
-  },
-  fieldLabel: {
-    fontSize: 12,
     color: "#64748b",
-    fontWeight: "500",
-  },
-  fieldValue: {
-    fontSize: 14,
-    color: "#00112e",
-    fontWeight: "600",
     marginTop: 2,
   },
-  checkRow: {
+  editText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2563eb",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  notificationCard: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
-    columnGap: 8,
+    justifyContent: "space-between",
+    marginTop: 4,
+    marginBottom: 24,
   },
-  checkText: {
+  notificationLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    columnGap: 12,
+    paddingRight: 8,
+  },
+  bellIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#ffedd5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationInfo: {
+    flexDirection: "column",
+    flex: 1,
+  },
+  notificationTitle: {
     fontSize: 14,
+    fontWeight: "700",
     color: "#00112e",
-    fontWeight: "600",
-    textTransform: "capitalize",
+    letterSpacing: -0.2,
   },
-  unmetText: {
-    fontSize: 13,
-    color: "#94a3b8",
-    fontStyle: "italic",
+  notificationSubtitle: {
+    fontSize: 12,
+    color: "#78350f",
+    marginTop: 2,
   },
 });
