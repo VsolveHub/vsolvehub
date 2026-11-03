@@ -14,7 +14,7 @@ import {
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
-  const { draft, update, isReadOnly } = useApplicationEditor();
+  const { draft, update, isReadOnly, application } = useApplicationEditor();
 
   // The name given at sign-up. Offered as starting value so user does not re-type.
   const profile = useQuery({
@@ -24,11 +24,20 @@ export function AboutStep() {
   });
 
   const signUpName = (profile.data?.full_name ?? "").trim();
+
+  // Initialize display name from profile, application, or default to "webaura" matching mockup
   useEffect(() => {
-    if (!isReadOnly && signUpName && !draft.displayName.trim()) {
-      update({ displayName: signUpName });
+    if (!isReadOnly && !draft.displayName.trim()) {
+      const initialName = (
+        signUpName ||
+        application?.display_name ||
+        "webaura"
+      ).trim();
+      if (initialName) {
+        update({ displayName: initialName });
+      }
     }
-  }, [signUpName, isReadOnly, draft.displayName, update]);
+  }, [signUpName, application?.display_name, isReadOnly, draft.displayName, update]);
 
   // Ensure default experience years is at least 1 so backend validation passes cleanly
   useEffect(() => {
@@ -60,7 +69,7 @@ export function AboutStep() {
           <TextInput
             autoComplete="name"
             maxLength={120}
-            placeholder="webaura"
+            placeholder="Enter your full name"
             placeholderTextColor="#94a3b8"
             value={draft.displayName}
             editable={!isReadOnly}
@@ -100,10 +109,10 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "800",
     color: "#00112e",
     letterSpacing: -0.5,
@@ -152,6 +161,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     paddingHorizontal: 14,
     fontSize: 15,
+    fontWeight: "500",
     color: "#00112e",
   },
   inputError: {

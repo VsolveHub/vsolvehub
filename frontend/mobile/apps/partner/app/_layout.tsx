@@ -22,6 +22,7 @@ import { isOfferCreatedPush, resolvePartnerPush } from "@/features/notifications
 import { requestOpenAlerts } from "@/features/notifications/alerts-bus";
 
 import { LogBox, Platform } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 
 import "../global.css";
@@ -66,16 +67,18 @@ export default function RootLayout() {
   }
 
   return (
-    <MobileQueryProvider>
-      <I18nProvider locale={locale} catalog={catalogs[locale] ?? catalogs["en-IN"]}>
-        <ToastProvider>
-          <VersionGate>
-            <PushRouting />
-            <Stack screenOptions={{ headerShown: false }} />
-          </VersionGate>
-        </ToastProvider>
-      </I18nProvider>
-    </MobileQueryProvider>
+    <SafeAreaProvider>
+      <MobileQueryProvider>
+        <I18nProvider locale={locale} catalog={catalogs[locale] ?? catalogs["en-IN"]}>
+          <ToastProvider>
+            <VersionGate>
+              <PushRouting />
+              <Stack screenOptions={{ headerShown: false }} />
+            </VersionGate>
+          </ToastProvider>
+        </I18nProvider>
+      </MobileQueryProvider>
+    </SafeAreaProvider>
   );
 }
 

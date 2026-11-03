@@ -1,7 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
-import { Logo, Text } from "@vsolve/mobile-ui";
 import { Slot, usePathname, useRouter } from "expo-router";
 import {
   ChevronLeft,
@@ -15,27 +14,33 @@ import {
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
+  Text,
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
 import {
   previousStep,
-  stepProgress,
 } from "@/features/application/model/progress";
 import { APPLICATION_STEPS } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
 
+const logoMark = require("@vsolve/mobile-ui/src/logo-mark.png");
+
 export default function ApplyLayout() {
   const pathname = usePathname();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const signOut = useMobileLogout("/login?next=%2Fapply");
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
@@ -44,6 +49,16 @@ export default function ApplyLayout() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const onCommitRef = useRef<(() => void) | null>(null);
+
+  // Safe area insets with guaranteed fallbacks for native iOS notch / dynamic island
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "ios" ? 48 : (StatusBar.currentHeight ?? 24),
+  );
+  const bottomInset = Math.max(
+    insets.bottom,
+    Platform.OS === "ios" ? 34 : 16,
+  );
 
   const registerDock = useCallback((config: DockConfig | null) => {
     setDockConfig((prev) => {
@@ -88,16 +103,16 @@ export default function ApplyLayout() {
   );
   const currentStep = APPLICATION_STEPS[currentStepIdx] ?? APPLICATION_STEPS[0];
 
-  // User initial (e.g. "W" for webaura)
-  const initialLetter = (application?.display_name || "W").trim()[0]?.toUpperCase() || "W";
+  // User initial (defaults to "W" matching mockup)
+  const initialLetter = (application?.display_name || "webaura").trim()[0]?.toUpperCase() || "W";
 
   return (
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
       <View style={styles.rootContainer}>
-        {/* Top Header */}
-        <View style={styles.headerContainer}>
+        {/* Top Header with Safe Area Spacing */}
+        <View style={[styles.headerContainer, { paddingTop: topInset + 6 }]}>
           <View style={[styles.headerInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            {/* Left: Back button or placeholder */}
+            {/* Left: Back chevron or balanced placeholder */}
             {back !== null && currentStepIdx > 0 ? (
               <Pressable
                 accessibilityRole="button"
@@ -114,9 +129,17 @@ export default function ApplyLayout() {
               <View style={styles.backPlaceholder} />
             )}
 
-            {/* Center: VSolve Hub Logo */}
+            {/* Center: VSolve Hub Logo matching Mockup */}
             <View style={styles.logoCenter}>
-              <Logo />
+              <Image
+                source={logoMark}
+                style={{ width: 28, height: 28 }}
+                resizeMode="contain"
+                accessibilityLabel="VSolve Hub"
+              />
+              <Text style={styles.logoTextNavy}>
+                VSolve <Text style={styles.logoTextOrange}>Hub</Text>
+              </Text>
             </View>
 
             {/* Right: Circular User Initial Badge */}
@@ -163,7 +186,7 @@ export default function ApplyLayout() {
             styles.scrollContent,
             {
               maxWidth: isDesktop ? 672 : "100%",
-              paddingBottom: dockConfig ? 130 : 50,
+              paddingBottom: dockConfig ? bottomInset + 100 : 50,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -174,7 +197,7 @@ export default function ApplyLayout() {
 
         {/* Fixed Bottom Action Dock */}
         {dockConfig ? (
-          <View style={styles.dockContainer}>
+          <View style={[styles.dockContainer, { paddingBottom: bottomInset + 12 }]}>
             <View style={[styles.dockInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
               {/* Conflict / Error alerts if any */}
               {dockConfig.conflict ? (
@@ -318,7 +341,7 @@ export default function ApplyLayout() {
                   </View>
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.profileNameText}>
-                      {application?.display_name || "Partner Applicant"}
+                      {application?.display_name || "webaura"}
                     </Text>
                     <Text style={styles.profileStatusText}>
                       Status: {application?.status || "DRAFT"}
@@ -427,13 +450,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#fbfaf8",
     borderBottomWidth: 1,
     borderColor: "#f1f5f9",
-    paddingTop: Platform.OS === "web" ? 14 : 10,
     zIndex: 20,
   },
   headerInner: {
     width: "100%",
     marginHorizontal: "auto",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -457,6 +479,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    columnGap: 8,
+  },
+  logoTextNavy: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#00112e",
+    letterSpacing: -0.3,
+  },
+  logoTextOrange: {
+    color: "#ea580c",
   },
   avatarBadge: {
     width: 36,
@@ -481,8 +513,8 @@ const styles = StyleSheet.create({
     marginHorizontal: "auto",
     flexDirection: "row",
     columnGap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 6,
   },
   progressBarSegment: {
@@ -493,12 +525,12 @@ const styles = StyleSheet.create({
   stepLabelRow: {
     width: "100%",
     marginHorizontal: "auto",
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 10,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   stepLabelText: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: "#64748b",
     fontWeight: "500",
   },
@@ -509,8 +541,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     width: "100%",
     marginHorizontal: "auto",
-    paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   dockContainer: {
     position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
@@ -518,24 +550,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 40,
-    backgroundColor: "rgba(251, 250, 248, 0.98)",
+    backgroundColor: "#ffffff",
     borderTopWidth: 1,
     borderColor: "#f1f5f9",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === "web" ? "calc(env(safe-area-inset-bottom, 0px) + 16px)" : 20,
+    paddingHorizontal: 20,
+    paddingTop: 14,
     ...(Platform.OS === "web"
       ? ({
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
           boxShadow: "0 -4px 16px rgba(0, 17, 46, 0.05)",
         } as any)
       : {
-          elevation: 12,
+          elevation: 8,
           shadowColor: "#00112e",
           shadowOffset: { width: 0, height: -3 },
           shadowOpacity: 0.06,
-          shadowRadius: 12,
+          shadowRadius: 10,
         }),
   },
   dockInner: {
@@ -594,25 +623,25 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   continueButton: {
-    height: 46,
-    paddingHorizontal: 26,
+    height: 48,
+    paddingHorizontal: 28,
     borderRadius: 9999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    columnGap: 6,
+    columnGap: 8,
   },
   continueButtonActive: {
     backgroundColor: "#ea580c",
     ...(Platform.OS === "web"
       ? ({
-          boxShadow: "0 2px 8px rgba(234, 88, 12, 0.28)",
+          boxShadow: "0 4px 12px rgba(234, 88, 12, 0.3)",
         } as any)
       : {
           elevation: 4,
           shadowColor: "#ea580c",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.28,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.3,
           shadowRadius: 8,
         }),
   },
@@ -620,7 +649,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#c2410c",
   },
   continueButtonDisabled: {
-    backgroundColor: "#cbd5e1",
+    backgroundColor: "#94a3b8",
+    opacity: 0.85,
   },
   continueButtonText: {
     fontSize: 15,
