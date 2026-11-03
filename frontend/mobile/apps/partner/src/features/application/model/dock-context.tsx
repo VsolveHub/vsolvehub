@@ -9,6 +9,7 @@ export interface DockConfig {
   proceedDisabled: boolean;
   saved: boolean;
   conflict: boolean;
+  refusal?: { title: string; message: string } | null;
   failed: boolean;
   requestId: string | null;
   fieldMessages: readonly string[];

@@ -20,10 +20,13 @@ import { useAcceptCrewOffer, useDeclineCrewOffer, usePartnerCrewOffers, type Cre
 import { CrewOfferDeclineDialog } from "./crew-offer-decline-dialog";
 import { CrewOfferOutcome } from "./crew-offer-outcome";
 
-export function LiveOfferSheet() {
+export function LiveOfferSheet({ enabled = true }: { enabled?: boolean } = {}) {
   const pathname = usePathname();
-  const showsOffersAlready = pathname === "/work" || pathname.startsWith("/work/offers/");
-  const offersQuery = usePartnerCrewOffers(!showsOffersAlready);
+  const showsOffersAlready =
+    pathname === "/work" ||
+    pathname.startsWith("/work/offers/") ||
+    pathname.startsWith("/apply");
+  const offersQuery = usePartnerCrewOffers(enabled && !showsOffersAlready);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [answer, setAnswer] = useState<CrewOfferAnswer | null>(null);
 

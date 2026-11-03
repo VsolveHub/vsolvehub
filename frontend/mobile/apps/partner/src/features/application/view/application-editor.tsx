@@ -23,7 +23,7 @@ import {
 import { previousStep } from "../model/progress";
 import { isEditable } from "../model/readiness";
 import { nextStep } from "../model/steps";
-import { isVersionConflict, usePartnerApplication, useUpdateApplication } from "../queries";
+import { describeRefusal, isVersionConflict, useCurrentVersion, usePartnerApplication, useUpdateApplication } from "../queries";
 
 type Application = Schemas["PartnerApplication"];
 
@@ -122,8 +122,11 @@ function Editor({
   const following = continueOnSave ? nextStep(pathname) : null;
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
+  const currentVersion = useCurrentVersion();
+  const refusal = describeRefusal(save.error);
 
-  const fieldErrors = save.error instanceof ApiRequestError ? save.error.fieldErrors : {};
+  const fieldErrors =
+    save.error instanceof ApiRequestError && refusal === null ? save.error.fieldErrors : {};
   const fieldMessages = Object.entries(fieldErrors).flatMap(([field, messages]) =>
     messages.map((message) => `${field}: ${message}`),
   );
@@ -148,24 +151,32 @@ function Editor({
   const primaryLabel = saveLabel ?? "Save and Continue";
 
   const commit = useCallback(() => {
+    if (save.isPending) return;
     if (!dirty) {
       if (following !== null) router.push(following.href as never);
       return;
     }
 
-    save.mutate(changedFields(draft, application), {
-      onSuccess: () => {
-        if (following !== null) router.push(following.href as never);
+    const version = application?.version ?? currentVersion();
+    save.mutate(
+      {
+        ...changedFields(draft, application),
+        ...(version !== undefined ? { expected_version: version } : {}),
       },
-    });
-  }, [dirty, following, router, save, draft, application]);
+      {
+        onSuccess: () => {
+          if (following !== null) router.push(following.href as never);
+        },
+      },
+    );
+  }, [dirty, following, router, save, draft, application, currentVersion]);
 
   const previous = previousStep(pathname);
   const backHref = previous ? previous.href : "/apply";
 
   const isSaving = save.isPending;
   const isConflict = isVersionConflict(save.error);
-  const isFailed = save.isError && !isConflict && fieldMessages.length === 0;
+  const isFailed = save.isError && !isConflict && refusal === null && fieldMessages.length === 0;
   const requestId = save.error instanceof ApiRequestError ? save.error.requestId : null;
   const isSaved = save.isSuccess && !dirty;
   const isProceedBlocked = proceedDisabled || childProceedDisabled;
@@ -186,6 +197,7 @@ function Editor({
       proceedDisabled: isProceedBlocked,
       saved: isSaved,
       conflict: isConflict,
+      refusal,
       failed: isFailed,
       requestId,
       fieldMessages,
@@ -204,6 +216,7 @@ function Editor({
     isProceedBlocked,
     isSaved,
     isConflict,
+    refusal,
     isFailed,
     requestId,
     fieldMessages,

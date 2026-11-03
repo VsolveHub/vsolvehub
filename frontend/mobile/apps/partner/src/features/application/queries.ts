@@ -50,7 +50,34 @@ export function usePartnerApplication({ enabled = true }: { enabled?: boolean } 
 
 /** True when the failure was a version conflict rather than anything else. */
 export function isVersionConflict(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status === 409;
+  return (
+    error instanceof ApiRequestError &&
+    error.status === 409 &&
+    error.code === "partner_application_version_conflict"
+  );
+}
+
+export function describeRefusal(
+  error: unknown,
+): { title: string; message: string } | null {
+  if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "partner_application_incomplete") {
+    return {
+      title: "Incomplete selection",
+      message:
+        (error.message as string) ||
+        "Please select the required items for your configuration before continuing.",
+    };
+  }
+  if (error.code === "partner_transition_not_allowed") {
+    return {
+      title: "Application cannot be edited",
+      message:
+        (error.message as string) ||
+        "This application cannot be edited in its current state.",
+    };
+  }
+  return null;
 }
 
 /**
@@ -59,7 +86,7 @@ export function isVersionConflict(error: unknown): boolean {
  * From the cache rather than from component state: a component that captured the
  * version on mount would send a stale one after any successful save.
  */
-function useCurrentVersion(): () => number | undefined {
+export function useCurrentVersion(): () => number | undefined {
   const queryClient = useQueryClient();
   return () =>
     queryClient.getQueryData<Application>(queryKeys.partner.application())?.version;
@@ -82,7 +109,9 @@ function useApplyResult() {
 export type ApplicationPatch = Omit<
   Schemas["PatchedPartnerApplicationUpdateRequest"],
   "expected_version"
->;
+> & {
+  expected_version?: number;
+};
 
 export function useUpdateApplication() {
   const queryClient = useQueryClient();
@@ -90,12 +119,18 @@ export function useUpdateApplication() {
   const applyResult = useApplyResult();
 
   return useMutation({
-    mutationFn: (patch: ApplicationPatch) =>
-      request(() =>
+    mutationFn: (patch: ApplicationPatch) => {
+      const version = patch.expected_version ?? currentVersion();
+      const body: Record<string, unknown> = { ...patch };
+      if (version !== undefined) {
+        body.expected_version = version;
+      }
+      return request(() =>
         getApiClient().PATCH("/api/v1/partner/application/", {
-          body: { ...patch, expected_version: currentVersion() },
+          body: body as Schemas["PatchedPartnerApplicationUpdateRequest"],
         }),
-      ),
+      );
+    },
     onSuccess: applyResult,
     onError: (error) => {
       // A conflict means someone else moved the application. Refetching is the

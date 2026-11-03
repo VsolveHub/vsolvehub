@@ -53,6 +53,7 @@ export default function ApplyLayout() {
         prev.proceedDisabled === config.proceedDisabled &&
         prev.saved === config.saved &&
         prev.conflict === config.conflict &&
+        prev.refusal?.message === config.refusal?.message &&
         prev.failed === config.failed &&
         prev.requestId === config.requestId &&
         prev.fieldMessages.join(",") === config.fieldMessages.join(",") &&
@@ -368,6 +369,17 @@ export default function ApplyLayout() {
                 </Text>
                 <Text style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>
                   We have reloaded the latest version so you can see it before saving again.
+                </Text>
+              </View>
+            ) : null}
+
+            {dockConfig.refusal ? (
+              <View style={{ borderRadius: 8, backgroundColor: "#fff7ed", padding: 10, borderWidth: 1, borderColor: "#ffedd5" }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#c2410c" }}>
+                  {dockConfig.refusal.title}
+                </Text>
+                <Text style={{ fontSize: 12, color: "#9a3412", marginTop: 2 }}>
+                  {dockConfig.refusal.message}
                 </Text>
               </View>
             ) : null}

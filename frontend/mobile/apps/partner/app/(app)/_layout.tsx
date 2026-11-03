@@ -93,7 +93,7 @@ export default function AppLayout() {
         ) : (
           <>
             <Slot />
-            <LiveOfferSheet />
+            {isApprovedPartner && !isApplyRoute ? <LiveOfferSheet /> : null}
           </>
         )}
       </PartnerPresenceProvider>
