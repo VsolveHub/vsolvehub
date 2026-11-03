@@ -322,7 +322,7 @@ export default function ApplyLayout() {
           marginHorizontal: "auto",
           paddingHorizontal: isDesktop ? 32 : 16,
           paddingTop: isDesktop ? 128 : 96,
-          paddingBottom: dockConfig ? 140 : 64,
+          paddingBottom: dockConfig ? 160 : 64,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
