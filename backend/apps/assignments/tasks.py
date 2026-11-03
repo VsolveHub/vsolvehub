@@ -143,13 +143,18 @@ def send_dispatch_offer_push_task(_self: object, offer_id: str) -> dict[str, Any
     if offer.expires_at <= timezone.now():
         return {"skipped": True, "reason": "Offer already expired"}
 
+    from apps.mobile.services import active_devices_for, deliver_push_intent
+    from apps.notifications.services import request_notification
+
     partner = offer.partner
     has_active_sub = PartnerPushSubscription.objects.filter(
         partner=partner,
         is_active=True,
     ).exists()
 
-    if not has_active_sub:
+    active_mobile_devices = active_devices_for(partner.user) if partner.user else []
+
+    if not has_active_sub and not active_mobile_devices:
         logger.warning(
             "dispatch_push_failed",
             extra={
@@ -161,50 +166,102 @@ def send_dispatch_offer_push_task(_self: object, offer_id: str) -> dict[str, Any
         expire_dispatch_offer_task.delay(str(offer.id))
         return {"success": False, "reason": "No active push subscription"}
 
-    external_ids = [str(partner.id), str(partner.user_id)]
-    base_url = getattr(settings, "PARTNER_PORTAL_BASE_URL", "http://localhost:3001").rstrip("/")
-    dispatch_url = f"{base_url}/dispatch/{offer.id}"
+    onesignal_result: dict[str, Any] = {}
+    if has_active_sub:
+        external_ids = [str(partner.id), str(partner.user_id)]
+        base_url = getattr(settings, "PARTNER_PORTAL_BASE_URL", "http://localhost:3001").rstrip("/")
+        dispatch_url = f"{base_url}/dispatch/{offer.id}"
 
-    result = send_push_to_external_ids(
-        external_ids=external_ids,
-        heading="New Instant job nearby",
-        body="Tap to review and accept this ASAP booking.",
-        data={
-            "type": "DISPATCH_OFFER",
-            "offer_id": str(offer.id),
-            "booking_id": str(offer.booking_id),
-            "attempt_number": offer.attempt_number,
-        },
-        url=dispatch_url,
-    )
-
-    if result.get("success") and result.get("notification_id"):
-        offer.onesignal_notification_id = str(result["notification_id"])
-        offer.save(update_fields=["onesignal_notification_id"])
-        logger.info(
-            "dispatch_push_sent",
-            extra={
+        onesignal_result = send_push_to_external_ids(
+            external_ids=external_ids,
+            heading="New Instant job nearby",
+            body="Tap to review and accept this ASAP booking.",
+            data={
+                "type": "DISPATCH_OFFER",
                 "offer_id": str(offer.id),
                 "booking_id": str(offer.booking_id),
-                "partner_id": str(partner.id),
-                "notification_id": str(result["notification_id"]),
+                "attempt_number": offer.attempt_number,
             },
+            url=dispatch_url,
         )
-    else:
-        logger.warning(
-            "dispatch_push_failed",
-            extra={
-                "offer_id": str(offer.id),
-                "booking_id": str(offer.booking_id),
-                "partner_id": str(partner.id),
-                "errors": result.get("errors"),
-            },
-        )
-        errors = result.get("errors") or []
-        error_text = " ".join(str(e) for e in errors).lower()
-        if "invalid" in error_text or "unsubscribed" in error_text:
-            PartnerPushSubscription.objects.filter(partner=partner).update(is_active=False)
-            expire_dispatch_offer_task.delay(str(offer.id))
+
+        if onesignal_result.get("success") and onesignal_result.get("notification_id"):
+            offer.onesignal_notification_id = str(onesignal_result["notification_id"])
+            offer.save(update_fields=["onesignal_notification_id"])
+            logger.info(
+                "dispatch_push_sent",
+                extra={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "partner_id": str(partner.id),
+                    "notification_id": str(onesignal_result["notification_id"]),
+                },
+            )
+        else:
+            logger.warning(
+                "dispatch_push_failed",
+                extra={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "partner_id": str(partner.id),
+                    "errors": onesignal_result.get("errors"),
+                },
+            )
+            errors = onesignal_result.get("errors") or []
+            error_text = " ".join(str(e) for e in errors).lower()
+            if "invalid" in error_text or "unsubscribed" in error_text:
+                PartnerPushSubscription.objects.filter(partner=partner).update(is_active=False)
+                if not active_mobile_devices:
+                    expire_dispatch_offer_task.delay(str(offer.id))
+
+    mobile_success = False
+    mobile_intent_id = None
+    if active_mobile_devices and partner.user:
+        try:
+            intent = request_notification(
+                recipient_id=partner.user_id,
+                purpose="partner.offer_created",
+                channel="PUSH",
+                template_code="partner_dispatch_offer",
+                context={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "attempt_number": str(offer.attempt_number),
+                },
+                idempotency_key=f"dispatch-offer-push:{offer.id}",
+            )
+            mobile_intent_id = str(intent.id)
+            deliver_push_intent(intent_id=intent.id)
+            mobile_success = True
+            logger.info(
+                "dispatch_mobile_push_sent",
+                extra={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "partner_id": str(partner.id),
+                    "intent_id": mobile_intent_id,
+                    "devices_count": len(active_mobile_devices),
+                },
+            )
+        except Exception as exc:
+            logger.exception(
+                "dispatch_mobile_push_error",
+                extra={
+                    "offer_id": str(offer.id),
+                    "booking_id": str(offer.booking_id),
+                    "partner_id": str(partner.id),
+                    "error": str(exc),
+                },
+            )
+
+    overall_success = bool(onesignal_result.get("success") or mobile_success)
+    result = dict(onesignal_result) if onesignal_result else {}
+    result["success"] = overall_success
+    if mobile_intent_id:
+        result["mobile_intent_id"] = mobile_intent_id
+        result["mobile_devices"] = len(active_mobile_devices)
+    if not overall_success and not has_active_sub and not mobile_success:
+        expire_dispatch_offer_task.delay(str(offer.id))
 
     return result
 

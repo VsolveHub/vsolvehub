@@ -29,6 +29,7 @@ from psycopg.types.range import Range
 from apps.assignments.models import AssignmentAttempt, Reservation
 from apps.carts.availability import schedule_available_partner_ids
 from apps.carts.models import BookingGroup, FulfilmentUnit
+from apps.mobile.models import PushDevice
 from apps.partners.models import (
     PartnerApplication,
     PartnerLocation,
@@ -168,9 +169,8 @@ def _exclusions_for(
                 reasons.append(ExclusionReason.NO_PUSH_SUBSCRIPTION)
             elif candidate.id not in fresh_location_ids:
                 reasons.append(ExclusionReason.LOCATION_STALE)
-        else:
-            if candidate.id not in online_partner_ids:
-                reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
+        elif candidate.id not in online_partner_ids:
+            reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
 
     # Availability is read last so a Partner excluded for the wrong service is not also
     # reported as unavailable.
@@ -249,12 +249,21 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
                     scheduled_end_at__gt=now,
                 ).values_list("partner_id", flat=True)
             )
-            push_capable_ids = frozenset(
+            web_push_ids = frozenset(
                 PartnerPushSubscription.objects.filter(
                     partner_id__in=pool_ids,
                     is_active=True,
                 ).values_list("partner_id", flat=True)
             )
+            mobile_push_ids = frozenset(
+                PushDevice.objects.filter(
+                    user__partner_profile__id__in=pool_ids,
+                    disabled_at__isnull=True,
+                    session__revoked_at__isnull=True,
+                    session__expires_at__gt=now,
+                ).values_list("user__partner_profile__id", flat=True)
+            )
+            push_capable_ids = web_push_ids | mobile_push_ids
             max_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
             fresh_location_ids = frozenset(
                 PartnerLocation.objects.filter(

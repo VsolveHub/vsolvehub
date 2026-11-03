@@ -77,3 +77,7 @@ export async function unregisterPush(): Promise<void> {
   }
   await kvRemove(PUSH_TOKEN_KEY);
 }
+
+export function isPushSupported(): boolean {
+  return Platform.OS !== "web" && Device.isDevice;
+}

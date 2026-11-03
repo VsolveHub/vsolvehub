@@ -371,3 +371,102 @@ def test_celery_dispatch_flow_and_reconciliation(mock_push, test_setup):
     assert reconciled >= 1
     offer.refresh_from_db()
     assert offer.status == DispatchOffer.Status.EXPIRED
+
+
+@pytest.mark.django_db
+def test_mobile_push_device_dispatch_flow(test_setup):
+    from apps.identity.models import UserSession
+    from apps.mobile.models import PushDevice
+    from apps.notifications.models import NotificationIntent
+
+    p2 = test_setup["partner2"]
+    user2 = test_setup["user2"]
+    area = test_setup["area"]
+    booking = test_setup["booking"]
+    now = timezone.now()
+
+    PartnerShift.objects.create(
+        partner=p2,
+        service_area=area,
+        started_at=now - timedelta(hours=1),
+        scheduled_end_at=now + timedelta(hours=7),
+    )
+    PartnerLocation.objects.create(
+        partner=p2,
+        service_area=area,
+        latitude=Decimal("17.440000"),
+        longitude=Decimal("78.380000"),
+        accuracy_m=10,
+        captured_at=now,
+        purpose=PartnerLocation.Purpose.INSTANT_MATCHING,
+        consent_version="v1",
+    )
+
+    # 1. Without PushDevice or web sub, partner is NOT push-capable
+    web_push_ids = frozenset(
+        PartnerPushSubscription.objects.filter(
+            partner_id__in=[p2.id],
+            is_active=True,
+        ).values_list("partner_id", flat=True)
+    )
+    mobile_push_ids = frozenset(
+        PushDevice.objects.filter(
+            user__partner_profile__id__in=[p2.id],
+            disabled_at__isnull=True,
+            session__revoked_at__isnull=True,
+            session__expires_at__gt=now,
+        ).values_list("user__partner_profile__id", flat=True)
+    )
+    assert p2.id not in (web_push_ids | mobile_push_ids)
+
+    # 2. Register mobile PushDevice with active UserSession
+    session = UserSession.objects.create(
+        user=user2,
+        session_key_hash="hash-user2",
+        expires_at=now + timedelta(days=7),
+    )
+    PushDevice.objects.create(
+        user=user2,
+        session=session,
+        app="partner",
+        platform="android",
+        expo_push_token="ExponentPushToken[user2_test_token]",
+        app_version="1.0.0",
+    )
+
+    # Now partner 2 is recognized as push-capable!
+    mobile_push_ids_after = frozenset(
+        PushDevice.objects.filter(
+            user__partner_profile__id__in=[p2.id],
+            disabled_at__isnull=True,
+            session__revoked_at__isnull=True,
+            session__expires_at__gt=now,
+        ).values_list("user__partner_profile__id", flat=True)
+    )
+    assert p2.id in mobile_push_ids_after
+
+    # 3. Test send_dispatch_offer_push_task with mobile device
+    offer = DispatchOffer.objects.create(
+        booking=booking,
+        partner=p2,
+        status=DispatchOffer.Status.PENDING,
+        attempt_number=1,
+        offered_at=now,
+        expires_at=now + timedelta(seconds=60),
+    )
+
+    result = send_dispatch_offer_push_task(str(offer.id))
+    assert result["success"] is True
+    assert result["mobile_devices"] == 1
+    assert "mobile_intent_id" in result
+
+    # Check notification intent was created
+    intent = NotificationIntent.objects.get(id=result["mobile_intent_id"])
+    assert intent.recipient == user2
+    assert intent.channel == "PUSH"
+    assert intent.template_code == "partner_dispatch_offer"
+    assert intent.context["offer_id"] == str(offer.id)
+
+    # Check offer did not expire
+    offer.refresh_from_db()
+    assert offer.status == DispatchOffer.Status.PENDING

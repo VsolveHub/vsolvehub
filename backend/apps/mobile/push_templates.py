@@ -38,6 +38,12 @@ _TEMPLATES: dict[str, _Template] = {
         target_kind="PARTNER_OFFERS",
         context_id_key="offer_id",
     ),
+    "partner_dispatch_offer": _Template(
+        title="New Instant job nearby",
+        body="Tap to review and accept this ASAP booking.",
+        target_kind="DISPATCH_OFFER",
+        context_id_key="offer_id",
+    ),
     "partner_job_assigned": _Template(
         title="Job confirmed",
         body="A job has been assigned to you. Open for the details.",

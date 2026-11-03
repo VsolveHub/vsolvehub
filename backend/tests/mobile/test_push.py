@@ -9,6 +9,7 @@ import pytest
 from django.core.cache import cache
 from django.test import override_settings
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.identity.models import User
 from apps.mobile.models import PushDevice, PushTicket
@@ -234,3 +235,30 @@ def test_mirror_uses_the_in_app_renderer() -> None:
     rendered = render_notification(template_code="m2_requirement_closed", context={})
     assert rendered.title
     assert rendered.body
+
+
+def test_dev_mobile_test_push_endpoint() -> None:
+    user = _user_from_bearer()
+    client = APIClient()
+
+    # 1. Dev test push with user_id
+    with override_settings(DEBUG=True):
+        resp = client.post(
+            "/api/v1/dev/mobile/test-push/",
+            {"user_id": str(user.id)},
+            format="json",
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["device_count"] >= 1
+        assert "intent_id" in data
+
+    # 2. Disabled when DEBUG is False
+    with override_settings(DEBUG=False, ONESIGNAL_ENV="production"):
+        resp = client.post(
+            "/api/v1/dev/mobile/test-push/",
+            {"user_id": str(user.id)},
+            format="json",
+        )
+        assert resp.status_code == 404

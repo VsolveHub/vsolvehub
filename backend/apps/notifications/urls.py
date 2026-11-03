@@ -4,6 +4,7 @@ from django.urls import path
 
 from apps.notifications.streaming import PartnerOfferStreamView
 from apps.notifications.views import (
+    DevMobileTestPushView,
     DevOneSignalTestPushView,
     KillSwitchListView,
     KillSwitchReleaseView,
@@ -35,6 +36,15 @@ urlpatterns = [
         KillSwitchReleaseView.as_view(),
         name="operations-kill-switch-release",
     ),
-    path("dev/onesignal/test-push/", DevOneSignalTestPushView.as_view(), name="dev-onesignal-test-push"),
+    path(
+        "dev/onesignal/test-push/",
+        DevOneSignalTestPushView.as_view(),
+        name="dev-onesignal-test-push",
+    ),
+    path(
+        "dev/mobile/test-push/",
+        DevMobileTestPushView.as_view(),
+        name="dev-mobile-test-push",
+    ),
 ]
 

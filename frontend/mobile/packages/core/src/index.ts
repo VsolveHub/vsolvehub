@@ -16,7 +16,7 @@ export type { MobileApiClient, ExtendedHttpMethods } from "./api/client";
 export { getMobileQueryClient, bindAppStateFocus, bindNetworkOnline } from "./query/query-client";
 export { MobileQueryProvider } from "./query/provider";
 
-export { registerForPush, unregisterPush, readRegisteredPushToken } from "./push/register";
+export { registerForPush, unregisterPush, readRegisteredPushToken, isPushSupported } from "./push/register";
 export { routePushData } from "./push/routing";
 export type { PushData, PushTarget } from "./push/routing";
 

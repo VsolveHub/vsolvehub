@@ -5,6 +5,7 @@ import { useMobileLogout } from "@vsolve/mobile-core";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import {
+  Bell,
   Briefcase,
   ChevronRight,
   FolderKanban,
@@ -18,6 +19,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react-native";
+import { PushDiagnosticsModal } from "@/features/notifications/view/push-diagnostics-modal";
 import { useState, type ReactNode } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
 
@@ -32,6 +34,7 @@ export function MeHome() {
   const router = useRouter();
   const logout = useMobileLogout();
   const [signingOut, setSigningOut] = useState(false);
+  const [showPushDiagnostics, setShowPushDiagnostics] = useState(false);
   const grants = usePartnerWorkspaceGrants();
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
 
@@ -64,6 +67,15 @@ export function MeHome() {
           boxBorder="border-purple-100"
           iconColor="#6b21a8"
           onPress={() => router.push("/me/language")}
+        />
+        <SettingsRow
+          icon={Bell}
+          title="Push Notification Diagnostics"
+          subtitle="Token status, permissions & alert tests"
+          boxBg="bg-orange-50"
+          boxBorder="border-orange-100"
+          iconColor="#f87000"
+          onPress={() => setShowPushDiagnostics(true)}
         />
         <SettingsRow
           icon={User}
@@ -189,6 +201,11 @@ export function MeHome() {
           </Text>
         </Pressable>
       </View>
+
+      <PushDiagnosticsModal
+        open={showPushDiagnostics}
+        onOpenChange={setShowPushDiagnostics}
+      />
     </ScrollView>
   );
 }

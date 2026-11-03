@@ -236,6 +236,7 @@ class DevOneSignalTestPushView(APIView):
 
     def post(self, request: Request) -> Response:
         from django.conf import settings
+
         from apps.notifications.onesignal import send_push_to_external_ids
 
         is_dev_enabled = settings.DEBUG or getattr(settings, "ONESIGNAL_ENV", "") == "local"
@@ -262,5 +263,75 @@ class DevOneSignalTestPushView(APIView):
             data=data,
             url=url,
         )
-        return Response(result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST)
+        resp_status = (
+            status.HTTP_200_OK if result.get("success") else status.HTTP_400_BAD_REQUEST
+        )
+        return Response(result, status=resp_status)
+
+
+class DevMobileTestPushView(APIView):
+    """Local development endpoint to verify mobile Expo push delivery to user devices."""
+
+    authentication_classes = ()
+    permission_classes = ()
+
+    def post(self, request: Request) -> Response:
+        import uuid
+
+        from django.conf import settings
+
+        from apps.identity.models import User
+        from apps.mobile.services import active_devices_for, deliver_push_intent
+        from apps.notifications.services import request_notification
+
+        is_dev_enabled = settings.DEBUG or getattr(settings, "ONESIGNAL_ENV", "") == "local"
+        if not is_dev_enabled:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user_id = request.data.get("user_id") or (
+            str(request.user.id) if request.user and request.user.is_authenticated else None
+        )
+        if not user_id:
+            return Response(
+                {"error": "user_id is required or user must be authenticated"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        devices = active_devices_for(user)
+        if not devices:
+            return Response(
+                {
+                    "success": False,
+                    "error": "No active mobile PushDevice records found for this user",
+                    "device_count": 0,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        offer_id = str(request.data.get("offer_id") or uuid.uuid4())
+        intent = request_notification(
+            recipient_id=user.id,
+            purpose="partner.offer_created",
+            channel="PUSH",
+            template_code="partner_dispatch_offer",
+            context={
+                "offer_id": offer_id,
+            },
+            idempotency_key=f"dev-mobile-test:{uuid.uuid4()}",
+        )
+        deliver_push_intent(intent_id=intent.id)
+
+        return Response(
+            {
+                "success": True,
+                "intent_id": str(intent.id),
+                "device_count": len(devices),
+                "tokens": [d.expo_push_token for d in devices],
+            },
+            status=status.HTTP_200_OK,
+        )
 

@@ -180,6 +180,11 @@ def deliver_push_intent(*, intent_id: UUID) -> None:
                         "template_code": intent.template_code,
                         "purpose": intent.purpose,
                         "target": copy.target,
+                        **(
+                            {"dispatch_offer_id": str(intent.context["offer_id"])}
+                            if intent.context and "offer_id" in intent.context
+                            else {}
+                        ),
                     },
                     purpose=intent.purpose,
                 )
