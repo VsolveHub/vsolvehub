@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { Receipt } from "@/features/payment/view/receipt";
+import { BOOKING_PAGE_FRAME } from "@/features/bookings/view/booking-layout";
 
 /**
  * The receipt for one paid Booking Group.
@@ -24,7 +25,7 @@ export default async function BookingReceiptPage({
   const { groupId } = await params;
 
   return (
-    <main className="mx-auto w-full min-w-0 max-w-5xl overflow-x-hidden px-4 pt-6 pb-24 sm:px-6 md:pb-16">
+    <main className={`${BOOKING_PAGE_FRAME} min-w-0 max-w-full overflow-x-hidden pt-6 pb-24 lg:pb-16`}>
       <Receipt groupId={groupId} />
     </main>
   );

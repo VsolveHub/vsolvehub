@@ -522,54 +522,68 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
             : "space-y-4 pb-20 lg:pb-12"
         }
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <BackToBookingsLink />
-          <div className="flex items-center gap-2">
-            {isPaid ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
-                <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
-                Booking Confirmed
-              </span>
-            ) : isAwaitingPayment ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 border border-amber-300">
-                <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-                Awaiting Payment
-              </span>
-            ) : null}
-            <span className="text-xs text-text-secondary font-mono">
-              Ref #{group.id.slice(0, 8)}
-            </span>
-          </div>
-        </div>
-
         {isAwaitingPayment ? (
-          <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-surface p-5 sm:p-6 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl sm:text-3xl font-black text-navy-900 tracking-tight">
-                    Complete Payment to Confirm
-                  </h1>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
-                    Action Required
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Every visit has a verified professional reserved for you. Complete payment now to confirm your schedule.
-                </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-text">
+                  Your booking
+                </h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                  Awaiting Payment
+                </span>
               </div>
+              <p className="mt-1 text-sm text-text-secondary">
+                Every visit has a verified professional reserved. Complete payment to confirm.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+              <BackToBookingsLink />
             </div>
           </div>
-        ) : null}
-
-        {isMultiPaidVisit ? (
-          <div className="rounded-2xl border border-line/80 bg-gradient-to-r from-orange-50/40 via-warm-50/20 to-surface p-5 sm:p-6 shadow-xs">
-            <h1 className="text-2xl sm:text-3xl font-black text-navy-900 tracking-tight">Your visits</h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              {group.units.length} visits scheduled · All professionals assigned and confirmed for your services.
-            </p>
+        ) : isMultiPaidVisit ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-text">
+                  Your visits
+                </h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-200">
+                  <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                  Booking Confirmed
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-text-secondary">
+                {group.units.length} visits scheduled · All professionals assigned and confirmed.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+              <BackToBookingsLink />
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <BackToBookingsLink />
+            <div className="flex items-center gap-2">
+              {isPaid ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
+                  <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                  Booking Confirmed
+                </span>
+              ) : null}
+              <span className="text-xs text-text-secondary font-mono">
+                Ref #{group.id.slice(0, 8)}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* The status card, on the states that still have something to say. `showBookingSummaryCard`
             narrows what used to be `!isAwaitingPayment`: on a live or finished booking the visit
@@ -643,11 +657,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         <div
           className={
             usesTwoColumn
-              ? "lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-4 lg:space-y-0"
-              : undefined
+              ? "mt-6 lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-6 lg:space-y-0"
+              : "mt-6 space-y-4"
           }
         >
-          <div className={usesTwoColumn ? (isAwaitingPayment ? "lg:col-span-7 min-w-0 space-y-4" : "lg:col-span-8 min-w-0 space-y-4") : "space-y-4"}>
+          <div className={usesTwoColumn ? "lg:col-span-8 min-w-0 space-y-4" : "space-y-4"}>
             {isAwaitingPayment ? (
               <div className="sr-only">
                 <AssignmentProgress group={group} />
@@ -722,7 +736,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           </div>
 
           {isAwaitingPayment ? (
-            <div className="hidden min-w-0 lg:col-span-5 lg:block">
+            <div className="hidden min-w-0 lg:col-span-4 lg:block">
               <PaymentSummarySideCard group={group} />
             </div>
           ) : null}

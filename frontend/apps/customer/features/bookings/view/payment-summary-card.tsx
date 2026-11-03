@@ -15,16 +15,6 @@ interface PaymentSummaryProps {
   group: BookingGroup;
 }
 
-function formatWhen(instant: string): string {
-  return new Date(instant).toLocaleString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
   const { handlePay, isPaying, payError, profileDialog, loyalty } = useBookingPayment(group);
   const currency = group.units[0]?.total?.currency ?? "INR";
@@ -39,86 +29,93 @@ export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
   const feeOrTaxMoney = { amount_paise: feeOrTaxPaise, currency };
 
   return (
-    <aside className="sticky top-24 rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm">
+    <aside
+      aria-labelledby="payment-summary-heading"
+      className="sticky top-24 rounded-2xl border border-line bg-surface p-6 shadow-card"
+    >
       {/* Header section with booking count and status */}
-      <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
+      <div className="flex items-center justify-between border-b border-line pb-4">
         <div>
-          <h2 className="text-xl font-bold text-text">
-            {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
+          <h2 id="payment-summary-heading" className="text-lg font-extrabold text-navy-900">
+            Payment summary
           </h2>
           <p className="text-xs text-text-secondary mt-0.5">
-            Booked {formatWhen(group.created_at)}
+            {group.units.length} {group.units.length === 1 ? "visit" : "visits"} · Ready for payment
           </p>
         </div>
         <GroupStatusBadge group={group} />
       </div>
 
-      {/* Progress status banner */}
-      <div className="mt-4 rounded-xl bg-surface-sunken p-3 text-xs text-text leading-relaxed">
-        Every visit has a professional. Payment is the last step.
-      </div>
+      {/* Itemised breakdown */}
+      <dl className="mt-5 space-y-3 text-sm">
+        {group.units.map((unit, uIdx) => {
+          const displayLines = unit.lines.filter(
+            (line) => (line.amount?.amount_paise ?? 0) > 0 || line.kind === "SERVICE",
+          );
+          return (
+            <div key={unit.id} className="space-y-2">
+              {group.units.length > 1 ? (
+                <div className="flex items-center justify-between text-xs font-bold text-navy-900 border-b border-line/40 pb-1">
+                  <span className="text-action">Visit {uIdx + 1}</span>
+                  <span className="text-[11px] font-normal text-text-secondary">
+                    {unit.arrival_window_minutes} min window
+                  </span>
+                </div>
+              ) : null}
 
-      {/* Booked Services Details directly above Pay Now */}
-      <div className="mt-4 space-y-3 border-b border-line pb-4">
-        <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">
-          Booked Services
-        </p>
-
-        <div className="space-y-2.5">
-          {group.units.map((unit, uIdx) => {
-            const displayLines = unit.lines.filter(
-              (line) => (line.amount?.amount_paise ?? 0) > 0 || line.kind === "SERVICE",
-            );
-            return (
-              <div key={unit.id} className="space-y-1.5 rounded-xl bg-surface-sunken/60 border border-line/60 p-3 text-xs">
-                {group.units.length > 1 ? (
-                  <div className="flex justify-between items-center font-semibold text-text border-b border-line/40 pb-1.5">
-                    <span className="text-action">Visit {uIdx + 1}</span>
-                    <span className="text-[11px] text-text-secondary font-normal">
-                      {unit.arrival_window_minutes} min window
-                    </span>
+              {displayLines.map((line) => {
+                const label = cleanServiceLabel(line.label, line.quantity);
+                return (
+                  <div key={line.id} className="flex items-baseline justify-between gap-3">
+                    <dt className="min-w-0 text-text-secondary">
+                      {label}
+                      {line.quantity > 1 ? (
+                        <span className="font-semibold text-navy-700"> × {line.quantity}</span>
+                      ) : null}
+                    </dt>
+                    <dd data-numeric className="shrink-0 font-semibold text-navy-900 tabular-nums">
+                      <Money value={line.amount} />
+                    </dd>
                   </div>
-                ) : null}
+                );
+              })}
+            </div>
+          );
+        })}
 
-                {displayLines.map((line) => {
-                  const label = cleanServiceLabel(line.label, line.quantity);
-                  return (
-                    <div key={line.id} className="flex justify-between items-start text-text gap-2">
-                      <span className="font-medium text-slate-700">
-                        {label}
-                        {line.quantity > 1 ? (
-                          <span className="text-text-secondary font-normal"> × {line.quantity}</span>
-                        ) : null}
-                      </span>
-                      <span className="font-semibold text-text tabular-nums shrink-0">
-                        <Money value={line.amount} />
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
+        {/* Subtotal if there are taxes/platform fee */}
+        {feeOrTaxPaise > 0 ? (
+          <div className="flex items-baseline justify-between gap-3 border-t border-line/80 pt-3">
+            <dt className="font-bold text-navy-900">Subtotal</dt>
+            <dd data-numeric className="font-bold text-navy-900 tabular-nums">
+              <Money value={{ amount_paise: itemChargesPaise, currency }} />
+            </dd>
+          </div>
+        ) : null}
 
         {/* Taxes & Platform Fee if applicable */}
         {feeOrTaxPaise > 0 ? (
-          <div className="flex justify-between items-center text-xs text-text-secondary pt-1 px-1">
-            <span>Taxes & platform fee</span>
-            <span className="font-medium text-text tabular-nums">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-text-secondary">Taxes & platform fee</dt>
+            <dd data-numeric className="font-semibold text-navy-900 tabular-nums">
               <Money value={feeOrTaxMoney} />
-            </span>
+            </dd>
           </div>
         ) : null}
-      </div>
 
-      {/* Total Amount */}
-      <div className="mt-4 flex items-baseline justify-between px-1">
-        <span className="text-sm font-bold text-text">Total Payable</span>
-        <span className="text-2xl font-extrabold text-navy-900">
-          <Money value={totalMoney} />
-        </span>
-      </div>
+        {/* Total Amount */}
+        <div className="flex items-baseline justify-between gap-3 border-t border-line/80 pt-3">
+          <dt className="font-extrabold text-navy-900 text-base">Amount to pay</dt>
+          <dd data-numeric className="text-xl font-extrabold text-navy-900 tabular-nums">
+            <Money value={totalMoney} />
+          </dd>
+        </div>
+
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-xs font-medium text-text-muted">Includes GST</dt>
+          <dd data-numeric className="text-xs font-medium text-text-muted">All taxes included</dd>
+        </div>
+      </dl>
 
       {loyalty.show ? (
         <div className="mt-4 border-t border-line/60 pt-3">
@@ -127,9 +124,9 @@ export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
       ) : null}
 
       {/* Pay Now CTA */}
-      <div className="mt-5 space-y-2">
+      <div className="mt-6 space-y-2">
         {payError ? (
-          <p className="text-xs text-critical font-medium" role="alert">
+          <p className="text-xs text-critical font-medium text-center" role="alert">
             {payError}
           </p>
         ) : null}
@@ -137,28 +134,17 @@ export function PaymentSummarySideCard({ group }: PaymentSummaryProps) {
           loading={isPaying}
           loadingLabel="Opening payment..."
           onClick={handlePay}
-          className="w-full justify-center h-12 text-base font-bold shadow-md bg-orange-600 hover:bg-orange-700"
+          className="w-full justify-center h-12 text-base font-bold shadow-md bg-[#EA580C] hover:bg-[#C2410C] text-white"
         >
           Pay Now →
         </Button>
       </div>
-      {profileDialog}
 
-      {/* Trust & Guarantee */}
-      <div className="mt-5 pt-4 border-t border-line/60 space-y-2 text-[11px] text-text-secondary">
-        <div className="flex items-center gap-2">
-          <span className="text-success font-bold text-xs">🔒</span>
-          <span>256-bit Razorpay secured payment</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-success font-bold text-xs">🛡️</span>
-          <span>100% money back guarantee on cancellation</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-success font-bold text-xs">✓</span>
-          <span>Real partner details unlocked immediately</span>
-        </div>
-      </div>
+      <p className="mt-3.5 text-center text-xs text-text-secondary">
+        256-bit Razorpay secured payment · Free cancellation before arrival
+      </p>
+
+      {profileDialog}
     </aside>
   );
 }
