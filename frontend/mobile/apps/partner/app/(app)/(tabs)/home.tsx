@@ -1,23 +1,26 @@
+import { useLocalSearchParams } from "expo-router";
+
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { resolveWorkspaces, specialtyShellHome } from "@/features/workspace/registry";
 import { WorkHome } from "@/features/work-stack/view/work-home";
 import { RentalHome } from "@/features/rentals/view/rental-home";
-import { PartnerStaysScreen } from "@/features/stays/view/partner-stays-screen";
+import { StayHome } from "@/features/stays/view/stay-home";
 import { ListingHome } from "@/features/listings/view/listing-home";
-import { PartnerListingsScreen } from "@/features/listings/view/partner-listings-screen";
 
 export default function HomeScreen() {
+  const searchParams = useLocalSearchParams<{ specialty?: string }>();
   const grants = usePartnerWorkspaceGrants();
   const resolved = resolveWorkspaces(grants.grants ?? []);
   const specialty = specialtyShellHome(resolved);
+  const effectiveSpecialty = searchParams.specialty || specialty;
 
-  if (specialty === "rentals") {
+  if (effectiveSpecialty === "rentals") {
     return <RentalHome />;
   }
-  if (specialty === "stays") {
-    return <PartnerStaysScreen initialTab="properties" />;
+  if (effectiveSpecialty === "stays") {
+    return <StayHome />;
   }
-  if (specialty === "listings") {
+  if (effectiveSpecialty === "listings") {
     return <ListingHome />;
   }
 
