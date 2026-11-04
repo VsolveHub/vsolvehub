@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Lock, PhoneCall, ShieldCheck, Zap } from "lucide-react-native";
 import { Pressable, useWindowDimensions, View } from "react-native";
+import { PARTNER_SUPPORT_HOURS, PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
 
 const WEB_BASE = process.env.EXPO_PUBLIC_WEB_BASE_URL ?? "https://partner.vsolvehub.com";
 
@@ -136,12 +137,12 @@ export function MarketingFooter() {
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => void WebBrowser.openBrowserAsync(`tel:18008765832`)}
+            onPress={() => void WebBrowser.openBrowserAsync(`tel:${PARTNER_SUPPORT_PHONE}`)}
             className="mt-2 flex-row items-center gap-2 active:opacity-80"
           >
             <PhoneCall size={14} color="#f59e0b" />
             <Text className="text-xs font-bold text-amber-400">
-              Partner Helpline: +91 (800) 876-5832 / +91 879 056 4634
+              Partner Helpline: {PARTNER_SUPPORT_PHONE_DISPLAY} ({PARTNER_SUPPORT_HOURS})
             </Text>
           </Pressable>
         </View>

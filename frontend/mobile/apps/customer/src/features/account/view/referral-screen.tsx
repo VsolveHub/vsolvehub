@@ -1,11 +1,14 @@
+import { webBaseUrl } from "@vsolve/mobile-core";
 import { describeError } from "@vsolve/query/native";
-import { Button, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { Button, ErrorState, Spinner, Text, formatMoney } from "@vsolve/mobile-ui";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Share, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
+
+import { referralLink, referralOfferCopy, shareMessageWith } from "@/features/referral/model";
 
 import { useCustomerReferral, useReferralAttributions } from "../queries";
 
@@ -24,12 +27,16 @@ export function ReferralScreen({ embedded = false }: { embedded?: boolean } = {}
     setRefreshing(false);
   };
 
+  // Everything on the share card is the server's: the customer's own code, the link the web
+  // credits (`/signup?ref=`), the server's share message, and the published program's amounts.
   const summary = referralQuery.data;
-  const referralCode = summary?.referral_code ?? "VSOLVE100";
-  const shareUrl = `https://vsolvehub.com/?ref=${referralCode}`;
+  const referralCode = summary?.code ?? "";
+  const shareLink = referralCode ? referralLink(webBaseUrl(), referralCode) : "";
+  const shareMessage = summary ? shareMessageWith(summary.share_message, summary.share_url, shareLink) : "";
+  const offer = referralOfferCopy(summary?.active_program);
 
   const copyToClipboard = async () => {
-    await Clipboard.setStringAsync(referralCode);
+    await Clipboard.setStringAsync(shareLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -37,8 +44,8 @@ export function ReferralScreen({ embedded = false }: { embedded?: boolean } = {}
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Use my invite code ${referralCode} to get ₹100 off on your first service booking with V Solve Hub! ${shareUrl}`,
-        url: shareUrl,
+        message: shareMessage,
+        url: shareLink,
         title: "Join V Solve Hub",
       });
     } catch {
@@ -63,14 +70,10 @@ export function ReferralScreen({ embedded = false }: { embedded?: boolean } = {}
           {/* Share Hero Card */}
           <View className="overflow-hidden rounded-2xl bg-[#0B162C] p-5 shadow-sm">
             <Text className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">
-              GIVE ₹100, GET ₹150
+              Invite Friends & Earn
             </Text>
-            <Text className="mt-1 text-2xl font-extrabold text-white">
-              Invite friends to V Solve Hub
-            </Text>
-            <Text className="mt-1 text-xs text-[#94A3B8] leading-relaxed">
-              Your friend gets ₹100 off on their first service, and you get ₹150 in your wallet or V Coins when they complete it.
-            </Text>
+            <Text className="mt-1 text-2xl font-extrabold text-white">{offer.headline}</Text>
+            <Text className="mt-1 text-xs text-[#94A3B8] leading-relaxed">{offer.sentence}</Text>
 
             {/* Code Box */}
             <View className="mt-4 flex-row items-center justify-between rounded-xl border border-white/20 bg-white/10 px-4 py-3">
@@ -110,7 +113,7 @@ export function ReferralScreen({ embedded = false }: { embedded?: boolean } = {}
             <View className="flex-1 rounded-2xl border border-[#F1EFEB] bg-white p-4 shadow-xs">
               <Text className="text-xs text-[#64748B]">Earned Rewards</Text>
               <Text className="mt-1 text-2xl font-extrabold text-emerald-600">
-                ₹{((summary?.total_earned_paise ?? 0) / 100).toLocaleString("en-IN")}
+                {formatMoney(summary?.total_earned_paise ?? 0)}
               </Text>
             </View>
           </View>

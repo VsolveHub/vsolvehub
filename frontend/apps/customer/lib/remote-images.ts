@@ -17,7 +17,11 @@
  * bundler is running.
  */
 export const OPTIMIZED_IMAGE_HOSTS = [
-  // Catalogue artwork: category, subcategory and service-cover images.
+  // The public bucket's custom domain (R2_PUBLIC_BASE_URL, docs/runbooks/cloudflare-r2-storage.md).
+  // Saved links move here with `manage.py rehost_public_media`.
+  "media.vsolvehub.com",
+  // Catalogue artwork: category, subcategory and service-cover images. Kept until every
+  // saved link has moved to the custom domain, then removed.
   "pub-32e84da8140449ddbc61c13539728e0e.r2.dev",
   // Seed photography and the home hero.
   "images.unsplash.com",

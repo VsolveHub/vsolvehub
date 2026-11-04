@@ -34,6 +34,7 @@ import {
 } from "@/features/application/model/progress";
 import { APPLICATION_STEPS, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
+import { PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
 
 const logoMark = require("../../../assets/logo-mark.png");
 
@@ -315,19 +316,19 @@ export default function ApplyLayout() {
                   accessibilityRole="button"
                   onPress={() => {
                     setHelpModalOpen(false);
-                    void Linking.openURL("tel:+918008765832");
+                    void Linking.openURL(`tel:${PARTNER_SUPPORT_PHONE}`);
                   }}
                   style={styles.helpPrimaryAction}
                 >
                   <Phone size={18} color="#ffffff" />
-                  <Text style={styles.helpPrimaryActionText}>Call Support (+91 8008765832)</Text>
+                  <Text style={styles.helpPrimaryActionText}>Call Support ({PARTNER_SUPPORT_PHONE_DISPLAY})</Text>
                 </Pressable>
 
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {
                     setHelpModalOpen(false);
-                    void Linking.openURL("https://wa.me/918008765832");
+                    void Linking.openURL(`https://wa.me/${PARTNER_SUPPORT_PHONE.replace("+", "")}`);
                   }}
                   style={styles.helpSecondaryAction}
                 >

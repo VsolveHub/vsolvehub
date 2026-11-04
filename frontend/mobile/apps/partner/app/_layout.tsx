@@ -13,13 +13,15 @@ import {
   MobileQueryProvider,
   ProviderCheckoutHost,
   registerForPush,
+  reportError,
+  startCrashReporting,
   useAuthStore,
   VersionGate,
 } from "@vsolve/mobile-core";
-import { I18nProvider, ToastProvider } from "@vsolve/mobile-ui";
+import { ErrorState, I18nProvider, ToastProvider } from "@vsolve/mobile-ui";
 import { queryKeys } from "@vsolve/query/native";
 import { useQueryClient } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
@@ -28,7 +30,7 @@ import { useLocaleStore } from "@/i18n/locale-store";
 import { isOfferCreatedPush, resolvePartnerPush } from "@/features/notifications/push-routing";
 import { requestOpenAlerts } from "@/features/notifications/alerts-bus";
 
-import { LogBox, Platform } from "react-native";
+import { LogBox, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 
@@ -41,7 +43,29 @@ configureReanimatedLogger({
 
 LogBox.ignoreAllLogs();
 configureCore({ appKind: "partner" });
+startCrashReporting();
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * Shown in place of a screen that crashed while rendering, word for word the web's error page,
+ * so a crash is a recoverable screen instead of a closed app. The error goes to Crashlytics.
+ * It renders outside the app's providers, so it uses nothing that needs one.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    reportError(error, "root error boundary");
+  }, [error]);
+  return (
+    <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#FAF9F7" }}>
+      <ErrorState
+        title="Something went wrong"
+        message="The page ran into an unexpected error. Nothing was charged or changed."
+        actionLabel="Try again"
+        onAction={() => void retry()}
+      />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const status = useAuthStore((state) => state.status);

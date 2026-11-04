@@ -198,7 +198,18 @@ frontend/mobile/
   lists, prices, reward amounts, support numbers). Render what the API returns, exactly as
   the web does, and show the web's empty state when a value is missing. A bundled copy
   drifts from the web and can only change with an app release. Never substitute stock
-  photos (Unsplash) or invented values for a missing one.
+  photos (Unsplash) or invented values for a missing one: no stand-in names, companies,
+  cities, dates, plans, skills, descriptions, match scores or demo lists "for visual fidelity".
+  A missing fact is left out, or shown as an honest neutral label ("Your booking").
+- **Type API data with the generated `Schemas["…"]`, never a hand-written interface plus
+  `as unknown as`.** A hand-written copy once invented `referral_code` (the server sends
+  `code`), so every customer shared a placeholder code.
+- **Never use `window.localStorage` / `window.sessionStorage`.** React Native has `window`
+  but not those, so the call throws and the `catch` silently drops the data. Use `kvGet`/`kvSet`
+  (kept across launches) or `sessionGet`/`sessionSet` (this app session) from
+  `@vsolve/mobile-core/storage`.
+- **Support contacts come from `@/features/support/contact`** (partner), the same values as the
+  web. Never type a phone number or hours into a screen.
 - **A bundled image's contents must match its extension.** Photos are `.jpg`, art with
   transparency is `.png`. Android's release build (AAPT2) rejects a JPEG named `.png` ("file does
   not start with PNG signature") and the EAS build fails, while Expo Go, Metro and the browser

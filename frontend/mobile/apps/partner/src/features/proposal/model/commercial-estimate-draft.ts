@@ -1,5 +1,6 @@
 // Ported from frontend/apps/partner/features/proposal/model/commercial-estimate-draft.ts
 import type { Schemas } from "@vsolve/api-client";
+import { kvGet, kvRemove, kvSet } from "@vsolve/mobile-core/storage";
 
 export type EstimateMode = Schemas["EstimateTypeEnum"];
 export type EstimateUnit = Schemas["UnitEnum"];
@@ -961,14 +962,28 @@ export function hasEnteredModeData(draft: CommercialEstimateDraft): boolean {
    Autosave
    --------------------------------------------------------------------------- */
 
+// Kept in the app's key-value store (AsyncStorage on a phone, the browser's storage on the
+// web). The web version reads `window.localStorage`, which React Native does not have: there
+// the call threw, the `catch` swallowed it, and a vendor's draft was never kept.
 const STORAGE_PREFIX = "vsolve.m2.commercial-estimate.v1.";
 
-export function saveCommercialEstimate(invitationId: string, draft: CommercialEstimateDraft) {
-  if (typeof window === "undefined") return;
+export async function saveCommercialEstimate(
+  invitationId: string,
+  draft: CommercialEstimateDraft,
+): Promise<void> {
   try {
-    window.localStorage.setItem(`${STORAGE_PREFIX}${invitationId}`, JSON.stringify(draft));
+    await kvSet(`${STORAGE_PREFIX}${invitationId}`, JSON.stringify(draft));
   } catch {
     // Losing autosave is survivable; the controlled form remains intact.
+  }
+}
+
+export async function loadCommercialEstimate(invitationId: string): Promise<CommercialEstimateDraft | null> {
+  try {
+    const raw = await kvGet(`${STORAGE_PREFIX}${invitationId}`);
+    return raw === null ? null : parseCommercialEstimate(raw);
+  } catch {
+    return null;
   }
 }
 
@@ -977,11 +992,8 @@ export function saveCommercialEstimate(invitationId: string, draft: CommercialEs
  * written by an older bundle. Rows from before 1.48.0 carry no `isCustom`, and
  * a typed row with no catalogue id is custom by definition.
  */
-export function loadCommercialEstimate(invitationId: string): CommercialEstimateDraft | null {
-  if (typeof window === "undefined") return null;
+export function parseCommercialEstimate(raw: string): CommercialEstimateDraft | null {
   try {
-    const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${invitationId}`);
-    if (raw === null) return null;
     const parsed = JSON.parse(raw) as Partial<CommercialEstimateDraft>;
     if (!Array.isArray(parsed.itemLines) || !Array.isArray(parsed.labourLines)) return null;
     if (!Array.isArray(parsed.materialLines) || !Array.isArray(parsed.installments)) return null;
@@ -1007,10 +1019,9 @@ export function loadCommercialEstimate(invitationId: string): CommercialEstimate
   }
 }
 
-export function clearCommercialEstimate(invitationId: string) {
-  if (typeof window === "undefined") return;
+export async function clearCommercialEstimate(invitationId: string): Promise<void> {
   try {
-    window.localStorage.removeItem(`${STORAGE_PREFIX}${invitationId}`);
+    await kvRemove(`${STORAGE_PREFIX}${invitationId}`);
   } catch {
     // Nothing to clear when storage is unavailable.
   }

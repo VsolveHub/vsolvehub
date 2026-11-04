@@ -1,4 +1,5 @@
 // Ported from frontend/apps/customer/features/booking/view/workspace-context.tsx
+import { sessionGet, sessionSet } from "@vsolve/mobile-core/storage";
 import {
   createContext,
   useCallback,
@@ -58,9 +59,8 @@ function storageKey(serviceSlug: string): string {
 }
 
 function readIntent(serviceSlug: string): PersistedIntent | null {
-  if (typeof window === "undefined") return null;
   try {
-    const raw = window.sessionStorage.getItem(storageKey(serviceSlug));
+    const raw = sessionGet(storageKey(serviceSlug));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedIntent;
     return parsed.serviceSlug === serviceSlug ? parsed : null;
@@ -70,7 +70,6 @@ function readIntent(serviceSlug: string): PersistedIntent | null {
 }
 
 function writeIntent(state: WorkspaceState): void {
-  if (typeof window === "undefined") return;
   const intent: PersistedIntent = {
     serviceSlug: state.serviceSlug,
     answers: state.answers,
@@ -78,11 +77,7 @@ function writeIntent(state: WorkspaceState): void {
     taskLines: [...state.taskLines],
     addressId: state.address?.id ?? null,
   };
-  try {
-    window.sessionStorage.setItem(storageKey(state.serviceSlug), JSON.stringify(intent));
-  } catch {
-    /* private browsing */
-  }
+  sessionSet(storageKey(state.serviceSlug), JSON.stringify(intent));
 }
 
 function start(input: { serviceSlug: string; initialStage: Stage }): WorkspaceState {

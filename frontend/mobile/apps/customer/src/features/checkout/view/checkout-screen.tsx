@@ -691,7 +691,7 @@ export function CheckoutScreen() {
                   <View className="rounded-2xl border border-line bg-white p-5 shadow-xs">
                     <View className="flex-row items-center justify-between pb-3 border-b border-line">
                       <Text className="text-base font-bold text-navy-950">
-                        {groups[0]?.label || cart.items[0]?.service_name || "Home Cleaning"}
+                        {groups[0]?.label || cart.items[0]?.service_name || "Your booking"}
                       </Text>
                       <Text className="text-xs text-text-secondary">
                         Approx. {Math.floor((groups[0]?.estimated_duration_minutes ?? 120) / 60)} hrs {((groups[0]?.estimated_duration_minutes ?? 120) % 60) > 0 ? `& ${(groups[0]?.estimated_duration_minutes ?? 120) % 60} mins` : ""}

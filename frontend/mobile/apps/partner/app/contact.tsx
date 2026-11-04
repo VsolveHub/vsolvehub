@@ -4,6 +4,7 @@ import { Clock, Mail, MapPin, MessageCircle, Phone, ShieldCheck } from "lucide-r
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { MarketingHeader } from "../src/components/marketing-header";
 import { MarketingFooter } from "../src/components/marketing-footer";
+import { PARTNER_SUPPORT_HOURS, PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "../src/features/support/contact";
 
 const CHANNELS = [
   {
@@ -13,8 +14,8 @@ const CHANNELS = [
     iconBorder: "#a7f3d0",
     title: "WhatsApp",
     detail: "Chat with support instantly",
-    value: "+91 879 056 4634",
-    url: "https://wa.me/918790564634",
+    value: PARTNER_SUPPORT_PHONE_DISPLAY,
+    url: `https://wa.me/${PARTNER_SUPPORT_PHONE.replace("+", "")}`,
   },
   {
     icon: Phone,
@@ -22,9 +23,9 @@ const CHANNELS = [
     iconBg: "#f0f9ff",
     iconBorder: "#bae6fd",
     title: "Call us",
-    detail: "9am–9pm, all days",
-    value: "+91 879 056 4634",
-    url: "tel:+918790564634",
+    detail: PARTNER_SUPPORT_HOURS,
+    value: PARTNER_SUPPORT_PHONE_DISPLAY,
+    url: `tel:${PARTNER_SUPPORT_PHONE}`,
   },
   {
     icon: Mail,

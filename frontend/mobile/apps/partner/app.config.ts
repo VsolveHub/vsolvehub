@@ -9,17 +9,34 @@ const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
 // Android needs Kotlin 2.3+: React Native Firebase 27 pulls in firebase-auth 25, compiled with
 // Kotlin 2.4, which React Native 0.88's default Kotlin 2.2 cannot read. Kotlin 2.3 reads it, and
 // Expo SDK 58 pairs Kotlin >= 2.3 with its version-independent KSP.
+// Crashlytics rides with them: it reports through the same Firebase app, so it is on only when
+// Firebase is.
 const firebasePlugins: NonNullable<ExpoConfig["plugins"]> =
   googleServicesFile || googleServiceInfoPlist
     ? [
         "@react-native-firebase/app",
         "@react-native-firebase/auth",
+        "@react-native-firebase/crashlytics",
         [
           "expo-build-properties",
           { ios: { useFrameworks: "static" }, android: { kotlinVersion: "2.3.21" } },
         ],
       ]
     : [];
+
+// A store or test build must name the servers it talks to. On EAS (every profile except the
+// local-network development client) a missing or non-https address stops the build here,
+// instead of shipping an app that quietly talks to some other server.
+if (process.env.EAS_BUILD === "true" && process.env.EAS_BUILD_PROFILE !== "development") {
+  for (const name of ["EXPO_PUBLIC_API_BASE_URL", "EXPO_PUBLIC_WEB_BASE_URL"] as const) {
+    const value = process.env[name]?.trim() ?? "";
+    if (!value.startsWith("https://")) {
+      throw new Error(
+        `${name} must be an https:// address for the "${process.env.EAS_BUILD_PROFILE}" build (got "${value}"). Set it in eas.json.`,
+      );
+    }
+  }
+}
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,

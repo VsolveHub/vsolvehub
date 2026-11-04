@@ -76,22 +76,18 @@ export function ListingCard({
   const isLive = !isDraft && !isClosed;
 
   const displayPay = formatSalaryText(listing);
-  const location =
-    listing.location_text ||
-    listing.location ||
-    listing.city ||
-    (listing.area ? `${listing.area}, Hyderabad` : "Hyderabad, Telangana");
+  // Only what the listing says; a missing fact is left out, never stood in for.
+  const location: string | null =
+    listing.location_text || listing.location || listing.city || listing.area || null;
 
-  const exp =
+  const exp: string | null =
     listing.experience ||
     listing.experience_band ||
     (listing.structured_fields?.experience_years
       ? `${listing.structured_fields.experience_years} years`
-      : "1-3 years");
+      : null);
 
-  const companyLine = `${listing.service_name || "Axon Analytics"} · ${
-    listing.poster_name || "Open Staffing Solutions"
-  }`;
+  const companyLine = [listing.service_name, listing.poster_name].filter(Boolean).join(" · ");
 
   const skills = (listing.required_skills as string[] | undefined) ?? [];
   const counts = listing.counts ?? {
@@ -103,7 +99,7 @@ export function ListingCard({
     matches: 0,
   };
 
-  const vacancies = listing.vacancies ?? 1;
+  const vacancies = listing.vacancies ?? null;
 
   const dateText = isLive
     ? listing.expires_at
@@ -129,9 +125,11 @@ export function ListingCard({
       </Text>
 
       {/* 2. Company / Poster Line */}
-      <Text className="mt-1 text-xs text-[#64748b]" numberOfLines={1}>
-        {companyLine}
-      </Text>
+      {companyLine ? (
+        <Text className="mt-1 text-xs text-[#64748b]" numberOfLines={1}>
+          {companyLine}
+        </Text>
+      ) : null}
 
       {/* 3. Location & Experience Meta Row */}
       <View className="mt-1.5 flex-row flex-wrap items-center gap-3">
@@ -159,9 +157,11 @@ export function ListingCard({
       ) : null}
 
       {/* 5. Vacancies Needed */}
-      <Text className="mt-1.5 text-xs font-semibold text-[#071328]">
-        👥 {vacancies} needed
-      </Text>
+      {vacancies ? (
+        <Text className="mt-1.5 text-xs font-semibold text-[#071328]">
+          👥 {vacancies} needed
+        </Text>
+      ) : null}
 
       {/* 6. Skills Tags or Description Snippet */}
       {skills.length > 0 ? (

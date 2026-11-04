@@ -28,6 +28,7 @@ import { usePartnerProfile } from "@/features/profile/queries";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
+import { PARTNER_SUPPORT_HOURS, PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
 
 const WEB_BASE = process.env.EXPO_PUBLIC_WEB_BASE_URL ?? "https://partner.vsolvehub.com";
 
@@ -175,12 +176,12 @@ export function MeHome() {
       <Section title="Support & Safety">
         <SettingsRow
           icon={Phone}
-          title="24/7 Partner Helpline"
-          subtitle="+91 (800) 876-5832 • Dedicated Assistance"
+          title="Partner Helpline"
+          subtitle={`${PARTNER_SUPPORT_PHONE_DISPLAY} • ${PARTNER_SUPPORT_HOURS}`}
           boxBg="bg-teal-50"
           boxBorder="border-teal-100"
           iconColor="#0D9488"
-          onPress={() => void Linking.openURL("tel:+918008765832")}
+          onPress={() => void Linking.openURL(`tel:${PARTNER_SUPPORT_PHONE}`)}
         />
         <SettingsRow
           icon={Globe}

@@ -92,9 +92,25 @@ export function CommercialEstimateComposer({
   onSend,
   notice,
 }: CommercialEstimateComposerProps) {
-  const [draft, setDraft] = useState<CommercialEstimateDraft>(
-    () => loadCommercialEstimate(invitationId) ?? EMPTY_COMMERCIAL_ESTIMATE,
-  );
+  const [draft, setDraft] = useState<CommercialEstimateDraft>(EMPTY_COMMERCIAL_ESTIMATE);
+  // The saved draft loads asynchronously on a phone. Until it has, autosave stays off so the
+  // empty form cannot overwrite it, and a draft that arrives after the vendor started typing
+  // never replaces what they typed.
+  const [restoredFor, setRestoredFor] = useState<string | null>(null);
+  const restored = restoredFor === invitationId;
+  useEffect(() => {
+    let active = true;
+    void loadCommercialEstimate(invitationId).then((saved) => {
+      if (!active) return;
+      if (saved !== null) {
+        setDraft((current) => (current === EMPTY_COMMERCIAL_ESTIMATE ? saved : current));
+      }
+      setRestoredFor(invitationId);
+    });
+    return () => {
+      active = false;
+    };
+  }, [invitationId]);
   const [attempted, setAttempted] = useState(false);
   const [pendingMode, setPendingMode] = useState<EstimateMode | null>(null);
   const [picker, setPicker] = useState<Picker>(null);
@@ -127,8 +143,9 @@ export function CommercialEstimateComposer({
     preview.data !== undefined && debouncedPreview !== null && debouncedPreview.fingerprint === currentFingerprint;
 
   useEffect(() => {
-    saveCommercialEstimate(invitationId, draft);
-  }, [draft, invitationId]);
+    if (!restored) return;
+    void saveCommercialEstimate(invitationId, draft);
+  }, [draft, invitationId, restored]);
 
   function applyMode(mode: EstimateMode) {
     setDraft((current) => ({
@@ -664,5 +681,5 @@ function PresetPicker({ open, picker, mode, work, materials, onClose, onCustom, 
 }
 
 export function clearSavedCommercialEstimate(invitationId: string) {
-  clearCommercialEstimate(invitationId);
+  void clearCommercialEstimate(invitationId);
 }

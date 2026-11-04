@@ -49,10 +49,12 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
           </div>
         </div>
         <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-secondary">
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="size-3" />
-            {listing.location_text || "Hyderabad"}
-          </span>
+          {listing.location_text ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="size-3" />
+              {listing.location_text}
+            </span>
+          ) : null}
           <span>{String(pay)}</span>
           <span>{String(experience)}</span>
           <span>{String(roleType)}</span>

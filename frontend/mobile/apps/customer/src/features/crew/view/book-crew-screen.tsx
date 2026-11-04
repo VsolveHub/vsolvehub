@@ -661,7 +661,7 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
       />
     ) : (
       <JobFormScreen
-        serviceName={(service.name || "Construction Helpers").toUpperCase()}
+        serviceName={service.name.toUpperCase()}
         title={isFixedTeam ? "Book a cook" : "Book a crew"}
         heading={isFixedTeam ? "Plan your house function" : "Plan your crew"}
         questions={detailQuestions}
@@ -683,7 +683,7 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
         saveError={writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />}
         stepLabel={workQuestion === null ? "STEP 1 OF 2" : "STEP 2 OF 3"}
         selectedWorkEyebrow="WORK SELECTED"
-        selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Material shifting on site")}
+        selectedWorkLabel={workQuestion === null ? null : workLabel}
         onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
         onRefresh={handleRefresh}
         aboutPanel={

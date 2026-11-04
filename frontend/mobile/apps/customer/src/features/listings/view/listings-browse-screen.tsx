@@ -49,74 +49,6 @@ export const CATEGORY_PILLS: CategoryOption[] = [
   { label: "IT & Software", value: "it-software" },
 ];
 
-export const DEMO_LISTINGS: Listing[] = [
-  {
-    id: "job-demo-1",
-    slug: "jewellery-sales-executive-suryapet",
-    title: "Jewellery Sales Executive",
-    company_name: "Apex Staffing Solutions",
-    location_text: "Suryapet",
-    city: "Suryapet",
-    experience_band: "1-2 years",
-    salary_display: "₹ 30,000 – ₹50,000/mo",
-    work_mode: "Work from Office",
-    job_category: "Sales & Retail",
-    role_template: "jewellery-sales",
-  },
-  {
-    id: "job-demo-2",
-    slug: "office-coordinator-pending-ops-review",
-    title: "Office Coordinator —\nPending Ops Review",
-    company_name: "Apex Staffing Solutions",
-    location_text: "Hyderabad",
-    city: "Hyderabad",
-    experience_band: "1-2 years",
-    salary_display: "₹ 10,000 – ₹15,000/mo",
-    work_mode: "Work from Office",
-    job_category: "Admin & Operations",
-    role_template: "office-coordinator",
-  },
-  {
-    id: "job-demo-3",
-    slug: "accountant-mancherial",
-    title: "Accountant",
-    company_name: "Apex Staffing Solutions",
-    location_text: "Mancherial",
-    city: "Mancherial",
-    experience_band: "1-2 years",
-    salary_display: "₹ 10,000 – ₹15,000/mo",
-    work_mode: "Work from Office",
-    job_category: "Finance & Accounts",
-    role_template: "accountant",
-  },
-  {
-    id: "job-demo-4",
-    slug: "warehouse-helper-packer-siddipet",
-    title: "Warehouse Helper / Packer",
-    company_name: "Apex Staffing Solutions",
-    location_text: "Siddipet",
-    city: "Siddipet",
-    experience_band: "1-2 years",
-    salary_display: "₹ 10,000 – ₹15,000/mo",
-    work_mode: "Work from Office",
-    job_category: "Warehouse & Logistics",
-    role_template: "warehouse-helper",
-  },
-  {
-    id: "job-demo-5",
-    slug: "staff-nurse-adilabad",
-    title: "Staff Nurse",
-    company_name: "Apex Staffing Solutions",
-    location_text: "Adilabad",
-    city: "Adilabad",
-    experience_band: "1-2 years",
-    salary_display: "₹ 15,000 – ₹30,000/mo",
-    work_mode: "Rotational shift",
-    job_category: "Healthcare",
-    role_template: "staff-nurse",
-  },
-];
-
 const SORT_OPTIONS = [
   { label: "Latest", value: "latest" },
   { label: "Salary: High to Low", value: "salary_high" },
@@ -194,8 +126,7 @@ export function ListingsBrowseScreen() {
 
   // Filter listings
   const displayListings = useMemo(() => {
-    const sourceList = rawListings.length > 0 ? rawListings : DEMO_LISTINGS;
-    return sourceList.filter((item) => {
+    return rawListings.filter((item) => {
       if (selectedCategory) {
         const cat = (item.job_category || item.service_name || "").toLowerCase();
         const sel = selectedCategory.toLowerCase();

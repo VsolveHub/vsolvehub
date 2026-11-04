@@ -313,7 +313,7 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
                 {t("work.dispatch.serviceArea")}
               </Text>
               <Text className="text-sm font-bold text-navy-950">
-                {offer.booking.location_area || "Hyderabad"}
+                {offer.booking.location_area || "Area not given"}
               </Text>
             </View>
           </View>

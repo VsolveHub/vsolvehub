@@ -169,10 +169,14 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
     void applicantsQuery.refetch();
   };
 
-  const listingTitle = listingQuery.data?.title || "Cashier";
-  const serviceSubtitle = `${
-    listingQuery.data?.service_name || "Job listings (hiring partner)"
-  } • ${applications.length} total applicant(s) received`;
+  // The listing's own title; "Applicants" only until it loads, never a stand-in job title.
+  const listingTitle = listingQuery.data?.title || "Applicants";
+  const serviceSubtitle = [
+    listingQuery.data?.service_name,
+    `${applications.length} total applicant(s) received`,
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
   return (
     <View className="flex-1 bg-[#faf8f5]">

@@ -7,9 +7,6 @@ import { Pressable, View } from "react-native";
 import { formatPaise, type RentalAsset } from "../model";
 import { useSavedItems } from "../use-saved-items";
 
-const FALLBACK_TOOL_IMAGE =
-  "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?q=80&w=800&auto=format&fit=crop";
-
 export function RentalCard({ asset }: { asset: RentalAsset }) {
   const router = useRouter();
   const saved = useSavedItems("rental");
@@ -17,7 +14,8 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
 
   const dailyPrice = formatPaise(asset.daily_rate_paise);
   const deposit = formatPaise(asset.deposit_paise);
-  const imageUrl = asset.media?.[0]?.url || asset.thumbnail_url || FALLBACK_TOOL_IMAGE;
+  // The listing's own photo or none, as on the web: never a stock photo of some other tool.
+  const imageUrl = asset.media?.[0]?.url || asset.thumbnail_url || null;
 
   const partnerDisplay =
     asset.partner_name ||
@@ -36,13 +34,15 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
       className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs active:scale-[0.99] active:border-line-strong active:shadow-raised"
     >
       {/* Cover Image - Clean, no badges overlaid (100% Web Parity) */}
-      <View className="aspect-[16/10] w-full bg-surface-muted overflow-hidden">
-        <Image
-          source={{ uri: imageUrl }}
-          contentFit="cover"
-          style={{ width: "100%", height: "100%" }}
-        />
-      </View>
+      {imageUrl ? (
+        <View className="aspect-[16/10] w-full bg-surface-muted overflow-hidden">
+          <Image
+            source={{ uri: imageUrl }}
+            contentFit="cover"
+            style={{ width: "100%", height: "100%" }}
+          />
+        </View>
+      ) : null}
 
       <View className="gap-3 p-4">
         {/* Top Badges & Heart Row below Image matching Web 100% */}
