@@ -1,6 +1,7 @@
 // Ported from frontend/apps/customer/features/session/view/customer-login-experience.tsx
 // Redesigned to 100% exact parity with the V Solve Hub mobile login popup reference image
 import { webBaseUrl, type MobileOtpFlow } from "@vsolve/mobile-core";
+import { LoginReferralInput } from "./login-referral-input";
 import { ErrorState, Logo, Text, cn, formatDuration } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
@@ -173,6 +174,8 @@ export function CustomerLoginForm({
             onPhoneChange={flow.onPhoneChange}
             phoneError={flow.phoneError}
           />
+
+          <LoginReferralInput />
 
           <Pressable
             accessibilityRole="button"

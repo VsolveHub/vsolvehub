@@ -15,7 +15,10 @@ const mockUploadStatus = { value: 200 };
 jest.mock("expo-file-system", () => ({
   UploadType: { BINARY_CONTENT: 0, MULTIPART: 1 },
   File: class {
-    constructor(private readonly uri: string) {}
+    private readonly uri: string;
+    constructor(mockUri: string) {
+      this.uri = mockUri;
+    }
     get exists() {
       return mockFiles.has(this.uri);
     }

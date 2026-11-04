@@ -17,7 +17,7 @@ import { useAuthStore } from "./auth-store";
 import { deviceLabel } from "./device-label";
 import { getFirebaseAuthModule } from "./firebase-module";
 import { installationId } from "./installation-id";
-import type { MobileOtpFlow } from "./use-mobile-otp-flow";
+import type { MobileOtpFlow, MobileOtpFlowOptions } from "./use-mobile-otp-flow";
 
 const CODE_LENGTH = 6;
 const MINIMUM_PHONE_DIGITS = 10;
@@ -61,7 +61,7 @@ const UNAVAILABLE: OtpFailure = {
  * 3. The Firebase ID token goes to `POST /auth/mobile/firebase/verify/`, which answers with the
  *    bearer token this app keeps instead of a cookie.
  */
-export function useMobileFirebaseFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow {
+export function useMobileFirebaseFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
   const intendedRole = options?.intendedRole ?? "";
   const [phase, setPhase] = useState<OtpPhase>("phone");
   const [phone, setPhone] = useState("");
@@ -129,6 +129,9 @@ export function useMobileFirebaseFlow(options?: { intendedRole?: "partner" }): M
               intended_role: intendedRole,
               device_identifier: device,
               device_label: deviceLabel(),
+              ...(options?.getReferralCode?.()?.trim()
+                ? { referral_code: options.getReferralCode()!.trim() }
+                : {}),
             },
           }),
         )) as { session_token?: string } | undefined;
@@ -166,7 +169,7 @@ export function useMobileFirebaseFlow(options?: { intendedRole?: "partner" }): M
         setVerifying(false);
       }
     },
-    [clearConfirmation, intendedRole],
+    [clearConfirmation, intendedRole, options],
   );
 
   const issue = useCallback(async () => {

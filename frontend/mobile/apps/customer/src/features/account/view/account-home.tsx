@@ -3,7 +3,7 @@ import { useMobileLogout, webBaseUrl } from "@vsolve/mobile-core";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import * as WebBrowser from "expo-web-browser";
-import { FileText, LifeBuoy, RotateCcw, ShieldCheck } from "lucide-react-native";
+import { Bell, FileText, LifeBuoy, RotateCcw, ShieldCheck } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
@@ -25,6 +25,7 @@ import { MessagesScreen } from "./messages-screen";
 import { DocumentsScreen } from "./documents-screen";
 import { PrivacyScreen } from "./privacy-screen";
 import { SessionsScreen } from "./sessions-screen";
+import { PushPreferencesScreen } from "./push-preferences-screen";
 import { ProfileEditor } from "./profile-editor";
 
 export function AccountHome({ initialSection = "profile" }: { initialSection?: AccountSectionKey } = {}) {
@@ -301,6 +302,12 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
                 <SessionsScreen embedded />
               </View>
             )}
+
+            {activeSection === "notifications" && (
+              <View className="min-w-0 flex-1">
+                <PushPreferencesScreen embedded />
+              </View>
+            )}
           </View>
         </View>
 
@@ -485,6 +492,15 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
           title="Devices"
           subtitle="Where you're signed in"
           onPress={() => router.push("/account/sessions")}
+          showDivider
+        />
+
+        {/* Item 8: Notifications */}
+        <MenuItemRow
+          icon={<Bell size={22} color="#EA580C" />}
+          title="Notifications"
+          subtitle="Alerts & preferences"
+          onPress={() => router.push("/account/notifications")}
           showDivider={false}
         />
       </View>

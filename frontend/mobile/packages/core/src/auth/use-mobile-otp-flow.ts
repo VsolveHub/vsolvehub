@@ -16,6 +16,11 @@ import { phoneAuthProvider } from "./firebase-module";
 import { installationId } from "./installation-id";
 import { useMobileFirebaseFlow } from "./use-mobile-firebase-flow";
 
+export interface MobileOtpFlowOptions {
+  intendedRole?: "partner";
+  getReferralCode?: () => string | null | undefined;
+}
+
 export interface MobileOtpFlow {
   phase: OtpPhase;
   phone: string;
@@ -54,7 +59,7 @@ function digitsIn(value: string): number {
  * server-sent code. The setting is fixed for the life of a build, so the hook order never
  * changes between renders.
  */
-export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow {
+export function useMobileOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
   if (phoneAuthProvider() === "firebase") {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useMobileFirebaseFlow(options);
@@ -67,7 +72,7 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
  * Same steps as the web OTP flow. Verify uses the mobile endpoint and stores
  * the bearer token instead of relying on a cookie.
  */
-function useServerOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow {
+function useServerOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
   const [phase, setPhase] = useState<OtpPhase>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -165,6 +170,9 @@ function useServerOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow
                 code: activeCode,
                 device_identifier: device,
                 device_label: deviceLabel(),
+                ...(options?.getReferralCode?.()?.trim()
+                  ? { referral_code: options.getReferralCode()!.trim() }
+                  : {}),
               },
             }),
           )) as { session_token?: string } | undefined;
@@ -197,7 +205,7 @@ function useServerOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow
         }
       })();
     },
-    [challengeId, code, codeLength, isVerifying, phone],
+    [challengeId, code, codeLength, isVerifying, options, phone],
   );
 
   const resendInSeconds =

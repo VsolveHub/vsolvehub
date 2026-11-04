@@ -441,3 +441,45 @@ export function useReferralAttributions() {
     ...SESSION_STATE,
   });
 }
+
+export function useValidateReferralCode() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      request(() =>
+        getApiClient().POST("/api/v1/customer/referral/validate/", {
+          body: { code },
+        }),
+      ),
+  });
+}
+
+export type PushPreferenceItem = Schemas["PushPreferenceItem"];
+export type PushPreferencesResponse = Schemas["PushPreferences"];
+
+export function usePushNotificationPreferences() {
+  return useQuery<PushPreferencesResponse>({
+    queryKey: ["customer", "push-preferences"],
+    queryFn: () =>
+      request<PushPreferencesResponse>(() =>
+        getApiClient().GET("/api/v1/customer/notification-preferences/"),
+      ),
+    ...SESSION_STATE,
+  });
+}
+
+export function useUpdatePushNotificationPreference() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { category: string; isEnabled: boolean }) =>
+      request<PushPreferencesResponse>(() =>
+        getApiClient().PATCH("/api/v1/customer/notification-preferences/", {
+          body: { category: input.category, is_enabled: input.isEnabled },
+        }),
+      ),
+    onSuccess: (data: PushPreferencesResponse) => {
+      queryClient.setQueryData(["customer", "push-preferences"], data);
+    },
+    retry: false,
+  });
+}

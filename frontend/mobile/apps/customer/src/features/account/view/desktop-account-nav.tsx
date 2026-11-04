@@ -11,7 +11,8 @@ export type AccountSectionKey =
   | "messages"
   | "documents"
   | "privacy"
-  | "devices";
+  | "devices"
+  | "notifications";
 
 interface AccountSectionItem {
   key: AccountSectionKey;
@@ -30,6 +31,7 @@ export const ACCOUNT_SECTIONS: readonly AccountSectionItem[] = [
   { key: "documents", href: "/account/documents", label: "Your documents", hint: "Your verified documents" },
   { key: "privacy", href: "/account/privacy", label: "Privacy", hint: "Your data and consents" },
   { key: "devices", href: "/account/sessions", label: "Devices", hint: "Where you are signed in" },
+  { key: "notifications", href: "/account/notifications", label: "Notifications", hint: "Push notification preferences" },
 ];
 
 export function DesktopAccountNav({

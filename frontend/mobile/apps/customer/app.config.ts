@@ -6,12 +6,18 @@ const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
 // Firebase phone sign-in. Its plugins read the Firebase config files, so they switch on only
 // when a build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST).
 // Expo Go and builds without the files are unaffected. iOS needs static frameworks for it.
+// Android needs Kotlin 2.3+: React Native Firebase 27 pulls in firebase-auth 25, compiled with
+// Kotlin 2.4, which React Native 0.88's default Kotlin 2.2 cannot read. Kotlin 2.3 reads it, and
+// Expo SDK 58 pairs Kotlin >= 2.3 with its version-independent KSP.
 const firebasePlugins: NonNullable<ExpoConfig["plugins"]> =
   googleServicesFile || googleServiceInfoPlist
     ? [
         "@react-native-firebase/app",
         "@react-native-firebase/auth",
-        ["expo-build-properties", { ios: { useFrameworks: "static" } }],
+        [
+          "expo-build-properties",
+          { ios: { useFrameworks: "static" }, android: { kotlinVersion: "2.3.21" } },
+        ],
       ]
     : [];
 

@@ -10,7 +10,8 @@ import { Pressable, RefreshControl, ScrollView, TextInput, View } from "react-na
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { CategoryArtwork } from "@/features/catalog/category-artwork";
-import { useCategories, type Category } from "@/features/catalog/client-queries";
+import { useCategories, usePromoBanners, type Category } from "@/features/catalog/client-queries";
+import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
@@ -33,6 +34,7 @@ export function HomeScreen() {
 function DesktopHomeScreen() {
   const router = useRouter();
   const categories = useCategories();
+  const promoBannersQuery = usePromoBanners();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -181,8 +183,12 @@ function DesktopHomeScreen() {
 
         {/* 3. Rich Client Sections (Best Sellers, Electrical Safety Carousel, Electrician, Guides, Plumbing, Carpenter, Testimonials) */}
         <View className="mt-16 mb-20">
-          <HomepageClientSections />
+          <PromoBanners banners={promoBannersQuery.data ?? []} fallbackImageUrl="" />
+
+      <HomepageClientSections />
         </View>
+
+        <PromoBanners banners={promoBannersQuery.data ?? []} fallbackImageUrl="" />
 
         {/* 4. The V Solve Approach Section */}
         <View className="my-16 items-center">
@@ -261,6 +267,7 @@ function DesktopHomeScreen() {
 function MobileHomeScreen() {
   const router = useRouter();
   const categories = useCategories();
+  const promoBannersQuery = usePromoBanners();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {

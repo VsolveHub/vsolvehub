@@ -8,7 +8,8 @@ import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { useAddCartItem, useCart, useRemoveCartItem, useUpdateCartItem } from "@/features/checkout/queries";
-import { useCategories, useCategoryServices, useServiceDetail, type ServiceCard, type ServiceDetail } from "@/features/catalog/client-queries";
+import { useCategories, useCategoryServices, usePromoBanners, useServiceDetail, type ServiceCard, type ServiceDetail } from "@/features/catalog/client-queries";
+import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { recordViewed } from "@/features/catalog/recently-viewed";
 import { serviceHref } from "@/features/catalog/service-href";
@@ -427,6 +428,7 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
   const services = useCategoryServices(categorySlug.length > 0 ? categorySlug : null);
   const viewed = detail.data;
   const viewedCategory = viewed?.category_slug;
+  const promoBannersQuery = usePromoBanners(categorySlug.length > 0 ? categorySlug : (viewedCategory ?? null));
   useEffect(() => {
     if (!viewed || !viewedCategory) return;
     void recordViewed({

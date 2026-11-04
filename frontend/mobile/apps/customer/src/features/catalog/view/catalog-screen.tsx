@@ -10,7 +10,8 @@ import { DeviceEventEmitter, Pressable, RefreshControl, ScrollView, TextInput, V
 import Svg, { Circle, Path } from "react-native-svg";
 
 import { LOCAL_CATEGORY_TILES, getCategoryFallbackIcon, resolveImageUrl } from "@/features/catalog/category-artwork";
-import { useCatalogIndex, useCategories, type Category, type ServiceCard } from "@/features/catalog/client-queries";
+import { useCatalogIndex, useCategories, usePromoBanners, type Category, type ServiceCard } from "@/features/catalog/client-queries";
+import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { bookingModeLabel, rankCatalogMatches } from "@/features/catalog/search";
 import { serviceHref } from "@/features/catalog/service-href";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
@@ -21,6 +22,7 @@ export function CatalogScreen() {
   const params = useLocalSearchParams<{ search?: string; q?: string; t?: string }>();
   const isDesktop = useIsDesktop();
   const categories = useCategories();
+  const promoBannersQuery = usePromoBanners();
   const [query, setQuery] = useState(typeof params.q === "string" ? params.q : "");
   const [searchOpen, setSearchOpen] = useState(params.search === "1" || params.search === "true" || !!params.t);
   const scrollViewRef = useRef<ElementRef<typeof ScrollView>>(null);
@@ -143,7 +145,10 @@ export function CatalogScreen() {
           query.trim().length > 0 ? (
             <SearchHits categories={categories.data} query={query.trim()} />
           ) : (
-            <CategoryRows categories={categories.data} isDesktop={isDesktop} />
+            <>
+              <PromoBanners banners={promoBannersQuery.data ?? []} fallbackImageUrl="" />
+              <CategoryRows categories={categories.data} isDesktop={isDesktop} />
+            </>
           )
         ) : null}
       </View>

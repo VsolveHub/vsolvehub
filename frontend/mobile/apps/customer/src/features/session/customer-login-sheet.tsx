@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CustomerLoginExperience } from "./view/customer-login-experience";
+import { readPendingReferral } from "../referral/pending-referral";
 
 export function CustomerLoginSheet({
   open,
@@ -27,7 +28,7 @@ export function CustomerLoginSheet({
   onSuccess?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const flow = useMobileOtpFlow();
+  const flow = useMobileOtpFlow({ getReferralCode: readPendingReferral });
   const router = useRouter();
   const status = useAuthStore((state) => state.status);
   const wasOpenRef = useRef(open);
