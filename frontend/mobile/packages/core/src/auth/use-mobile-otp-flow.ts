@@ -12,7 +12,9 @@ import { getApiClient } from "../api/client";
 import { getMobileQueryClient } from "../query/query-client";
 import { useAuthStore } from "./auth-store";
 import { deviceLabel } from "./device-label";
+import { phoneAuthProvider } from "./firebase-module";
 import { installationId } from "./installation-id";
+import { useMobileFirebaseFlow } from "./use-mobile-firebase-flow";
 
 export interface MobileOtpFlow {
   phase: OtpPhase;
@@ -47,10 +49,25 @@ function digitsIn(value: string): number {
 }
 
 /**
+ * Phone sign-in for both apps, switched like the web's `usePhoneAuthFlow`: Firebase when the
+ * build sets `EXPO_PUBLIC_PHONE_AUTH_PROVIDER=firebase` (store and test builds), otherwise the
+ * server-sent code. The setting is fixed for the life of a build, so the hook order never
+ * changes between renders.
+ */
+export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow {
+  if (phoneAuthProvider() === "firebase") {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useMobileFirebaseFlow(options);
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useServerOtpFlow(options);
+}
+
+/**
  * Same steps as the web OTP flow. Verify uses the mobile endpoint and stores
  * the bearer token instead of relying on a cookie.
  */
-export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow {
+function useServerOtpFlow(options?: { intendedRole?: "partner" }): MobileOtpFlow {
   const [phase, setPhase] = useState<OtpPhase>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -160,11 +177,19 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
           setChallengeId(null);
           setDevelopmentCode(null);
         } catch (error) {
-          if (error instanceof ApiRequestError && error.status === 400) {
+          const codeFieldError =
+            error instanceof ApiRequestError ? (error.fieldErrors.code?.[0] ?? null) : null;
+          if (codeFieldError) {
+            setCodeError(codeFieldError);
+          } else if (error instanceof ApiRequestError && error.code.toLowerCase() === "invalid_otp") {
+            // Django answers `invalid_otp` for a wrong, expired and locked-out code alike.
             setCodeError(
               "That code is not right, or it has expired. Check the code, or request a new one.",
             );
           } else {
+            // Any other 400 is about something the app sent (once, an over-long
+            // `device_label`), not the code the person typed. Calling it a wrong code
+            // sends them round in circles re-entering a correct one.
             setFailure(describeOtpFailure(error));
           }
         } finally {

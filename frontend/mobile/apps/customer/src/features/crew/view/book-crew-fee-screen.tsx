@@ -7,6 +7,7 @@ import {
   useServerCountdown,
   type BookingFeePhase,
 } from "@vsolve/query/native";
+import { useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { Badge, Button, ErrorState, Skeleton, Text, buttonStyles } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
@@ -31,6 +32,9 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
   const backHref = requestHrefProp ?? requestHref(requirementId);
   const rateQuery = useRateCardState(requirementId);
   const checkout = useStartBookingFeeCheckout();
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
+  const [isHandingOff, setIsHandingOff] = useState(false);
+  const [handoffError, setHandoffError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -82,6 +86,26 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
   const crewName = confirmedCrewName(state);
   const isHeld = bookingPhase(state) === "offer_held";
 
+  /** Same as the web: create the charge, open Razorpay, then re-read the booking. */
+  async function payBookingFee() {
+    if (booking === null || state === null) return;
+    setHandoffError(null);
+    try {
+      const started = await checkout.mutateAsync({
+        requirementId,
+        bookingId: booking.id,
+        isRetryAfterFailure: bookingFeePhase(state) === "failed",
+      });
+      setIsHandingOff(true);
+      await completeOrOpenCheckout(String(started.payment_attempt_id));
+      void rateQuery.refetch();
+    } catch (error) {
+      setHandoffError(error);
+    } finally {
+      setIsHandingOff(false);
+    }
+  }
+
   const refusal = isBookingFeeNotChargeable(checkout.error) ? (
     <ErrorState
       title="Nobody is holding this job any more"
@@ -90,7 +114,7 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
       inline
     />
   ) : (
-    <AccessRefusal error={checkout.error} attempting="pay the booking fee" />
+    <AccessRefusal error={checkout.error ?? handoffError} attempting="pay the booking fee" />
   );
 
   return (
@@ -142,14 +166,8 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
           phase={feePhase}
           canCheckOut={canCheckOutBookingFee(state)}
           feeLabel={view.bookingFeeLabel}
-          isPending={checkout.isPending}
-          onPay={() =>
-            checkout.mutate({
-              requirementId,
-              bookingId: booking.id,
-              isRetryAfterFailure: feePhase === "failed",
-            })
-          }
+          isPending={checkout.isPending || isHandingOff}
+          onPay={() => void payBookingFee()}
           requestHref={backHref}
         />
         {refusal}

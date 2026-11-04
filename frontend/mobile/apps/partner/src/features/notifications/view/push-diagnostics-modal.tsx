@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from "react-native";
-import * as Notifications from "expo-notifications";
 import * as Clipboard from "expo-clipboard";
 import { Button, Sheet, Text, cn } from "@vsolve/mobile-ui";
 import {
+  getNotifications,
   readRegisteredPushToken,
   registerForPush,
   isPushSupported,
@@ -45,7 +45,10 @@ export function PushDiagnosticsModal({
       const storedToken = await readRegisteredPushToken();
       setToken(storedToken);
 
-      if (!isWeb) {
+      const Notifications = getNotifications();
+      if (!isWeb && Notifications === null) {
+        setPermissionStatus("unavailable_in_expo_go_android");
+      } else if (!isWeb && Notifications !== null) {
         const perms = await Notifications.getPermissionsAsync();
         setPermissionStatus(perms.status);
       } else {
@@ -74,6 +77,11 @@ export function PushDiagnosticsModal({
   const handleTriggerLocalAlert = async () => {
     if (isWeb) {
       setTestResult("Local notifications require an iOS/Android device or emulator.");
+      return;
+    }
+    const Notifications = getNotifications();
+    if (Notifications === null) {
+      setTestResult("Notifications are not available in Expo Go on Android. Use a development build.");
       return;
     }
     try {

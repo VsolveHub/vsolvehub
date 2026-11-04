@@ -1,6 +1,19 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
+
+// Firebase phone sign-in. Its plugins read the Firebase config files, so they switch on only
+// when a build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST).
+// Expo Go and builds without the files are unaffected. iOS needs static frameworks for it.
+const firebasePlugins: NonNullable<ExpoConfig["plugins"]> =
+  googleServicesFile || googleServiceInfoPlist
+    ? [
+        "@react-native-firebase/app",
+        "@react-native-firebase/auth",
+        ["expo-build-properties", { ios: { useFrameworks: "static" } }],
+      ]
+    : [];
 
 // APP_ENV=development disables Expo Updates so Metro is always the JS source
 // during local development. Preview and production builds retain the CDN URL.
@@ -30,6 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
+    ...(googleServiceInfoPlist ? { googleServicesFile: googleServiceInfoPlist } : {}),
   },
   android: {
     package: "com.vsolvehub.partner",
@@ -101,6 +115,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         sounds: ["./assets/sounds/booking_alert.wav"],
       },
     ],
+    ...firebasePlugins,
   ],
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",

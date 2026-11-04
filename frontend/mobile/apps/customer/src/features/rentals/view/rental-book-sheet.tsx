@@ -16,12 +16,11 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
-import { useAuthStore } from "@vsolve/mobile-core";
+import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { useCustomerProfile } from "@/features/account/queries";
 import { preferredAddressId, useAddresses, type Address } from "@/features/addresses/queries";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 import { calculateRentalDays, formatPaise, type RentalAsset, type RentalBooking } from "../model";
-import { completeOrOpenRentalCheckout } from "../payment-handoff";
 import { AddressSheet } from "@/features/checkout/view/address-sheet";
 import { addDaysIso, formatReadableDate, todayIso } from "../pickup-time";
 import { bookRental, fetchMyRentals, fetchRentalPlatformFee } from "../queries";
@@ -166,6 +165,7 @@ export function RentalBookSheet({
   const platformFeePaise = Math.floor((rentalFeePaise * feePercent) / 100);
   const totalPaise = rentalFeePaise + platformFeePaise + depositPaise;
 
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
   const mutation = useMutation({
     mutationFn: () => {
       const deliveryAddress =
@@ -209,9 +209,9 @@ export function RentalBookSheet({
         const attemptId = deposit?.payment_attempt_id;
 
         if (attemptId) {
-          const result = await completeOrOpenRentalCheckout(String(attemptId), {
-            businessName: "Vsolve Hub",
-          });
+          // Close the sheet first: iOS cannot show the checkout over another modal.
+          onOpenChange(false);
+          const result = await completeOrOpenCheckout(String(attemptId));
           if (result.mode === "pending") {
             Alert.alert(
               "Pending Payment",

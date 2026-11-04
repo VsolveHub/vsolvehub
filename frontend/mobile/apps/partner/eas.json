@@ -19,7 +19,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api-staging.vsolvehub.com",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://partner.vsolvehub.com"
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://partner.vsolvehub.com",
+        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "firebase"
       }
     },
     "production": {
@@ -27,7 +28,8 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.vsolvehub.com",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://partner.vsolvehub.com"
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://partner.vsolvehub.com",
+        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "firebase"
       }
     }
   },

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Alert, TextInput, View } from "react-native";
 
 import { formatPaise, type RentalBooking } from "../model";
-import { completeOrOpenRentalCheckout } from "../payment-handoff";
+import { useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { rentalTransportAction } from "../queries";
 
 export const TRANSPORT_TRIP_LABELS: Record<string, string> = {
@@ -66,6 +66,7 @@ export function DeliveryRequest({ booking }: { booking: RentalBooking }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
   const act = useMutation({
     mutationFn: ({ action, note: text }: { action: Action; note?: string }) =>
       rentalTransportAction(booking.id, action, text ?? ""),
@@ -80,9 +81,7 @@ export function DeliveryRequest({ booking }: { booking: RentalBooking }) {
       const attemptId = updated?.deposit?.payment_attempt_id || booking.deposit?.payment_attempt_id;
       if (!attemptId) return;
       try {
-        const result = await completeOrOpenRentalCheckout(String(attemptId), {
-          businessName: "Vsolve Hub",
-        });
+        const result = await completeOrOpenCheckout(String(attemptId));
         if (result.mode === "pending") {
           Alert.alert("Payment Preparing", "Payment is still preparing — open My Rentals shortly to pay.");
         } else {

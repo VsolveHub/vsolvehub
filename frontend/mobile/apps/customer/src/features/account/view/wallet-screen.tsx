@@ -1,3 +1,4 @@
+import { useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { describeError } from "@vsolve/query/native";
 import { Button, ErrorState, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
@@ -16,9 +17,12 @@ export function WalletScreen({ embedded = false }: { embedded?: boolean } = {}) 
   const walletQuery = useWallet();
   const txnsQuery = useWalletTransactions();
   const topUp = useInitiateWalletTopUp();
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
 
   const [customAmount, setCustomAmount] = useState("500");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isHandingOff, setIsHandingOff] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -27,18 +31,34 @@ export function WalletScreen({ embedded = false }: { embedded?: boolean } = {}) 
     setRefreshing(false);
   };
 
-  const handleTopUp = (amountPaise: number) => {
+  /**
+   * Same as the web: create the top-up, open Razorpay, and say what is true afterwards. The
+   * wallet is credited only when Razorpay confirms the capture, so a closed checkout is never
+   * reported as money added.
+   */
+  const handleTopUp = async (amountPaise: number) => {
     setSuccessMessage(null);
-    topUp.mutate(
-      { amount_paise: amountPaise },
-      {
-        onSuccess: async () => {
-          setSuccessMessage(`Successfully added ₹${(amountPaise / 100).toLocaleString("en-IN")} to your wallet!`);
-          await Promise.all([walletQuery.refetch(), txnsQuery.refetch()]);
-          setTimeout(() => setSuccessMessage(null), 4000);
-        },
-      }
-    );
+    setHandoffError(null);
+    let attemptId: string;
+    try {
+      attemptId = (await topUp.mutateAsync({ amount_paise: amountPaise })).payment_attempt_id;
+    } catch {
+      return; // `topUp.error` is shown below.
+    }
+    setIsHandingOff(true);
+    try {
+      const result = await completeOrOpenCheckout(attemptId);
+      setSuccessMessage(
+        result.mode === "pending"
+          ? "Top-up started. Payment is still preparing — try again in a moment."
+          : "Payment submitted. Your wallet updates once Razorpay confirms it.",
+      );
+      await Promise.all([walletQuery.refetch(), txnsQuery.refetch()]);
+    } catch (error) {
+      setHandoffError(error instanceof Error ? error.message : "Could not open payment.");
+    } finally {
+      setIsHandingOff(false);
+    }
   };
 
   const amountNumber = Math.max(0, parseInt(customAmount, 10) || 0);
@@ -120,10 +140,10 @@ export function WalletScreen({ embedded = false }: { embedded?: boolean } = {}) 
                 />
               </View>
               <Button
-                loading={topUp.isPending}
-                loadingLabel="Adding…"
-                disabled={amountNumber <= 0 || topUp.isPending}
-                onPress={() => handleTopUp(amountNumber * 100)}
+                loading={topUp.isPending || isHandingOff}
+                loadingLabel="Opening payment"
+                disabled={amountNumber <= 0 || topUp.isPending || isHandingOff}
+                onPress={() => void handleTopUp(amountNumber * 100)}
                 className="bg-[#EA580C] px-5"
               >
                 Top up
@@ -133,6 +153,12 @@ export function WalletScreen({ embedded = false }: { embedded?: boolean } = {}) 
             {successMessage ? (
               <View className="mt-3 rounded-xl bg-emerald-50 border border-emerald-200 p-2.5">
                 <Text className="text-xs font-semibold text-emerald-800">{successMessage}</Text>
+              </View>
+            ) : null}
+
+            {handoffError ? (
+              <View className="mt-3 rounded-xl bg-red-50 border border-red-200 p-2.5">
+                <Text className="text-xs font-semibold text-red-700">{handoffError}</Text>
               </View>
             ) : null}
 

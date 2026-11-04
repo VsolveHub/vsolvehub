@@ -20,8 +20,12 @@ import {
 } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "@vsolve/mobile-core";
-import { sha256Hex } from "@/features/application/model/upload";
+import {
+  describeLocalFile,
+  getApiClient,
+  LocalFileUnreadableError,
+  uploadToSignedUrl,
+} from "@vsolve/mobile-core";
 
 /**
  * The vendor's engagement reads and commands — contract 1.25.0.
@@ -379,51 +383,29 @@ export class EvidenceUploadFailure extends Error {
 }
 
 /**
- * PUTs the bytes to storage, reporting progress.
- *
- * `XMLHttpRequest` rather than `fetch` for the same reason the KYC uploader uses
- * it: no shipping browser reports progress for a `fetch` request body, and a
- * video of a finished milestone over a site's mobile connection is exactly the
- * case where a progress bar is the difference between waiting and re-tapping.
+ * PUTs the file to storage from disk, reporting progress. Storage answers 401/403 for a
+ * signature that has expired: retryable by asking for a fresh grant, never by resending to the
+ * same dead URL.
  */
-function putEvidenceBytes(
+async function putEvidenceBytes(
   url: string,
-  file: File,
-  contentType: string,
+  file: LocalEvidenceFile,
   onProgress: (percent: number) => void,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.setRequestHeader("content-type", contentType);
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-        return;
-      }
-      // Storage answers 401/403 for a signature that has expired. Retryable by
-      // asking for a fresh grant and resending — never by resending to the same
-      // dead URL.
-      reject(
-        new EvidenceUploadFailure(
-          xhr.status === 401 || xhr.status === 403 ? "expired" : "network",
-          `Storage refused the upload (${xhr.status}).`,
-        ),
-      );
-    };
-
-    xhr.onerror = () =>
-      reject(new EvidenceUploadFailure("network", "The upload could not reach storage."));
-    xhr.onabort = () =>
-      reject(new EvidenceUploadFailure("network", "The upload was cancelled."));
-
-    xhr.send(file);
-  });
+  try {
+    await uploadToSignedUrl({
+      uri: file.uri,
+      contentType: file.mimeType,
+      url,
+      onProgress: (fraction) => onProgress(Math.round(fraction * 100)),
+    });
+  } catch (error) {
+    const status = /status (\d+)/.exec(error instanceof Error ? error.message : "")?.[1];
+    if (status === "401" || status === "403") {
+      throw new EvidenceUploadFailure("expired", `Storage refused the upload (${status}).`);
+    }
+    throw new EvidenceUploadFailure("network", "The upload could not reach storage.");
+  }
 }
 
 function evidenceFailure(error: unknown): EvidenceUploadFailure {
@@ -448,10 +430,16 @@ function evidenceFailure(error: unknown): EvidenceUploadFailure {
   return new EvidenceUploadFailure("unknown", "The upload did not complete.");
 }
 
+/** A photo or video picked on the phone: a local `file://` URI, read from disk when sent. */
+export interface LocalEvidenceFile {
+  readonly uri: string;
+  readonly mimeType: string;
+}
+
 export interface EvidenceUploadInput {
   readonly stageId: string;
   readonly kind: EvidenceUploadKind;
-  readonly file: File;
+  readonly file: LocalEvidenceFile;
   readonly onProgress?: (progress: EvidenceUploadProgress) => void;
 }
 
@@ -480,7 +468,15 @@ export function useUploadStageEvidence(engagementId: string) {
       const report = (progress: EvidenceUploadProgress) => input.onProgress?.(progress);
 
       report({ phase: "hashing", percent: 0 });
-      const sha256 = await sha256Hex(input.file);
+      // Size and digest both come from the bytes on disk, so they describe exactly what is sent.
+      const facts = await describeLocalFile(input.file.uri).catch((error: unknown) => {
+        throw new EvidenceUploadFailure(
+          "rejected",
+          error instanceof LocalFileUnreadableError
+            ? error.message
+            : "We could not read that file. Choose it again.",
+        );
+      });
 
       report({ phase: "requesting", percent: 0 });
       const grant = await request(() =>
@@ -488,9 +484,9 @@ export function useUploadStageEvidence(engagementId: string) {
           params: { path: { stage_id: input.stageId } },
           body: {
             kind: input.kind,
-            content_type: input.file.type,
-            size_bytes: input.file.size,
-            sha256,
+            content_type: input.file.mimeType,
+            size_bytes: facts.sizeBytes,
+            sha256: facts.sha256,
           },
         }),
       ).catch((error: unknown) => {
@@ -507,7 +503,7 @@ export function useUploadStageEvidence(engagementId: string) {
       }
 
       report({ phase: "uploading", percent: 0 });
-      await putEvidenceBytes(grant.upload_url, input.file, input.file.type, (percent) =>
+      await putEvidenceBytes(grant.upload_url, input.file, (percent) =>
         report({ phase: "uploading", percent }),
       );
 

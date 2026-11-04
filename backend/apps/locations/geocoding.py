@@ -1,5 +1,6 @@
-"""Reverse-geocoding adapters with bounded latency and cacheable normalized output."""
+"""Geocoding adapters (reverse, and place search) with bounded latency and cacheable output."""
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -194,3 +195,115 @@ def reverse_geocode(*, latitude: Decimal, longitude: Decimal) -> GeocodedAddress
     payload["longitude"] = str(result.longitude)
     cache.set(cache_key, payload, timeout=settings.GEOCODING_CACHE_SECONDS)
     return result
+
+
+@dataclass(frozen=True, slots=True)
+class PlaceSuggestion:
+    """One search result: what to show, and where to put the pin."""
+
+    label: str
+    latitude: Decimal
+    longitude: Decimal
+
+
+#: Enough to pick from on a phone; the pin is then described by `reverse_geocode`.
+MAX_PLACE_SUGGESTIONS = 5
+_COORDINATE = Decimal("0.000001")
+
+
+def _google_place_search(query: str) -> list[PlaceSuggestion]:
+    """Google Geocoding API in its forward direction, India only, with the server key.
+
+    The same API and key as `GoogleReverseGeocoder`, so no other Google service has to be
+    enabled. The key travels in the query string, so the URL is never logged and Google's own
+    ``error_message`` (which can echo the request) is not passed on.
+    """
+    key = cast(str, settings.GOOGLE_MAPS_SERVER_KEY)
+    if not key:
+        raise GeocodingError("Geocoding provider key is not configured.")
+    params = urlencode(
+        {
+            "address": query,
+            "key": key,
+            "language": "en",
+            "region": "in",
+            "components": "country:IN",
+        },
+    )
+    request = Request(  # noqa: S310 - fixed HTTPS endpoint.
+        f"{GOOGLE_GEOCODE_URL}?{params}",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=settings.GEOCODING_TIMEOUT_SECONDS) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise GeocodingError("Geocoding provider request failed.") from exc
+
+    if not isinstance(payload, dict):
+        raise GeocodingError("Geocoding provider returned malformed data.")
+    status = payload.get("status")
+    if status == "ZERO_RESULTS":
+        return []
+    if status != "OK":
+        raise GeocodingError(f"Geocoding provider refused the request ({status}).")
+
+    results = payload.get("results")
+    suggestions: list[PlaceSuggestion] = []
+    for result in results if isinstance(results, list) else []:
+        if not isinstance(result, dict):
+            continue
+        types = result.get("types")
+        if isinstance(types, list) and "plus_code" in types:
+            continue
+        label = str(result.get("formatted_address", "")).strip()
+        geometry = result.get("geometry")
+        location = geometry.get("location") if isinstance(geometry, dict) else None
+        if not label or not isinstance(location, dict):
+            continue
+        try:
+            latitude = Decimal(str(location["lat"])).quantize(_COORDINATE)
+            longitude = Decimal(str(location["lng"])).quantize(_COORDINATE)
+        except (KeyError, ArithmeticError, ValueError):
+            continue
+        suggestions.append(PlaceSuggestion(label=label, latitude=latitude, longitude=longitude))
+        if len(suggestions) >= MAX_PLACE_SUGGESTIONS:
+            break
+    return suggestions
+
+
+def search_places(*, query: str) -> list[PlaceSuggestion]:
+    """Places matching a typed address, for the mobile apps' address search.
+
+    The web searches with Google's browser library, which a native app cannot load; this is the
+    same lookup done server side. Cached per normalised query so typing the same street twice
+    costs one provider call.
+    """
+    provider = cast(str, settings.GEOCODING_PROVIDER).lower()
+    if provider != "google":
+        raise GeocodingError("No geocoding provider is configured.")
+    normalized = " ".join(query.lower().split())
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    cache_key = f"geocoding:search:{provider}:{digest}"
+    cached = cache.get(cache_key)
+    if isinstance(cached, list):
+        return [
+            PlaceSuggestion(
+                label=str(item["label"]),
+                latitude=Decimal(item["latitude"]),
+                longitude=Decimal(item["longitude"]),
+            )
+            for item in cached
+            if isinstance(item, dict)
+        ]
+
+    suggestions = _google_place_search(normalized)
+    cache.set(
+        cache_key,
+        [
+            {"label": item.label, "latitude": str(item.latitude), "longitude": str(item.longitude)}
+            for item in suggestions
+        ],
+        timeout=settings.GEOCODING_CACHE_SECONDS,
+    )
+    return suggestions

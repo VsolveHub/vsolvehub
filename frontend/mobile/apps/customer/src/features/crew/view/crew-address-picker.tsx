@@ -11,6 +11,7 @@ import {
   locateErrorMessage,
 } from "@/features/addresses/locate-device";
 import { useAddresses, useCreateAddress, useReverseGeocode } from "@/features/addresses/queries";
+import { PlaceSearch } from "@/features/addresses/view/place-search";
 
 type Address = Schemas["Address"];
 
@@ -44,12 +45,8 @@ export function CrewAddressPicker({
     if (openSignal > 0) setOpen(true);
   }, [openSignal]);
 
-  async function locate() {
-    setLocationError(null);
-    try {
-      const position = await getDevicePosition();
-      const lat = position.coords.latitude.toFixed(6);
-      const lng = position.coords.longitude.toFixed(6);
+  /** Put the pin here and describe it with Django's reverse geocode, as the web does. */
+  async function placePin(lat: string, lng: string) {
       try {
         const found = await reverseGeocode.mutateAsync({ latitude: lat, longitude: lng });
         setLine1(found.line1);
@@ -64,10 +61,24 @@ export function CrewAddressPicker({
         setLatitude(coords.latitude);
         setLongitude(coords.longitude);
       }
+  }
+
+  async function locate() {
+    setLocationError(null);
+    try {
+      const position = await getDevicePosition();
+      await placePin(position.coords.latitude.toFixed(6), position.coords.longitude.toFixed(6));
     } catch (error) {
       setLocationError(locateErrorMessage(error));
     }
   }
+
+  // A saved address is where the crew is sent: a real pin and real fields, never a default (it
+  // used to fall back to a fixed Hyderabad pin and PIN code).
+  const postalDigits = postal.replace(/\D/g, "").slice(0, 6);
+  const canSave =
+    latitude !== "" && longitude !== "" && line1.trim() !== "" && city.trim() !== "" &&
+    stateName.trim() !== "" && postalDigits.length === 6;
 
   return (
     <Sheet open={open} onOpenChange={setOpen} title="Where">
@@ -93,9 +104,15 @@ export function CrewAddressPicker({
             </Text>
           </Pressable>
         ))}
+        <PlaceSearch onPick={(place) => void placePin(place.latitude, place.longitude)} />
         <Button variant="secondary" loading={reverseGeocode.isPending} onPress={() => void locate()}>
           Use my location
         </Button>
+        {latitude === "" ? (
+          <Text className="text-xs text-text-secondary">
+            Search for the place or use your location to put the pin on the door.
+          </Text>
+        ) : null}
         {locationError ? <Text className="text-sm text-danger-text">{locationError}</Text> : null}
         <Input value={line1} onChangeText={setLine1} placeholder="Street" />
         <Input value={locality} onChangeText={setLocality} placeholder="Locality" />
@@ -108,18 +125,19 @@ export function CrewAddressPicker({
         <Button
           loading={createAddress.isPending}
           loadingLabel="Saving"
+          disabled={!canSave}
           onPress={() =>
             createAddress.mutate(
               {
                 label: "Saved address",
-                line1,
-                locality: locality || city || "Hyderabad",
-                city: city || "Hyderabad",
-                state: stateName || "Telangana",
-                postal_code: postal.replace(/\D/g, "").slice(0, 6) || "500032",
-                latitude: latitude || "17.414053",
-                longitude: longitude || "78.353554",
-                source: latitude ? "REVERSE_GEOCODED" : "MANUAL",
+                line1: line1.trim(),
+                locality: locality.trim() || city.trim(),
+                city: city.trim(),
+                state: stateName.trim(),
+                postal_code: postalDigits,
+                latitude,
+                longitude,
+                source: "REVERSE_GEOCODED",
                 country_code: "IN",
                 is_default: addresses.length === 0,
               },

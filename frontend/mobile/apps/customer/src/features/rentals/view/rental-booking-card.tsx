@@ -11,7 +11,7 @@ import {
   getRentalStatusBadge,
   type RentalBooking,
 } from "../model";
-import { completeOrOpenRentalCheckout } from "../payment-handoff";
+import { useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { formatReadableDate } from "../pickup-time";
 import { cancelRentalBooking } from "../queries";
 import { DeliveryRequest } from "./delivery-request";
@@ -56,6 +56,7 @@ export function RentalBookingCard({
     },
   });
 
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
   const handlePayNow = async () => {
     if (!paymentAttemptId) {
       setPayError("Payment is not ready yet. Refresh and try again shortly.");
@@ -64,9 +65,7 @@ export function RentalBookingCard({
     setPayError(null);
     setIsPaying(true);
     try {
-      const result = await completeOrOpenRentalCheckout(paymentAttemptId, {
-        businessName: "Vsolve Hub",
-      });
+      const result = await completeOrOpenCheckout(paymentAttemptId);
       if (result.mode === "pending") {
         Alert.alert("Notice", "Payment is still preparing — try Pay Now again in a moment.");
       } else {

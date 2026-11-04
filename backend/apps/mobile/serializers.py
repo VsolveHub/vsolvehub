@@ -2,12 +2,27 @@
 
 from rest_framework import serializers
 
-from apps.identity.serializers import AuthenticatedSessionSerializer, OtpVerifySerializer
+from apps.identity.serializers import (
+    AuthenticatedSessionSerializer,
+    FirebaseVerifySerializer,
+    OtpVerifySerializer,
+)
 from apps.mobile.models import PushDevice
 
 
 class MobileOtpVerifySerializer(OtpVerifySerializer):
     """Same OTP body as the web, with a required installation id."""
+
+    device_identifier = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        max_length=128,
+        write_only=True,
+    )
+
+
+class MobileFirebaseVerifySerializer(FirebaseVerifySerializer):
+    """The web Firebase verify body, with a required installation id."""
 
     device_identifier = serializers.CharField(
         required=True,

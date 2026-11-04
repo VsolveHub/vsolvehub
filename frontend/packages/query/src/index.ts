@@ -116,10 +116,9 @@ export {
   useVerifyFirebase,
   getFirebaseAuth,
   getFirebaseApp,
-  mapFirebaseError,
-  formatToE164,
   startFirebasePhoneVerification,
 } from "./firebase-phone";
+export { mapFirebaseError, formatToE164 } from "./firebase-errors";
 export type { FirebaseVerifyInput } from "./firebase-phone";
 
 export {

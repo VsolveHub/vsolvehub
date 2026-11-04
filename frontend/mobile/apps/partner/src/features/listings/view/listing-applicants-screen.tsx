@@ -16,11 +16,11 @@ import {
   fetchListingApplications,
   fetchPartnerListing,
   fetchSubscriptionPlans,
-  purchaseSubscription,
   reportApplicantApplication,
   revealApplicationContact,
   updateApplicationStatus,
 } from "../queries";
+import { usePlanPurchase } from "../use-plan-purchase";
 import { proposeInterview } from "../jobs-queries";
 import { ApplicantCard } from "./applicant-card";
 import { InterviewDialog } from "./interview-dialog";
@@ -119,16 +119,12 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
     },
   });
 
-  const subscribeMutation = useMutation({
-    mutationFn: (planId: string) => purchaseSubscription(planId),
-    onSuccess: () => {
+  const subscribeMutation = usePlanPurchase({
+    beforeCheckout: () => setShowSubscription(false),
+    onSettled: () => {
       setShowSubscription(false);
-      Alert.alert("Success", "Subscription plan upgraded successfully!");
       void queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
       void queryClient.invalidateQueries({ queryKey: ["vendor-subscriptions"] });
-    },
-    onError: (err: any) => {
-      Alert.alert("Subscription Error", err?.message || "Failed to upgrade subscription.");
     },
   });
 

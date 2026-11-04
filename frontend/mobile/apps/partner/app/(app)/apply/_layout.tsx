@@ -36,7 +36,7 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
 import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
 
-const logoMark = require("@vsolve/mobile-ui/src/logo-mark.png");
+const logoMark = require("../../../assets/logo-mark.png");
 
 export default function ApplyLayout() {
   const pathname = usePathname();
@@ -135,7 +135,7 @@ export default function ApplyLayout() {
           <View style={[styles.headerInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
             {/* Left: Back chevron or balanced placeholder */}
             {isStatusPage ? (
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 onPress={() => {
@@ -153,7 +153,7 @@ export default function ApplyLayout() {
                 <ArrowLeft size={22} color="#00112e" strokeWidth={2.2} />
               </Pressable>
             ) : back !== null && currentStepIdx > 0 ? (
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 onPress={() => router.push(back.href as any)}
@@ -182,7 +182,7 @@ export default function ApplyLayout() {
             </View>
 
             {/* Right: Circular User Initial Badge */}
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Partner profile & options"
               onPress={() => setProfileModalOpen(true)}
@@ -248,7 +248,7 @@ export default function ApplyLayout() {
               {/* Main Dock Row: "Need help?" on left, "Continue ->" on right */}
               <View style={styles.dockActionRow}>
                 {/* Left: Need help? */}
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="button"
                   onPress={() => setHelpModalOpen(true)}
                   style={({ pressed }) => [
@@ -261,7 +261,7 @@ export default function ApplyLayout() {
                 </Pressable>
 
                 {/* Right: Continue -> (or Submit application) */}
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="button"
                   accessibilityLabel={primaryLabel}
                   disabled={isProceedDisabled || isSaving}

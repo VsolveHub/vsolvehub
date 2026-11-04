@@ -218,28 +218,6 @@ export function classifyRecording(
 }
 
 /**
- * Hex SHA-256 of the bytes, computed in the browser.
- *
- * Django recomputes it over the stored object and refuses the finalize if the
- * two disagree, which is what turns a truncated or swapped upload into a visible
- * failure rather than a corrupt record nobody notices until a vendor opens it.
- *
- * `crypto.subtle` needs a secure context. Over plain HTTP on a non-localhost
- * origin it is simply absent, so the caller gets a clear failure instead of a
- * hang — and the screen says attachments are unavailable rather than blaming
- * the file.
- */
-export async function sha256Hex(blob: Blob): Promise<string> {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("Secure hashing is unavailable in this browser context.");
-  }
-  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
  * True once the signed upload URL has expired and a new one must be requested.
  *
  * An unparseable deadline reads as expired. The alternative — treating "we

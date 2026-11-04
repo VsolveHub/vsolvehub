@@ -239,7 +239,7 @@ function TrackCard({
   isDesktop?: boolean;
 }) {
   return (
-    <Pressable
+    <Pressable cssInterop={false}
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled}
@@ -437,7 +437,7 @@ function Standing({ application }: { application: Application }) {
                   </View>
                 </View>
 
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="button"
                   onPress={() => router.push(nextHref as never)}
                   style={({ pressed }) => ({
@@ -480,7 +480,7 @@ function Standing({ application }: { application: Application }) {
               <Text style={{ fontSize: 12, lineHeight: 18, color: "#64748b" }}>
                 Have a crew of 3+ technicians? Dispatch work teams and bid for custom corporate contracts.
               </Text>
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 onPress={() => router.push("/apply/capabilities" as never)}
                 style={({ pressed }) => ({
@@ -513,7 +513,7 @@ function Standing({ application }: { application: Application }) {
               const isFirstIncomplete = !isDone && step.href === summary.nextIncomplete?.href;
 
               return (
-                <Pressable
+                <Pressable cssInterop={false}
                   key={step.href}
                   accessibilityRole="button"
                   onPress={() => router.push(step.href as never)}

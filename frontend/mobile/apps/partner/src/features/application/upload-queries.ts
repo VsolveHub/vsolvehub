@@ -3,7 +3,7 @@ import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { queryKeys } from "@vsolve/query/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient, sha256OfFile, uploadToSignedUrl } from "@vsolve/mobile-core";
+import { describeLocalFile, getApiClient, uploadToSignedUrl } from "@vsolve/mobile-core";
 
 import {
   isUploadExpired,
@@ -111,7 +111,14 @@ export function useUploadDocument() {
       const report = (progress: UploadProgress) => input.onProgress?.(progress);
 
       report({ phase: "hashing", percent: 0 });
-      const sha256 = await sha256OfFile(input.file.uri);
+      // Size and digest both come from the bytes on disk, so they describe exactly what is sent.
+      const facts = await describeLocalFile(input.file.uri).catch((error: unknown) => {
+        // The picked file is gone or unreadable; only choosing it again can fix that.
+        throw new UploadFailure(
+          "rejected",
+          error instanceof Error ? error.message : "We could not read that file. Choose it again.",
+        );
+      });
 
       report({ phase: "requesting", percent: 0 });
       const upload = await request(() =>
@@ -120,8 +127,8 @@ export function useUploadDocument() {
             expected_version: input.expectedVersion,
             kind: input.kind,
             content_type: input.file.mimeType as Schemas["ContentTypeEnum"],
-            size_bytes: input.file.size,
-            sha256,
+            size_bytes: facts.sizeBytes,
+            sha256: facts.sha256,
           },
         }),
       ).catch((error: unknown) => {
@@ -160,5 +167,17 @@ export function useUploadDocument() {
     },
 
     retry: false,
+  });
+}
+
+/** A short-lived link to read one of this Partner's own documents. Same call as the web. */
+export function usePartnerDocumentAccess() {
+  return useMutation({
+    mutationFn: async (documentId: string) =>
+      request(() =>
+        getApiClient().GET("/api/v1/partner/application/documents/{document_id}/access/", {
+          params: { path: { document_id: documentId } },
+        }),
+      ),
   });
 }

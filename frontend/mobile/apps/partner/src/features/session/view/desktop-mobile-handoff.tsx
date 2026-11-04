@@ -147,7 +147,7 @@ export function DesktopMobileHandoff({
 
           {/* Right Action Buttons */}
           <View style={{ flexDirection: "row", alignItems: "center", columnGap: 12 }}>
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Application & Documents"
               onPress={() => router.push("/apply/documents")}
@@ -176,7 +176,7 @@ export function DesktopMobileHandoff({
               </Text>
             </Pressable>
 
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Sign Out"
               onPress={() => void signOut()}

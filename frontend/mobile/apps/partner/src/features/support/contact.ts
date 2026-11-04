@@ -2,7 +2,10 @@
 import { Linking } from "react-native";
 
 /**
- * The one Partner support line and mailbox, aligned across web and mobile.
+ * The one Partner support desk, the same values as the web.
+ *
+ * A support number that differs between two screens, or between the app and the website, is
+ * worse than no number at all, so there is exactly one.
  */
 export const PARTNER_SUPPORT_PHONE = "+918790564634";
 export const PARTNER_SUPPORT_PHONE_DISPLAY = "+91 879 056 4634";

@@ -148,7 +148,7 @@ export function DocumentUpload({
   return (
     <View style={styles.container}>
       {/* Dashed Upload Dropzone Box matching Mockup */}
-      <Pressable
+      <Pressable cssInterop={false}
         accessibilityRole="button"
         accessibilityLabel={`Upload ${label}`}
         accessibilityState={{ disabled: blocked }}

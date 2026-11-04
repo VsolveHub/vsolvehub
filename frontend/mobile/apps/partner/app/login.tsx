@@ -101,7 +101,7 @@ export default function LoginScreen() {
             Taking you to your application…
           </Text>
           <View style={{ width: "100%", rowGap: 10 }}>
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               onPress={() => router.replace((next ?? "/apply") as never)}
               style={({ pressed }) => ({
@@ -117,7 +117,7 @@ export default function LoginScreen() {
                 Continue to Application
               </Text>
             </Pressable>
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               onPress={async () => {
                 await useAuthStore.getState().signOut();
@@ -390,7 +390,7 @@ export default function LoginScreen() {
             </Card>
 
             {/* Helpdesk Contact Link Below Card (Navigates in the SAME TAB) */}
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="link"
               accessibilityLabel="Partner Helpdesk Contact"
               onPress={() => router.push("/contact")}

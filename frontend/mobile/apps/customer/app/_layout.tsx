@@ -7,10 +7,17 @@ import {
   PlusJakartaSans_800ExtraBold,
   useFonts,
 } from "@expo-google-fonts/plus-jakarta-sans";
-import { configureCore, MobileQueryProvider, registerForPush, useAuthStore, VersionGate } from "@vsolve/mobile-core";
+import {
+  configureCore,
+  getNotifications,
+  MobileQueryProvider,
+  ProviderCheckoutHost,
+  registerForPush,
+  useAuthStore,
+  VersionGate,
+} from "@vsolve/mobile-core";
 import { useQueryClient } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import * as Notifications from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
@@ -60,14 +67,21 @@ export default function RootLayout() {
     <MobileQueryProvider>
       <VersionGate>
         <PushRouting />
-        <Stack screenOptions={{ headerShown: false }} />
+        <ProviderCheckoutHost>
+          <Stack screenOptions={{ headerShown: false }} />
+        </ProviderCheckoutHost>
       </VersionGate>
     </MobileQueryProvider>
   );
 }
 
+/** Push taps and arrivals only exist on a phone; the web preview renders nothing here. */
 function PushRouting() {
   if (Platform.OS === "web") return null;
+  return <NativePushRouting />;
+}
+
+function NativePushRouting() {
   const status = useAuthStore((state) => state.status);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -78,6 +92,9 @@ function PushRouting() {
   }, [status]);
 
   useEffect(() => {
+    // Null in Expo Go on Android, where the notifications package cannot load.
+    const Notifications = getNotifications();
+    if (Notifications === null) return;
     const response = Notifications.addNotificationResponseReceivedListener((event) => {
       const data = event.notification.request.content.data as { target?: { kind: string; id?: string } | null };
       const destination = resolveCustomerPush(data.target ?? null);

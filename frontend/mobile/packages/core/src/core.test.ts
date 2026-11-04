@@ -3,8 +3,42 @@ import { useAuthStore } from "./auth/auth-store";
 import { mapLocationError, PERMISSION_DENIED, TIMEOUT } from "./location/errors";
 import { razorpayCheckoutHtml, shouldOpenPaymentUrlExternally } from "./payments/checkout-html";
 import { routePushData } from "./push/routing";
-import { uploadToSignedUrl } from "./upload/upload";
+import { describeLocalFile, LocalFileUnreadableError, uploadToSignedUrl } from "./upload/upload";
 import { compareVersions } from "./version/compare";
+
+// The phone upload reads files through expo-file-system. Names start with `mock` because jest
+// hoists jest.mock above the imports and only lets the factory see such names.
+const mockFiles = new Map<string, number>();
+const mockUploads: { url: string; method?: string; headers?: Record<string, string> }[] = [];
+const mockUploadStatus = { value: 200 };
+
+jest.mock("expo-file-system", () => ({
+  UploadType: { BINARY_CONTENT: 0, MULTIPART: 1 },
+  File: class {
+    constructor(private readonly uri: string) {}
+    get exists() {
+      return mockFiles.has(this.uri);
+    }
+    get size() {
+      return mockFiles.get(this.uri) ?? 0;
+    }
+    async digest() {
+      return "a".repeat(64);
+    }
+    async upload(
+      url: string,
+      options: {
+        httpMethod?: string;
+        headers?: Record<string, string>;
+        onProgress?: (data: { bytesSent: number; totalBytes: number }) => void;
+      },
+    ) {
+      mockUploads.push({ url, method: options.httpMethod, headers: options.headers });
+      options.onProgress?.({ bytesSent: 1, totalBytes: 2 });
+      return { status: mockUploadStatus.value, body: "", headers: {} };
+    }
+  },
+}));
 
 jest.mock("./auth/token-store", () => {
   let value: string | null = null;
@@ -71,33 +105,54 @@ describe("versions", () => {
 });
 
 describe("uploads", () => {
-  it("reports progress and resolves on a successful PUT", async () => {
+  beforeEach(() => {
+    mockFiles.clear();
+    mockUploads.length = 0;
+  });
+
+  it("measures size and digest from the file on disk, not from fetch", async () => {
+    mockFiles.set("file:///cache/%2540anonymous%252Fapp/ImagePicker/id.jpg", 96162);
+    const fetchSpy = jest.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    await expect(
+      describeLocalFile("file:///cache/%2540anonymous%252Fapp/ImagePicker/id.jpg"),
+    ).resolves.toEqual({ sizeBytes: 96162, sha256: "a".repeat(64) });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a file that is no longer on disk instead of hashing an error body", async () => {
+    await expect(describeLocalFile("file:///cache/gone.jpg")).rejects.toBeInstanceOf(
+      LocalFileUnreadableError,
+    );
+  });
+
+  it("PUTs the file natively, reports progress and resolves on a 2xx", async () => {
+    mockFiles.set("file:///photo.jpg", 2);
     const progress: number[] = [];
-    class FakeXhr {
-      upload = { onprogress: (_event: ProgressEvent) => undefined };
-      status = 200;
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      open() {}
-      setRequestHeader() {}
-      send() {
-        this.upload.onprogress({ lengthComputable: true, loaded: 1, total: 2 } as ProgressEvent);
-        this.onload?.();
-      }
-    }
-    const Original = globalThis.XMLHttpRequest;
-    globalThis.XMLHttpRequest = FakeXhr as unknown as typeof XMLHttpRequest;
-    globalThis.fetch = jest.fn(async () => ({
-      blob: async () => new Blob(["hi"]),
-    })) as unknown as typeof fetch;
     await uploadToSignedUrl({
-      uri: "file://photo.jpg",
+      uri: "file:///photo.jpg",
       contentType: "image/jpeg",
       url: "https://uploads.example/photo",
       onProgress: (fraction) => progress.push(fraction),
     });
     expect(progress).toEqual([0.5]);
-    globalThis.XMLHttpRequest = Original;
+    expect(mockUploads).toEqual([
+      {
+        url: "https://uploads.example/photo",
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+      },
+    ]);
+  });
+
+  it("rejects when storage answers with an error status", async () => {
+    mockFiles.set("file:///photo.jpg", 2);
+    mockUploadStatus.value = 403;
+    await expect(
+      uploadToSignedUrl({ uri: "file:///photo.jpg", contentType: "image/jpeg", url: "https://u" }),
+    ).rejects.toThrow("status 403");
+    mockUploadStatus.value = 200;
   });
 });
 

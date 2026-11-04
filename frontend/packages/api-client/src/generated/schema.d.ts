@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.93.0)
- * Checksum: cab736246df7824a
+ * Source:   contracts/openapi/v1.yaml (version 1.94.0)
+ * Checksum: 127bd26a08037971
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -158,6 +158,29 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth_logout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mobile/firebase/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Firebase phone sign-in for the apps.
+         *
+         *     The web's Firebase check (`verify_firebase_login`), answered with a bearer token instead of
+         *     cookies, like `MobileOtpVerifyView`. The app sends the precheck to the shared
+         *     `POST /auth/firebase/precheck/` first, exactly as the web does.
+         */
+        post: operations["auth_mobile_firebase_verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2127,6 +2150,29 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["geocoding_reverse_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocoding/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Places matching a typed address: the mobile apps' address search.
+         *
+         *     The web searches with Google's browser library; a native app cannot load it, so the same
+         *     lookup runs here with the server key. A result only places the pin: the address text then
+         *     comes from `POST /geocoding/reverse/` for that pin, exactly as on the web.
+         */
+        get: operations["geocoding_search_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12671,6 +12717,17 @@ export interface components {
             readonly session_expires_at: string;
             readonly session_token: string;
         };
+        /** @description The web Firebase verify body, with a required installation id. */
+        MobileFirebaseVerifyRequest: {
+            /** @description Firebase ID token issued after client-side Phone Auth. */
+            id_token: string;
+            /** @default  */
+            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
+            /** @description Applied only when this verification creates a new account. */
+            referral_code?: string;
+            device_identifier: string;
+            device_label?: string;
+        };
         /** @description Same OTP body as the web, with a required installation id. */
         MobileOtpVerifyRequest: {
             /** Format: uuid */
@@ -15582,6 +15639,16 @@ export interface components {
         PickupHoursUpdateRequest: {
             days: components["schemas"]["PickupDayInputRequest"][];
             closed_dates?: string[];
+        };
+        PlaceSearchResponse: {
+            readonly results: components["schemas"]["PlaceSuggestion"][];
+        };
+        PlaceSuggestion: {
+            readonly label: string;
+            /** Format: decimal */
+            readonly latitude: string;
+            /** Format: decimal */
+            readonly longitude: string;
         };
         PlanQuoteCreateRequest: {
             /** Format: uuid */
@@ -20525,6 +20592,57 @@ export interface operations {
             };
         };
     };
+    auth_mobile_firebase_verify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileFirebaseVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MobileFirebaseVerifyRequest"];
+                "multipart/form-data": components["schemas"]["MobileFirebaseVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobileAuthenticatedSession"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     auth_mobile_otp_verify_create: {
         parameters: {
             query?: never;
@@ -24975,6 +25093,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReverseGeocodeResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    geocoding_search_retrieve: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceSearchResponse"];
                 };
             };
             400: {

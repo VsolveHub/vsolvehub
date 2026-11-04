@@ -83,7 +83,7 @@ export function ConsentStep() {
             <View key={`${doc.purpose}@${doc.document_version}`} style={styles.card}>
               <View style={styles.cardLeft}>
                 {/* Square Checkbox */}
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: accepted, disabled: isReadOnly }}
                   disabled={isReadOnly}

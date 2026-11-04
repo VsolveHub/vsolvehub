@@ -1,6 +1,19 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
+
+// Firebase phone sign-in. Its plugins read the Firebase config files, so they switch on only
+// when a build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST).
+// Expo Go and builds without the files are unaffected. iOS needs static frameworks for it.
+const firebasePlugins: NonNullable<ExpoConfig["plugins"]> =
+  googleServicesFile || googleServiceInfoPlist
+    ? [
+        "@react-native-firebase/app",
+        "@react-native-firebase/auth",
+        ["expo-build-properties", { ios: { useFrameworks: "static" } }],
+      ]
+    : [];
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -21,6 +34,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ITSAppUsesNonExemptEncryption: false,
     },
     associatedDomains: ["applinks:vsolvehub.com"],
+    ...(googleServiceInfoPlist ? { googleServicesFile: googleServiceInfoPlist } : {}),
   },
   android: {
     package: "com.vsolvehub.customer",
@@ -93,6 +107,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         color: "#f87000",
       },
     ],
+    ...firebasePlugins,
   ],
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
