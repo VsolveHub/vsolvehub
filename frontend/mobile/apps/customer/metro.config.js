@@ -9,9 +9,14 @@ const config = getDefaultConfig(projectRoot);
 // too, and a second copy of React breaks every hook ("Invalid hook call").
 const SINGLETONS = ["react", "react-native", "@tanstack/react-query", "expo-router"];
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // Normalize module name if requested via relative monorepo path containing node_modules
+  // Normalize a RELATIVE monorepo path into node_modules ("../../node_modules/react" -> "react").
+  // Absolute paths are left alone: Metro asks for its own files by absolute path (for example
+  // metro-runtime's empty-module.js), and rewriting that to a bare name made it unresolvable from
+  // the app on Linux, so EAS builds failed at "Bundle JavaScript". Windows paths use backslashes,
+  // which is why the same build passed locally.
   let targetName = moduleName;
-  if (targetName.includes("node_modules/")) {
+  const isRelative = moduleName.startsWith("./") || moduleName.startsWith("../");
+  if (isRelative && targetName.includes("node_modules/")) {
     targetName = targetName.slice(targetName.lastIndexOf("node_modules/") + "node_modules/".length);
   }
 
