@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { useRouter } from "expo-router";
 import {
@@ -14,7 +15,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { formatMoney } from "@vsolve/mobile-ui";
+import { Text, formatMoney } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   BedDouble,
@@ -17,7 +17,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";

@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import {
   ArrowRight,
   Briefcase,
@@ -14,7 +15,7 @@ import {
   Users,
   Zap,
 } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import type { PartnerListing } from "../model";
 

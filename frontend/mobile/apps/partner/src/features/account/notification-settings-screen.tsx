@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import {
@@ -14,7 +15,6 @@ import {
   Pressable,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from "react-native";
 

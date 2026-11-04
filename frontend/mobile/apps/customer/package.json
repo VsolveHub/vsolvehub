@@ -4,6 +4,8 @@
   "private": true,
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/hind-guntur": "^0.4.1",
+    "@expo-google-fonts/mukta": "^0.4.1",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@lottiefiles/dotlottie-react": "^0.13.5",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -78,6 +80,7 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "lint": "expo lint",
+    "check:fonts": "node ../../scripts/check-fonts.mjs",
     "typecheck": "tsc --noEmit",
     "test": "jest"
   }

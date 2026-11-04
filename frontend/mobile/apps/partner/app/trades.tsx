@@ -140,7 +140,6 @@ export default function TradesScreen() {
               letterSpacing: -1,
               marginTop: 16,
               color: "#00112e",
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -154,7 +153,6 @@ export default function TradesScreen() {
               marginTop: 12,
               color: "#64748b",
               maxWidth: 620,
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -274,7 +272,6 @@ export default function TradesScreen() {
                 lineHeight: isDesktop ? 38 : 30,
                 marginTop: 12,
                 color: "#ffffff",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
             >
               Supply Multi-Person Crews & Custom Projects

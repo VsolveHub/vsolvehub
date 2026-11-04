@@ -137,7 +137,6 @@ export function DesktopMobileHandoff({
                   fontSize: 12,
                   fontWeight: "700",
                   color: "#34d399",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                 }}
               >
                 Registration Approved • Mobile Portal Active
@@ -169,7 +168,6 @@ export function DesktopMobileHandoff({
                   fontSize: 12,
                   fontWeight: "700",
                   color: "#ffffff",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                 }}
               >
                 Application & Documents
@@ -198,7 +196,6 @@ export function DesktopMobileHandoff({
                   fontSize: 12,
                   fontWeight: "600",
                   color: "#cbd5e1",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                 }}
               >
                 Sign Out
@@ -255,7 +252,6 @@ export function DesktopMobileHandoff({
                     letterSpacing: 0.6,
                     textTransform: "uppercase",
                     color: "#fcd34d",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Mobile-Only Partner App
@@ -281,7 +277,6 @@ export function DesktopMobileHandoff({
                     fontSize: 11,
                     fontWeight: "700",
                     color: "#6ee7b7",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Desktop Registration Complete
@@ -298,7 +293,6 @@ export function DesktopMobileHandoff({
                   letterSpacing: -0.8,
                   lineHeight: 52,
                   color: "#ffffff",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                 }}
               >
                 Partner Work & Dispatches are{"\n"}
@@ -324,7 +318,6 @@ export function DesktopMobileHandoff({
                   fontSize: 16,
                   lineHeight: 26,
                   color: "#cbd5e1",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                 }}
               >
                 Your registration and KYC verification are completed. Daily operations—including live dispatches, real-time navigation, job acceptance, customer calls, and instant payouts—operate exclusively through the VSOLVE Partner Mobile App.
@@ -384,7 +377,6 @@ export function DesktopMobileHandoff({
                           fontSize: 16,
                           fontWeight: "700",
                           color: "#ffffff",
-                          fontFamily: "system-ui, -apple-system, sans-serif",
                         }}
                       >
                         {partnerName}
@@ -597,7 +589,6 @@ export function DesktopMobileHandoff({
                   fontSize: 20,
                   fontWeight: "900",
                   color: "#ffffff",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                   zIndex: 2,
                 }}
               >
@@ -611,7 +602,6 @@ export function DesktopMobileHandoff({
                   lineHeight: 18,
                   textAlign: "center",
                   color: "#cbd5e1",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
                   maxWidth: 300,
                   zIndex: 2,
                 }}

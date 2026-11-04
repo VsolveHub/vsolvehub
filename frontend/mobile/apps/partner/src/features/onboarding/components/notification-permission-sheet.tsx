@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import { registerForPush } from "@vsolve/mobile-core";
 import * as Notifications from "expo-notifications";
 import Svg, { G, Path } from "react-native-svg";
@@ -8,7 +9,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

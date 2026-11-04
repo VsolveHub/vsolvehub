@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronLeft } from "lucide-react-native";
-import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const logoMark = require("@vsolve/mobile-ui/src/logo-mark.png");

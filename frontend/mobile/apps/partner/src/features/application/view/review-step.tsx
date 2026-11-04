@@ -1,6 +1,6 @@
 ﻿// Ported from frontend/apps/partner/features/application/view/review-step.tsx
 import { ApiRequestError } from "@vsolve/api-client";
-import { ErrorState, Spinner } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   Bell,
@@ -14,7 +14,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 

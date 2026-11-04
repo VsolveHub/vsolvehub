@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/documents-step.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Spinner } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -12,7 +12,7 @@ import {
   RotateCw,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
 import { usePartnerApplication } from "../queries";

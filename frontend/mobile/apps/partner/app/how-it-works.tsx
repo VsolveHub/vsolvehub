@@ -164,7 +164,6 @@ export default function HowItWorksScreen() {
               letterSpacing: -1,
               marginTop: 16,
               color: "#00112e",
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -178,7 +177,6 @@ export default function HowItWorksScreen() {
               marginTop: 12,
               color: "#64748b",
               maxWidth: 620,
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -286,7 +284,6 @@ export default function HowItWorksScreen() {
                 letterSpacing: -0.5,
                 marginTop: 12,
                 color: "#00112e",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -337,7 +334,6 @@ export default function HowItWorksScreen() {
                 letterSpacing: -0.5,
                 marginTop: 12,
                 color: "#00112e",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -406,7 +402,6 @@ export default function HowItWorksScreen() {
               lineHeight: isDesktop ? 44 : 32,
               letterSpacing: -0.5,
               color: "#ffffff",
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -419,7 +414,6 @@ export default function HowItWorksScreen() {
               marginTop: 10,
               color: "#cbd5e1",
               maxWidth: 540,
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >

@@ -228,7 +228,6 @@ export default function LoginScreen() {
                     letterSpacing: -0.8,
                     lineHeight: 50,
                     color: "#00112e",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Register & Verify as a Partner on Desktop
@@ -238,7 +237,6 @@ export default function LoginScreen() {
                     fontSize: 16,
                     lineHeight: 26,
                     color: "#453f37", // text-text-secondary
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                     maxWidth: 500,
                   }}
                 >

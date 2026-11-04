@@ -1,6 +1,7 @@
+import { Text } from "@vsolve/mobile-ui";
 import { Check, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
 export type TimelineNodeState =
   | "completed" // green filled with checkmark

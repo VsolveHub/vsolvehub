@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   ChevronRight,
@@ -12,7 +13,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 

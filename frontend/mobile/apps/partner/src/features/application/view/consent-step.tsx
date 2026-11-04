@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/consent-step.tsx
-import { ErrorState, Spinner } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { Check, FileText, X } from "lucide-react-native";
 import { useState } from "react";
 import {
@@ -8,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 

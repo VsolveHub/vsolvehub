@@ -1,4 +1,5 @@
 ﻿// Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
+import { Text } from "@vsolve/mobile-ui";
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { Slot, usePathname, useRouter } from "expo-router";
@@ -23,7 +24,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";

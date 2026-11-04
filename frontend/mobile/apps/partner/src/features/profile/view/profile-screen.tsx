@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { Lock, MapPin, Phone } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -7,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   useWindowDimensions,
   View,

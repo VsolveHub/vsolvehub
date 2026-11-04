@@ -1,4 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/about-step.tsx
+import { Text } from "@vsolve/mobile-ui";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
@@ -6,7 +7,6 @@ import { useEffect } from "react";
 import {
   Platform,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";

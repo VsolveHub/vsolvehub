@@ -1,5 +1,6 @@
+import { Text } from "@vsolve/mobile-ui";
 import { Check } from "lucide-react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 export interface OnboardingStepperProps {
   currentStep: number; // 0-based: 0 (Step 1), 1 (Step 2), 2 (Step 3), 3 (Step 4)

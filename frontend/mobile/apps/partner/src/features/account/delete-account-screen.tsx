@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { useRouter } from "expo-router";
 import { Check, Trash2 } from "lucide-react-native";
@@ -9,7 +10,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   useWindowDimensions,
   View,

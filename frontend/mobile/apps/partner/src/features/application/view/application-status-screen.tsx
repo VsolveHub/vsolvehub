@@ -1,3 +1,4 @@
+import { Text } from "@vsolve/mobile-ui";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertTriangle,
@@ -23,7 +24,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 

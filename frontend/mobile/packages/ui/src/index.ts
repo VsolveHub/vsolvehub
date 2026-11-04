@@ -1,6 +1,6 @@
 // Ported from frontend/packages/ui/src/index.ts
 export { cn } from "./cn";
-export { Text } from "./text";
+export { Text, MONO_FONT_FAMILY } from "./text";
 export type { TextProps } from "./text";
 export { Screen } from "./screen";
 export type { ScreenProps } from "./screen";

@@ -133,7 +133,6 @@ function NotStarted({ application }: { application?: Application }) {
               color: "#ffffff",
               textAlign: "center",
               letterSpacing: -0.4,
-              fontFamily: "system-ui, -apple-system, sans-serif",
             }}
           >
             Start your application
@@ -147,7 +146,6 @@ function NotStarted({ application }: { application?: Application }) {
               color: "#cbd5e1",
               textAlign: "center",
               maxWidth: 380,
-              fontFamily: "system-ui, -apple-system, sans-serif",
             }}
           >
             About five minutes. You can stop and come back — nothing is sent for review until you choose to send it.
@@ -162,7 +160,6 @@ function NotStarted({ application }: { application?: Application }) {
             fontSize: 16,
             fontWeight: "700",
             color: "#00112e",
-            fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
           What will you do on VSolve?
@@ -171,7 +168,6 @@ function NotStarted({ application }: { application?: Application }) {
           style={{
             fontSize: 14,
             color: "#453f37",
-            fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
           Tap one to start your application.
@@ -278,7 +274,6 @@ function TrackCard({
             fontSize: 16,
             fontWeight: "700",
             color: "#00112e",
-            fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
           {title}
@@ -288,7 +283,6 @@ function TrackCard({
             fontSize: 14,
             lineHeight: 20,
             color: "#453f37",
-            fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         >
           {description}
@@ -332,7 +326,6 @@ function PromiseItem({ text }: { text: string }) {
           fontSize: 15,
           lineHeight: 24,
           color: "#453f37",
-          fontFamily: "system-ui, -apple-system, sans-serif",
         }}
       >
         {text}

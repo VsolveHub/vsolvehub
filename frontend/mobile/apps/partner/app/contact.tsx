@@ -72,7 +72,6 @@ export default function ContactScreen() {
               letterSpacing: -1,
               marginTop: 10,
               color: "#00112e",
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -86,7 +85,6 @@ export default function ContactScreen() {
               marginTop: 12,
               color: "#64748b",
               maxWidth: 580,
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >

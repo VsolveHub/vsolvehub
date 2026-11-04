@@ -8,6 +8,20 @@ import {
   useFonts,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import {
+  Mukta_400Regular,
+  Mukta_500Medium,
+  Mukta_600SemiBold,
+  Mukta_700Bold,
+  Mukta_800ExtraBold,
+} from "@expo-google-fonts/mukta";
+import {
+  HindGuntur_400Regular,
+  HindGuntur_500Medium,
+  HindGuntur_600SemiBold,
+  HindGuntur_700Bold,
+} from "@expo-google-fonts/hind-guntur";
+
+import {
   configureCore,
   getNotifications,
   MobileQueryProvider,
@@ -47,6 +61,15 @@ export default function RootLayout() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
+    Mukta_400Regular,
+    Mukta_500Medium,
+    Mukta_600SemiBold,
+    Mukta_700Bold,
+    Mukta_800ExtraBold,
+    HindGuntur_400Regular,
+    HindGuntur_500Medium,
+    HindGuntur_600SemiBold,
+    HindGuntur_700Bold,
   });
 
   useEffect(() => {
