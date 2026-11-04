@@ -13,8 +13,26 @@ from apps.notifications.onesignal import send_push_to_external_ids
 def configure_onesignal_settings(settings):
     settings.ONESIGNAL_APP_ID = "test-app-id-12345"
     settings.ONESIGNAL_REST_API_KEY = "test-rest-key-99999"
+    # The sender prefers the partner app's settings, which config/settings/test.py also sets.
+    settings.ONESIGNAL_PARTNER_APP_ID = "test-app-id-12345"
+    settings.ONESIGNAL_PARTNER_REST_API_KEY = "test-rest-key-99999"
     settings.ONESIGNAL_API_URL = "https://api.onesignal.com/notifications"
     settings.ONESIGNAL_ENV = "local"
+
+
+@pytest.mark.parametrize("channel", ["offer-channel-uuid", None])
+def test_android_channel_is_sent_only_when_given(channel: str | None) -> None:
+    with patch("requests.Session.post") as mock_post:
+        mock_post.return_value = MagicMock(status_code=200, content=b'{"id": "n-1"}')
+        mock_post.return_value.json.return_value = {"id": "n-1"}
+
+        send_push_to_external_ids(
+            external_ids=["user-1"], heading="h", body="b", data={}, android_channel_id=channel
+        )
+
+    payload = mock_post.call_args.kwargs["json"]
+    assert payload.get("android_channel_id") == channel
+    assert "web_url" not in payload
 
 
 def test_send_push_to_external_ids_correct_payload():
@@ -54,8 +72,11 @@ def test_send_push_to_external_ids_correct_payload():
         assert json_payload["include_aliases"] == {"external_id": ["partner-uuid-1", "user-uuid-1"]}
         assert json_payload["headings"] == {"en": heading}
         assert json_payload["contents"] == {"en": body}
-        assert json_payload["data"] == data
-        assert json_payload["url"] == launch_url
+        # The link rides in `data` for the apps and as `web_url` for browsers only: a phone
+        # given `url` opens the browser instead of the app.
+        assert json_payload["data"] == {**data, "url": launch_url}
+        assert json_payload["web_url"] == launch_url
+        assert "url" not in json_payload
 
         # Verify Authorization header uses server-side REST API key
         assert headers["Authorization"] == "Basic test-rest-key-99999"
@@ -65,6 +86,7 @@ def test_send_push_to_external_ids_correct_payload():
 def test_send_push_os_v2_key_authorization_header(settings):
     settings.ONESIGNAL_APP_ID = "test-app-id-12345"
     settings.ONESIGNAL_REST_API_KEY = "os_v2_app_real_api_key_here"
+    settings.ONESIGNAL_PARTNER_REST_API_KEY = "os_v2_app_real_api_key_here"
 
     with patch("requests.Session.post") as mock_post:
         mock_response = MagicMock()

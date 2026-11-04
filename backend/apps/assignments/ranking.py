@@ -324,13 +324,19 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
                 )
                 .values_list("partner_id", flat=True)
             )
-            mobile_push_ids = frozenset(
-                PushDevice.objects.filter(
-                    user__partner_profile__id__in=pool_ids,
-                    disabled_at__isnull=True,
-                    session__revoked_at__isnull=True,
-                    session__expires_at__gt=now,
-                ).values_list("user__partner_profile__id", flat=True)
+            # PartnerPushSubscription above holds the partner app's OneSignal subscriptions too
+            # (platform ANDROID/IOS). Expo devices count only while that path is the one in use.
+            mobile_push_ids: frozenset[UUID] = (
+                frozenset(
+                    PushDevice.objects.filter(
+                        user__partner_profile__id__in=pool_ids,
+                        disabled_at__isnull=True,
+                        session__revoked_at__isnull=True,
+                        session__expires_at__gt=now,
+                    ).values_list("user__partner_profile__id", flat=True)
+                )
+                if getattr(settings, "MOBILE_PUSH_PROVIDER", "") != "onesignal"
+                else frozenset()
             )
             push_capable_ids = web_push_ids | mobile_push_ids
             max_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)

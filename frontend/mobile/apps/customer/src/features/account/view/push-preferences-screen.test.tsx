@@ -15,9 +15,9 @@ const mockClient = {
 
 jest.mock("@vsolve/mobile-core", () => ({
   getApiClient: () => mockClient,
-  getNotifications: () => null,
-  notificationsUnavailable: true,
-  registerForPush: jest.fn(),
+  // Expo Go: OneSignal cannot run, so the phone reports push as unavailable.
+  pushPermission: async () => "unavailable",
+  enablePush: jest.fn(async () => "unavailable"),
 }));
 
 jest.mock("expo-router", () => ({

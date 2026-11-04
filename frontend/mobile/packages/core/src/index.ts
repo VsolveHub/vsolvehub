@@ -17,10 +17,19 @@ export type { MobileApiClient, ExtendedHttpMethods } from "./api/client";
 export { getMobileQueryClient, bindAppStateFocus, bindNetworkOnline } from "./query/query-client";
 export { MobileQueryProvider } from "./query/provider";
 
-export { registerForPush, unregisterPush, readRegisteredPushToken, isPushSupported } from "./push/register";
-export { getNotifications, notificationsUnavailable } from "./push/notifications-module";
-export type { NotificationsModule } from "./push/notifications-module";
-export { routePushData } from "./push/routing";
+export {
+  enablePush,
+  isPushSupported,
+  linkPushUser,
+  onPushReceived,
+  onPushTap,
+  pushPermission,
+  pushStatus,
+  startPush,
+  unlinkPushUser,
+} from "./push/onesignal";
+export type { PushPayload, PushPermission } from "./push/onesignal";
+export { pushedAppPath, routePushData } from "./push/routing";
 export type { PushData, PushTarget } from "./push/routing";
 
 export { describeLocalFile, LocalFileUnreadableError, uploadToSignedUrl } from "./upload/upload";

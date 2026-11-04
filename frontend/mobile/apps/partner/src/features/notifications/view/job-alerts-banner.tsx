@@ -1,4 +1,4 @@
-import { getNotifications } from "@vsolve/mobile-core";
+import { enablePush, pushPermission } from "@vsolve/mobile-core";
 import { Button, COLOR_TOKENS, Text, useT } from "@vsolve/mobile-ui";
 import { Bell, Sparkles, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -11,36 +11,26 @@ export function JobAlertsBanner() {
 
 function NativeJobAlertsBanner() {
   const t = useT();
-  const [granted, setGranted] = useState(true);
+  // Hidden until the phone says otherwise. Expo Go reports "unavailable": no push there, so
+  // there is nothing to switch on.
+  const [needed, setNeeded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  // Null in Expo Go on Android: there is no push there, so there is nothing to switch on.
-  const Notifications = getNotifications();
 
   useEffect(() => {
-    if (Notifications === null) return;
     let mounted = true;
-    void Notifications.getPermissionsAsync().then((settings) => {
-      if (mounted) {
-        setGranted(settings.granted || settings.status === "granted");
-      }
+    void pushPermission().then((permission) => {
+      if (mounted) setNeeded(permission === "undetermined" || permission === "denied");
     });
     return () => {
       mounted = false;
     };
-  }, [Notifications]);
+  }, []);
 
-  if (Notifications === null || granted || dismissed) return null;
+  if (!needed || dismissed) return null;
 
   const handleRequest = async () => {
-    const next = await Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowBadge: true,
-        allowSound: true,
-      },
-    });
-    if (next.granted || next.status === "granted") {
-      setGranted(true);
+    if ((await enablePush()) === "granted") {
+      setNeeded(false);
     } else {
       setDismissed(true);
     }

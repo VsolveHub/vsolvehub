@@ -2,11 +2,7 @@
 import { useEffect, useState } from "react";
 import { describeError } from "@vsolve/query/native";
 import { Badge, Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
-import {
-  getNotifications,
-  notificationsUnavailable,
-  registerForPush,
-} from "@vsolve/mobile-core";
+import { enablePush, pushPermission, type PushPermission } from "@vsolve/mobile-core";
 import { AlertCircle, AlertTriangle, CheckCircle, ShieldAlert } from "lucide-react-native";
 import { Switch, View } from "react-native";
 
@@ -16,6 +12,11 @@ import {
   type PushPreferenceItem,
 } from "../queries";
 import { AccountPageShell } from "./account-page-shell";
+
+/** This screen's names for the phone's notification permission ("default": not asked yet). */
+function screenState(permission: PushPermission): "granted" | "denied" | "default" | "unavailable" {
+  return permission === "undetermined" ? "default" : permission;
+}
 
 function PushPreferenceRow({
   preference,
@@ -75,45 +76,13 @@ export function PushPreferencesScreen({ embedded = false }: { embedded?: boolean
   const [permissionState, setPermissionState] = useState<"granted" | "denied" | "default" | "unavailable">("default");
 
   useEffect(() => {
-    async function checkPermission() {
-      if (notificationsUnavailable) {
-        setPermissionState("unavailable");
-        return;
-      }
-      const Notifications = getNotifications();
-      if (!Notifications) {
-        setPermissionState("unavailable");
-        return;
-      }
-      try {
-        const current = await Notifications.getPermissionsAsync();
-        if (current.status === "granted") {
-          setPermissionState("granted");
-        } else if (current.status === "denied") {
-          setPermissionState("denied");
-        } else {
-          setPermissionState("default");
-        }
-      } catch {
-        setPermissionState("unavailable");
-      }
-    }
-    void checkPermission();
+    void pushPermission().then((permission) => setPermissionState(screenState(permission)));
   }, []);
 
   const handleManualEnable = async () => {
     setIsRequesting(true);
     try {
-      const token = await registerForPush({ appKind: "customer" });
-      if (token) {
-        setPermissionState("granted");
-      } else {
-        const Notifications = getNotifications();
-        if (Notifications) {
-          const status = await Notifications.getPermissionsAsync();
-          setPermissionState(status.status === "granted" ? "granted" : status.status === "denied" ? "denied" : "default");
-        }
-      }
+      setPermissionState(screenState(await enablePush()));
     } finally {
       setIsRequesting(false);
     }

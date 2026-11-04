@@ -403,7 +403,12 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
     partner = offer.partner
     freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
     freshness_cutoff = now - timedelta(days=freshness_days)
-    active_mobile_devices = active_devices_for(partner.user) if partner.user else []
+    # With OneSignal the partner app is a OneSignal subscriber, so the one send below reaches
+    # the phone too; the Expo path stays off so an offer never arrives twice.
+    expo_path_on = getattr(settings, "MOBILE_PUSH_PROVIDER", "") != "onesignal"
+    active_mobile_devices = (
+        active_devices_for(partner.user) if partner.user and expo_path_on else []
+    )
     send_web_push = True
 
     if getattr(settings, "FEATURE_PUSH_GATED_INSTANT", False):
@@ -500,6 +505,7 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
             ttl=remaining_ttl,
             priority=10,
             expires_at=offer.expires_at,
+            android_channel_id=getattr(settings, "ONESIGNAL_PARTNER_OFFER_CHANNEL_ID", "") or None,
         )
     except Exception as exc:
         if mobile:

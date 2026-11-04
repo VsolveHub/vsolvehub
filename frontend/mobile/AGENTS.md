@@ -86,7 +86,7 @@ keystores (`*.jks`, `*.keystore`), `*.p8`, `*.p12`, `*.mobileprovision`,
 | Images | `expo-image` | RN `Image` for remote images |
 | Secure token | `expo-secure-store` | AsyncStorage for secrets |
 | Other storage | `@react-native-async-storage/async-storage` (non-secret only) | — |
-| Push | `expo-notifications` + Expo Push Service | direct FCM/APNs SDKs, OneSignal |
+| Push | OneSignal (`react-native-onesignal` + `onesignal-expo-plugin`), through `@vsolve/mobile-core` push functions only (owner decision 2026-11-04: one channel with the web, campaigns) | `expo-notifications`, Expo Push Service, direct FCM/APNs SDKs: two push SDKs on Android fight over the same messages |
 | Location | `expo-location` (foreground only) | background location |
 | Camera / photos / files | `expo-image-picker`, `expo-document-picker` | — |
 | Payments | `react-native-webview` hosting Razorpay Checkout (see `guide/02-architecture.md` §8) | `react-native-razorpay` or any Razorpay SDK |

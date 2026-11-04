@@ -94,6 +94,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(googleServicesFile ? { googleServicesFile } : {}),
   },
   plugins: [
+    // Push notifications (OneSignal). It must be the first plugin. `mode` is the iOS APNs
+    // environment: production for store builds, development otherwise.
+    [
+      "onesignal-expo-plugin",
+      {
+        mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
+        smallIcons: ["./assets/android-icon-monochrome.png"],
+        smallIconAccentColor: "#f87000",
+        disableLocation: true,
+      },
+    ],
     "expo-router",
     "expo-font",
     "expo-secure-store",
@@ -121,13 +132,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         photosPermission: "Choose photos of documents and work.",
         cameraPermission: "Take photos of documents and work.",
         microphonePermission: false,
-      },
-    ],
-    [
-      "expo-notifications",
-      {
-        icon: "./assets/icon.png",
-        color: "#f87000",
       },
     ],
     ...firebasePlugins,

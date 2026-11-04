@@ -789,6 +789,9 @@ MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 
 # Mobile apps (frontend/mobile). Push is fail-closed like MESSAGE_TRANSPORT.
+# "onesignal": the apps are OneSignal subscribers like the web, so every push (job offers
+# included) reaches phones through OneSignal and the Expo path is off. "expo": the old path,
+# job offers only, kept for app builds made before OneSignal.
 MOBILE_PUSH_PROVIDER = env("MOBILE_PUSH_PROVIDER", default="unconfigured")
 MOBILE_PUSH_ALLOW_FAKE = env.bool("MOBILE_PUSH_ALLOW_FAKE", default=False)
 EXPO_ACCESS_TOKEN = env("EXPO_ACCESS_TOKEN", default="")
@@ -1392,6 +1395,9 @@ ONESIGNAL_CUSTOMER_APP_ID = env("ONESIGNAL_CUSTOMER_APP_ID", default="")
 ONESIGNAL_CUSTOMER_REST_API_KEY = env("ONESIGNAL_CUSTOMER_REST_API_KEY", default="")
 ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
 ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
+#: The partner OneSignal app's "Job offers" Android channel (Settings -> Push -> Android
+#: Notification Channels): high importance and the booking_alert sound. Blank: OneSignal's default.
+ONESIGNAL_PARTNER_OFFER_CHANNEL_ID = env("ONESIGNAL_PARTNER_OFFER_CHANNEL_ID", default="")
 DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
 PARTNER_PORTAL_BASE_URL = env("PARTNER_PORTAL_BASE_URL", default="http://localhost:3001")
 

@@ -197,6 +197,7 @@ class OneSignalMessageTransport:
         collapse_id: str | None = None,
         priority: int | None = 10,
         expires_at: datetime | None = None,
+        android_channel_id: str | None = None,
         **extra: Any,
     ) -> TransportResult:
         from apps.notifications.services import fit_idempotency_key, is_engaged
@@ -598,6 +599,7 @@ class OneSignalMessageTransport:
             web_push_topic=web_push_topic,
             ttl=ttl,
             priority=priority or 10,
+            android_channel_id=android_channel_id,
         )
 
         http_status = res.get("http_status", 200)

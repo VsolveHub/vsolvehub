@@ -39,6 +39,7 @@ def send_push_to_external_ids(
     web_push_topic: str | None = None,
     ttl: int | None = None,
     priority: int | None = 10,
+    android_channel_id: str | None = None,
 ) -> dict[str, Any]:
     """Send a push notification to specific users identified by their external_id aliases.
 
@@ -85,15 +86,18 @@ def send_push_to_external_ids(
         },
         "headings": {"en": heading},
         "contents": {"en": body},
-        "data": data,
+        "data": {**data, "url": data.get("url") or url} if url else data,
     }
 
-    if url:
-        payload["url"] = url
-    if collapse_id:
-        payload["collapse_id"] = collapse_id
-    if web_push_topic:
-        payload["web_push_topic"] = web_push_topic
+    # `web_url`, not `url`: a phone would open `url` in the browser instead of the app. The
+    # apps route from `data` (its `url`, `target` or offer id) to their own screen.
+    optional_fields = {
+        "web_url": url,
+        "android_channel_id": android_channel_id,
+        "collapse_id": collapse_id,
+        "web_push_topic": web_push_topic,
+    }
+    payload.update({name: value for name, value in optional_fields.items() if value})
     if ttl is not None:
         payload["ttl"] = ttl
     if priority is not None:

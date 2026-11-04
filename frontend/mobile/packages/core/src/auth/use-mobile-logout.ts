@@ -5,25 +5,16 @@ import { router } from "expo-router";
 import { appKind } from "../config";
 import { getApiClient } from "../api/client";
 import { useAuthStore } from "./auth-store";
-import { readRegisteredPushToken } from "../push/register";
+import { unlinkPushUser } from "../push/onesignal";
 
-/** Unregister this phone, end the Django session, then leave for home or login. */
+/** Unlink this phone from push, end the Django session, then leave for home or login. */
 export function useMobileLogout(redirectPath?: string): () => Promise<void> {
   const queryClient = useQueryClient();
   return async () => {
     const api = getApiClient();
-    const pushToken = await readRegisteredPushToken();
-    if (pushToken) {
-      try {
-        await request(() =>
-          api.POST("/api/v1/mobile/devices/unregister/", {
-            body: { expo_push_token: pushToken },
-          }),
-        );
-      } catch {
-        // A failed unregister must not trap the person on a signed-in screen.
-      }
-    }
+    // Before the session ends: Django is told this phone's subscription is gone, which needs it.
+    // A failure must not trap the person on a signed-in screen; unlinkPushUser never throws.
+    await unlinkPushUser();
     try {
       await request(() => api.POST("/api/v1/auth/logout/"));
     } catch {
