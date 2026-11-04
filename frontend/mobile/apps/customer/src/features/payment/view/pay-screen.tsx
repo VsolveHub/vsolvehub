@@ -2,7 +2,7 @@
 import type { Schemas } from "@vsolve/api-client";
 import { handoffTarget, RazorpayCheckout } from "@vsolve/mobile-core";
 import { describeError, useServerCountdown } from "@vsolve/query/native";
-import { Badge, Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
+import { Badge, Button, ErrorState, formatMoney, Skeleton, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
@@ -22,6 +22,8 @@ import {
   useStartPayment,
   type PaymentAllocation,
 } from "@/features/payment/queries";
+import { CheckoutLoyaltyOptions, useCheckoutLoyalty } from "./checkout-loyalty-options";
+import { CancellationLadder } from "@/features/booking/view/cancellation-ladder";
 
 const ALLOCATION_KIND_LABEL: Record<Schemas["QuoteLineKindEnum"], string> = {
   SERVICE: "Service",
@@ -110,6 +112,10 @@ export function PayScreen({ groupId }: { groupId: string }) {
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const profileGate = useProfileCompletionGate("payment");
 
+  const payablePaise =
+    group?.units.reduce((sum, unit) => sum + unit.total.amount_paise, 0) ?? 0;
+  const loyalty = useCheckoutLoyalty(payablePaise);
+
   const attempt = attemptQuery.data ?? checkoutPayment.data ?? startPayment.data ?? null;
   const countdown = useServerCountdown(attempt?.expires_at ?? null);
   const returnToBooking = shouldReturnToBooking(group, attempt);
@@ -160,6 +166,8 @@ export function PayScreen({ groupId }: { groupId: string }) {
         checkoutId,
         expectedCheckoutVersion: group.checkout_version,
         groupId: group.id,
+        walletAmountPaise: loyalty.walletAmountPaise,
+        coinBurnAmount: loyalty.coinBurnAmount,
       });
       setStartedId(created.id);
     } catch {
@@ -244,6 +252,11 @@ export function PayScreen({ groupId }: { groupId: string }) {
             {describeError(startPayment.error, "mutation").message}
           </Text>
         ) : null}
+        <CheckoutLoyaltyOptions loyalty={loyalty} />
+
+      <View className="mt-4">
+        <CancellationLadder />
+      </View>
         <View className="mt-5">
           <Button
             loading={startPayment.isPending}
@@ -290,6 +303,26 @@ export function PayScreen({ groupId }: { groupId: string }) {
           <Text className="text-base font-semibold text-text">Amount</Text>
           <Money value={attempt.amount} className="text-xl font-bold tabular-nums text-text" />
         </View>
+        {(attempt.coin_discount_paise ?? 0) > 0 || (attempt.wallet_reserved_paise ?? 0) > 0 ? (
+          <View className="mt-3 border-t border-line pt-2 gap-1">
+            {(attempt.coin_discount_paise ?? 0) > 0 ? (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-text-secondary">Coin discount</Text>
+                <Text className="text-sm tabular-nums text-success-text">
+                  -{formatMoney(attempt.coin_discount_paise!)}
+                </Text>
+              </View>
+            ) : null}
+            {(attempt.wallet_reserved_paise ?? 0) > 0 ? (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-text-secondary">Paid from wallet</Text>
+                <Text className="text-sm tabular-nums text-text-secondary">
+                  -{formatMoney(attempt.wallet_reserved_paise!)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         <AllocationList attempt={attempt} group={group} />
       </View>
 
