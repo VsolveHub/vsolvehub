@@ -15,12 +15,12 @@ const mockUploadStatus = { value: 200 };
 jest.mock("expo-file-system", () => ({
   UploadType: { BINARY_CONTENT: 0, MULTIPART: 1 },
   File: class {
-    constructor(private readonly uri: string) {}
+    constructor(private readonly mockUri: string) {}
     get exists() {
-      return mockFiles.has(this.uri);
+      return mockFiles.has(this.mockUri);
     }
     get size() {
-      return mockFiles.get(this.uri) ?? 0;
+      return mockFiles.get(this.mockUri) ?? 0;
     }
     async digest() {
       return "a".repeat(64);
