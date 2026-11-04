@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { LOCAL_CATEGORY_TILES, resolveImageUrl } from "@/features/catalog/category-artwork";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useCategories, useCategoryServices, useServiceDetail, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { serviceHref } from "@/features/catalog/service-href";
 import { AddToCartButton } from "@/features/catalog/view/add-to-cart-button";
@@ -149,10 +149,6 @@ function Thumb({ uri, px, iconKey }: { uri: string; px: number; iconKey: string 
 
 function TileGraphic({ tile }: { tile: TileGroup }) {
   const [error, setError] = useState(false);
-  const localAsset = LOCAL_CATEGORY_TILES[tile.slug];
-  if (localAsset) {
-    return <Image source={localAsset} contentFit="contain" style={{ width: 48, height: 48 }} />;
-  }
   const resolved = resolveImageUrl(tile.imageUrl);
   if (resolved && !error) {
     return (

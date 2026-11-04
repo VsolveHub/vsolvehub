@@ -194,6 +194,15 @@ frontend/mobile/
   only shows on a phone. Use `className` with `active:` variants instead. If you must keep a
   `StyleSheet` function style, add `cssInterop={false}` to that `Pressable` (and then it cannot
   take `className`).
+- **Never bundle a copy of data the API serves** (catalogue photos, category or service
+  lists, prices, reward amounts, support numbers). Render what the API returns, exactly as
+  the web does, and show the web's empty state when a value is missing. A bundled copy
+  drifts from the web and can only change with an app release. Never substitute stock
+  photos (Unsplash) or invented values for a missing one.
+- **A bundled image's contents must match its extension.** Photos are `.jpg`, art with
+  transparency is `.png`. Android's release build (AAPT2) rejects a JPEG named `.png` ("file does
+  not start with PNG signature") and the EAS build fails, while Expo Go, Metro and the browser
+  accept it, so it only shows on EAS. Check new images with `file <path>`.
 
 ---
 
@@ -214,6 +223,11 @@ For every phase:
     `pnpm exec vitest run packages/api-client` from `frontend/` for the api-client bearer-mode test
   - backend: `.\.venv\Scripts\python.exe -m pytest tests/mobile -q` and
     `.\scripts\quality-static.cmd` from `backend/`
+- Every Babel preset or plugin named in `babel.config.js`, including ones NativeWind's preset
+  names (`@babel/plugin-transform-react-jsx`), must be in that app's `package.json`. EAS's Gradle
+  runs Node directly, without the module path `pnpm exec` adds, so an undeclared one bundles fine
+  locally and fails on EAS. To reproduce a Gradle step locally, run it with plain `node`, never
+  through `pnpm exec`.
 - Never write "tests pass" unless you ran them in this session and they passed.
 - Never skip, delete or weaken a test to make it pass.
 
