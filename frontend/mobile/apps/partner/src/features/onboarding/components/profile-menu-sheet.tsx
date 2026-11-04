@@ -87,6 +87,7 @@ export function ProfileMenuSheet({
           <View style={styles.menuList}>
             {/* 1. Profile */}
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Profile"
               onPress={() => handleNavigate("/me/profile")}
@@ -102,6 +103,7 @@ export function ProfileMenuSheet({
 
             {/* 2. Application status */}
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Application status"
               onPress={() => handleNavigate("/apply/status")}
@@ -117,6 +119,7 @@ export function ProfileMenuSheet({
 
             {/* 3. Notifications */}
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Notifications"
               onPress={() => handleNavigate("/me/notifications")}
@@ -132,6 +135,7 @@ export function ProfileMenuSheet({
 
             {/* 4. Help & support */}
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Help & support"
               onPress={() => handleNavigate("/help")}
@@ -147,6 +151,7 @@ export function ProfileMenuSheet({
 
             {/* 5. Delete account */}
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Delete account"
               onPress={() => handleNavigate("/me/delete-account")}
@@ -162,6 +167,7 @@ export function ProfileMenuSheet({
 
             {/* 6. Sign out */}
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Sign out"
               onPress={handleSignOut}
