@@ -230,3 +230,37 @@ export function useMarkNotificationRead() {
 export function isNotificationNotFound(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "notification_not_found";
 }
+
+/* ---------------------------------------------------------------------------
+   Partner Push Preferences
+   --------------------------------------------------------------------------- */
+
+export type PushPreferenceItem = Schemas["PushPreferenceItem"];
+export type PushPreferencesResponse = Schemas["PushPreferences"];
+
+export function usePartnerPushPreferences() {
+  return useQuery<PushPreferencesResponse>({
+    queryKey: ["partner", "push-preferences"],
+    queryFn: () =>
+      request<PushPreferencesResponse>(() =>
+        getApiClient().GET("/api/v1/partner/notification-preferences/"),
+      ),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdatePartnerPushPreference() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { category: string; isEnabled: boolean }) =>
+      request<PushPreferencesResponse>(() =>
+        getApiClient().PATCH("/api/v1/partner/notification-preferences/", {
+          body: { category: input.category, is_enabled: input.isEnabled },
+        }),
+      ),
+    onSuccess: (data: PushPreferencesResponse) => {
+      queryClient.setQueryData(["partner", "push-preferences"], data);
+    },
+  });
+}

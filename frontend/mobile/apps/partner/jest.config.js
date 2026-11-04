@@ -12,6 +12,10 @@ module.exports = {
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    "^react-native/asset-registry$": "react-native/src/asset-registry.js",
+    "^react-native/react-private-interface$": "react-native/src/react-private-interface.js",
+    "^react-native/setup-env$": "<rootDir>/src/test/empty-mock.js",
+    "^react-native/unstable-internals-do-not-use$": "react-native/src/unstable-internals-do-not-use.js",
     "^expo-router$": "<rootDir>/src/test/expo-router-mock.cjs",
     "^lucide-react-native$": "<rootDir>/src/test/lucide-mock.cjs",
     "^@react-native-async-storage/async-storage$": "<rootDir>/src/test/async-storage-mock.cjs",

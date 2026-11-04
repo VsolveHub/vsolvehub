@@ -80,6 +80,15 @@ export function MeHome() {
         />
         <SettingsRow
           icon={Bell}
+          title="Notification preferences"
+          subtitle="Alerts & push preferences"
+          boxBg="bg-amber-50"
+          boxBorder="border-amber-100"
+          iconColor="#d97706"
+          onPress={() => router.push("/me/notifications" as never)}
+        />
+        <SettingsRow
+          icon={Bell}
           title="Push Notification Diagnostics"
           subtitle="Token status, permissions & alert tests"
           boxBg="bg-orange-50"
