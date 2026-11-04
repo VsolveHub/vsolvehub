@@ -1,4 +1,4 @@
-// Ported from frontend/apps/partner/features/application/view/review-step.tsx
+﻿// Ported from frontend/apps/partner/features/application/view/review-step.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { ErrorState, Spinner } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
@@ -14,7 +14,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from "react-native";
@@ -22,7 +21,7 @@ import {
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
 import { useApplyDock } from "../model/dock-context";
 import { canSubmit, isEditable } from "../model/readiness";
-import { isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
+import { describeRefusal, isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
 
 export function ReviewStep() {
   const router = useRouter();
@@ -30,7 +29,8 @@ export function ReviewStep() {
   const submit = useSubmitApplication();
   const { registerDock } = useApplyDock();
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  // Notification toggle state - starts FALSE so submit button is dark and disabled until turned on
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permissionSheetOpen, setPermissionSheetOpen] = useState(false);
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
@@ -67,11 +67,17 @@ export function ReviewStep() {
     });
   }, [router]);
 
+  // Submit button requires both ready AND notificationsEnabled to be turned on
+  const canProceed = ready && notificationsEnabled && !submit.isPending;
+
   useEffect(() => {
     if (!editable) {
       registerDock(null);
       return;
     }
+
+    const conflict = isVersionConflict(submit.error);
+    const refusal = describeRefusal(submit.error);
 
     registerDock({
       label: "Submit application",
@@ -79,17 +85,17 @@ export function ReviewStep() {
       nextStepName: null,
       onCommit,
       isSaving: submit.isPending,
-      proceedDisabled: !ready || submit.isPending,
+      proceedDisabled: !canProceed,
       saved: submit.isSuccess,
-      conflict: isVersionConflict(submit.error),
-      refusal: null,
-      failed: submit.isError && !isVersionConflict(submit.error),
+      conflict,
+      refusal,
+      failed: submit.isError && !conflict && !refusal,
       requestId: null,
       fieldMessages: [],
     });
   }, [
     editable,
-    ready,
+    canProceed,
     submit.isPending,
     submit.isSuccess,
     submit.isError,
@@ -104,9 +110,10 @@ export function ReviewStep() {
     };
   }, [registerDock]);
 
-  const handleToggleNotifications = (value: boolean) => {
-    setNotificationsEnabled(value);
-    if (value) {
+  const handleToggleNotifications = () => {
+    const nextValue = !notificationsEnabled;
+    setNotificationsEnabled(nextValue);
+    if (nextValue) {
       setPermissionSheetOpen(true);
     }
   };
@@ -159,7 +166,7 @@ export function ReviewStep() {
         <Text style={styles.title}>Review & Submit</Text>
       </View>
 
-      {/* 3 Summary Cards matching Screen 5 */}
+      {/* 3 Summary Cards matching Screen 5 & User Mockup */}
       <View style={styles.cardsContainer}>
         {/* Card 1: About you */}
         <View style={styles.summaryCard}>
@@ -230,27 +237,44 @@ export function ReviewStep() {
         </View>
       </View>
 
-      {/* Notification Toggle Card matching Screen 5 */}
+      {/* Notification Toggle Card matching User Uploaded Image 2 */}
       <View style={styles.notificationCard}>
         <View style={styles.notificationLeft}>
           <View style={styles.bellIconBox}>
-            <Bell size={20} color="#f26a0f" strokeWidth={2.2} />
+            <Bell size={20} color="#f87000" strokeWidth={2.2} />
           </View>
           <View style={styles.notificationInfo}>
             <Text style={styles.notificationTitle}>Get updates on your application</Text>
             <Text style={styles.notificationSubtitle}>We'll notify you when it's reviewed.</Text>
           </View>
         </View>
-        <Switch
-          value={notificationsEnabled}
-          onValueChange={handleToggleNotifications}
-          trackColor={{ false: "#e2e8f0", true: "#f26a0f" }}
-          thumbColor={Platform.OS === "android" ? "#ffffff" : undefined}
-          ios_backgroundColor="#e2e8f0"
-        />
+
+        {/* Custom Toggle Switch matching exact image: Orange track with Teal/Emerald knob when active */}
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel="Get updates on your application"
+          accessibilityState={{ checked: notificationsEnabled }}
+          onPress={handleToggleNotifications}
+          style={[
+            styles.customSwitchTrack,
+            {
+              backgroundColor: notificationsEnabled ? "#ea580c" : "#cbd5e1",
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.customSwitchThumb,
+              {
+                backgroundColor: notificationsEnabled ? "#008a7a" : "#ffffff",
+                alignSelf: notificationsEnabled ? "flex-end" : "flex-start",
+              },
+            ]}
+          />
+        </Pressable>
       </View>
 
-      {/* Screen 6: Notification Permission Bottom Sheet */}
+      {/* Notification Permission Bottom Sheet */}
       <NotificationPermissionSheet
         visible={permissionSheetOpen}
         onClose={() => setPermissionSheetOpen(false)}
@@ -296,7 +320,7 @@ const styles = StyleSheet.create({
   },
   startButton: {
     marginTop: 16,
-    backgroundColor: "#f26a0f",
+    backgroundColor: "#f87000",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 9999,
@@ -313,7 +337,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#e2e8f0",
     paddingVertical: 16,
@@ -356,13 +380,14 @@ const styles = StyleSheet.create({
   editText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#2563eb",
+    color: "#1d4ed8",
+    textDecorationLine: "underline",
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   notificationCard: {
     backgroundColor: "#fff7ed",
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#fed7aa",
     paddingVertical: 16,
@@ -393,14 +418,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   notificationTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#00112e",
+    color: "#071328",
     letterSpacing: -0.2,
   },
   notificationSubtitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: "#78350f",
     marginTop: 2,
+  },
+  customSwitchTrack: {
+    width: 54,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 3,
+    justifyContent: "center",
+  },
+  customSwitchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+          transition: "all 0.2s ease-in-out",
+        } as any)
+      : {
+          elevation: 3,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1.5 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+        }),
   },
 });

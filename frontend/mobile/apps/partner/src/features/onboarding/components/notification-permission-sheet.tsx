@@ -1,6 +1,6 @@
 import { registerForPush } from "@vsolve/mobile-core";
 import * as Notifications from "expo-notifications";
-import { Bell } from "lucide-react-native";
+import Svg, { G, Path } from "react-native-svg";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -66,23 +66,61 @@ export function NotificationPermissionSheet({
           style={StyleSheet.absoluteFill}
         />
 
-        <View style={[styles.sheetCard, { paddingBottom: bottomInset + 20 }]}>
+        <View style={[styles.sheetCard, { paddingBottom: bottomInset + 16 }]}>
           {/* Grabber Handle */}
           <View style={styles.grabber} />
 
-          {/* Large Ringing Bell Illustration */}
-          <View style={styles.bellCircleContainer}>
-            <View style={styles.bellCircle}>
-              {/* Decorative Ring Ticks */}
-              <View style={styles.ringTickLeft} />
-              <View style={styles.ringTickRight} />
-              <Bell size={42} color="#f26a0f" strokeWidth={2.2} />
-            </View>
+          {/* Ringing Bell Illustration Matching Mockup */}
+          <View style={styles.bellCircle}>
+            <Svg width={80} height={80} viewBox="0 0 80 80" fill="none">
+              {/* 3 Radiating Sound Rays (Top-Right) */}
+              <Path
+                d="M 54 17 L 57 11"
+                stroke="#f87000"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+              <Path
+                d="M 62 25 L 70 21"
+                stroke="#f87000"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+              <Path
+                d="M 64 35 L 72 36"
+                stroke="#f87000"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+
+              {/* Tilted Bell Body Matching Exact Geometry */}
+              <G transform="rotate(-12, 38, 38)">
+                {/* Bell Contour with Flared Base and Soft Curve */}
+                <Path
+                  d="M 38 16
+                     C 32 16 28 20 27 26
+                     C 25 33 24 40 20 47
+                     C 18 51 18 54 22 55
+                     C 28 56 48 56 54 55
+                     C 58 54 58 51 56 47
+                     C 52 40 51 33 49 26
+                     C 48 20 44 16 38 16
+                     Z"
+                  fill="#ffe5d3"
+                  stroke="#f87000"
+                  strokeWidth="3.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </G>
+            </Svg>
           </View>
 
           {/* Title and Subtitle */}
           <Text style={styles.title}>Turn on notifications?</Text>
-          <Text style={styles.body}>Know the moment your application is approved.</Text>
+          <Text style={styles.body}>
+            Know the moment your application{"\n"}is approved.
+          </Text>
 
           {/* Action Buttons */}
           <View style={styles.actions}>
@@ -126,8 +164,8 @@ const styles = StyleSheet.create({
   },
   sheetCard: {
     backgroundColor: "#ffffff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingTop: 12,
     paddingHorizontal: 24,
     alignItems: "center",
@@ -148,80 +186,55 @@ const styles = StyleSheet.create({
   },
   grabber: {
     width: 44,
-    height: 5,
-    borderRadius: 3,
+    height: 4.5,
+    borderRadius: 9999,
     backgroundColor: "#d1d5db",
-    marginBottom: 28,
+    marginTop: 4,
+    marginBottom: 20,
   },
-  bellCircleContainer: {
+  bellCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#fff2e8",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
   },
-  bellCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "#ffe9d6",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  ringTickLeft: {
-    position: "absolute",
-    top: 14,
-    right: 18,
-    width: 6,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: "#f26a0f",
-    transform: [{ rotate: "45deg" }],
-  },
-  ringTickRight: {
-    position: "absolute",
-    top: 18,
-    right: 14,
-    width: 6,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: "#f26a0f",
-    transform: [{ rotate: "20deg" }],
-  },
   title: {
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: "800",
-    color: "#0b1b3a",
+    color: "#071328",
     textAlign: "center",
     letterSpacing: -0.4,
   },
   body: {
-    fontSize: 15,
-    color: "#6b7280",
+    fontSize: 15.5,
+    color: "#556476",
     textAlign: "center",
     marginTop: 8,
     lineHeight: 22,
-    paddingHorizontal: 16,
+    maxWidth: 280,
   },
   actions: {
     width: "100%",
-    marginTop: 28,
-    flexDirection: "column",
-    rowGap: 14,
+    marginTop: 26,
+    alignItems: "center",
   },
   allowButton: {
     height: 52,
-    borderRadius: 9999,
-    backgroundColor: "#f26a0f",
+    borderRadius: 14,
+    backgroundColor: "#f87000",
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
     ...(Platform.OS === "web"
       ? ({
-          boxShadow: "0 4px 14px rgba(242, 106, 15, 0.35)",
+          boxShadow: "0 4px 14px rgba(248, 112, 0, 0.35)",
         } as any)
       : {
           elevation: 4,
-          shadowColor: "#f26a0f",
+          shadowColor: "#f87000",
           shadowOffset: { width: 0, height: 3 },
           shadowOpacity: 0.35,
           shadowRadius: 8,
@@ -236,14 +249,17 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   notNowButton: {
+    marginTop: 18,
+    marginBottom: 6,
     paddingVertical: 8,
+    paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   notNowText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#0b1b3a",
+    color: "#071328",
     textDecorationLine: "underline",
   },
 });

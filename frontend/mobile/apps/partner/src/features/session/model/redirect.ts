@@ -25,12 +25,15 @@ const UNFINISHED: readonly Status[] = ["DRAFT", "CHANGES_REQUIRED"];
  * The signed-in landing page for an application in this state.
  *
  * An absent application counts as unfinished: the person has not started, and
- * `/apply` is where starting happens. Everything else — including the waiting
- * states and the closed ones — belongs on the home, which states plainly that
- * nothing is owed and links onward. Sending a `SUBMITTED` applicant back into
- * the form would invite them to edit a record a reviewer is holding.
+ * `/apply` is where starting happens.
+ * A declined/rejected application lands directly on `/apply/status` to show
+ * the decision and appeal options.
+ * Approved and submitted applications land on `/home`.
  */
-export function homeForApplication(status: Status | null): "/apply" | "/home" {
+export function homeForApplication(
+  status: Status | null,
+): "/apply" | "/home" | "/apply/status" {
   if (status === null || UNFINISHED.includes(status)) return "/apply";
+  if (status === "DECLINED") return "/apply/status";
   return "/home";
 }

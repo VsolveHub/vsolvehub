@@ -1,5 +1,6 @@
 import { Check, X } from "lucide-react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 export type TimelineNodeState =
   | "completed" // green filled with checkmark
@@ -12,6 +13,7 @@ export interface TimelineNode {
   title: string;
   subtitle: string;
   state: TimelineNodeState;
+  connectorColors?: [string, string] | string;
 }
 
 export interface StatusTimelineProps {
@@ -30,7 +32,7 @@ export function StatusTimeline({ nodes }: StatusTimelineProps) {
             ? "#f26a0f"
             : node.state === "rejected"
             ? "#d32f1e"
-            : "#e5e7eb";
+            : "#e2e8f0";
 
         return (
           <View key={index} style={styles.nodeRow}>
@@ -55,12 +57,26 @@ export function StatusTimeline({ nodes }: StatusTimelineProps) {
 
               {/* Vertical line between nodes */}
               {!isLast ? (
-                <View
-                  style={[
-                    styles.verticalLine,
-                    { backgroundColor: lineActiveColor },
-                  ]}
-                />
+                Array.isArray(node.connectorColors) ? (
+                  <LinearGradient
+                    colors={node.connectorColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.verticalLine}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.verticalLine,
+                      {
+                        backgroundColor:
+                          typeof node.connectorColors === "string"
+                            ? node.connectorColors
+                            : lineActiveColor,
+                      },
+                    ]}
+                  />
+                )
               ) : null}
             </View>
 
@@ -79,68 +95,84 @@ export function StatusTimeline({ nodes }: StatusTimelineProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: "#f1f5f9",
     padding: 22,
     flexDirection: "column",
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 2px 8px rgba(7, 19, 40, 0.04)",
+        } as any)
+      : {
+          elevation: 2,
+          shadowColor: "#071328",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+        }),
   },
   nodeRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
   },
   leftColumn: {
-    alignItems: "center",
     width: 28,
-    marginRight: 14,
+    alignItems: "center",
+    marginRight: 16,
+    position: "relative",
   },
   circleBase: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 2,
+    backgroundColor: "#ffffff",
   },
   circleCompleted: {
     backgroundColor: "#2fa84f",
   },
   circleActiveBlue: {
-    backgroundColor: "#ffffff",
     borderWidth: 3,
     borderColor: "#2563eb",
   },
   circleActiveOrange: {
-    backgroundColor: "#ffffff",
     borderWidth: 3,
     borderColor: "#f26a0f",
   },
   circleRejected: {
-    backgroundColor: "#d32f1e",
+    backgroundColor: "#ef4444",
   },
   circlePending: {
-    backgroundColor: "#ffffff",
     borderWidth: 2,
     borderColor: "#cbd5e1",
   },
   verticalLine: {
-    width: 2,
-    flex: 1,
-    marginTop: 4,
-    marginBottom: 4,
+    position: "absolute",
+    top: 26,
+    bottom: -4,
+    width: 2.5,
+    zIndex: 1,
   },
   rightColumn: {
     flex: 1,
     flexDirection: "column",
-    justifyContent: "flex-start",
+    justifyContent: "center",
+    paddingTop: 1.5,
   },
   nodeTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    color: "#0b1b3a",
+    fontWeight: "800",
+    color: "#071328",
+    letterSpacing: -0.2,
+    marginBottom: 3,
   },
   nodeSubtitle: {
     fontSize: 13.5,
-    color: "#6b7280",
-    marginTop: 2,
-    lineHeight: 19,
+    color: "#64748b",
+    lineHeight: 18,
+    fontWeight: "400",
   },
 });

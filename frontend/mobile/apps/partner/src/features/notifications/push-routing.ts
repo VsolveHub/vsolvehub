@@ -14,12 +14,23 @@ export function resolvePartnerPush(target: PushTarget): PushDestination {
     const href = targetHref(target as Schemas["NotificationTarget"]);
     if (href) return { type: "route", href };
   }
-  if (target?.kind === "DISPATCH_OFFER" && "id" in target && target.id) return { type: "route", href: `/dispatch/${target.id}` };
+  if (target?.kind === "DISPATCH_OFFER" && "id" in target && target.id) {
+    return { type: "route", href: `/dispatch/${target.id}` };
+  }
   if (target?.kind === "PARTNER_OFFERS") return { type: "route", href: "/work/offers" };
   if (target?.kind === "PARTNER_WORK") return { type: "route", href: "/work/all" };
-  if (target?.kind === "APPLICATION" || target?.kind === "PARTNER_APPLICATION") return { type: "route", href: "/apply/status" };
-  if (target?.kind === "APPLICATION_DOCUMENT" || target?.kind === "DOCUMENT_REUPLOAD") return { type: "route", href: "/apply/documents" };
-  if (target?.kind === "APPLICATION_APPROVED") return { type: "route", href: "/apply/status" };
+  if (
+    target?.kind === "APPLICATION" ||
+    target?.kind === "PARTNER_APPLICATION" ||
+    target?.kind === "APPLICATION_APPROVED" ||
+    target?.kind === "APPLICATION_DECLINED" ||
+    target?.kind === "PARTNER_APPLICATION_DECLINED"
+  ) {
+    return { type: "route", href: "/apply/status" };
+  }
+  if (target?.kind === "APPLICATION_DOCUMENT" || target?.kind === "DOCUMENT_REUPLOAD") {
+    return { type: "route", href: "/apply/documents" };
+  }
   return { type: "alerts" };
 }
 

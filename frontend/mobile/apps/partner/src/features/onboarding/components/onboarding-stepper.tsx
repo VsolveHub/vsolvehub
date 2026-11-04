@@ -12,7 +12,7 @@ export function OnboardingStepper({
   currentStep,
   totalSteps = 4,
   stepLabel,
-  variant = "circles",
+  variant = "segmented",
 }: OnboardingStepperProps) {
   const steps = Array.from({ length: totalSteps }, (_, i) => i);
 
@@ -32,7 +32,7 @@ export function OnboardingStepper({
                   <View
                     style={[
                       styles.connectingLine,
-                      { backgroundColor: stepIndex <= currentStep ? "#f26a0f" : "#e5e7eb" },
+                      { backgroundColor: stepIndex <= currentStep ? "#f87000" : "#e5e7eb" },
                     ]}
                   />
                 ) : null}
@@ -63,7 +63,7 @@ export function OnboardingStepper({
                   <View
                     style={[
                       styles.connectingLine,
-                      { backgroundColor: stepIndex < currentStep ? "#f26a0f" : "#e5e7eb" },
+                      { backgroundColor: stepIndex < currentStep ? "#f87000" : "#e5e7eb" },
                     ]}
                   />
                 ) : null}
@@ -72,7 +72,7 @@ export function OnboardingStepper({
           })}
         </View>
       ) : (
-        /* Segmented 4-Pill Bar Variant (Screens 4-6) */
+        /* Segmented 4-Pill Bar Variant (Matching Design Spec) */
         <View style={styles.segmentedRow}>
           {steps.map((stepIndex) => (
             <View
@@ -80,7 +80,7 @@ export function OnboardingStepper({
               style={[
                 styles.segmentBar,
                 {
-                  backgroundColor: stepIndex <= currentStep ? "#f26a0f" : "#e5e7eb",
+                  backgroundColor: stepIndex <= currentStep ? "#f87000" : "#d1d5db",
                 },
               ]}
             />
@@ -88,10 +88,10 @@ export function OnboardingStepper({
         </View>
       )}
 
-      {/* Step Caption (e.g. Step 1 of 4 • About you) */}
+      {/* Step Caption (e.g. Step 1 of 4 · About you) */}
       <View style={styles.captionRow}>
         <Text style={styles.captionText}>
-          Step {currentStep + 1} of {totalSteps} • {stepLabel}
+          Step {currentStep + 1} of {totalSteps} · {stepLabel}
         </Text>
       </View>
     </View>
@@ -104,8 +104,8 @@ const styles = StyleSheet.create({
     maxWidth: 672,
     alignSelf: "center",
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   circlesRow: {
     flexDirection: "row",
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   circleNodeActive: {
-    backgroundColor: "#f26a0f",
+    backgroundColor: "#f87000",
   },
   circleNodeInactive: {
     backgroundColor: "#f3f4f6",
@@ -159,15 +159,15 @@ const styles = StyleSheet.create({
   },
   segmentBar: {
     flex: 1,
-    height: 4.5,
+    height: 5,
     borderRadius: 9999,
   },
   captionRow: {
-    marginTop: 4,
+    marginTop: 6,
   },
   captionText: {
     fontSize: 13.5,
-    color: "#6b7280",
+    color: "#64748b",
     fontWeight: "500",
   },
 });

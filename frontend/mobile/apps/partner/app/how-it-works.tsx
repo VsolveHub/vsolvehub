@@ -1,4 +1,4 @@
-import { Text } from "@vsolve/mobile-ui";
+﻿import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
@@ -22,6 +22,8 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform, StatusBar } from "react-native";
 import { MarketingHeader } from "../src/components/marketing-header";
 import { MarketingFooter } from "../src/components/marketing-footer";
 
@@ -130,6 +132,9 @@ export default function HowItWorksScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight ?? 16));
+  const heroPaddingTop = isDesktop ? 128 : topInset + 80;
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const toggleFaq = (idx: number) => {
@@ -142,7 +147,7 @@ export default function HowItWorksScreen() {
       <MarketingHeader activeTab="how-it-works" />
 
       {/* Hero Header */}
-      <View className="px-5 pt-24 pb-8 sm:pt-28 sm:pb-14">
+      <View className="px-5 pb-8 sm:pb-14" style={{ paddingTop: heroPaddingTop }}>
         <View className="mx-auto w-full max-w-4xl items-center text-center">
           <View className="flex-row items-center gap-1.5 rounded-full bg-orange-50 px-3.5 py-1 border border-orange-200 shadow-xs">
             <Sparkles size={14} color="#ea580c" />
