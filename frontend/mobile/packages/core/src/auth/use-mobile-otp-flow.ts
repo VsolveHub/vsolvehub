@@ -160,11 +160,19 @@ export function useMobileOtpFlow(options?: { intendedRole?: "partner" }): Mobile
           setChallengeId(null);
           setDevelopmentCode(null);
         } catch (error) {
-          if (error instanceof ApiRequestError && error.status === 400) {
+          const codeFieldError =
+            error instanceof ApiRequestError ? (error.fieldErrors.code?.[0] ?? null) : null;
+          if (codeFieldError) {
+            setCodeError(codeFieldError);
+          } else if (error instanceof ApiRequestError && error.code.toLowerCase() === "invalid_otp") {
+            // Django answers `invalid_otp` for a wrong, expired and locked-out code alike.
             setCodeError(
               "That code is not right, or it has expired. Check the code, or request a new one.",
             );
           } else {
+            // Any other 400 is about something the app sent (once, an over-long
+            // `device_label`), not the code the person typed. Calling it a wrong code
+            // sends them round in circles re-entering a correct one.
             setFailure(describeOtpFailure(error));
           }
         } finally {

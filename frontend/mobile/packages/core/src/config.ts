@@ -44,7 +44,13 @@ export function apiBaseUrl(): string {
         hostname === "127.0.0.1" ||
         /^192\.168\.\d+\.\d+$|^10\.\d+\.\d+\.\d+$|^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(hostname)
       ) {
-        return rawUrl.replace(/^(https?:\/\/)([^:/]+)(:\d+)?/, `$1${hostname}$3`);
+        // `localhost` goes to 127.0.0.1, never to `localhost`. Browsers resolve `localhost` to
+        // the IPv6 `::1` first, while `runserver 0.0.0.0:8000` listens on IPv4 only, so the
+        // call can reach another program on [::1]:8000 and fail as ERR_EMPTY_RESPONSE. The
+        // different host is safe: the app authenticates with a bearer token, not cookies, and
+        // local settings allow the http://localhost:8081 origin.
+        const apiHost = hostname === "localhost" ? "127.0.0.1" : hostname;
+        return rawUrl.replace(/^(https?:\/\/)([^:/]+)(:\d+)?/, `$1${apiHost}$3`);
       }
     }
     return rawUrl;

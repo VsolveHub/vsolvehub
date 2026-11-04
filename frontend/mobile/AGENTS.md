@@ -188,6 +188,12 @@ frontend/mobile/
 - Accessibility: every pressable has `accessibilityRole` and `accessibilityLabel` where the web
   has an `aria-label`. Status is never colour alone, as on web.
 - Light theme only (web is light only). Set `userInterfaceStyle: "light"`.
+- **Never give a `Pressable` a function `style` (`style={({ pressed }) => …}`) under NativeWind.**
+  On iOS/Android NativeWind replaces a function style with an empty one, so the element renders
+  unstyled (white text on white: invisible). It still looks right in the browser, so the bug
+  only shows on a phone. Use `className` with `active:` variants instead. If you must keep a
+  `StyleSheet` function style, add `cssInterop={false}` to that `Pressable` (and then it cannot
+  take `className`).
 
 ---
 

@@ -1,31 +1,27 @@
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { request } from "@vsolve/api-client";
 
 import { getApiClient } from "../api/client";
 import { appKind, type AppKind } from "../config";
 import { kvGet, kvRemove, kvSet } from "../storage/kv";
+import { getNotifications } from "./notifications-module";
 
 const PUSH_TOKEN_KEY = "expo-push-token";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 
 export async function readRegisteredPushToken(): Promise<string | null> {
   return kvGet(PUSH_TOKEN_KEY);
 }
 
-/** Permission once, then register the Expo token. A no-op in the browser and on a simulator. */
+/**
+ * Permission once, then register the Expo token. A no-op in the browser, on a simulator and in
+ * Expo Go on Android (no push there since SDK 53).
+ */
 export async function registerForPush(options?: { appKind?: AppKind }): Promise<string | null> {
   if (Platform.OS === "web" || !Device.isDevice) return null;
+  const Notifications = getNotifications();
+  if (Notifications === null) return null;
   const current = await Notifications.getPermissionsAsync();
   const permission =
     current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
@@ -79,5 +75,5 @@ export async function unregisterPush(): Promise<void> {
 }
 
 export function isPushSupported(): boolean {
-  return Platform.OS !== "web" && Device.isDevice;
+  return Platform.OS !== "web" && Device.isDevice && getNotifications() !== null;
 }

@@ -11,7 +11,7 @@ import {
 import { SESSION_STATE } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient, sha256OfFile, uploadToSignedUrl } from "@vsolve/mobile-core";
+import { describeLocalFile, getApiClient, uploadToSignedUrl } from "@vsolve/mobile-core";
 import { registrationKeys } from "@/features/capability/queries";
 import { isUploadExpired, type UploadProgress } from "@/features/application/model/upload";
 import type {
@@ -255,7 +255,8 @@ export function useUploadCrewDocument() {
       const report = (progress: UploadProgress) => input.onProgress?.(progress);
 
       report({ phase: "hashing", percent: 0 });
-      const sha256 = await sha256OfFile(input.file.uri);
+      // Size and digest both come from the bytes on disk, so they describe exactly what is sent.
+      const facts = await describeLocalFile(input.file.uri);
 
       report({ phase: "requesting", percent: 0 });
       const grant = await request(() =>
@@ -264,8 +265,8 @@ export function useUploadCrewDocument() {
           body: {
             kind: input.kind,
             content_type: input.file.mimeType,
-            size_bytes: input.file.size,
-            sha256,
+            size_bytes: facts.sizeBytes,
+            sha256: facts.sha256,
           },
         }),
       );

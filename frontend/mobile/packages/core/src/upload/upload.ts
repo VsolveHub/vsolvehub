@@ -1,12 +1,38 @@
-import * as Crypto from "expo-crypto";
+import { File, UploadType } from "expo-file-system";
 
-export async function sha256OfFile(uri: string): Promise<string> {
-  const response = await fetch(uri);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+/**
+ * Phone uploads read the picked file straight from disk with `expo-file-system`.
+ *
+ * Never `fetch(uri)` a local file here. Expo's Android `fetch` takes the path out of a `file://`
+ * URL without decoding it, and Expo Go keeps picked files under a percent-encoded folder
+ * (`…/%2540anonymous%252F…/ImagePicker/…`). The lookup misses and the response is a 404 whose
+ * body is the 14 bytes `File not found`. Those bytes were then hashed and uploaded in place of
+ * the photo, and Django refused every document as `partner_document_upload_invalid`.
+ */
+
+/** What Django is told about a file before it is sent: both measured from the bytes on disk. */
+export interface LocalFileFacts {
+  sizeBytes: number;
+  sha256: string;
+}
+
+export class LocalFileUnreadableError extends Error {
+  constructor() {
+    super("We could not read that file from your phone. Choose it again.");
+    this.name = "LocalFileUnreadableError";
+  }
+}
+
+function openPicked(uri: string): File {
+  const file = new File(uri);
+  if (!file.exists) throw new LocalFileUnreadableError();
+  return file;
+}
+
+/** Size and lowercase-hex SHA-256 of a picked file, read from disk by the native module. */
+export async function describeLocalFile(uri: string): Promise<LocalFileFacts> {
+  const file = openPicked(uri);
+  return { sizeBytes: file.size, sha256: await file.digest("SHA-256") };
 }
 
 export interface SignedUpload {
@@ -16,25 +42,18 @@ export interface SignedUpload {
   onProgress?: (fraction: number) => void;
 }
 
-/** PUT the file bytes to a signed URL and report progress the way the web upload does. */
-export function uploadToSignedUrl(upload: SignedUpload): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", upload.url);
-    xhr.setRequestHeader("Content-Type", upload.contentType);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && upload.onProgress) {
-        upload.onProgress(event.loaded / event.total);
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`Upload failed with status ${xhr.status}.`));
-    };
-    xhr.onerror = () => reject(new Error("Upload failed before a response arrived."));
-    void fetch(upload.uri)
-      .then((response) => response.blob())
-      .then((blob) => xhr.send(blob))
-      .catch(reject);
+/** PUT the file's bytes to a signed URL natively, reporting progress. Resolves on a 2xx only. */
+export async function uploadToSignedUrl(upload: SignedUpload): Promise<void> {
+  const file = openPicked(upload.uri);
+  const result = await file.upload(upload.url, {
+    httpMethod: "PUT",
+    uploadType: UploadType.BINARY_CONTENT,
+    headers: { "Content-Type": upload.contentType },
+    onProgress: ({ bytesSent, totalBytes }) => {
+      if (totalBytes > 0) upload.onProgress?.(bytesSent / totalBytes);
+    },
   });
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Upload failed with status ${result.status}.`);
+  }
 }

@@ -90,7 +90,7 @@ export function MarketingHeader({
         >
           {/* Brand & Live Demand Tag */}
           <View style={{ flexDirection: "row", alignItems: "center", columnGap: isTabletOrDesktop ? 12 : 10 }}>
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="V Solve Hub Home"
               onPress={() => router.push("/")}
@@ -181,7 +181,7 @@ export function MarketingHeader({
               {NAV_ITEMS.map((item) => {
                 const isActive = activeTab === item.key;
                 return (
-                  <Pressable
+                  <Pressable cssInterop={false}
                     key={item.key}
                     accessibilityRole="button"
                     accessibilityLabel={item.label}
@@ -224,7 +224,7 @@ export function MarketingHeader({
           <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8 }}>
             {/* Sign In link (hidden sm:inline-flex -> visible width >= 640) */}
             {isTabletOrDesktop ? (
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Sign In"
                 onPress={() => router.push("/login")}
@@ -254,7 +254,7 @@ export function MarketingHeader({
             ) : null}
 
             {/* Become a Partner Primary Gradient Button */}
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel={isTabletOrDesktop ? "Become a Partner" : "Join"}
               onPress={() => router.push("/apply")}
@@ -303,7 +303,7 @@ export function MarketingHeader({
 
             {/* Mobile Hamburger Button (lg:hidden -> width < 1024) */}
             {!isDesktop ? (
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Open navigation menu"
                 onPress={() => setDrawerOpen(true)}
@@ -390,7 +390,7 @@ export function MarketingHeader({
               >
                 <Logo />
               </Pressable>
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityLabel="Close menu"
                 onPress={() => setDrawerOpen(false)}
                 style={({ pressed }) => ({
@@ -469,7 +469,7 @@ export function MarketingHeader({
                   {NAV_ITEMS.map((item) => {
                     const isActive = activeTab === item.key;
                     return (
-                      <Pressable
+                      <Pressable cssInterop={false}
                         key={item.key}
                         onPress={() => {
                           setDrawerOpen(false);
@@ -509,7 +509,7 @@ export function MarketingHeader({
               {/* Action CTAs & Support footer at bottom of drawer */}
               <View style={{ marginTop: "auto", paddingTop: 16, borderTopWidth: 1, borderColor: "#e7e2da", rowGap: 10 }}>
                 {/* Become a Partner */}
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="button"
                   onPress={() => {
                     setDrawerOpen(false);
@@ -553,7 +553,7 @@ export function MarketingHeader({
                 </Pressable>
 
                 {/* Sign In to Account */}
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="button"
                   onPress={() => {
                     setDrawerOpen(false);

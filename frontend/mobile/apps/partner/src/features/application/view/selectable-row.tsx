@@ -17,7 +17,7 @@ export function SelectableRow({
   caption?: string;
 }) {
   return (
-    <Pressable
+    <Pressable cssInterop={false}
       accessibilityRole="checkbox"
       accessibilityState={{ checked, disabled }}
       disabled={disabled}

@@ -17,10 +17,13 @@ export { getMobileQueryClient, bindAppStateFocus, bindNetworkOnline } from "./qu
 export { MobileQueryProvider } from "./query/provider";
 
 export { registerForPush, unregisterPush, readRegisteredPushToken, isPushSupported } from "./push/register";
+export { getNotifications, notificationsUnavailable } from "./push/notifications-module";
+export type { NotificationsModule } from "./push/notifications-module";
 export { routePushData } from "./push/routing";
 export type { PushData, PushTarget } from "./push/routing";
 
-export { sha256OfFile, uploadToSignedUrl } from "./upload/upload";
+export { describeLocalFile, LocalFileUnreadableError, uploadToSignedUrl } from "./upload/upload";
+export type { LocalFileFacts } from "./upload/upload";
 export type { SignedUpload } from "./upload/upload";
 
 export { RazorpayCheckout } from "./payments/RazorpayCheckout";

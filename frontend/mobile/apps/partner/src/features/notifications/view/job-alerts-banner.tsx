@@ -1,4 +1,4 @@
-import * as Notifications from "expo-notifications";
+import { getNotifications } from "@vsolve/mobile-core";
 import { Button, COLOR_TOKENS, Text, useT } from "@vsolve/mobile-ui";
 import { Bell, Sparkles, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -6,11 +6,18 @@ import { Platform, Pressable, View } from "react-native";
 
 export function JobAlertsBanner() {
   if (Platform.OS === "web") return null;
+  return <NativeJobAlertsBanner />;
+}
+
+function NativeJobAlertsBanner() {
   const t = useT();
   const [granted, setGranted] = useState(true);
   const [dismissed, setDismissed] = useState(false);
+  // Null in Expo Go on Android: there is no push there, so there is nothing to switch on.
+  const Notifications = getNotifications();
 
   useEffect(() => {
+    if (Notifications === null) return;
     let mounted = true;
     void Notifications.getPermissionsAsync().then((settings) => {
       if (mounted) {
@@ -20,9 +27,9 @@ export function JobAlertsBanner() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [Notifications]);
 
-  if (granted || dismissed) return null;
+  if (Notifications === null || granted || dismissed) return null;
 
   const handleRequest = async () => {
     const next = await Notifications.requestPermissionsAsync({
