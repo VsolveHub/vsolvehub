@@ -515,44 +515,81 @@ export function StayHome() {
         )}
 
         {/* Bottom Quick Action CTAs */}
-        <View style={styles.actionButtonsRow}>
+        <View className="mt-6 flex-row flex-wrap items-center gap-3">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Manage rooms"
             onPress={() => router.push("/stays" as any)}
-            style={({ pressed }) => [
-              styles.manageRoomsButton,
-              pressed ? { opacity: 0.9 } : null,
-            ]}
+            className="flex-row items-center gap-2 rounded-2xl bg-[#f87000] px-5 py-3.5 shadow-sm active:opacity-90"
+            style={{
+              backgroundColor: "#f87000",
+              borderRadius: 14,
+              paddingHorizontal: 20,
+              paddingVertical: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
           >
-            <BedDouble size={18} color="#ffffff" />
-            <Text style={styles.manageRoomsButtonText}>Manage rooms</Text>
+            <BedDouble size={18} color="#ffffff" strokeWidth={2.4} />
+            <Text
+              className="text-sm font-bold text-white"
+              style={{ color: "#ffffff", fontSize: 14, fontWeight: "700" }}
+            >
+              Manage rooms
+            </Text>
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View enquiries"
             onPress={() => router.push("/stays/enquiries" as any)}
-            style={({ pressed }) => [
-              styles.outlineActionButton,
-              pressed ? { backgroundColor: "#f8fafc" } : null,
-            ]}
+            className="flex-row items-center gap-1.5 rounded-2xl border border-slate-300 bg-white px-5 py-3.5 shadow-sm active:bg-slate-50"
+            style={{
+              backgroundColor: "#ffffff",
+              borderWidth: 1.5,
+              borderColor: "#cbd5e1",
+              borderRadius: 14,
+              paddingHorizontal: 20,
+              paddingVertical: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+            }}
           >
-            <Text style={styles.outlineActionButtonText}>Enquiries →</Text>
+            <Text
+              className="text-sm font-bold text-navy-900"
+              style={{ color: "#00112e", fontSize: 14, fontWeight: "700" }}
+            >
+              Enquiries →
+            </Text>
           </Pressable>
         </View>
 
-        <View style={{ marginTop: 10, alignSelf: "flex-start" }}>
+        <View className="mt-3 self-start">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View visits"
             onPress={() => router.push("/stays/visits" as any)}
-            style={({ pressed }) => [
-              styles.outlineActionButton,
-              pressed ? { backgroundColor: "#f8fafc" } : null,
-            ]}
+            className="flex-row items-center gap-1.5 rounded-2xl border border-slate-300 bg-white px-5 py-3.5 shadow-sm active:bg-slate-50"
+            style={{
+              backgroundColor: "#ffffff",
+              borderWidth: 1.5,
+              borderColor: "#cbd5e1",
+              borderRadius: 14,
+              paddingHorizontal: 20,
+              paddingVertical: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+            }}
           >
-            <Text style={styles.outlineActionButtonText}>Visits →</Text>
+            <Text
+              className="text-sm font-bold text-navy-900"
+              style={{ color: "#00112e", fontSize: 14, fontWeight: "700" }}
+            >
+              Visits →
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -566,7 +603,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#00112e",
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
   darkHero: {
     backgroundColor: "#00112e",
