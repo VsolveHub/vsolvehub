@@ -9,7 +9,8 @@ import { type ElementRef, useEffect, useRef, useState } from "react";
 import { DeviceEventEmitter, Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { LOCAL_CATEGORY_TILES, getCategoryFallbackIcon, resolveImageUrl } from "@/features/catalog/category-artwork";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
+import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import { useCatalogIndex, useCategories, usePromoBanners, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { bookingModeLabel, rankCatalogMatches } from "@/features/catalog/search";
@@ -218,7 +219,6 @@ function CategoryRows({ categories, isDesktop }: { categories: Category[]; isDes
               >
                 <TilePhoto
                   imageUrl={subcategory.image_url}
-                  slug={subcategory.slug}
                   iconKey={subcategory.icon_key}
                   isDesktop={isDesktop}
                 />
@@ -243,35 +243,17 @@ function CategoryRows({ categories, isDesktop }: { categories: Category[]; isDes
 
 function TilePhoto({
   imageUrl,
-  slug,
   iconKey,
   isDesktop = false,
 }: {
   imageUrl: string;
-  slug?: string;
   iconKey?: string;
   isDesktop?: boolean;
 }) {
   const [loadError, setLoadError] = useState(false);
-  const localAsset = slug ? LOCAL_CATEGORY_TILES[slug] : null;
-
-  if (localAsset) {
-    return (
-      <View
-        className={
-          isDesktop
-            ? "aspect-square w-full items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC] border border-[#e7e2da]/70 shadow-xs hover:border-[#EA580C] hover:bg-[#FFF8F3]"
-            : "aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]"
-        }
-      >
-        <Image source={localAsset} contentFit="contain" style={{ width: "74%", height: "74%" }} />
-      </View>
-    );
-  }
-
   const resolved = resolveImageUrl(imageUrl);
   const isCover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
-  const FallbackIcon = getCategoryFallbackIcon(slug, iconKey);
+  const FallbackIcon = iconForService(iconKey || "service");
 
   return (
     <View

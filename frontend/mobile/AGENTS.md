@@ -194,6 +194,11 @@ frontend/mobile/
   only shows on a phone. Use `className` with `active:` variants instead. If you must keep a
   `StyleSheet` function style, add `cssInterop={false}` to that `Pressable` (and then it cannot
   take `className`).
+- **Never bundle a copy of data the API serves** (catalogue photos, category or service
+  lists, prices, reward amounts, support numbers). Render what the API returns, exactly as
+  the web does, and show the web's empty state when a value is missing. A bundled copy
+  drifts from the web and can only change with an app release. Never substitute stock
+  photos (Unsplash) or invented values for a missing one.
 - **A bundled image's contents must match its extension.** Photos are `.jpg`, art with
   transparency is `.png`. Android's release build (AAPT2) rejects a JPEG named `.png` ("file does
   not start with PNG signature") and the EAS build fails, while Expo Go, Metro and the browser
