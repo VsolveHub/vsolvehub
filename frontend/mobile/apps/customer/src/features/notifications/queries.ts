@@ -11,6 +11,14 @@ import {
 import { getApiClient } from "@vsolve/mobile-core";
 
 /**
+ * The side of a person this app reads (contract 1.95.0). One person can be a
+ * Customer and a Partner; this app shows only their customer notices, never
+ * their partner ones. Every read and the mark-read command send it, so the
+ * badge, the list and "mark all read" all cover the same notices.
+ */
+export const NOTIFICATION_AUDIENCE = { audience: "customer" } as const;
+
+/**
  * The in-app notification bell — contract 1.34.0.
  *
  * Three calls: a count every authenticated screen holds open, a feed read when
@@ -96,7 +104,12 @@ export function isNotificationNotFound(error: unknown): boolean {
 export function useUnreadNotificationCount(enabled = true) {
   return useQuery({
     queryKey: m2QueryKeys.notifications.unreadCount(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/unread-count/")),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/notifications/unread-count/", {
+          params: { query: NOTIFICATION_AUDIENCE },
+        }),
+      ),
     enabled,
     ...M2_FRESHNESS.notificationCount,
     // See the module header: a feed is never settled, so `boundedPoll` and its
@@ -127,7 +140,12 @@ export function useNotificationFeed(enabled = true) {
     queryFn: async ({ pageParam }) => {
       const page = await request(() =>
         getApiClient().GET("/api/v1/notifications/", {
-          params: { query: { ...(pageParam ? { cursor: pageParam } : {}) } },
+          params: {
+            query: {
+              ...NOTIFICATION_AUDIENCE,
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
         }),
       );
       cursorFromNextUrl(page.next);
@@ -201,6 +219,7 @@ export function useMarkNotificationRead() {
     mutationFn: (input: MarkNotificationReadInput) =>
       request(() =>
         getApiClient().POST("/api/v1/notifications/read/", {
+          params: { query: NOTIFICATION_AUDIENCE },
           body: input.all
             ? { all: true }
             : { all: false, notification_id: input.notificationId },

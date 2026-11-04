@@ -1,5 +1,17 @@
 # API Contract Changelog
 
+## 1.95.0 - Each app reads only its own side's notifications
+
+Additive. One person can be a Customer and a Partner; until now the customer app's bell also
+showed their partner notices.
+
+- **Added** optional query parameter `audience` (`customer` | `partner` | `operations`) on
+  `GET /notifications/`, `GET /notifications/unread-count/` and `POST /notifications/read/`. The
+  app names its own side; the feed, the badge and "mark all read" then cover only that side.
+  Left out, the session's active role decides (customer when the session has none). Any other
+  value is `400 validation_error`.
+- Removed: none. Renamed: none.
+
 ## 1.94.0 - Firebase sign-in for the apps, and address search
 
 Additive.

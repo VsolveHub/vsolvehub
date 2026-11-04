@@ -102,7 +102,9 @@ describe("the unread count", () => {
     const { result } = renderHook(() => useUnreadNotificationCount(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/unread-count/");
+    expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/unread-count/", {
+      params: { query: { audience: "customer" } },
+    });
     expect(result.current.data).toEqual({ unread: 3 });
   });
 
@@ -161,7 +163,7 @@ describe("the feed", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/", {
-      params: { query: {} },
+      params: { query: { audience: "customer" } },
     });
   });
 
@@ -185,7 +187,7 @@ describe("the feed", () => {
     await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
 
     expect(client.GET).toHaveBeenNthCalledWith(2, "/api/v1/notifications/", {
-      params: { query: { cursor: "opaque-page-2" } },
+      params: { query: { audience: "customer", cursor: "opaque-page-2" } },
     });
     expect(
       result.current.data?.pages.flatMap((page) => page.results).map((row) => row.id),
@@ -215,6 +217,8 @@ describe("marking one notice read", () => {
     await waitFor(() => expect(client.POST).toHaveBeenCalled());
     const [path, init] = client.POST.mock.calls[0]!;
     expect(path).toBe("/api/v1/notifications/read/");
+    // The customer app marks only its own side read (contract 1.95.0).
+    expect(init.params).toEqual({ query: { audience: "customer" } });
     // `all` is required on the request schema, so it is sent rather than left to
     // a default the contract does not promise.
     expect(init.body).toEqual({ all: false, notification_id: "note-1" });

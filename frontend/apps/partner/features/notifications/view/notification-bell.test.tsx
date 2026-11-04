@@ -282,6 +282,7 @@ describe("marking things read", () => {
 
     await waitFor(() =>
       expect(client.POST).toHaveBeenCalledWith("/api/v1/notifications/read/", {
+        params: { query: { audience: "partner" } },
         body: { all: true },
       }),
     );
@@ -305,6 +306,7 @@ describe("marking things read", () => {
 
     await waitFor(() =>
       expect(client.POST).toHaveBeenCalledWith("/api/v1/notifications/read/", {
+        params: { query: { audience: "partner" } },
         body: { notification_id: "note-1", all: false },
       }),
     );

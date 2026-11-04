@@ -151,6 +151,7 @@ def _notify_lost_commitments(group: BookingGroup, *, terminal_status: str) -> No
             recipient_id=reservation.partner.user_id,
             purpose="partner.job_cancelled",
             channel="PUSH",
+            audience="PARTNER",
             template_code="partner_job_cancelled",
             context={
                 "fulfilment_unit_id": str(unit.id),
@@ -307,6 +308,7 @@ def _create_offer(
         recipient_id=candidate.user_id,
         purpose="partner.offer_created",
         channel="PUSH",
+        audience="PARTNER",
         template_code="partner_offer_created",
         context={
             "offer_id": str(offer.id),
@@ -489,6 +491,7 @@ def directly_assign(*, unit: FulfilmentUnit) -> Reservation | None:
             recipient_id=candidate.user_id,
             purpose="partner.job_assigned",
             channel="PUSH",
+            audience="PARTNER",
             template_code="partner_job_assigned",
             context={
                 "fulfilment_unit_id": str(unit.id),

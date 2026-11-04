@@ -40,6 +40,7 @@ def _request(user: User, key: str) -> NotificationIntent:
         recipient_id=user.id,
         purpose="m2_shift_day",
         channel=NotificationIntent.Channel.EMAIL,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="m2_stage_awaiting_review",
         context={},
         idempotency_key=key,

@@ -174,6 +174,7 @@ def _notify_application_event(
                 recipient_id=application.partner.user_id,
                 purpose=purpose,
                 channel=NotificationIntent.Channel.IN_APP,
+                audience=NotificationIntent.Audience.PARTNER,
                 template_code=template_code,
                 context=context or {},
                 idempotency_key=idempotency_key,

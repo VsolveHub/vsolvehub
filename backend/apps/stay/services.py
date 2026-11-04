@@ -1125,6 +1125,11 @@ def _notify_enquiry(
             recipient_id=recipient_id,
             purpose=purpose,
             channel=NotificationIntent.Channel.IN_APP,
+            audience=(
+                NotificationIntent.Audience.PARTNER
+                if to_host
+                else NotificationIntent.Audience.CUSTOMER
+            ),
             template_code=template_code,
             context={
                 "property_title": prop.title,
@@ -1490,6 +1495,7 @@ def respond_enquiry(
             resp_time = enquiry.responded_at.isoformat() if enquiry.responded_at else "1"
             request_notification(
                 recipient_id=enquiry.customer_id,
+                audience=NotificationIntent.Audience.CUSTOMER,
                 purpose="stay.enquiry.responded",
                 channel=NotificationIntent.Channel.IN_APP,
                 template_code="stay_enquiry_responded",

@@ -82,16 +82,35 @@ def unregister_device(*, user: User, expo_push_token: str) -> None:
     ).update(disabled_at=timezone.now(), disabled_reason="unregistered")
 
 
-def active_devices_for(user: User) -> list[PushDevice]:
+#: The phone app that shows each side's notices. Operations has no phone app, and a row with no
+#: audience (written before audiences were recorded) cannot be placed, so neither is pushed.
+_AUDIENCE_APPS: dict[str, str] = {
+    NotificationIntent.Audience.CUSTOMER: PushDevice.App.CUSTOMER,
+    NotificationIntent.Audience.PARTNER: PushDevice.App.PARTNER,
+}
+
+
+def active_devices_for(user: User, *, app: str) -> list[PushDevice]:
+    """This person's signed-in installations of one app.
+
+    One person can have the customer app and the partner app on the same phone, signed in as
+    the same account; a partner job offer must reach only the partner app.
+    """
     now = timezone.now()
     return list(
         PushDevice.objects.filter(
             user=user,
+            app=app,
             disabled_at__isnull=True,
             session__revoked_at__isnull=True,
             session__expires_at__gt=now,
         )
     )
+
+
+def _devices_for_intent(intent: NotificationIntent) -> list[PushDevice]:
+    app = _AUDIENCE_APPS.get(intent.audience)
+    return active_devices_for(intent.recipient, app=app) if app else []
 
 
 def _message(
@@ -160,7 +179,7 @@ def deliver_push_intent(*, intent_id: UUID) -> None:
     copy = render_push_template(template_code=intent.template_code, context=intent.context)
     devices = [
         device
-        for device in active_devices_for(intent.recipient)
+        for device in _devices_for_intent(intent)
         if not PushTicket.objects.filter(intent=intent, device=device).exists()
     ]
     if not devices:
@@ -223,7 +242,7 @@ def mirror_in_app_notice(*, intent_id: UUID) -> None:
         return
     if PushTicket.objects.filter(intent=intent).exists():
         return
-    devices = active_devices_for(intent.recipient)
+    devices = _devices_for_intent(intent)
     if not devices:
         return
     try:

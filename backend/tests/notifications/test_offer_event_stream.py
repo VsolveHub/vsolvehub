@@ -124,6 +124,7 @@ def _offer_notice(*, partner: PartnerProfile, invitation: VendorInvitation, key:
         recipient_id=partner.user_id,
         purpose="m2.invitation.received",
         channel=NotificationIntent.Channel.IN_APP,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="m2_invitation_received",
         context={"target_kind": "WORKFORCE_INVITATION", "target_id": str(invitation.id)},
         idempotency_key=key,

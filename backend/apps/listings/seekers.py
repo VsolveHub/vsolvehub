@@ -247,6 +247,7 @@ def quick_apply(
     )
     _notify(
         recipient_id=listing.poster.user_id,
+        audience="PARTNER",
         template_code="job_application_received",
         purpose="jobs.application.received",
         key=f"job-applied:{application.id}",
@@ -409,6 +410,7 @@ def invite_to_apply(*, listing: Listing, profile: JobSeekerProfile) -> None:
         raise ListingStateError("This person only shares their profile when they apply.")
     _notify(
         recipient_id=profile.user_id,
+        audience="CUSTOMER",
         template_code="job_invite",
         purpose="jobs.invite",
         key=f"job-invite:{listing.id}:{profile.id}",
@@ -434,6 +436,7 @@ def notify_new_job_matches(listing: Listing) -> int:
             continue
         _notify(
             recipient_id=profile.user_id,
+            audience="CUSTOMER",
             template_code="job_match_new",
             purpose="jobs.match.new",
             key=f"job-match:{listing.id}:{profile.id}",
@@ -478,6 +481,7 @@ def send_candidate_digests() -> int:
     for poster_id, profile_ids in per_poster.items():
         _notify(
             recipient_id=users[poster_id],
+            audience="PARTNER",
             template_code="job_candidates_digest",
             purpose="jobs.candidates.digest",
             key=f"job-digest:{poster_id}:{today}",
@@ -487,13 +491,22 @@ def send_candidate_digests() -> int:
 
 
 def _notify(
-    *, recipient_id: Any, template_code: str, purpose: str, key: str, context: dict[str, str]
+    *,
+    recipient_id: Any,
+    audience: str,
+    template_code: str,
+    purpose: str,
+    key: str,
+    context: dict[str, str],
 ) -> None:
+    """One jobs notice. The employer (a Partner) and the job seeker (a Customer) can be the same
+    person, so each caller says which side it is speaking to."""
     try:
         request_notification(
             recipient_id=recipient_id,
             purpose=purpose,
             channel=NotificationIntent.Channel.IN_APP,
+            audience=audience,
             template_code=template_code,
             context=context,
             idempotency_key=key,

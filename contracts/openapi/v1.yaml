@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.94.0
+  version: 1.95.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -6377,6 +6377,19 @@ paths:
         which is the same reasoning that keeps `partner_id` off the partner ledger.
       parameters:
       - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
+      - in: query
         name: cursor
         schema:
           type: string
@@ -6412,6 +6425,20 @@ paths:
 
         `ThrottledWriteMixin` exempts safe methods, so mounting a scope here costs the polled reads
         above nothing while still bounding a script hammering the write.
+      parameters:
+      - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
       tags:
       - Notifications
       requestBody:
@@ -6461,6 +6488,20 @@ paths:
         Its own endpoint rather than a field on the feed page, because the badge is polled on every
         authenticated screen and the feed is read only when somebody opens the panel. Making the cheap
         question carry the expensive answer is how a poll becomes a page fetch every few seconds.
+      parameters:
+      - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
       tags:
       - Notifications
       security:
@@ -6471,6 +6512,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnreadNotificationCount'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:

@@ -7,6 +7,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@vsolve/mobile-core";
 
 /**
+ * The side of a person this app reads (contract 1.95.0). One person can be a
+ * Customer and a Partner; this app shows only their partner notices, never
+ * their customer ones. Every read and the mark-read command send it, so the
+ * badge, the list and "mark all read" all cover the same notices.
+ */
+export const NOTIFICATION_AUDIENCE = { audience: "partner" } as const;
+
+/**
  * The in-app notification feed and its badge (contract 1.34.0).
  *
  * Three reads and one command, all of them user-scoped rather than
@@ -106,7 +114,12 @@ function retryUnlessRefused(failureCount: number, error: unknown): boolean {
 export function useUnreadNotificationCount(enabled = true) {
   return useQuery({
     queryKey: m2QueryKeys.notifications.unreadCount(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/unread-count/")),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/notifications/unread-count/", {
+          params: { query: NOTIFICATION_AUDIENCE },
+        }),
+      ),
     enabled,
     ...M2_FRESHNESS.notificationCount,
     refetchInterval: 60_000,
@@ -140,7 +153,12 @@ export function useUnreadNotificationCount(enabled = true) {
 export function useNotificationFeed(enabled = true) {
   return useQuery({
     queryKey: m2QueryKeys.notifications.feed(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/")),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/notifications/", {
+          params: { query: NOTIFICATION_AUDIENCE },
+        }),
+      ),
     enabled,
     ...M2_FRESHNESS.notificationFeed,
     retry: retryUnlessRefused,
@@ -196,6 +214,7 @@ export function useMarkNotificationRead() {
     mutationFn: (input: MarkNotificationReadInput) =>
       request(() =>
         getApiClient().POST("/api/v1/notifications/read/", {
+          params: { query: NOTIFICATION_AUDIENCE },
           // `all` is required by the serializer at both ends of the union, so the
           // false is sent explicitly rather than left to a default this client
           // cannot see.

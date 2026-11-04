@@ -594,6 +594,7 @@ def test_push_kill_switch_does_not_affect_sms_or_in_app(customer_user: User) -> 
         recipient_id=customer_user.id,
         purpose="booking.downgraded_to_scheduled",
         channel=NotificationIntent.Channel.IN_APP,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="booking_downgraded_to_scheduled",
         context={"booking_id": "123"},
         idempotency_key="in-app-ks-test",

@@ -209,19 +209,8 @@ class OneSignalMessageTransport:
             .strip()
             .upper()
         )
-        if not role:
-            if recipient and (
-                hasattr(recipient, "partner_profile")
-                or PartnerProfile.objects.filter(user=recipient).exists()
-            ):
-                role = "PARTNER"
-            elif recipient:
-                role = "CUSTOMER"
-            else:
-                raise MessageTransportError(
-                    "Unknown or missing recipient role: role must be CUSTOMER or PARTNER"
-                )
-
+        # Never guessed from the recipient: one person can be a Customer and a Partner, and a
+        # guess sends one side's push to the other side's app.
         if role not in ("CUSTOMER", "PARTNER"):
             raise MessageTransportError(f"Unknown or missing recipient role: {role}")
 
@@ -276,6 +265,7 @@ class OneSignalMessageTransport:
                         "recipient": user_recipient,
                         "purpose": notif_purpose,
                         "channel": NotificationIntent.Channel.PUSH,
+                        "audience": role,
                         "template_code": template_code,
                         "context": ctx,
                         "deep_link": notif_deep_link,
@@ -288,6 +278,7 @@ class OneSignalMessageTransport:
                     recipient=user_recipient,
                     purpose=notif_purpose,
                     channel=NotificationIntent.Channel.PUSH,
+                    audience=role,
                     template_code=template_code,
                     context=ctx,
                     deep_link=notif_deep_link,
@@ -366,6 +357,7 @@ class OneSignalMessageTransport:
                         "recipient": user_recipient,
                         "purpose": notif_purpose,
                         "channel": NotificationIntent.Channel.PUSH,
+                        "audience": role,
                         "template_code": template_code,
                         "context": ctx,
                         "deep_link": notif_deep_link,
@@ -378,6 +370,7 @@ class OneSignalMessageTransport:
                     recipient=user_recipient,
                     purpose=notif_purpose,
                     channel=NotificationIntent.Channel.PUSH,
+                    audience=role,
                     template_code=template_code,
                     context=ctx,
                     deep_link=notif_deep_link,
@@ -477,6 +470,7 @@ class OneSignalMessageTransport:
                         "recipient": user_recipient,
                         "purpose": notif_purpose,
                         "channel": NotificationIntent.Channel.PUSH,
+                        "audience": role,
                         "template_code": template_code,
                         "context": ctx,
                         "deep_link": notif_deep_link,
@@ -489,6 +483,7 @@ class OneSignalMessageTransport:
                     recipient=user_recipient,
                     purpose=notif_purpose,
                     channel=NotificationIntent.Channel.PUSH,
+                    audience=role,
                     template_code=template_code,
                     context=ctx,
                     deep_link=notif_deep_link,
@@ -538,6 +533,7 @@ class OneSignalMessageTransport:
                     "recipient": user_recipient,
                     "purpose": notif_purpose,
                     "channel": NotificationIntent.Channel.PUSH,
+                    "audience": role,
                     "template_code": template_code,
                     "context": ctx,
                     "deep_link": notif_deep_link,
@@ -549,6 +545,7 @@ class OneSignalMessageTransport:
                 recipient=user_recipient,
                 purpose=notif_purpose,
                 channel=NotificationIntent.Channel.PUSH,
+                audience=role,
                 template_code=template_code,
                 context=ctx,
                 deep_link=notif_deep_link,

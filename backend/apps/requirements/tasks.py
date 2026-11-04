@@ -675,6 +675,7 @@ def sweep_rate_card_decline_alarm() -> int:
         for recipient_id in recipients:
             request_notification(
                 recipient_id=recipient_id,
+                audience=NotificationIntent.Audience.OPERATIONS,
                 purpose="m2_rate_card_decline_alarm",
                 channel=NotificationIntent.Channel.EMAIL,
                 template_code="m2_rate_card_decline_alarm",

@@ -116,6 +116,19 @@ class NotificationIntent(models.Model):
         #: A kill switch was engaged, or the recipient opted out of this purpose.
         SUPPRESSED = "SUPPRESSED", "Suppressed"
 
+    class Audience(models.TextChoices):
+        """Which side of the platform the notice speaks to.
+
+        One person can be both a Customer and a Partner. Their customer notices belong in the
+        customer app and site, their partner notices in the partner app and site, and the recipient
+        alone cannot tell the two apart. Recorded when the notice is created, by the code that
+        knows which side the recipient is on in that moment.
+        """
+
+        CUSTOMER = "CUSTOMER", "Customer"
+        PARTNER = "PARTNER", "Partner"
+        OPERATIONS = "OPERATIONS", "Operations"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="notification_intents"
@@ -124,6 +137,8 @@ class NotificationIntent(models.Model):
     #: so a Partner who muted marketing still gets told their job was cancelled.
     purpose = models.CharField(max_length=64)
     channel = models.CharField(max_length=8, choices=Channel.choices)
+    #: Blank only on rows written before audiences were recorded; every new row has one.
+    audience = models.CharField(max_length=10, choices=Audience.choices, blank=True, default="")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     template_code = models.CharField(max_length=80)
     #: The values a template needs. Never the rendered message — a rendered body would freeze

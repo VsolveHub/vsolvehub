@@ -161,6 +161,7 @@ def settle_unstaffable_booking(*, booking_id: UUID) -> tuple[Booking, list[Refun
         recipient_id=booking.customer_id,
         purpose="booking.replacement_unavailable",
         channel="PUSH",
+        audience="CUSTOMER",
         template_code="customer_booking_unstaffable",
         context={
             "booking_id": str(booking.id),

@@ -224,6 +224,7 @@ def _send_dispatch_offer_mobile_push(*, offer: Any, devices: list[Any]) -> dict[
             recipient_id=offer.partner.user_id,
             purpose="partner.offer_created",
             channel="PUSH",
+            audience="PARTNER",
             template_code="partner_dispatch_offer",
             context={
                 "offer_id": str(offer.id),
@@ -300,6 +301,7 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
     from django.utils import timezone
 
     from apps.assignments.models import DispatchOffer
+    from apps.mobile.models import PushDevice
     from apps.mobile.services import active_devices_for
     from apps.notifications.models import NotificationDelivery, NotificationIntent
     from apps.notifications.transport import OneSignalMessageTransport
@@ -407,7 +409,9 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
     # the phone too; the Expo path stays off so an offer never arrives twice.
     expo_path_on = getattr(settings, "MOBILE_PUSH_PROVIDER", "") != "onesignal"
     active_mobile_devices = (
-        active_devices_for(partner.user) if partner.user and expo_path_on else []
+        active_devices_for(partner.user, app=PushDevice.App.PARTNER)
+        if partner.user and expo_path_on
+        else []
     )
     send_web_push = True
 
@@ -908,6 +912,7 @@ def reassign_or_downgrade_booking_task(
                     recipient_id=booking.customer_id,
                     purpose="booking.downgraded_to_scheduled",
                     channel=NotificationIntent.Channel.IN_APP,
+                    audience=NotificationIntent.Audience.CUSTOMER,
                     template_code="booking_downgraded_to_scheduled",
                     context={"booking_id": str(booking.id)},
                     idempotency_key=f"downgrade:{booking.id}",

@@ -281,12 +281,17 @@ def request_notification(
     recipient_id: UUID,
     purpose: str,
     channel: str,
+    audience: str,
     template_code: str,
     context: dict[str, Any] | None = None,
     idempotency_key: str = "",
     deep_link: str = "",
 ) -> NotificationIntent:
     """Record the decision to notify somebody. Sending is a separate, later step.
+
+    `audience` is the side of the platform the notice speaks to (`NotificationIntent.Audience`).
+    One person can be a Customer and a Partner, so the recipient alone cannot say which app's
+    feed a notice belongs in; the code that decides to notify always knows.
 
     Suppression is recorded as an intent with a reason rather than as nothing at all. "We chose
     not to send this, because a kill switch was engaged" is a fact an incident review needs; a
@@ -301,6 +306,8 @@ def request_notification(
     that wrote it, never in front of the person reading their feed.
     """
 
+    if audience not in NotificationIntent.Audience.values:
+        raise ValueError(f"Unknown notification audience {audience!r}.")
     if channel == NotificationIntent.Channel.IN_APP:
         assert_template_registered(template_code)
 
@@ -318,6 +325,7 @@ def request_notification(
         recipient=recipient,
         purpose=purpose,
         channel=channel,
+        audience=audience,
         template_code=template_code,
         context=context or {},
         idempotency_key=idempotency_key,

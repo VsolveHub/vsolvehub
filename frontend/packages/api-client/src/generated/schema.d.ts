@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.94.0)
- * Checksum: 127bd26a08037971
+ * Source:   contracts/openapi/v1.yaml (version 1.95.0)
+ * Checksum: 99bec4de08f10ce5
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -26078,6 +26078,12 @@ export interface operations {
     notification_feed_list: {
         parameters: {
             query?: {
+                /**
+                 * @description * `customer` - customer
+                 *     * `partner` - partner
+                 *     * `operations` - operations
+                 */
+                audience?: "customer" | "partner" | "operations";
                 cursor?: string;
             };
             header?: never;
@@ -26114,7 +26120,14 @@ export interface operations {
     };
     notification_mark_read: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description * `customer` - customer
+                 *     * `partner` - partner
+                 *     * `operations` - operations
+                 */
+                audience?: "customer" | "partner" | "operations";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -26164,7 +26177,14 @@ export interface operations {
     };
     notification_unread_count: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description * `customer` - customer
+                 *     * `partner` - partner
+                 *     * `operations` - operations
+                 */
+                audience?: "customer" | "partner" | "operations";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -26177,6 +26197,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadNotificationCount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             403: {

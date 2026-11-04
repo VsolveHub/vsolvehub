@@ -3,6 +3,7 @@
 import re
 from collections.abc import Iterator
 from datetime import timedelta
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,7 @@ def test_a_push_intent_sends_one_ticket_per_active_device() -> None:
         recipient_id=user.id,
         purpose="partner.offer_created",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_offer_created",
         context={"offer_id": "11111111-1111-1111-1111-111111111111"},
     )
@@ -76,6 +78,7 @@ def test_no_device_records_no_registered_device_and_stays_pending() -> None:
         recipient_id=user.id,
         purpose="partner.job_assigned",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_job_assigned",
         context={"fulfilment_unit_id": "22222222-2222-2222-2222-222222222222"},
     )
@@ -95,6 +98,7 @@ def test_a_revoked_session_device_is_skipped() -> None:
         recipient_id=device.user_id,
         purpose="partner.job_cancelled",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_job_cancelled",
         context={"fulfilment_unit_id": "33333333-3333-3333-3333-333333333333"},
     )
@@ -128,6 +132,7 @@ def test_a_provider_timeout_stays_pending_until_the_budget_is_spent(
         recipient_id=user.id,
         purpose="partner.offer_created",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_offer_created",
         context={"offer_id": "44444444-4444-4444-4444-444444444444"},
     )
@@ -147,9 +152,10 @@ def test_an_in_app_notice_is_mirrored_without_another_delivery() -> None:
     user = _user_from_bearer()
     intent = request_notification(
         recipient_id=user.id,
-        purpose="m2.requirement.closed",
+        purpose="m2.proposal.rejected",
         channel=NotificationIntent.Channel.IN_APP,
-        template_code="m2_requirement_closed",
+        audience=NotificationIntent.Audience.PARTNER,
+        template_code="m2_proposal_rejected",
         context={},
     )
     rendered = NotificationSerializer(intent).data
@@ -164,9 +170,10 @@ def test_device_not_registered_disables_the_device(monkeypatch: pytest.MonkeyPat
     user = _user_from_bearer()
     intent = request_notification(
         recipient_id=user.id,
-        purpose="customer_booking_unstaffable",
+        purpose="partner.job_cancelled",
         channel=NotificationIntent.Channel.PUSH,
-        template_code="customer_booking_unstaffable",
+        audience=NotificationIntent.Audience.PARTNER,
+        template_code="partner_job_cancelled",
         context={},
     )
     ticket = PushTicket.objects.get(intent=intent)
@@ -196,6 +203,60 @@ def test_device_not_registered_disables_the_device(monkeypatch: pytest.MonkeyPat
     assert device.disabled_reason == "device_not_registered"
 
 
+CUSTOMER_TOKEN = "ExponentPushToken[customer-phone]"  # noqa: S105
+
+
+def _register_customer_app(token: str) -> None:
+    response = APIClient().post(
+        "/api/v1/mobile/devices/",
+        {
+            "expo_push_token": CUSTOMER_TOKEN,
+            "app": "customer",
+            "platform": "android",
+            "app_version": "1.0.0",
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_a_partner_push_reaches_only_the_partner_app_of_a_dual_role_person() -> None:
+    """Both apps on one phone, signed in as one person: a job offer rings the partner app only."""
+
+    token = _bearer("9876543223")
+    _register(token)
+    _register_customer_app(token)
+    user = PushDevice.objects.get(expo_push_token=TOKEN).user
+    intent = request_notification(
+        recipient_id=user.id,
+        purpose="partner.offer_created",
+        channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
+        template_code="partner_offer_created",
+        context={"offer_id": "66666666-6666-6666-6666-666666666666"},
+    )
+    tickets = PushTicket.objects.filter(intent=intent)
+    assert [ticket.device.app for ticket in tickets] == [PushDevice.App.PARTNER]
+
+
+def test_a_customer_notice_is_mirrored_only_to_the_customer_app() -> None:
+    token = _bearer("9876543224")
+    _register(token)
+    _register_customer_app(token)
+    user = PushDevice.objects.get(expo_push_token=TOKEN).user
+    intent = request_notification(
+        recipient_id=user.id,
+        purpose="m2.requirement.closed",
+        channel=NotificationIntent.Channel.IN_APP,
+        audience=NotificationIntent.Audience.CUSTOMER,
+        template_code="m2_requirement_closed",
+        context={},
+    )
+    tickets = PushTicket.objects.filter(intent=intent)
+    assert [ticket.device.app for ticket in tickets] == [PushDevice.App.CUSTOMER]
+
+
 def test_every_push_template_code_in_the_backend_is_registered() -> None:
     root = Path(__file__).resolve().parents[2] / "apps"
     found: set[str] = set()
@@ -221,6 +282,7 @@ def test_a_retry_does_not_send_twice() -> None:
         recipient_id=user.id,
         purpose="partner.job_assigned",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_job_assigned",
         context={"fulfilment_unit_id": "55555555-5555-5555-5555-555555555555"},
     )
