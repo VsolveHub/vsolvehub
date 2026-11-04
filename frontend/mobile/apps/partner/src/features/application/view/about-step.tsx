@@ -46,6 +46,13 @@ export function AboutStep() {
     }
   }, [draft.experienceYears, isReadOnly, update]);
 
+  // Ensure default track is RENTAL_OWNER for the 4-step mobile flow
+  useEffect(() => {
+    if (!isReadOnly && draft.track !== "RENTAL_OWNER" && draft.track !== "STAY_HOST") {
+      update({ track: "RENTAL_OWNER" });
+    }
+  }, [draft.track, isReadOnly, update]);
+
   const trimmedName = draft.displayName.trim();
   const isNameInvalid = trimmedName.length < 2;
 

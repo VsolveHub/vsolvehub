@@ -32,6 +32,7 @@ export interface ApplicationDraft {
   displayName: string;
   biography: string;
   experienceYears: number;
+  track?: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
   skillCodes: readonly string[];
   serviceVariantIds: readonly string[];
   serviceAreaIds: readonly string[];
@@ -61,6 +62,7 @@ export function draftFromApplication(application: Application | null): Applicati
     displayName: application.display_name,
     biography: application.biography,
     experienceYears: application.experience_years,
+    track: (application.track as any) || undefined,
     skillCodes: [...application.skill_codes],
     serviceVariantIds: [...application.service_variant_ids],
     serviceAreaIds: [...application.service_area_ids],
@@ -108,6 +110,10 @@ export function changedFields(
 
   const displayName = draft.displayName.trim();
   if (displayName !== saved.displayName.trim()) patch.display_name = displayName;
+
+  if (draft.track && draft.track !== saved.track) {
+    patch.track = draft.track;
+  }
 
   const biography = draft.biography.trim();
   if (biography !== saved.biography.trim()) patch.biography = biography;

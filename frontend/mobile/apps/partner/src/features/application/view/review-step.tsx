@@ -1,8 +1,9 @@
-﻿// Ported from frontend/apps/partner/features/application/view/review-step.tsx
+// Ported from frontend/apps/partner/features/application/view/review-step.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
+  AlertCircle,
   Bell,
   CheckCircle2,
   FileCheck2,
@@ -20,12 +21,19 @@ import {
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
 import { useApplyDock } from "../model/dock-context";
 import { canSubmit, isEditable } from "../model/readiness";
-import { describeRefusal, isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
+import {
+  describeRefusal,
+  isVersionConflict,
+  usePartnerApplication,
+  useSubmitApplication,
+  useUpdateApplication,
+} from "../queries";
 
 export function ReviewStep() {
   const router = useRouter();
   const query = usePartnerApplication();
   const submit = useSubmitApplication();
+  const updateApp = useUpdateApplication();
   const { registerDock } = useApplyDock();
 
   // Notification toggle state - starts FALSE so submit button is dark and disabled until turned on
@@ -41,7 +49,6 @@ export function ReviewStep() {
     appStatus === "SUBMITTED" ||
     appStatus === "UNDER_REVIEW" ||
     appStatus === "APPROVED" ||
-    appStatus === "CHANGES_REQUIRED" ||
     appStatus === "REJECTED" ||
     appStatus === "DECLINED";
 
@@ -57,17 +64,35 @@ export function ReviewStep() {
   const refetchRef = useRef(query.refetch);
   refetchRef.current = query.refetch;
 
-  const onCommit = useCallback(() => {
-    submitMutateRef.current(undefined, {
-      onSuccess: () => {
-        void refetchRef.current();
-        router.replace("/apply/status" as any);
-      },
-    });
-  }, [router]);
+  const isSaving = submit.isPending || updateApp.isPending;
+
+  const onCommit = useCallback(async () => {
+    if (isSaving) return;
+    try {
+      const app = query.data;
+      if (app && app.track !== "RENTAL_OWNER" && app.track !== "STAY_HOST") {
+        await updateApp.mutateAsync({
+          expected_version: app.version,
+          track: "RENTAL_OWNER",
+        });
+      }
+      submitMutateRef.current(undefined, {
+        onSuccess: () => {
+          void refetchRef.current();
+          router.replace("/apply/status" as any);
+        },
+      });
+    } catch {
+      // Caught by react-query mutation error state
+    }
+  }, [isSaving, query.data, updateApp, router]);
 
   // Submit button requires both ready AND notificationsEnabled to be turned on
-  const canProceed = ready && notificationsEnabled && !submit.isPending;
+  const canProceed = ready && notificationsEnabled && !isSaving;
+
+  const activeError = submit.error || updateApp.error;
+  const conflict = isVersionConflict(activeError);
+  const refusal = describeRefusal(activeError);
 
   useEffect(() => {
     if (!editable) {
@@ -75,30 +100,28 @@ export function ReviewStep() {
       return;
     }
 
-    const conflict = isVersionConflict(submit.error);
-    const refusal = describeRefusal(submit.error);
-
     registerDock({
       label: "Submit application",
       backHref: "/apply/documents",
       nextStepName: null,
       onCommit,
-      isSaving: submit.isPending,
+      isSaving,
       proceedDisabled: !canProceed,
       saved: submit.isSuccess,
       conflict,
       refusal,
-      failed: submit.isError && !conflict && !refusal,
+      failed: Boolean(activeError && !conflict && !refusal),
       requestId: null,
       fieldMessages: [],
     });
   }, [
     editable,
     canProceed,
-    submit.isPending,
+    isSaving,
     submit.isSuccess,
-    submit.isError,
-    submit.error,
+    activeError,
+    conflict,
+    refusal,
     registerDock,
     onCommit,
   ]);
@@ -164,6 +187,26 @@ export function ReviewStep() {
       <View style={styles.header}>
         <Text style={styles.title}>Review & Submit</Text>
       </View>
+
+      {/* Error / Refusal Banner if submission failed */}
+      {activeError && (
+        <View style={styles.errorBanner}>
+          <AlertCircle size={20} color="#b91c1c" />
+          <View style={styles.errorBannerText}>
+            <Text style={styles.errorBannerTitle}>
+              {refusal?.title || (conflict ? "Version conflict" : "Could not submit application")}
+            </Text>
+            <Text style={styles.errorBannerMessage}>
+              {refusal?.message ||
+                (conflict
+                  ? "Someone else updated this application. Please try again."
+                  : activeError instanceof ApiRequestError
+                    ? activeError.message
+                    : "We could not submit your application. Check your connection and try again.")}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* 3 Summary Cards matching Screen 5 & User Mockup */}
       <View style={styles.cardsContainer}>
@@ -450,5 +493,30 @@ const styles = StyleSheet.create({
           shadowOpacity: 0.2,
           shadowRadius: 2.5,
         }),
+  },
+  errorBanner: {
+    flexDirection: "row",
+    backgroundColor: "#fef2f2",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    padding: 12,
+    marginBottom: 16,
+    alignItems: "flex-start",
+    columnGap: 10,
+  },
+  errorBannerText: {
+    flex: 1,
+  },
+  errorBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#b91c1c",
+  },
+  errorBannerMessage: {
+    fontSize: 13,
+    color: "#991b1b",
+    marginTop: 2,
+    lineHeight: 18,
   },
 });

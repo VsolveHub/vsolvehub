@@ -1,4 +1,4 @@
-﻿// Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
+// Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
 import { Text } from "@vsolve/mobile-ui";
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
@@ -233,6 +233,13 @@ export default function ApplyLayout() {
                   <Text style={styles.conflictSubtitle}>
                     We reloaded the latest version so you can review before continuing.
                   </Text>
+                </View>
+              ) : null}
+
+              {dockConfig?.refusal ? (
+                <View style={styles.failedBanner}>
+                  <Text style={styles.failedTitle}>{dockConfig.refusal.title}</Text>
+                  <Text style={styles.failedSubtitle}>{dockConfig.refusal.message}</Text>
                 </View>
               ) : null}
 
