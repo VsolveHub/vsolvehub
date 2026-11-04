@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Text } from "@vsolve/mobile-ui";
+
 const logoMark = require("@vsolve/mobile-ui/src/logo-mark.png");
 
 export interface NavyHeaderLayoutProps {
