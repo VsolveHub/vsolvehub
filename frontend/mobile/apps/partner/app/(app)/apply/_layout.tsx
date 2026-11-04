@@ -1,7 +1,7 @@
 // Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
-import { Slot, usePathname, useRouter } from "expo-router";
+import { Redirect, Slot, usePathname, useRouter } from "expo-router";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,6 +9,7 @@ import {
   LogOut,
   Phone,
   Send,
+  User,
   X,
 } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
@@ -105,8 +106,8 @@ export default function ApplyLayout() {
   );
   const currentStep = APPLICATION_STEPS[currentStepIdx] ?? APPLICATION_STEPS[0];
 
-  // User initial (defaults to "W" matching mockup)
-  const initialLetter = (application?.display_name || "webaura").trim()[0]?.toUpperCase() || "W";
+  // The applicant's own initial; with no name yet the avatar shows the person icon.
+  const initialLetter = application?.display_name?.trim()[0]?.toUpperCase() ?? "";
 
   // Primary action button configuration with robust fallbacks
   const defaultLabel = currentStepIdx === 3 ? "Submit application" : "Continue";
@@ -125,6 +126,10 @@ export default function ApplyLayout() {
       router.push(next.href as any);
     }
   };
+
+  // An approved Partner has finished onboarding: their place is the workspace, not this form.
+  // Every way in (a sign-in with next=/apply, an Apply button, a back gesture) ends up here.
+  if (application?.status === "APPROVED") return <Redirect href="/home" />;
 
   return (
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
@@ -172,7 +177,11 @@ export default function ApplyLayout() {
                 pressed ? styles.avatarBadgePressed : null,
               ]}
             >
-              <Text style={styles.avatarText}>{initialLetter}</Text>
+              {initialLetter ? (
+                <Text style={styles.avatarText}>{initialLetter}</Text>
+              ) : (
+                <User size={16} color="#ea580c" />
+              )}
             </Pressable>
           </View>
 
@@ -360,11 +369,15 @@ export default function ApplyLayout() {
               <View style={styles.modalHeader}>
                 <View style={styles.profileHeaderInfo}>
                   <View style={styles.avatarBadgeLarge}>
-                    <Text style={styles.avatarTextLarge}>{initialLetter}</Text>
+                    {initialLetter ? (
+                      <Text style={styles.avatarTextLarge}>{initialLetter}</Text>
+                    ) : (
+                      <User size={20} color="#ea580c" />
+                    )}
                   </View>
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.profileNameText}>
-                      {application?.display_name || "webaura"}
+                      {application?.display_name || "Your application"}
                     </Text>
                     <Text style={styles.profileStatusText}>
                       Status: {application?.status || "DRAFT"}

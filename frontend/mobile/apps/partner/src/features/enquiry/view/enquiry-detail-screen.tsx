@@ -115,7 +115,9 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
               message={acceptPresentation.message}
               severity={acceptPresentation.severity}
               actionLabel={kycGate ? "Finish verification" : "Try again"}
-              onAction={kycGate ? () => router.push("/apply" as never) : () => accept.mutate()}
+              // Only approved Partners see enquiries, and their verification documents live on
+              // the documents screen; the application form sends an approved Partner home.
+              onAction={kycGate ? () => router.push("/me/documents" as never) : () => accept.mutate()}
               reference={acceptPresentation.reference}
             />
           ) : null}

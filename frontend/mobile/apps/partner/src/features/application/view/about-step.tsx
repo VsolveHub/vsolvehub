@@ -25,14 +25,11 @@ export function AboutStep() {
 
   const signUpName = (profile.data?.full_name ?? "").trim();
 
-  // Initialize display name from profile, application, or default to "webaura" matching mockup
+  // Prefill the display name with the person's own name (sign-up, else the saved application).
+  // With neither, the field stays empty for them to fill: never a placeholder name they might submit.
   useEffect(() => {
     if (!isReadOnly && !draft.displayName.trim()) {
-      const initialName = (
-        signUpName ||
-        application?.display_name ||
-        "webaura"
-      ).trim();
+      const initialName = (signUpName || application?.display_name || "").trim();
       if (initialName) {
         update({ displayName: initialName });
       }
