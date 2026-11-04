@@ -18,10 +18,8 @@ import {
 } from "@vsolve/config";
 import { browserApiBaseUrl, getApiClient } from "@/lib/api/browser";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const PARTNER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ?? "";
 
 interface AlertBannerLocaleCopy {
   deniedTitle: string;
@@ -187,7 +185,7 @@ export function JobAlertsBanner({
     userId,
     triggerEvent: "go_online_shift_start",
     apiBaseUrl: browserApiBaseUrl(),
-    appId: ONESIGNAL_APP_ID,
+    appId: PARTNER_ONESIGNAL_APP_ID,
   });
 
   const isModalOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -239,7 +237,7 @@ export function JobAlertsBanner({
             permission_state: "denied",
             trigger_event: "go_online_shift_start",
             prompt_count: promptCount,
-            app_id_present: Boolean(ONESIGNAL_APP_ID),
+            app_id_present: Boolean(PARTNER_ONESIGNAL_APP_ID),
           },
         );
         return;
@@ -255,7 +253,7 @@ export function JobAlertsBanner({
         permission_state: "default",
         trigger_event: "go_online_shift_start",
         prompt_count: promptCount,
-        app_id_present: Boolean(ONESIGNAL_APP_ID),
+        app_id_present: Boolean(PARTNER_ONESIGNAL_APP_ID),
       });
     };
 
@@ -288,7 +286,7 @@ export function JobAlertsBanner({
             permission_state: "denied",
             trigger_event: "go_online_shift_start",
             prompt_count: promptCount,
-            app_id_present: Boolean(ONESIGNAL_APP_ID),
+            app_id_present: Boolean(PARTNER_ONESIGNAL_APP_ID),
           },
         );
       } else {

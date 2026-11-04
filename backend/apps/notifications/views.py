@@ -267,6 +267,9 @@ class DevOneSignalTestPushView(APIView):
         body = request.data.get("body", "This is a test Instant booking notification.")
         data = request.data.get("data", {"type": "DEV_TEST"})
         url = request.data.get("url")
+        # The caller's own OneSignal app: a partner's, else a customer's.
+        is_partner = getattr(request.user, "partner_profile", None) is not None
+        app_id, rest_api_key = onesignal.app_credentials("PARTNER" if is_partner else "CUSTOMER")
 
         result = onesignal.send_push_to_external_ids(
             external_ids=[str(request.user.id)],
@@ -274,6 +277,8 @@ class DevOneSignalTestPushView(APIView):
             body=body,
             data=data,
             url=url,
+            app_id=app_id,
+            rest_api_key=rest_api_key,
         )
         return Response(
             result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST

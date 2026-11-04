@@ -1385,12 +1385,10 @@ LOGGING = {
 }
 
 # OneSignal Push & Instant Dispatch settings
-ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
-ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
-ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default=ONESIGNAL_APP_ID)
-ONESIGNAL_PARTNER_REST_API_KEY = env(
-    "ONESIGNAL_PARTNER_REST_API_KEY", default=ONESIGNAL_REST_API_KEY
-)
+# One OneSignal app per audience, each shared by its website and mobile app. No shared
+# ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY and no fallback between them (owner, 2026-11-04).
+ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default="")
+ONESIGNAL_PARTNER_REST_API_KEY = env("ONESIGNAL_PARTNER_REST_API_KEY", default="")
 ONESIGNAL_CUSTOMER_APP_ID = env("ONESIGNAL_CUSTOMER_APP_ID", default="")
 ONESIGNAL_CUSTOMER_REST_API_KEY = env("ONESIGNAL_CUSTOMER_REST_API_KEY", default="")
 ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")

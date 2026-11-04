@@ -9,8 +9,9 @@ import { appKind, type AppKind } from "../config";
 /**
  * Push notifications through OneSignal, the same channel as the web.
  *
- * Each app is a OneSignal subscriber of its own OneSignal app (`EXPO_PUBLIC_ONESIGNAL_APP_ID`:
- * the customer app and the partner app, the same apps their websites use) and signs in with the
+ * Each app is a OneSignal subscriber of its own OneSignal app (`EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID`
+ * or `EXPO_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID`: the same apps their websites use; there is no shared
+ * App ID) and signs in with the
  * user's id, exactly as the web does with `OneSignal.login(userId)`. One send from Django then
  * reaches every device the person uses. The subscription is also reported to Django
  * (`/push-subscriptions/sync/`), which only pushes to people with a verified subscription.
@@ -56,7 +57,12 @@ function ready(): OneSignalPackage | null {
 export function startPush(): void {
   if (started) return;
   const mod = oneSignalPackage();
-  const appId = process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim();
+  // Each app's own OneSignal app, never a shared one. Both are read statically so Expo inlines them.
+  const appId = (
+    appKind() === "partner"
+      ? process.env.EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID
+      : process.env.EXPO_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID
+  )?.trim();
   if (mod === null || !appId) return;
   try {
     mod.OneSignal.initialize(appId);

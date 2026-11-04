@@ -162,7 +162,7 @@ sequenceDiagram
 
 | Layer | Component | Status | Finding / Analysis |
 | :--- | :--- | :--- | :--- |
-| **SDK Initializer** | `OneSignalInit` in `apps/partner` | **Active** | Loaded via `next/script` (`v16/OneSignalSDK.page.js`). Initializes with `NEXT_PUBLIC_ONESIGNAL_APP_ID`. |
+| **SDK Initializer** | `OneSignalInit` in `apps/partner` | **Active** | Loaded via `next/script` (`v16/OneSignalSDK.page.js`). Initializes with `NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID`. |
 | **Identity Sync** | `OneSignal.login(userId)` | **Active** | Links the authenticated partner's `user.id` to OneSignal aliases on sign-in and `OneSignal.logout()` on sign-out. |
 | **Service Worker** | `OneSignalSDKWorker.js` | **Active** | Exists in `apps/partner/public/`, `apps/customer/public/`, and `apps/admin/public/`. Imports `v16/OneSignalSDK.sw.js`. |
 | **User Prompt** | `JobAlertsBanner` | **Active** | Custom floating heads-up banner (`fixed top-... z-[60]`). Triggers `OneSignal.User.PushSubscription.optIn()` on click. |
@@ -381,7 +381,7 @@ High-priority push payload:
 - [ ] **OneSignal Dashboard Site URL**: Set strictly to `https://partner.vsolvehub.com` (not `vsolvehub.com`).
 - [ ] **Service Worker Path**: `https://partner.vsolvehub.com/OneSignalSDKWorker.js` served at root with `Content-Type: application/javascript`.
 - [ ] **Localhost Allowed Flag**: Ensure `allowLocalhostAsSecureOrigin` is `false` in production.
-- [ ] **Server-Side API Key Security**: `ONESIGNAL_REST_API_KEY` stored exclusively in `infra/.env.production` on backend server (never exposed in Next.js bundles).
+- [ ] **Server-Side API Key Security**: `ONESIGNAL_PARTNER_REST_API_KEY` stored exclusively in `infra/.env.production` on backend server (never exposed in Next.js bundles).
 - [ ] **Android Chrome Test**: Send push to locked real device; verify sound and head-up banner appear.
 - [ ] **iOS Safari Test**: Ensure Web Push is configured for iOS 16.4+ / PWA Add to Home Screen if iOS is targeted.
 - [ ] **Network Dropout Test**: Verify that if a partner accepts while cell signal drops, the client shows a clear retryable error without corrupting booking state.

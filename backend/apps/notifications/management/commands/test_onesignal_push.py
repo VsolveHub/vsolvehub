@@ -4,7 +4,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 
-from apps.notifications.onesignal import send_push_to_external_ids
+from apps.notifications.onesignal import app_credentials, send_push_to_external_ids
 
 
 class Command(BaseCommand):
@@ -16,6 +16,12 @@ class Command(BaseCommand):
             required=True,
             type=str,
             help="The external_id (partner user UUID or partner ID) registered with OneSignal",
+        )
+        parser.add_argument(
+            "--audience",
+            required=True,
+            choices=("partner", "customer"),
+            help="Which OneSignal app to send through: partner or customer",
         )
         parser.add_argument(
             "--heading",
@@ -41,6 +47,9 @@ class Command(BaseCommand):
         heading = options["heading"]
         body = options["body"]
         url = options["url"]
+        app_id, rest_api_key = app_credentials(
+            "CUSTOMER" if options["audience"] == "customer" else "PARTNER"
+        )
 
         self.stdout.write(f"Sending test push to external_id '{external_id}'...")
         result = send_push_to_external_ids(
@@ -49,6 +58,8 @@ class Command(BaseCommand):
             body=body,
             data={"type": "DEV_TEST", "external_id": external_id},
             url=url,
+            app_id=app_id,
+            rest_api_key=rest_api_key,
         )
 
         if result["success"]:

@@ -225,13 +225,10 @@ class OneSignalMessageTransport:
         if role not in ("CUSTOMER", "PARTNER"):
             raise MessageTransportError(f"Unknown or missing recipient role: {role}")
 
-        # Routing credentials
-        if role == "CUSTOMER":
-            app_id = getattr(settings, "ONESIGNAL_CUSTOMER_APP_ID", "")
-            rest_key = getattr(settings, "ONESIGNAL_CUSTOMER_REST_API_KEY", "")
-        else:
-            app_id = getattr(settings, "ONESIGNAL_PARTNER_APP_ID", "")
-            rest_key = getattr(settings, "ONESIGNAL_PARTNER_REST_API_KEY", "")
+        # Routing credentials: the recipient's own OneSignal app, never a shared default.
+        app_id, rest_key = onesignal_module.app_credentials(
+            "CUSTOMER" if role == "CUSTOMER" else "PARTNER"
+        )
 
         if not app_id or not rest_key:
             raise MessageTransportError(

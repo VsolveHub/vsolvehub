@@ -11,10 +11,8 @@ import {
 import { getApiClient } from "@/lib/api/browser";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const CUSTOMER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID ?? "";
 
 const RECOVERY_DISMISSED_KEY = "vsh_customer_push_denied_recovery_dismissed";
 
@@ -56,7 +54,7 @@ export function CustomerPushPromptCard({
     userId,
     triggerEvent: "booking_confirmation_screen",
     apiBaseUrl: PUBLIC_API_BASE_URL,
-    appId: ONESIGNAL_APP_ID,
+    appId: CUSTOMER_ONESIGNAL_APP_ID,
   });
 
   // Track prompt viewed once when eligible and visible
@@ -75,7 +73,7 @@ export function CustomerPushPromptCard({
         permission_state: "default",
         trigger_event: "booking_confirmation_screen",
         prompt_count: promptCount,
-        app_id_present: Boolean(ONESIGNAL_APP_ID),
+        app_id_present: Boolean(CUSTOMER_ONESIGNAL_APP_ID),
       });
     }
   }, [isPromptEligible, isDismissed, showDeniedRecovery, userId, promptCount]);
@@ -100,7 +98,7 @@ export function CustomerPushPromptCard({
             permission_state: "denied",
             trigger_event: "booking_confirmation_screen",
             prompt_count: promptCount,
-            app_id_present: Boolean(ONESIGNAL_APP_ID),
+            app_id_present: Boolean(CUSTOMER_ONESIGNAL_APP_ID),
           },
         );
       } else {

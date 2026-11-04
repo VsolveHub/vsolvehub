@@ -8,14 +8,12 @@ from rest_framework.test import APIClient
 from apps.identity.models import User
 from apps.notifications.onesignal import send_push_to_external_ids
 
+#: Every send names its OneSignal app; there is no default to fall back to.
+CREDS = {"app_id": "test-app-id-12345", "rest_api_key": "test-rest-key-99999"}
+
 
 @pytest.fixture(autouse=True)
 def configure_onesignal_settings(settings):
-    settings.ONESIGNAL_APP_ID = "test-app-id-12345"
-    settings.ONESIGNAL_REST_API_KEY = "test-rest-key-99999"
-    # The sender prefers the partner app's settings, which config/settings/test.py also sets.
-    settings.ONESIGNAL_PARTNER_APP_ID = "test-app-id-12345"
-    settings.ONESIGNAL_PARTNER_REST_API_KEY = "test-rest-key-99999"
     settings.ONESIGNAL_API_URL = "https://api.onesignal.com/notifications"
     settings.ONESIGNAL_ENV = "local"
 
@@ -27,7 +25,12 @@ def test_android_channel_is_sent_only_when_given(channel: str | None) -> None:
         mock_post.return_value.json.return_value = {"id": "n-1"}
 
         send_push_to_external_ids(
-            external_ids=["user-1"], heading="h", body="b", data={}, android_channel_id=channel
+            external_ids=["user-1"],
+            heading="h",
+            body="b",
+            data={},
+            android_channel_id=channel,
+            **CREDS,
         )
 
     payload = mock_post.call_args.kwargs["json"]
@@ -55,6 +58,7 @@ def test_send_push_to_external_ids_correct_payload():
             body=body,
             data=data,
             url=launch_url,
+            **CREDS,
         )
 
         assert result["success"] is True
@@ -83,10 +87,7 @@ def test_send_push_to_external_ids_correct_payload():
         assert headers["Content-Type"] == "application/json; charset=utf-8"
 
 
-def test_send_push_os_v2_key_authorization_header(settings):
-    settings.ONESIGNAL_APP_ID = "test-app-id-12345"
-    settings.ONESIGNAL_REST_API_KEY = "os_v2_app_real_api_key_here"
-    settings.ONESIGNAL_PARTNER_REST_API_KEY = "os_v2_app_real_api_key_here"
+def test_send_push_os_v2_key_authorization_header() -> None:
 
     with patch("requests.Session.post") as mock_post:
         mock_response = MagicMock()
@@ -100,10 +101,25 @@ def test_send_push_os_v2_key_authorization_header(settings):
             heading="Title",
             body="Body",
             data={},
+            app_id="test-app-id-12345",
+            rest_api_key="os_v2_app_real_api_key_here",
         )
         assert result["success"] is True
         headers = mock_post.call_args.kwargs["headers"]
         assert headers["Authorization"] == "Key os_v2_app_real_api_key_here"
+
+
+@pytest.mark.parametrize(
+    "creds", [{"app_id": "", "rest_api_key": "k"}, {"app_id": "a", "rest_api_key": ""}]
+)
+def test_a_send_without_its_app_is_refused_not_redirected(creds: dict[str, str]) -> None:
+    with patch("requests.Session.post") as mock_post:
+        result = send_push_to_external_ids(
+            external_ids=["u-1"], heading="h", body="b", data={}, **creds
+        )
+
+    assert result["success"] is False
+    mock_post.assert_not_called()
 
 
 def test_send_push_empty_external_ids_rejected():
@@ -113,6 +129,7 @@ def test_send_push_empty_external_ids_rejected():
             heading="Test",
             body="Test body",
             data={},
+            **CREDS,
         )
         assert result["success"] is False
         assert "No valid external_ids provided" in result["errors"]
@@ -132,6 +149,7 @@ def test_send_push_api_error_response_handled():
             heading="Test",
             body="Test",
             data={},
+            **CREDS,
         )
 
         assert result["success"] is False
@@ -150,6 +168,7 @@ def test_send_push_network_exception_handled():
             heading="Test",
             body="Test",
             data={},
+            **CREDS,
         )
 
         assert result["success"] is False
@@ -175,6 +194,7 @@ def test_send_push_with_collapse_id_web_push_topic_ttl_priority():
             ttl=45,
             priority=10,
             app_id="partner-app-999",
+            rest_api_key="test-rest-key-99999",
         )
 
         assert result["success"] is True

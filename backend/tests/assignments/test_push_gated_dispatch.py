@@ -13,6 +13,7 @@ from rest_framework.test import APIClient
 from apps.assignments.models import DispatchOffer, Reservation
 from apps.assignments.tasks import (
     reconcile_expired_dispatch_offers,
+    send_dispatch_offer_push_task,
 )
 from apps.carts.availability import AvailabilitySnapshot, compute_instant_availability
 from apps.carts.models import BookingGroup, CheckoutSession, Quote

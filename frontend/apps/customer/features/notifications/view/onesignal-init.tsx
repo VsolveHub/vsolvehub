@@ -5,10 +5,8 @@ import { useEffect, useRef } from "react";
 import { useCustomerSession } from "@/features/session/queries";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const CUSTOMER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID ?? "";
 
 const ONESIGNAL_SAFARI_WEB_ID =
   process.env.NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID || "";
@@ -377,7 +375,7 @@ export function OneSignalInit() {
 
   // OneSignal Web Push SDK initialization
   useEffect(() => {
-    if (typeof window === "undefined" || !ONESIGNAL_APP_ID) return;
+    if (typeof window === "undefined" || !CUSTOMER_ONESIGNAL_APP_ID) return;
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async (OneSignal) => {
@@ -388,7 +386,7 @@ export function OneSignalInit() {
 
       try {
         const initConfig: Parameters<typeof OneSignal.init>[0] = {
-          appId: ONESIGNAL_APP_ID,
+          appId: CUSTOMER_ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: isLocalhost,
           autoRegister: false,
           autoResubscribe: true,
@@ -455,7 +453,7 @@ export function OneSignalInit() {
 
   // Sync external user id with OneSignal and sync subscription state
   useEffect(() => {
-    if (typeof window === "undefined" || !ONESIGNAL_APP_ID) return;
+    if (typeof window === "undefined" || !CUSTOMER_ONESIGNAL_APP_ID) return;
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
 

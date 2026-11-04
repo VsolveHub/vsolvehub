@@ -6,10 +6,8 @@ import { ApiRequestError, request } from "@vsolve/api-client";
 import { useCurrentSession } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const PARTNER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ?? "";
 
 const QUEUE_STORAGE_KEY = "vsh_pending_partner_push_sync";
 const MAX_ATTEMPTS = 10;
@@ -246,7 +244,7 @@ export function OneSignalInit() {
 
   // OneSignal Web Push SDK initialization
   useEffect(() => {
-    if (typeof window === "undefined" || !ONESIGNAL_APP_ID) return;
+    if (typeof window === "undefined" || !PARTNER_ONESIGNAL_APP_ID) return;
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async (OneSignal) => {
@@ -258,7 +256,7 @@ export function OneSignalInit() {
 
       try {
         await OneSignal.init({
-          appId: ONESIGNAL_APP_ID,
+          appId: PARTNER_ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: isLocalEnv,
           autoRegister: false,
           autoResubscribe: true,
@@ -314,7 +312,7 @@ export function OneSignalInit() {
 
   // Sync external partner id with OneSignal and sync subscription state
   useEffect(() => {
-    if (typeof window === "undefined" || !ONESIGNAL_APP_ID) return;
+    if (typeof window === "undefined" || !PARTNER_ONESIGNAL_APP_ID) return;
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
 

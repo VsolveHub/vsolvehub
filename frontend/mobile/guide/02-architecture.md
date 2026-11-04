@@ -144,8 +144,8 @@ backend event ──► NotificationIntent (PUSH) ──► OneSignal (by extern
 The apps are OneSignal subscribers exactly like the websites: one send from Django reaches every
 device the person uses. All of it lives in `packages/core/src/push/onesignal.ts`.
 
-- Each app uses its own OneSignal app, the same one as its website (`EXPO_PUBLIC_ONESIGNAL_APP_ID`
-  in `eas.json`). `startPush()` runs at app start.
+- Each app uses its own OneSignal app, the same one as its website (`EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID` /
+  `EXPO_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID` in `eas.json`; no shared App ID). `startPush()` runs at app start.
 - On sign-in (and on every app start while signed in), `linkPushUser()` calls
   `OneSignal.login(user.id)` (the web's `OneSignal.login(userId)`), asks for permission once, and
   reports the subscription to `POST /api/v1/{partner|customer}/push-subscriptions/sync/` with

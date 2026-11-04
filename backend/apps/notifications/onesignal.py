@@ -1,7 +1,7 @@
 """OneSignal REST API client for targeted push notifications."""
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import requests
 from django.conf import settings
@@ -11,6 +11,20 @@ from urllib3.util.retry import Retry
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 10
+
+#: Each audience has its own OneSignal app, shared by its website and mobile app.
+Audience = Literal["PARTNER", "CUSTOMER"]
+
+
+def app_credentials(audience: Audience) -> tuple[str, str]:
+    """The OneSignal app ID and REST API key for one audience.
+
+    Partner and customer are separate OneSignal apps, and there is deliberately no shared
+    default: a push that does not say which app it is for must fail, not go to the wrong one.
+    """
+    if audience == "CUSTOMER":
+        return settings.ONESIGNAL_CUSTOMER_APP_ID, settings.ONESIGNAL_CUSTOMER_REST_API_KEY
+    return settings.ONESIGNAL_PARTNER_APP_ID, settings.ONESIGNAL_PARTNER_REST_API_KEY
 
 
 def _build_retry_session(retries: int = 3, backoff_factor: float = 0.5) -> requests.Session:
@@ -33,8 +47,9 @@ def send_push_to_external_ids(
     body: str,
     data: dict[str, Any],
     url: str | None = None,
-    app_id: str | None = None,
-    rest_api_key: str | None = None,
+    *,
+    app_id: str,
+    rest_api_key: str,
     collapse_id: str | None = None,
     web_push_topic: str | None = None,
     ttl: int | None = None,
@@ -56,30 +71,20 @@ def send_push_to_external_ids(
             "raw_response": {},
         }
 
-    resolved_app_id = (
-        app_id
-        or getattr(settings, "ONESIGNAL_PARTNER_APP_ID", "")
-        or getattr(settings, "ONESIGNAL_APP_ID", "")
-    )
-    resolved_rest_api_key: str = (
-        rest_api_key
-        or getattr(settings, "ONESIGNAL_PARTNER_REST_API_KEY", "")
-        or getattr(settings, "ONESIGNAL_REST_API_KEY", "")
-        or ""
-    )
     api_url = getattr(settings, "ONESIGNAL_API_URL", "https://api.onesignal.com/notifications")
 
-    if not resolved_app_id:
-        logger.error("[OneSignal] Target app ID is not configured")
+    # No fallback: the caller names the app (see `app_credentials`).
+    if not app_id or not rest_api_key:
+        logger.error("[OneSignal] Target app ID or REST API key is not configured")
         return {
             "success": False,
             "notification_id": None,
-            "errors": ["Target app ID not configured"],
+            "errors": ["Target app ID or REST API key not configured"],
             "raw_response": {},
         }
 
     payload: dict[str, Any] = {
-        "app_id": resolved_app_id,
+        "app_id": app_id,
         "target_channel": "push",
         "include_aliases": {
             "external_id": cleaned_external_ids,
@@ -103,10 +108,10 @@ def send_push_to_external_ids(
     if priority is not None:
         payload["priority"] = priority
 
-    auth_prefix = "Key" if resolved_rest_api_key.startswith("os_v2_") else "Basic"
+    auth_prefix = "Key" if rest_api_key.startswith("os_v2_") else "Basic"
     headers = {
         "Content-Type": "application/json; charset=utf-8",
-        "Authorization": f"{auth_prefix} {resolved_rest_api_key}",
+        "Authorization": f"{auth_prefix} {rest_api_key}",
     }
 
     session = _build_retry_session()
