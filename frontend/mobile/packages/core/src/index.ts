@@ -57,6 +57,14 @@ export { compareVersions, versionIsBelow } from "./version/compare";
 
 export { kvGet, kvSet, kvRemove } from "./storage/kv";
 
+export { PlaceSearch, usePlaceSearch, useReverseGeocode } from './places';
+export type {
+  PlaceSearchProps,
+  PlaceSuggestion,
+  ResolvedLocation,
+  ReverseGeocodeRequest,
+} from './places';
+
 
 export type {
   BookingMode,
