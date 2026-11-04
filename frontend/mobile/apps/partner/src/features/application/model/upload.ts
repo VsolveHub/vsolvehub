@@ -75,27 +75,6 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * Hex SHA-256 of the file, computed in the browser.
- *
- * Django recomputes it over the stored bytes and refuses the finalize if they
- * disagree, which is what makes a truncated or swapped upload a failure rather
- * than a corrupt record nobody notices until a reviewer opens it.
- *
- * `crypto.subtle` requires a secure context; over plain HTTP on a non-localhost
- * origin it is absent, so the caller gets a clear error instead of a hang.
- */
-export async function sha256Hex(file: Blob): Promise<string> {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("Secure hashing is unavailable in this browser context.");
-  }
-
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 /** True once the signed upload URL has expired and a new one must be requested. */
 export function isUploadExpired(expiresAt: string, now: number = Date.now()): boolean {
   const deadline = Date.parse(expiresAt);

@@ -55,10 +55,8 @@ function StageWork({
     const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (picked.canceled || !picked.assets[0]) return;
     const asset = picked.assets[0];
-    const response = await fetch(asset.uri);
-    const blob = await response.blob();
-    const file = new File([blob], asset.fileName ?? "evidence.jpg", { type: asset.mimeType ?? "image/jpeg" });
-    upload.mutate({ stageId, kind: "PHOTO", file });
+    // The photo is read from disk when it is sent; `fetch(asset.uri)` reads nothing on Android.
+    upload.mutate({ stageId, kind: "PHOTO", file: { uri: asset.uri, mimeType: asset.mimeType ?? "image/jpeg" } });
   }
 
   return (

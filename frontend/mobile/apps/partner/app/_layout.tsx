@@ -11,6 +11,7 @@ import {
   configureCore,
   getNotifications,
   MobileQueryProvider,
+  ProviderCheckoutHost,
   registerForPush,
   useAuthStore,
   VersionGate,
@@ -79,7 +80,9 @@ export default function RootLayout() {
           <ToastProvider>
             <VersionGate>
               <PushRouting />
-              <Stack screenOptions={{ headerShown: false }} />
+              <ProviderCheckoutHost>
+                <Stack screenOptions={{ headerShown: false }} />
+              </ProviderCheckoutHost>
             </VersionGate>
           </ToastProvider>
         </I18nProvider>

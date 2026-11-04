@@ -1,8 +1,9 @@
 // Ported from frontend/apps/customer/features/session/view/customer-login-experience.tsx
 // Redesigned to 100% exact parity with the V Solve Hub mobile login popup reference image
-import type { MobileOtpFlow } from "@vsolve/mobile-core";
+import { webBaseUrl, type MobileOtpFlow } from "@vsolve/mobile-core";
 import { ErrorState, Logo, Text, cn, formatDuration } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { ChevronDown, ChevronRight, LayoutGrid, X } from "lucide-react-native";
 import { useEffect, useRef, type ReactNode } from "react";
 import {
@@ -346,7 +347,26 @@ export function CustomerLoginForm({
           </View>
         </View>
       ) : null}
+      <LegalConsentLine />
     </View>
+  );
+}
+
+/** Store review needs the terms and privacy policy reachable before sign-in. */
+function LegalConsentLine() {
+  const open = (path: string) => void WebBrowser.openBrowserAsync(`${webBaseUrl()}${path}`);
+  return (
+    <Text className="mt-4 text-center text-xs leading-5 text-text-muted">
+      By continuing you agree to our{" "}
+      <Text accessibilityRole="link" className="font-semibold text-[#EA580C]" onPress={() => open("/terms")}>
+        Terms of Service
+      </Text>{" "}
+      and{" "}
+      <Text accessibilityRole="link" className="font-semibold text-[#EA580C]" onPress={() => open("/privacy")}>
+        Privacy Policy
+      </Text>
+      .
+    </Text>
   );
 }
 

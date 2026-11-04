@@ -5,6 +5,7 @@ import { useMobileLogout } from "@vsolve/mobile-core";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import {
+  FileCheck2,
   Bell,
   Briefcase,
   ChevronRight,
@@ -58,6 +59,15 @@ export function MeHome() {
           boxBorder="border-blue-100"
           iconColor="#00246b"
           onPress={() => router.push("/me/profile")}
+        />
+        <SettingsRow
+          icon={FileCheck2}
+          title="Application & documents"
+          subtitle="Your application, KYC documents and agreements"
+          boxBg="bg-emerald-50"
+          boxBorder="border-emerald-100"
+          iconColor="#047857"
+          onPress={() => router.push("/me/documents" as never)}
         />
         <SettingsRow
           icon={Globe}

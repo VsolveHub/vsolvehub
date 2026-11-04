@@ -20,9 +20,9 @@ import {
   fetchListingHome,
   fetchPartnerListings,
   fetchSubscriptionPlans,
-  purchaseSubscription,
   runListingAction,
 } from "../queries";
+import { usePlanPurchase } from "../use-plan-purchase";
 import { duplicateJob, publishJob } from "../jobs-queries";
 import { ListingCard } from "./listing-card";
 import { SubscriptionDialog } from "./subscription-dialog";
@@ -121,15 +121,11 @@ export function PartnerListingsScreen() {
     },
   });
 
-  const subscribeMutation = useMutation({
-    mutationFn: (planId: string) => purchaseSubscription(planId),
-    onSuccess: () => {
+  const subscribeMutation = usePlanPurchase({
+    beforeCheckout: () => setShowSubscription(false),
+    onSettled: () => {
       setShowSubscription(false);
-      Alert.alert("Success", "Subscription plan upgraded successfully!");
       refreshWorkspace();
-    },
-    onError: (err: any) => {
-      Alert.alert("Subscription Error", err?.message || "Failed to upgrade subscription.");
     },
   });
 

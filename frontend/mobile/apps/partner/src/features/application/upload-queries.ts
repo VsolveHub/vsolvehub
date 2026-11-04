@@ -169,3 +169,15 @@ export function useUploadDocument() {
     retry: false,
   });
 }
+
+/** A short-lived link to read one of this Partner's own documents. Same call as the web. */
+export function usePartnerDocumentAccess() {
+  return useMutation({
+    mutationFn: async (documentId: string) =>
+      request(() =>
+        getApiClient().GET("/api/v1/partner/application/documents/{document_id}/access/", {
+          params: { path: { document_id: documentId } },
+        }),
+      ),
+  });
+}

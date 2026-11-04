@@ -12,6 +12,7 @@ import {
   useUpdateAddress,
   type Address,
 } from "@/features/addresses/queries";
+import { PlaceSearch } from "@/features/addresses/view/place-search";
 
 export interface AddressSheetProps {
   open: boolean;
@@ -50,13 +51,39 @@ export function AddressSheet({
   const [label, setLabel] = useState("Home");
   const [line1, setLine1] = useState("");
   const [locality, setLocality] = useState("");
-  const [city, setCity] = useState("Hyderabad");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
   const [postal, setPostal] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  /** Put the pin here and describe it with Django's reverse geocode, as the web does. */
+  function placePin(lat: string, lng: string, onDone?: () => void) {
+    setLatitude(lat);
+    setLongitude(lng);
+    setFormError(null);
+    reverseGeocode.mutate(
+      { latitude: lat, longitude: lng },
+      {
+        onSuccess: (found) => {
+          setLine1(found.line1 || "");
+          setLocality(found.locality || "");
+          setCity(found.city || "");
+          setStateName(found.state || "");
+          setPostal(found.postal_code || "");
+          onDone?.();
+        },
+        onError: () => {
+          // The pin stays; only its description failed. The person types the rest.
+          setLocateError("We could not read the address for that spot. Check the details below.");
+          onDone?.();
+        },
+      },
+    );
+  }
 
   async function handleUseLocation() {
     setLocating(true);
@@ -72,29 +99,10 @@ export function AddressSheet({
       const position = await Location.getCurrentPositionAsync({});
       const lat = Number(position.coords.latitude).toFixed(6);
       const lng = Number(position.coords.longitude).toFixed(6);
-      setLatitude(lat);
-      setLongitude(lng);
-
-      reverseGeocode.mutate(
-        { latitude: lat, longitude: lng },
-        {
-          onSuccess: (found) => {
-            setLine1(found.line1 || "");
-            setLocality(found.locality || "");
-            setCity(found.city || "Hyderabad");
-            setPostal(found.postal_code || "");
-            setMode("add");
-            setLocating(false);
-          },
-          onError: () => {
-            setLocality("Hyderabad");
-            setCity("Hyderabad");
-            setMode("add");
-            setLocateError("Automatic address resolution failed. Please verify your address details below.");
-            setLocating(false);
-          },
-        },
-      );
+      placePin(lat, lng, () => {
+        setMode("add");
+        setLocating(false);
+      });
     } catch {
       setLocateError("Could not retrieve current location. Please enter your address below.");
       setLocating(false);
@@ -116,20 +124,21 @@ export function AddressSheet({
       return;
     }
 
-    const loc = locality.trim() || city.trim() || "Hyderabad";
-    const ct = city.trim() || "Hyderabad";
-    const lat =
-      latitude && latitude.trim() !== ""
-        ? latitude.trim()
-        : editingAddress?.latitude
-          ? String(editingAddress.latitude)
-          : "17.414053";
-    const lng =
-      longitude && longitude.trim() !== ""
-        ? longitude.trim()
-        : editingAddress?.longitude
-          ? String(editingAddress.longitude)
-          : "78.353554";
+    // A saved address is where somebody is sent: it needs a real pin and real fields, never a
+    // default (it used to fall back to a fixed Hyderabad pin).
+    const lat = latitude.trim();
+    const lng = longitude.trim();
+    if (lat === "" || lng === "") {
+      setFormError("Search for the place or use your location to put the pin on the door.");
+      return;
+    }
+    const ct = city.trim();
+    const st = stateName.trim();
+    if (ct === "" || st === "") {
+      setFormError("City and state are required.");
+      return;
+    }
+    const loc = locality.trim() || ct;
 
     if (mode === "edit" && editingAddress) {
       updateAddress.mutate(
@@ -143,7 +152,7 @@ export function AddressSheet({
             postal_code: cleanPostal,
             latitude: lat,
             longitude: lng,
-            state: "Telangana",
+            state: st,
             country_code: "IN",
           },
         },
@@ -172,9 +181,9 @@ export function AddressSheet({
         postal_code: cleanPostal,
         latitude: lat,
         longitude: lng,
-        state: "Telangana",
+        state: st,
         country_code: "IN",
-        source: latitude ? "REVERSE_GEOCODED" : "MANUAL",
+        source: "REVERSE_GEOCODED",
         is_default: addresses.length === 0,
       },
       {
@@ -342,7 +351,8 @@ export function AddressSheet({
                           setLabel(address.label || "Home");
                           setLine1(address.line1 || "");
                           setLocality(address.locality || "");
-                          setCity(address.city || "Hyderabad");
+                          setCity(address.city || "");
+                          setStateName(address.state || "");
                           setPostal(address.postal_code || "");
                           setLatitude(address.latitude ? String(address.latitude) : "");
                           setLongitude(address.longitude ? String(address.longitude) : "");
@@ -384,7 +394,8 @@ export function AddressSheet({
                   setLabel("Home");
                   setLine1("");
                   setLocality("");
-                  setCity("Hyderabad");
+                  setCity("");
+                  setStateName("");
                   setPostal("");
                   setLatitude("");
                   setLongitude("");
@@ -409,6 +420,14 @@ export function AddressSheet({
         ) : (
           /* Address Entry Form */
           <View className="gap-3.5 pb-2">
+            <PlaceSearch onPick={(place) => placePin(place.latitude, place.longitude)} />
+            <Text className="text-xs text-text-secondary">
+              {latitude === ""
+                ? "Search for the place or use your location to put the pin on the door."
+                : reverseGeocode.isPending
+                  ? "Finding the address for that pin…"
+                  : "Pin placed. Check the details below."}
+            </Text>
             <View>
               <Text className="text-xs font-semibold text-text-secondary mb-1">
                 Label (Home, Work, etc.)
@@ -458,7 +477,7 @@ export function AddressSheet({
                     setCity(val);
                     setFormError(null);
                   }}
-                  placeholder="Hyderabad"
+                  placeholder="City"
                 />
               </View>
               <View className="flex-1">
@@ -474,6 +493,18 @@ export function AddressSheet({
                   maxLength={6}
                 />
               </View>
+            </View>
+
+            <View>
+              <Text className="text-xs font-semibold text-text-secondary mb-1">State *</Text>
+              <Input
+                value={stateName}
+                onChangeText={(val) => {
+                  setStateName(val);
+                  setFormError(null);
+                }}
+                placeholder="State"
+              />
             </View>
 
             {formError ? (

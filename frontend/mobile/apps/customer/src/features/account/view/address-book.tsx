@@ -8,6 +8,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { useAddresses, useArchiveAddress, useCreateAddress, useReverseGeocode, type Address, type AddressInput } from "@/features/addresses/queries";
+import { PlaceSearch } from "@/features/addresses/view/place-search";
 import { AccountPageShell } from "./account-page-shell";
 
 export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
@@ -25,6 +26,7 @@ export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
   const [locality, setLocality] = useState("");
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
+  const [stateName, setStateName] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
 
@@ -38,45 +40,55 @@ export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
     setRefreshing(false);
   };
 
+  /** Put the pin here and describe it with Django's reverse geocode, as the web does. */
+  function placePin(lat: string, lng: string) {
+    setLatitude(lat);
+    setLongitude(lng);
+    geocode.mutate(
+      { latitude: lat, longitude: lng },
+      {
+        onSuccess: (found) => {
+          setLine1(found.line1);
+          setLocality(found.locality);
+          setCity(found.city);
+          setStateName(found.state);
+          setPostal(found.postal_code);
+        },
+      },
+    );
+  }
+
   async function handleLocate() {
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== "granted") return;
       const pos = await Location.getCurrentPositionAsync({});
-      const lat = String(pos.coords.latitude);
-      const lng = String(pos.coords.longitude);
-      setLatitude(lat);
-      setLongitude(lng);
-      geocode.mutate(
-        { latitude: lat, longitude: lng },
-        {
-          onSuccess: (found) => {
-            setLine1(found.line1);
-            setLocality(found.locality);
-            setCity(found.city);
-            setPostal(found.postal_code);
-          },
-        },
-      );
+      placePin(Number(pos.coords.latitude).toFixed(6), Number(pos.coords.longitude).toFixed(6));
     } catch {
-      // ignore
+      // The search box is the other way to place the pin.
     }
   }
 
+  // A saved address is where somebody is sent, so it needs a real pin and real fields. Nothing is
+  // filled in on the person's behalf (it used to default to a fixed Hyderabad pin).
+  const postalDigits = postal.replace(/\D/g, "").slice(0, 6);
+  const hasPin = latitude !== "" && longitude !== "";
+  const canSave = hasPin && line1.trim() !== "" && city.trim() !== "" && stateName.trim() !== "" && postalDigits.length === 6;
+
   function handleSaveAddress() {
-    if (!line1 || !locality || !city || !postal) return;
+    if (!canSave) return;
     createAddress.mutate(
       {
         label: label || "Saved address",
-        line1,
-        locality: locality || "Hyderabad",
-        city: city || "Hyderabad",
-        state: "Telangana",
-        postal_code: postal.replace(/\D/g, "").slice(0, 6) || "500032",
+        line1: line1.trim(),
+        locality: locality.trim() || city.trim(),
+        city: city.trim(),
+        state: stateName.trim(),
+        postal_code: postalDigits,
         country_code: "IN",
-        latitude: latitude || "17.414053",
-        longitude: longitude || "78.353554",
-        source: latitude ? "REVERSE_GEOCODED" : "MANUAL",
+        latitude,
+        longitude,
+        source: "REVERSE_GEOCODED",
         is_default: addresses.length === 0,
       } as AddressInput,
       {
@@ -86,6 +98,9 @@ export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
           setLocality("");
           setCity("");
           setPostal("");
+          setStateName("");
+          setLatitude("");
+          setLongitude("");
           void addressesQuery.refetch();
         },
       },
@@ -349,7 +364,7 @@ export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
               <Button variant="ghost" onPress={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onPress={handleSaveAddress} loading={createAddress.isPending}>
+              <Button onPress={handleSaveAddress} loading={createAddress.isPending} disabled={!canSave}>
                 Save address
               </Button>
             </View>
@@ -360,9 +375,17 @@ export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
             keyboardShouldPersistTaps="handled"
             contentContainerClassName="gap-3.5 py-1"
           >
+            <PlaceSearch onPick={(place) => placePin(place.latitude, place.longitude)} />
             <Button variant="outline" size="sm" onPress={handleLocate}>
               📍 Use my current location
             </Button>
+            {!hasPin ? (
+              <Text className="text-xs text-text-secondary">
+                Search for the place or use your location to put the pin on the door.
+              </Text>
+            ) : geocode.isPending ? (
+              <Text className="text-xs text-text-secondary">Finding the address for that pin…</Text>
+            ) : null}
             <Field label="Label" showOptional={false}>
               <Input placeholder="Home, Office, etc." value={label} onChangeText={setLabel} />
             </Field>
@@ -384,6 +407,9 @@ export function AddressBook({ embedded = false }: { embedded?: boolean } = {}) {
                 </Field>
               </View>
             </View>
+            <Field label="State" required>
+              <Input placeholder="State" value={stateName} onChangeText={setStateName} />
+            </Field>
           </ScrollView>
         </Dialog>
       </View>

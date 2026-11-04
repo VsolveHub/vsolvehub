@@ -1,7 +1,9 @@
 import { describeError } from "@vsolve/query/native";
-import { useMobileLogout } from "@vsolve/mobile-core";
+import { useMobileLogout, webBaseUrl } from "@vsolve/mobile-core";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
+import * as WebBrowser from "expo-web-browser";
+import { FileText, LifeBuoy, RotateCcw, ShieldCheck } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
@@ -202,6 +204,38 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
                       title="Devices"
                       subtitle="Where you're signed in"
                       onPress={() => setActiveSection("devices")}
+                      showDivider={false}
+                    />
+                  </View>
+
+                  {/* Help and legal: the web's footer links. These pages open on the website. */}
+                  <View className="overflow-hidden rounded-2xl border border-[#F1EFEB] bg-white shadow-xs">
+                    <MenuItemRow
+                      icon={<LifeBuoy size={20} color="#EA580C" />}
+                      title="Contact us"
+                      subtitle="Help with a booking or your account"
+                      onPress={() => openWebPage("/contact")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<FileText size={20} color="#EA580C" />}
+                      title="Terms of Service"
+                      subtitle="The terms for using V Solve Hub"
+                      onPress={() => openWebPage("/terms")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<ShieldCheck size={20} color="#EA580C" />}
+                      title="Privacy Policy"
+                      subtitle="How we handle your data"
+                      onPress={() => openWebPage("/privacy")}
+                      showDivider
+                    />
+                    <MenuItemRow
+                      icon={<RotateCcw size={20} color="#EA580C" />}
+                      title="Refund policy"
+                      subtitle="Cancellations and refunds"
+                      onPress={() => openWebPage("/refund-policy")}
                       showDivider={false}
                     />
                   </View>
@@ -461,6 +495,11 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
       </View>
     </ScrollView>
   );
+}
+
+/** The website's legal and help pages: the app links to them rather than copying them. */
+function openWebPage(path: string) {
+  void WebBrowser.openBrowserAsync(`${webBaseUrl()}${path}`);
 }
 
 function MenuItemRow({

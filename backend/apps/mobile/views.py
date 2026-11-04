@@ -1,19 +1,25 @@
 """Native sign-in. The session is the same Django session the web uses."""
 
+import logging
+
 from django.conf import settings
 from django.http import HttpRequest
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.identity.exceptions import InvalidOtpApiError
-from apps.identity.models import User
+from apps.identity.exceptions import InvalidOtpApiError, NoAccountForRoleApiError
+from apps.identity.firebase_auth import verify_firebase_login
+from apps.identity.hashing import keyed_hash
+from apps.identity.models import User, UserSession
 from apps.identity.serializers import UserSerializer
 from apps.identity.services import (
+    NoAccountForRoleError,
     OtpVerificationError,
     create_authenticated_session,
     verify_login_otp,
@@ -22,6 +28,7 @@ from apps.mobile.serializers import (
     AppConfigQuerySerializer,
     AppConfigSerializer,
     MobileAuthenticatedSessionSerializer,
+    MobileFirebaseVerifySerializer,
     MobileOtpVerifySerializer,
     PushDeviceRegisterSerializer,
     PushDeviceSerializer,
@@ -36,9 +43,7 @@ from apps.mobile.services import (
     version_is_below,
 )
 from common.errors.serializers import ApiErrorSerializer
-
-
-import logging
+from common.observability.context import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +87,9 @@ class MobileOtpVerifyView(APIView):
             if not getattr(http_request.session, "session_key", None):
                 http_request.session.cycle_key()
                 http_request.session.save()
-            from apps.identity.hashing import keyed_hash
-            from apps.identity.models import UserSession
-
             session_key = http_request.session.session_key
             session, _ = UserSession.objects.update_or_create(
-                session_key_hash=keyed_hash(session_key),
+                session_key_hash=keyed_hash(str(session_key)),
                 defaults={
                     "user": user,
                     "expires_at": http_request.session.get_expiry_date(),
@@ -106,6 +108,74 @@ class MobileOtpVerifyView(APIView):
                 "active_role": active_role_code,
                 "session_expires_at": session.expires_at,
                 "session_token": session_key,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class MobileFirebaseVerifyView(APIView):
+    """Firebase phone sign-in for the apps.
+
+    The web's Firebase check (`verify_firebase_login`), answered with a bearer token instead of
+    cookies, like `MobileOtpVerifyView`. The app sends the precheck to the shared
+    `POST /auth/firebase/precheck/` first, exactly as the web does.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "firebase_verify"
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=MobileFirebaseVerifySerializer,
+        responses={
+            200: MobileAuthenticatedSessionSerializer,
+            400: ApiErrorSerializer,
+            404: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description=(
+                    "Firebase auth is disabled or `intended_role` was set and this number "
+                    "holds no such account."
+                ),
+            ),
+            429: OpenApiResponse(response=ApiErrorSerializer, description="Rate limit exceeded."),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
+            raise NotFound("Firebase authentication is disabled.")
+
+        serializer = MobileFirebaseVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        http_request: HttpRequest = request._request
+        try:
+            user = verify_firebase_login(
+                id_token=data["id_token"],
+                intended_role=data.get("intended_role", ""),
+                referral_code=data.get("referral_code", ""),
+                request_ip=str(request.META.get("REMOTE_ADDR") or "unknown"),
+                request_id=get_request_id() or "",
+            )
+        except NoAccountForRoleError as exc:
+            raise NoAccountForRoleApiError from exc
+        except OtpVerificationError as exc:
+            raise InvalidOtpApiError from exc
+
+        http_request.vsolve_bearer = True  # type: ignore[attr-defined]
+        session = create_authenticated_session(
+            request=http_request,
+            user=user,
+            device_identifier=data["device_identifier"],
+            device_label=data.get("device_label", ""),
+        )
+        return Response(
+            {
+                "user": UserSerializer(user).data,
+                "active_role": session.active_role.code if session.active_role else None,
+                "session_expires_at": session.expires_at,
+                "session_token": http_request.session.session_key,
             },
             status=status.HTTP_200_OK,
         )

@@ -1,6 +1,6 @@
 // Ported from frontend/apps/customer/features/payment/view/payment-workspace.tsx
 import type { Schemas } from "@vsolve/api-client";
-import { RazorpayCheckout } from "@vsolve/mobile-core";
+import { handoffTarget, RazorpayCheckout } from "@vsolve/mobile-core";
 import { describeError, useServerCountdown } from "@vsolve/query/native";
 import { Badge, Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
@@ -12,7 +12,6 @@ import { useProfileCompletionGate } from "@/features/account/view/profile-comple
 import { useBookingGroup, type BookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/payment/view/money";
 import { canReconcile, paymentPhase, type PaymentAttempt } from "@/features/payment/model/outcome";
-import { handoffTarget } from "@/features/payment/model/provider-handoff";
 import {
   isNoAttemptStarted,
   isProviderUnreachable,

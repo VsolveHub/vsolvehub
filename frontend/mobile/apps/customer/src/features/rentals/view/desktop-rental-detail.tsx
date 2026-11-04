@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useAuthStore } from "@vsolve/mobile-core";
+import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { Text, TouchDatePicker } from "@vsolve/mobile-ui";
 import {
   AlertCircle,
@@ -34,7 +34,6 @@ import {
   type RentalAsset,
   type RentalBooking,
 } from "../model";
-import { completeOrOpenRentalCheckout } from "../payment-handoff";
 import { addDaysIso, todayIso } from "../pickup-time";
 import { bookRental, fetchMyRentals, fetchRentalPlatformFee } from "../queries";
 
@@ -134,6 +133,7 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
   const overlap = checkDateOverlap(startDate, endDate, asset.reserved_ranges);
   const blockBooking = permanentlyOutOfStock || Boolean(overlap);
 
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
   const mutation = useMutation({
     mutationFn: () =>
       bookRental({
@@ -156,7 +156,7 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
       if (attemptId) {
         setIsProcessing(true);
         try {
-          await completeOrOpenRentalCheckout(String(attemptId));
+          await completeOrOpenCheckout(String(attemptId));
           router.push("/activity?type=rentals");
         } catch {
           router.push("/activity?type=rentals");

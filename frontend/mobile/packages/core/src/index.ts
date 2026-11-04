@@ -7,6 +7,7 @@ export { installationId } from "./auth/installation-id";
 export { deviceLabel } from "./auth/device-label";
 export { readSessionToken, writeSessionToken, deleteSessionToken } from "./auth/token-store";
 export { useMobileOtpFlow } from "./auth/use-mobile-otp-flow";
+export { phoneAuthProvider } from "./auth/firebase-module";
 export type { MobileOtpFlow } from "./auth/use-mobile-otp-flow";
 export { useMobileLogout } from "./auth/use-mobile-logout";
 
@@ -28,6 +29,18 @@ export type { SignedUpload } from "./upload/upload";
 
 export { RazorpayCheckout } from "./payments/RazorpayCheckout";
 export type { RazorpayCheckoutProps } from "./payments/RazorpayCheckout";
+export {
+  ProviderCheckoutHost,
+  useCompleteOrOpenCheckout,
+  useProviderCheckout,
+} from "./payments/checkout-host";
+export type { CheckoutEnded, CheckoutOutcome } from "./payments/checkout-host";
+export {
+  fetchPaymentAttempt,
+  handoffTarget,
+  waitForPaymentHandoff,
+} from "./payments/handoff";
+export type { HandoffTarget, PaymentAttemptDetail } from "./payments/handoff";
 export { razorpayCheckoutHtml, shouldOpenPaymentUrlExternally } from "./payments/checkout-html";
 
 export { getCurrentPosition } from "./location/position";

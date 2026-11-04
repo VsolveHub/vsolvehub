@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.93.0
+  version: 1.94.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -412,6 +412,72 @@ paths:
       responses:
         '204':
           description: The current session was revoked.
+  /api/v1/auth/mobile/firebase/verify/:
+    post:
+      operationId: auth_mobile_firebase_verify_create
+      description: |-
+        Firebase phone sign-in for the apps.
+
+        The web's Firebase check (`verify_firebase_login`), answered with a bearer token instead of
+        cookies, like `MobileOtpVerifyView`. The app sends the precheck to the shared
+        `POST /auth/firebase/precheck/` first, exactly as the web does.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileFirebaseVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MobileFirebaseVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MobileFirebaseVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAuthenticatedSession'
+              examples:
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      display_name: Gopal Rao
+                      full_name: ''
+                      email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Firebase auth is disabled or `intended_role` was set and this
+            number holds no such account.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Rate limit exceeded.
   /api/v1/auth/mobile/otp/verify/:
     post:
       operationId: auth_mobile_otp_verify_create
@@ -5289,6 +5355,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReverseGeocodeResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/geocoding/search/:
+    get:
+      operationId: geocoding_search_retrieve
+      description: |-
+        Places matching a typed address: the mobile apps' address search.
+
+        The web searches with Google's browser library; a native app cannot load it, so the same
+        lookup runs here with the server key. A result only places the pin: the address text then
+        comes from `POST /geocoding/reverse/` for that pin, exactly as on the web.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+          minLength: 3
+          maxLength: 200
+        required: true
+      tags:
+      - Locations
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaceSearchResponse'
           description: ''
         '400':
           content:
@@ -31089,6 +31201,38 @@ components:
       - session_expires_at
       - session_token
       - user
+    MobileFirebaseVerifyRequest:
+      type: object
+      description: The web Firebase verify body, with a required installation id.
+      properties:
+        id_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Firebase ID token issued after client-side Phone Auth.
+        intended_role:
+          writeOnly: true
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/IntendedRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        referral_code:
+          type: string
+          writeOnly: true
+          description: Applied only when this verification creates a new account.
+          maxLength: 32
+        device_identifier:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+        device_label:
+          type: string
+          writeOnly: true
+          maxLength: 100
+      required:
+      - device_identifier
+      - id_token
     MobileOtpVerifyRequest:
       type: object
       description: Same OTP body as the web, with a required installation id.
@@ -38675,6 +38819,36 @@ components:
           maxItems: 366
       required:
       - days
+    PlaceSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaceSuggestion'
+          readOnly: true
+      required:
+      - results
+    PlaceSuggestion:
+      type: object
+      properties:
+        label:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+      required:
+      - label
+      - latitude
+      - longitude
     PlanQuoteCreateRequest:
       type: object
       properties:

@@ -82,6 +82,25 @@ export function useReverseGeocode() {
   });
 }
 
+export type PlaceSuggestion = Schemas["PlaceSuggestion"];
+
+/**
+ * Places matching what the person typed, for picking a pin. The web searches with Google's
+ * browser library; the app asks Django, which runs the same lookup with the server key. A result
+ * only places the pin: the address text then comes from `useReverseGeocode` for that pin.
+ */
+export function usePlaceSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["geocoding", "search", q.toLowerCase()],
+    queryFn: () =>
+      request(() => getApiClient().GET("/api/v1/geocoding/search/", { params: { query: { q } } })),
+    enabled: q.length >= 3,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+}
+
 export function useAddresses(enabled = true) {
   return useQuery({
     queryKey: queryKeys.addresses.list(),

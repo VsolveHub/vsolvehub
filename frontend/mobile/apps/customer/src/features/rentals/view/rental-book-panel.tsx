@@ -15,12 +15,11 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, TextInput, View } from "react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
-import { useAuthStore } from "@vsolve/mobile-core";
+import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { useCustomerProfile } from "@/features/account/queries";
 import { preferredAddressId, useAddresses, type Address } from "@/features/addresses/queries";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 import { calculateRentalDays, formatPaise, type RentalAsset, type RentalBooking } from "../model";
-import { completeOrOpenRentalCheckout } from "../payment-handoff";
 import { addDaysIso, todayIso } from "../pickup-time";
 import { bookRental, fetchMyRentals, fetchRentalPlatformFee } from "../queries";
 import { deliveryAddressFrom, deliveryProblem, extractPhoneDigits } from "./delivery-helpers";
@@ -160,6 +159,7 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
   const platformFeePaise = Math.floor((rentalChargePaise * feePercent) / 100);
   const totalDuePaise = rentalChargePaise + platformFeePaise + depositPaise;
 
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
   const mutation = useMutation({
     mutationFn: () => {
       const deliveryAddress =
@@ -186,9 +186,7 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
         const attemptId = deposit?.payment_attempt_id;
 
         if (attemptId) {
-          const result = await completeOrOpenRentalCheckout(String(attemptId), {
-            businessName: "Vsolve Hub",
-          });
+          const result = await completeOrOpenCheckout(String(attemptId));
           if (result.mode === "pending") {
             Alert.alert(
               "Pending Payment",

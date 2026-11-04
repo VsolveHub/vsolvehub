@@ -4,12 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@vsolve/api-client";
 import { RecaptchaVerifier } from "firebase/auth";
 
-import {
-  formatToE164,
-  mapFirebaseError,
-  startFirebasePhoneVerification,
-  useFirebasePhoneFlow,
-} from "./firebase-phone";
+import { formatToE164, mapFirebaseError } from "./firebase-errors";
+import { startFirebasePhoneVerification, useFirebasePhoneFlow } from "./firebase-phone";
 import type { OtpFlowOptions } from "./otp-flow";
 import { queryKeys } from "./keys";
 

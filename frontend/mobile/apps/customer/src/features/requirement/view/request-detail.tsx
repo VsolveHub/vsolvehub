@@ -22,6 +22,7 @@ import { useAddresses } from "@/features/addresses/queries";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { toEngagementLists } from "@/features/engagement/adapters";
 import { useEngagements } from "@/features/engagement/queries";
+import { RequestAccessPanel } from "@/features/access/view/request-access-panel";
 import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents, type RequestRowView, type TimelineEventView } from "@/features/requirement/adapters";
 import { engagementDestination } from "@/features/requirement/model/engagement-redirect";
 import {
@@ -175,6 +176,14 @@ export function RequestDetail({ requirementId }: { requirementId: string }) {
       {draft !== null ? (
         <View className="gap-2">
           <Text className="text-sm text-text-secondary">{draft.service_name}</Text>
+          {/* The visit plan or the quote unlock, with its payment; the web's money surface. */}
+          {draft.status !== "DRAFT" ? (
+            <RequestAccessPanel
+              requirementId={requirementId}
+              archetype={toArchetype(draft)}
+              supportAction={support}
+            />
+          ) : null}
           <Link href={requestQuotesHref(requirementId)} asChild>
             <Pressable>
               <Text className="text-sm font-semibold text-text-link">Quotes</Text>

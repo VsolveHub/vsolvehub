@@ -1,5 +1,6 @@
 // Ported from frontend/apps/customer/features/engagement/view/engagement-screen.tsx
 import { describeError, isStageNotFundable, type StageKind } from "@vsolve/query/native";
+import { useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { Badge, Button, Dialog, EmptyState, ErrorState, Readout, Sheet, Skeleton, Text, Timeline, TimelineEvent, buttonStyles } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
@@ -719,20 +720,40 @@ function FundStageDialog({
   onClose: () => void;
 }) {
   const fund = useFundStage();
-  // Capture is confirmed only by the provider's webhook, so once the checkout exists the
-  // dialog says the charge is with the provider rather than pretending money moved.
+  const completeOrOpenCheckout = useCompleteOrOpenCheckout();
+  // Capture is confirmed only by the provider's webhook, so once Razorpay closes the dialog
+  // says the charge is with the provider rather than pretending money moved.
   const [settled, setSettled] = useState<"awaiting-provider" | null>(null);
-  const isWorking = fund.isPending;
-  const failure = fund.error;
+  const [handoffError, setHandoffError] = useState<unknown>(null);
+  const [isHandingOff, setIsHandingOff] = useState(false);
+  const isWorking = fund.isPending || isHandingOff;
+  const failure = fund.error ?? handoffError;
 
   async function pay() {
-    await fund.mutateAsync({ engagementId, stageId: stage.stageId });
-    setSettled("awaiting-provider");
+    // `useFundStage` keys its idempotency on the stage, so a second press returns the same
+    // attempt rather than a second charge.
+    setHandoffError(null);
+    const checkout = await fund.mutateAsync({ engagementId, stageId: stage.stageId });
+    const attemptId = checkout?.payment_attempt_id ?? null;
+    if (attemptId === null) {
+      setSettled("awaiting-provider");
+      return;
+    }
+    setIsHandingOff(true);
+    try {
+      await completeOrOpenCheckout(String(attemptId));
+      setSettled("awaiting-provider");
+    } catch (error) {
+      setHandoffError(error);
+    } finally {
+      setIsHandingOff(false);
+    }
   }
 
   return (
     <Dialog
-      open
+      // Hidden while Razorpay is open: iOS cannot show the checkout over another modal.
+      open={!isHandingOff}
       onOpenChange={(next) => {
         if (!next && !isWorking) onClose();
       }}

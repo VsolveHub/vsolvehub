@@ -1,5 +1,20 @@
 # API Contract Changelog
 
+## 1.94.0 - Firebase sign-in for the apps, and address search
+
+Additive.
+
+- **Added** `POST /auth/mobile/firebase/verify/` (`MobileFirebaseVerifyRequest` →
+  `MobileAuthenticatedSession`): the web's Firebase verify body (`id_token`, `intended_role`,
+  `referral_code`, `device_label`) with a required `device_identifier`. Same checks as
+  `POST /auth/firebase/verify/`, answered with `session_token` for bearer auth instead of cookies.
+  `404` while Firebase auth is off. The apps send `POST /auth/firebase/precheck/` first, as the web.
+- **Added** `GET /geocoding/search/?q=` (`PlaceSearchResponse`: `results[]` of `{label, latitude,
+  longitude}`, at most five, India only): address search for the apps, which cannot load Google's
+  browser library. `q` is 3–200 characters. A result only places the pin; the address text comes
+  from `POST /geocoding/reverse/`. `503 geocoding_unavailable` without a provider.
+- Removed: none. Renamed: none.
+
 ## 1.93.0 - Mobile app sign-in, push devices and version check
 
 Additive. Published from the `mobile-expo-apps` branch's backend, which already served these

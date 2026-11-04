@@ -52,8 +52,8 @@ import {
 import {
   fetchPartnerListing,
   fetchSubscriptionPlans,
-  purchaseSubscription,
 } from "../queries";
+import { usePlanPurchase } from "../use-plan-purchase";
 import type { PartnerListing } from "../model";
 import { SubscriptionDialog } from "./subscription-dialog";
 
@@ -451,16 +451,12 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
     },
   });
 
-  const subscribeMutation = useMutation({
-    mutationFn: (planId: string) => purchaseSubscription(planId),
-    onSuccess: () => {
+  const subscribeMutation = usePlanPurchase({
+    beforeCheckout: () => setShowSubscription(false),
+    onSettled: () => {
       setShowSubscription(false);
-      Alert.alert("Success", "Subscription updated successfully!");
       void qc.invalidateQueries({ queryKey: ["partner-listing-home"] });
       void qc.invalidateQueries({ queryKey: ["vendor-subscriptions"] });
-    },
-    onError: (err: any) => {
-      Alert.alert("Subscription Error", err?.message || "Failed to upgrade subscription.");
     },
   });
 

@@ -16,10 +16,12 @@ from rest_framework.views import APIView
 
 from apps.identity.models import User
 from apps.locations.exceptions import GeocodingUnavailableApiError
-from apps.locations.geocoding import GeocodingError, reverse_geocode
+from apps.locations.geocoding import GeocodingError, reverse_geocode, search_places
 from apps.locations.models import Address
 from apps.locations.serializers import (
     AddressSerializer,
+    PlaceSearchQuerySerializer,
+    PlaceSearchResponseSerializer,
     ReverseGeocodeRequestSerializer,
     ReverseGeocodeResponseSerializer,
     ServiceabilityRequestSerializer,
@@ -138,6 +140,41 @@ class ReverseGeocodeView(APIView):
         except GeocodingError as exc:
             raise GeocodingUnavailableApiError from exc
         return Response(ReverseGeocodeResponseSerializer(asdict(result)).data)
+
+
+class PlaceSearchView(APIView):
+    """Places matching a typed address: the mobile apps' address search.
+
+    The web searches with Google's browser library; a native app cannot load it, so the same
+    lookup runs here with the server key. A result only places the pin: the address text then
+    comes from `POST /geocoding/reverse/` for that pin, exactly as on the web.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "geocoding"
+
+    @extend_schema(
+        tags=["Locations"],
+        parameters=[PlaceSearchQuerySerializer],
+        responses={
+            200: PlaceSearchResponseSerializer,
+            400: ApiErrorSerializer,
+            429: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request) -> Response:
+        query = PlaceSearchQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        try:
+            results = search_places(query=str(query.validated_data["q"]))
+        except GeocodingError as exc:
+            raise GeocodingUnavailableApiError from exc
+        return Response(
+            PlaceSearchResponseSerializer({"results": [asdict(result) for result in results]}).data
+        )
 
 
 class ServiceabilityCheckView(APIView):
