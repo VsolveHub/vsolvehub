@@ -1,4 +1,6 @@
 // Ported from frontend/apps/partner/features/proposal/model/recent-presets.ts
+import { storageAdapter } from "@vsolve/mobile-core";
+
 /**
  * The presets this vendor reaches for, so they are not hunting every time.
  *
@@ -32,10 +34,9 @@ const STORAGE_KEY = "vsh-partner-recent-presets";
 /** Enough to cover a vendor's usual repertoire without becoming the whole list. */
 const LIMIT = 6;
 
-function read(): string[] {
-  if (typeof window === "undefined") return [];
+export async function readRecentPresets(): Promise<string[]> {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = await storageAdapter.getItem(STORAGE_KEY);
     if (raw === null) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -46,11 +47,11 @@ function read(): string[] {
 }
 
 /** Records a preset as just-used. Most recent first, de-duplicated, capped. */
-export function rememberPreset(code: string): void {
-  if (typeof window === "undefined") return;
-  const next = [code, ...read().filter((entry) => entry !== code)].slice(0, LIMIT);
+export async function rememberPreset(code: string): Promise<void> {
+  const current = await readRecentPresets();
+  const next = [code, ...current.filter((entry) => entry !== code)].slice(0, LIMIT);
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    await storageAdapter.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
     // A vendor who cannot write a preference can still write an estimate.
   }
@@ -65,10 +66,18 @@ export function rememberPreset(code: string): void {
  * actually runs in (strip out, then walls, then wiring…). Shuffling that for
  * a first-time vendor would trade one kind of hunting for another.
  */
-export function byRecentFirst<T extends { readonly code: string }>(
+export async function byRecentFirst<T extends { readonly code: string }>(
   presets: readonly T[],
+): Promise<readonly T[]> {
+  const recent = await readRecentPresets();
+  return sortPresetsByRecentCodes(presets, recent);
+}
+
+/** Synchronous sort given already-loaded recent codes */
+export function sortPresetsByRecentCodes<T extends { readonly code: string }>(
+  presets: readonly T[],
+  recent: readonly string[],
 ): readonly T[] {
-  const recent = read();
   if (recent.length === 0) return presets;
 
   const rank = (preset: T): number => {

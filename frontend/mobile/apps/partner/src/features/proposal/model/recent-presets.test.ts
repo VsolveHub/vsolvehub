@@ -1,8 +1,4 @@
-// Ported from frontend/apps/partner/features/proposal/model/recent-presets.test.ts
-// @vitest-environment jsdom
-// The module under test is a localStorage convenience; every case exercises the
-// store, and the node environment has no `window` for `afterEach` to clear.
-
+import { storageAdapter } from "@vsolve/mobile-core";
 import { byRecentFirst, rememberPreset } from "./recent-presets";
 
 const KEY = "vsh-partner-recent-presets";
@@ -15,19 +11,20 @@ const PRESETS = [
   { code: "plaster" },
 ] as const;
 
-afterEach(() => {
-  window.localStorage.clear();
-  vi.restoreAllMocks();
-});
-
-describe("byRecentFirst", () => {
-  it("leaves the declared order alone for a vendor who has never quoted", () => {
-    expect(byRecentFirst(PRESETS)).toEqual(PRESETS);
+describe("byRecentFirst and rememberPreset", () => {
+  beforeEach(async () => {
+    await storageAdapter.removeItem(KEY);
+    jest.restoreAllMocks();
   });
 
-  it("floats a used preset to the top", () => {
-    rememberPreset("plaster");
-    expect(byRecentFirst(PRESETS).map((entry) => entry.code)).toEqual([
+  it("leaves the declared order alone for a vendor who has never quoted", async () => {
+    expect(await byRecentFirst(PRESETS)).toEqual(PRESETS);
+  });
+
+  it("floats a used preset to the top", async () => {
+    await rememberPreset("plaster");
+    const result = await byRecentFirst(PRESETS);
+    expect(result.map((entry) => entry.code)).toEqual([
       "plaster",
       "strip_out",
       "civil",
@@ -36,12 +33,13 @@ describe("byRecentFirst", () => {
     ]);
   });
 
-  it("orders several used presets most-recent first", () => {
-    rememberPreset("civil");
-    rememberPreset("plaster");
-    rememberPreset("wiring");
+  it("orders several used presets most-recent first", async () => {
+    await rememberPreset("civil");
+    await rememberPreset("plaster");
+    await rememberPreset("wiring");
 
-    expect(byRecentFirst(PRESETS).map((entry) => entry.code)).toEqual([
+    const result = await byRecentFirst(PRESETS);
+    expect(result.map((entry) => entry.code)).toEqual([
       "wiring",
       "plaster",
       "civil",
@@ -50,15 +48,10 @@ describe("byRecentFirst", () => {
     ]);
   });
 
-  /*
-    The property that makes the sheet predictable: presets the vendor has never
-    used keep the order `estimate-presets` declares them in, which is the order
-    the trade actually runs in (strip out, then walls, then wiring). Sorting
-    them among themselves would trade one kind of hunting for another.
-  */
-  it("is stable among presets that have never been used", () => {
-    rememberPreset("plumbing");
-    expect(byRecentFirst(PRESETS).map((entry) => entry.code)).toEqual([
+  it("is stable among presets that have never been used", async () => {
+    await rememberPreset("plumbing");
+    const result = await byRecentFirst(PRESETS);
+    expect(result.map((entry) => entry.code)).toEqual([
       "plumbing",
       "strip_out",
       "civil",
@@ -67,64 +60,55 @@ describe("byRecentFirst", () => {
     ]);
   });
 
-  it("ignores remembered codes that are not in the list it is given", () => {
-    rememberPreset("a_code_from_another_trade");
-    expect(byRecentFirst(PRESETS)).toEqual(PRESETS);
-  });
-});
-
-describe("rememberPreset", () => {
-  it("de-duplicates rather than growing on every use", () => {
-    rememberPreset("wiring");
-    rememberPreset("civil");
-    rememberPreset("wiring");
-
-    expect(JSON.parse(window.localStorage.getItem(KEY) ?? "[]")).toEqual(["wiring", "civil"]);
+  it("ignores remembered codes that are not in the list it is given", async () => {
+    await rememberPreset("a_code_from_another_trade");
+    expect(await byRecentFirst(PRESETS)).toEqual(PRESETS);
   });
 
-  it("caps the list at six", () => {
-    for (const code of ["a", "b", "c", "d", "e", "f", "g", "h"]) rememberPreset(code);
+  it("de-duplicates rather than growing on every use", async () => {
+    await rememberPreset("wiring");
+    await rememberPreset("civil");
+    await rememberPreset("wiring");
 
-    const stored: string[] = JSON.parse(window.localStorage.getItem(KEY) ?? "[]");
+    const raw = await storageAdapter.getItem(KEY);
+    expect(JSON.parse(raw ?? "[]")).toEqual(["wiring", "civil"]);
+  });
+
+  it("caps the list at six", async () => {
+    for (const code of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+      await rememberPreset(code);
+    }
+
+    const raw = await storageAdapter.getItem(KEY);
+    const stored: string[] = JSON.parse(raw ?? "[]");
     expect(stored).toHaveLength(6);
     expect(stored[0]).toBe("h");
     expect(stored).not.toContain("a");
   });
-});
 
-/*
-  An estimate must never fail to open because a preference could not be read.
-  localStorage throws in private modes and on quota, and the store is shared
-  with anything else that can write to this origin.
-*/
-describe("a store that cannot be trusted", () => {
-  it("treats unparseable JSON as no history", () => {
-    window.localStorage.setItem(KEY, "{not json");
-    expect(byRecentFirst(PRESETS)).toEqual(PRESETS);
+  it("treats unparseable JSON as no history", async () => {
+    await storageAdapter.setItem(KEY, "{not json");
+    expect(await byRecentFirst(PRESETS)).toEqual(PRESETS);
   });
 
-  it("treats a non-array payload as no history", () => {
-    window.localStorage.setItem(KEY, JSON.stringify({ wiring: 1 }));
-    expect(byRecentFirst(PRESETS)).toEqual(PRESETS);
+  it("treats a non-array payload as no history", async () => {
+    await storageAdapter.setItem(KEY, JSON.stringify({ wiring: 1 }));
+    expect(await byRecentFirst(PRESETS)).toEqual(PRESETS);
   });
 
-  it("drops non-string entries rather than ranking on them", () => {
-    window.localStorage.setItem(KEY, JSON.stringify([42, "plaster", null]));
-    expect(byRecentFirst(PRESETS)[0]?.code).toBe("plaster");
+  it("drops non-string entries rather than ranking on them", async () => {
+    await storageAdapter.setItem(KEY, JSON.stringify([42, "plaster", null]));
+    const result = await byRecentFirst(PRESETS);
+    expect(result[0]?.code).toBe("plaster");
   });
 
-  it("survives a read that throws", () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("SecurityError");
-    });
-    expect(() => byRecentFirst(PRESETS)).not.toThrow();
-    expect(byRecentFirst(PRESETS)).toEqual(PRESETS);
+  it("survives a read that throws", async () => {
+    jest.spyOn(storageAdapter, "getItem").mockRejectedValueOnce(new Error("SecurityError"));
+    expect(await byRecentFirst(PRESETS)).toEqual(PRESETS);
   });
 
-  it("survives a write that throws, so a full quota cannot block an estimate", () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("QuotaExceededError");
-    });
-    expect(() => rememberPreset("wiring")).not.toThrow();
+  it("survives a write that throws", async () => {
+    jest.spyOn(storageAdapter, "setItem").mockRejectedValueOnce(new Error("QuotaExceededError"));
+    await expect(rememberPreset("wiring")).resolves.not.toThrow();
   });
 });

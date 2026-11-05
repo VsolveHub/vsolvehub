@@ -56,6 +56,8 @@ export { VersionGate, UpdateRequiredScreen } from "./version/VersionGate";
 export { compareVersions, versionIsBelow } from "./version/compare";
 
 export { kvGet, kvSet, kvRemove } from "./storage/kv";
+export { storageAdapter } from "./storage/adapter";
+export type { StorageAdapter } from "./storage/adapter";
 
 
 export type {

@@ -92,9 +92,26 @@ export function CommercialEstimateComposer({
   onSend,
   notice,
 }: CommercialEstimateComposerProps) {
-  const [draft, setDraft] = useState<CommercialEstimateDraft>(
-    () => loadCommercialEstimate(invitationId) ?? EMPTY_COMMERCIAL_ESTIMATE,
-  );
+  const [draft, setDraft] = useState<CommercialEstimateDraft>(EMPTY_COMMERCIAL_ESTIMATE);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCommercialEstimate(invitationId)
+      .then((saved) => {
+        if (!cancelled && saved) {
+          setDraft(saved);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoaded(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invitationId]);
   const [attempted, setAttempted] = useState(false);
   const [pendingMode, setPendingMode] = useState<EstimateMode | null>(null);
   const [picker, setPicker] = useState<Picker>(null);
@@ -127,8 +144,9 @@ export function CommercialEstimateComposer({
     preview.data !== undefined && debouncedPreview !== null && debouncedPreview.fingerprint === currentFingerprint;
 
   useEffect(() => {
-    saveCommercialEstimate(invitationId, draft);
-  }, [draft, invitationId]);
+    if (!isLoaded) return;
+    void saveCommercialEstimate(invitationId, draft);
+  }, [draft, invitationId, isLoaded]);
 
   function applyMode(mode: EstimateMode) {
     setDraft((current) => ({
@@ -663,6 +681,6 @@ function PresetPicker({ open, picker, mode, work, materials, onClose, onCustom, 
   );
 }
 
-export function clearSavedCommercialEstimate(invitationId: string) {
-  clearCommercialEstimate(invitationId);
+export async function clearSavedCommercialEstimate(invitationId: string): Promise<void> {
+  await clearCommercialEstimate(invitationId);
 }

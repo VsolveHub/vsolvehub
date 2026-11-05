@@ -7,7 +7,6 @@ module.exports = {
     "offers/offers.test.tsx",
     "offers/live-events.test.ts",
     "notifications/queries.test.tsx",
-    "proposal/model/recent-presets.test.ts",
     "enquiry/contact-boundary.test.ts",
   ],
   moduleNameMapper: {
