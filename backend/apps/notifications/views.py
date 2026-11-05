@@ -564,7 +564,7 @@ class CustomerPushSubscriptionDetailView(APIView):
 
 
 class BasePushNotificationPreferencesView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
     role: str = ""
 
     @extend_schema(
@@ -611,7 +611,7 @@ class BasePushNotificationPreferencesView(APIView):
             ),
         },
     )
-    def patch(self, request: Request) -> Response:
+    def patch(self, request: Request) -> Response:  # noqa: PLR0912
         role = self.role
         user = cast(User, request.user)
         metadata = PushNotificationPreference.CATEGORY_METADATA.get(role, {})

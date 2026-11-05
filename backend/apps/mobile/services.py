@@ -11,8 +11,13 @@ from rest_framework.request import Request
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
 from apps.mobile.models import PushDevice, PushTicket
+from apps.mobile.onesignal_delivery import (
+    deliver_push_intent_by_onesignal,
+    is_onesignal_channel,
+    mirror_in_app_notice_by_onesignal,
+)
 from apps.mobile.push_provider import PushProviderError, PushSendResult, get_push_provider
-from apps.mobile.push_templates import render_push_template
+from apps.mobile.push_templates import registered_push_template_codes, render_push_template
 from apps.notifications.models import NotificationDelivery, NotificationIntent
 from apps.notifications.serializers import NotificationSerializer
 from apps.notifications.services import MAX_DELIVERY_ATTEMPTS, record_delivery_attempt
@@ -175,7 +180,24 @@ def deliver_push_intent(*, intent_id: UUID) -> None:
         return
     if intent.attempts >= MAX_DELIVERY_ATTEMPTS:
         return
+    if is_onesignal_channel():
+        _deliver_by_onesignal(intent)
+    else:
+        _deliver_by_expo(intent)
 
+
+def _deliver_by_onesignal(intent: NotificationIntent) -> None:
+    # A PUSH intent with no copy here was written by `OneSignalMessageTransport`, which sends it
+    # itself; sending it again would be a second banner for one event.
+    if intent.template_code not in registered_push_template_codes():
+        return
+    copy = render_push_template(template_code=intent.template_code, context=intent.context)
+    deliver_push_intent_by_onesignal(
+        intent=intent, title=copy.title, body=copy.body, target=copy.target
+    )
+
+
+def _deliver_by_expo(intent: NotificationIntent) -> None:
     copy = render_push_template(template_code=intent.template_code, context=intent.context)
     devices = [
         device
@@ -211,7 +233,7 @@ def deliver_push_intent(*, intent_id: UUID) -> None:
             ]
         )
     except PushProviderError as exc:
-        logger.warning("Push delivery failed for %s: %s", intent_id, exc.failure_code)
+        logger.warning("Push delivery failed for %s: %s", intent.id, exc.failure_code)
         _fail_intent(intent=intent, failure_code=exc.failure_code)
         return
 
@@ -227,6 +249,15 @@ def deliver_push_intent(*, intent_id: UUID) -> None:
     )
 
 
+def _target_of(value: object) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    kind, target_id = value.get("kind"), value.get("id")
+    if not kind or not target_id:
+        return None
+    return {"kind": str(kind), "id": str(target_id)}
+
+
 def mirror_in_app_notice(*, intent_id: UUID) -> None:
     """Copy an already-delivered in-app notice onto the recipient's phones.
 
@@ -240,6 +271,19 @@ def mirror_in_app_notice(*, intent_id: UUID) -> None:
         return
     if intent.status != NotificationIntent.Status.SENT:
         return
+    if is_onesignal_channel():
+        rendered_notice = NotificationSerializer(intent).data
+        mirror_in_app_notice_by_onesignal(
+            intent=intent,
+            title=str(rendered_notice.get("title") or ""),
+            body=str(rendered_notice.get("body") or ""),
+            target=_target_of(rendered_notice.get("target")),
+        )
+    else:
+        _mirror_by_expo(intent)
+
+
+def _mirror_by_expo(intent: NotificationIntent) -> None:
     if PushTicket.objects.filter(intent=intent).exists():
         return
     devices = _devices_for_intent(intent)

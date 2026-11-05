@@ -103,7 +103,7 @@ def test_booking_windows_publishes_instant_summary_when_online_partner_reachable
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -132,7 +132,7 @@ def test_booking_windows_publishes_instant_unavailable_when_no_partner_online(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -158,7 +158,7 @@ def test_booking_windows_publishes_instant_unavailable_outside_operating_hours(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: NIGHT_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     response = client.post(
@@ -176,7 +176,7 @@ def test_booking_windows_publishes_instant_unavailable_outside_operating_hours(
 @pytest.mark.django_db
 def test_instant_plan_set_creation_uses_earliest_starts_at(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -207,7 +207,7 @@ def test_scheduled_plan_set_creation_uses_selected_starts_at(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -242,7 +242,7 @@ def test_instant_booking_group_dispatches_via_same_day_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -293,7 +293,7 @@ def test_scheduled_booking_group_dispatches_via_advance_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -346,7 +346,7 @@ def test_scheduled_booking_group_dispatches_via_advance_path(
 @pytest.mark.django_db
 def test_mode_switch_invalidates_prior_plan_set_and_quote(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     area = ServiceArea.objects.get(slug="hyderabad-500032")
@@ -410,7 +410,7 @@ def test_no_instant_booking_created_when_no_partner_reachable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(timezone, "now", lambda: FROZEN_NOW)
-    client, customer, address_id, cart_version = _customer_context()
+    client, _customer, address_id, cart_version = _customer_context()
     _add_item(client, slug="switch-socket-repair", cart_version=cart_version)
 
     # No partner created / online

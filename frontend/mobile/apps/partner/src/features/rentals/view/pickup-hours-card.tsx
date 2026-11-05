@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, COLOR_TOKENS, Dialog, Input, Text, useT } from "@vsolve/mobile-ui";
 import { Clock, Copy, Plus, X } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
 import {
   fetchPartnerPickupHours,
@@ -82,6 +82,8 @@ export function PickupHoursCard() {
   const [error, setError] = useState<string | null>(null);
   const [prevHoursData, setPrevHoursData] = useState<PickupHours | undefined>(undefined);
   const today = todayIso();
+  const { height: windowHeight } = useWindowDimensions();
+  const maxBodyHeight = Math.max(300, Math.min(windowHeight * 0.58, 480));
 
   // Adjust state when query finishes loading without useEffect cascading setState
   if (hours.data !== prevHoursData) {
@@ -187,8 +189,37 @@ export function PickupHoursCard() {
         }}
         title={t("rentals.hours.title")}
         description={t("rentals.hours.dialogDescription")}
+        footer={
+          <View className="flex-row items-center justify-end gap-2 w-full">
+            <Button
+              variant="ghost"
+              disabled={save.isPending}
+              onPress={() => setOpen(false)}
+              className="h-9 px-4"
+            >
+              <Text className="text-xs font-bold text-text-muted">{t("common.cancel")}</Text>
+            </Button>
+            <Button
+              variant="primary"
+              disabled={save.isPending}
+              onPress={() => save.mutate()}
+              className="h-9 px-4 min-w-[100px] items-center justify-center"
+            >
+              {save.isPending ? (
+                <ActivityIndicator size="small" color={COLOR_TOKENS.white} />
+              ) : (
+                <Text className="text-xs font-bold text-white">{t("common.save")}</Text>
+              )}
+            </Button>
+          </View>
+        }
       >
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={{ maxHeight: maxBodyHeight, flexShrink: 1 }}
+          contentContainerStyle={{ paddingBottom: 16 }}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+        >
           <View className="gap-4 py-2">
             {/* Days Schedule */}
             <View className="gap-2.5">
@@ -348,29 +379,7 @@ export function PickupHoursCard() {
               </View>
             ) : null}
 
-            {/* Actions */}
-            <View className="flex-row items-center justify-end gap-2 pt-2">
-              <Button
-                variant="ghost"
-                disabled={save.isPending}
-                onPress={() => setOpen(false)}
-                className="h-9 px-4"
-              >
-                <Text className="text-xs font-bold text-text-muted">{t("common.cancel")}</Text>
-              </Button>
-              <Button
-                variant="primary"
-                disabled={save.isPending}
-                onPress={() => save.mutate()}
-                className="h-9 px-4 min-w-[100px] items-center justify-center"
-              >
-                {save.isPending ? (
-                  <ActivityIndicator size="small" color={COLOR_TOKENS.white} />
-                ) : (
-                  <Text className="text-xs font-bold text-white">{t("common.save")}</Text>
-                )}
-              </Button>
-            </View>
+            
           </View>
         </ScrollView>
       </Dialog>

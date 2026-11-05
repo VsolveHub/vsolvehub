@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatPaise } from "../model";
 import { fetchRentalAsset } from "../queries";
 import { RentalBookPanel } from "./rental-book-panel";
+import { RentalPhotos } from "./rental-photos";
 import { useIsDesktop } from "@/lib/responsive";
 import { DesktopRentalDetail } from "./desktop-rental-detail";
 
@@ -139,6 +140,8 @@ function MobileRentalDetailContent({
           Back to Equipment Rentals
         </Text>
       </Pressable>
+
+      <RentalPhotos media={asset.media} title={asset.title} />
 
       {/* Card 1: Equipment Details Card (Web 100% Parity) */}
       <View className="gap-4 rounded-2xl border border-line bg-surface p-6 shadow-xs">

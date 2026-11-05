@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PUSH_NOTIFICATION_EVENTS,
   trackPushAnalyticsEvent,
-  type PushNotificationEventName,
 } from "@vsolve/config";
 
 interface OneSignalUserPushSubscription {
@@ -179,6 +178,10 @@ export function usePushPermission({
     readStoredNumber(promptCountKey) || 0,
   );
 
+  // Read the clock once when the hook mounts. Cooldowns last days, so this stays accurate
+  // and keeps render pure. A dismissal later than this time still counts as "in cooldown".
+  const [mountedAt] = useState(() => Date.now());
+
   const [showPrePrompt, setShowPrePrompt] = useState(false);
   const unsupportedEmittedRef = useRef(false);
 
@@ -199,9 +202,8 @@ export function usePushPermission({
   );
 
   // Determine prompt eligibility: must be 'default', supported, and not in cooldown
-  const now = Date.now();
   const isInCooldown =
-    lastDismissedAt !== null && now - lastDismissedAt < cooldownMs;
+    lastDismissedAt !== null && mountedAt - lastDismissedAt < cooldownMs;
 
   const isPromptEligible =
     permissionState === "default" && !isInCooldown;

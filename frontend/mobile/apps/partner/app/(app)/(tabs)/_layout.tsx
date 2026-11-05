@@ -88,7 +88,7 @@ export default function TabsLayout() {
   const isHomeActive = pathname === "/home";
 
   return (
-    <View className="flex-1 bg-canvas">
+    <View className={cn("flex-1", pathname === "/home" ? "bg-[#00112e]" : "bg-canvas")}>
       {/* Top Header for Full Chrome */}
       {chrome === "full" ? (
         <View

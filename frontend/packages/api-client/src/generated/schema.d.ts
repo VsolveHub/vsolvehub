@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.95.0)
- * Checksum: 99bec4de08f10ce5
+ * Source:   contracts/openapi/v1.yaml (version 1.97.0)
+ * Checksum: 8f6a03fb9d3030bf
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3787,7 +3787,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * @description A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+         *
+         *     The read comes first so a change edits what is there instead of overwriting it blind.
+         */
+        get: operations["operations_partner_schedule_retrieve"];
+        /**
+         * @description A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+         *
+         *     The read comes first so a change edits what is there instead of overwriting it blind.
+         */
         put: operations["operations_partners_availability_update"];
         post?: never;
         delete?: never;
@@ -5765,6 +5775,29 @@ export interface paths {
          *     justify the Partner to the platform.
          */
         post: operations["partner_booking_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/route/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The road route from where the Partner is to the visit, for the in-app map.
+         *
+         *     A read, sent as `POST` so the Partner's position travels in the body rather than in a URL
+         *     that proxies log. Under the same gate as the address: the route ends at the Customer's
+         *     door, so it is served exactly when the address is.
+         */
+        post: operations["partner_booking_route"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12535,6 +12568,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             readonly application_count: number;
+            readonly media: components["schemas"]["ListingMedia"][];
             /** Format: uuid */
             readonly role_template: string | null;
             readonly job_category: string;
@@ -12569,6 +12603,28 @@ export interface components {
         };
         ListingFiltersTaxonomy: {
             categories: components["schemas"]["ListingCategoryOption"][];
+        };
+        ListingMedia: {
+            /** Format: uuid */
+            readonly id: string;
+            kind?: components["schemas"]["ListingMediaKindEnum"];
+            /** Format: uri */
+            url: string;
+            alt_text?: string;
+            display_order?: number;
+        };
+        /**
+         * @description * `IMAGE` - Image
+         *     * `ATTACHMENT` - Attachment
+         * @enum {string}
+         */
+        ListingMediaKindEnum: "IMAGE" | "ATTACHMENT";
+        ListingMediaRequest: {
+            kind?: components["schemas"]["ListingMediaKindEnum"];
+            /** Format: uri */
+            url: string;
+            alt_text?: string;
+            display_order?: number;
         };
         /**
          * @description * `DRAFT` - Draft
@@ -12622,6 +12678,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             readonly application_count: number;
+            readonly media: components["schemas"]["ListingMedia"][];
             /** Format: uuid */
             readonly role_template: string | null;
             readonly job_category: string;
@@ -13313,6 +13370,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly display_name: string;
+            readonly phone_number: string;
             readonly experience_years: number;
             /** Format: uuid */
             readonly application_id: string;
@@ -13350,6 +13408,16 @@ export interface components {
             readonly reviewed_at: string | null;
             /** Format: date-time */
             readonly uploaded_at: string;
+        };
+        /**
+         * @description A Partner's current hours, with what an operator needs to change them without typing ids:
+         *     the areas the Partner serves and the consent receipts a change may be recorded against.
+         */
+        OperationsPartnerSchedule: {
+            readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
+            readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
+            readonly service_areas: components["schemas"]["OperationsScheduleArea"][];
+            readonly consents: components["schemas"]["OperationsScheduleConsent"][];
         };
         OperationsPartnerScheduleUpdateRequest: {
             rules: components["schemas"]["PartnerAvailabilityRuleInputRequest"][];
@@ -13438,6 +13506,17 @@ export interface components {
             readonly engagement_status: string | null;
             readonly vendor_display_name: string | null;
             readonly engagement_total_paise: number | null;
+        };
+        OperationsScheduleArea: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        OperationsScheduleConsent: {
+            purpose: string;
+            document_version: string;
+            /** Format: date-time */
+            accepted_at: string;
         };
         OperationsTaxProfileVerifyRequest: {
             /** @default  */
@@ -14497,6 +14576,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             readonly application_count: number;
+            readonly media: components["schemas"]["ListingMedia"][];
             /** Format: uuid */
             readonly role_template: string | null;
             readonly job_category: string;
@@ -14805,6 +14885,13 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        /** @description Where the Partner is now. Used for this one route and not stored. */
+        PartnerRouteOriginRequest: {
+            /** Format: decimal */
+            latitude: string;
+            /** Format: decimal */
+            longitude: string;
+        };
         PartnerSchedule: {
             readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
             readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
@@ -14979,6 +15066,22 @@ export interface components {
             attributes?: unknown;
             readonly upcoming_booking_count: number;
             readonly rooms: components["schemas"]["Room"][];
+        };
+        /**
+         * @description The road route to the visit, for the Partner's map.
+         *
+         *     There is no separate destination point: the line ends at the Customer's pin, which is all a
+         *     map needs, and the pin still never travels as bare coordinates (see
+         *     `PartnerSiteAddressSerializer`).
+         */
+        PartnerVisitRoute: {
+            /** @description Google encoded polyline from the Partner to the Customer's pin. */
+            encoded_polyline: string;
+            distance_meters: number;
+            /** @description Two-wheeler travel time with live traffic. */
+            duration_seconds: number;
+            /** Format: date-time */
+            server_now: string;
         };
         /**
          * @description One withdrawal as the Partner follows it: Requested, Sent, Paid — or Failed, with the
@@ -28633,6 +28736,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor. */
                 cursor?: string;
+                /** @description A name, or a mobile number typed any way (spaces, +91, dashes). */
+                q?: string;
                 /** @description Repeatable skill code. A Partner matching *any* supplied skill is listed — a directory multi-select reads as a union. */
                 skill?: string[];
                 /** @description Filter by application status. */
@@ -28687,6 +28792,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationsPartnerDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_schedule_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPartnerSchedule"];
                 };
             };
             403: {
@@ -33322,6 +33464,65 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_route: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerRouteOriginRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerRouteOriginRequest"];
+                "multipart/form-data": components["schemas"]["PartnerRouteOriginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerVisitRoute"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

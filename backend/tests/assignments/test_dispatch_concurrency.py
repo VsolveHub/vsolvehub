@@ -107,7 +107,8 @@ def test_a_revoke_and_an_accept_cannot_both_win_the_same_offer() -> None:
             status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
         ).exists()
     else:
-        assert offer.status == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
+        # Accepting is final, so the winning accept is already committed.
+        assert offer.status == PartnerOffer.Status.COMMITTED
         assert Reservation.objects.filter(fulfilment_unit=unit).count() == 1
     # Whichever lost, the audit records only commands that actually committed.
     assert DispatchCommandAudit.objects.count() <= 1
@@ -155,7 +156,7 @@ def test_an_accept_landing_exactly_as_the_offer_expires_resolves_one_way() -> No
 
     offer.refresh_from_db()
     assert offer.status in (
-        PartnerOffer.Status.ACCEPTED_PENDING_UNDO,
+        PartnerOffer.Status.COMMITTED,
         PartnerOffer.Status.EXPIRED,
     )
     reservations = Reservation.objects.filter(fulfilment_unit=unit)

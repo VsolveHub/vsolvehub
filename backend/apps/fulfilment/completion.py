@@ -24,7 +24,6 @@ from apps.fulfilment.models import (
     BookingStatusHistory,
     CompletionResponse,
     CompletionSubmission,
-    WorkEvidence,
     WorkOutcome,
     WorkTask,
 )
@@ -35,6 +34,7 @@ from apps.fulfilment.services import (
     guard_booking_version,
     locked_booking_context,
 )
+from apps.fulfilment.visit_notices import notify_customer_of_visit_step
 from apps.identity.models import User
 from apps.payouts.models import PartnerEarningHold
 from apps.payouts.services import place_earning_hold, settle_booking_earning
@@ -212,7 +212,7 @@ def submit_completion(
     )
 
     if from_status == Booking.Status.IN_PROGRESS:
-        apply_transition(
+        submitted = apply_transition(
             group=group,
             unit=unit,
             booking=booking,
@@ -225,6 +225,8 @@ def submit_completion(
                 "safety_damage_declared": safety_damage_declared,
             },
         )
+        # The Customer's confirm button is the next step, and nothing told them it was there.
+        notify_customer_of_visit_step(booking=submitted)
     else:
         _settle_submission(
             group=group,
@@ -437,19 +439,15 @@ def _hold_disputed_earning(*, booking: Booking, actor: User | None) -> None:
     )
 
 
-def _has_completion_evidence(booking: Booking) -> bool:
-    return WorkEvidence.objects.filter(
-        booking=booking,
-        kind__in=(WorkEvidence.Kind.AFTER, WorkEvidence.Kind.COMPLETION),
-        processing_status=WorkEvidence.ProcessingStatus.CLEAN,
-    ).exists()
-
-
 @transaction.atomic
 def auto_finalize_completion(*, booking_id: UUID) -> Booking | None:
-    """Watchdog step: finalize a silent Customer's completion, but only with real evidence behind
-    it — a missing or failed-scan upload leaves the Booking pending for Operations, never a
-    blind finalize on the Partner's word alone."""
+    """Watchdog step: finalize a silent Customer's completion once the response window passes.
+
+    A photo is optional (owner decision, 5 November 2026). Requiring one left every report from
+    an app that took no photo waiting at "Waiting for customer" forever, with the Partner unpaid.
+    The Customer is told the report arrived and has the whole window to confirm or dispute it;
+    a damage declaration still settles as a dispute through `_settlement_status`.
+    """
 
     group, unit, booking = locked_booking_context(booking_id)
     if booking.status != Booking.Status.COMPLETION_SUBMITTED:
@@ -461,8 +459,6 @@ def auto_finalize_completion(*, booking_id: UUID) -> Booking | None:
         return None
     deadline = submission.submitted_at + timedelta(hours=settings.M1_COMPLETION_RESPONSE_HOURS)
     if timezone.now() < deadline:
-        return None
-    if not submission.safety_damage_declared and not _has_completion_evidence(booking):
         return None
     CompletionResponse.objects.create(
         completion_submission=submission,

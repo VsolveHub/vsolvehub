@@ -169,12 +169,17 @@ def _plan(
     address_id: str,
     cart_version: int,
     starts_at: datetime | None = None,
+    booking_mode: str = "SCHEDULED",
 ) -> dict[str, object]:
     """Plans the cart, giving every published visit the same start.
 
     Real callers pick a time per visit; these tests are about the planner's
     structure rather than about scheduling, so they hand every group one time and
     keep the old single-start behaviour as the case under test.
+
+    `booking_mode` is what the Customer chose (17940ed1): an `INSTANT` booking is offered to
+    online Partners, a `SCHEDULED` one is assigned directly with no offer at all, whatever its
+    start time. A test that needs an offer has to ask for an instant booking.
     """
     when = _preferred_start() if starts_at is None else starts_at
     groups = _scheduling_groups(client, address_id=address_id, cart_version=cart_version)
@@ -183,6 +188,7 @@ def _plan(
         {
             "address_id": address_id,
             "expected_cart_version": cart_version,
+            "booking_mode": booking_mode,
             "preferred_starts": [
                 {"group_key": group["key"], "starts_at": when.isoformat()} for group in groups
             ],

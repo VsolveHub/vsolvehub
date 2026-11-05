@@ -16,11 +16,9 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-logger = logging.getLogger(__name__)
-
+from apps.assignments.models import DispatchOffer
 from apps.identity.models import User
 from apps.partners.exceptions import (
-    PartnerAccessDeniedError,
     PartnerEligibilityError,
     PartnerPresenceError,
     PartnerPushSubscriptionConflictError,
@@ -29,11 +27,12 @@ from apps.partners.models import (
     PartnerApplication,
     PartnerLocation,
     PartnerOnlineSession,
+    PartnerProfile,
     PartnerPushSubscription,
     PartnerServiceArea,
     PartnerShift,
 )
-from apps.partners.selectors import presence_cache_key
+from apps.partners.selectors import partner_profile_for_user, presence_cache_key
 
 from .base import (
     COORDINATE_QUANTUM,
@@ -41,6 +40,8 @@ from .base import (
     _base_application_is_complete,
     _latest_required_documents_are_approved,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _assert_operational_eligibility(application: PartnerApplication) -> None:
@@ -61,12 +62,50 @@ def _presence_payload(session: PartnerOnlineSession) -> dict[str, str]:
     }
 
 
+def partner_reachable_on_phone(partner_id: uuid.UUID) -> bool:
+    """Whether a push can reach this Partner's phone with the app closed.
+
+    True only when the phone app receives push through OneSignal and the Partner has a live,
+    opted-in phone subscription. It is what lets presence outlive the screen: a Partner whose
+    phone rings for an offer does not need the app open to be offered one.
+    """
+
+    if getattr(settings, "MOBILE_PUSH_PROVIDER", "") != "onesignal":
+        return False
+    return (
+        PartnerPushSubscription.objects.filter(
+            partner_id=partner_id,
+            platform__in=(
+                PartnerPushSubscription.Platform.ANDROID,
+                PartnerPushSubscription.Platform.IOS,
+            ),
+            is_active=True,
+            opted_in=True,
+        )
+        .exclude(permission_state__iexact="denied")
+        .exists()
+    )
+
+
+def _presence_ttl_seconds(partner_id: uuid.UUID) -> int:
+    """How long presence survives without a heartbeat.
+
+    A browser, or a phone push cannot reach, keeps the short TTL: nothing can tell that
+    Partner about an offer once the screen is gone. A phone push can reach stays online in
+    the background until the Partner has not opened the app for the background TTL.
+    """
+
+    if partner_reachable_on_phone(partner_id):
+        return int(settings.PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS)
+    return int(settings.PARTNER_PRESENCE_TTL_SECONDS)
+
+
 def _publish_presence(session: PartnerOnlineSession) -> None:
     try:
         cache.set(
             presence_cache_key(session.partner_id),
             _presence_payload(session),
-            timeout=settings.PARTNER_PRESENCE_TTL_SECONDS,
+            timeout=_presence_ttl_seconds(session.partner_id),
         )
     except Exception as exc:
         raise PartnerPresenceError(
@@ -274,6 +313,82 @@ def go_offline(*, user: User, session_id: uuid.UUID) -> None:
         ) from exc
 
 
+def _tell_partner_they_are_offline(
+    *, partner: PartnerProfile, session_id: uuid.UUID, reason: str
+) -> None:
+    """In-app notice, copied to the phone, so going offline is never silent."""
+
+    if partner.user_id is None:
+        return
+    from apps.notifications.services import request_notification  # noqa: PLC0415
+
+    try:
+        request_notification(
+            recipient_id=partner.user_id,
+            purpose="partner.presence_ended",
+            channel="IN_APP",
+            audience="PARTNER",
+            template_code="partner_went_offline",
+            context={"reason": reason},
+            idempotency_key=f"presence-ended:{session_id}",
+        )
+    except Exception:
+        # Ending the session is the fact that matters; the notice must not undo it.
+        logger.exception("partner_offline_notice_failed", extra={"session_id": str(session_id)})
+
+
+def end_presence_after_missed_offers(*, partner_id: uuid.UUID) -> bool:
+    """Take a Partner offline once they let `PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS` offers lapse.
+
+    Staying online in the background is only fair to Customers if a Partner who is not
+    answering stops being offered work. Only offers made during the current session count, so
+    going online again starts a clean slate. Returns whether a session was ended.
+    """
+
+    # Local: `assignments` builds on `partners`, so a module-level import would cycle.
+    from apps.assignments.models import PartnerOffer  # noqa: PLC0415
+
+    limit = int(settings.PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS)
+    if limit <= 0:
+        return False
+    session = (
+        PartnerOnlineSession.objects.select_for_update()
+        .filter(partner_id=partner_id, ended_at__isnull=True)
+        .select_related("partner")
+        .first()
+    )
+    if session is None:
+        return False
+    recent = list(
+        PartnerOffer.objects.filter(
+            partner_id=partner_id,
+            fulfilment_unit__isnull=False,
+            created_at__gte=session.started_at,
+        )
+        .order_by("-created_at", "-id")
+        .values_list("status", flat=True)[:limit]
+    )
+    if len(recent) < limit or any(status != PartnerOffer.Status.EXPIRED for status in recent):
+        return False
+    session.ended_at = timezone.now()
+    session.end_reason = PartnerOnlineSession.EndReason.MISSED_OFFERS
+    session.save(update_fields=("ended_at", "end_reason"))
+    try:
+        cache.delete(presence_cache_key(partner_id))
+    except Exception:
+        logger.warning("presence_cache_delete_failed", extra={"partner_id": str(partner_id)})
+    logger.info(
+        "partner_presence_ended_missed_offers",
+        extra={"partner_id": str(partner_id), "session_id": str(session.id), "missed": limit},
+    )
+    _tell_partner_they_are_offline(
+        partner=session.partner,
+        session_id=session.id,
+        reason=f"You missed {limit} job offers in a row.",
+    )
+    return True
+
+
 def expire_missing_presence_sessions(*, batch_size: int = 500) -> int:
     sessions = list(
         PartnerOnlineSession.objects.filter(ended_at__isnull=True)
@@ -293,13 +408,27 @@ def expire_missing_presence_sessions(*, batch_size: int = 500) -> int:
         ) from exc
     if not expired_ids:
         return 0
-    return PartnerOnlineSession.objects.filter(
+    ended = PartnerOnlineSession.objects.filter(
         id__in=expired_ids,
         ended_at__isnull=True,
     ).update(
         ended_at=timezone.now(),
         end_reason=PartnerOnlineSession.EndReason.PRESENCE_EXPIRED,
     )
+    # A phone Partner was online in the background, so they would not notice being dropped.
+    # A browser Partner closed the tab; telling them is noise, so they are not told.
+    hours = max(1, int(settings.PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS) // 3600)
+    for session in PartnerOnlineSession.objects.filter(
+        id__in=expired_ids,
+        end_reason=PartnerOnlineSession.EndReason.PRESENCE_EXPIRED,
+    ).select_related("partner"):
+        if partner_reachable_on_phone(session.partner_id):
+            _tell_partner_they_are_offline(
+                partner=session.partner,
+                session_id=session.id,
+                reason=f"You had not opened the app for {hours} hours.",
+            )
+    return ended
 
 
 def expire_expired_shifts() -> int:
@@ -319,8 +448,6 @@ def expire_expired_shifts() -> int:
     # and has NO pending dispatch offers
     idle_minutes = getattr(settings, "PARTNER_SHIFT_MAX_IDLE_MINUTES", 30)
     idle_cutoff = now - timedelta(minutes=idle_minutes)
-
-    from apps.assignments.models import DispatchOffer
 
     partners_with_pending_offers = set(
         DispatchOffer.objects.filter(
@@ -393,26 +520,26 @@ def sync_partner_push_subscription(
 
     profile = getattr(user, "partner_profile", None)
     if profile is None:
-        from apps.partners.selectors import partner_profile_for_user
-
         profile = partner_profile_for_user(user)
     if profile is None:
         raise PartnerEligibilityError("Partner profile was not found.")
 
-    # Cross-user validation: Ensure subscription does not belong to another user
+    # A OneSignal subscription belongs to the browser or phone, not to a person: when another
+    # Partner signs in on that device, `OneSignal.login` moves it to them, and this row follows.
+    # Refusing it left the new account unreachable for the life of the device. Pushes are
+    # addressed by user id at OneSignal, so moving this row cannot redirect anyone's messages.
     existing = PartnerPushSubscription.objects.filter(
         onesignal_subscription_id=clean_sub_id,
     ).first()
     if existing and existing.user_id != user.id:
-        logger.warning(
-            "push_subscription_cross_user_denied",
+        logger.info(
+            "push_subscription_reassigned",
             extra={
                 "request_user_id": str(user.id),
-                "existing_user_id": str(existing.user_id),
+                "previous_user_id": str(existing.user_id),
                 "subscription_id": clean_sub_id,
             },
         )
-        raise PartnerAccessDeniedError("This push subscription belongs to another user account.")
 
     # The browser logs in to OneSignal as the user id and pushes target that alias.
     partner_external_id = str(user.id)

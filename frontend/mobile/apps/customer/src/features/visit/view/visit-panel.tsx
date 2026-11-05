@@ -10,7 +10,6 @@ import {
   formatBookingTime,
   serviceLinesOf,
 } from "@/features/bookings/view/booking-format";
-import { UnitStatusBadge } from "@/features/bookings/view/group-status";
 import { MockProfessionalCard } from "@/features/bookings/view/mock-professional-card";
 import { PaidVisitPaymentCard } from "@/features/bookings/view/paid-visit-cards";
 import { ProfessionalCard } from "@/features/bookings/view/professional-card";
@@ -37,7 +36,7 @@ import {
   type Visit,
 } from "../queries";
 import { VisitActions } from "./visit-actions";
-import { VISIT_STATUS_DESCRIPTIONS, VisitStatusBadge } from "./visit-status";
+import { VisitHero } from "./visit-hero";
 
 function VisitTasksPaymentCard({ visit }: { visit: Visit }) {
   if (visit.work_tasks.length === 0) return null;
@@ -389,18 +388,7 @@ export function VisitPanel({
   return (
     <View className="gap-4">
       <Card className="p-5 shadow-xs">
-        <View className="flex-row flex-wrap items-start justify-between gap-3">
-          <View className="flex-1 min-w-0">
-            {unit !== null ? (
-              <UnitStatusBadge unit={unit} />
-            ) : (
-              <VisitStatusBadge status={data.status} />
-            )}
-            <Text className="mt-2 text-sm leading-6 text-text-secondary">
-              {VISIT_STATUS_DESCRIPTIONS[data.status]}
-            </Text>
-          </View>
-        </View>
+        <VisitHero visit={data} />
 
         <View className="mt-4">
           <VisitProgress status={data.status} />

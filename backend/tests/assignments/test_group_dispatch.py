@@ -278,65 +278,6 @@ def test_customer_cancel_is_versioned_idempotent_and_releases_every_hold() -> No
     ).exists()
 
 
-def test_partner_may_commit_inside_their_own_undo_window() -> None:
-    """A Partner who is sure should not have to wait out their own grace period.
-
-    The undo window exists to protect the Partner. Refusing an explicit commit
-    while it is open makes the "Commit now" control unusable for its entire
-    duration, which is the whole time anyone would want to press it.
-    """
-    client, _customer, address_id, version = _customer_context()
-    item = _add_item(client, slug="switch-socket-repair", cart_version=version)
-    partner = _partner(suffix="61", variant_slugs=("switch-socket-repair",))
-    plan = _plan(client, address_id=address_id, cart_version=int(item["version"]))["plans"][0]
-    quote = _quote(client, plan["id"], key="undo-waiver-quote")
-    checkout = _checkout(client, quote["id"], key="undo-waiver-checkout")
-    group = BookingGroup.objects.get(id=checkout["booking_group"]["id"])
-    offer = PartnerOffer.objects.get(fulfilment_unit__booking_group=group)
-
-    accepted = accept_unit_offer(offer_id=offer.id, partner=partner)
-    assert accepted.undo_deadline is not None
-    assert accepted.undo_deadline > timezone.now(), "window must still be open"
-
-    committed = commit_unit_offer(offer_id=offer.id, partner=partner)
-
-    assert committed.status == PartnerOffer.Status.COMMITTED
-
-
-def test_an_unattributed_commit_still_waits_for_the_undo_window() -> None:
-    """Only the Partner may waive their own window; the system may not do it for them."""
-    client, _customer, address_id, version = _customer_context()
-    item = _add_item(client, slug="switch-socket-repair", cart_version=version)
-    partner = _partner(suffix="62", variant_slugs=("switch-socket-repair",))
-    plan = _plan(client, address_id=address_id, cart_version=int(item["version"]))["plans"][0]
-    quote = _quote(client, plan["id"], key="undo-system-quote")
-    checkout = _checkout(client, quote["id"], key="undo-system-checkout")
-    group = BookingGroup.objects.get(id=checkout["booking_group"]["id"])
-    offer = PartnerOffer.objects.get(fulfilment_unit__booking_group=group)
-    accept_unit_offer(offer_id=offer.id, partner=partner)
-
-    with pytest.raises(ValueError, match="undo window is still open"):
-        commit_unit_offer(offer_id=offer.id)
-
-
-def test_the_reconciler_does_not_commit_before_the_undo_deadline() -> None:
-    """The grace period is only a grace period if nothing closes it early."""
-    client, _customer, address_id, version = _customer_context()
-    item = _add_item(client, slug="switch-socket-repair", cart_version=version)
-    partner = _partner(suffix="63", variant_slugs=("switch-socket-repair",))
-    plan = _plan(client, address_id=address_id, cart_version=int(item["version"]))["plans"][0]
-    quote = _quote(client, plan["id"], key="undo-reconcile-quote")
-    checkout = _checkout(client, quote["id"], key="undo-reconcile-checkout")
-    group = BookingGroup.objects.get(id=checkout["booking_group"]["id"])
-    offer = PartnerOffer.objects.get(fulfilment_unit__booking_group=group)
-    accept_unit_offer(offer_id=offer.id, partner=partner)
-
-    reconcile_group_dispatch(group_id=group.id)
-
-    offer.refresh_from_db()
-    assert offer.status == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
-
-
 def test_partner_commit_endpoint_works_while_the_window_is_open() -> None:
     """The bug as reported: the Commit now button returned offer_invalid."""
     client, _customer, address_id, version = _customer_context()

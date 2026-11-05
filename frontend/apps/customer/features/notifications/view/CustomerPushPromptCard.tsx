@@ -32,7 +32,6 @@ export interface CustomerPushPromptCardProps {
  * - Denial transitions to non-intrusive recovery UI and avoids repeated prompts.
  */
 export function CustomerPushPromptCard({
-  bookingId,
   className = "",
 }: CustomerPushPromptCardProps) {
   const session = useCurrentSession(getApiClient());

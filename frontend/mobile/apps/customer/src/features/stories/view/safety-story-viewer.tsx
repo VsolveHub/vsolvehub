@@ -1,3 +1,4 @@
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { COLOR_TOKENS, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -195,7 +196,7 @@ export function SafetyStoryViewer({
             />
           ) : (
             <Image
-              source={{ uri: currentStory.media_url }}
+              source={{ uri: resolveImageUrl(currentStory.media_url) || currentStory.media_url }}
               style={{ width: "100%", height: "100%" }}
               contentFit="cover"
             />
@@ -313,7 +314,7 @@ export function SafetyStoryViewer({
               </Text>
             ) : null}
             <Text className="text-[11px] font-semibold text-white/70">
-              Verified Trust &amp; Safety Protocol · V Solve
+              Verified Trust &amp; Safety Protocol Â· V Solve
             </Text>
           </View>
         </SafeAreaView>

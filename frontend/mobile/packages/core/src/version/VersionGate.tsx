@@ -28,8 +28,8 @@ async function loadConfig(): Promise<AppConfig | null> {
 export function UpdateRequiredScreen({ storeUrl }: { storeUrl: string }) {
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 12 }}>Update V Solve Hub</Text>
-      <Text style={{ textAlign: "center", marginBottom: 24 }}>
+      <Text style={{ fontSize: 22, fontWeight: "700", fontFamily: "PlusJakartaSans_700Bold", marginBottom: 12 }}>Update V Solve Hub</Text>
+      <Text style={{ textAlign: "center", fontFamily: "PlusJakartaSans_400Regular", marginBottom: 24 }}>
         This version is no longer supported. Update to continue.
       </Text>
       <Pressable
@@ -39,7 +39,7 @@ export function UpdateRequiredScreen({ storeUrl }: { storeUrl: string }) {
         }}
         style={{ backgroundColor: "#f87000", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
       >
-        <Text style={{ color: "#ffffff", fontWeight: "600" }}>Update</Text>
+        <Text style={{ color: "#ffffff", fontWeight: "600", fontFamily: "PlusJakartaSans_600SemiBold" }}>Update</Text>
       </Pressable>
     </View>
   );

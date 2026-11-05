@@ -1,3 +1,4 @@
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
@@ -36,21 +37,21 @@ import { fetchRentals, fetchRentalTaxonomy } from "../queries";
 import { useSavedItems } from "../use-saved-items";
 
 const SLIDER_MIN_PAISE = 0;
-const SLIDER_MAX_PAISE = 500_000; // ₹5,000 / day
-const SLIDER_STEP_PAISE = 5_000; // ₹50 step
+const SLIDER_MAX_PAISE = 500_000; // â‚¹5,000 / day
+const SLIDER_STEP_PAISE = 5_000; // â‚¹50 step
 
 function paiseToDisplay(paise: number): string {
   const rupees = Math.round(paise / 100);
-  if (rupees >= 1000) return `₹${(rupees / 1000).toFixed(rupees % 1000 === 0 ? 0 : 1)}k`;
-  return `₹${rupees}`;
+  if (rupees >= 1000) return `â‚¹${(rupees / 1000).toFixed(rupees % 1000 === 0 ? 0 : 1)}k`;
+  return `â‚¹${rupees}`;
 }
 
 const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
   { label: "All Rates", min: undefined, max: undefined },
-  { label: "Under ₹500", min: undefined, max: 50_000 },
-  { label: "₹500 – ₹1.5k", min: 50_000, max: 150_000 },
-  { label: "₹1.5k – ₹3k", min: 150_000, max: 300_000 },
-  { label: "₹3k+", min: 300_000, max: undefined },
+  { label: "Under â‚¹500", min: undefined, max: 50_000 },
+  { label: "â‚¹500 â€“ â‚¹1.5k", min: 50_000, max: 150_000 },
+  { label: "â‚¹1.5k â€“ â‚¹3k", min: 150_000, max: 300_000 },
+  { label: "â‚¹3k+", min: 300_000, max: undefined },
 ];
 
 export function DesktopRentalsBrowse() {
@@ -346,7 +347,7 @@ export function DesktopRentalsBrowse() {
                     hasPriceFilter || priceSliderOpen ? "text-white" : "text-[#475569]"
                   }`}
                 >
-                  {hasPriceFilter ? "Daily rate ✕" : "Daily rate"}
+                  {hasPriceFilter ? "Daily rate âœ•" : "Daily rate"}
                 </Text>
               </Pressable>
             </View>
@@ -358,7 +359,7 @@ export function DesktopRentalsBrowse() {
                   <View className="flex-row items-center gap-2">
                     <Text className="text-xs font-bold text-navy-900">Daily rate range</Text>
                     <Text className="text-xs font-extrabold text-[#EA580C] tabular-nums">
-                      {paiseToDisplay(minPrice ?? SLIDER_MIN_PAISE)} –{" "}
+                      {paiseToDisplay(minPrice ?? SLIDER_MIN_PAISE)} â€“{" "}
                       {(maxPrice ?? SLIDER_MAX_PAISE) >= SLIDER_MAX_PAISE
                         ? `${paiseToDisplay(SLIDER_MAX_PAISE)}+`
                         : paiseToDisplay(maxPrice ?? SLIDER_MAX_PAISE)}
@@ -444,7 +445,7 @@ export function DesktopRentalsBrowse() {
           {/* Summary Row matching Web customer portal */}
           <View className="flex-row items-center justify-between text-xs text-[#6B6560] font-medium px-1">
             {isLoading ? (
-              <Text className="text-xs font-medium text-[#6B6560]">Loading equipment…</Text>
+              <Text className="text-xs font-medium text-[#6B6560]">Loading equipmentâ€¦</Text>
             ) : (
               <Text className="text-xs font-medium text-[#6B6560]">
                 Showing <Text className="font-bold text-navy-900">{rentals.length}</Text> rental item
@@ -559,7 +560,7 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
   const dailyPrice = formatPaise(asset.daily_rate_paise);
   const deposit = formatPaise(asset.deposit_paise);
   // The listing's own photo and partner, or nothing, as on the web: never a stand-in.
-  const imageUrl = asset.media?.[0]?.url || asset.thumbnail_url || null;
+  const imageUrl = resolveImageUrl(asset.media?.[0]?.url || asset.thumbnail_url);
 
   const partnerDisplay =
     asset.partner_name ||
@@ -581,11 +582,11 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
           accessibilityRole="link"
           accessibilityLabel={`View ${asset.title}`}
           onPress={handleCardPress}
-          className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden rounded-t-2xl bg-[#F8F6F2] cursor-pointer"
+          className="-mx-5 -mt-5 mb-3 aspect-[4/3] overflow-hidden rounded-t-2xl bg-white p-3 cursor-pointer"
         >
           <Image
             source={{ uri: imageUrl }}
-            contentFit="cover"
+            contentFit="contain"
             style={{ width: "100%", height: "100%" }}
             transition={200}
           />
@@ -664,7 +665,7 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
             </Text>
             {asset.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                · {asset.distance_km} km away
+                Â· {asset.distance_km} km away
               </Text>
             ) : null}
           </View>

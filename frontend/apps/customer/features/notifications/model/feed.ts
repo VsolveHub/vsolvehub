@@ -1,6 +1,6 @@
 import type { Schemas } from "@vsolve/api-client";
 
-import { engagementHref, requestHref, requestQuotesHref } from "@/lib/routes";
+import { bookingGroupHref, engagementHref, requestHref, requestQuotesHref } from "@/lib/routes";
 
 /**
  * What a notice is called, and where it leads — contract 1.34.0.
@@ -55,6 +55,8 @@ const HREF_BY_KIND: Record<string, (id: string) => string> = {
   // the full quote" pointing at the request page is a link the reader still has
   // to navigate from.
   REQUIREMENT_QUOTES: requestQuotesHref,
+  // A booked visit moved (1.96.0): on the way, arrived, work reported done.
+  BOOKING_GROUP: bookingGroupHref,
 };
 
 /**

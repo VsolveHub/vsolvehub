@@ -1,4 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/about-step.tsx
+import { Text } from "@vsolve/mobile-ui";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
@@ -6,7 +7,6 @@ import { useEffect } from "react";
 import {
   Platform,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -36,12 +36,13 @@ export function AboutStep() {
     }
   }, [signUpName, application?.display_name, isReadOnly, draft.displayName, update]);
 
-  // Ensure default experience years is at least 1 so backend validation passes cleanly
+  // A stay host or rental owner is not asked for experience, and the server does not need it.
+  // Someone offering services answers for themselves below: never a made-up number.
   useEffect(() => {
-    if (!isReadOnly && draft.experienceYears <= 0) {
+    if (!isReadOnly && application?.track !== "SERVICES" && draft.experienceYears <= 0) {
       update({ experienceYears: 1 });
     }
-  }, [draft.experienceYears, isReadOnly, update]);
+  }, [application?.track, draft.experienceYears, isReadOnly, update]);
 
   const trimmedName = draft.displayName.trim();
   const isNameInvalid = trimmedName.length < 2;
@@ -67,7 +68,7 @@ export function AboutStep() {
             autoComplete="name"
             maxLength={120}
             placeholder="Enter your full name"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor="#8c96a3"
             value={draft.displayName}
             editable={!isReadOnly}
             onChangeText={(value) => update({ displayName: value })}
@@ -78,15 +79,36 @@ export function AboutStep() {
           ) : null}
         </View>
 
+        {/* Years of experience: services only, and the server requires it */}
+        {application?.track === "SERVICES" ? (
+          <View style={[styles.fieldGroup, { marginTop: 18 }]}>
+            <Text style={styles.label}>
+              Years of experience <Text style={styles.requiredAsterisk}>*</Text>
+            </Text>
+            <TextInput
+              keyboardType="number-pad"
+              maxLength={2}
+              placeholder="e.g. 5"
+              placeholderTextColor="#8c96a3"
+              value={draft.experienceYears > 0 ? String(draft.experienceYears) : ""}
+              editable={!isReadOnly}
+              onChangeText={(value) => update({ experienceYears: Number(value.replace(/\D/g, "")) })}
+              style={styles.input}
+            />
+          </View>
+        ) : null}
+
         {/* Short Bio Field */}
         <View style={[styles.fieldGroup, { marginTop: 18 }]}>
-          <Text style={styles.label}>Short bio (optional)</Text>
+          <Text style={styles.label}>
+            Short bio <Text style={styles.optionalText}>(optional)</Text>
+          </Text>
           <TextInput
             multiline
             numberOfLines={4}
             maxLength={200}
             placeholder="e.g. Home appliance service partner in Hyderabad."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor="#8c96a3"
             value={draft.biography}
             editable={!isReadOnly}
             onChangeText={(value) => update({ biography: value })}
@@ -106,60 +128,66 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   header: {
-    marginBottom: 18,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "800",
-    color: "#00112e",
-    letterSpacing: -0.5,
+    color: "#071328",
+    letterSpacing: -0.6,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#64748b",
+    fontSize: 15,
+    color: "#556476",
     marginTop: 4,
     fontWeight: "400",
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: "#f1f5f9",
-    padding: 20,
+    padding: 22,
     ...(Platform.OS === "web"
       ? ({
-          boxShadow: "0 1px 4px rgba(0, 0, 0, 0.05)",
+          boxShadow: "0 2px 8px rgba(7, 19, 40, 0.04)",
         } as any)
       : {
           elevation: 2,
-          shadowColor: "#00112e",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
+          shadowColor: "#071328",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
         }),
   },
   fieldGroup: {
     flexDirection: "column",
   },
   label: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#00112e",
+    color: "#071328",
     marginBottom: 8,
   },
   requiredAsterisk: {
-    color: "#ea580c",
+    color: "#dc2626",
+    fontWeight: "700",
+  },
+  optionalText: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#64748b",
   },
   input: {
-    height: 48,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 14,
-    fontSize: 15,
+    borderColor: "#e7e2da",
+    backgroundColor: "#f4f1ec",
+    paddingHorizontal: 16,
+    fontSize: 15.5,
     fontWeight: "500",
-    color: "#00112e",
+    color: "#071328",
   },
   inputError: {
     borderColor: "#f87171",
@@ -171,19 +199,22 @@ const styles = StyleSheet.create({
   },
   textarea: {
     height: 110,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    backgroundColor: "#f8fafc",
-    padding: 14,
-    fontSize: 14,
-    color: "#00112e",
+    borderColor: "#e7e2da",
+    backgroundColor: "#f4f1ec",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: "#071328",
   },
   counter: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "600",
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "500",
     textAlign: "right",
-    marginTop: 6,
+    marginTop: 8,
   },
 });

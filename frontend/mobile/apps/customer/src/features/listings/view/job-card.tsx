@@ -1,4 +1,6 @@
 import { Text } from "@vsolve/mobile-ui";
+import { Image } from "expo-image";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useRouter } from "expo-router";
 import {
   Bookmark,
@@ -143,10 +145,10 @@ export function JobCard({ listing }: { listing: Listing }) {
     : listing.salary_display
       ? listing.salary_display
       : listing.salary_min_paise && listing.salary_max_paise
-        ? `₹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")} – ₹${Math.round(listing.salary_max_paise / 100).toLocaleString("en-IN")}/mo`
+        ? `Ã¢â€šÂ¹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")} Ã¢â‚¬â€œ Ã¢â€šÂ¹${Math.round(listing.salary_max_paise / 100).toLocaleString("en-IN")}/mo`
         : listing.salary_min_paise
-          ? `From ₹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")}/mo`
-          : "₹ 10,000 – ₹15,000/mo";
+          ? `From Ã¢â€šÂ¹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")}/mo`
+          : "Ã¢â€šÂ¹ 10,000 Ã¢â‚¬â€œ Ã¢â€šÂ¹15,000/mo";
 
   const rawExp = listing.experience_band || fields.experience_years || fields.experience;
   const experience = rawExp ? String(rawExp) : "1-2 years";
@@ -185,13 +187,20 @@ export function JobCard({ listing }: { listing: Listing }) {
     <View className="rounded-3xl border border-slate-100 bg-white p-4 shadow-xs gap-3">
       {/* Top Section: Icon Tile + Details + Actions */}
       <View className="flex-row items-start justify-between gap-3">
-        {/* Left Category Icon Tile */}
+        {/* Left Category / Job Image Tile */}
         <View
-          className={`size-[52px] items-center justify-center rounded-2xl ${visuals.bg} shrink-0`}
+          className={`size-[56px] items-center justify-center rounded-2xl ${visuals.bg} shrink-0 overflow-hidden border border-slate-100`}
         >
-          {visuals.icon}
+          {listing.media?.[0]?.url ? (
+            <Image
+              source={{ uri: resolveImageUrl(listing.media[0].url) || listing.media[0].url }}
+              contentFit="cover"
+              style={{ width: "100%", height: "100%" }}
+            />
+          ) : (
+            visuals.icon
+          )}
         </View>
-
         {/* Center Details */}
         <Pressable
           accessibilityRole="button"
@@ -244,15 +253,15 @@ export function JobCard({ listing }: { listing: Listing }) {
         </View>
       </View>
 
-      {/* Middle Details Row: Experience · Salary · Work Mode */}
+      {/* Middle Details Row: Experience Ã‚Â· Salary Ã‚Â· Work Mode */}
       <View className="mt-0.5 flex-row items-center flex-wrap gap-x-2 gap-y-1">
         <View className="flex-row items-center gap-1">
           <Briefcase size={12} color="#64748B" />
           <Text className="text-xs text-slate-600">{experience}</Text>
         </View>
-        <Text className="text-xs text-slate-400">·</Text>
+        <Text className="text-xs text-slate-400">Ã‚Â·</Text>
         <Text className="text-xs font-bold text-slate-800">{pay}</Text>
-        <Text className="text-xs text-slate-400">·</Text>
+        <Text className="text-xs text-slate-400">Ã‚Â·</Text>
         <View className="flex-row items-center gap-1">
           <Building2 size={12} color="#64748B" />
           <Text className="text-xs text-slate-600">{mode}</Text>

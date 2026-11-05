@@ -8,8 +8,10 @@ import type { Offer, OfferAction, OfferStatus } from "../queries";
 
 const STATUS_LABELS: Record<OfferStatus, string> = {
   OFFERED: "Offered to you",
-  ACCEPTED_PENDING_UNDO: "Accepted — you can still undo",
-  COMMITTED: "Committed",
+  // Accepting is final (5 November 2026). An offer left in this state from before then is
+  // committed by the server within seconds, so it reads the same as a committed one.
+  ACCEPTED_PENDING_UNDO: "Accepted — it is yours",
+  COMMITTED: "Accepted — it is yours",
   UNDONE: "Undone",
   DECLINED: "Declined",
   EXPIRED: "Expired",
@@ -68,7 +70,7 @@ export function OfferCard({
   onCommand: (action: OfferAction) => void;
 }) {
   const isOffered = offer.status === "OFFERED";
-  const isPendingUndo = offer.status === "ACCEPTED_PENDING_UNDO";
+  const isAccepted = offer.status === "COMMITTED" || offer.status === "ACCEPTED_PENDING_UNDO";
   return (
     <View className="overflow-hidden rounded-card border border-line bg-surface">
       <View className="bg-warning-surface px-4 py-2.5">
@@ -76,7 +78,6 @@ export function OfferCard({
           {STATUS_LABELS[offer.status]}
         </Text>
         {isOffered ? <Deadline label="to respond" deadline={offer.expires_at} /> : null}
-        {isPendingUndo ? <Deadline label="left to undo" deadline={offer.undo_deadline} /> : null}
       </View>
       <View className="gap-2 p-4">
         <Text className="text-base font-bold text-text">{offer.approximate_area ?? "Area not given"}</Text>
@@ -100,32 +101,18 @@ export function OfferCard({
         ) : null}
         {isOffered ? (
           <View className="mt-2 flex-row gap-3">
-            <Button className="flex-1" loading={isBusy} loadingLabel="Accepting" onPress={() => onCommand("accept")}>
-              Accept
+            <Button className="flex-1" loading={isBusy} loadingLabel="Taking the job" onPress={() => onCommand("accept")}>
+              Take this job
             </Button>
             <Button className="flex-1" variant="outline" disabled={isBusy} onPress={() => onCommand("decline")}>
-              Decline
+              Not for me
             </Button>
           </View>
         ) : null}
-        {isPendingUndo ? (
-          <View className="mt-2 gap-3">
-            <Text className="text-sm text-text-secondary">
-              This is yours. You can still undo at no cost until the timer runs out, or commit now to lock it in.
-            </Text>
-            <View className="flex-row gap-3">
-              <Button className="flex-1" loading={isBusy} loadingLabel="Committing" onPress={() => onCommand("commit")}>
-                Commit now
-              </Button>
-              <Button className="flex-1" variant="outline" disabled={isBusy} onPress={() => onCommand("undo")}>
-                Undo — no penalty
-              </Button>
-            </View>
-          </View>
-        ) : null}
-        {offer.status === "COMMITTED" ? (
+        {isAccepted ? (
           <Text className="text-sm text-text-secondary">
-            Committed. The job details will appear in your work list when that is available.
+            This job is yours. It moves to your work list as soon as the customer pays, and we will
+            notify you. If you cannot make it, hand it back from the job screen.
           </Text>
         ) : null}
       </View>

@@ -1,5 +1,49 @@
 # API Contract Changelog
 
+## 1.97.0 - Job listings publish their photos
+
+Additive.
+
+- **Added** `media` (`ListingMedia[]`: `id`, `kind`, `url`, `alt_text`, `display_order`) to
+  `ListingSummary` and everything built on it. A listing's own photos, empty when it has none. The
+  list endpoints prefetch it, so it adds one query, not one per row.
+
+## 1.96.0 - Accepting is final, visit route, partner hours on the record, mobile search, and background presence
+
+Additive, with three behaviour changes to existing endpoints.
+
+- **Added** `POST /partner/bookings/{booking_id}/route/` (`PartnerRouteOriginRequest` →
+  `PartnerVisitRoute`): the two-wheeler road route, with live traffic, from where the Partner is
+  to the visit — `encoded_polyline`, `distance_meters`, `duration_seconds`, `server_now`. Served
+  under the same gate as `site_address`; the line ends at the Customer's pin, which is still never
+  published as separate coordinates. `409 site_details_locked` before the unlock or once the visit
+  is over, `503 routing_unavailable` without a provider (the app falls back to `directions_url`).
+  The Partner's position is used for this one request and not stored.
+- **Added** `q` on `GET /operations/partners/`: a name, or a mobile number typed any way
+  (spaces, `+91`, a leading `0` and dashes are ignored; four or more digits match part of a
+  number).
+- **Added** `phone_number` on each directory row.
+- **Added** `GET /operations/partners/{partner_id}/availability/`: the partner's current rules
+  and exceptions, the service areas they serve, and their active consent receipts, so a change
+  is made against what is there with no ids typed. `PUT` is unchanged.
+- **Changed** `POST /partner/offers/{offer_id}/accept/` on a Fulfilment Unit offer now answers
+  `COMMITTED`: accepting is final and there is no undo window. `.../commit/` on a committed offer
+  answers it unchanged (older apps still send it); `.../undo/` is `400 offer_invalid`.
+  `undo_deadline` is the instant of acceptance. `ACCEPTED_PENDING_UNDO` stays in the enum for
+  offers written before this release.
+- **Changed** `POST /partner/push-subscriptions/sync/` and `POST /customer/push-subscriptions/sync/`
+  no longer answer `403` when another account last used the device: the subscription moves to the
+  account now signed in on it, as it already has at OneSignal.
+- **Changed** presence: a Partner whose phone has a live OneSignal subscription stays online with
+  the app closed for up to `PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS` (2 hours) after last opening
+  it, instead of 90 seconds; letting `PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS` (2) offers lapse in a
+  row ends the session. Either way the Partner gets the `partner_went_offline` notice.
+- **Added** notification target kinds `BOOKING` (Partner, a Booking id → the job) and
+  `BOOKING_GROUP` (Customer, a Booking Group id → the booking page), used by the new notices
+  `partner_booking_confirmed`, `partner_visit_time_to_leave`, `partner_went_offline`,
+  `customer_visit_en_route`, `customer_visit_arrived` and `customer_visit_work_submitted`.
+- Removed: none. Renamed: none.
+
 ## 1.95.0 - Each app reads only its own side's notifications
 
 Additive. One person can be a Customer and a Partner; until now the customer app's bell also

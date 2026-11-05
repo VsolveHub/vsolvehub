@@ -52,11 +52,13 @@ export {
 export type { HandoffTarget, PaymentAttemptDetail } from "./payments/handoff";
 export { razorpayCheckoutHtml, shouldOpenPaymentUrlExternally } from "./payments/checkout-html";
 
-export { getCurrentPosition } from "./location/position";
+export { getCurrentPosition, hasLocationPermission, lookupPlace } from "./location/position";
+export type { PositionOptions } from "./location/position";
 export {
   mapLocationError,
   PERMISSION_DENIED,
   POSITION_UNAVAILABLE,
+  SERVICES_DISABLED,
   TIMEOUT,
 } from "./location/errors";
 export type { CurrentPosition, PositionError } from "./location/errors";

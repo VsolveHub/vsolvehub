@@ -1,10 +1,10 @@
 // Ported from frontend/apps/partner/features/application/view/document-upload.tsx
-import { ErrorState, Sheet } from "@vsolve/mobile-ui";
+import { ErrorState, Sheet, Text } from "@vsolve/mobile-ui";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { CloudUpload, Upload as UploadIcon } from "lucide-react-native";
 import { useState } from "react";
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
 
 import {
   formatBytes,

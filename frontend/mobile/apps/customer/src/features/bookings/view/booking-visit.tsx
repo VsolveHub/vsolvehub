@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBookingGroup } from "@/features/bookings/queries";
 import { useVisit } from "@/features/visit/queries";
 import { VisitPanel } from "@/features/visit/view/visit-panel";
+import { VisitStatusBadge } from "@/features/visit/view/visit-status";
 
 export function BookingVisit({ groupId, bookingId }: { groupId: string; bookingId: string }) {
   const insets = useSafeAreaInsets();
@@ -47,24 +48,23 @@ export function BookingVisit({ groupId, bookingId }: { groupId: string; bookingI
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back to booking"
-        onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.push(`/bookings/${groupId}` as never);
-          }
-        }}
-        className="mb-1 flex-row items-center gap-1.5 self-start rounded-full border border-line bg-surface px-3 py-1.5 shadow-2xs active:bg-surface-hover"
-      >
-        <ChevronLeft size={16} color="#00112e" />
-        <Text className="text-xs font-bold text-navy-900">Back to this booking</Text>
-      </Pressable>
-
-      <View>
-        <Text className="text-2xl font-bold text-text">{heading}</Text>
+      <View className="flex-row items-center gap-3">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to booking"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push(`/bookings/${groupId}` as never);
+            }
+          }}
+          className="size-12 items-center justify-center rounded-full border border-line bg-surface shadow-sm active:bg-surface-hover"
+        >
+          <ChevronLeft size={22} color="#00112e" />
+        </Pressable>
+        <Text className="min-w-0 flex-1 text-2xl font-extrabold tracking-tight text-text">{heading}</Text>
+        {visitQuery.data ? <VisitStatusBadge status={visitQuery.data.status} /> : null}
       </View>
 
       <VisitPanel bookingId={bookingId} groupId={groupId} />

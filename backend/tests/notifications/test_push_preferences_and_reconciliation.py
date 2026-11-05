@@ -1,4 +1,6 @@
-"""Tests for PushNotificationPreference, OneSignal transport suppression, and subscription reconciliation."""
+"""Tests for PushNotificationPreference, OneSignal transport suppression, and subscription
+reconciliation.
+"""
 
 from datetime import timedelta
 from unittest.mock import MagicMock, patch

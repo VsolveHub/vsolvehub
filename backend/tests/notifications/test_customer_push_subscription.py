@@ -221,10 +221,11 @@ def test_customer_push_replaces_older_active_web_subscription(
     assert sub_new.is_active is True
 
 
-def test_customer_push_cross_user_denied(
+def test_customer_push_subscription_moves_to_the_customer_now_signed_in(
     customer_user: User,
     other_customer_user: User,
 ):
+    """A browser's subscription follows whoever signs in on it, instead of a permanent 403."""
     sub_id = str(uuid.uuid4())
     CustomerPushSubscription.objects.create(
         user=customer_user,
@@ -242,10 +243,16 @@ def test_customer_push_cross_user_denied(
         {
             "onesignal_subscription_id": sub_id,
             "is_active": True,
+            "opted_in": True,
+            "permission_state": "granted",
         },
         format="json",
     )
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_200_OK
+    moved = CustomerPushSubscription.objects.get(onesignal_subscription_id=sub_id)
+    assert moved.user_id == other_customer_user.id
+    assert moved.onesignal_external_id == str(other_customer_user.id)
+    assert moved.is_active is True
 
 
 def test_customer_push_validation_empty_id(auth_client: APIClient):

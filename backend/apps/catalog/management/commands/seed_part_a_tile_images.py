@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.catalog.models import Category
+from apps.foundation.catalog_media import catalog_image_url
 
 
 class Command(BaseCommand):
@@ -35,7 +36,7 @@ class Command(BaseCommand):
 
                 # Update Category
                 if not category.image_url:
-                    category.image_url = f"/catalog/tiles/{category.slug}.png"
+                    category.image_url = catalog_image_url(f"/catalog/tiles/{category.slug}.png")
                     category.save(update_fields=["image_url", "updated_at"])
                     updated_categories += 1
                     self.stdout.write(f"Updated category: {category.slug}")
@@ -50,7 +51,9 @@ class Command(BaseCommand):
 
                 for subcategory in subcategories:
                     if not subcategory.image_url:
-                        subcategory.image_url = f"/catalog/tiles/{subcategory.slug}.png"
+                        subcategory.image_url = catalog_image_url(
+                            f"/catalog/tiles/{subcategory.slug}.png"
+                        )
                         subcategory.save(update_fields=["image_url", "updated_at"])
                         updated_subcategories += 1
                         self.stdout.write(f"Updated subcategory: {subcategory.slug}")

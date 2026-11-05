@@ -13,6 +13,8 @@ from apps.assignments.tasks import (
     send_dispatch_offer_task,
 )
 from apps.carts.models import BookingGroup
+from apps.notifications.models import NotificationIntent
+from apps.notifications.templates_registry import render_notification
 from tests.fulfilment.conftest import create_booked_group
 
 pytestmark = [
@@ -115,8 +117,6 @@ def test_expire_dispatch_offer_task_expires_and_triggers_reassignment() -> None:
 
 
 def test_reassignment_or_downgrade_task_downgrades_when_no_partner_available() -> None:
-    from apps.notifications.models import NotificationIntent
-    from apps.notifications.templates_registry import render_notification
 
     booked = create_booked_group(key_prefix="cel-down")
     booking = booked.booking

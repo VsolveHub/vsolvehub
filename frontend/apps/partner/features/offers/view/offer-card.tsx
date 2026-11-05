@@ -151,7 +151,9 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
   const translator = useTranslator();
   const { t } = translator;
   const isOffered = offer.status === "OFFERED";
-  const isPendingUndo = offer.status === "ACCEPTED_PENDING_UNDO";
+  // Accepting is final (1.96.0). A row still in the old undo state is committed by the server
+  // within seconds, so it reads exactly like a committed one.
+  const isAccepted = offer.status === "COMMITTED" || offer.status === "ACCEPTED_PENDING_UNDO";
   const style = STATUS_STYLES[offer.status];
   const isTerminal =
     offer.status === "EXPIRED" ||
@@ -175,9 +177,6 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
         </span>
         {isOffered ? (
           <Deadline label={t("offers.card.toRespond")} deadline={offer.expires_at} />
-        ) : null}
-        {isPendingUndo ? (
-          <Deadline label={t("offers.card.leftToUndo")} deadline={offer.undo_deadline} />
         ) : null}
       </div>
 
@@ -264,33 +263,7 @@ export function OfferCard({ offer, isBusy, unconfirmedMessage, onCommand }: Offe
           </div>
         ) : null}
 
-        {isPendingUndo ? (
-          <div className="mt-4">
-            <p className="text-sm text-text-secondary">
-              {t("offers.card.pendingUndoNote")}
-            </p>
-            <div className="mt-3 flex gap-3">
-              <Button
-                className="flex-1"
-                onClick={() => onCommand("commit")}
-                loading={isBusy}
-                loadingLabel={t("offers.card.committing")}
-              >
-                {t("offers.card.commit")}
-              </Button>
-              <Button
-                className="flex-1"
-                variant="outline"
-                onClick={() => onCommand("undo")}
-                disabled={isBusy}
-              >
-                {t("offers.card.undo")}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        {offer.status === "COMMITTED" ? (
+        {isAccepted ? (
           <p className="mt-4 text-sm text-text-secondary">
             {t("offers.card.committedNote")}
           </p>

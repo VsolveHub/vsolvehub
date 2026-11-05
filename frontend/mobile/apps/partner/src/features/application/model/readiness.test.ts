@@ -37,6 +37,9 @@ function application(overrides: Partial<Application> = {}): Application {
     partner_id: "partner-1",
     status: "DRAFT",
     version: 1,
+    can_edit: true,
+    consents_complete: false,
+    required_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF"],
     display_name: "",
     biography: "",
     experience_years: 0,
@@ -58,6 +61,7 @@ function application(overrides: Partial<Application> = {}): Application {
 /** An application with everything the 4-step mobile onboarding requires. */
 function completeApplication(overrides: Partial<Application> = {}): Application {
   return application({
+    consents_complete: true,
     display_name: "webaura",
     documents: [
       document({ id: "doc-id", kind: "GOVERNMENT_ID" }),
@@ -127,12 +131,25 @@ describe("requirements in 4-step flow", () => {
     const rejected = rejectedDocuments(
       completeApplication({
         documents: [
-          document({ status: "REJECTED", review_reason: "Photo is cut off" }),
+          document({ status: "REJECTED", review_reason: "Photo is cut off", can_replace: true }),
         ],
       }),
     );
     expect(rejected).toHaveLength(1);
     expect(rejected[0]?.review_reason).toBe("Photo is cut off");
+  });
+
+  it("does not offer to replace what the server refuses, as on a declined application", () => {
+    const rejected = rejectedDocuments(
+      completeApplication({ documents: [document({ status: "REJECTED", can_replace: false })] }),
+    );
+    expect(rejected).toHaveLength(0);
+  });
+
+  it("asks only for the documents the server requires", () => {
+    const codes = requirements(application({ required_document_kinds: ["GOVERNMENT_ID"] })).map((item) => item.code);
+    expect(codes).toContain("GOVERNMENT_ID");
+    expect(codes).not.toContain("ADDRESS_PROOF");
   });
 
   it("gives every outstanding requirement somewhere to go", () => {
@@ -142,22 +159,37 @@ describe("requirements in 4-step flow", () => {
   });
 });
 
+describe("a services application", () => {
+  const services = (overrides: Partial<Application> = {}) => completeApplication({ track: "SERVICES", ...overrides });
+
+  it("also needs experience, trades, jobs and areas", () => {
+    expect(outstandingRequirements(services()).map((item) => item.code)).toEqual([
+      "EXPERIENCE_YEARS",
+      "SKILLS",
+      "SERVICES",
+      "SERVICE_AREAS",
+    ]);
+  });
+
+  it("can be sent once those are filled in", () => {
+    const filled = services({
+      experience_years: 3,
+      skill_codes: ["ELECTRICIAN"],
+      service_variant_ids: ["variant-1"],
+      service_area_ids: ["area-1"],
+    });
+    expect(canSubmit(filled)).toBe(true);
+  });
+
+  it("does not ask a rental owner for any of it", () => {
+    expect(outstandingRequirements(completeApplication({ track: "RENTAL_OWNER" }))).toHaveLength(0);
+  });
+});
+
 describe("editability", () => {
-  it("allows editing a draft", () => {
-    expect(isEditable(application({ status: "DRAFT" }))).toBe(true);
-  });
-
-  it("reopens editing when changes are required", () => {
-    expect(isEditable(application({ status: "CHANGES_REQUIRED" }))).toBe(true);
-  });
-
-  it("locks the application while it is being reviewed", () => {
-    expect(isEditable(application({ status: "SUBMITTED" }))).toBe(false);
-    expect(isEditable(application({ status: "UNDER_REVIEW" }))).toBe(false);
-  });
-
-  it("locks a suspended account", () => {
-    expect(isEditable(application({ status: "SUSPENDED" }))).toBe(false);
+  it("is the server's own answer", () => {
+    expect(isEditable(application({ can_edit: true }))).toBe(true);
+    expect(isEditable(application({ can_edit: false }))).toBe(false);
   });
 });
 
@@ -171,7 +203,7 @@ describe("submission", () => {
   });
 
   it("refuses to resubmit something already under review", () => {
-    expect(canSubmit(completeApplication({ status: "UNDER_REVIEW" }))).toBe(false);
+    expect(canSubmit(completeApplication({ status: "UNDER_REVIEW", can_edit: false }))).toBe(false);
   });
 
   it("permits resubmitting after changes were requested", () => {

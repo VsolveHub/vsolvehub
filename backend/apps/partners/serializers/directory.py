@@ -41,6 +41,8 @@ class OperationsPartnerDirectoryQuerySerializer(serializers.Serializer[dict[str,
     skill = serializers.ListField(
         child=serializers.SlugField(max_length=100), required=False, default=list
     )
+    #: A name, or a mobile number in any format ("98765 43210", "+91 98765-43210").
+    q = serializers.CharField(required=False, allow_blank=True, max_length=80)
     cursor = serializers.CharField(required=False, write_only=True)
 
 
@@ -59,12 +61,15 @@ class OperationsPartnerDirectoryItemSerializer(serializers.ModelSerializer[Partn
     skills = serializers.SerializerMethodField()
     service_count = serializers.IntegerField(read_only=True)
     service_area_count = serializers.IntegerField(read_only=True)
+    #: The number they sign in with, so Operations can find and call them from the list.
+    phone_number = serializers.CharField(source="user.phone_number", read_only=True)
 
     class Meta:
         model = PartnerProfile
         fields = (
             "id",
             "display_name",
+            "phone_number",
             "experience_years",
             "application_id",
             "application_status",

@@ -3,7 +3,7 @@
 
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { LocateFixed, MapPin } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "../cn";
 import { useTOrDefault } from "../i18n";
@@ -87,6 +87,7 @@ function FilterBody({
 }: Omit<PlaceFilterProps, "apiKey"> & { withSuggestions?: boolean }) {
   const tf = useTOrDefault();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [failure, setFailure] = useState<DeviceFailure | null>(null);
@@ -121,6 +122,7 @@ function FilterBody({
         <input
           type="text"
           role="combobox"
+          aria-controls={listId}
           aria-expanded={open && suggestions.length > 0}
           aria-autocomplete="list"
           aria-label={tf("ui.placeFilter.label", "City or area")}
@@ -151,6 +153,7 @@ function FilterBody({
 
       {withSuggestions ? (
         <Suggestions
+          listId={listId}
           query={value.source === "typed" ? value.name : ""}
           onResults={(found) => {
             setSearchFailed(false);
@@ -185,6 +188,7 @@ function FilterBody({
 
 /** The suggestion list. Lives inside `APIProvider`, so the Places library can load. */
 function Suggestions({
+  listId,
   query,
   suggestions,
   onResults,
@@ -192,6 +196,7 @@ function Suggestions({
   onPicked,
   onPickFailed,
 }: {
+  listId: string;
   query: string;
   suggestions: Suggestion[];
   onResults: (found: Suggestion[]) => void;
@@ -276,6 +281,7 @@ function Suggestions({
   if (suggestions.length === 0) return null;
   return (
     <ul
+      id={listId}
       role="listbox"
       aria-label={tf("ui.placeFilter.results", "Suggested places")}
       className="absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-auto rounded-control border border-line bg-surface py-1 shadow-md"

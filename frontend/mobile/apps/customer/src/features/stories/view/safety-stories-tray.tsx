@@ -1,3 +1,4 @@
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
@@ -63,7 +64,7 @@ export function SafetyStoriesTray({
           onPress={() => handleOpenStory(0)}
         >
           <Text className="text-xs font-bold text-[#f87000]">
-            Watch all →
+            Watch all â†’
           </Text>
         </Pressable>
       </View>
@@ -96,7 +97,7 @@ export function SafetyStoriesTray({
                 <View className="p-[2px] rounded-full bg-white">
                   <View className="size-16 rounded-full overflow-hidden bg-navy-100 items-center justify-center">
                     <Image
-                      source={{ uri: story.thumbnail_url || story.media_url }}
+                      source={{ uri: resolveImageUrl(story.thumbnail_url || story.media_url) || (story.thumbnail_url || story.media_url) }}
                       style={{ width: "100%", height: "100%" }}
                       contentFit="cover"
                     />

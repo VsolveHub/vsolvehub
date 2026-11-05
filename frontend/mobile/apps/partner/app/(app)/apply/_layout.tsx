@@ -1,12 +1,14 @@
 // Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
+import { Text } from "@vsolve/mobile-ui";
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { Redirect, Slot, usePathname, useRouter } from "expo-router";
 import {
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Headphones,
   HelpCircle,
-  LogOut,
   Phone,
   Send,
   User,
@@ -23,24 +25,24 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
-import {
-  previousStep,
-} from "@/features/application/model/progress";
-import { APPLICATION_STEPS, nextStep } from "@/features/application/model/steps";
+import { previousStep } from "@/features/application/model/progress";
+import { applicationSteps, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
 import { PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
+import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
+import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
 
 const logoMark = require("../../../assets/logo-mark.png");
 
 export default function ApplyLayout() {
   const pathname = usePathname();
+  const isStatusPage = pathname === "/apply/status" || pathname.endsWith("/status");
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const signOut = useMobileLogout("/login?next=%2Fapply");
@@ -96,15 +98,16 @@ export default function ApplyLayout() {
   const application = missing ? null : (query.data ?? null);
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
-  const back = isSubmitted ? null : previousStep(pathname);
-  const shouldShowDock = !isSubmitted;
+  const back = isStatusPage ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
+  const shouldShowDock = !isSubmitted && !isStatusPage;
 
-  // Find current step index in the 4-step sequence
+  // Find the current step in this partner's own sequence
+  const steps = applicationSteps(application?.track);
   const currentStepIdx = Math.max(
     0,
-    APPLICATION_STEPS.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
+    steps.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
   );
-  const currentStep = APPLICATION_STEPS[currentStepIdx] ?? APPLICATION_STEPS[0];
+  const currentStep = steps[currentStepIdx] ?? steps[0];
 
   // The applicant's own initial; with no name yet the avatar shows the person icon.
   const initialLetter = application?.display_name?.trim()[0]?.toUpperCase() ?? "";
@@ -121,7 +124,7 @@ export default function ApplyLayout() {
       onCommitRef.current();
       return;
     }
-    const next = nextStep(pathname);
+    const next = nextStep(pathname, application?.track);
     if (next) {
       router.push(next.href as any);
     }
@@ -138,7 +141,25 @@ export default function ApplyLayout() {
         <View style={[styles.headerContainer, { paddingTop: topInset + 6 }]}>
           <View style={[styles.headerInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
             {/* Left: Back chevron or balanced placeholder */}
-            {back !== null && currentStepIdx > 0 ? (
+            {isStatusPage ? (
+              <Pressable cssInterop={false}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.push("/apply" as any);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.backButton,
+                  pressed ? styles.backButtonPressed : null,
+                ]}
+              >
+                <ArrowLeft size={22} color="#00112e" strokeWidth={2.2} />
+              </Pressable>
+            ) : back !== null && currentStepIdx > 0 ? (
               <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -163,7 +184,7 @@ export default function ApplyLayout() {
                 accessibilityLabel="VSolve Hub"
               />
               <Text style={styles.logoTextNavy}>
-                VSolve <Text style={styles.logoTextOrange}>Hub</Text>
+                V Solve <Text style={styles.logoTextOrange}>Hub</Text>
               </Text>
             </View>
 
@@ -185,26 +206,14 @@ export default function ApplyLayout() {
             </Pressable>
           </View>
 
-          {/* Segmented 4-Step Progress Bar */}
-          <View style={[styles.progressRow, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            {APPLICATION_STEPS.map((step, idx) => (
-              <View
-                key={step.href}
-                style={[
-                  styles.progressBarSegment,
-                  {
-                    backgroundColor: idx <= currentStepIdx ? "#ea580c" : "#e2e8f0",
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Step Counter Label */}
-          <View style={[styles.stepLabelRow, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            <Text style={styles.stepLabelText}>
-              Step {currentStepIdx + 1} of {APPLICATION_STEPS.length} • {currentStep.label}
-            </Text>
+          {/* Stepper: Circles variant for Steps 1-3, Segmented variant for Mixed Documents & Step 4 */}
+          <View style={[styles.stepperWrapper, { maxWidth: isDesktop ? 672 : "100%" }]}>
+            <OnboardingStepper
+              currentStep={currentStepIdx}
+              totalSteps={4}
+              stepLabel={currentStep.label}
+              variant="segmented"
+            />
           </View>
         </View>
 
@@ -215,7 +224,7 @@ export default function ApplyLayout() {
             styles.scrollContent,
             {
               maxWidth: isDesktop ? 672 : "100%",
-              paddingBottom: shouldShowDock ? bottomInset + 88 : 40,
+              paddingBottom: (shouldShowDock || isStatusPage) ? bottomInset + 88 : 40,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -235,6 +244,13 @@ export default function ApplyLayout() {
                   <Text style={styles.conflictSubtitle}>
                     We reloaded the latest version so you can review before continuing.
                   </Text>
+                </View>
+              ) : null}
+
+              {dockConfig?.refusal ? (
+                <View style={styles.failedBanner}>
+                  <Text style={styles.failedTitle}>{dockConfig.refusal.title}</Text>
+                  <Text style={styles.failedSubtitle}>{dockConfig.refusal.message}</Text>
                 </View>
               ) : null}
 
@@ -258,6 +274,7 @@ export default function ApplyLayout() {
                     pressed ? { opacity: 0.7 } : null,
                   ]}
                 >
+                  
                   <Text style={styles.helpButtonText}>Need help?</Text>
                 </Pressable>
 
@@ -273,8 +290,8 @@ export default function ApplyLayout() {
                       backgroundColor: isProceedDisabled
                         ? "#cbd5e1"
                         : pressed
-                        ? "#c2410c"
-                        : "#ea580c",
+                        ? "#d65e00"
+                        : "#f87000",
                       opacity: isProceedDisabled ? 0.95 : 1,
                     },
                   ]}
@@ -283,8 +300,9 @@ export default function ApplyLayout() {
                     <ActivityIndicator color="#ffffff" size="small" />
                   ) : (
                     <View style={styles.continueButtonContent}>
-                      <Text style={styles.continueButtonText}>{primaryLabel}</Text>
-                      <Text style={styles.continueButtonArrow}>{"->"}</Text>
+                      <Text style={styles.continueButtonText}>
+                        {primaryLabel.includes("Submit application") ? "Submit application" : "Continue"}
+                      </Text>
                     </View>
                   )}
                 </Pressable>
@@ -357,120 +375,13 @@ export default function ApplyLayout() {
           </View>
         </Modal>
 
-        {/* User Profile / Steps Sheet Modal */}
-        <Modal
+        {/* Screen 11: Profile Menu Bottom Sheet */}
+        <ProfileMenuSheet
           visible={profileModalOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setProfileModalOpen(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.profileModalCard}>
-              <View style={styles.modalHeader}>
-                <View style={styles.profileHeaderInfo}>
-                  <View style={styles.avatarBadgeLarge}>
-                    {initialLetter ? (
-                      <Text style={styles.avatarTextLarge}>{initialLetter}</Text>
-                    ) : (
-                      <User size={20} color="#ea580c" />
-                    )}
-                  </View>
-                  <View style={{ marginLeft: 12 }}>
-                    <Text style={styles.profileNameText}>
-                      {application?.display_name || "Your application"}
-                    </Text>
-                    <Text style={styles.profileStatusText}>
-                      Status: {application?.status || "DRAFT"}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setProfileModalOpen(false)}
-                  style={styles.modalCloseIcon}
-                >
-                  <X size={20} color="#64748b" />
-                </Pressable>
-              </View>
-
-              <Text style={styles.sheetSectionTitle}>Onboarding Steps</Text>
-
-              <View style={styles.stepsList}>
-                {APPLICATION_STEPS.map((step, idx) => {
-                  const isCurrent = idx === currentStepIdx;
-                  return (
-                    <Pressable
-                      key={step.href}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        setProfileModalOpen(false);
-                        router.push(step.href as any);
-                      }}
-                      style={[
-                        styles.stepItem,
-                        isCurrent ? styles.stepItemCurrent : null,
-                      ]}
-                    >
-                      <View style={styles.stepItemLeft}>
-                        <View
-                          style={[
-                            styles.stepNumberBadge,
-                            isCurrent
-                              ? styles.stepNumberBadgeCurrent
-                              : idx < currentStepIdx
-                              ? styles.stepNumberBadgeDone
-                              : styles.stepNumberBadgeFuture,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepNumberText,
-                              isCurrent
-                                ? { color: "#ffffff" }
-                                : idx < currentStepIdx
-                                ? { color: "#ffffff" }
-                                : { color: "#64748b" },
-                            ]}
-                          >
-                            {idx + 1}
-                          </Text>
-                        </View>
-                        <Text
-                          style={[
-                            styles.stepItemLabel,
-                            isCurrent ? { fontWeight: "700", color: "#00112e" } : null,
-                          ]}
-                        >
-                          {step.label}
-                        </Text>
-                      </View>
-                      <ChevronRight size={16} color="#94a3b8" />
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* Sign Out Button */}
-              <View style={styles.profileModalFooter}>
-                <Pressable cssInterop={false}
-                  accessibilityRole="button"
-                  accessibilityLabel="Sign Out"
-                  onPress={() => {
-                    setProfileModalOpen(false);
-                    void signOut();
-                  }}
-                  style={({ pressed }) => [
-                    styles.signOutButton,
-                    pressed ? { backgroundColor: "#ffe4e6" } : null,
-                  ]}
-                >
-                  <LogOut size={16} color="#be123c" />
-                  <Text style={styles.signOutButtonText}>Sign Out</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          onClose={() => setProfileModalOpen(false)}
+          partnerName={application?.display_name}
+          partnerInitial={initialLetter}
+        />
       </View>
     </ApplyDockContext.Provider>
   );
@@ -479,13 +390,13 @@ export default function ApplyLayout() {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: "#fbfaf8",
+    backgroundColor: "#faf8f5",
     minHeight: "100%",
   },
   headerContainer: {
-    backgroundColor: "#fbfaf8",
-    borderBottomWidth: 1,
-    borderColor: "#f1f5f9",
+    backgroundColor: "#faf8f5",
+    borderBottomWidth: 0,
+    borderColor: "transparent",
     zIndex: 20,
   },
   headerInner: {
@@ -500,7 +411,7 @@ const styles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 9999,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -524,13 +435,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   logoTextOrange: {
-    color: "#ea580c",
+    color: "#f87000",
   },
   avatarBadge: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#ffedd5",
+    backgroundColor: "#fff2e8",
     borderWidth: 1,
     borderColor: "#fed7aa",
     alignItems: "center",
@@ -542,7 +453,11 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#ea580c",
+    color: "#f87000",
+  },
+  stepperWrapper: {
+    width: "100%",
+    alignSelf: "center",
   },
   progressRow: {
     width: "100%",
@@ -556,7 +471,7 @@ const styles = StyleSheet.create({
   progressBarSegment: {
     flex: 1,
     height: 4.5,
-    borderRadius: 9999,
+    borderRadius: 14,
   },
   stepLabelRow: {
     width: "100%",
@@ -572,7 +487,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: "#fbfaf8",
+    backgroundColor: "#faf8f5",
   },
   scrollContent: {
     width: "100%",
@@ -586,9 +501,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 40,
-    backgroundColor: "#ffffff",
-    borderTopWidth: 1,
-    borderColor: "#f1f5f9",
+    backgroundColor: "#faf8f5",
+    borderTopWidth: 0,
+    borderColor: "transparent",
     paddingHorizontal: 20,
     paddingTop: 12,
     ...(Platform.OS === "web"
@@ -626,6 +541,24 @@ const styles = StyleSheet.create({
     color: "#b45309",
     marginTop: 2,
   },
+  refusalBanner: {
+    borderRadius: 12,
+    backgroundColor: "#fff7ed",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+  },
+  refusalTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#c2410c",
+  },
+  refusalSubtitle: {
+    fontSize: 13,
+    color: "#7c2d12",
+    marginTop: 2,
+    lineHeight: 18,
+  },
   failedBanner: {
     borderRadius: 8,
     backgroundColor: "#fef2f2",
@@ -660,10 +593,10 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   continueButton: {
-    height: 48,
-    minWidth: 128,
-    paddingHorizontal: 28,
-    borderRadius: 9999,
+    height: 50,
+    minWidth: 136,
+    paddingHorizontal: 36,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     ...(Platform.OS === "web"
@@ -672,7 +605,7 @@ const styles = StyleSheet.create({
         } as any)
       : {
           elevation: 4,
-          shadowColor: "#ea580c",
+          shadowColor: "#f87000",
           shadowOffset: { width: 0, height: 3 },
           shadowOpacity: 0.35,
           shadowRadius: 8,
@@ -740,7 +673,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   helpPrimaryAction: {
-    backgroundColor: "#ea580c",
+    backgroundColor: "#f87000",
     borderRadius: 9999,
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -767,7 +700,7 @@ const styles = StyleSheet.create({
     columnGap: 10,
   },
   helpSecondaryActionText: {
-    color: "#ea580c",
+    color: "#f87000",
     fontSize: 15,
     fontWeight: "700",
   },
@@ -795,7 +728,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#ffedd5",
+    backgroundColor: "#fff2e8",
     borderWidth: 1,
     borderColor: "#fed7aa",
     alignItems: "center",
@@ -804,7 +737,7 @@ const styles = StyleSheet.create({
   avatarTextLarge: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#ea580c",
+    color: "#f87000",
   },
   profileNameText: {
     fontSize: 16,
@@ -853,7 +786,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepNumberBadgeCurrent: {
-    backgroundColor: "#ea580c",
+    backgroundColor: "#f87000",
   },
   stepNumberBadgeDone: {
     backgroundColor: "#15803d",

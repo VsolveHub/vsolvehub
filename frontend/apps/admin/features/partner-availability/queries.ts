@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 import type { ScheduleDraft } from "./model/schedule";
@@ -57,7 +57,26 @@ function toRequest(draft: ScheduleDraft) {
   };
 }
 
+export type PartnerScheduleRead = Schemas["OperationsPartnerSchedule"];
+
+export const partnerScheduleKey = (partnerId: string) => ["ops-partner-schedule", partnerId] as const;
+
+/** A Partner's current hours, the areas they serve and the consent receipts a change can use. */
+export function usePartnerSchedule(partnerId: string | null) {
+  return useQuery({
+    queryKey: partnerScheduleKey(partnerId ?? ""),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/operations/partners/{partner_id}/availability/", {
+          params: { path: { partner_id: partnerId as string } },
+        }),
+      ),
+    enabled: partnerId !== null,
+  });
+}
+
 export function useReplacePartnerSchedule() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (draft: ScheduleDraft): Promise<ScheduleResult> =>
       request(() =>
@@ -70,6 +89,9 @@ export function useReplacePartnerSchedule() {
     // attempt after an ambiguous failure could overwrite a change somebody else
     // made in between.
     retry: false,
+    onSuccess: (_result, draft) => {
+      void queryClient.invalidateQueries({ queryKey: partnerScheduleKey(draft.partnerId.trim()) });
+    },
   });
 }
 

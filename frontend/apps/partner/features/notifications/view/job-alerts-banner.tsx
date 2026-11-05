@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Sparkles, X, ShieldAlert, ExternalLink, CheckCircle, Lock, Check } from "lucide-react";
+import { Bell, Sparkles, ShieldAlert, ExternalLink, CheckCircle, Lock, Check } from "lucide-react";
 import { useCurrentSession } from "@vsolve/query";
 import {
   Dialog,
@@ -10,7 +10,6 @@ import {
   usePushPermission,
   useTranslator,
   type Locale,
-  type PushPermissionState,
 } from "@vsolve/ui";
 import {
   PUSH_NOTIFICATION_EVENTS,
@@ -174,8 +173,6 @@ export function JobAlertsBanner({
   }, [onProceed]);
 
   const {
-    permissionState,
-    isPromptEligible,
     requestPermission,
     dismissPrompt,
     syncSubscription,

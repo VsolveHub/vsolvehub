@@ -38,7 +38,7 @@ def approved_partner(partner_user: User) -> tuple[PartnerProfile, ServiceArea]:
         user=partner_user,
         display_name="Shift Partner",
     )
-    application = PartnerApplication.objects.create(
+    PartnerApplication.objects.create(
         partner=profile,
         status=PartnerApplication.Status.APPROVED,
     )
@@ -49,7 +49,7 @@ def approved_partner(partner_user: User) -> tuple[PartnerProfile, ServiceArea]:
 @pytest.mark.django_db
 @patch("apps.partners.services.presence._assert_operational_eligibility")
 def test_go_online_flag_off_does_not_create_shift(
-    mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+    _mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
 ):
     profile, area = approved_partner
     with override_settings(FEATURE_PUSH_GATED_INSTANT=False):
@@ -68,7 +68,7 @@ def test_go_online_flag_off_does_not_create_shift(
 @pytest.mark.django_db
 @patch("apps.partners.services.presence._assert_operational_eligibility")
 def test_go_online_flag_on_creates_and_reuses_shift(
-    mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+    _mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
 ):
     profile, area = approved_partner
     with override_settings(FEATURE_PUSH_GATED_INSTANT=True):
@@ -87,7 +87,7 @@ def test_go_online_flag_on_creates_and_reuses_shift(
         assert shift1.scheduled_end_at > timezone.now()
 
         # Simulate returning to foreground / going online again: should reuse active shift
-        session2 = services.go_online(
+        services.go_online(
             user=partner_user,
             service_area_id=area.id,
             latitude=Decimal("17.441000"),
@@ -103,7 +103,7 @@ def test_go_online_flag_on_creates_and_reuses_shift(
 @pytest.mark.django_db
 @patch("apps.partners.services.presence._assert_operational_eligibility")
 def test_go_offline_flag_on_ends_session_and_shift(
-    mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+    _mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
 ):
     profile, area = approved_partner
     with override_settings(FEATURE_PUSH_GATED_INSTANT=True):

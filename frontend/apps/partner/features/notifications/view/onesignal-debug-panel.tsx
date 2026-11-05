@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Copy, Check, Send, BellRing, Bug, ChevronUp, ChevronDown } from "lucide-react";
 import { useCurrentSession } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
@@ -35,7 +35,7 @@ export function OneSignalDebugPanel() {
     subscriptionId: null,
   });
 
-  const refreshDebugInfo = () => {
+  const refreshDebugInfo = useCallback(() => {
     if (typeof window === "undefined") return;
 
     const browserPermission = "Notification" in window ? Notification.permission : "unsupported";
@@ -70,7 +70,7 @@ export function OneSignalDebugPanel() {
         externalId: currentUserId,
       }));
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!isLocalEnv) return;
@@ -89,7 +89,7 @@ export function OneSignalDebugPanel() {
     }
 
     return () => clearInterval(interval);
-  }, [isLocalEnv, currentUserId]);
+  }, [isLocalEnv, refreshDebugInfo]);
 
   if (!isLocalEnv) {
     return null;

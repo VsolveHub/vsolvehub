@@ -88,6 +88,7 @@ keystores (`*.jks`, `*.keystore`), `*.p8`, `*.p12`, `*.mobileprovision`,
 | Other storage | `@react-native-async-storage/async-storage` (non-secret only) | — |
 | Push | OneSignal (`react-native-onesignal` + `onesignal-expo-plugin`), through `@vsolve/mobile-core` push functions only (owner decision 2026-11-04: one channel with the web, campaigns) | `expo-notifications`, Expo Push Service, direct FCM/APNs SDKs: two push SDKs on Android fight over the same messages |
 | Location | `expo-location` (foreground only) | background location |
+| Maps | `react-native-maps` (owner decision 2026-11-05: the Partner job screen's route map). Google maps on Android with the EAS secret `GOOGLE_MAPS_ANDROID_API_KEY`, Apple Maps on iOS; the route comes from Django (`POST /partner/bookings/{id}/route/`), never from a key in the app | Google Navigation SDK, routing keys in the app, `expo-maps` |
 | Camera / photos / files | `expo-image-picker`, `expo-document-picker` | — |
 | Payments | `react-native-webview` hosting Razorpay Checkout (see `guide/02-architecture.md` §8) | `react-native-razorpay` or any Razorpay SDK |
 | Network state | `@react-native-community/netinfo` | — |

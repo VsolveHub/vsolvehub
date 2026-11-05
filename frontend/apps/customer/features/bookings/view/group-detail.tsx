@@ -26,7 +26,7 @@ import {
 } from "./paid-visit-cards";
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
-import { VisitStartCode } from "./visit-start-code";
+import { showsStartCode, VisitStartCode } from "./visit-start-code";
 
 import {
   hasLiveVisit,
@@ -183,7 +183,7 @@ function UnitCard({
           </div>
         ) : null}
 
-        {unit.booking_id && unit.booking_status ? (
+        {unit.booking_id && unit.booking_status && showsStartCode(unit.booking_status) ? (
           <div className="rounded-xl border border-orange-200/80 bg-orange-50/50 p-4">
             <p className="text-xs font-semibold text-orange-950 mb-2">
               🔐 Start Code for Visit {index + 1}

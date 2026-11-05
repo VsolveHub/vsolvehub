@@ -130,7 +130,7 @@ export function Dialog({
               className && className.includes("max-w-") ? undefined : "max-w-md",
               className
             )}
-            style={{ maxHeight: maxDialogHeight }}
+            style={{ maxHeight: maxDialogHeight, overflow: "hidden" }}
           >
             {title || description || dismissable ? (
               <View className="flex-row items-start justify-between gap-3 shrink-0">
@@ -145,8 +145,8 @@ export function Dialog({
                 {dismissable ? <CloseButton onPress={() => onOpenChange(false)} /> : null}
               </View>
             ) : null}
-            {children ? <View className="mt-4">{children}</View> : null}
-            {footer ? <View className="mt-5 shrink-0 flex-row justify-end gap-2">{footer}</View> : null}
+            {children ? <View className="mt-4 min-h-0" style={{ flexShrink: 1 }}>{children}</View> : null}
+            {footer ? <View className="mt-4 shrink-0 flex-row justify-end gap-2 border-t border-line/60 pt-3">{footer}</View> : null}
           </View>
         </KeyboardAvoidingView>
       </View>

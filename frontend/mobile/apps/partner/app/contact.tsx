@@ -1,7 +1,8 @@
-import { Text } from "@vsolve/mobile-ui";
+﻿import { Text } from "@vsolve/mobile-ui";
 import * as WebBrowser from "expo-web-browser";
 import { Clock, Mail, MapPin, MessageCircle, Phone, ShieldCheck } from "lucide-react-native";
-import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MarketingHeader } from "../src/components/marketing-header";
 import { MarketingFooter } from "../src/components/marketing-footer";
 import { PARTNER_SUPPORT_HOURS, PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "../src/features/support/contact";
@@ -42,6 +43,9 @@ const CHANNELS = [
 export default function ContactScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight ?? 16));
+  const heroPaddingTop = isDesktop ? 128 : topInset + 80;
 
   const handleOpen = (url: string) => {
     void WebBrowser.openBrowserAsync(url);
@@ -52,7 +56,7 @@ export default function ContactScreen() {
       <MarketingHeader activeTab="contact" />
 
       {/* Hero Header */}
-      <View className="px-5 pt-24 pb-8 sm:pt-28 lg:pt-32 sm:pb-14">
+      <View className="px-5 pb-8 sm:pb-14" style={{ paddingTop: heroPaddingTop }}>
         <View className="mx-auto w-full max-w-3xl items-center text-center">
           <View className="flex-row items-center gap-1.5 rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1 shadow-xs mb-3">
             <ShieldCheck size={14} color="#059669" />
@@ -69,7 +73,6 @@ export default function ContactScreen() {
               letterSpacing: -1,
               marginTop: 10,
               color: "#00112e",
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -83,7 +86,6 @@ export default function ContactScreen() {
               marginTop: 12,
               color: "#64748b",
               maxWidth: 580,
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >

@@ -45,8 +45,8 @@ _TEMPLATES: dict[str, _Template] = {
         context_id_key="offer_id",
     ),
     "partner_job_assigned": _Template(
-        title="Job confirmed",
-        body="A job has been assigned to you. Open for the details.",
+        title="New job for you",
+        body="A customer is booking you for a job. We will confirm it once they pay.",
         target_kind="PARTNER_WORK",
         context_id_key="fulfilment_unit_id",
     ),

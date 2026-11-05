@@ -45,7 +45,6 @@ from apps.fulfilment.models import (
     BookingStatusHistory,
     CustomerContactAttempt,
     ScopeAmendment,
-    WorkEvidence,
     WorkOutcome,
     WorkTask,
 )
@@ -458,7 +457,7 @@ def test_a_disputed_completion_holds_payout_and_still_settles_the_group() -> Non
 # --- Customer does not respond: evidence-gated automatic finalization --------------------------
 
 
-def test_auto_finalization_is_evidence_gated_and_runs_exactly_once() -> None:
+def test_auto_finalization_runs_exactly_once_without_needing_a_photo() -> None:
     booked = create_booked_group(key_prefix="fo-autofinal")
     booking = _start_work(booked)
     tasks = list(WorkTask.objects.filter(booking=booking))
@@ -480,18 +479,7 @@ def test_auto_finalization_is_evidence_gated_and_runs_exactly_once() -> None:
     submission.submitted_at = timezone.now() - timedelta(days=7)
     submission.save(update_fields=("submitted_at",))
 
-    assert auto_finalize_completion(booking_id=booking.id) is None, "finalized without evidence"
-
-    WorkEvidence.objects.create(
-        booking=booking,
-        kind=WorkEvidence.Kind.AFTER,
-        object_key=f"evidence/{booking.id}/after.jpg",
-        content_type="image/jpeg",
-        size_bytes=1024,
-        sha256="a" * 64,
-        processing_status=WorkEvidence.ProcessingStatus.CLEAN,
-        uploaded_by=booked.partner.user,
-    )
+    # A photo is optional since 5 November 2026: a silent Customer's window closing is enough.
     finalized = auto_finalize_completion(booking_id=booking.id)
     replay = auto_finalize_completion(booking_id=booking.id)
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import { Badge, Button, ErrorState, Field, Select, Spinner } from "@vsolve/ui";
+import { useState } from "react";
+import { Badge, Button, ErrorState, Field, Input, Select, Spinner } from "@vsolve/ui";
 
 import {
   usePartnerDirectory,
@@ -9,6 +10,7 @@ import {
   type PartnerDirectoryFilters,
 } from "@/features/partners/queries";
 import { PartnerSkillFilter } from "@/features/partners/view/partner-skill-filter";
+import { useDebounced } from "@/features/shared/use-debounced";
 
 /**
  * The Partner list, with the two filters a manager actually reaches for.
@@ -64,7 +66,9 @@ export function PartnerDirectory({
   selectedId,
   onSelect,
 }: PartnerDirectoryProps) {
-  const directory = usePartnerDirectory(filters);
+  const [search, setSearch] = useState(filters.q ?? "");
+  const q = useDebounced(search.trim());
+  const directory = usePartnerDirectory({ ...filters, q: q || undefined });
   const skills = usePartnerSkills();
 
   const rows = directory.data?.pages.flatMap((page) => page.results) ?? [];
@@ -79,6 +83,15 @@ export function PartnerDirectory({
   return (
     <div className="space-y-4">
       <div className="bg-surface border border-line rounded-card p-4 shadow-card space-y-4">
+        <Field label="Search">
+          <Input
+            type="search"
+            value={search}
+            placeholder="Name or mobile number"
+            inputMode="search"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </Field>
         <Field label="Application status">
           <Select
             value={filters.status ?? ""}
@@ -152,7 +165,7 @@ export function PartnerDirectory({
           </div>
         ) : rows.length === 0 ? (
           <p className="p-6 text-sm text-text-secondary">
-            No partner matches these filters.
+            {q ? `No partner matches “${q}”.` : "No partner matches these filters."}
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -174,6 +187,11 @@ export function PartnerDirectory({
                       {STATUS_LABELS[row.application_status] ?? row.application_status}
                     </Badge>
                   </div>
+                  {row.phone_number ? (
+                    <p className="mt-0.5 text-sm text-text-secondary" data-numeric>
+                      {row.phone_number}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-xs text-text-secondary">
                     {row.experience_years} yr experience · {row.service_count} service
                     {row.service_count === 1 ? "" : "s"} · {row.service_area_count} area
