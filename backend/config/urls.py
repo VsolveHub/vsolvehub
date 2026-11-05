@@ -56,3 +56,4 @@ if settings.DEBUG or getattr(settings, "DOCUMENT_STORAGE_PROVIDER", "") in ("dev
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static("/catalog/", document_root=settings.MEDIA_ROOT)

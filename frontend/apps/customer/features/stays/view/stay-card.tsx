@@ -17,6 +17,26 @@ import {
 } from "../model";
 import { amenityIcon } from "./amenity-icon";
 
+export function getStayFallbackImage(property?: { title?: string; room_style?: string; description?: string }): string {
+  const text = `${property?.title || ""} ${property?.room_style || ""} ${property?.description || ""}`.toLowerCase();
+  if (text.includes("hostel") || text.includes("bed space") || text.includes("dorm") || text.includes("student")) {
+    return "/catalog/stays/clean-hostel-dormitory-room-interior.jpg";
+  }
+  if (text.includes("hotel") || text.includes("resort") || text.includes("lodge") || text.includes("suite")) {
+    return "/catalog/stays/hotel-suite-bedroom-interior.jpg";
+  }
+  if (text.includes("apartment") || text.includes("flat") || text.includes("bhk") || text.includes("villa") || text.includes("condo")) {
+    return "/catalog/stays/compact-apartment-interior-layout.jpg";
+  }
+  if (text.includes("executive") || text.includes("single")) {
+    return "/catalog/stays/modern-executive-room-with-workstation.jpg";
+  }
+  if (text.includes("sharing") || text.includes("double")) {
+    return "/catalog/stays/shared-bedroom-with-two-beds.jpg";
+  }
+  return "/catalog/stays/compact-apartment-interior-layout.jpg";
+}
+
 interface StayCardProps {
   property: StayProperty | StayPropertySummary;
 }
@@ -32,11 +52,12 @@ export function StayCard({ property }: StayCardProps) {
   const occupancy = primaryUnit ? roomOccupancyLabel(primaryUnit, property.room_style) : null;
   // Only what the host said yes to, labelled by the server; the card has room for three.
   const amenities = (property.amenities ?? []).slice(0, 3);
+  const fallback = getStayFallbackImage(property);
   const hero =
-    Array.isArray((property as { media?: { url?: string }[] }).media) &&
-    (property as { media: { url?: string }[] }).media[0]?.url
-      ? (property as { media: { url: string }[] }).media[0].url
-      : null;
+    (Array.isArray((property as { media?: { url?: string }[] }).media) &&
+      (property as { media: { url?: string }[] }).media[0]?.url) ||
+    (Array.isArray(property.units) && property.units[0]?.media?.[0]?.url) ||
+    fallback;
 
   const detailHref = stayHref(property.slug);
   const averageRating = (property as StayPropertySummary).average_rating;
@@ -69,7 +90,16 @@ export function StayCard({ property }: StayCardProps) {
       {hero ? (
         <div className="pointer-events-none -mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={hero} alt="" className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]" />
+          <img
+            src={hero}
+            alt={property.title}
+            className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]"
+            onError={(e) => {
+              if (e.currentTarget.src !== fallback) {
+                e.currentTarget.src = fallback;
+              }
+            }}
+          />
         </div>
       ) : null}
       <div className="relative z-[1] pointer-events-none flex flex-col gap-3">

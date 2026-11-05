@@ -95,7 +95,7 @@ export function resolveImageUrl(url: string | null | undefined): string | null {
   }
 
   // Relative catalog tiles -> resolve to web base URL
-  if (trimmed.startsWith("/catalog/tiles/")) {
+  if (trimmed.startsWith("/catalog/")) {
     const webBase = webBaseUrl();
     return `${webBase}${trimmed}`;
   }

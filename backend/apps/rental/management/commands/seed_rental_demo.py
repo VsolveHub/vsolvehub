@@ -194,7 +194,7 @@ class Command(BaseCommand):
                         "is_active": True,
                     },
                 )
-                asset_schema = {}
+                asset_schema: dict[str, Any] = {}
                 if "Tent" in sub_name or "Shamiana" in sub_name:
                     asset_schema = {
                         "type": "object",
@@ -272,9 +272,9 @@ class Command(BaseCommand):
         )
         PartnerCapability.objects.get_or_create(
             partner=profile,
+            variant=first_variant,
             archetype=ServiceVariant.BookingArchetype.A7_RENTAL,
             defaults={
-                "variant": first_variant,
                 "status": PartnerCapability.Status.APPROVED,
             },
         )
@@ -368,26 +368,40 @@ class Command(BaseCommand):
                 daily_rate_paise=39900,
                 deposit_paise=150000,
             )
+            RentalAsset.objects.filter(id=pending.id).update(
+                pickup_address_line="Plot 12, Road 3, KPHB Colony",
+                pickup_area="Kukatpally",
+                pickup_city="Hyderabad",
+                pickup_pincode="500072",
+            )
+            RentalAssetMedia.objects.get_or_create(
+                asset=pending,
+                url="https://images.unsplash.com/photo-1572981779307-38b8cabb2407?q=80&w=1200&fit=crop",
+                defaults={"caption": "Angle Grinder in box", "display_order": 0},
+            )
+            pending.refresh_from_db()
             submit_asset(asset=pending, partner=profile)
+            pending.moderation_status = RentalAsset.ModerationStatus.PENDING
+            pending.save(update_fields=("moderation_status", "updated_at"))
 
         RentalAssetMedia.objects.get_or_create(
             asset=asset,
-            url="https://picsum.photos/seed/rental1/800/600",
+            url="https://images.unsplash.com/photo-1504148455328-c376907d081c?q=80&w=1200&fit=crop",
             defaults={"caption": "Bosch Professional Impact Drill", "display_order": 0},
         )
         RentalAssetMedia.objects.get_or_create(
             asset=asset,
-            url="https://picsum.photos/seed/rental2/800/600",
+            url="https://images.unsplash.com/photo-1572981779307-38b8cabb2407?w=800",
             defaults={"caption": "Drill bits and accessory carrying case", "display_order": 1},
         )
         RentalAssetMedia.objects.get_or_create(
             asset=carpenter_kit,
-            url="https://picsum.photos/seed/rental3/800/600",
+            url="https://images.unsplash.com/photo-1581244277943-fe4a9c777189?q=80&w=1200&fit=crop",
             defaults={"caption": "Stanley Carpentry Tool Set", "display_order": 0},
         )
         RentalAssetMedia.objects.get_or_create(
             asset=pending,
-            url="https://picsum.photos/seed/rental4/800/600",
+            url="https://images.unsplash.com/photo-1572981779307-38b8cabb2407?q=80&w=1200&fit=crop",
             defaults={"caption": "Angle Grinder in box", "display_order": 0},
         )
 
@@ -416,6 +430,9 @@ class Command(BaseCommand):
                 notes="Seeded demo rental booking.",
                 hold_deposit_for_demo=True,
             )
+
+        from django.core.management import call_command
+        call_command("seed_new_rental_images")
 
         self.stdout.write(self.style.SUCCESS("seed_rental_demo completed."))
         self.stdout.write(

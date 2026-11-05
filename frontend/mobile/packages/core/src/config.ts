@@ -79,7 +79,23 @@ export function apiBaseUrl(): string {
 }
 
 export function webBaseUrl(): string {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      /^192\.168\.\d+\.\d+$|^10\.\d+\.\d+\.\d+$|^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(hostname)
+    ) {
+      const apiHost = hostname === "localhost" ? "127.0.0.1" : hostname;
+      return `http://${apiHost}:8000`;
+    }
+  }
   const configured = process.env.EXPO_PUBLIC_WEB_BASE_URL?.trim();
-  if (configured && configured.length > 0) return configured.replace(/\/$/, "");
+  if (configured && configured.length > 0 && !configured.includes("vsolvehub.com")) {
+    return configured.replace(/\/$/, "");
+  }
+  if (__DEV__) {
+    return apiBaseUrl();
+  }
   return configuredKind === "partner" ? "https://partner.vsolvehub.com" : "https://vsolvehub.com";
 }

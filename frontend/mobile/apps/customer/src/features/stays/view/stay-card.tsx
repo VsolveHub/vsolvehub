@@ -14,8 +14,9 @@ import {
 import { THEME_COLORS } from "../theme-colors";
 import { useSavedItems } from "../use-saved-items";
 import { getAmenityIcon } from "./amenity-icon";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 
-const FALLBACK_STAY_IMAGE =
+const FALLBACK_STAY_IMAGE = "/catalog/stays/compact-apartment-interior-layout.jpg";
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop";
 
 export function StayCard({ property }: { property: StayPropertySummary }) {
@@ -32,11 +33,12 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
         )
       : property.min_price_paise ?? 0;
 
-  const rawMedia = (property as { media?: { url?: string }[] }).media;
-  const imageUrl =
+  const rawMedia = property.media;
+  const rawImage =
     (Array.isArray(rawMedia) && rawMedia[0]?.url) ||
     property.image_urls?.[0] ||
     FALLBACK_STAY_IMAGE;
+  const imageUrl = resolveImageUrl(rawImage) || rawImage;
 
   const hostName =
     property.host_name ||
@@ -148,7 +150,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </Text>
             {property.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                · {property.distance_km} km away
+                Â· {property.distance_km} km away
               </Text>
             ) : null}
           </View>
@@ -194,7 +196,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </View>
             <Text className="mt-0.5 text-[10px] text-text-muted" numberOfLines={1}>
               {typeof property.min_stay_nights === "number" && property.min_stay_nights > 1
-                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} · `
+                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} Â· `
                 : ""}
               Enquire and the host calls you
             </Text>

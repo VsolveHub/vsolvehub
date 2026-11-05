@@ -6,6 +6,7 @@ export type ListingPay = {
   salary_max_paise?: number;
   salary_period?: string;
   salary_display?: string;
+  media?: { id?: string; kind?: string; url?: string; alt_text?: string; display_order?: number }[];
 };
 
 export interface Interview {

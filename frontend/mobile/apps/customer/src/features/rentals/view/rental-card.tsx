@@ -6,8 +6,9 @@ import { Pressable, View } from "react-native";
 
 import { formatPaise, type RentalAsset } from "../model";
 import { useSavedItems } from "../use-saved-items";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 
-const FALLBACK_TOOL_IMAGE =
+const FALLBACK_TOOL_IMAGE = "/catalog/rentals/bosch-corded-impact-drill.jpg";
   "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?q=80&w=800&auto=format&fit=crop";
 
 export function RentalCard({ asset }: { asset: RentalAsset }) {
@@ -17,7 +18,8 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
 
   const dailyPrice = formatPaise(asset.daily_rate_paise);
   const deposit = formatPaise(asset.deposit_paise);
-  const imageUrl = asset.media?.[0]?.url || asset.thumbnail_url || FALLBACK_TOOL_IMAGE;
+  const rawImageUrl = asset.media?.[0]?.url || asset.thumbnail_url || FALLBACK_TOOL_IMAGE;
+  const imageUrl = resolveImageUrl(rawImageUrl) || rawImageUrl;
 
   const partnerDisplay =
     asset.partner_name ||
@@ -111,7 +113,7 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
             </Text>
             {asset.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                · {asset.distance_km} km away
+                Â· {asset.distance_km} km away
               </Text>
             ) : null}
           </View>

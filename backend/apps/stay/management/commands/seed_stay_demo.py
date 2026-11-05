@@ -578,7 +578,7 @@ class Command(BaseCommand):
                 unit_name="Double sharing AC",
                 nightly_rate_paise=85000,
                 sharing_count=2,
-                image_urls=["https://picsum.photos/seed/stay-demo-1/800/600"],
+                image_urls=["https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop"],
             )
             prop.structured_fields = {
                 "ac": True,
@@ -650,7 +650,7 @@ class Command(BaseCommand):
                 unit_name="Executive Single AC Room",
                 nightly_rate_paise=160000,
                 sharing_count=1,
-                image_urls=["https://picsum.photos/seed/stay-demo-2/800/600"],
+                image_urls=["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop"],
             )
             single_prop.structured_fields = {
                 "ac": True,
@@ -704,7 +704,7 @@ class Command(BaseCommand):
                 unit_name="Deluxe Suite",
                 nightly_rate_paise=450000,
                 sharing_count=2,
-                image_urls=["https://picsum.photos/seed/stay-demo-3/800/600"],
+                image_urls=["https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1200&fit=crop"],
             )
             hotel_prop.structured_fields = {
                 "star_rating": "5 Star",
@@ -750,51 +750,51 @@ class Command(BaseCommand):
                 location_text="Hyderabad",
                 unit_name="Bed",
                 nightly_rate_paise=45000,
-                image_urls=["https://picsum.photos/seed/stay-demo-4/800/600"],
+                image_urls=["https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop"],
             )
             submit_property(prop=pending, host=profile)
 
         # Property Media galleries
         PropertyMedia.objects.get_or_create(
             property=prop,
-            url="https://picsum.photos/seed/stay1/800/600",
+            url="https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop",
             defaults={"caption": "Spacious Double Sharing Room", "display_order": 0},
         )
         PropertyMedia.objects.get_or_create(
             property=prop,
-            url="https://picsum.photos/seed/stay2/800/600",
+            url="https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?q=80&w=1200&fit=crop",
             defaults={"caption": "Common Dining & Lounge Area", "display_order": 1},
         )
         PropertyMedia.objects.get_or_create(
             property=prop,
-            url="https://picsum.photos/seed/stay3/800/600",
+            url="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&fit=crop",
             defaults={"caption": "Modern Attached Washroom", "display_order": 2},
         )
         PropertyMedia.objects.get_or_create(
             property=single_prop,
-            url="https://picsum.photos/seed/stay4/800/600",
+            url="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop",
             defaults={"caption": "Executive Single AC Room", "display_order": 0},
         )
         PropertyMedia.objects.get_or_create(
             property=single_prop,
-            url="https://picsum.photos/seed/stay5/800/600",
+            url="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=1200&fit=crop",
             defaults={"caption": "Dedicated Workstation", "display_order": 1},
         )
         if hotel_prop:
             PropertyMedia.objects.get_or_create(
                 property=hotel_prop,
-                url="https://picsum.photos/seed/hotel1/800/600",
+                url="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1200&fit=crop",
                 defaults={"caption": "Grand Hotel Facade", "display_order": 0},
             )
             PropertyMedia.objects.get_or_create(
                 property=hotel_prop,
-                url="https://picsum.photos/seed/hotel2/800/600",
+                url="https://images.unsplash.com/photo-1590490360182-c33d57733427?q=80&w=1200&fit=crop",
                 defaults={"caption": "Deluxe Suite Interior", "display_order": 1},
             )
 
         PropertyMedia.objects.get_or_create(
             property=pending,
-            url="https://picsum.photos/seed/stay6/800/600",
+            url="https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop",
             defaults={"caption": "Hostel Bed Space", "display_order": 0},
         )
 
@@ -834,7 +834,7 @@ class Command(BaseCommand):
                 "rating": 5,
                 "body": "Excellent stay! Clean rooms, fast WiFi, and delicious food provided daily.",
                 "comment": "Excellent stay! Clean rooms, fast WiFi, and delicious food provided daily.",
-                "image_urls": ["https://picsum.photos/seed/review1/800/600"],
+                "image_urls": ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop"],
             },
         )
 

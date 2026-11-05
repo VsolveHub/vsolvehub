@@ -57,6 +57,7 @@ import { getAmenityIcon } from "./amenity-icon";
 import { StayCard } from "./stay-card";
 import { StayReviewSheet } from "./stay-review-sheet";
 import { LookSwitcher } from "./look-switcher";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { pickLook, visibleLooks } from "../looks";
 
 const FALLBACK_STAY_IMAGE =
@@ -190,12 +191,13 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
     property.image_urls && property.image_urls.length > 0
       ? property.image_urls
       : [FALLBACK_STAY_IMAGE];
-  const images =
+  const rawImages =
     lookMediaUrls.length > 0
       ? lookMediaUrls
       : unitMediaUrls.length > 0
         ? unitMediaUrls
         : propertyImages;
+  const images = rawImages.map((u) => resolveImageUrl(u) || u);
 
   const prevPhoto = () => {
     if (images.length < 2) return;
@@ -664,7 +666,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                   <Star size={18} color="#F59E0B" fill="#F59E0B" />
                   <Text className="text-sm font-extrabold text-navy-950">
                     {averageRating
-                      ? `${averageRating} · ${reviews.length} Review${reviews.length === 1 ? "" : "s"
+                      ? `${averageRating} Â· ${reviews.length} Review${reviews.length === 1 ? "" : "s"
                       }`
                       : "Guest Reviews"}
                   </Text>
@@ -937,7 +939,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           }}
                           className="size-7 items-center justify-center rounded-lg bg-white border border-slate-200 hover:border-slate-400 active:scale-95 cursor-pointer"
                         >
-                          <Text className="text-xs font-bold text-navy-900">–</Text>
+                          <Text className="text-xs font-bold text-navy-900">â€“</Text>
                         </Pressable>
                         <TextInput
                           value={lengthText}
@@ -991,7 +993,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           className={`size-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:border-slate-400 active:scale-95 cursor-pointer ${adultCount <= 1 ? "opacity-50" : ""
                             }`}
                         >
-                          <Text className="text-sm font-bold text-navy-950">–</Text>
+                          <Text className="text-sm font-bold text-navy-950">â€“</Text>
                         </Pressable>
                         <Text className="w-5 text-center text-sm font-bold text-navy-950 tabular-nums">
                           {adultCount}
@@ -1022,7 +1024,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           className={`size-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:border-slate-400 active:scale-95 cursor-pointer ${childCount <= 0 ? "opacity-50" : ""
                             }`}
                         >
-                          <Text className="text-sm font-bold text-navy-950">–</Text>
+                          <Text className="text-sm font-bold text-navy-950">â€“</Text>
                         </Pressable>
                         <Text className="w-5 text-center text-sm font-bold text-navy-950 tabular-nums">
                           {childCount}
@@ -1042,7 +1044,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                     <View className="flex-row items-center justify-between px-1">
                       <Text className="text-xs text-slate-500">
                         {totalGuests} guest{totalGuests === 1 ? "" : "s"} total
-                        {maxGuests > 1 ? ` · room fits up to ${maxGuests}` : ""}
+                        {maxGuests > 1 ? ` Â· room fits up to ${maxGuests}` : ""}
                       </Text>
                       {totalGuests >= maxGuests && (
                         <View className="rounded-full bg-amber-50 px-2 py-0.5 border border-amber-200">
@@ -1075,7 +1077,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                   <View className="rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5 gap-2">
                     <View className="flex-row items-baseline justify-between border-b border-[#E5E1DC]/60 pb-2">
                       <Text className="text-xs text-slate-600">
-                        {formatPaise(rate)}/{monthly ? "month" : "night"} × {length}{" "}
+                        {formatPaise(rate)}/{monthly ? "month" : "night"} Ã— {length}{" "}
                         {monthly
                           ? length === 1
                             ? "month"
@@ -1100,7 +1102,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                     <View className="flex-row items-start gap-2">
                       <Info size={13} color="#94A3B8" style={{ marginTop: 2 }} />
                       <Text className="flex-1 text-[11px] leading-relaxed text-slate-500">
-                        An estimate only — you agree the final price and payment with the host.
+                        An estimate only â€” you agree the final price and payment with the host.
                       </Text>
                     </View>
                   </View>
@@ -1127,7 +1129,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                     {enquiryMutation.isPending ? (
                       <View className="flex-row items-center gap-2">
                         <ActivityIndicator size="small" color="#ffffff" />
-                        <Text className="text-sm font-bold text-white">Sending enquiry…</Text>
+                        <Text className="text-sm font-bold text-white">Sending enquiryâ€¦</Text>
                       </View>
                     ) : (
                       <Text className="text-sm font-bold text-white">Send enquiry</Text>
@@ -1157,7 +1159,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                 className="cursor-pointer"
               >
                 <Text className="text-xs font-bold text-[#EA580C] hover:underline">
-                  View all stays →
+                  View all stays â†’
                 </Text>
               </Pressable>
             </View>

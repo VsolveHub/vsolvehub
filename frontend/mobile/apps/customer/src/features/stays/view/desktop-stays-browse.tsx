@@ -1,3 +1,4 @@
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Skeleton, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
@@ -66,11 +67,11 @@ const SORT_OPTIONS = [
 
 const PRICE_PRESETS = [
   { label: "All Rates", min: undefined, max: undefined },
-  { label: "Under ₹5k", min: undefined, max: 500_000 },
-  { label: "₹5k – ₹10k", min: 500_000, max: 1_000_000 },
-  { label: "₹10k – ₹15k", min: 1_000_000, max: 1_500_000 },
-  { label: "₹15k – ₹20k", min: 1_500_000, max: 2_000_000 },
-  { label: "₹20k+", min: 2_000_000, max: undefined },
+  { label: "Under â‚¹5k", min: undefined, max: 500_000 },
+  { label: "â‚¹5k â€“ â‚¹10k", min: 500_000, max: 1_000_000 },
+  { label: "â‚¹10k â€“ â‚¹15k", min: 1_000_000, max: 1_500_000 },
+  { label: "â‚¹15k â€“ â‚¹20k", min: 1_500_000, max: 2_000_000 },
+  { label: "â‚¹20k+", min: 2_000_000, max: undefined },
 ];
 
 export function DesktopStaysBrowse() {
@@ -402,7 +403,7 @@ export function DesktopStaysBrowse() {
                     hasPriceFilter || priceSliderOpen ? "text-white" : "text-[#475569]"
                   }`}
                 >
-                  {hasPriceFilter ? "Price range ✕" : "Price range"}
+                  {hasPriceFilter ? "Price range âœ•" : "Price range"}
                 </Text>
               </Pressable>
             </View>
@@ -528,7 +529,7 @@ export function DesktopStaysBrowse() {
               </Text>
             </Text>
             <Text className="text-xs font-medium text-[#6B6560]">
-              Transparent date quotes · Direct host communication
+              Transparent date quotes Â· Direct host communication
             </Text>
           </View>
         </View>
@@ -691,10 +692,11 @@ function DesktopStayCard({ property }: { property: StayPropertySummary }) {
       : property.min_price_paise ?? 0;
 
   const rawMedia = (property as { media?: { url?: string }[] }).media;
-  const imageUrl =
+  const rawImage =
     (Array.isArray(rawMedia) && rawMedia[0]?.url) ||
     property.image_urls?.[0] ||
     FALLBACK_STAY_IMAGE;
+  const imageUrl = resolveImageUrl(rawImage) || rawImage;
 
   const hostName =
     property.host_name ||
@@ -855,7 +857,7 @@ function DesktopStayCard({ property }: { property: StayPropertySummary }) {
             </View>
             <Text className="mt-0.5 text-[11px] font-medium text-[#8C827A]" numberOfLines={1}>
               {typeof property.min_stay_nights === "number" && property.min_stay_nights > 1
-                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} · `
+                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} Â· `
                 : ""}
               Enquire and the host calls you
             </Text>
