@@ -147,7 +147,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
     webBaseUrl: process.env.EXPO_PUBLIC_WEB_BASE_URL ?? "",
-    mapsEnabled: googleMapsAndroidKey !== "",
+    // The key is an EAS secret: builds can read it, `eas update` on a PC cannot. An update keeps the
+    // key already inside the installed app, so it says so with this public flag instead.
+    mapsEnabled: googleMapsAndroidKey !== "" || process.env.EXPO_PUBLIC_MAPS_ENABLED === "true",
     eas: {
       projectId: "9223c951-f79e-44c2-869d-1dc244c89071",
     },

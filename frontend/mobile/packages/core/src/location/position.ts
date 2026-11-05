@@ -29,6 +29,19 @@ export async function hasLocationPermission(): Promise<boolean> {
   }
 }
 
+/**
+ * Where a place name is, from the phone's own geocoder (no API key). Empty when it knows nothing or
+ * cannot ask: the caller decides what to show without it.
+ */
+export async function lookupPlace(text: string): Promise<{ latitude: number; longitude: number }[]> {
+  try {
+    const found = await withTimeout(Location.geocodeAsync(text), 8000);
+    return found.map(({ latitude, longitude }) => ({ latitude, longitude }));
+  } catch {
+    return [];
+  }
+}
+
 function toPosition(position: Location.LocationObject): CurrentPosition {
   return {
     coords: {

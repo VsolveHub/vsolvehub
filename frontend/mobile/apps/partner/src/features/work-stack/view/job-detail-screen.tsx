@@ -45,9 +45,6 @@ export function JobDetailScreen({ id }: { id: string }) {
     return (
       <View className="flex-1 bg-canvas">
         <VisitJobView key={visit.data.id} visit={visit.data} />
-        <View className="bg-canvas px-4 pb-6">
-          <BookingSupport reference={visit.data.id} />
-        </View>
       </View>
     );
   }

@@ -1,10 +1,11 @@
 import { request, type Schemas } from "@vsolve/api-client";
-import { getApiClient, getCurrentPosition } from "@vsolve/mobile-core";
+import { getApiClient, getCurrentPosition, lookupPlace } from "@vsolve/mobile-core";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useEffect, useState } from "react";
-import { AppState, Platform } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 
+import { nearestBelievable } from "./model/area";
 import type { PartnerVisit } from "./queries";
 
 /**
@@ -45,9 +46,18 @@ export function isRoutable(visit: PartnerVisit): boolean {
   );
 }
 
-/** The Partner's position, refreshed every half minute while the app is on screen. No prompt. */
-export function usePartnerPosition(enabled: boolean): LatLng | null {
+export interface PartnerPosition {
+  readonly position: LatLng | null;
+  /** True once a read has failed: location is off, or this app may not use it. */
+  readonly unavailable: boolean;
+  /** Ask for permission, for a tap on "Turn on location". */
+  readonly turnOn: () => void;
+}
+
+/** The Partner's position, refreshed every half minute while the app is on screen. Only a tap prompts. */
+export function usePartnerPosition(enabled: boolean): PartnerPosition {
   const [position, setPosition] = useState<LatLng | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -56,10 +66,13 @@ export function usePartnerPosition(enabled: boolean): LatLng | null {
       if (AppState.currentState !== "active") return;
       void getCurrentPosition({ prompt: false, maxAgeMs: POSITION_EVERY_MS })
         .then((fix) => {
-          if (!cancelled) setPosition({ latitude: fix.coords.latitude, longitude: fix.coords.longitude });
+          if (cancelled) return;
+          setPosition({ latitude: fix.coords.latitude, longitude: fix.coords.longitude });
+          setUnavailable(false);
         })
         .catch(() => {
           // No position, no route: the Navigate button still works without one.
+          if (!cancelled) setUnavailable(true);
         });
     };
     read();
@@ -70,7 +83,17 @@ export function usePartnerPosition(enabled: boolean): LatLng | null {
     };
   }, [enabled]);
 
-  return position;
+  const turnOn = () => {
+    void getCurrentPosition({ prompt: true, maxAgeMs: POSITION_EVERY_MS })
+      .then((fix) => {
+        setPosition({ latitude: fix.coords.latitude, longitude: fix.coords.longitude });
+        setUnavailable(false);
+      })
+      // Refused before, so Android will not ask again: only its settings page can change it.
+      .catch(() => void Linking.openSettings());
+  };
+
+  return { position, unavailable, turnOn };
 }
 
 /** ~110 m: moving less than this does not need a new route. */
@@ -99,6 +122,20 @@ export function useVisitRoute(visit: PartnerVisit, origin: LatLng | null) {
     refetchInterval: ROUTE_EVERY_MS,
     // A missing route is not worth hammering: the screen falls back to the Navigate button.
     retry: 1,
+  });
+}
+
+/**
+ * The middle of the visit's area, for the map before the address unlocks; `null` when the phone
+ * cannot place it near the Partner. An area does not move, so one good answer lasts the session.
+ */
+export function useAreaCenter(area: string | null, near: LatLng | null) {
+  return useQuery({
+    queryKey: ["partner-work", "area-center", area],
+    queryFn: async () => nearestBelievable(await lookupPlace(`${area}, India`), near!),
+    enabled: area !== null && near !== null,
+    staleTime: Infinity,
+    retry: false,
   });
 }
 

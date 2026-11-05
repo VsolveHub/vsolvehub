@@ -52,7 +52,7 @@ export {
 export type { HandoffTarget, PaymentAttemptDetail } from "./payments/handoff";
 export { razorpayCheckoutHtml, shouldOpenPaymentUrlExternally } from "./payments/checkout-html";
 
-export { getCurrentPosition, hasLocationPermission } from "./location/position";
+export { getCurrentPosition, hasLocationPermission, lookupPlace } from "./location/position";
 export type { PositionOptions } from "./location/position";
 export {
   mapLocationError,

@@ -55,6 +55,9 @@ apps go live together.
 
 ## After release
 
-- JS-only fix: `eas update --channel production --message "<what changed>"`
+- JS-only fix: `eas update --channel production --environment production --message "<what changed>"`.
+  First run `eas env:list --environment production`: `eas update` ignores `env` in `eas.json`, so
+  every `EXPO_PUBLIC_*` value must be in the EAS environment. Without the API address the app
+  crashes on launch for everyone on that channel. Try it on `preview` first.
 - Native change: bump `version` in `app.config.ts` → new production build → submit.
 - Raise `MOBILE_*_MIN_VERSION` on the server only after the new version is live in both stores.

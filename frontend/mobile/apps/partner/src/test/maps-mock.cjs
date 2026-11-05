@@ -17,6 +17,7 @@ module.exports = {
   default: MapView,
   Marker: host("Marker"),
   Polyline: host("Polyline"),
+  Circle: host("Circle"),
   PROVIDER_DEFAULT: undefined,
   PROVIDER_GOOGLE: "google",
 };
