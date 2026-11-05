@@ -582,11 +582,11 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
           accessibilityRole="link"
           accessibilityLabel={`View ${asset.title}`}
           onPress={handleCardPress}
-          className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden rounded-t-2xl bg-[#F8F6F2] cursor-pointer"
+          className="-mx-5 -mt-5 mb-3 aspect-[4/3] overflow-hidden rounded-t-2xl bg-white p-3 cursor-pointer"
         >
           <Image
             source={{ uri: imageUrl }}
-            contentFit="cover"
+            contentFit="contain"
             style={{ width: "100%", height: "100%" }}
             transition={200}
           />

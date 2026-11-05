@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { RentalPhotos } from "./rental-photos";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
@@ -253,6 +254,8 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
           <View style={{ flex: 7, minWidth: 0 }} className="flex-col gap-6">
             {/* Card 1: Equipment Details Card */}
             <View className="rounded-2xl border border-[#E5E1DC] bg-white p-6 shadow-xs flex-col gap-5">
+              <RentalPhotos media={asset.media ?? []} title={asset.title} />
+
               {/* Top Badges matching Screenshot */}
               <View className="flex-row items-center gap-2">
                 <View className="flex-row items-center gap-1.5 rounded-full bg-[#EEF2FB] border border-[#BFDBFE] px-3 py-1">

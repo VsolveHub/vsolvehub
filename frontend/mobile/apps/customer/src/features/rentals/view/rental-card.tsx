@@ -36,10 +36,10 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
     >
       {/* Cover Image - Clean, no badges overlaid (100% Web Parity) */}
       {imageUrl ? (
-        <View className="aspect-[16/10] w-full bg-surface-muted overflow-hidden">
+        <View className="aspect-[4/3] w-full overflow-hidden bg-white p-3">
           <Image
             source={{ uri: imageUrl }}
-            contentFit="cover"
+            contentFit="contain"
             style={{ width: "100%", height: "100%" }}
           />
         </View>

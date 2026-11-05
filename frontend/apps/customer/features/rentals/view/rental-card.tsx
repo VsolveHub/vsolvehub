@@ -22,12 +22,12 @@ export function RentalCard({ asset }: RentalCardProps) {
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-card border border-line bg-surface p-4 shadow-card transition duration-fast hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised">
       {hero ? (
-        <div className="relative mb-3 h-48 w-full overflow-hidden rounded-control bg-surface-sunken">
+        <div className="relative mb-3 aspect-[4/3] w-full overflow-hidden rounded-control border border-line bg-white">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={hero}
             alt={asset.title}
-            className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]"
+            className="h-full w-full object-contain p-3 transition duration-slow group-hover:scale-[1.03]"
           />
         </div>
       ) : null}

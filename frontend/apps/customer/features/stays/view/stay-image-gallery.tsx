@@ -18,21 +18,12 @@ interface StayImageGalleryProps {
   media: StayMedia[];
   title: string;
   className?: string;
+  /** `contain` shows the whole photo on white, for a product; rooms fill the frame. */
+  fit?: "cover" | "contain";
 }
 
-export function StayImageGallery({ media, title, className }: StayImageGalleryProps) {
-  const rawSlides = orderedMedia(media);
-  const slides: StayMedia[] =
-    rawSlides.length > 0
-      ? rawSlides
-      : [
-          {
-            id: "fallback-stay-image",
-            url: "/catalog/tiles/apartments.png",
-            caption: title,
-            display_order: 0,
-          } as StayMedia,
-        ];
+export function StayImageGallery({ media, title, className, fit = "cover" }: StayImageGalleryProps) {
+  const slides = orderedMedia(media);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -47,7 +38,8 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
     [slides.length],
   );
 
-  const current = slides[Math.min(index, slides.length - 1)]!;
+  const current = slides[Math.min(index, slides.length - 1)];
+  if (!current) return null;
   const caption = current.caption?.trim() || title;
 
   return (
@@ -72,7 +64,7 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
           src={current.url}
           alt={caption}
           containerClassName="size-full"
-          className="size-full object-cover"
+          className={fit === "contain" ? "size-full bg-white object-contain p-3" : "size-full object-cover"}
         />
 
         {slides.length > 1 ? (
@@ -118,7 +110,7 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
                 src={item.url}
                 alt=""
                 containerClassName="size-full"
-                className="size-full object-cover"
+                className={fit === "contain" ? "size-full bg-white object-contain" : "size-full object-cover"}
               />
             </button>
           ))}
