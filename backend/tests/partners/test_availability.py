@@ -372,3 +372,50 @@ def test_booking_engine_returns_no_capacity_for_approved_partner_with_zero_activ
         horizon_end=target_start + timedelta(days=2),
     )
     assert snapshot.capacity(starts_at=target_start, duration_minutes=60) == 0
+
+
+def test_operations_reads_current_hours_with_the_areas_and_consents_to_change_them(
+    partner_setup: PartnerSetup,
+    operations_user: User,
+) -> None:
+    """Regression: Operations could only overwrite a schedule blind, typing area and consent ids."""
+    _create_application(partner_setup)
+    application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+    client = force_role_client(user=operations_user, role_code="operations")
+    url = f"/api/v1/operations/partners/{application.partner_id}/availability/"
+    client.put(
+        url,
+        {
+            "consent_purpose": "partner_terms",
+            "consent_document_version": "2026-07",
+            "rules": [
+                {
+                    "service_area_id": str(partner_setup.service_area.id),
+                    "weekday": 2,
+                    "starts_at": "10:00",
+                    "ends_at": "18:00",
+                },
+            ],
+            "exceptions": [],
+        },
+        format="json",
+    )
+
+    body = client.get(url).json()
+
+    assert [(rule["weekday"], rule["starts_at"]) for rule in body["rules"]] == [(2, "10:00:00")]
+    assert {area["id"] for area in body["service_areas"]} == {str(partner_setup.service_area.id)}
+    assert {(consent["purpose"], consent["document_version"]) for consent in body["consents"]} >= {
+        ("partner_terms", "2026-07")
+    }
+
+
+def test_a_customer_cannot_read_a_partners_hours(partner_setup: PartnerSetup) -> None:
+    _create_application(partner_setup)
+    application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+
+    response = partner_setup.client.get(
+        f"/api/v1/operations/partners/{application.partner_id}/availability/"
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN

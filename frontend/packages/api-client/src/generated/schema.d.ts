@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.95.0)
- * Checksum: 99bec4de08f10ce5
+ * Source:   contracts/openapi/v1.yaml (version 1.96.0)
+ * Checksum: cb049dd74bc0d1a9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3787,7 +3787,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * @description A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+         *
+         *     The read comes first so a change edits what is there instead of overwriting it blind.
+         */
+        get: operations["operations_partner_schedule_retrieve"];
+        /**
+         * @description A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+         *
+         *     The read comes first so a change edits what is there instead of overwriting it blind.
+         */
         put: operations["operations_partners_availability_update"];
         post?: never;
         delete?: never;
@@ -13313,6 +13323,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly display_name: string;
+            readonly phone_number: string;
             readonly experience_years: number;
             /** Format: uuid */
             readonly application_id: string;
@@ -13350,6 +13361,16 @@ export interface components {
             readonly reviewed_at: string | null;
             /** Format: date-time */
             readonly uploaded_at: string;
+        };
+        /**
+         * @description A Partner's current hours, with what an operator needs to change them without typing ids:
+         *     the areas the Partner serves and the consent receipts a change may be recorded against.
+         */
+        OperationsPartnerSchedule: {
+            readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
+            readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
+            readonly service_areas: components["schemas"]["OperationsScheduleArea"][];
+            readonly consents: components["schemas"]["OperationsScheduleConsent"][];
         };
         OperationsPartnerScheduleUpdateRequest: {
             rules: components["schemas"]["PartnerAvailabilityRuleInputRequest"][];
@@ -13438,6 +13459,17 @@ export interface components {
             readonly engagement_status: string | null;
             readonly vendor_display_name: string | null;
             readonly engagement_total_paise: number | null;
+        };
+        OperationsScheduleArea: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        OperationsScheduleConsent: {
+            purpose: string;
+            document_version: string;
+            /** Format: date-time */
+            accepted_at: string;
         };
         OperationsTaxProfileVerifyRequest: {
             /** @default  */
@@ -28633,6 +28665,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor. */
                 cursor?: string;
+                /** @description A name, or a mobile number typed any way (spaces, +91, dashes). */
+                q?: string;
                 /** @description Repeatable skill code. A Partner matching *any* supplied skill is listed — a directory multi-select reads as a union. */
                 skill?: string[];
                 /** @description Filter by application status. */
@@ -28687,6 +28721,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationsPartnerDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_schedule_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPartnerSchedule"];
                 };
             };
             403: {

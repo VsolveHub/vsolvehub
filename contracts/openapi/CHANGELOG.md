@@ -1,5 +1,17 @@
 # API Contract Changelog
 
+## 1.96.0 - Find a partner by mobile number; read a partner's working hours
+
+Additive, Operations only.
+
+- **Added** `q` on `GET /operations/partners/`: a name, or a mobile number typed any way
+  (spaces, `+91`, a leading `0` and dashes are ignored; four or more digits match part of a
+  number).
+- **Added** `phone_number` on each directory row.
+- **Added** `GET /operations/partners/{partner_id}/availability/`: the partner's current rules
+  and exceptions, the service areas they serve, and their active consent receipts, so a change
+  is made against what is there with no ids typed. `PUT` is unchanged.
+
 ## 1.95.0 - Each app reads only its own side's notifications
 
 Additive. One person can be a Customer and a Partner; until now the customer app's bell also

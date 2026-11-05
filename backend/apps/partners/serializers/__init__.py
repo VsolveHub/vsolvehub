@@ -13,6 +13,7 @@ Where to look:
 """
 
 from .availability import (
+    OperationsPartnerScheduleSerializer,
     OperationsPartnerScheduleUpdateSerializer,
     PartnerAvailabilityExceptionInputSerializer,
     PartnerAvailabilityExceptionSerializer,
@@ -117,6 +118,7 @@ __all__ = [
     "OperationsPartnerDirectoryPageSerializer",
     "OperationsPartnerDirectoryQuerySerializer",
     "OperationsPartnerDocumentStateSerializer",
+    "OperationsPartnerScheduleSerializer",
     "OperationsPartnerScheduleUpdateSerializer",
     "OperationsTaxProfileVerifySerializer",
     "OperationsTransitionSerializer",
