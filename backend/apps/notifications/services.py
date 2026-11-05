@@ -20,7 +20,7 @@ from uuid import UUID
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 
 from apps.identity.models import CommunicationPreference, User
 from apps.notifications.models import (
@@ -533,23 +533,23 @@ def sync_customer_push_subscription(
         },
     )
 
-    # Cross-user validation: Ensure subscription does not belong to another user
+    # A OneSignal subscription belongs to the browser or phone, not to a person: when somebody
+    # else signs in on that device, `OneSignal.login` moves it to them. The row follows, so the
+    # new account is reachable instead of being refused for as long as the device lives. Pushes
+    # are addressed by user id at OneSignal, so moving this row cannot redirect anyone's messages.
     existing = CustomerPushSubscription.objects.filter(
         onesignal_subscription_id=clean_sub_id,
     ).first()
     if existing and existing.user_id != user.id:
-        logger.warning(
-            "customer_push_subscription_sync_failed",
+        logger.info(
+            "customer_push_subscription_reassigned",
             extra={
                 "user_id": user_id_str,
                 "role": "CUSTOMER",
-                "existing_user_id": str(existing.user_id),
+                "previous_user_id": str(existing.user_id),
                 "subscription_id": clean_sub_id,
-                "sync_status": "FAILED",
-                "failure_reason": "cross_user_denied",
             },
         )
-        raise PermissionDenied("This push subscription belongs to another user account.")
 
     now = timezone.now()
     is_deactivate = action == "deactivate"

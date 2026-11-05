@@ -161,6 +161,40 @@ class Msg91MessageTransport:
         )
 
 
+#: Template-code keywords → preference category, checked in order; the first hit wins.
+_CUSTOMER_PUSH_CATEGORIES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("security", "auth", "login", "password"), "ACCOUNT_SECURITY"),
+    (("otp", "arrival", "arrived"), "ARRIVAL_AND_OTP_ALERTS"),
+    (("dispatch", "assigned", "assignment", "match"), "DISPATCH_AND_ASSIGNMENT_UPDATES"),
+    (("promo", "offer", "discount", "campaign"), "OFFERS_AND_PROMOTIONS"),
+)
+_PARTNER_PUSH_CATEGORIES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("security", "auth", "login", "bank", "payout"), "ACCOUNT_SECURITY"),
+    (("shift", "availability", "schedule", "reminder"), "SHIFT_AND_AVAILABILITY_REMINDERS"),
+    (("product", "feature", "news", "announcement"), "PRODUCT_UPDATES"),
+)
+
+
+def push_category_for(*, role: str, template_code: str, category: str = "") -> str:
+    """The preference category a push falls under, so a muted category is honoured.
+
+    An explicit `category` wins. Otherwise the template code decides, by the same keywords for
+    every sender, so a notice cannot be muted on one path and still arrive by another.
+    """
+
+    if category:
+        return category
+    template_str = (template_code or "").lower()
+    if role == "CUSTOMER":
+        table, fallback = _CUSTOMER_PUSH_CATEGORIES, "BOOKING_UPDATES"
+    else:
+        table, fallback = _PARTNER_PUSH_CATEGORIES, "JOB_AND_DISPATCH_ALERTS"
+    matched = next(
+        (name for keywords, name in table if any(k in template_str for k in keywords)), fallback
+    )
+    return str(PushNotificationPreference.Category(matched))
+
+
 class OneSignalMessageTransport:
     """Outbound OneSignal Web Push transport.
 
@@ -304,34 +338,9 @@ class OneSignalMessageTransport:
             )
 
         # 1.5 Preference Check
-        resolved_category = str(ctx.get("category") or "")
-        if not resolved_category:
-            template_str = (template_code or "").lower()
-            if role == "CUSTOMER":
-                if any(k in template_str for k in ["security", "auth", "login", "password"]):
-                    resolved_category = PushNotificationPreference.Category.ACCOUNT_SECURITY
-                elif any(k in template_str for k in ["otp", "arrival", "arrived"]):
-                    resolved_category = PushNotificationPreference.Category.ARRIVAL_AND_OTP_ALERTS
-                elif any(
-                    k in template_str for k in ["dispatch", "assigned", "assignment", "match"]
-                ):
-                    resolved_category = (
-                        PushNotificationPreference.Category.DISPATCH_AND_ASSIGNMENT_UPDATES
-                    )
-                elif any(k in template_str for k in ["promo", "offer", "discount", "campaign"]):
-                    resolved_category = PushNotificationPreference.Category.OFFERS_AND_PROMOTIONS
-                else:
-                    resolved_category = PushNotificationPreference.Category.BOOKING_UPDATES
-            elif any(k in template_str for k in ["security", "auth", "login", "bank", "payout"]):
-                resolved_category = PushNotificationPreference.Category.ACCOUNT_SECURITY
-            elif any(k in template_str for k in ["shift", "availability", "schedule", "reminder"]):
-                resolved_category = (
-                    PushNotificationPreference.Category.SHIFT_AND_AVAILABILITY_REMINDERS
-                )
-            elif any(k in template_str for k in ["product", "feature", "news", "announcement"]):
-                resolved_category = PushNotificationPreference.Category.PRODUCT_UPDATES
-            else:
-                resolved_category = PushNotificationPreference.Category.JOB_AND_DISPATCH_ALERTS
+        resolved_category = push_category_for(
+            role=role, template_code=template_code, category=str(ctx.get("category") or "")
+        )
 
         if not PushNotificationPreference.is_category_enabled(
             user_recipient, role, resolved_category

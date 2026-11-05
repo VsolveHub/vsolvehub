@@ -39,6 +39,7 @@ from apps.fulfilment.views import (
     PartnerArrivedView,
     PartnerBookingCollectionView,
     PartnerBookingDetailView,
+    PartnerBookingRouteView,
     PartnerContactAttemptView,
     PartnerCustomerUnavailableView,
     PartnerEnRouteView,
@@ -123,6 +124,11 @@ urlpatterns = [
         "partner/bookings/<uuid:booking_id>/",
         PartnerBookingDetailView.as_view(),
         name="partner-booking-detail",
+    ),
+    path(
+        "partner/bookings/<uuid:booking_id>/route/",
+        PartnerBookingRouteView.as_view(),
+        name="partner-booking-route",
     ),
     path(
         "partner/bookings/<uuid:booking_id>/en-route/",

@@ -136,6 +136,15 @@ def sweep_completion_auto_finalize() -> int:
 
 
 @shared_task
+def sweep_visit_time_to_leave_reminders() -> int:
+    """Tell Partners of visits booked well ahead that it is time to set off."""
+
+    from apps.fulfilment.visit_notices import send_time_to_leave_reminders  # noqa: PLC0415
+
+    return send_time_to_leave_reminders()
+
+
+@shared_task
 def sweep_unacknowledged_assignments() -> int:
     """Flag directly-assigned advance jobs that remain unacknowledged ~24h before the visit.
 

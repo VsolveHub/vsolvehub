@@ -158,6 +158,43 @@ def test_every_registered_template_renders_from_its_documented_context() -> None
         # Partner application notices (`apps.partners.services.base._notify_application_event`).
         "reason": "The photo is blurred",
         "document": "Government identity",
+        # Booked-visit notices (`apps.fulfilment.visit_notices`).
+        "service": "Door Repair",
+        "when": "Thu 5 Nov, 2:00 pm",
+        "time": "2:00 pm",
+        "booking_id": "VSH-1042",
+        # Stays (`apps.stay`): enquiries and visits.
+        "property_title": "Lakeview 2BHK",
+        "host_name": "Ravi",
+        "guest_name": "Anita",
+        "response_text": "Yes, it is available.",
+        "check_in": "Mon, 1 Dec",
+        "host_note": "Booked for those dates.",
+        "visit_date": "Sat, 8 Nov",
+        "visit_time": "11:00 am",
+        "reason_text": "The owner is travelling.",
+        # Jobs board (`apps.listings`).
+        "job_title": "Site supervisor",
+        "place": "Gachibowli",
+        "score": "92",
+        "business_name": "Anvaya Interiors",
+        "count": "4",
+        "message": "Shortlisted",
+        "mode": "phone call",
+        "candidate_name": "Suresh",
+        "note": "Please bring your ID.",
+        # Rentals (`apps.rental`).
+        "asset_title": "Concrete mixer",
+        "customer_name": "Kiran",
+        "start_date": "Mon, 10 Nov",
+        "end_date": "Wed, 12 Nov",
+        "approved_amount": "₹800",
+        "pin": "4821",
+        "total_amount": "₹2,400",
+        "deposit_amount": "₹1,000",
+        "amount_asked": "₹1,200",
+        "refund_amount": "₹400",
+        "deducted_amount": "₹800",
     }
     for template_code in registered_template_codes():
         rendered = render_notification(template_code=template_code, context=context)
@@ -212,7 +249,9 @@ def test_unread_count_falls_as_notices_are_opened() -> None:
     _notice(recipient)
     assert unread_count(recipient, audience=NotificationIntent.Audience.CUSTOMER) == THREE_NOTICES
 
-    mark_read(recipient=recipient, audience=NotificationIntent.Audience.CUSTOMER, notification_id=first.id)
+    mark_read(
+        recipient=recipient, audience=NotificationIntent.Audience.CUSTOMER, notification_id=first.id
+    )
 
     assert unread_count(recipient, audience=NotificationIntent.Audience.CUSTOMER) == TWO_NOTICES
 
@@ -223,8 +262,16 @@ def test_reading_a_notice_twice_keeps_the_first_timestamp() -> None:
     recipient = _user()
     notice = _notice(recipient)
 
-    first_read = mark_read(recipient=recipient, audience=NotificationIntent.Audience.CUSTOMER, notification_id=notice.id).read_at
-    second_read = mark_read(recipient=recipient, audience=NotificationIntent.Audience.CUSTOMER, notification_id=notice.id).read_at
+    first_read = mark_read(
+        recipient=recipient,
+        audience=NotificationIntent.Audience.CUSTOMER,
+        notification_id=notice.id,
+    ).read_at
+    second_read = mark_read(
+        recipient=recipient,
+        audience=NotificationIntent.Audience.CUSTOMER,
+        notification_id=notice.id,
+    ).read_at
 
     assert first_read == second_read, "Reopening the panel made an old notice look freshly seen."
 
@@ -248,7 +295,11 @@ def test_reading_somebody_elses_notice_is_a_not_found() -> None:
     theirs_notice = _notice(theirs)
 
     with pytest.raises(NotificationNotFoundError):
-        mark_read(recipient=mine, audience=NotificationIntent.Audience.CUSTOMER, notification_id=theirs_notice.id)
+        mark_read(
+            recipient=mine,
+            audience=NotificationIntent.Audience.CUSTOMER,
+            notification_id=theirs_notice.id,
+        )
 
 
 # --------------------------------------------------------------------------------------------

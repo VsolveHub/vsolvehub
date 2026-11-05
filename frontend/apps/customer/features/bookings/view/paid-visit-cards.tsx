@@ -4,7 +4,8 @@ import { buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import { Money } from "@/features/checkout/view/money";
-import { useVisit, type VisitStatus } from "@/features/visit/queries";
+import { canRespondToCompletion, useVisit, type VisitStatus } from "@/features/visit/queries";
+import { CompletionDecision } from "@/features/visit/view/completion-decision";
 import { VisitActions } from "@/features/visit/view/visit-actions";
 import { bookingVisitHref } from "@/lib/routes";
 
@@ -21,7 +22,7 @@ import { UnitStatusBadge } from "./group-status";
 import { MockProfessionalCard } from "./mock-professional-card";
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
-import { VisitStartCode } from "./visit-start-code";
+import { showsStartCode, VisitStartCode } from "./visit-start-code";
 
 /**
  * Where this visit has got to, from whichever read the page holds is newer.
@@ -125,13 +126,11 @@ export function SingleVisitDetailCard({
         <UnitStatusBadge unit={unit} />
       </div>
 
-      {bookingStatus ? (
-        <div className="rounded-xl bg-surface-sunken/40 border border-line/60 p-4">
-          <VisitProgress status={bookingStatus} />
-        </div>
-      ) : null}
+      {/* `VisitProgress` draws its own card and nothing at all outside the journey, so it is not
+          wrapped: an outer box here was the empty grey panel left on a finished visit. */}
+      {bookingStatus ? <VisitProgress status={bookingStatus} /> : null}
 
-      {unit.booking_id && bookingStatus ? (
+      {unit.booking_id && bookingStatus && showsStartCode(bookingStatus) ? (
         <div className="rounded-xl border border-orange-200/80 bg-orange-50/50 p-4">
           <p className="text-xs font-semibold text-orange-950 mb-2">
             🔐 Start Code for Visit
@@ -192,7 +191,14 @@ export function SingleVisitDetailCard({
 function SingleVisitLiveActions({ bookingId }: { bookingId: string }) {
   const visit = useVisit(bookingId);
   if (visit.data === undefined) return null;
-  return <VisitActions visit={visit.data} />;
+  return (
+    <>
+      {/* The Partner's report waits on this answer; this is the screen a one-visit booking
+          opens on, so the answer has to be here and not only on the visit page. */}
+      {canRespondToCompletion(visit.data) ? <CompletionDecision visit={visit.data} /> : null}
+      <VisitActions visit={visit.data} />
+    </>
+  );
 }
 
 /** Compact card on a multi-visit paid overview. */
@@ -259,7 +265,7 @@ export function MultiVisitOverviewCard({
         </div>
 
         {/* Start Code (OTP) if active */}
-        {unit.booking_id && bookingStatus ? (
+        {unit.booking_id && bookingStatus && showsStartCode(bookingStatus) ? (
           <div className="rounded-xl border border-orange-200/80 bg-orange-50/50 p-4">
             <p className="text-xs font-semibold text-orange-950 mb-2">
               🔐 Start Code for Visit {index + 1}
@@ -307,6 +313,12 @@ export function MultiVisitOverviewCard({
               })}
             </ul>
           </div>
+        ) : null}
+
+        {unit.booking_id && bookingStatus === "COMPLETION_SUBMITTED" ? (
+          <p className="rounded-xl border border-warning-line bg-warning-surface p-3 text-sm font-semibold text-text">
+            The work on this visit is reported done. Open it to confirm, or to tell us what is wrong.
+          </p>
         ) : null}
 
         {/* Card Action Link */}

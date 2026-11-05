@@ -41,6 +41,8 @@ const { NotificationBell } = await import("./notification-bell");
 
 const COUNT_PATH = "/api/v1/notifications/unread-count/";
 const FEED_PATH = "/api/v1/notifications/";
+/** Each app reads only its own side's notices (contract 1.95.0). */
+const PARTNER_SIDE = { params: { query: { audience: "partner" } } };
 
 function ok<T>(data: T) {
   return { data, error: undefined, response: new Response(null, { status: 200 }) };
@@ -146,15 +148,15 @@ describe("opening the panel", () => {
     serve({ unread: 1, results: [notice()] });
     renderBell();
 
-    await waitFor(() => expect(client.GET).toHaveBeenCalledWith(COUNT_PATH));
-    expect(client.GET).not.toHaveBeenCalledWith(FEED_PATH);
+    await waitFor(() => expect(client.GET).toHaveBeenCalledWith(COUNT_PATH, PARTNER_SIDE));
+    expect(client.GET).not.toHaveBeenCalledWith(FEED_PATH, expect.anything());
   });
 
   it("reads the feed once it is open, and shows what a notice says", async () => {
     serve({ unread: 1, results: [notice()] });
     renderBell();
 
-    await waitFor(() => expect(client.GET).toHaveBeenCalledWith(COUNT_PATH));
+    await waitFor(() => expect(client.GET).toHaveBeenCalledWith(COUNT_PATH, PARTNER_SIDE));
     fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
 
     await waitFor(() => expect(screen.getByText("The job is open")).toBeInTheDocument());
@@ -272,7 +274,7 @@ describe("marking things read", () => {
     client.POST.mockResolvedValue(ok({ unread: 0 }));
     renderBell();
 
-    await waitFor(() => expect(client.GET).toHaveBeenCalledWith(COUNT_PATH));
+    await waitFor(() => expect(client.GET).toHaveBeenCalledWith(COUNT_PATH, PARTNER_SIDE));
     fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
 
     await waitFor(() =>

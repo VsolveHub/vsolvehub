@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.95.0)
- * Checksum: 99bec4de08f10ce5
+ * Source:   contracts/openapi/v1.yaml (version 1.96.0)
+ * Checksum: 7f4a078a08ae878e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5765,6 +5765,29 @@ export interface paths {
          *     justify the Partner to the platform.
          */
         post: operations["partner_booking_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/route/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The road route from where the Partner is to the visit, for the in-app map.
+         *
+         *     A read, sent as `POST` so the Partner's position travels in the body rather than in a URL
+         *     that proxies log. Under the same gate as the address: the route ends at the Customer's
+         *     door, so it is served exactly when the address is.
+         */
+        post: operations["partner_booking_route"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14805,6 +14828,13 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        /** @description Where the Partner is now. Used for this one route and not stored. */
+        PartnerRouteOriginRequest: {
+            /** Format: decimal */
+            latitude: string;
+            /** Format: decimal */
+            longitude: string;
+        };
         PartnerSchedule: {
             readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
             readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
@@ -14979,6 +15009,22 @@ export interface components {
             attributes?: unknown;
             readonly upcoming_booking_count: number;
             readonly rooms: components["schemas"]["Room"][];
+        };
+        /**
+         * @description The road route to the visit, for the Partner's map.
+         *
+         *     There is no separate destination point: the line ends at the Customer's pin, which is all a
+         *     map needs, and the pin still never travels as bare coordinates (see
+         *     `PartnerSiteAddressSerializer`).
+         */
+        PartnerVisitRoute: {
+            /** @description Google encoded polyline from the Partner to the Customer's pin. */
+            encoded_polyline: string;
+            distance_meters: number;
+            /** @description Two-wheeler travel time with live traffic. */
+            duration_seconds: number;
+            /** Format: date-time */
+            server_now: string;
         };
         /**
          * @description One withdrawal as the Partner follows it: Requested, Sent, Paid — or Failed, with the
@@ -33322,6 +33368,65 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_route: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerRouteOriginRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerRouteOriginRequest"];
+                "multipart/form-data": components["schemas"]["PartnerRouteOriginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerVisitRoute"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

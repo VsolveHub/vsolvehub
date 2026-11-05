@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.95.0
+  version: 1.96.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -14080,6 +14080,69 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/route/:
+    post:
+      operationId: partner_booking_route
+      description: |-
+        The road route from where the Partner is to the visit, for the in-app map.
+
+        A read, sent as `POST` so the Partner's position travels in the body rather than in a URL
+        that proxies log. Under the same gate as the address: the route ends at the Customer's
+        door, so it is served exactly when the address is.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerVisitRoute'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -36853,6 +36916,21 @@ components:
           type: string
           default: ''
           maxLength: 200
+    PartnerRouteOriginRequest:
+      type: object
+      description: Where the Partner is now. Used for this one route and not stored.
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+      required:
+      - latitude
+      - longitude
     PartnerSchedule:
       type: object
       properties:
@@ -37300,6 +37378,34 @@ components:
       - nightly_rate_paise
       - rooms
       - upcoming_booking_count
+    PartnerVisitRoute:
+      type: object
+      description: |-
+        The road route to the visit, for the Partner's map.
+
+        There is no separate destination point: the line ends at the Customer's pin, which is all a
+        map needs, and the pin still never travels as bare coordinates (see
+        `PartnerSiteAddressSerializer`).
+      properties:
+        encoded_polyline:
+          type: string
+          description: Google encoded polyline from the Partner to the Customer's
+            pin.
+        distance_meters:
+          type: integer
+          minimum: 0
+        duration_seconds:
+          type: integer
+          minimum: 0
+          description: Two-wheeler travel time with live traffic.
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - distance_meters
+      - duration_seconds
+      - encoded_polyline
+      - server_now
     PartnerWithdrawal:
       type: object
       description: |-

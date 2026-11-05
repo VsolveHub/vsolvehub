@@ -90,6 +90,8 @@ def same_day_offer(
         address_id=address.json()["id"],
         cart_version=int(item["version"]),
         starts_at=SAME_DAY_START,
+        # Only an instant booking is offered; a scheduled one is assigned directly.
+        booking_mode="INSTANT",
     )
     quote = _quote(client, plans["plans"][0]["id"], key=f"{key}-quote")
     checkout = _checkout(client, quote["id"], key=f"{key}-checkout")

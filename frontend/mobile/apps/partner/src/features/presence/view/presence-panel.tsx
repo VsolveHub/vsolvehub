@@ -1,17 +1,25 @@
 // Ported from frontend/apps/partner/features/presence/view/presence-panel.tsx
 import { describeError } from "@vsolve/query/native";
-import { getCurrentPosition, PERMISSION_DENIED } from "@vsolve/mobile-core";
+import {
+  getCurrentPosition,
+  hasLocationPermission,
+  PERMISSION_DENIED,
+  SERVICES_DISABLED,
+  TIMEOUT,
+} from "@vsolve/mobile-core";
 import { Badge, Button, Card, Dialog, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
 import { ChevronDown, MapPin, Power } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppState, Linking, Pressable, View } from "react-native";
 
 import { useApplicationReference } from "@/features/application/reference-queries";
 
 import { announceHeartbeat, claimRecurringHeartbeat } from "../model/heartbeat-lease";
-import { HEARTBEAT_INTERVAL_MS, PRESENCE_COPY, presenceStatus, type PresenceStatus } from "../model/presence";
-import { clearStoredSession, readStoredSession, writeStoredSession } from "../model/stored-session";
+import { HEARTBEAT_INTERVAL_MS, PRESENCE_COPY, type PresenceStatus } from "../model/presence";
+import { clearStoredSession, writeStoredSession } from "../model/stored-session";
+import { sessionIsGone } from "../model/use-partner-receiving-offers";
 import { useGoOffline, useGoOnline, useHeartbeat } from "../queries";
+import { usePartnerPresence } from "./partner-presence-provider";
 
 const TONE: Record<PresenceStatus, "neutral" | "success" | "warning" | "danger"> = {
   checking: "neutral",
@@ -66,6 +74,34 @@ function AreaPickerButton({
   );
 }
 
+/** Django's `PARTNER_LOCATION_MAX_ACCURACY_METERS`: a coarser fix is refused. */
+const MAX_ACCURACY_M = 500;
+
+type LocationProblem = "denied" | "off" | "slow" | "unavailable";
+
+const LOCATION_PROBLEM_COPY: Record<Exclude<LocationProblem, "denied">, { title: string; message: string }> = {
+  off: {
+    title: "Location is turned off",
+    message: "Turn on location (GPS) in your phone\u2019s quick settings, then tap Go online again.",
+  },
+  slow: {
+    title: "We could not find your location",
+    message: "Your phone took too long to find you. Step near a window or outside and try again.",
+  },
+  unavailable: {
+    title: "We could not find your location",
+    message: "Check that location is on for V Solve Hub Partner, then try again.",
+  },
+};
+
+function locationProblemOf(error: unknown): LocationProblem {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
+  if (code === PERMISSION_DENIED) return "denied";
+  if (code === SERVICES_DISABLED) return "off";
+  if (code === TIMEOUT) return "slow";
+  return "unavailable";
+}
+
 export function PresencePanel({
   consentVersion,
   variant = "default",
@@ -74,106 +110,71 @@ export function PresencePanel({
   variant?: "default" | "driver";
 }) {
   const reference = useApplicationReference();
+  const presence = usePartnerPresence();
   const goOnline = useGoOnline();
   const goOffline = useGoOffline();
   const heartbeat = useHeartbeat();
   const [areaId, setAreaId] = useState("");
   const [openAreaModal, setOpenAreaModal] = useState(false);
   const [explainLocation, setExplainLocation] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [lastBeatAt, setLastBeatAt] = useState<number | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-  const [hasProbedStoredSession, setHasProbedStoredSession] = useState(() => readStoredSession() === null);
-  const storedSession = readStoredSession();
-  const isRestoring = storedSession !== null && !hasProbedStoredSession;
+  const [locating, setLocating] = useState(false);
+  const [locationProblem, setLocationProblem] = useState<LocationProblem | null>(null);
+  const [offlineFailed, setOfflineFailed] = useState<unknown>(null);
 
-  const status = presenceStatus({
-    hasSession: sessionId !== null,
-    msSinceHeartbeat: lastBeatAt === null ? null : now - lastBeatAt,
-    isConnecting: goOnline.isPending,
-    locationDenied,
-    hasFailed: goOnline.isError,
-    isChecking: isRestoring,
-  });
-
-  const sendHeartbeat = useCallback(
-    async (id: string) => {
-      if (AppState.currentState !== "active") return;
-      try {
-        const position = await getCurrentPosition().catch((err) => {
-          console.warn("[presence] getCurrentPosition failed:", err);
-          return null;
-        });
-        await heartbeat.mutateAsync({
-          session_id: id,
-          ...(position
-            ? {
-                latitude: position.coords.latitude.toFixed(6),
-                longitude: position.coords.longitude.toFixed(6),
-                accuracy_m: position.coords.accuracy === null ? undefined : Math.round(position.coords.accuracy),
-              }
-            : {}),
-        });
-        setLastBeatAt(Date.now());
-        announceHeartbeat();
-      } catch {
-        // Left for the status to report as stale.
-      }
-    },
-    [heartbeat],
-  );
-
-  const sendHeartbeatRef = useRef(sendHeartbeat);
-  useEffect(() => {
-    sendHeartbeatRef.current = sendHeartbeat;
-  }, [sendHeartbeat]);
+  // The provider owns the session: the same answer on Home, on Me, and after a remount.
+  const sessionId = presence.sessionId;
+  const isRestoring = presence.status === "checking";
+  const status: PresenceStatus =
+    locationProblem === "denied"
+      ? "location_denied"
+      : locating || goOnline.isPending
+        ? "connecting"
+        : presence.status;
 
   const heartbeatRef = useRef(heartbeat);
   useEffect(() => {
     heartbeatRef.current = heartbeat;
   }, [heartbeat]);
 
-  useEffect(() => {
-    const stored = readStoredSession();
-    if (stored === null) return;
-    let cancelled = false;
-    void heartbeatRef.current
-      .mutateAsync({ session_id: stored })
-      .then((session) => {
-        if (cancelled) return;
-        setSessionId(session.id);
-        setLastBeatAt(Date.now());
-        announceHeartbeat();
-      })
-      .catch((err) => {
-        console.warn("[presence] Stored session check failed:", err);
-        if (!cancelled) clearStoredSession();
-      })
-      .finally(() => {
-        if (!cancelled) setHasProbedStoredSession(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  // While this panel is on screen it refreshes the Partner's position with each heartbeat; the
+  // provider's keep-alive stands down for as long as the lease is held.
   useEffect(() => {
     if (sessionId === null) return;
     const releaseLease = claimRecurringHeartbeat();
     let beat: ReturnType<typeof setInterval> | null = null;
-    let refresh: ReturnType<typeof setInterval> | null = null;
+    const send = async () => {
+      if (AppState.currentState !== "active") return;
+      // Never a prompt here: this runs on a timer, not on a tap.
+      const position = await getCurrentPosition({ prompt: false, maxAgeMs: 120_000 }).catch(() => null);
+      const accuracy = position?.coords.accuracy ?? null;
+      // Django takes a location refresh only whole — all four fields, consent included — and only
+      // inside its accuracy limit. This used to send three of the four, so every heartbeat from
+      // this panel was refused and presence lapsed 90 seconds after going online. A fix that
+      // cannot be sent whole is left out; the beat still keeps the session alive.
+      const refresh =
+        position !== null && consentVersion !== null && accuracy !== null && accuracy <= MAX_ACCURACY_M
+          ? {
+              latitude: position.coords.latitude.toFixed(6),
+              longitude: position.coords.longitude.toFixed(6),
+              accuracy_m: Math.max(1, Math.round(accuracy)),
+              consent_version: consentVersion,
+            }
+          : {};
+      try {
+        await heartbeatRef.current.mutateAsync({ session_id: sessionId, ...refresh });
+        announceHeartbeat();
+      } catch (error) {
+        if (sessionIsGone(error)) clearStoredSession();
+      }
+    };
     const start = () => {
       if (beat !== null) return;
-      void sendHeartbeatRef.current(sessionId);
-      beat = setInterval(() => void sendHeartbeatRef.current(sessionId), HEARTBEAT_INTERVAL_MS);
-      refresh = setInterval(() => setNow(Date.now()), 5_000);
+      void send();
+      beat = setInterval(() => void send(), HEARTBEAT_INTERVAL_MS);
     };
     const stop = () => {
       if (beat !== null) clearInterval(beat);
-      if (refresh !== null) clearInterval(refresh);
       beat = null;
-      refresh = null;
     };
     if (AppState.currentState === "active") start();
     const subscription = AppState.addEventListener("change", (next) => {
@@ -185,17 +186,19 @@ export function PresencePanel({
       stop();
       subscription.remove();
     };
-  }, [sessionId]);
+  }, [sessionId, consentVersion]);
 
   async function placeOnline() {
-    setLocationDenied(false);
+    setLocationProblem(null);
+    setLocating(true);
     let position;
     try {
       position = await getCurrentPosition();
     } catch (error) {
-      const denied = typeof error === "object" && error !== null && "code" in error && error.code === PERMISSION_DENIED;
-      if (denied) setLocationDenied(true);
+      setLocationProblem(locationProblemOf(error));
       return;
+    } finally {
+      setLocating(false);
     }
     if (!areaId || !consentVersion) return;
     const session = await goOnline
@@ -203,7 +206,7 @@ export function PresencePanel({
         service_area_id: areaId,
         latitude: position.coords.latitude.toFixed(6),
         longitude: position.coords.longitude.toFixed(6),
-        accuracy_m: position.coords.accuracy === null ? 0 : Math.round(position.coords.accuracy),
+        accuracy_m: Math.max(1, Math.round(position.coords.accuracy ?? 1)),
         consent_version: consentVersion,
       })
       .catch((err) => {
@@ -211,25 +214,36 @@ export function PresencePanel({
         return null;
       });
     if (session) {
-      setSessionId(session.id);
-      setLastBeatAt(Date.now());
-      writeStoredSession(session.id);
+      // Written to the shared store, already confirmed: every screen shows Online at once.
+      writeStoredSession(session.id, { confirmed: true });
       announceHeartbeat();
     }
   }
 
-  function handleGoOnline() {
+  async function handleGoOnline() {
+    setLocationProblem(null);
+    // Explain before the system prompt only the first time; after that one tap goes online.
+    if (await hasLocationPermission()) {
+      void placeOnline();
+      return;
+    }
     setExplainLocation(true);
   }
 
   async function handleGoOffline() {
     if (sessionId === null) return;
-    await goOffline.mutateAsync({ session_id: sessionId }).catch((err) => {
-      console.warn("[presence] goOffline mutation failed:", err);
-      return null;
-    });
-    setSessionId(null);
-    setLastBeatAt(null);
+    setOfflineFailed(null);
+    try {
+      await goOffline.mutateAsync({ session_id: sessionId });
+    } catch (error) {
+      // With background presence the server would keep offering work for hours, so a failed
+      // "Go offline" must not look like a successful one. A session the server already ended
+      // is offline either way.
+      if (!sessionIsGone(error)) {
+        setOfflineFailed(error);
+        return;
+      }
+    }
     clearStoredSession();
   }
 
@@ -238,19 +252,31 @@ export function PresencePanel({
   }
 
   const copy = PRESENCE_COPY[status];
-  const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending;
-  const isOnline = sessionId !== null && (status === "online" || status === "stale");
+  const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending && !locating;
+  const isOnline = sessionId !== null;
+  const busy = locating || goOnline.isPending || goOffline.isPending;
   const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
 
-  const locationBlock = locationDenied ? (
-    <ErrorState
-      inline
-      title={PRESENCE_COPY.location_denied.label}
-      message={PRESENCE_COPY.location_denied.detail}
-      actionLabel="Open settings"
-      onAction={() => void Linking.openSettings()}
-    />
-  ) : null;
+  const locationBlock =
+    locationProblem === "denied" ? (
+      <ErrorState
+        inline
+        title={PRESENCE_COPY.location_denied.label}
+        message={PRESENCE_COPY.location_denied.detail}
+        actionLabel="Open settings"
+        onAction={() => void Linking.openSettings()}
+      />
+    ) : locationProblem !== null ? (
+      <ErrorState
+        inline
+        title={LOCATION_PROBLEM_COPY[locationProblem].title}
+        message={LOCATION_PROBLEM_COPY[locationProblem].message}
+        actionLabel="Try again"
+        onAction={() => void placeOnline()}
+      />
+    ) : offlineFailed !== null ? (
+      <GoOnlineFailure error={offlineFailed} />
+    ) : null;
 
   const controls =
     isRestoring ? (
@@ -262,7 +288,12 @@ export function PresencePanel({
           disabled={reference.isPending || reference.serviceAreas.length === 0}
           onPress={() => setOpenAreaModal(true)}
         />
-        <Button disabled={!canGoOnline} loading={goOnline.isPending} loadingLabel="Going online" onPress={handleGoOnline}>
+        <Button
+          disabled={!canGoOnline}
+          loading={locating || goOnline.isPending}
+          loadingLabel={locating ? "Finding your location" : "Going online"}
+          onPress={() => void handleGoOnline()}
+        >
           Go online
         </Button>
       </View>
@@ -309,12 +340,12 @@ export function PresencePanel({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={isOnline ? "Go offline" : "Go online"}
-                disabled={isRestoring || (sessionId === null && !canGoOnline) || goOnline.isPending || goOffline.isPending}
+                disabled={isRestoring || (sessionId === null && !canGoOnline) || busy}
                 onPress={() => void (sessionId === null ? handleGoOnline() : handleGoOffline())}
                 className={cn(
                   "size-[5.5rem] items-center justify-center rounded-full active:scale-95",
                   isOnline ? "bg-[#DC2626]" : "bg-[#16A34A]",
-                  (isRestoring || (sessionId === null && !canGoOnline) || goOnline.isPending || goOffline.isPending) ? "opacity-50" : ""
+                  (isRestoring || (sessionId === null && !canGoOnline) || busy) ? "opacity-50" : ""
                 )}
                 style={{
                   elevation: 8,
@@ -324,14 +355,20 @@ export function PresencePanel({
                   shadowRadius: 14,
                 }}
               >
-                {goOnline.isPending || goOffline.isPending ? (
+                {busy ? (
                   <Spinner size="md" />
                 ) : (
                   <Power size={36} color="#FFFFFF" strokeWidth={2.5} />
                 )}
               </Pressable>
               <Text className="text-center text-xs font-semibold text-text-muted">
-                {isOnline ? "Tap to go offline" : "Tap to go online"}
+                {locating
+                  ? "Finding your location\u2026"
+                  : goOnline.isPending
+                    ? "Going online\u2026"
+                    : isOnline
+                      ? "Tap to go offline"
+                      : "Tap to go online"}
               </Text>
             </View>
           )}
@@ -365,8 +402,8 @@ export function PresencePanel({
       <Dialog
         open={explainLocation}
         onOpenChange={setExplainLocation}
-        title={PRESENCE_COPY.location_denied.label}
-        description="We need your location to offer you nearby jobs. Allow location for this site, then go online again."
+        title="Allow location"
+        description="We use your location to offer you jobs near you. Your phone will ask you to allow it next."
         footer={
           <>
             <Button variant="outline" onPress={() => setExplainLocation(false)}>
@@ -375,7 +412,8 @@ export function PresencePanel({
             <Button
               onPress={() => {
                 setExplainLocation(false);
-                void placeOnline();
+                // Android drops a permission prompt raised while a dialog is still closing.
+                setTimeout(() => void placeOnline(), 350);
               }}
             >
               Allow location

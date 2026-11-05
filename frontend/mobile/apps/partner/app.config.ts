@@ -1,6 +1,12 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+
+// The job screen's map (owner decision, 5 November 2026). Android draws Google maps with a key
+// restricted to this app's package and signing certificate (EAS secret
+// GOOGLE_MAPS_ANDROID_API_KEY, never committed); iOS uses Apple Maps and needs none. Without the
+// key the screen keeps the address card and the Navigate button and draws no map.
+const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() ?? "";
 const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
 
 // Firebase phone sign-in. Its plugins read the Firebase config files, so they switch on only
@@ -44,7 +50,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "vsolve-partner",
   owner: "vsolvehub",
   scheme: "vsolvepartner",
-  version: "1.0.0",
+  // 1.1.0: the job screen map adds a native module (react-native-maps). With the
+  // `appVersion` runtime policy this keeps its JS off 1.0.0 binaries, which would crash on it.
+  version: "1.1.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
@@ -89,6 +97,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     blockedPermissions: ["ACCESS_BACKGROUND_LOCATION", "RECORD_AUDIO"],
     ...(googleServicesFile ? { googleServicesFile } : {}),
+    ...(googleMapsAndroidKey ? { config: { googleMaps: { apiKey: googleMapsAndroidKey } } } : {}),
   },
   plugins: [
     // Push notifications (OneSignal). It must be the first plugin. `mode` is the iOS APNs
@@ -138,6 +147,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
     webBaseUrl: process.env.EXPO_PUBLIC_WEB_BASE_URL ?? "",
+    mapsEnabled: googleMapsAndroidKey !== "",
     eas: {
       projectId: "9223c951-f79e-44c2-869d-1dc244c89071",
     },

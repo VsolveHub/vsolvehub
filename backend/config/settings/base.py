@@ -418,7 +418,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.95.0",
+    "VERSION": "1.96.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -811,6 +811,9 @@ GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GOOGLE_MAPS_SERVER_KEY = env("GOOGLE_MAPS_SERVER_KEY", default="")
 GEOCODING_TIMEOUT_SECONDS = env.float("GEOCODING_TIMEOUT_SECONDS", default=3.0)
 GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 24 * 7)
+# 60: the Partner app re-asks for the road route as the Partner moves; a minute per rounded
+# origin keeps a still Partner, or a re-rendering screen, at one Routes API call a minute.
+ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -890,6 +893,13 @@ M2_VISIT_SLOT_TOKEN_TTL_SECONDS = env.int("M2_VISIT_SLOT_TOKEN_TTL_SECONDS", def
 # long a person reasonably takes to finish paying.
 M2_VISIT_PLAN_HOLD_SECONDS = env.int("M2_VISIT_PLAN_HOLD_SECONDS", default=1800)
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
+# 7200: a Partner whose phone OneSignal can reach stays online with the app closed, because the
+# offer rings the phone. Two hours without opening the app ends it, and so does missing
+# `PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS` offers in a row; either way the Partner is told.
+PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS = env.int(
+    "PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS", default=7200
+)
+PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS = env.int("PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS", default=2)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
     default=300,
@@ -1030,6 +1040,12 @@ CELERY_BEAT_SCHEDULE = {
     "sweep-completion-auto-finalize": {
         "task": "apps.fulfilment.tasks.sweep_completion_auto_finalize",
         "schedule": 300.0,
+    },
+    "sweep-visit-time-to-leave-reminders": {
+        "task": "apps.fulfilment.tasks.sweep_visit_time_to_leave_reminders",
+        # 120s: the reminder fires when "On my way" opens, an hour out; two minutes late is
+        # still a reminder, and the idempotency key makes every later pass a no-op.
+        "schedule": 120.0,
     },
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",

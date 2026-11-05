@@ -20,6 +20,7 @@ module.exports = {
     "^lucide-react-native$": "<rootDir>/src/test/lucide-mock.cjs",
     "^@react-native-async-storage/async-storage$": "<rootDir>/src/test/async-storage-mock.cjs",
     "^react-native-webview$": "<rootDir>/src/test/webview-mock.cjs",
+    "^react-native-maps$": "<rootDir>/src/test/maps-mock.cjs",
   },
   transformIgnorePatterns: [
     "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-native-svg|nativewind|react-native-css-interop|lucide-react-native|openapi-fetch|@vsolve|react-navigation|@react-navigation|@sentry/react-native|native-base))",

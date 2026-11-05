@@ -132,6 +132,7 @@ async function executePushSubscriptionSync(
     });
 
     if (res.ok) {
+      lastAccepted = { signature: syncSignature(item), at: Date.now() };
       savePendingSync(null);
       return true;
     }
@@ -274,6 +275,29 @@ async function processPendingSyncQueue(): Promise<void> {
   }
 }
 
+/**
+ * The last state Django accepted, so a tab regaining focus does not resend it. Every focus used to
+ * post the same subscription again — the repeated error in the console when the server refused it.
+ * Anything that changed (a new id, a permission answer, another account) still goes at once.
+ */
+let lastAccepted: { signature: string; at: number } | null = null;
+const RESYNC_AFTER_MS = 30 * 60 * 1000;
+
+function syncSignature(item: {
+  subscriptionId: string;
+  isActive: boolean;
+  optedIn: boolean;
+  permissionState: string;
+  action: string;
+  userId?: string | null;
+}): string {
+  return [item.subscriptionId, item.isActive, item.optedIn, item.permissionState, item.action, item.userId ?? ""].join("|");
+}
+
+function alreadyAccepted(signature: string): boolean {
+  return lastAccepted !== null && lastAccepted.signature === signature && Date.now() - lastAccepted.at < RESYNC_AFTER_MS;
+}
+
 async function syncPushSubscription(
   subscriptionId: string,
   isActive: boolean = true,
@@ -283,6 +307,15 @@ async function syncPushSubscription(
   userId: string | null = null,
 ): Promise<void> {
   if (!subscriptionId) return;
+  const resolvedPermission =
+    permissionState || (typeof Notification !== "undefined" ? Notification.permission : "");
+  if (
+    alreadyAccepted(
+      syncSignature({ subscriptionId, isActive, optedIn, permissionState: resolvedPermission, action, userId }),
+    )
+  ) {
+    return;
+  }
 
   const now = Date.now();
   const existing = loadPendingSync();
