@@ -1,12 +1,13 @@
 // Ported from frontend/apps/partner/features/work-stack/view/visit-job-view.tsx
 import { serverClock } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query/native";
-import { ErrorState, Input, Text, Textarea, cn, formatMoney } from "@vsolve/mobile-ui";
+import { ErrorState, Text, Textarea, cn, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { STATUS_COPY, type StatusTone } from "@/features/work/model/status";
 import {
@@ -34,154 +35,235 @@ import {
 import { useUploadCompletionPhoto, type PickedPhoto } from "@/features/work/completion-photo";
 import { isInAppMapAvailable, isRoutable, usePartnerPosition, useVisitRoute } from "@/features/work/route";
 
+import { CodeBoxes } from "./code-boxes";
 import { CompletionRating } from "./completion-rating";
+import { JobSheet, SHEET_SNAPS } from "./job-sheet";
 import { Pictogram, type PictogramName } from "./pictogram";
-import { VisitRouteMap } from "./visit-route-map";
+import { SlideToConfirm } from "./slide-to-confirm";
+import { VisitRouteMap, describeRoute } from "./visit-route-map";
 
+/** Statuses that are about getting to the Customer: the map is the screen. */
+const MAP_STAGES: readonly VisitStatus[] = ["CONFIRMED", "EN_ROUTE", "ARRIVED"];
+
+/** The shortest start code the Partner may submit; the server decides whether it is right. */
+const MIN_CODE_DIGITS = 4;
+
+/**
+ * The visit screen, one layout per stage (owner decision, 5 November 2026; spec in
+ * `guide/live-job-screens-spec.md`).
+ *
+ * Getting there (booked, on the way, arrived): the map fills the screen and a bottom sheet carries
+ * only what that stage needs, with the one primary action pinned at the bottom. Working and after:
+ * no map and no address. Once the start code has been checked the Partner is already at the door,
+ * so the screen is the work itself.
+ */
 export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
-  const router = useRouter();
   const enRoute = useMarkEnRoute();
   const arrived = useMarkArrived();
   const unavailable = useMarkCustomerUnavailable();
   useRefreshVisitAtGates(visit);
   const gate = waitingGate(visit, serverClock.now());
-  const status = STATUS_COPY[visit.status];
-  const versioned = { bookingId: visit.id, expectedVersion: visit.version };
-  const busy = enRoute.isPending || arrived.isPending || unavailable.isPending;
-  const commandError = enRoute.error ?? arrived.error ?? unavailable.error;
-  const money = visit.earning ?? visit.estimated_earning;
+  const commands = {
+    enRoute,
+    arrived,
+    unavailable,
+    busy: enRoute.isPending || arrived.isPending || unavailable.isPending,
+    error: enRoute.error ?? arrived.error ?? unavailable.error,
+  };
 
-  return (
-    <ScrollView className="flex-1 bg-canvas" contentContainerClassName="pb-5">
-      <View className="bg-navy-900 px-4 pb-6 pt-4">
-        <View className="flex-row items-center justify-between gap-3">
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface/13">
-            <Pictogram name="back" size="md" className="text-surface" />
-          </Pressable>
-          <Text className="rounded-full border border-surface/25 bg-surface/12 px-3 py-1 text-xs font-bold uppercase tracking-[0.05em] text-surface">
-            {status.label}
-          </Text>
-        </View>
-        <Text className="mt-5 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-navy-200">Service visit</Text>
-        <JobTitle visit={visit} />
-        <View className="mt-5 flex-row flex-wrap gap-2">
-          <View className={money ? "w-[48%]" : "w-full"}>
-            <HeroFact icon="time" label="Starts" value={clockTime(visit.scheduled_start) ?? "Time pending"} />
-          </View>
-          {money ? (
-            <View className="w-[48%]">
-              <HeroFact icon="money" label={visit.earning ? "Final earning" : "Estimated earning"} value={formatMoney(money.net_paise)} />
-            </View>
-          ) : null}
-        </View>
-      </View>
-      {commandError ? (
-        <View className="px-4 pt-4">
-          <CommandFailure error={commandError} />
-        </View>
-      ) : null}
-      <View className="flex-col gap-4 px-4 pb-5 pt-4">
-        {/* Where to go comes first: on the way, the map and the Navigate button are the screen. */}
-        <VisitLocation visit={visit} />
-        <View accessibilityLabel="Next step" className="rounded-card border border-line bg-surface p-4">
-          <View className="mb-4 flex-row items-start gap-3">
-            <View className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-selected-surface">
-              <Pictogram name={STATUS_PICTOGRAM[visit.status]} size="md" className="text-action-secondary" />
-            </View>
-            <View className="min-w-0 flex-1">
-              <Text className="text-base font-extrabold text-text">Next step</Text>
-              <Text className="mt-0.5 text-sm leading-5 text-text-secondary">{STATUS_GUIDANCE[visit.status]}</Text>
-            </View>
-          </View>
-          <View className="flex-col gap-3">
-            {gate !== null ? <GateNotice gate={gate} /> : null}
-            {canGoEnRoute(visit) ? (
-              <BigAction tone="secondary" icon="go" label="I am on my way" disabled={busy} onPress={() => enRoute.mutate(versioned)} />
-            ) : null}
-            {canArrive(visit) ? (
-              <BigAction tone="success" icon="yes" label="I have arrived" disabled={busy} onPress={() => arrived.mutate(versioned)} />
-            ) : null}
-            {canStartWork(visit) ? <StartCodePad visit={visit} /> : null}
-            {visit.status === "ARRIVED" && visit.customer_unavailable_wait_started_at === null ? (
-              <SecondaryAction icon="later" label="Nobody is here" consequence="Starts a paid wait. You keep the job." disabled={busy} onPress={() => unavailable.mutate(versioned)} />
-            ) : null}
-            {canAbort(visit) || canRelease(visit) ? (
-              <View className="mt-2 border-t border-line pt-4">
-                <ReleaseAction visit={visit} />
-              </View>
-            ) : null}
-            {canReport(visit) ? <JobReport visit={visit} /> : null}
-            {isWaiting(visit) ? <StatusMedallion status={visit.status} /> : null}
-          </View>
-        </View>
-        <ServiceDetails visit={visit} />
-        <VisitDetails visit={visit} />
-      </View>
-      <View className="bg-canvas px-4 pb-5">
-        <CompletionRating
-          subject="booking"
-          id={visit.id}
-          isComplete={visit.status === "COMPLETED" || visit.status === "PARTIALLY_COMPLETED"}
-        />
-      </View>
-    </ScrollView>
+  return MAP_STAGES.includes(visit.status) ? (
+    <MapStage visit={visit} gate={gate} commands={commands} />
+  ) : (
+    <WorkStage visit={visit} />
   );
 }
 
-function JobTitle({ visit }: { readonly visit: PartnerVisit }) {
+type Commands = {
+  readonly enRoute: ReturnType<typeof useMarkEnRoute>;
+  readonly arrived: ReturnType<typeof useMarkArrived>;
+  readonly unavailable: ReturnType<typeof useMarkCustomerUnavailable>;
+  readonly busy: boolean;
+  readonly error: unknown;
+};
+
+function jobTitleText(visit: PartnerVisit): string {
   const durableTitle = visit.display_title?.trim() || null;
   const [first, ...rest] = visit.work_tasks;
+  return `${durableTitle ?? (first === undefined ? "Your job" : first.label)}${durableTitle === null && rest.length > 0 ? ` +${rest.length} more` : ""}`;
+}
+
+/* ---------------------------------------------------------------------------
+   Getting there: full-screen map + bottom sheet
+   --------------------------------------------------------------------------- */
+
+function MapStage({ visit, gate, commands }: { readonly visit: PartnerVisit; readonly gate: WaitingGate | null; readonly commands: Commands }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const verify = useVerifyStartOtp();
+  const [code, setCode] = useState("");
+  const [showAddress, setShowAddress] = useState(false);
+
+  const status = STATUS_COPY[visit.status];
+  const versioned = { bookingId: visit.id, expectedVersion: visit.version };
+  const atDoor = visit.status === "ARRIVED";
+  const mapOn = isInAppMapAvailable() && isRoutable(visit);
+  const origin = usePartnerPosition(mapOn);
+  const route = useVisitRoute(visit, mapOn ? origin : null);
+  const contact = visitContact(visit);
+  const money = visit.earning ?? visit.estimated_earning;
+  const bottomInset = height * (atDoor ? SHEET_SNAPS[1] : SHEET_SNAPS[0]);
+
+  let footer: React.ReactNode = null;
+  if (canGoEnRoute(visit)) {
+    footer = <BigAction tone="secondary" icon="go" label="I am on my way" disabled={commands.busy} onPress={() => commands.enRoute.mutate(versioned)} />;
+  } else if (canArrive(visit)) {
+    footer = <SlideToConfirm label="Slide: I have arrived" disabled={commands.busy} onConfirm={() => commands.arrived.mutate(versioned)} />;
+  } else if (canStartWork(visit)) {
+    footer = (
+      <BigAction
+        tone="success"
+        icon="power"
+        label="Start work"
+        disabled={code.length < MIN_CODE_DIGITS || verify.isPending}
+        onPress={() => verify.mutate({ bookingId: visit.id, expectedVersion: visit.version, code })}
+      />
+    );
+  }
+
   return (
-    <Text className="mt-1 max-w-[28ch] text-[1.75rem] font-extrabold leading-tight tracking-[-0.025em] text-surface">
-      {durableTitle ?? (first === undefined ? "Your job" : first.label)}
-      {durableTitle === null && rest.length > 0 ? ` +${rest.length} more` : ""}
-    </Text>
+    <View className="flex-1 bg-surface">
+      {mapOn && route.data ? (
+        <VisitRouteMap route={route.data} bottomInset={bottomInset} topInset={insets.top} />
+      ) : (
+        <View className="absolute inset-x-0 top-0 px-4" style={{ paddingTop: insets.top + 72 }}>
+          <Text className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-text-muted">Service visit</Text>
+          <Text className="mt-1 text-[1.5rem] font-extrabold leading-tight text-text">{jobTitleText(visit)}</Text>
+          <Text className="mt-2 text-sm text-text-secondary">The route map appears here once your location is on.</Text>
+        </View>
+      )}
+
+      {/* Floating controls over the map: back, and the status. Nothing else lives up here. */}
+      <View pointerEvents="box-none" className="absolute inset-x-0 top-0 px-4" style={{ paddingTop: insets.top + 8 }}>
+        <View pointerEvents="box-none" className="flex-row items-center justify-between">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+            className="h-12 w-12 items-center justify-center rounded-full bg-surface shadow-md active:opacity-80"
+          >
+            <Pictogram name="back" size="md" className="text-text" />
+          </Pressable>
+          <Text className="rounded-full bg-surface px-4 py-2 text-xs font-extrabold uppercase tracking-[0.05em] text-text shadow-md">{status.label}</Text>
+        </View>
+        {mapOn && route.data && !atDoor ? (
+          <View accessibilityLiveRegion="polite" className="mt-3 flex-row items-center gap-2 self-start rounded-full bg-navy-900 px-4 py-2 shadow-md">
+            <Pictogram name="time" size="sm" className="text-action" />
+            <Text className="text-sm font-extrabold text-surface">{describeRoute(route.data)}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <JobSheet key={visit.status} accessibilityLabel="Job details" initialSnap={atDoor ? 1 : 0} footer={footer}>
+        {commands.error ? <CommandFailure error={commands.error} /> : null}
+        {verify.error ? <CommandFailure error={verify.error} /> : null}
+
+        {atDoor ? (
+          <View className="gap-4">
+            <View>
+              <Text className="text-xl font-extrabold text-text">{contact ? `Ask ${contact.firstName} for the start code` : "Ask the customer for the start code"}</Text>
+              <Text className="mt-1 text-sm leading-5 text-text-secondary">Type the digits they read out to begin the work.</Text>
+            </View>
+            <CodeBoxes value={code} onChange={setCode} error={verify.isError} />
+          </View>
+        ) : (
+          <View className="gap-1">
+            <Text className="text-xl font-extrabold leading-tight text-text">{jobTitleText(visit)}</Text>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              <FactChip icon="time" text={`Starts ${clockTime(visit.scheduled_start) ?? "time pending"}`} />
+              {money ? <FactChip icon="money" text={formatMoney(money.net_paise)} /> : null}
+            </View>
+          </View>
+        )}
+
+        {gate !== null ? <GateNotice gate={gate} /> : null}
+
+        {atDoor ? (
+          <View className="gap-3">
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: showAddress }} onPress={() => setShowAddress((open) => !open)} className="min-h-11 flex-row items-center gap-2">
+              <Pictogram name="site" size="sm" className="shrink-0 text-text-muted" />
+              <Text numberOfLines={showAddress ? undefined : 1} className="min-w-0 flex-1 text-sm font-semibold text-text-secondary">
+                {visit.site_address ? addressLine(visit.site_address) : (visit.approximate_area ?? "Customer address")}
+              </Text>
+              <Text className="text-xs font-bold text-action-secondary">{showAddress ? "Hide" : "Show"}</Text>
+            </Pressable>
+            <View className="flex-row gap-2">
+              {contact !== null ? <CallButton name={contact.firstName} phone={contact.phone} /> : null}
+            </View>
+            {visit.customer_unavailable_wait_started_at === null ? (
+              <SecondaryAction icon="later" label="Nobody is here" consequence="Starts a paid wait. You keep the job." disabled={commands.busy} onPress={() => commands.unavailable.mutate(versioned)} />
+            ) : null}
+          </View>
+        ) : (
+          <LocationBlock visit={visit} />
+        )}
+
+        {atDoor ? null : <ServiceDetails visit={visit} />}
+
+        {canAbort(visit) || canRelease(visit) ? (
+          <View className="border-t border-line pt-4">
+            <ReleaseAction visit={visit} />
+          </View>
+        ) : null}
+      </JobSheet>
+    </View>
   );
 }
 
-const LIVE_STATUSES: readonly VisitStatus[] = ["CONFIRMED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"];
+function FactChip({ icon, text }: { readonly icon: PictogramName; readonly text: string }) {
+  return (
+    <View className="flex-row items-center gap-1.5 rounded-full border border-line bg-surface-sunken px-3 py-1.5">
+      <Pictogram name={icon} size="sm" className="text-action-secondary" />
+      <Text className="text-sm font-bold text-text">{text}</Text>
+    </View>
+  );
+}
 
-/**
- * The Google Maps hand-off: turn-by-turn voice directions to the Customer's pin, on a two-wheeler.
- * Opens the Maps app when it is installed, and the Maps site when it is not.
- */
-function navigationHref(visit: PartnerVisit): string | null {
-  const address = visit.site_address;
-  if (address === null) return null;
-  const route = visit.directions_url || address.directions_url;
-  if (route) return `${route}&travelmode=two-wheeler&dir_action=navigate`;
-  const text = [address.line1, address.line2, address.landmark, address.locality, address.city, address.postal_code]
-    .filter((part) => part.trim() !== "")
-    .join(", ");
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(text)}&travelmode=two-wheeler`;
+function addressLine(address: NonNullable<PartnerVisit["site_address"]>): string {
+  return [address.line1, address.line2, address.landmark, address.locality, address.city, address.postal_code].filter((part) => part.trim() !== "").join(", ");
+}
+
+function CallButton({ name, phone }: { readonly name: string; readonly phone: string }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Call ${name}`}
+      onPress={() => void Linking.openURL(`tel:${phone}`)}
+      className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-[18px] border border-line-strong bg-surface active:bg-surface-sunken"
+    >
+      <Pictogram name="call" size="md" className="text-action-secondary" />
+      <Text numberOfLines={1} className="text-base font-bold text-text">Call {name}</Text>
+    </Pressable>
+  );
 }
 
 /**
  * Where the job is and who to ask for, on the server's clock.
  *
  * Before the unlock (two hours before the start; at once for a job happening now) the locality is
- * all there is, and the card says when the rest arrives. After it: the route map, the address,
- * Navigate and Call — what the website showed and this screen never did.
+ * all there is, and the card says when the rest arrives. After it: the address, Navigate and Call.
  */
-function VisitLocation({ visit }: { readonly visit: PartnerVisit }) {
-  const live = LIVE_STATUSES.includes(visit.status);
-  const mapOn = live && isInAppMapAvailable() && isRoutable(visit) && visit.status !== "ARRIVED";
-  const origin = usePartnerPosition(mapOn);
-  const route = useVisitRoute(visit, mapOn ? origin : null);
-  if (!live) return null;
-
+function LocationBlock({ visit }: { readonly visit: PartnerVisit }) {
   const address = visit.site_address;
   if (address === null) {
     const unlocksAt = clockTime(visit.gates.address_unlocks_at);
     return (
-      <View className="flex-row items-start gap-3 rounded-card border border-line bg-surface p-4">
-        <View className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface-sunken">
+      <View className="flex-row items-start gap-3 rounded-card border border-line bg-surface-sunken p-4">
+        <View className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface">
           <Pictogram name="distance" size="md" className="text-text-muted" />
         </View>
         <View className="min-w-0 flex-1">
-          <Text className="text-sm font-bold text-text">
-            {visit.approximate_area ? `Near ${visit.approximate_area}` : "Customer address"}
-          </Text>
+          <Text className="text-sm font-bold text-text">{visit.approximate_area ? `Near ${visit.approximate_area}` : "Customer address"}</Text>
           <Text className="mt-1 text-sm leading-5 text-text-secondary">
             {unlocksAt === null
               ? "The exact address, the map and the customer's number appear closer to the visit."
@@ -197,53 +279,119 @@ function VisitLocation({ visit }: { readonly visit: PartnerVisit }) {
   const locality = [address.locality, address.city, address.postal_code].filter((part) => part.trim() !== "").join(", ");
 
   return (
-    <View className="flex-col gap-3">
-      {mapOn && route.data ? <VisitRouteMap route={route.data} /> : null}
-      <View className="rounded-card border border-success-line bg-surface p-4">
-        <View className="flex-row items-start gap-3">
-          <View className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-success-surface">
-            <Pictogram name="site" size="md" className="text-success-text" />
-          </View>
-          <View className="min-w-0 flex-1">
-            <Text className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">Customer address</Text>
-            <Text className="mt-0.5 text-base font-extrabold leading-snug text-text">{address.line1}</Text>
-            {address.line2.trim() !== "" ? <Text className="text-sm leading-5 text-text">{address.line2}</Text> : null}
-            {address.landmark.trim() !== "" ? (
-              <Text className="text-sm leading-5 text-text-secondary">Near {address.landmark}</Text>
-            ) : null}
-            {locality !== "" ? <Text className="text-sm leading-5 text-text-secondary">{locality}</Text> : null}
-          </View>
+    <View className="rounded-card border border-success-line bg-surface p-4">
+      <View className="flex-row items-start gap-3">
+        <View className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-success-surface">
+          <Pictogram name="site" size="md" className="text-success-text" />
         </View>
-        <View className="mt-4 flex-row gap-2">
-          {navigate !== null ? (
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Navigate with Google Maps"
-              onPress={() => void Linking.openURL(navigate)}
-              className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-[18px] bg-action-secondary"
-            >
-              <Pictogram name="go" size="md" className="text-surface" />
-              <Text className="text-base font-bold text-surface">Navigate</Text>
-            </Pressable>
-          ) : null}
-          {contact !== null ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Call ${contact.firstName}`}
-              onPress={() => void Linking.openURL(`tel:${contact.phone}`)}
-              className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-[18px] border border-line-strong bg-surface"
-            >
-              <Pictogram name="call" size="md" className="text-action-secondary" />
-              <Text numberOfLines={1} className="text-base font-bold text-text">Call {contact.firstName}</Text>
-            </Pressable>
-          ) : null}
+        <View className="min-w-0 flex-1">
+          <Text className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">Customer address</Text>
+          <Text className="mt-0.5 text-base font-extrabold leading-snug text-text">{address.line1}</Text>
+          {address.line2.trim() !== "" ? <Text className="text-sm leading-5 text-text">{address.line2}</Text> : null}
+          {address.landmark.trim() !== "" ? <Text className="text-sm leading-5 text-text-secondary">Near {address.landmark}</Text> : null}
+          {locality !== "" ? <Text className="text-sm leading-5 text-text-secondary">{locality}</Text> : null}
         </View>
-        {mapOn && route.isError ? (
-          <Text className="mt-2 text-xs text-text-muted">The map could not load the route. Navigate still works.</Text>
+      </View>
+      <View className="mt-4 flex-row gap-2">
+        {navigate !== null ? (
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Navigate with Google Maps"
+            onPress={() => void Linking.openURL(navigate)}
+            className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-[18px] bg-action-secondary active:opacity-90"
+          >
+            <Pictogram name="go" size="md" className="text-surface" />
+            <Text className="text-base font-bold text-surface">Navigate</Text>
+          </Pressable>
         ) : null}
+        {contact !== null ? <CallButton name={contact.firstName} phone={contact.phone} /> : null}
       </View>
     </View>
   );
+}
+
+/* ---------------------------------------------------------------------------
+   Working and after: no map, no address
+   --------------------------------------------------------------------------- */
+
+function WorkStage({ visit }: { readonly visit: PartnerVisit }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const status = STATUS_COPY[visit.status];
+  const money = visit.earning ?? visit.estimated_earning;
+  const contact = visitContact(visit);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const working = visit.status === "IN_PROGRESS" || visit.status === "ABORTED";
+
+  return (
+    <ScrollView className="flex-1 bg-canvas" contentContainerClassName="pb-8">
+      <View className="bg-navy-900 px-4 pb-6" style={{ paddingTop: insets.top + 12 }}>
+        <View className="flex-row items-center justify-between gap-3">
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface/13">
+            <Pictogram name="back" size="md" className="text-surface" />
+          </Pressable>
+          <View className="flex-row items-center gap-2">
+            <Text className="rounded-full border border-surface/25 bg-surface/12 px-3 py-1 text-xs font-bold uppercase tracking-[0.05em] text-surface">{status.label}</Text>
+            {canAbort(visit) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="More options"
+                accessibilityState={{ expanded: menuOpen }}
+                onPress={() => setMenuOpen((open) => !open)}
+                className="h-11 w-11 items-center justify-center rounded-2xl bg-surface/13"
+              >
+                <Pictogram name="more" size="md" className="text-surface" />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <Text className="mt-5 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-navy-200">Service visit</Text>
+        <JobTitle visit={visit} />
+        {money ? (
+          <View className="mt-4 w-[60%]">
+            <HeroFact icon="money" label={visit.earning ? "Final earning" : "Estimated earning"} value={formatMoney(money.net_paise)} />
+          </View>
+        ) : null}
+      </View>
+
+      <View className="flex-col gap-4 px-4 pt-4">
+        {menuOpen && canAbort(visit) ? <ReleaseAction visit={visit} /> : null}
+        {visit.status === "IN_PROGRESS" && contact !== null ? (
+          <View className="flex-row">
+            <CallButton name={contact.firstName} phone={contact.phone} />
+          </View>
+        ) : null}
+        {working ? <ServiceDetails visit={visit} /> : null}
+        {canReport(visit) ? <JobReport visit={visit} /> : null}
+        {isWaiting(visit) ? (
+          <View className="gap-3">
+            <StatusMedallion status={visit.status} />
+            <Text className="px-1 text-sm leading-5 text-text-secondary">{STATUS_GUIDANCE[visit.status]}</Text>
+          </View>
+        ) : null}
+        <CompletionRating subject="booking" id={visit.id} isComplete={visit.status === "COMPLETED" || visit.status === "PARTIALLY_COMPLETED"} />
+      </View>
+    </ScrollView>
+  );
+}
+
+function JobTitle({ visit }: { readonly visit: PartnerVisit }) {
+  return <Text className="mt-1 max-w-[28ch] text-[1.75rem] font-extrabold leading-tight tracking-[-0.025em] text-surface">{jobTitleText(visit)}</Text>;
+}
+
+/**
+ * The Google Maps hand-off: turn-by-turn voice directions to the Customer's pin, on a two-wheeler.
+ * Opens the Maps app when it is installed, and the Maps site when it is not.
+ */
+function navigationHref(visit: PartnerVisit): string | null {
+  const address = visit.site_address;
+  if (address === null) return null;
+  const route = visit.directions_url || address.directions_url;
+  if (route) return `${route}&travelmode=two-wheeler&dir_action=navigate`;
+  const text = [address.line1, address.line2, address.landmark, address.locality, address.city, address.postal_code]
+    .filter((part) => part.trim() !== "")
+    .join(", ");
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(text)}&travelmode=two-wheeler`;
 }
 
 /** Why the next step is not on screen yet, and when it will be — instead of an error after a tap. */
@@ -331,34 +479,6 @@ function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
   );
 }
 
-function VisitDetails({ visit }: { readonly visit: PartnerVisit }) {
-  return (
-    <View>
-      <Text className="mb-2 text-sm font-extrabold text-text">Visit details</Text>
-      <View className="flex-row flex-wrap gap-2">
-        <View className="w-[48%]"><DetailFact icon="date" label="Date" value={calendarDate(visit.scheduled_start)} /></View>
-        <View className="w-[48%]"><DetailFact icon="time" label="Start time" value={clockTime(visit.scheduled_start) ?? "Time pending"} /></View>
-        <View className="w-[48%]"><DetailFact icon="days" label="Expected work" value={durationLabel(visit.estimated_duration_minutes)} /></View>
-        {visit.approximate_area ? (
-          <View className="w-[48%]"><DetailFact icon="distance" label="Service area" value={visit.approximate_area} /></View>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function DetailFact({ icon, label, value }: { readonly icon: PictogramName; readonly label: string; readonly value: string }) {
-  return (
-    <View className="min-w-0 rounded-card border border-line bg-surface px-3 py-3">
-      <View className="flex-row items-center gap-1.5">
-        <Pictogram name={icon} size="sm" className="shrink-0 text-text-muted" />
-        <Text className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-text-muted">{label}</Text>
-      </View>
-      <Text className="mt-1 text-sm font-bold leading-5 text-text">{value}</Text>
-    </View>
-  );
-}
-
 const STATUS_GUIDANCE: Record<VisitStatus, string> = {
   CONFIRMED: "Review the scope and tools, then start travelling when you are ready.",
   EN_ROUTE: "Mark arrival only after you have reached the customer’s site.",
@@ -394,33 +514,6 @@ function canReport(visit: PartnerVisit): boolean {
 function isWaiting(visit: PartnerVisit): boolean {
   if (canReportCompletion(visit)) return !canReport(visit);
   return WAITING_STATUS[visit.status];
-}
-
-function StartCodePad({ visit }: { readonly visit: PartnerVisit }) {
-  const verify = useVerifyStartOtp();
-  const [code, setCode] = useState("");
-  return (
-    <View className="flex-col gap-3">
-      {verify.error ? <CommandFailure error={verify.error} /> : null}
-      <Text className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">Start code</Text>
-      <Input
-        value={code}
-        onChangeText={(value) => setCode(value.replace(/\D/g, ""))}
-        keyboardType="number-pad"
-        textContentType="oneTimeCode"
-        autoComplete="sms-otp"
-        className="h-16 text-center text-[2.125rem] font-extrabold tracking-[0.28em] text-text"
-      />
-      <Text className="text-[0.8125rem] leading-snug text-text-secondary">Ask the customer to read out their code.</Text>
-      <BigAction
-        tone="success"
-        icon="power"
-        label="Start work"
-        disabled={code.length === 0 || verify.isPending}
-        onPress={() => verify.mutate({ bookingId: visit.id, expectedVersion: visit.version, code })}
-      />
-    </View>
-  );
 }
 
 type TaskChoice = "DONE" | "PARTIAL" | "NOT_DONE";
@@ -862,12 +955,4 @@ function calendarDate(iso: string): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "Date pending";
   return new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" }).format(at);
-}
-
-function durationLabel(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const remaining = minutes % 60;
-  if (hours === 0) return `${remaining} min`;
-  if (remaining === 0) return `${hours} hr`;
-  return `${hours} hr ${remaining} min`;
 }

@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
+import { useOfferRingtone } from "@/features/notifications/use-offer-ringtone";
+
 import {
   ACCEPT_CONSEQUENCE,
   PAID_DAILY,
@@ -66,6 +68,8 @@ function OfferSheet({
   const [confirming, setConfirming] = useState(false);
   const [declining, setDeclining] = useState(false);
   const countdown = useServerCountdown(offer.responds_by, 1000);
+  // Rings until answered or the server's countdown ends.
+  useOfferRingtone(countdown === null || !countdown.isExpired);
   const accept = useAcceptCrewOffer(offer.invitation_id, {
     onAccepted: (booking) => {
       setConfirming(false);

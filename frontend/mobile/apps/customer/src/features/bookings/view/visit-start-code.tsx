@@ -1,75 +1,82 @@
 // Ported from frontend/apps/customer/features/bookings/view/visit-start-code.tsx
-import { Button, Text } from "@vsolve/mobile-ui";
-import { getApiClient } from "@vsolve/mobile-core";
+import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query/native";
-import { request } from "@vsolve/api-client";
-import { useState } from "react";
+import { Button, Text } from "@vsolve/mobile-ui";
+import { useEffect } from "react";
 import { View } from "react-native";
 
-export function VisitStartCode({
-  bookingId,
-  status,
-}: {
-  bookingId: string;
-  status: string;
-}) {
-  const [code, setCode] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+import { useRequestStartOtp, useVisit } from "@/features/visit/queries";
 
-  if (status !== "ARRIVED") return null;
+/** Whether a visit at this status has a start code to show. Callers draw no frame around nothing. */
+export function showsStartCode(status: Schemas["BookingStatusEnum"] | string): boolean {
+  return status === "ARRIVED";
+}
 
-  async function handleGetCode() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await request(() =>
-        getApiClient().POST("/api/v1/bookings/{booking_id}/start-otp/", {
-          params: { path: { booking_id: bookingId } },
-          body: { expected_version: 1 },
-        }),
-      );
-      if (res?.development_code) {
-        setCode(res.development_code);
-      }
-    } catch (err) {
-      setError(describeError(err, "mutation").message);
-    } finally {
-      setLoading(false);
+/**
+ * The code the customer reads out to let work begin.
+ *
+ * It appears by itself the moment the professional arrives: nobody should have to hunt for a
+ * button while someone waits at the door. Django issues the code on demand and rate-limits it;
+ * asking again inside the cooldown returns the same live code, so re-opening the screen never
+ * leaves the customer with nothing to read out.
+ *
+ * The code comes back in the response (`code`, contract 1.82.0) to this customer and nobody else,
+ * so a job never waits on an SMS. It is sent with the visit's own current version, as on the web;
+ * a hard-coded version once made every request fail the moment the booking had moved on.
+ */
+export function VisitStartCode({ bookingId, status }: { bookingId: string; status: string }) {
+  const visit = useVisit(bookingId);
+  const requestOtp = useRequestStartOtp();
+  const visible = showsStartCode(status);
+  const version = visit.data?.version ?? null;
+  const { isIdle, mutate } = requestOtp;
+
+  useEffect(() => {
+    if (visible && version !== null && isIdle) {
+      mutate({ bookingId, expectedVersion: version });
     }
-  }
+  }, [visible, version, isIdle, mutate, bookingId]);
+
+  if (!visible) return null;
+
+  const code = requestOtp.data?.code ?? null;
 
   return (
-    <View className="rounded-2xl bg-navy-950 p-4 shadow-sm">
-      <View className="flex-row flex-wrap items-center justify-between gap-3">
-        <View className="min-w-0 flex-1">
-          <Text className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-            Start code
-          </Text>
-          <Text className="mt-0.5 text-xs text-stone-200">
-            Read this out to start the work — and only once they are with you.
-          </Text>
-        </View>
+    <View accessibilityLiveRegion="polite" className="rounded-2xl bg-navy-950 p-4 shadow-sm">
+      <Text className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Your start code</Text>
+      <Text className="mt-0.5 text-xs text-stone-200">Tell it only to your professional, once they are at your door.</Text>
 
-        {code === null ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-amber-300 bg-white"
-            loading={loading}
-            onPress={handleGetCode}
-          >
-            Show code
-          </Button>
-        ) : (
-          <View className="rounded-xl bg-navy-900 px-4 py-2">
-            <Text className="text-xl font-extrabold tracking-[0.25em] text-white">
-              {code}
-            </Text>
+      {code !== null ? (
+        <View accessibilityLabel={`Start code ${code.split("").join(" ")}`} className="mt-3 flex-row justify-center gap-2.5">
+          {code.split("").map((digit, index) => (
+            <View key={index} className="h-16 w-12 items-center justify-center rounded-xl bg-navy-900">
+              <Text className="text-3xl font-extrabold text-white">{digit}</Text>
+            </View>
+          ))}
+        </View>
+      ) : requestOtp.isError ? (
+        <View className="mt-3 gap-2">
+          <Text className="text-xs text-rose-300">{describeError(requestOtp.error, "mutation").message}</Text>
+          <View className="self-start">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-300 bg-white"
+              onPress={() => {
+                if (version !== null) mutate({ bookingId, expectedVersion: version });
+              }}
+            >
+              Try again
+            </Button>
           </View>
-        )}
-      </View>
-      {error ? <Text className="mt-2 text-xs text-rose-300">{error}</Text> : null}
+        </View>
+      ) : (
+        <View className="mt-3 flex-row justify-center gap-2.5">
+          {[0, 1, 2, 3].map((index) => (
+            <View key={index} className="h-16 w-12 rounded-xl bg-navy-900 opacity-60" />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
