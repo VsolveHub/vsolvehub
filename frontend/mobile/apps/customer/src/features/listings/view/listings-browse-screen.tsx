@@ -30,6 +30,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchListingFilters, fetchListings, type Listing } from "../queries";
 import { JobCard } from "./job-card";
+import { DesktopListingsBrowse } from "./desktop-listings-browse";
+import { useIsDesktop } from "@/lib/responsive";
 
 export interface CategoryOption {
   label: string;
@@ -134,6 +136,14 @@ const CITIES = [
 ];
 
 export function ListingsBrowseScreen() {
+  const isDesktop = useIsDesktop();
+  if (isDesktop) {
+    return <DesktopListingsBrowse />;
+  }
+  return <MobileListingsBrowseScreen />;
+}
+
+function MobileListingsBrowseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
