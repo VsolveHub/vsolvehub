@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.96.0)
- * Checksum: 8136ac6e940b9c80
+ * Source:   contracts/openapi/v1.yaml (version 1.97.0)
+ * Checksum: 8f6a03fb9d3030bf
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -12568,6 +12568,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             readonly application_count: number;
+            readonly media: components["schemas"]["ListingMedia"][];
             /** Format: uuid */
             readonly role_template: string | null;
             readonly job_category: string;
@@ -12602,6 +12603,28 @@ export interface components {
         };
         ListingFiltersTaxonomy: {
             categories: components["schemas"]["ListingCategoryOption"][];
+        };
+        ListingMedia: {
+            /** Format: uuid */
+            readonly id: string;
+            kind?: components["schemas"]["ListingMediaKindEnum"];
+            /** Format: uri */
+            url: string;
+            alt_text?: string;
+            display_order?: number;
+        };
+        /**
+         * @description * `IMAGE` - Image
+         *     * `ATTACHMENT` - Attachment
+         * @enum {string}
+         */
+        ListingMediaKindEnum: "IMAGE" | "ATTACHMENT";
+        ListingMediaRequest: {
+            kind?: components["schemas"]["ListingMediaKindEnum"];
+            /** Format: uri */
+            url: string;
+            alt_text?: string;
+            display_order?: number;
         };
         /**
          * @description * `DRAFT` - Draft
@@ -12655,6 +12678,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             readonly application_count: number;
+            readonly media: components["schemas"]["ListingMedia"][];
             /** Format: uuid */
             readonly role_template: string | null;
             readonly job_category: string;
@@ -14552,6 +14576,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             readonly application_count: number;
+            readonly media: components["schemas"]["ListingMedia"][];
             /** Format: uuid */
             readonly role_template: string | null;
             readonly job_category: string;

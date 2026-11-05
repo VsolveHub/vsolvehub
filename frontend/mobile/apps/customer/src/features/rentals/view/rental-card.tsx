@@ -6,6 +6,7 @@ import { Pressable, View } from "react-native";
 
 import { formatPaise, type RentalAsset } from "../model";
 import { useSavedItems } from "../use-saved-items";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 
 export function RentalCard({ asset }: { asset: RentalAsset }) {
   const router = useRouter();
@@ -15,7 +16,7 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
   const dailyPrice = formatPaise(asset.daily_rate_paise);
   const deposit = formatPaise(asset.deposit_paise);
   // The listing's own photo or none, as on the web: never a stock photo of some other tool.
-  const imageUrl = asset.media?.[0]?.url || asset.thumbnail_url || null;
+  const imageUrl = resolveImageUrl(asset.media?.[0]?.url || asset.thumbnail_url);
 
   const partnerDisplay =
     asset.partner_name ||
@@ -111,7 +112,7 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
             </Text>
             {asset.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                · {asset.distance_km} km away
+                Â· {asset.distance_km} km away
               </Text>
             ) : null}
           </View>

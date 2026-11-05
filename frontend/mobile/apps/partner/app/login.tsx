@@ -1,4 +1,4 @@
-// Ported faithfully from frontend/apps/partner/features/session/view/login-screen.tsx
+﻿// Ported faithfully from frontend/apps/partner/features/session/view/login-screen.tsx
 // 100% identical navbar, responsive layout, structure, tokens, and same-tab navigation.
 
 import { ApiRequestError } from "@vsolve/api-client";
@@ -14,7 +14,8 @@ import {
   Sparkles,
 } from "lucide-react-native";
 import { useEffect } from "react";
-import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MarketingHeader } from "@/components/marketing-header";
 import { usePartnerApplication } from "@/features/application/queries";
@@ -25,6 +26,14 @@ export default function LoginScreen() {
   const params = useLocalSearchParams<{ next?: string; phone?: string; switch?: string }>();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight ?? 16),
+  );
+  const heroPaddingTop = isDesktop
+    ? 136
+    : topInset + (Platform.OS === 'web' ? 76 : 88);
 
   const status = useAuthStore((state) => state.status);
   const signedIn = status === "signedIn";
@@ -143,7 +152,13 @@ export default function LoginScreen() {
       {/* Page Content */}
       <ScrollView
         className="flex-1 bg-canvas"
-        contentContainerClassName="min-h-screen pt-24 sm:pt-28 lg:pt-36 pb-16 px-4 sm:px-6 lg:px-8 items-center"
+        contentContainerStyle={{
+          paddingTop: heroPaddingTop,
+          paddingBottom: 48,
+          paddingHorizontal: 16,
+          alignItems: 'center',
+          flexGrow: 1,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -157,7 +172,6 @@ export default function LoginScreen() {
             justifyContent: isDesktop ? "space-between" : "flex-start",
             columnGap: 48,
             rowGap: 32,
-            marginVertical: isDesktop ? "auto" : undefined,
           }}
         >
           {/* Desktop Left Column: Registration Portal Value Prop */}
@@ -214,7 +228,6 @@ export default function LoginScreen() {
                     letterSpacing: -0.8,
                     lineHeight: 50,
                     color: "#00112e",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Register & Verify as a Partner on Desktop
@@ -224,7 +237,6 @@ export default function LoginScreen() {
                     fontSize: 16,
                     lineHeight: 26,
                     color: "#453f37", // text-text-secondary
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                     maxWidth: 500,
                   }}
                 >

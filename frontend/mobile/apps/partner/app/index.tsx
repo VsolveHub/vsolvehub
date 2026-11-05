@@ -1,4 +1,4 @@
-// Ported from frontend/apps/partner/app/(marketing)/page.tsx, partner-hero.tsx & layout.tsx
+﻿// Ported from frontend/apps/partner/app/(marketing)/page.tsx, partner-hero.tsx & layout.tsx
 import { useAuthStore } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import * as WebBrowser from "expo-web-browser";
@@ -43,11 +43,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   TextInput,
   UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MarketingHeader } from "../src/components/marketing-header";
 import { MarketingFooter } from "../src/components/marketing-footer";
@@ -292,6 +294,14 @@ export default function Index() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "ios" ? 48 : (StatusBar.currentHeight ?? 16),
+  );
+  const heroPaddingTop = isDesktop
+    ? 136
+    : topInset + (Platform.OS === "web" ? 76 : 88);
   const status = useAuthStore((state) => state.status);
   const [phone, setPhone] = useState("");
   const [offerIndex, setOfferIndex] = useState(0);
@@ -397,8 +407,11 @@ export default function Index() {
         {/* Shared Marketing Header */}
         <MarketingHeader activeTab="home" />
 
-        {/* Hero Content Section */}
-        <View className="px-5 pt-24 pb-16 sm:pt-32 sm:pb-24">
+        {/* Hero Content Section with Guaranteed Navbar Clearance */}
+        <View
+          className="px-5 pb-16 sm:pb-24"
+          style={{ paddingTop: heroPaddingTop }}
+        >
           <View
             className={`mx-auto w-full ${
               isDesktop ? "max-w-6xl flex-row items-center justify-between gap-12" : "max-w-md flex-col gap-8"
@@ -414,7 +427,6 @@ export default function Index() {
                   letterSpacing: 1.05,
                   textTransform: "uppercase",
                   color: "#fb8130",
-                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                 }}
               >
                 Free to join
@@ -429,7 +441,6 @@ export default function Index() {
                     letterSpacing: -1,
                     fontWeight: "900",
                     color: "#ffffff",
-                    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Your skill. Their doorstep.
@@ -441,7 +452,6 @@ export default function Index() {
                     letterSpacing: -1,
                     fontWeight: "900",
                     color: "#f87000",
-                    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Paid instantly.
@@ -454,7 +464,6 @@ export default function Index() {
                   fontSize: isDesktop ? 18 : 15,
                   lineHeight: isDesktop ? 28 : 24,
                   color: "rgba(255, 255, 255, 0.75)",
-                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                 }}
               >
                 Now onboarding service professionals in Hyderabad. Get local jobs and weekly bank payouts.
@@ -499,7 +508,6 @@ export default function Index() {
                         fontSize: 16,
                         fontWeight: "600",
                         color: "#00112e",
-                        fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                       }}
                     />
                   </View>
@@ -528,7 +536,6 @@ export default function Index() {
                         fontSize: 16,
                         fontWeight: "800",
                         color: "#ffffff",
-                        fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                       }}
                     >
                       Apply Now
@@ -543,7 +550,6 @@ export default function Index() {
                     style={{
                       fontSize: 13,
                       color: "rgba(255, 255, 255, 0.7)",
-                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                     }}
                   >
                     We&apos;ll send an OTP. Signup takes only 5 minutes.
@@ -571,7 +577,6 @@ export default function Index() {
                     style={{
                       fontSize: 13,
                       color: "rgba(255, 255, 255, 0.85)",
-                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                     }}
                   >
                     Already registered as a Partner?
@@ -598,7 +603,6 @@ export default function Index() {
                         fontSize: 12,
                         fontWeight: "800",
                         color: "#00112e",
-                        fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
                       }}
                     >
                       Sign In
@@ -847,7 +851,6 @@ export default function Index() {
                 letterSpacing: -0.75,
                 marginTop: 16,
                 color: "#00112e",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -860,7 +863,6 @@ export default function Index() {
                 marginTop: 10,
                 color: "#64748b",
                 maxWidth: 580,
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -949,7 +951,6 @@ export default function Index() {
                 letterSpacing: -0.75,
                 marginTop: 16,
                 color: "#00112e",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -962,7 +963,6 @@ export default function Index() {
                 marginTop: 10,
                 color: "#64748b",
                 maxWidth: 580,
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -1027,7 +1027,6 @@ export default function Index() {
                 letterSpacing: -0.75,
                 marginTop: 16,
                 color: "#00112e",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -1040,7 +1039,6 @@ export default function Index() {
                 marginTop: 10,
                 color: "#64748b",
                 maxWidth: 580,
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -1166,7 +1164,6 @@ export default function Index() {
                 letterSpacing: -0.75,
                 marginTop: 16,
                 color: "#00112e",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -1178,7 +1175,6 @@ export default function Index() {
                 lineHeight: 22,
                 marginTop: 10,
                 color: "#64748b",
-                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
               }}
               className="text-center"
             >
@@ -1272,7 +1268,6 @@ export default function Index() {
               letterSpacing: -0.75,
               marginTop: 18,
               color: "#ffffff",
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >
@@ -1286,7 +1281,6 @@ export default function Index() {
               marginTop: 12,
               color: "#cbd5e1",
               maxWidth: 540,
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
             }}
             className="text-center"
           >

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.96.0
+  version: 1.97.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -30903,6 +30903,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -30988,6 +30993,7 @@ components:
       - job_type
       - languages
       - listing_type_schema
+      - media
       - min_qualification
       - poster_name
       - preferred_skills
@@ -31016,6 +31022,56 @@ components:
             $ref: '#/components/schemas/ListingCategoryOption'
       required:
       - categories
+    ListingMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          $ref: '#/components/schemas/ListingMediaKindEnum'
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        alt_text:
+          type: string
+          maxLength: 200
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - id
+      - url
+    ListingMediaKindEnum:
+      enum:
+      - IMAGE
+      - ATTACHMENT
+      type: string
+      description: |-
+        * `IMAGE` - Image
+        * `ATTACHMENT` - Attachment
+    ListingMediaRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/ListingMediaKindEnum'
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
+        alt_text:
+          type: string
+          maxLength: 200
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - url
     ListingModerationStatusEnum:
       enum:
       - DRAFT
@@ -31131,6 +31187,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -31199,6 +31260,7 @@ components:
       - job_category
       - job_type
       - languages
+      - media
       - min_qualification
       - poster_name
       - preferred_skills
@@ -36178,6 +36240,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -36298,6 +36365,7 @@ components:
       - job_type
       - languages
       - listing_type_schema
+      - media
       - min_qualification
       - moderation_reason
       - moderation_status

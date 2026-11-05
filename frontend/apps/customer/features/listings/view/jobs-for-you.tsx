@@ -6,6 +6,7 @@ import { Badge, Card } from "@vsolve/ui";
 import { MapPin, Sparkles, UserRound } from "lucide-react";
 
 import { fetchJobsForYou, fetchMyJobProfile, MATCH_LOOK } from "../seeker-queries";
+import { getCareerImage } from "../career-images";
 
 /** "Jobs for you" for a seeker with a profile, or a nudge to make one. */
 export function JobsForYou() {
@@ -52,17 +53,38 @@ export function JobsForYou() {
       <div className="flex gap-3 overflow-x-auto pb-2">
         {rows.slice(0, 10).map(({ listing, match }) => {
           const look = (match.level ? MATCH_LOOK[match.level] : null) ?? MATCH_LOOK.OTHER!;
+          const { url: heroImage, fallback } = getCareerImage(listing);
           return (
-            <Link key={listing.id} href={`/listings/${listing.slug || listing.id}`} className="w-64 shrink-0">
-              <Card className="flex h-full flex-col gap-2 p-4 hover:border-action">
+            <Link key={listing.id} href={`/listings/${listing.slug || listing.id}`} className="w-64 shrink-0 group">
+              <Card className="flex h-full flex-col gap-2.5 p-4 hover:border-action transition duration-200">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-lg font-extrabold text-navy-900">{match.score}%</span>
-                  <Badge tone={look.tone}>{look.label}</Badge>
+                  <div className="relative size-9 shrink-0 overflow-hidden rounded-md border border-line bg-surface-sunken">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={heroImage}
+                      alt=""
+                      className="size-full object-cover transition duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base font-extrabold text-navy-900">{match.score}%</span>
+                    <Badge tone={look.tone}>{look.label}</Badge>
+                  </div>
                 </div>
-                <p className="font-bold text-navy-900">{listing.title}</p>
-                <p className="text-xs text-text-secondary">{listing.poster_name}</p>
-                <p className="inline-flex items-center gap-1 text-xs text-text-secondary">
-                  <MapPin className="size-3.5" aria-hidden /> {listing.location_text}
+                <div>
+                  <p className="font-bold text-navy-900 line-clamp-1 group-hover:text-action transition-colors">
+                    {listing.title}
+                  </p>
+                  <p className="text-xs text-text-secondary truncate mt-0.5">{listing.poster_name}</p>
+                </div>
+                <p className="inline-flex items-center gap-1 text-xs text-text-secondary mt-auto pt-1">
+                  <MapPin className="size-3.5 shrink-0 text-text-muted" aria-hidden />{" "}
+                  <span className="truncate">{listing.location_text}</span>
                 </p>
               </Card>
             </Link>

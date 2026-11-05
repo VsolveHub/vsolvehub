@@ -13,6 +13,7 @@ from apps.listings.models import (
     Interview,
     JobSeekerProfile,
     Listing,
+    ListingMedia,
     ListingReport,
     VendorSubscription,
     VendorSubscriptionPlan,
@@ -82,6 +83,12 @@ def live_application_count(listing: Listing) -> int:
     ).count()
 
 
+class ListingMediaSerializer(serializers.ModelSerializer[ListingMedia]):
+    class Meta:
+        model = ListingMedia
+        fields = ("id", "kind", "url", "alt_text", "display_order")
+
+
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     poster_name = serializers.CharField(source="poster.display_name", read_only=True)
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
@@ -91,6 +98,7 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     application_count = serializers.SerializerMethodField()
     public_state = serializers.CharField(read_only=True)
     salary_display = serializers.SerializerMethodField()
+    media = ListingMediaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Listing
@@ -114,6 +122,7 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
             "published_at",
             "expires_at",
             "application_count",
+            "media",
             *JOB_FIELDS,
         )
         read_only_fields: tuple[str, ...] = JOB_FIELDS

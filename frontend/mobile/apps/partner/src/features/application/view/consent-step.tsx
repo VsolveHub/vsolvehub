@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/consent-step.tsx
-import { ErrorState, Spinner } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { Check, FileText, X } from "lucide-react-native";
 import { useState } from "react";
 import {
@@ -8,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
@@ -69,9 +68,10 @@ export function ConsentStep() {
 
   return (
     <View style={styles.container}>
-      {/* Title */}
+      {/* Title & Subtitle */}
       <View style={styles.header}>
         <Text style={styles.title}>Agreements</Text>
+        <Text style={styles.subtitle}>Please review and accept the following documents to continue.</Text>
       </View>
 
       {/* Cards List */}
@@ -209,6 +209,12 @@ const styles = StyleSheet.create({
     color: "#00112e",
     letterSpacing: -0.5,
   },
+  subtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 4,
+    lineHeight: 20,
+  },
   cardsContainer: {
     flexDirection: "column",
     rowGap: 12,
@@ -241,8 +247,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 28,
+    height: 28,
     borderRadius: 6,
     borderWidth: 1.5,
     alignItems: "center",
@@ -253,8 +259,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
   checkboxChecked: {
-    borderColor: "#ea580c",
-    backgroundColor: "#ea580c",
+    borderColor: "#f26a0f",
+    backgroundColor: "#f26a0f",
   },
   cardContent: {
     flexDirection: "column",

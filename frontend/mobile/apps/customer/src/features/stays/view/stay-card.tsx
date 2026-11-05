@@ -14,6 +14,7 @@ import {
 import { THEME_COLORS } from "../theme-colors";
 import { useSavedItems } from "../use-saved-items";
 import { getAmenityIcon } from "./amenity-icon";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 
 export function StayCard({ property }: { property: StayPropertySummary }) {
   const router = useRouter();
@@ -31,10 +32,9 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
 
   const rawMedia = (property as { media?: { url?: string }[] }).media;
   // The listing's own photo and host, or nothing, as on the web: never a stand-in.
-  const imageUrl =
-    (Array.isArray(rawMedia) && rawMedia[0]?.url) ||
-    property.image_urls?.[0] ||
-    null;
+  const imageUrl = resolveImageUrl(
+    (Array.isArray(rawMedia) && rawMedia[0]?.url) || property.image_urls?.[0],
+  );
 
   const hostName =
     property.host_name ||
@@ -150,7 +150,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </Text>
             {property.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                · {property.distance_km} km away
+                Â· {property.distance_km} km away
               </Text>
             ) : null}
           </View>
@@ -196,7 +196,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </View>
             <Text className="mt-0.5 text-[10px] text-text-muted" numberOfLines={1}>
               {typeof property.min_stay_nights === "number" && property.min_stay_nights > 1
-                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} · `
+                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} Â· `
                 : ""}
               Enquire and the host calls you
             </Text>

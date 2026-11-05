@@ -162,8 +162,8 @@ export function fitOutServiceArtwork(option: FitOutServiceOption): string {
       <rect x="18" y="16" width="164" height="108" rx="16" fill="rgba(10,18,32,0.12)" />
       ${option.value === "shell-core-completion" ? '<path d="M24 112l22-24 28 18 24-22 26 14 30-30 24 16" stroke="rgba(255,255,255,0.18)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' : ""}
       ${motif}
-      <text x="24" y="126" fill="rgba(255,255,255,0.94)" font-family="system-ui, sans-serif" font-size="16" font-weight="700">${escapeXml(option.imageLabel)}</text>
-      <text x="24" y="36" fill="rgba(255,255,255,0.78)" font-family="system-ui, sans-serif" font-size="10" font-weight="700" letter-spacing="1.2">${escapeXml(option.description)}</text>
+      <text x="24" y="126" fill="rgba(255,255,255,0.94)" font-family="'Plus Jakarta Sans', sans-serif" font-size="16" font-weight="700">${escapeXml(option.imageLabel)}</text>
+      <text x="24" y="36" fill="rgba(255,255,255,0.78)" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="1.2">${escapeXml(option.description)}</text>
     </svg>
   `);
 }

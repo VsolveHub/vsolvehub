@@ -65,6 +65,7 @@ export interface StayPropertySummary {
   review_count?: number;
   total_units?: number;
   image_urls?: string[];
+  media?: { id?: string; url?: string; caption?: string; display_order?: number }[];
   host_name?: string;
   amenities?: { key: string; label: string }[];
   partner?: StayPartner;
@@ -79,6 +80,7 @@ export interface StayReview {
   comment?: string;
   customer_name?: string;
   image_urls?: string[];
+  media?: { id?: string; url?: string; caption?: string; display_order?: number }[];
   created_at?: string;
 }
 

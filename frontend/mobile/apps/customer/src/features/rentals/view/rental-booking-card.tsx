@@ -1,4 +1,4 @@
-import { Badge, Button, COLOR_TOKENS, Text } from "@vsolve/mobile-ui";
+import { Badge, Button, COLOR_TOKENS, MONO_FONT_FAMILY, Text } from "@vsolve/mobile-ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, MapPin, Navigation, ShieldCheck, Truck } from "lucide-react-native";
 import { useState } from "react";
@@ -243,11 +243,7 @@ export function RentalBookingCard({
           <Text className="text-xs font-bold text-navy-900">Handover PIN</Text>
           <Text
             className="my-1 text-xl font-black text-brand tabular-nums tracking-widest"
-            style={Platform.select({
-              ios: { fontFamily: "Courier", letterSpacing: 6 },
-              android: { fontFamily: "monospace", letterSpacing: 4, includeFontPadding: false },
-              default: { fontFamily: "monospace", letterSpacing: 4 },
-            })}
+            style={{ fontFamily: MONO_FONT_FAMILY, letterSpacing: 6 }}
           >
             {handoverPin}
           </Text>

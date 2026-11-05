@@ -1,27 +1,29 @@
 // Ported from frontend/apps/partner/features/application/view/documents-step.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Spinner } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import { Check, RefreshCw } from "lucide-react-native";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  CreditCard,
+  FileText,
+  RotateCw,
+} from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
+import { requiredDocumentKinds } from "../model/readiness";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
 
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
-const REQUIRED: readonly { kind: DocumentKind; label: string }[] = [
-  {
-    kind: "GOVERNMENT_ID",
-    label: "Government photo ID",
-  },
-  {
-    kind: "ADDRESS_PROOF",
-    label: "Proof of address",
-  },
+const OFFERED: readonly { kind: DocumentKind; label: string }[] = [
+  { kind: "GOVERNMENT_ID", label: "Government photo ID" },
+  { kind: "ADDRESS_PROOF", label: "Proof of address" },
 ];
 
 function currentDocument(application: Application, kind: DocumentKind): Schemas["PartnerDocument"] | null {
@@ -39,15 +41,12 @@ export function DocumentsStep() {
   const [replacingKind, setReplacingKind] = useState<DocumentKind | null>(null);
 
   const application = query.data ?? null;
-  const isEditable =
-    application === null || application.status === "DRAFT" || application.status === "CHANGES_REQUIRED";
-
-  const govtIdDoc = application ? currentDocument(application, "GOVERNMENT_ID") : null;
-  const addressProofDoc = application ? currentDocument(application, "ADDRESS_PROOF") : null;
-
-  const hasGovtId = govtIdDoc !== null && govtIdDoc.status !== "REJECTED";
-  const hasAddressProof = addressProofDoc !== null && addressProofDoc.status !== "REJECTED";
-  const allUploaded = hasGovtId && hasAddressProof;
+  const required = requiredDocumentKinds(application);
+  const allUploaded = required.every((kind) => {
+    const document = application ? currentDocument(application, kind) : null;
+    return document !== null && document.status !== "REJECTED";
+  });
+  const anyUploaded = OFFERED.some((item) => application !== null && currentDocument(application, item.kind) !== null);
 
   const onCommit = useCallback(() => {
     router.push("/apply/review");
@@ -55,9 +54,9 @@ export function DocumentsStep() {
 
   useEffect(() => {
     registerDock({
-      label: "Continue",
+      label: anyUploaded ? "Continue" : "Continue →",
       backHref: "/apply/consent",
-      nextStepName: "Review and send",
+      nextStepName: "Review & Submit",
       onCommit,
       isSaving: false,
       proceedDisabled: !allUploaded,
@@ -68,7 +67,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, allUploaded]);
+  }, [registerDock, onCommit, allUploaded, anyUploaded]);
 
   useEffect(() => {
     return () => {
@@ -98,66 +97,110 @@ export function DocumentsStep() {
 
   return (
     <View style={styles.container}>
-      {/* Title */}
+      {/* Title & Subtitle Matching Mockups */}
       <View style={styles.header}>
         <Text style={styles.title}>Documents</Text>
+        <Text style={styles.subtitle}>
+          Upload the required documents to verify your identity and address.
+        </Text>
       </View>
 
       {/* Cards List */}
       <View style={styles.cardsContainer}>
-        {REQUIRED.map((item) => {
+        {OFFERED.map((item) => {
           const document = application ? currentDocument(application, item.kind) : null;
-          const isUploaded = document !== null && document.status !== "REJECTED";
+          const isUploaded = document !== null;
           const isReplacing = replacingKind === item.kind;
+          const isApproved = document?.status === "APPROVED";
+          const isRejected = document?.status === "REJECTED";
+          const isPending = document?.status === "PENDING";
+          // Replaceable only when the server says so: a declined application refuses it with a 409.
+          const canReplace = document?.can_replace ?? false;
+          const isReplaceState = isRejected && canReplace;
 
           return (
             <View key={item.kind} style={styles.card}>
+              {/* Card Header Row: Title + Status Pill */}
               <View style={styles.labelRow}>
                 <Text style={styles.label}>
-                  {item.label} <Text style={styles.requiredAsterisk}>*</Text>
+                  {item.label}{" "}
+                  {required.includes(item.kind) ? <Text style={styles.requiredAsterisk}>*</Text> : <Text>(optional)</Text>}
                 </Text>
-                {isUploaded ? (
-                  <View style={styles.statusBadge}>
-                    <Check size={12} color="#15803d" strokeWidth={3} />
-                    <Text style={styles.statusBadgeText}>Uploaded</Text>
-                  </View>
+
+                {isUploaded && !isReplacing ? (
+                  isApproved ? (
+                    <View style={styles.approvedPill}>
+                      <CheckCircle2 size={13} color="#2fa84f" strokeWidth={2.4} />
+                      <Text style={styles.approvedPillText}>Approved</Text>
+                    </View>
+                  ) : isReplaceState ? (
+                    <View style={styles.replacePill}>
+                      <AlertTriangle size={13} color="#d32f1e" strokeWidth={2.4} />
+                      <Text style={styles.replacePillText}>Replace</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.pendingPill}>
+                      <Text style={styles.pendingPillText}>In review</Text>
+                    </View>
+                  )
                 ) : null}
               </View>
 
-              {document?.status === "REJECTED" ? (
-                <Text style={styles.rejectedText}>
-                  ⚠️ {document.review_reason || "Document could not be verified. Please upload a clear photo or PDF."}
-                </Text>
+              {/* Expired / Rejected Banner if Replace State */}
+              {isUploaded && !isReplacing && isReplaceState ? (
+                <View style={styles.expiredBanner}>
+                  <AlertCircle size={15} color="#d32f1e" strokeWidth={2.2} />
+                  <Text style={styles.expiredBannerText}>
+                    {document?.review_reason || "This document was not accepted."}
+                  </Text>
+                </View>
               ) : null}
 
+              {/* Render Uploaded File Body or Upload Box */}
               {isUploaded && !isReplacing ? (
-                <View style={styles.uploadedBox}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.uploadedDocName}>
-                      {item.label} (v{document.version})
-                    </Text>
-                    <Text style={styles.uploadedDocMeta}>
-                      Status: {document.status === "APPROVED" ? "Approved" : "Waiting for review"}
-                    </Text>
+                <View style={styles.fileContainer}>
+                  {/* File Metadata Tile Row */}
+                  <View style={styles.fileRow}>
+                    <View style={[styles.fileTile, isApproved ? styles.fileTileBlue : styles.fileTileGray]}>
+                      {item.kind === "GOVERNMENT_ID" ? (
+                        <CreditCard size={20} color={isApproved ? "#2563eb" : "#64748b"} />
+                      ) : (
+                        <FileText size={20} color={isApproved ? "#2563eb" : "#64748b"} />
+                      )}
+                    </View>
+
+                    <View style={styles.fileInfo}>
+                      <Text style={styles.fileName}>
+                        {document.file_name}
+                      </Text>
+                      <Text style={styles.fileMeta}>
+                        {Math.round(document.size_bytes / 1024)} KB · {document.content_type.split("/")[1]?.toUpperCase()}
+                      </Text>
+                    </View>
+
                   </View>
-                  {isEditable ? (
+
+                  {/* Re-upload Outline Button (Screen 4 Replace Tile) */}
+                  {isReplaceState ? (
                     <Pressable
                       accessibilityRole="button"
+                      accessibilityLabel="Re-upload document"
                       onPress={() => setReplacingKind(item.kind)}
-                      style={styles.replaceButton}
+                      style={styles.reuploadButton}
                     >
-                      <RefreshCw size={13} color="#ea580c" />
-                      <Text style={styles.replaceButtonText}>Replace</Text>
+                      <RotateCw size={15} color="#f26a0f" strokeWidth={2.4} />
+                      <Text style={styles.reuploadButtonText}>Re-upload</Text>
                     </Pressable>
                   ) : null}
                 </View>
               ) : (
-                <View style={{ marginTop: 4 }}>
+                /* Empty / Upload State (Screen 3) */
+                <View style={{ marginTop: 8 }}>
                   <DocumentUpload
                     kind={item.kind}
                     label={item.label}
                     expectedVersion={application?.version ?? null}
-                    replacing={isReplacing || document?.status === "REJECTED"}
+                    replacing={isReplacing || isReplaceState}
                   />
                   {isReplacing ? (
                     <Pressable
@@ -191,35 +234,40 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: "#64748b",
+    color: "#6b7280",
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "800",
-    color: "#00112e",
+    color: "#0b1b3a",
     letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 4,
+    lineHeight: 20,
   },
   cardsContainer: {
     flexDirection: "column",
-    rowGap: 14,
+    rowGap: 16,
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#f1f5f9",
-    padding: 18,
-    flexDirection: "column",
+    padding: 20,
     ...(Platform.OS === "web"
       ? ({
-          boxShadow: "0 1px 4px rgba(0, 0, 0, 0.05)",
+          boxShadow: "0 1px 4px rgba(11, 27, 58, 0.05)",
         } as any)
       : {
           elevation: 2,
-          shadowColor: "#00112e",
+          shadowColor: "#0b1b3a",
           shadowOffset: { width: 0, height: 1 },
           shadowOpacity: 0.05,
           shadowRadius: 4,
@@ -229,80 +277,147 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
   },
   label: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#00112e",
+    color: "#0b1b3a",
   },
   requiredAsterisk: {
-    color: "#ea580c",
+    color: "#f26a0f",
   },
-  statusBadge: {
+  approvedPill: {
     flexDirection: "row",
     alignItems: "center",
-    columnGap: 4,
-    backgroundColor: "#f0fdf4",
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
+    columnGap: 5,
+    backgroundColor: "#e8f7ec",
     borderRadius: 9999,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#15803d",
-  },
-  rejectedText: {
+  approvedPillText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#be123c",
-    marginBottom: 10,
+    fontWeight: "700",
+    color: "#2fa84f",
   },
-  uploadedBox: {
+  replacePill: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    padding: 14,
+    columnGap: 5,
+    backgroundColor: "#fdecec",
+    borderRadius: 9999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  uploadedDocName: {
+  replacePillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#d32f1e",
+  },
+  pendingPill: {
+    backgroundColor: "#e0f2fe",
+    borderRadius: 9999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  pendingPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0369a1",
+  },
+  expiredBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 8,
+    backgroundColor: "#fdecec",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  expiredBannerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#d32f1e",
+  },
+  fileContainer: {
+    marginTop: 14,
+    flexDirection: "column",
+    rowGap: 12,
+  },
+  fileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 12,
+  },
+  fileTile: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fileTileBlue: {
+    backgroundColor: "#eff6ff",
+  },
+  fileTileGray: {
+    backgroundColor: "#f1f5f9",
+  },
+  fileInfo: {
+    flex: 1,
+    flexDirection: "column",
+  },
+  fileName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#00112e",
+    color: "#0b1b3a",
   },
-  uploadedDocMeta: {
+  fileMeta: {
     fontSize: 12,
-    color: "#64748b",
+    color: "#6b7280",
     marginTop: 2,
   },
-  replaceButton: {
+  viewButton: {
     flexDirection: "row",
     alignItems: "center",
-    columnGap: 4,
-    paddingHorizontal: 12,
+    columnGap: 5,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#ffedd5",
   },
-  replaceButtonText: {
-    fontSize: 12,
+  viewButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0b1b3a",
+  },
+  reuploadButton: {
+    width: "100%",
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#f26a0f",
+    backgroundColor: "#ffffff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 8,
+    marginTop: 4,
+  },
+  reuploadButtonText: {
+    fontSize: 14,
     fontWeight: "700",
-    color: "#c2410c",
+    color: "#f26a0f",
   },
   cancelReplaceButton: {
     marginTop: 8,
-    alignItems: "center",
-    paddingVertical: 6,
+    alignSelf: "flex-start",
   },
   cancelReplaceText: {
-    fontSize: 12,
-    color: "#64748b",
+    fontSize: 13,
+    color: "#6b7280",
     textDecorationLine: "underline",
   },
 });

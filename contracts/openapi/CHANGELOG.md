@@ -1,5 +1,13 @@
 # API Contract Changelog
 
+## 1.97.0 - Job listings publish their photos
+
+Additive.
+
+- **Added** `media` (`ListingMedia[]`: `id`, `kind`, `url`, `alt_text`, `display_order`) to
+  `ListingSummary` and everything built on it. A listing's own photos, empty when it has none. The
+  list endpoints prefetch it, so it adds one query, not one per row.
+
 ## 1.96.0 - Accepting is final, visit route, partner hours on the record, mobile search, and background presence
 
 Additive, with three behaviour changes to existing endpoints.

@@ -1,4 +1,5 @@
 import { File, UploadType } from "expo-file-system";
+import { apiBaseUrl } from "../config";
 
 /**
  * Phone uploads read the picked file straight from disk with `expo-file-system`.
@@ -42,10 +43,23 @@ export interface SignedUpload {
   onProgress?: (fraction: number) => void;
 }
 
+function resolveTargetUrl(rawUrl: string): string {
+  if (rawUrl.includes("localhost") || rawUrl.includes("127.0.0.1")) {
+    const base = apiBaseUrl();
+    const match = base.match(/^https?:\/\/([^:/]+)(:\d+)?/);
+    if (match) {
+      const devHost = match[1];
+      return rawUrl.replace(/localhost|127\.0\.0\.1/, devHost);
+    }
+  }
+  return rawUrl;
+}
+
 /** PUT the file's bytes to a signed URL natively, reporting progress. Resolves on a 2xx only. */
 export async function uploadToSignedUrl(upload: SignedUpload): Promise<void> {
   const file = openPicked(upload.uri);
-  const result = await file.upload(upload.url, {
+  const targetUrl = resolveTargetUrl(upload.url);
+  const result = await file.upload(targetUrl, {
     httpMethod: "PUT",
     uploadType: UploadType.BINARY_CONTENT,
     headers: { "Content-Type": upload.contentType },

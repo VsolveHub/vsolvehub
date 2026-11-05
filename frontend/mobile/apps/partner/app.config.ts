@@ -43,6 +43,12 @@ if (process.env.EAS_BUILD === "true" && process.env.EAS_BUILD_PROFILE !== "devel
     }
   }
 }
+// APP_ENV=development disables Expo Updates so Metro is always the JS source
+// during local development. Preview and production builds retain the CDN URL.
+// This variable is injected by eas.json's "development" profile env block and
+// must be set locally before running `expo start`:
+//   $env:APP_ENV = "development"; npx expo start --dev-client --clear
+const isDev = process.env.APP_ENV === "development";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -57,7 +63,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
   runtimeVersion: { policy: "appVersion" },
-  updates: { url: "https://u.expo.dev/9223c951-f79e-44c2-869d-1dc244c89071" },
+  updates: isDev
+    ? { enabled: false }
+    : { url: "https://u.expo.dev/9223c951-f79e-44c2-869d-1dc244c89071" },
   ios: {
     bundleIdentifier: "com.vsolvehub.partner",
     supportsTablet: false,

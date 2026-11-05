@@ -8,6 +8,7 @@ import { stayHref } from "@/lib/routes";
 import { otherLooksLabel } from "../looks";
 import { availabilityLabel, formatPaise, pricePeriodOf, roomOccupancyLabel } from "../model";
 import type { RoomCard as RoomCardData } from "../room-cards";
+import { getStayFallbackImage } from "./stay-card";
 
 const TENANT_LABELS: Record<string, string> = {
   BACHELOR_MALE: "Bachelor (M)",
@@ -39,6 +40,17 @@ export function RoomCard({ card }: { card: RoomCardData }) {
   const period = pricePeriodOf(property.price_period);
   const tenant = tenantLabel(property.structured_fields);
   const title = look.display_name || unit.name;
+  const fallbackPhoto = getStayFallbackImage({
+    title: property.title,
+    room_style: property.room_style,
+    description: title,
+  });
+  const photo =
+    look.media[0]?.url ||
+    unit.media?.[0]?.url ||
+    (property as { media?: { url?: string }[] }).media?.[0]?.url ||
+    fallbackPhoto;
+
   const chips: StayRoomCardChip[] = [
     { label: roomOccupancyLabel(unit, property.room_style), tone: "neutral" },
     ...(tenant ? [{ label: tenant, tone: "brand" as const }] : []),
@@ -48,8 +60,8 @@ export function RoomCard({ card }: { card: RoomCardData }) {
 
   return (
     <StayRoomCard
-      photoUrl={look.media[0]?.url}
-      photoCount={look.media.length}
+      photoUrl={photo}
+      photoCount={Math.max(look.media.length, 1)}
       rating={property.average_rating}
       reviewCount={property.review_count}
       title={title}

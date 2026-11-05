@@ -144,7 +144,6 @@ export function MarketingHeader({
                     fontSize: 11,
                     fontWeight: "500",
                     color: "#453f37", // text-text-secondary
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Now onboarding:
@@ -154,7 +153,6 @@ export function MarketingHeader({
                     fontSize: 11,
                     fontWeight: "700",
                     color: "#00112e", // text-navy-900
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Hyderabad
@@ -209,7 +207,6 @@ export function MarketingHeader({
                         fontSize: 13, // text-[0.8125rem]
                         fontWeight: isActive ? "700" : "600",
                         color: isActive ? "#00112e" : "#453f37", // text-navy-900 vs text-text-secondary
-                        fontFamily: "system-ui, -apple-system, sans-serif",
                       }}
                     >
                       {item.label}
@@ -245,7 +242,6 @@ export function MarketingHeader({
                     fontSize: 12,
                     fontWeight: "700",
                     color: "#00112e", // text-navy-900
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Sign In
@@ -293,7 +289,6 @@ export function MarketingHeader({
                     fontSize: 12,
                     fontWeight: "800",
                     color: "#00112e", // text-[#00112e] dark navy text!
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   {isTabletOrDesktop ? "Become a Partner" : "Join"}
@@ -429,7 +424,6 @@ export function MarketingHeader({
                       fontSize: 12,
                       fontWeight: "700",
                       color: "#78350f", // text-amber-900
-                      fontFamily: "system-ui, -apple-system, sans-serif",
                     }}
                   >
                     Fast 24h Activation
@@ -441,7 +435,6 @@ export function MarketingHeader({
                     fontSize: 12,
                     lineHeight: 18,
                     color: "#451a03", // text-amber-950/80
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Zero joining fee. Direct bank settlements within 24 hours of job completion.
@@ -459,7 +452,6 @@ export function MarketingHeader({
                     color: "#756c5e", // text-text-muted
                     paddingHorizontal: 8,
                     marginBottom: 8,
-                    fontFamily: "system-ui, -apple-system, sans-serif",
                   }}
                 >
                   Explore Menu
@@ -494,7 +486,6 @@ export function MarketingHeader({
                             fontSize: 14,
                             fontWeight: isActive ? "800" : "700",
                             color: "#00112e",
-                            fontFamily: "system-ui, -apple-system, sans-serif",
                           }}
                         >
                           {item.label}
@@ -544,7 +535,6 @@ export function MarketingHeader({
                         fontSize: 14,
                         fontWeight: "800",
                         color: "#00112e",
-                        fontFamily: "system-ui, -apple-system, sans-serif",
                       }}
                     >
                       Become a Partner
@@ -574,7 +564,6 @@ export function MarketingHeader({
                       fontSize: 14,
                       fontWeight: "700",
                       color: "#00112e",
-                      fontFamily: "system-ui, -apple-system, sans-serif",
                     }}
                   >
                     Sign In to Account
@@ -603,7 +592,6 @@ export function MarketingHeader({
                       fontSize: 12,
                       fontWeight: "600",
                       color: "#453f37",
-                      fontFamily: "system-ui, -apple-system, sans-serif",
                     }}
                   >
                     Partner Helpline: +91 879 056 4634

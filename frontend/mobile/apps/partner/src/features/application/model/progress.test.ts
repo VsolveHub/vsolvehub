@@ -8,6 +8,9 @@ const EMPTY = {
   id: "app-1",
   status: "DRAFT",
   version: 1,
+  can_edit: true,
+  consents_complete: false,
+  required_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF"],
   display_name: "",
   biography: "",
   experience_years: 0,
@@ -41,6 +44,7 @@ const COMPLETE = {
   display_name: "webaura",
   biography: "Home appliance service partner",
   experience_years: 5,
+  consents_complete: true,
   consents: [
     { purpose: "PARTNER_TERMS", document_version: "2026-07", withdrawn_at: null },
     { purpose: "PRIVACY_NOTICE", document_version: "2026-07", withdrawn_at: null },

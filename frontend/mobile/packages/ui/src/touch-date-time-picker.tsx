@@ -1,3 +1,4 @@
+/// <reference types="nativewind/types" />
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, View } from "react-native";
 

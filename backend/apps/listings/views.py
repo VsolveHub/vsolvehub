@@ -24,7 +24,6 @@ from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
     ApplicationRateLimitApiError,
     ListingCapabilityRequiredApiError,
-    ListingIdempotencyKeyRequiredApiError,
     ListingNotAcceptingApplicationsApiError,
     ListingPlanCapApiError,
     ListingStateConflictApiError,
@@ -237,7 +236,9 @@ class ListingBrowseView(APIView):
         )
         limit, offset = browse_window(request)
         # The chosen sort, then `id`, so a row cannot appear on two pages or on neither.
-        rows = rows.order_by(*rows.query.order_by, "-id")[offset : offset + limit]
+        rows = rows.prefetch_related("media").order_by(*rows.query.order_by, "-id")[
+            offset : offset + limit
+        ]
         return Response(ListingSummarySerializer(rows, many=True).data)
 
 
@@ -494,8 +495,10 @@ class PartnerListingCollectionView(APIView):
     @extend_schema(responses=PartnerListingSerializer(many=True))
     def get(self, request: Any) -> Response:
         poster = _partner_profile(request.user)
-        rows = Listing.objects.select_related("variant", "variant__service", "poster").filter(
-            poster=poster
+        rows = (
+            Listing.objects.select_related("variant", "variant__service", "poster")
+            .prefetch_related("media")
+            .filter(poster=poster)
         )
         return Response(PartnerListingSerializer(rows, many=True).data)
 
@@ -1135,8 +1138,10 @@ class MySavedJobsView(APIView):
     @extend_schema(responses=ListingSummarySerializer(many=True))
     def get(self, request: Any) -> Response:
         ids = SavedJob.objects.filter(user=request.user).values_list("listing_id", flat=True)
-        rows = Listing.objects.filter(id__in=list(ids)).select_related(
-            "poster", "variant", "variant__service"
+        rows = (
+            Listing.objects.filter(id__in=list(ids))
+            .select_related("poster", "variant", "variant__service")
+            .prefetch_related("media")
         )
         return Response(ListingSummarySerializer(rows, many=True).data)
 
