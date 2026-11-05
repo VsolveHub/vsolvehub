@@ -1,16 +1,32 @@
 """Celery tasks for assignment dispatch, OneSignal push delivery, and periodic reconciliation."""
 
+import contextlib
 import logging
+from datetime import timedelta
 from functools import partial
+from http import HTTPStatus
 from typing import Any
 from uuid import UUID
 
 from celery import shared_task
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
 
 from apps.assignments.group_services import GROUP_TERMINAL_STATUSES, reconcile_group_dispatch
+from apps.assignments.models import DispatchOffer
+from apps.assignments.ranking import evaluate_unit_candidates
 from apps.carts.models import BookingGroup
+from apps.commerce.models import Booking
+from apps.notifications.models import NotificationDelivery, NotificationIntent
+from apps.notifications.services import request_notification
+from apps.notifications.transport import OneSignalMessageTransport
+from apps.partners.models import PartnerPushSubscription
 
 logger = logging.getLogger(__name__)
+
+#: Attempts a dispatch push gets before the offer stops retrying.
+DISPATCH_PUSH_MAX_RETRIES = 5
 
 
 @shared_task(
@@ -44,15 +60,6 @@ def reconcile_booking_group_dispatch() -> int:
 )
 def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, Any]:
     """Start sequential Instant dispatch for a booking."""
-    from datetime import timedelta
-
-    from django.conf import settings
-    from django.db import transaction
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
-    from apps.assignments.ranking import evaluate_unit_candidates
-    from apps.commerce.models import Booking
 
     with transaction.atomic():
         booking = (
@@ -133,11 +140,8 @@ def _handle_dispatch_send_retry(
     is_rate_limit: bool,
     response_data: dict[str, Any],
 ) -> dict[str, Any]:
-    from django.db import transaction
 
-    from apps.assignments.models import DispatchOffer
-
-    max_retries = 5
+    max_retries = DISPATCH_PUSH_MAX_RETRIES
     with transaction.atomic():
         offer.refresh_from_db()
         offer.retry_count += 1
@@ -190,10 +194,8 @@ def _handle_dispatch_send_retry(
         },
     )
     if hasattr(self, "retry"):
-        try:
+        with contextlib.suppress(Exception):
             self.retry(countdown=countdown, max_retries=max_retries)
-        except Exception:
-            pass
     return {
         "success": False,
         "retry_scheduled": True,
@@ -285,27 +287,19 @@ def _finish_mobile_only_dispatch(*, offer: Any, mobile: dict[str, Any]) -> dict[
     autoretry_for=(),
     retry_kwargs={"max_retries": 5},
 )
-def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
+def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:  # noqa: PLR0911, PLR0912, PLR0915
     """Send OneSignal push notification to the targeted partner for an instant dispatch offer.
 
     Guarantees:
     - Atomically claims offer: PENDING -> SENDING via select_for_update(of=("self",))
     - Concurrency safety: only one worker can transition to SENDING
-    - Handles OneSignal success (2xx + id), 2xx without ID, 429 rate limit, 5xx/network errors, 400 client errors
-    - Deduplication: never re-sends if onesignal_notification_id exists or status in (SENT, EXPIRED, SKIPPED)
+    - Handles OneSignal success (2xx + id), 2xx without ID, 429 rate limit, 5xx/network errors,
+      400 client errors
+    - Deduplication: never re-sends if onesignal_notification_id exists or status in (SENT,
+      EXPIRED, SKIPPED)
     """
-    from datetime import timedelta
-
-    from django.conf import settings
-    from django.db import transaction
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
-    from apps.mobile.models import PushDevice
-    from apps.mobile.services import active_devices_for
-    from apps.notifications.models import NotificationDelivery, NotificationIntent
-    from apps.notifications.transport import OneSignalMessageTransport
-    from apps.partners.models import PartnerPushSubscription
+    from apps.mobile.models import PushDevice  # noqa: PLC0415 - mobile imports this module
+    from apps.mobile.services import active_devices_for  # noqa: PLC0415
 
     offer_uuid = UUID(offer_id)
     now = timezone.now()
@@ -578,7 +572,10 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
         }
 
     # 429 Rate Limit
-    if status == NotificationDelivery.Status.RATE_LIMITED or http_status == 429:
+    if (
+        status == NotificationDelivery.Status.RATE_LIMITED
+        or http_status == HTTPStatus.TOO_MANY_REQUESTS
+    ):
         return _handle_dispatch_send_retry(
             self=self,
             offer=offer,
@@ -588,12 +585,15 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
         )
 
     # 5xx Server Error or timeout
-    if status == NotificationDelivery.Status.RETRYABLE or http_status >= 500:
+    if (
+        status == NotificationDelivery.Status.RETRYABLE
+        or http_status >= HTTPStatus.INTERNAL_SERVER_ERROR
+    ):
         return _handle_dispatch_send_retry(
             self=self,
             offer=offer,
             failure_reason=f"server_error_{http_status}"
-            if http_status >= 500
+            if http_status >= HTTPStatus.INTERNAL_SERVER_ERROR
             else "network_timeout",
             is_rate_limit=False,
             response_data=raw_response,
@@ -601,7 +601,7 @@ def send_dispatch_offer_push_task(self: Any, offer_id: str) -> dict[str, Any]:
 
     # 400 / 401 / 403 / 404 Client errors: mark FAILED, do not retry
     if (
-        400 <= http_status < 500
+        HTTPStatus.BAD_REQUEST <= http_status < HTTPStatus.INTERNAL_SERVER_ERROR
         and status != NotificationDelivery.Status.SKIPPED
         and failure_code != "NO_VALID_RECIPIENTS"
     ):
@@ -658,12 +658,6 @@ send_dispatch_offer_task = send_dispatch_offer_push_task
 @shared_task
 def reconcile_stuck_dispatch_offers_task() -> dict[str, int]:
     """Finds offers stuck in SENDING for > 5 minutes and reconciles them."""
-    from datetime import timedelta
-
-    from django.db import transaction
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
 
     now = timezone.now()
     cutoff = now - timedelta(minutes=5)
@@ -691,7 +685,7 @@ def reconcile_stuck_dispatch_offers_task() -> dict[str, int]:
                 offer.save(update_fields=["status", "sent_at", "updated_at"])
                 reconciled_sent += 1
                 action = "marked_sent"
-            elif offer.retry_count < 5 and offer.expires_at > now:
+            elif offer.retry_count < DISPATCH_PUSH_MAX_RETRIES and offer.expires_at > now:
                 offer.status = DispatchOffer.Status.PENDING
                 offer.save(update_fields=["status", "updated_at"])
                 reconciled_pending += 1
@@ -725,10 +719,6 @@ def reconcile_stuck_dispatch_offers_task() -> dict[str, int]:
 @shared_task
 def expire_dispatch_offer_task(offer_id: str) -> bool:
     """Check if the dispatch offer has expired, transition status, and trigger reassignment."""
-    from django.db import transaction
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
 
     now = timezone.now()
     with transaction.atomic():
@@ -772,16 +762,6 @@ def reassign_or_downgrade_booking_task(
     exhausted_partner_ids: list[str] | None = None,
 ) -> str | None:
     """Reassign an instant booking to the next eligible partner, or downgrade to SCHEDULED."""
-    from datetime import timedelta
-
-    from django.conf import settings
-    from django.db import transaction
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
-    from apps.assignments.ranking import evaluate_unit_candidates
-    from apps.carts.models import BookingGroup
-    from apps.commerce.models import Booking
 
     with transaction.atomic():
         booking = (
@@ -905,9 +885,6 @@ def reassign_or_downgrade_booking_task(
 
         if booking.customer_id:
             try:
-                from apps.notifications.models import NotificationIntent
-                from apps.notifications.services import request_notification
-
                 request_notification(
                     recipient_id=booking.customer_id,
                     purpose="booking.downgraded_to_scheduled",
@@ -933,10 +910,6 @@ reassignment_or_downgrade_task = reassign_or_downgrade_booking_task
 @shared_task
 def reconcile_expired_dispatch_offers() -> int:
     """Periodic Celery Beat task to expire timed-out dispatch offers and trigger rotation."""
-    from django.db import transaction
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
 
     now = timezone.now()
     expired_offers = list(

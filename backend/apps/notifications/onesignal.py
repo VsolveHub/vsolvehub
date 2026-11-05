@@ -1,6 +1,7 @@
 """OneSignal REST API client for targeted push notifications."""
 
 import logging
+from http import HTTPStatus
 from typing import Any, Literal
 
 import requests
@@ -41,7 +42,7 @@ def _build_retry_session(retries: int = 3, backoff_factor: float = 0.5) -> reque
     return session
 
 
-def send_push_to_external_ids(
+def send_push_to_external_ids(  # noqa: PLR0917
     external_ids: list[str],
     heading: str,
     body: str,
@@ -145,7 +146,7 @@ def send_push_to_external_ids(
     elif isinstance(errors, dict):
         errors = [f"{k}: {v}" for k, v in errors.items()]
 
-    success = response.status_code == 200 and bool(notification_id) and not errors
+    success = response.status_code == HTTPStatus.OK and bool(notification_id) and not errors
 
     if success:
         logger.info(
@@ -187,7 +188,7 @@ def get_notification_view_metrics(
     session = _build_retry_session(retries=1)
     try:
         response = session.get(api_url, headers=headers, timeout=DEFAULT_TIMEOUT_SECONDS)
-        if response.status_code == 200:
+        if response.status_code == HTTPStatus.OK:
             data = response.json()
             return {
                 "success": True,

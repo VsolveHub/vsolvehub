@@ -29,9 +29,9 @@ from apps.notifications.models import (
     NotificationDelivery,
     NotificationIntent,
 )
+from apps.notifications.templates_registry import assert_template_registered
 
 logger = logging.getLogger(__name__)
-from apps.notifications.templates_registry import assert_template_registered
 
 #: The provider name recorded against an in-app delivery. Not a provider at all — the row is
 #: written by this process — but `NotificationDelivery` asks who carried the message, and "we did"
@@ -285,7 +285,6 @@ def request_notification(
     template_code: str,
     context: dict[str, Any] | None = None,
     idempotency_key: str = "",
-    deep_link: str = "",
 ) -> NotificationIntent:
     """Record the decision to notify somebody. Sending is a separate, later step.
 
@@ -418,13 +417,14 @@ class CustomerPushReachabilityReason:
     PERMISSION_DENIED = "PERMISSION_DENIED"
 
 
-def get_customer_push_reachability(user: User | None) -> dict[str, object]:
+def get_customer_push_reachability(user: User | None) -> dict[str, object]:  # noqa: PLR0912
     """Answers whether a customer can receive OneSignal web push right now.
 
     Returns:
         dict:
             reachable: bool
-            reason: str (ACTIVE_SUBSCRIPTION, NO_ACTIVE_SUBSCRIPTION, OPTED_OUT, STALE_SUBSCRIPTION, PERMISSION_DENIED)
+            reason: str (ACTIVE_SUBSCRIPTION, NO_ACTIVE_SUBSCRIPTION, OPTED_OUT,
+                STALE_SUBSCRIPTION, PERMISSION_DENIED)
             subscription_id: str | None
     """
     if user is None or not getattr(user, "is_authenticated", False):

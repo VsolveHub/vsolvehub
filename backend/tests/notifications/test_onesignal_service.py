@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 from rest_framework.test import APIClient
 
 from apps.identity.models import User
@@ -158,7 +159,6 @@ def test_send_push_api_error_response_handled():
 
 
 def test_send_push_network_exception_handled():
-    import requests
 
     with patch(
         "requests.Session.post", side_effect=requests.exceptions.ConnectTimeout("Network timeout")

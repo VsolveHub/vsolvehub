@@ -516,7 +516,7 @@ class InstantAvailability:
     unavailable_reason: str | None
 
 
-def compute_instant_availability(
+def compute_instant_availability(  # noqa: PLR0912, PLR0915
     *,
     area: ServiceArea,
     snapshot: AvailabilitySnapshot,

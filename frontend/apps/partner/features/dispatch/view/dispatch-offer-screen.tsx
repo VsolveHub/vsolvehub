@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   ArrowRight,
   ShieldCheck,
-  Building,
 } from "lucide-react";
 import { Spinner } from "@vsolve/ui";
 import { browserApiBaseUrl } from "@/lib/api/browser";

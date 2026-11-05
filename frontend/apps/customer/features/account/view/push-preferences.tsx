@@ -10,7 +10,6 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
-  Bell,
   CheckCircle,
   ShieldAlert,
 } from "lucide-react";

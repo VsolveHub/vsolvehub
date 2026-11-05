@@ -330,7 +330,8 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     ),
     "booking_downgraded_to_scheduled": (
         "Instant booking moved to scheduled",
-        "No technician was available for immediate dispatch. Your booking #{booking_id} has been moved to our next available scheduled slot.",
+        "No technician was available for immediate dispatch. Your booking #{booking_id} has been "
+        "moved to our next available scheduled slot.",
     ),
     "booking_completed": (
         "Your booking is complete",

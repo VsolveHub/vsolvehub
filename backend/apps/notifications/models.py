@@ -332,19 +332,26 @@ class PushNotificationPreference(models.Model):
         "CUSTOMER": {
             "BOOKING_UPDATES": {
                 "label": "Booking Updates",
-                "description": "Confirmations, rescheduling, and status changes for your active bookings.",
+                "description": (
+                    "Confirmations, rescheduling, and status changes for your active bookings."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
             "DISPATCH_AND_ASSIGNMENT_UPDATES": {
                 "label": "Dispatch & Assignment Updates",
-                "description": "Real-time alerts when a professional accepts and is assigned to your job.",
+                "description": (
+                    "Real-time alerts when a professional accepts and is assigned to your job."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
             "ARRIVAL_AND_OTP_ALERTS": {
                 "label": "Arrival & OTP Alerts",
-                "description": "Immediate notifications when your professional arrives with the start-work code.",
+                "description": (
+                    "Immediate notifications when your professional arrives with the start-work "
+                    "code."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
@@ -364,7 +371,10 @@ class PushNotificationPreference(models.Model):
         "PARTNER": {
             "JOB_AND_DISPATCH_ALERTS": {
                 "label": "Job & Dispatch Alerts",
-                "description": "Instant booking dispatch offers nearby. Disabling may make you ineligible for Instant dispatch.",
+                "description": (
+                    "Instant booking dispatch offers nearby. Disabling may make you ineligible "
+                    "for Instant dispatch."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
@@ -376,13 +386,17 @@ class PushNotificationPreference(models.Model):
             },
             "ACCOUNT_SECURITY": {
                 "label": "Account Security",
-                "description": "Critical login alerts, bank detail updates, and account verification notices.",
+                "description": (
+                    "Critical login alerts, bank detail updates, and account verification notices."
+                ),
                 "is_mutable": False,
                 "default_enabled": True,
             },
             "PRODUCT_UPDATES": {
                 "label": "Product Updates",
-                "description": "New partner features, app improvements, and operational guidelines.",
+                "description": (
+                    "New partner features, app improvements, and operational guidelines."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },

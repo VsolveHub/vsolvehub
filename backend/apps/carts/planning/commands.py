@@ -137,7 +137,7 @@ def _starts_by_item(
 
 
 @transaction.atomic
-def create_fulfilment_plan_set(
+def create_fulfilment_plan_set(  # noqa: PLR0912, PLR0915
     *,
     customer: User,
     cart: Cart,

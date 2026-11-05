@@ -2,12 +2,15 @@
 
 import logging
 from datetime import timedelta
+from http import HTTPStatus
 
 from celery import shared_task
 from django.conf import settings
+from django.db.models import Count
 from django.utils import timezone
 
 from apps.notifications.models import (
+    CustomerPushSubscription,
     NotificationDelivery,
     NotificationIntent,
     PushNotificationPreference,
@@ -15,6 +18,7 @@ from apps.notifications.models import (
 from apps.notifications.onesignal import get_notification_view_metrics
 from apps.notifications.templates_registry import render_notification
 from apps.notifications.transport import MessageTransportError, OneSignalMessageTransport
+from apps.partners.models import PartnerPushSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +90,7 @@ def reconcile_onesignal_push_delivery_status_task(max_deliveries: int = 100) -> 
 
     for delivery in deliveries:
         app_id = delivery.app_id or partner_app_id or customer_app_id
-        if app_id == customer_app_id:
-            rest_key = customer_rest_key
-        else:
-            rest_key = partner_rest_key
+        rest_key = customer_rest_key if app_id == customer_app_id else partner_rest_key
 
         if not app_id or not rest_key:
             continue
@@ -109,7 +110,7 @@ def reconcile_onesignal_push_delivery_status_task(max_deliveries: int = 100) -> 
             continue
 
         http_status = res.get("http_status", 200)
-        if http_status == 429:
+        if http_status == HTTPStatus.TOO_MANY_REQUESTS:
             logger.warning(
                 "reconcile_push_delivery_rate_limited",
                 extra={"delivery_id": str(delivery.id), "app_id": app_id},
@@ -117,7 +118,7 @@ def reconcile_onesignal_push_delivery_status_task(max_deliveries: int = 100) -> 
             rate_limited_count += 1
             break
 
-        if http_status >= 500:
+        if http_status >= HTTPStatus.INTERNAL_SERVER_ERROR:
             errored_count += 1
             continue
 
@@ -182,11 +183,6 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
     duplicate_customer_count = 0
     duplicate_partner_count = 0
     invalid_delivery_count = 0
-
-    from django.db.models import Count
-
-    from apps.notifications.models import CustomerPushSubscription
-    from apps.partners.models import PartnerPushSubscription
 
     # 1. Stale Customer Subscriptions
     stale_cust_subs = CustomerPushSubscription.objects.filter(

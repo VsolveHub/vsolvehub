@@ -9,6 +9,14 @@ export type OpsSafetyStory = Schemas["OpsSafetyStory"];
 
 const STORIES_QUERY_KEY = ["operations", "safety-stories"] as const;
 
+/** The fields an error response may carry a message in. Every one is optional. */
+type ApiErrorBody = {
+  error?: { message?: string };
+  details?: { message?: string };
+  detail?: string;
+  file?: string;
+};
+
 export async function fetchOpsStories(status = "all"): Promise<OpsSafetyStory[]> {
   const url = `${PUBLIC_API_BASE_URL}/api/v1/ops/stories/?status=${encodeURIComponent(status)}`;
   const res = await fetch(url, {
@@ -83,7 +91,7 @@ export async function createOpsStory(formData: FormData): Promise<OpsSafetyStory
   }
 
   if (!res.ok) {
-    const errorData = (await res.json().catch(() => ({}))) as Record<string, any>;
+    const errorData = (await res.json().catch(() => ({}))) as ApiErrorBody;
     const message =
       errorData?.error?.message ||
       errorData?.details?.message ||
@@ -132,7 +140,7 @@ export async function updateOpsStory(
   }
 
   if (!res.ok) {
-    const errorData = (await res.json().catch(() => ({}))) as Record<string, any>;
+    const errorData = (await res.json().catch(() => ({}))) as ApiErrorBody;
     const message =
       errorData?.error?.message ||
       errorData?.details?.message ||

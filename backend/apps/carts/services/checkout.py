@@ -183,7 +183,7 @@ def create_quote(
 
 
 @transaction.atomic
-def create_checkout(  # noqa: PLR0912
+def create_checkout(  # noqa: PLR0912, PLR0915
     *,
     customer: User,
     quote: Quote,
