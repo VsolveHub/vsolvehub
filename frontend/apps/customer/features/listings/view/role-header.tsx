@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Building, Clock, FileCheck2, Flame, MapPin } from "lucide-react";
+import { ArrowLeft, Clock, FileCheck2, Flame, MapPin } from "lucide-react";
 import { Badge, formatDate } from "@vsolve/ui";
 import type { ListingDetail } from "../queries";
 import { getCareerImage } from "../career-images";
@@ -9,7 +9,7 @@ export interface RoleHeaderProps {
 }
 
 export function RoleHeader({ listing }: RoleHeaderProps) {
-  const { url: heroImage, fallback } = getCareerImage(listing);
+  const heroImage = getCareerImage(listing);
 
   return (
     <>
@@ -32,16 +32,11 @@ export function RoleHeader({ listing }: RoleHeaderProps) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-sunken border border-line px-3 py-1 text-xs font-semibold text-text-secondary">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {heroImage ? (<img
               src={heroImage}
               alt=""
               className="size-4 rounded-full object-cover shrink-0"
-              onError={(e) => {
-                if (e.currentTarget.src !== fallback) {
-                  e.currentTarget.src = fallback;
-                }
-              }}
-            />
+            />) : null}
             {listing.poster_name || "Verified Employer"}
           </span>
           {listing.is_premium && (

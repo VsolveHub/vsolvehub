@@ -82,3 +82,13 @@ Keep the `r2.dev` address enabled until step 4 has run, so no saved link breaks 
 ## Photo rules
 
 JPEG, PNG or WebP, at most **10 MB** per photo, checked by the file's contents. A review can have up to 5 photos, and only the reviewer's own uploads.
+
+## Catalogue photos
+
+Rental, stay, career, tile and safety story photos are served from the public bucket only, under
+`catalog/`. The originals in `frontend/apps/customer/public/catalog/` are the upload's source.
+
+`manage.py upload_catalog_images --source <folder>` uploads them and rewrites any saved `/catalog/...`
+link. It must run where `R2_*` names the bucket you mean: a developer's `.env` names a development
+bucket, so production uploads run on the server. Seeds save the full address through
+`apps.foundation.catalog_media.catalog_image_url`.
