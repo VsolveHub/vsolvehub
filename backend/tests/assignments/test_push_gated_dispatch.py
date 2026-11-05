@@ -20,16 +20,18 @@ from apps.carts.models import BookingGroup, CheckoutSession, Quote
 from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
 from apps.commerce.models import Booking, Order
 from apps.identity.models import Role, User, UserRole
-from apps.locations.models import Address, ServiceArea
+from apps.locations.models import Address, ServiceArea, ServiceAreaOperatingWindow
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityRule,
     PartnerLocation,
     PartnerProfile,
     PartnerPushSubscription,
+    PartnerService,
     PartnerServiceArea,
     PartnerShift,
 )
+from apps.pricing.models import PricingPolicy
 
 
 @pytest.fixture
@@ -49,9 +51,6 @@ def test_setup():
         name="Madhapur",
         timezone="Asia/Kolkata",
     )
-    import datetime
-
-    from apps.locations.models import ServiceAreaOperatingWindow
 
     for d in range(7):
         ServiceAreaOperatingWindow.objects.create(
@@ -79,7 +78,6 @@ def test_setup():
         )
         PartnerApplication.objects.create(partner=p, status=PartnerApplication.Status.APPROVED)
         PartnerServiceArea.objects.create(partner=p, service_area=area, is_active=True)
-        from apps.partners.models import PartnerService
 
         PartnerService.objects.create(partner=p, variant=variant, is_active=True)
         return p
@@ -100,7 +98,6 @@ def test_setup():
         longitude=Decimal("78.391485"),
         confirmed_at=timezone.now(),
     )
-    from apps.pricing.models import PricingPolicy
 
     policy, _ = PricingPolicy.objects.get_or_create(
         code="m1-technician",
@@ -189,13 +186,13 @@ def test_instant_availability_push_gated_flag_on_vs_off(test_setup):
     now = timezone.now()
 
     # Active shift + active push + fresh location for Partner 1
-    shift = PartnerShift.objects.create(
+    PartnerShift.objects.create(
         partner=p1,
         service_area=area,
         started_at=now - timedelta(hours=1),
         scheduled_end_at=now + timedelta(hours=7),
     )
-    push_sub = PartnerPushSubscription.objects.create(
+    PartnerPushSubscription.objects.create(
         partner=p1,
         user=p1.user,
         onesignal_subscription_id="sub-p1",
@@ -274,7 +271,6 @@ def test_instant_availability_push_gated_flag_on_vs_off(test_setup):
 @pytest.mark.django_db
 def test_dispatch_offer_accept_decline_and_security(test_setup):
     p1 = test_setup["partner1"]
-    p2 = test_setup["partner2"]
     user1 = test_setup["user1"]
     user2 = test_setup["user2"]
     booking = test_setup["booking"]

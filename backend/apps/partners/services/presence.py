@@ -16,8 +16,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-logger = logging.getLogger(__name__)
-
+from apps.assignments.models import DispatchOffer
 from apps.identity.models import User
 from apps.partners.exceptions import (
     PartnerEligibilityError,
@@ -33,7 +32,7 @@ from apps.partners.models import (
     PartnerServiceArea,
     PartnerShift,
 )
-from apps.partners.selectors import presence_cache_key
+from apps.partners.selectors import partner_profile_for_user, presence_cache_key
 
 from .base import (
     COORDINATE_QUANTUM,
@@ -41,6 +40,8 @@ from .base import (
     _base_application_is_complete,
     _latest_required_documents_are_approved,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _assert_operational_eligibility(application: PartnerApplication) -> None:
@@ -448,8 +449,6 @@ def expire_expired_shifts() -> int:
     idle_minutes = getattr(settings, "PARTNER_SHIFT_MAX_IDLE_MINUTES", 30)
     idle_cutoff = now - timedelta(minutes=idle_minutes)
 
-    from apps.assignments.models import DispatchOffer
-
     partners_with_pending_offers = set(
         DispatchOffer.objects.filter(
             status=DispatchOffer.Status.PENDING,
@@ -521,8 +520,6 @@ def sync_partner_push_subscription(
 
     profile = getattr(user, "partner_profile", None)
     if profile is None:
-        from apps.partners.selectors import partner_profile_for_user
-
         profile = partner_profile_for_user(user)
     if profile is None:
         raise PartnerEligibilityError("Partner profile was not found.")

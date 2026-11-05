@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { PartnerPushPreferencesCard } from "./partner-push-preferences";
 import { PARTNER_DISMISS_KEY } from "@vsolve/ui";
+
+type OneSignalTestWindow = {
+  OneSignal: {
+    User?: unknown;
+    Notifications: { permissionNative: NotificationPermission; requestPermission: Mock };
+  };
+  OneSignalDeferred: unknown[];
+};
+const testWindow = window as unknown as OneSignalTestWindow;
+const mutableNotification = () =>
+  globalThis.Notification as unknown as { permission: NotificationPermission };
 const ok = (data: unknown) => ({ data, error: undefined, response: new Response(null, { status: 200 }) });
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
 vi.mock("@/lib/api/browser", () => ({
@@ -65,7 +76,7 @@ describe("PartnerPushPreferencesCard", () => {
       requestPermission: vi.fn().mockResolvedValue("granted"),
     } as unknown as typeof Notification;
 
-    (window as any).OneSignal = {
+    testWindow.OneSignal = {
       User: {
         PushSubscription: {
           id: "sub-partner-test",
@@ -81,7 +92,7 @@ describe("PartnerPushPreferencesCard", () => {
         requestPermission: vi.fn().mockResolvedValue(true),
       },
     };
-    (window as any).OneSignalDeferred = [];
+    testWindow.OneSignalDeferred = [];
 
     if (!HTMLDialogElement.prototype.showModal) {
       HTMLDialogElement.prototype.showModal = function () {
@@ -104,7 +115,7 @@ describe("PartnerPushPreferencesCard", () => {
       }
       return Promise.resolve(ok({}));
     });
-    client.PATCH.mockImplementation((path: string, options?: any) => {
+    client.PATCH.mockImplementation((path: string, options?: { body?: { category?: string; is_enabled?: boolean } }) => {
       if (path.includes("/api/v1/partner/notification-preferences/")) {
         const body = options?.body || {};
         const updated = {
@@ -120,7 +131,7 @@ describe("PartnerPushPreferencesCard", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn((url: string, init?: RequestInit) => {
+      vi.fn((url: string) => {
         if (url.includes("/api/v1/auth/csrf/")) {
           return Promise.resolve({
             ok: true,
@@ -142,8 +153,8 @@ describe("PartnerPushPreferencesCard", () => {
 
   afterEach(() => {
     globalThis.Notification = originalNotification;
-    delete (window as any).OneSignal;
-    delete (window as any).OneSignalDeferred;
+    Reflect.deleteProperty(window, "OneSignal");
+    Reflect.deleteProperty(window, "OneSignalDeferred");
     vi.restoreAllMocks();
   });
 
@@ -230,8 +241,8 @@ describe("PartnerPushPreferencesCard", () => {
   });
 
   it("renders granted state with Live alerts active badge and no enable button", async () => {
-    (globalThis.Notification as any).permission = "granted";
-    (window as any).OneSignal.Notifications.permissionNative = "granted";
+    mutableNotification().permission = "granted";
+    testWindow.OneSignal.Notifications.permissionNative = "granted";
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -245,8 +256,8 @@ describe("PartnerPushPreferencesCard", () => {
   });
 
   it("renders denied state with Blocked in browser badge and opens how-to modal without requesting permission", async () => {
-    (globalThis.Notification as any).permission = "denied";
-    (window as any).OneSignal.Notifications.permissionNative = "denied";
+    mutableNotification().permission = "denied";
+    testWindow.OneSignal.Notifications.permissionNative = "denied";
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -267,7 +278,7 @@ describe("PartnerPushPreferencesCard", () => {
 
     // Verify Notification.requestPermission was NOT called
     expect(Notification.requestPermission).not.toHaveBeenCalled();
-    expect((window as any).OneSignal.Notifications.requestPermission).not.toHaveBeenCalled();
+    expect(testWindow.OneSignal.Notifications.requestPermission).not.toHaveBeenCalled();
   });
 
   it("renders unsupported state when Notification API is not available", async () => {

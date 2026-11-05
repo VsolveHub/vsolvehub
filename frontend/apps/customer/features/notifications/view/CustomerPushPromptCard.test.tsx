@@ -1,8 +1,19 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { CustomerPushPromptCard } from "./CustomerPushPromptCard";
 import { CUSTOMER_DISMISS_KEY } from "@vsolve/ui";
+
+type OneSignalTestWindow = {
+  OneSignal: {
+    User?: unknown;
+    Notifications: { permissionNative: NotificationPermission; requestPermission: Mock };
+  };
+  OneSignalDeferred: unknown[];
+};
+const testWindow = window as unknown as OneSignalTestWindow;
+const mutableNotification = () =>
+  globalThis.Notification as unknown as { permission: NotificationPermission };
 
 // Mock @vsolve/query session
 vi.mock("@vsolve/query", () => ({
@@ -29,7 +40,7 @@ describe("CustomerPushPromptCard (Customer Permission UX)", () => {
       requestPermission: vi.fn().mockResolvedValue("granted"),
     } as unknown as typeof Notification;
 
-    (window as any).OneSignal = {
+    testWindow.OneSignal = {
       User: {
         PushSubscription: {
           id: "sub-cust-1",
@@ -44,13 +55,13 @@ describe("CustomerPushPromptCard (Customer Permission UX)", () => {
         requestPermission: vi.fn().mockResolvedValue(true),
       },
     };
-    (window as any).OneSignalDeferred = [];
+    testWindow.OneSignalDeferred = [];
   });
 
   afterEach(() => {
     globalThis.Notification = originalNotification;
-    delete (window as any).OneSignal;
-    delete (window as any).OneSignalDeferred;
+    Reflect.deleteProperty(window, "OneSignal");
+    Reflect.deleteProperty(window, "OneSignalDeferred");
     vi.restoreAllMocks();
   });
 
@@ -79,7 +90,7 @@ describe("CustomerPushPromptCard (Customer Permission UX)", () => {
   });
 
   it("does not render when permission is already granted", () => {
-    (globalThis.Notification as any).permission = "granted";
+    mutableNotification().permission = "granted";
 
     render(<CustomerPushPromptCard bookingId="booking-123" />);
 
@@ -127,8 +138,8 @@ describe("CustomerPushPromptCard (Customer Permission UX)", () => {
   });
 
   it("shows recovery guidance when permission is denied and does not re-request", async () => {
-    (Notification.requestPermission as any).mockResolvedValue("denied");
-    (window as any).OneSignal.Notifications.requestPermission.mockResolvedValue(false);
+    vi.mocked(Notification.requestPermission).mockResolvedValue("denied");
+    testWindow.OneSignal.Notifications.requestPermission.mockResolvedValue(false);
 
     render(<CustomerPushPromptCard bookingId="booking-123" />);
 

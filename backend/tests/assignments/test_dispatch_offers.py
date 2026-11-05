@@ -37,7 +37,7 @@ def _seed_second_partner(*, suffix: str = "2") -> tuple[PartnerProfile, User]:
 
 def test_partner_cannot_accept_another_partners_offer() -> None:
     booking, partner_a, _user_a = _seed_booking_and_partner(suffix="10")
-    partner_b, user_b = _seed_second_partner(suffix="11")
+    _partner_b, user_b = _seed_second_partner(suffix="11")
     client_b = force_role_client(user=user_b, role_code="partner")
 
     offer_a = DispatchOffer.objects.create(

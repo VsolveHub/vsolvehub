@@ -25,7 +25,8 @@ class OtpSender(Protocol):
 
 class DevelopmentOtpSender:
     def send(self, phone_number: str, code: str, purpose: str) -> None:
-        print(
+        # Local-only sender: production settings refuse OTP_PROVIDER="development".
+        print(  # noqa: T201
             f"\n[DEV OTP] Phone: {phone_number} | Code: {code} | Purpose: {purpose}\n", flush=True
         )
 

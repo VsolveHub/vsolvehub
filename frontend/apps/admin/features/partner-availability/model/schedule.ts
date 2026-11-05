@@ -254,3 +254,61 @@ export function describeWeek(draft: ScheduleDraft): string[] {
 
   return lines;
 }
+
+/** "09:00:00" from the server as the "09:00" a time input and the validator use. */
+function hhmm(value: string | null | undefined): string {
+  return (value ?? "").slice(0, 5);
+}
+
+let draftKey = 0;
+/** A local row key for a new or loaded row. Exported for tests. */
+export function nextRowKey(): string {
+  draftKey += 1;
+  return `row-${draftKey}`;
+}
+
+/**
+ * The server's current hours as an editable draft, so a change starts from what is there
+ * instead of an empty week. The consent receipt is the newest one on file. Exported for tests.
+ */
+export function draftFromSchedule(
+  partnerId: string,
+  schedule: {
+    rules: readonly { service_area_id: string; weekday: number; starts_at: string; ends_at: string; ends_next_day: boolean }[];
+    exceptions: readonly {
+      service_area_id: string;
+      date: string;
+      is_available: boolean;
+      starts_at?: string | null;
+      ends_at?: string | null;
+      ends_next_day: boolean;
+      reason?: string;
+    }[];
+    consents: readonly { purpose: string; document_version: string }[];
+  },
+): ScheduleDraft {
+  const consent = schedule.consents[0];
+  return {
+    partnerId,
+    consentPurpose: consent?.purpose ?? "",
+    consentVersion: consent?.document_version ?? "",
+    rules: schedule.rules.map((rule) => ({
+      key: nextRowKey(),
+      serviceAreaId: rule.service_area_id,
+      weekday: rule.weekday,
+      startsAt: hhmm(rule.starts_at),
+      endsAt: hhmm(rule.ends_at),
+      endsNextDay: rule.ends_next_day,
+    })),
+    exceptions: schedule.exceptions.map((exception) => ({
+      key: nextRowKey(),
+      serviceAreaId: exception.service_area_id,
+      date: exception.date,
+      isAvailable: exception.is_available,
+      startsAt: hhmm(exception.starts_at),
+      endsAt: hhmm(exception.ends_at),
+      endsNextDay: exception.ends_next_day,
+      reason: exception.reason ?? "",
+    })),
+  };
+}

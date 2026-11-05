@@ -83,7 +83,9 @@ def active_partner_subscription(partner_user: User) -> PartnerPushSubscription:
 
 
 def test_transport_customer_routing_credentials(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-id-1234"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-rest-key-5678"
@@ -120,7 +122,9 @@ def test_transport_customer_routing_credentials(
 
 
 def test_transport_partner_routing_credentials(
-    settings, partner_user: User, active_partner_subscription: PartnerPushSubscription
+    settings,
+    partner_user: User,
+    active_partner_subscription: PartnerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-id-9999"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-rest-key-9999"
@@ -303,7 +307,9 @@ def test_transport_permission_denied_subscription_skips(settings, customer_user:
 
 
 def test_audit_intent_and_delivery_created_on_success(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -352,7 +358,9 @@ def test_audit_intent_and_delivery_created_on_success(
 
 
 def test_idempotency_prevents_duplicate_intent_and_send(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -434,7 +442,9 @@ def test_onesignal_200_without_id_recorded_as_no_valid_recipients(
 
 
 def test_onesignal_429_recorded_as_rate_limited(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -461,7 +471,9 @@ def test_onesignal_429_recorded_as_rate_limited(
 
 
 def test_onesignal_5xx_recorded_as_retryable(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -523,7 +535,9 @@ def test_onesignal_400_recorded_as_failed_and_deactivates_on_invalid(
 
 
 def test_push_kill_switch_blocks_send_and_records_blocked(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -748,7 +762,9 @@ def test_reconciliation_skips_older_than_7_days(settings, customer_user: User) -
 
 
 def test_dispatch_task_uses_transport_and_creates_intent_delivery(
-    settings, partner_user: User, active_partner_subscription: PartnerPushSubscription
+    settings,
+    partner_user: User,
+    active_partner_subscription: PartnerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_PARTNER_APP_ID = "partner-app-dispatch"
     settings.ONESIGNAL_PARTNER_REST_API_KEY = "partner-key-dispatch"

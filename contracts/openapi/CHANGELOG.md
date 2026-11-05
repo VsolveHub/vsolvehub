@@ -1,6 +1,6 @@
 # API Contract Changelog
 
-## 1.96.0 - Accepting is final, visit notices, background presence, and the route to the visit
+## 1.96.0 - Accepting is final, visit route, partner hours on the record, mobile search, and background presence
 
 Additive, with three behaviour changes to existing endpoints.
 
@@ -11,6 +11,13 @@ Additive, with three behaviour changes to existing endpoints.
   published as separate coordinates. `409 site_details_locked` before the unlock or once the visit
   is over, `503 routing_unavailable` without a provider (the app falls back to `directions_url`).
   The Partner's position is used for this one request and not stored.
+- **Added** `q` on `GET /operations/partners/`: a name, or a mobile number typed any way
+  (spaces, `+91`, a leading `0` and dashes are ignored; four or more digits match part of a
+  number).
+- **Added** `phone_number` on each directory row.
+- **Added** `GET /operations/partners/{partner_id}/availability/`: the partner's current rules
+  and exceptions, the service areas they serve, and their active consent receipts, so a change
+  is made against what is there with no ids typed. `PUT` is unchanged.
 - **Changed** `POST /partner/offers/{offer_id}/accept/` on a Fulfilment Unit offer now answers
   `COMMITTED`: accepting is final and there is no undo window. `.../commit/` on a committed offer
   answers it unchanged (older apps still send it); `.../undo/` is `400 offer_invalid`.

@@ -25,7 +25,7 @@ import { PolicyList } from "./policy-list";
 import { useServiceDetail } from "../client-queries";
 import { useCart } from "@/features/checkout/queries";
 import { serviceHref } from "../service-href";
-import { addsToServiceCopy, durationLabel, policyTexts, warrantyText } from "../service-facts";
+import { addsToServiceCopy, durationLabel, warrantyText } from "../service-facts";
 import type { Category, ServiceCard } from "../queries";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";

@@ -1,9 +1,14 @@
 """Celery maintenance tasks for Partner presence and private uploads."""
 
 from celery import shared_task
+from django.conf import settings
+from django.utils import timezone
 
+from apps.assignments.models import DispatchOffer
+from apps.partners.models import PartnerShift
 from apps.partners.services import (
     cleanup_stale_partner_document_uploads,
+    expire_expired_shifts,
     expire_missing_presence_sessions,
 )
 from apps.partners.storage import DocumentStorageError
@@ -37,12 +42,6 @@ def cleanup_partner_document_uploads() -> int:
 )
 def reconcile_partner_shifts() -> int:
     """Periodic Celery Beat sweep: expire finished shifts and handle missed offer thresholds."""
-    from django.conf import settings
-    from django.utils import timezone
-
-    from apps.assignments.models import DispatchOffer
-    from apps.partners.models import PartnerShift
-    from apps.partners.services import expire_expired_shifts
 
     reconciled = expire_expired_shifts()
 

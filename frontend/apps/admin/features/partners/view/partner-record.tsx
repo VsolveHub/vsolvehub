@@ -4,6 +4,8 @@ import { Badge, EmptyState, ErrorState, Spinner } from "@vsolve/ui";
 
 import { usePartnerRecord } from "@/features/partners/queries";
 import { STATUS_LABELS, STATUS_TONE } from "./partner-directory";
+import { PartnerHours } from "@/features/partner-availability/view/partner-hours";
+
 import { TaxProfileSection } from "./tax-profile";
 
 /**
@@ -152,6 +154,7 @@ export function PartnerRecord({ partnerId }: { partnerId: string | null }) {
 
       <Section title="Business and tax">
         <TaxProfileSection partnerId={partner.id} profile={partner.business_profile} />
+        <PartnerHours partnerId={partner.id} />
       </Section>
 
       <Section title="Documents">

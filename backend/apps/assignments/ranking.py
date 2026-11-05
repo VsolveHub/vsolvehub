@@ -141,7 +141,7 @@ def is_same_day_unit(*, unit: FulfilmentUnit, now: datetime | None = None) -> bo
     return unit.requested_start <= clock + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
 
 
-def _exclusions_for(
+def _exclusions_for(  # noqa: PLR0912
     *,
     candidate: PartnerProfile,
     required: frozenset[str],

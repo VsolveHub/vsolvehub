@@ -14,6 +14,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from http import HTTPStatus
 from typing import Any, Protocol
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -31,6 +32,8 @@ from apps.notifications.models import (
     NotificationIntent,
     PushNotificationPreference,
 )
+from apps.notifications.services import fit_idempotency_key, is_engaged
+from apps.partners.models import PartnerProfile, PartnerPushSubscription
 
 #: Test seam: tests patch this name to stand in for the OneSignal call.
 send_push_to_external_ids: Callable[..., dict[str, Any]] | None = None
@@ -212,10 +215,10 @@ class OneSignalMessageTransport:
     def supported_channels(self) -> tuple[str, ...]:
         return (NotificationIntent.Channel.PUSH,)
 
-    def send(
+    def send(  # noqa: PLR0911, PLR0912, PLR0915
         self,
         *,
-        channel: str = NotificationIntent.Channel.PUSH,
+        channel: str = NotificationIntent.Channel.PUSH,  # noqa: ARG002 - transport interface
         destination: str = "",
         template_code: str = "",
         context: dict[str, object] | None = None,
@@ -230,12 +233,10 @@ class OneSignalMessageTransport:
         web_push_topic: str | None = None,
         collapse_id: str | None = None,
         priority: int | None = 10,
-        expires_at: datetime | None = None,
+        expires_at: datetime | None = None,  # noqa: ARG002 - transport interface
         android_channel_id: str | None = None,
-        **extra: Any,
+        **extra: Any,  # noqa: ARG002 - transport interface
     ) -> TransportResult:
-        from apps.notifications.services import fit_idempotency_key, is_engaged
-        from apps.partners.models import PartnerProfile, PartnerPushSubscription
 
         ctx = dict(context or {})
         role = (
@@ -260,11 +261,11 @@ class OneSignalMessageTransport:
                 f"rest_key={'set' if rest_key else 'missing'}"
             )
 
-        User = get_user_model()
+        user_model = get_user_model()
         user_recipient = recipient
         if user_recipient is None and destination:
             try:
-                user_recipient = User.objects.get(id=destination)
+                user_recipient = user_model.objects.get(id=destination)
             except Exception:
                 user_recipient = None
 
@@ -613,7 +614,11 @@ class OneSignalMessageTransport:
 
         # 5. Response Classification & Audit Recording
         # Case A: Success (2xx + valid notification_id)
-        if 200 <= http_status < 300 and notification_id and "unsubscribed" not in error_text:
+        if (
+            HTTPStatus.OK <= http_status < HTTPStatus.MULTIPLE_CHOICES
+            and notification_id
+            and "unsubscribed" not in error_text
+        ):
             delivery = NotificationDelivery.objects.create(
                 intent=intent,
                 provider=self.code,
@@ -658,7 +663,7 @@ class OneSignalMessageTransport:
             )
 
         # Case B: 429 Rate Limit
-        if http_status == 429 or "rate limit" in error_text:
+        if http_status == HTTPStatus.TOO_MANY_REQUESTS or "rate limit" in error_text:
             delivery = NotificationDelivery.objects.create(
                 intent=intent,
                 provider=self.code,
@@ -702,8 +707,12 @@ class OneSignalMessageTransport:
             )
 
         # Case C: 5xx Server Error or Network Timeout
-        if http_status >= 500 or "timeout" in error_text:
-            reason = f"SERVER_ERROR_{http_status}" if http_status >= 500 else "NETWORK_TIMEOUT"
+        if http_status >= HTTPStatus.INTERNAL_SERVER_ERROR or "timeout" in error_text:
+            reason = (
+                f"SERVER_ERROR_{http_status}"
+                if http_status >= HTTPStatus.INTERNAL_SERVER_ERROR
+                else "NETWORK_TIMEOUT"
+            )
             delivery = NotificationDelivery.objects.create(
                 intent=intent,
                 provider=self.code,
@@ -747,7 +756,7 @@ class OneSignalMessageTransport:
             )
 
         # Case D: 4xx Client Error
-        if 400 <= http_status < 500:
+        if HTTPStatus.BAD_REQUEST <= http_status < HTTPStatus.INTERNAL_SERVER_ERROR:
             reason = f"CLIENT_ERROR_{http_status}"
             delivery = NotificationDelivery.objects.create(
                 intent=intent,

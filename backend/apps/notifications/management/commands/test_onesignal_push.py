@@ -42,7 +42,7 @@ class Command(BaseCommand):
             help="Optional launch URL when the user clicks the notification",
         )
 
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *_args: Any, **options: Any) -> None:
         external_id = options["external_id"]
         heading = options["heading"]
         body = options["body"]
@@ -71,6 +71,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(
                 self.style.ERROR(
-                    f"Failed to send OneSignal notification: {result.get('errors')}. Response: {result.get('raw_response')}"
+                    f"Failed to send OneSignal notification: {result.get('errors')}. Response: "
+                    f"{result.get('raw_response')}"
                 )
             )
