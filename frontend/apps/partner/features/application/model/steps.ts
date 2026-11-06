@@ -22,6 +22,8 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/about", labelKey: "apply.steps.about" },
   // Trades, job types and service areas on one screen: the server validates them together.
   { href: "/apply/work", labelKey: "apply.steps.work" },
+  // Its own step so it cannot be scrolled past under a long list of trades.
+  { href: "/apply/areas", labelKey: "apply.steps.areas" },
   { href: "/apply/schedule", labelKey: "apply.steps.schedule" },
   { href: "/apply/documents", labelKey: "apply.steps.documents" },
   // The agreements are accepted on the screen that sends the application.
@@ -58,6 +60,43 @@ export function applicationSteps(track?: string | null): readonly ApplicationSte
  * step, so a `startsWith` check would report the overview for all of them. A
  * trailing slash is tolerated because Next can produce either form.
  */
+/**
+ * A draft nobody has touched yet. The server creates one, on the Services track, the first time
+ * a signed-in partner's application is read, so "no application" never actually happens; every
+ * choice or edit raises the version. Until then the partner has not chosen how to join, and is
+ * shown the choice rather than dropped into the Services steps.
+ */
+export function isUnchosenDraft(application: { status: string; version: number } | null | undefined): boolean {
+  return application?.status === "DRAFT" && application.version === 1;
+}
+
+/** The three ways to join offered on the first screen. */
+export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
+
+const AFTER_APPROVAL: Record<StartTrack, string> = {
+  SERVICES: "apply.overview.preview.after.services",
+  STAY_HOST: "apply.overview.preview.after.stays",
+  RENTAL_OWNER: "apply.overview.preview.after.rentals",
+};
+
+/**
+ * What the first screen shows once a way of joining is picked: the same steps the application
+ * will walk (without the overview), roughly how long, and what approval leads to.
+ */
+export function trackPreview(track: StartTrack): {
+  steps: readonly ApplicationStep[];
+  timeKey: string;
+  afterKey: string;
+} {
+  return {
+    steps: applicationSteps(track).filter((step) => step.href !== "/apply"),
+    timeKey: isListingTrack(track)
+      ? "apply.overview.preview.time.listing"
+      : "apply.overview.preview.time.services",
+    afterKey: AFTER_APPROVAL[track],
+  };
+}
+
 export function stepIndexOf(pathname: string, track?: string | null): number {
   return applicationSteps(track).findIndex((step) => step.href === normalise(pathname));
 }

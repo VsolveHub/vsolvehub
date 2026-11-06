@@ -117,7 +117,7 @@ export function requirements(
     {
       code: "SERVICE_AREAS",
       labelKey: "apply.requirements.serviceAreas",
-      href: "/apply/work",
+      href: "/apply/areas",
       isMet: (application?.service_area_ids.length ?? 0) > 0,
     },
     {

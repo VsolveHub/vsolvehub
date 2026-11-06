@@ -175,9 +175,13 @@ function ReviewForm({
                 trades: application.skill_codes.length,
                 jobs: application.service_variant_ids.length,
               })}
+            </SummaryRow>
+          )}
+          {listing ? null : (
+            <SummaryRow label={t("apply.steps.areas")} href={editable ? "/apply/areas" : null}>
               {application.service_area_ids.length > 0
-                ? ` · ${application.service_area_ids.map((id) => areaNames.get(id) ?? id.slice(0, 8)).join(", ")}`
-                : ""}
+                ? application.service_area_ids.map((id) => areaNames.get(id) ?? id.slice(0, 8)).join(", ")
+                : t("apply.review.notSet")}
             </SummaryRow>
           )}
           {listing ? null : (

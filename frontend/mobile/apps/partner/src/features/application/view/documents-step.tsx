@@ -15,6 +15,7 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
 import { requiredDocumentKinds } from "../model/readiness";
+import { isListingTrack } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
 
@@ -55,8 +56,9 @@ export function DocumentsStep() {
   useEffect(() => {
     registerDock({
       label: anyUploaded ? "Continue" : "Continue →",
-      backHref: "/apply/consent",
-      nextStepName: "Review & Submit",
+      // The step before Documents: your hours for services, About you for stays and rentals.
+      backHref: isListingTrack(application?.track) ? "/apply/about" : "/apply/schedule",
+      nextStepName: "Agree & send",
       onCommit,
       isSaving: false,
       proceedDisabled: !allUploaded,
@@ -67,7 +69,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, allUploaded, anyUploaded]);
+  }, [registerDock, onCommit, allUploaded, anyUploaded, application?.track]);
 
   useEffect(() => {
     return () => {

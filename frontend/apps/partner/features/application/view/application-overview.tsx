@@ -10,7 +10,7 @@ import { useState } from "react";
 import { progressSummary, stepProgress } from "../model/progress";
 import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
 import { documentLabelKey } from "../model/status";
-import { isListingTrack } from "../model/steps";
+import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { HelpSheet } from "./account-menu";
 import { StepMark } from "./apply-shell";
@@ -63,23 +63,23 @@ export function ApplicationOverview() {
     );
   }
 
-  if (isMissing || query.data === undefined) return <NotStarted />;
+  if (isMissing || query.data === undefined || isUnchosenDraft(query.data)) return <NotStarted />;
 
   return <Standing application={query.data} />;
 }
 
 /**
- * Nobody has applied yet.
+ * Nobody has applied yet: what will you do on VSolve?
  *
- * The only screen in this tree that is allowed to be a pitch, and it stays a
- * short one. The first question decides the path: someone listing their own
- * property skips the trades, areas and hours that only matter for people who
- * travel to a customer.
+ * Three plain choices. Tapping one does not start anything; it shows what happens next — the
+ * steps, how long, the one document, and what approval leads to — with Start and a way back.
+ * A wrong tap used to commit the applicant to the wrong form with nothing on screen saying so.
  */
 function NotStarted() {
   const t = useT();
   const router = useRouter();
   const start = useUpdateApplication();
+  const [chosen, setChosen] = useState<StartTrack | null>(null);
 
   return (
     <section className="flex flex-col gap-5">
@@ -99,67 +99,117 @@ function NotStarted() {
         <h2 className="text-base font-bold text-navy-900">{t("apply.overview.notStarted.whatWillYouDo")}</h2>
         <p className="text-sm text-text-secondary">{t("apply.overview.notStarted.tapToStart")}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <TrackCard
-          href="/apply/about"
-          icon={<Wrench size={22} aria-hidden />}
-          title={t("apply.overview.track.services.title")}
-          description={t("apply.overview.track.services.description")}
-        />
-        <TrackCard
-          disabled={start.isPending}
-          onClick={() =>
-            start.mutate({ track: "STAY_HOST" }, { onSuccess: () => router.push("/apply/about") })
-          }
-          icon={<BedDouble size={22} aria-hidden />}
-          title={t("apply.overview.track.stays.title")}
-          description={t("apply.overview.track.stays.description")}
-        />
-        <TrackCard
-          disabled={start.isPending}
-          onClick={() =>
-            start.mutate({ track: "RENTAL_OWNER" }, { onSuccess: () => router.push("/apply/about") })
-          }
-          icon={<Package size={22} aria-hidden />}
-          title={t("apply.overview.track.rentals.title")}
-          description={t("apply.overview.track.rentals.description")}
-        />
+      <div role="radiogroup" aria-label={t("apply.overview.notStarted.whatWillYouDo")} className="grid gap-3">
+        {TRACK_CHOICES.map(({ track, titleKey, descriptionKey, icon: Icon }) => (
+          <TrackCard
+            key={track}
+            selected={chosen === track}
+            onSelect={() => setChosen(track)}
+            icon={<Icon size={22} aria-hidden />}
+            title={t(titleKey)}
+            description={t(descriptionKey)}
+          />
+        ))}
       </div>
-      {start.isError ? (
-        <p className="text-sm text-danger-text">{t("apply.overview.startFailed")}</p>
-      ) : null}
 
-      <ul className="flex list-none flex-col gap-2 p-0">
-        <Promise>{t("apply.overview.promise.notSentUntilYouSend")}</Promise>
-        <Promise>{t("apply.overview.promise.notSharedUntilApproved")}</Promise>
-      </ul>
+      {chosen ? (
+        <TrackPreview
+          track={chosen}
+          pending={start.isPending}
+          failed={start.isError}
+          onStart={() =>
+            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about") })
+          }
+          onBack={() => setChosen(null)}
+        />
+      ) : (
+        <ul className="flex list-none flex-col gap-2 p-0">
+          <Promise>{t("apply.overview.promise.notSentUntilYouSend")}</Promise>
+          <Promise>{t("apply.overview.promise.notSharedUntilApproved")}</Promise>
+        </ul>
+      )}
     </section>
   );
 }
 
-/**
- * One way to join, drawn as something you tap.
- *
- * These used to be bare bordered panels — on a phone, with no hover, they read
- * as information and an applicant asked where to apply. The trailing chevron
- * and the pressed state are what say "this opens something".
- */
+/** What a chosen way of joining asks for, before the applicant commits to it. */
+function TrackPreview({
+  track,
+  pending,
+  failed,
+  onStart,
+  onBack,
+}: {
+  track: StartTrack;
+  pending: boolean;
+  failed: boolean;
+  onStart: () => void;
+  onBack: () => void;
+}) {
+  const t = useT();
+  const preview = trackPreview(track);
+
+  return (
+    <section
+      aria-labelledby="track-preview-title"
+      className="flex flex-col gap-4 rounded-card border border-action bg-surface p-5 shadow-sm"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="track-preview-title" className="text-base font-bold text-navy-900">
+          {t("apply.overview.preview.title")}
+        </h2>
+        <span className="text-sm text-text-secondary">{t(preview.timeKey)}</span>
+      </div>
+      <ol className="flex list-none flex-col gap-2 p-0">
+        {preview.steps.map((step, index) => (
+          <li key={step.href} className="flex items-center gap-3 text-sm text-text">
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs font-bold text-navy-900">
+              {index + 1}
+            </span>
+            {t(step.labelKey)}
+          </li>
+        ))}
+      </ol>
+      <p className="text-sm text-text-secondary">{t("apply.overview.preview.need")}</p>
+      <p className="rounded-control bg-surface-sunken p-3 text-sm text-text">{t(preview.afterKey)}</p>
+      {failed ? <p className="text-sm text-danger-text">{t("apply.overview.startFailed")}</p> : null}
+      <div className="flex flex-col gap-2 sm:flex-row-reverse sm:items-center">
+        <Button size="lg" onClick={onStart} loading={pending} className="font-bold sm:min-w-40">
+          {t("apply.overview.preview.start")}
+        </Button>
+        <Button variant="ghost" onClick={onBack} disabled={pending}>
+          {t("apply.overview.preview.back")}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** One way to join, drawn as something you pick. */
 function TrackCard({
   icon,
   title,
   description,
-  href,
-  onClick,
-  disabled,
+  selected,
+  onSelect,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
-} & ({ href: string; onClick?: never; disabled?: never } | { href?: never; onClick: () => void; disabled: boolean })) {
-  const className =
-    "group flex items-center gap-3.5 rounded-card border border-line bg-surface p-4 text-left shadow-xs transition-[border-color,box-shadow,transform] hover:border-action hover:shadow-sm active:scale-[0.99] active:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60";
-  const body = (
-    <>
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        "group flex items-center gap-3.5 rounded-card border bg-surface p-4 text-left shadow-xs transition-[border-color,box-shadow] hover:border-action hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+        selected ? "border-action ring-2 ring-action/30" : "border-line",
+      )}
+    >
       <span className="grid h-11 w-11 shrink-0 place-items-center self-start rounded-control bg-action-surface text-action">
         {icon}
       </span>
@@ -167,22 +217,15 @@ function TrackCard({
         <span className="font-bold text-navy-900">{title}</span>
         <span className="text-sm text-text-secondary">{description}</span>
       </span>
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-sunken text-navy-900 transition-colors group-hover:bg-action group-hover:text-surface group-active:bg-action group-active:text-surface">
-        <ChevronRight size={18} aria-hidden />
+      <span
+        aria-hidden
+        className={cn(
+          "grid h-6 w-6 shrink-0 place-items-center rounded-full border-2",
+          selected ? "border-action bg-action text-surface" : "border-line-strong",
+        )}
+      >
+        {selected ? <Check size={14} strokeWidth={3} /> : null}
       </span>
-    </>
-  );
-
-  if (href !== undefined) {
-    return (
-      <Link href={href} className={className}>
-        {body}
-      </Link>
-    );
-  }
-  return (
-    <button type="button" disabled={disabled} onClick={onClick} className={className}>
-      {body}
     </button>
   );
 }
@@ -279,9 +322,68 @@ function Standing({ application }: { application: Application }) {
         </Link>
       ) : null}
 
+      {application.status === "DRAFT" ? <SwitchTrack current={application.track} /> : null}
+
       <History application={application} />
 
       <HelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
+    </section>
+  );
+}
+
+const TRACK_CHOICES = [
+  {
+    track: "SERVICES",
+    titleKey: "apply.overview.track.services.title",
+    descriptionKey: "apply.overview.track.services.description",
+    icon: Wrench,
+  },
+  {
+    track: "STAY_HOST",
+    titleKey: "apply.overview.track.stays.title",
+    descriptionKey: "apply.overview.track.stays.description",
+    icon: BedDouble,
+  },
+  {
+    track: "RENTAL_OWNER",
+    titleKey: "apply.overview.track.rentals.title",
+    descriptionKey: "apply.overview.track.rentals.description",
+    icon: Package,
+  },
+] as const;
+
+/**
+ * Switching between services, stays and rentals while the application is still a draft.
+ *
+ * The first screen is the only other place the choice is made, and it is gone once a draft
+ * exists, so without this a partner who tapped the wrong card had no way back. Only in DRAFT:
+ * once a reviewer has asked for changes, the application they looked at stays what it was.
+ */
+function SwitchTrack({ current }: { current: string }) {
+  const t = useT();
+  const router = useRouter();
+  const update = useUpdateApplication();
+  const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
+
+  return (
+    <section className="rounded-card border border-line bg-surface p-4 shadow-xs sm:p-5">
+      <h2 className="text-sm font-bold text-text">{t("apply.overview.switch.title")}</h2>
+      <p className="mt-1 text-xs text-text-secondary">{t("apply.overview.switch.hint")}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {others.map(({ track, titleKey, icon: Icon }) => (
+          <Button
+            key={track}
+            variant="outline"
+            size="sm"
+            disabled={update.isPending}
+            onClick={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about") })}
+          >
+            <Icon size={16} aria-hidden />
+            {t(titleKey)}
+          </Button>
+        ))}
+      </div>
+      {update.isError ? <p className="mt-2 text-sm text-danger-text">{t("apply.overview.startFailed")}</p> : null}
     </section>
   );
 }

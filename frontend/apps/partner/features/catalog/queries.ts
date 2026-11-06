@@ -42,11 +42,17 @@ export interface MainCategory {
   imageUrl: string;
 }
 
-/** Partner onboarding only surfaces main categories when the catalog publishes fewer than ten. */
-const MAX_MAIN_CATEGORIES = 10;
-
-/** Stays and rentals are signup paths, not trades on /apply/work. */
-const NOT_A_TRADE = new Set(["rooms-pg-hostel", "rental-services"]);
+/**
+ * Not trades on /apply/work. Stays and rentals are their own ways to join, picked on /apply (both
+ * stays slugs: the older `rooms-pg-hostel` and the current `rooms-pg-hostel-hotels`). Crew and
+ * project work is added after approval, under Specialist work.
+ */
+const NOT_A_TRADE = new Set([
+  "rooms-pg-hostel",
+  "rooms-pg-hostel-hotels",
+  "rental-services",
+  "workforce-and-projects",
+]);
 
 export function visibleMainCategories(
   categories: readonly {
@@ -57,18 +63,13 @@ export function visibleMainCategories(
     image_url: string;
   }[],
 ): MainCategory[] {
-  const ordered = categories.filter((category) => !NOT_A_TRADE.has(category.slug)).map((category) => ({
+  return categories.filter((category) => !NOT_A_TRADE.has(category.slug)).map((category) => ({
     id: category.id,
     slug: category.slug,
     name: category.name,
     iconKey: category.icon_key,
     imageUrl: category.image_url,
   }));
-
-  if (ordered.length >= MAX_MAIN_CATEGORIES) {
-    return ordered.slice(0, MAX_MAIN_CATEGORIES - 1);
-  }
-  return ordered;
 }
 
 export interface WorkCatalog {

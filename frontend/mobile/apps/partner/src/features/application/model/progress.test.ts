@@ -7,6 +7,7 @@ type Application = Schemas["PartnerApplication"];
 const EMPTY = {
   id: "app-1",
   status: "DRAFT",
+  track: "STAY_HOST",
   version: 1,
   can_edit: true,
   consents_complete: false,
@@ -38,7 +39,7 @@ function withDocuments(kinds: readonly string[]): Application["documents"] {
   })) as unknown as Application["documents"];
 }
 
-/** Everything the 4-step mobile application needs. */
+/** Everything the short (stays and rentals) application needs. */
 const COMPLETE = {
   ...EMPTY,
   display_name: "webaura",
@@ -52,16 +53,46 @@ const COMPLETE = {
   documents: withDocuments(["GOVERNMENT_ID", "ADDRESS_PROOF"]),
 } as unknown as Application;
 
-describe("what counts as a step in the 4-step sequence", () => {
-  it("excludes the review screen from the denominator", () => {
+describe("what counts as a step", () => {
+  it("counts Agree & send, where the agreements are accepted, as a step", () => {
     const summary = progressSummary(COMPLETE);
     const steps = stepProgress(COMPLETE);
 
-    expect(steps.filter((step) => step.state === "waypoint").map((step) => step.href)).toEqual([
-      "/apply/review",
-    ]);
+    expect(steps.filter((step) => step.state === "waypoint")).toEqual([]);
+    expect(steps.map((step) => step.href)).toEqual(["/apply/about", "/apply/documents", "/apply/review"]);
     expect(summary.total).toBe(3);
     expect(summary.done).toBe(3);
+  });
+
+  it("keeps Agree & send open until the agreements are accepted", () => {
+    const unsigned = { ...COMPLETE, consents_complete: false } as Application;
+    expect(progressSummary(unsigned).nextIncomplete?.href).toBe("/apply/review");
+  });
+});
+
+describe("a services applicant", () => {
+  const SERVICES = {
+    ...COMPLETE,
+    track: "SERVICES",
+    skill_codes: ["electrician"],
+    service_variant_ids: ["variant-1"],
+    service_area_ids: ["area-1"],
+  } as unknown as Application;
+
+  it("points at Where you work until an area is chosen", () => {
+    const noArea = { ...SERVICES, service_area_ids: [] } as unknown as Application;
+    expect(progressSummary(noArea).nextIncomplete?.href).toBe("/apply/areas");
+  });
+
+  it("points at Your hours until every chosen area has hours, as the server requires", () => {
+    expect(progressSummary(SERVICES, { rules: [], exceptions: [] } as never).nextIncomplete?.href).toBe(
+      "/apply/schedule",
+    );
+    const withHours = {
+      rules: [{ service_area_id: "area-1", is_active: true }],
+      exceptions: [],
+    } as never;
+    expect(progressSummary(SERVICES, withHours).nextIncomplete).toBeNull();
   });
 });
 
@@ -104,15 +135,20 @@ describe("partial progress", () => {
   });
 });
 
-describe("stepping backwards in 4-step sequence", () => {
-  it("gives the previous step in the sequence", () => {
-    expect(previousStep("/apply/review")?.href).toBe("/apply/documents");
-    expect(previousStep("/apply/documents")?.href).toBe("/apply/consent");
-    expect(previousStep("/apply/consent")?.href).toBe("/apply/about");
+describe("stepping backwards", () => {
+  it("gives the previous step on the services path", () => {
+    expect(previousStep("/apply/review", "SERVICES")?.href).toBe("/apply/documents");
+    expect(previousStep("/apply/documents", "SERVICES")?.href).toBe("/apply/schedule");
+    expect(previousStep("/apply/schedule", "SERVICES")?.href).toBe("/apply/areas");
+    expect(previousStep("/apply/areas", "SERVICES")?.href).toBe("/apply/work");
+  });
+
+  it("gives the previous step on the short path", () => {
+    expect(previousStep("/apply/documents", "STAY_HOST")?.href).toBe("/apply/about");
   });
 
   it("tolerates a trailing slash", () => {
-    expect(previousStep("/apply/documents/")?.href).toBe("/apply/consent");
+    expect(previousStep("/apply/documents/", "STAY_HOST")?.href).toBe("/apply/about");
   });
 
   it("has nowhere to go back to from the first step", () => {

@@ -8,6 +8,8 @@ export interface MainCategory {
 
 /** Canonical skill for each main catalog category slug from the backend. */
 const PRIMARY_SKILL_BY_CATEGORY_SLUG: Record<string, string> = {
+  // A10 hiring partners — seeded by `seed_listing_catalog` (not a field trade).
+  "career-jobs": "career-jobs",
   technician: "carpenter",
   electrician: "electrician",
   plumber: "plumber",
@@ -16,6 +18,7 @@ const PRIMARY_SKILL_BY_CATEGORY_SLUG: Record<string, string> = {
   "home-services": "home-cleaning",
   "pet-services": "pet-grooming",
   construction: "construction-helper",
+  events: "event-staff",
 };
 
 /** Map a backend main category to the canonical skill applicants select as a trade. */
@@ -42,6 +45,14 @@ export function findSkillForCategory(
     const code = skill.code.toLowerCase();
     return code.includes(slug) || slug.includes(code);
   });
+}
+
+/** The categories a partner can actually tick: those with a skill behind them. */
+export function tickableCategories<Category extends MainCategory>(
+  categories: readonly Category[],
+  skills: readonly PartnerSkill[],
+): Category[] {
+  return categories.filter((category) => findSkillForCategory(skills, category) !== undefined);
 }
 
 export function variantIdsForCategory(
@@ -82,11 +93,18 @@ export function toggleTradeCategorySelection(
     };
   }
 
+  // Career/Jobs has a single apply-facing hiring variant — select it with the
+  // category so Save and Continue is not blocked waiting for a nested tick.
+  const attachVariants =
+    category.slug.toLowerCase() === "career-jobs" && variantIds.length > 0;
+
   return {
     skillCodes: skill
       ? Array.from(new Set([...selectedSkillCodes, skill.code]))
       : [...selectedSkillCodes],
-    serviceVariantIds: [...selectedVariantIds],
+    serviceVariantIds: attachVariants
+      ? Array.from(new Set([...selectedVariantIds, ...variantIds]))
+      : [...selectedVariantIds],
   };
 }
 

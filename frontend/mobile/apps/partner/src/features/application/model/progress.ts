@@ -64,9 +64,15 @@ export interface StepProgress extends ApplicationStep {
 }
 
 /** Steps that bracket the path rather than sitting on it. */
-const WAYPOINTS: readonly string[] = ["/apply", "/apply/review"];
+// "Agree & send" collects the agreements, so it is a step with work in it, as on the website.
+const WAYPOINTS: readonly string[] = ["/apply"];
 
-export function stepProgress(application: Application | null): StepProgress[] {
+type Schedule = Schemas["PartnerSchedule"];
+
+export function stepProgress(
+  application: Application | null,
+  availability?: Schedule | null,
+): StepProgress[] {
   /*
     `requirements` takes `null` directly and reports everything unmet.
 
@@ -77,7 +83,7 @@ export function stepProgress(application: Application | null): StepProgress[] {
     of truth what an application *needs*, rather than inferring it from what one
     *has*, removes that whole class of mistake.
   */
-  const met = requirements(application);
+  const met = requirements(application, availability);
 
   return applicationSteps(application?.track).map((step) => {
     const mine = met.filter((requirement) => requirement.href === step.href);
@@ -113,8 +119,11 @@ export interface ProgressSummary {
  * different from "3 things left to do", and the applicant would be reading two
  * numbers that never agree.
  */
-export function progressSummary(application: Application | null): ProgressSummary {
-  const steps = stepProgress(application);
+export function progressSummary(
+  application: Application | null,
+  availability?: Schedule | null,
+): ProgressSummary {
+  const steps = stepProgress(application, availability);
   const gating = steps.filter((step) => step.state === "done" || step.state === "todo");
   const done = gating.filter((step) => step.state === "done").length;
 

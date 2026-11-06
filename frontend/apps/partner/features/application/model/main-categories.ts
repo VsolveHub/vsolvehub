@@ -13,6 +13,7 @@ const PRIMARY_SKILL_BY_CATEGORY_SLUG: Record<string, string> = {
   "home-services": "home-cleaning",
   "pet-services": "pet-grooming",
   construction: "construction-helper",
+  events: "event-staff",
 };
 
 /** Map a backend main category to the canonical skill applicants select as a trade. */
@@ -39,6 +40,14 @@ export function findSkillForCategory(
     const code = skill.code.toLowerCase();
     return code.includes(slug) || slug.includes(code);
   });
+}
+
+/** The categories a partner can actually tick: those with a skill behind them. */
+export function tickableCategories(
+  categories: readonly MainCategory[],
+  skills: readonly PartnerSkill[],
+): MainCategory[] {
+  return categories.filter((category) => findSkillForCategory(skills, category) !== undefined);
 }
 
 export function variantIdsForCategory(

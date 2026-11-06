@@ -1,10 +1,6 @@
-import { ApplicationEditor } from "@/features/application/view/application-editor";
-import { ConsentStep } from "@/features/application/view/consent-step";
+import { Redirect } from "expo-router";
 
+/** The agreements are accepted on "Agree & send", as on the website. */
 export default function ConsentPage() {
-  return (
-    <ApplicationEditor saveLabel="Continue">
-      <ConsentStep />
-    </ApplicationEditor>
-  );
+  return <Redirect href="/apply/review" />;
 }

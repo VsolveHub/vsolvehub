@@ -4,6 +4,8 @@ import {
   APPLICATION_STEPS,
   applicationSteps,
   nextStep,
+  trackPreview,
+  isUnchosenDraft,
   stepIndexOf,
 } from "./steps";
 
@@ -28,7 +30,7 @@ describe("finding the current step", () => {
     // the overview as current on every page — which is how a nav ends up
     // highlighting the wrong tab everywhere.
     expect(stepIndexOf("/apply/work")).not.toBe(stepIndexOf("/apply"));
-    expect(stepIndexOf("/apply/documents")).toBe(4);
+    expect(stepIndexOf("/apply/documents")).toBe(5);
   });
 
   it("tolerates the trailing slash Next can produce", () => {
@@ -66,7 +68,8 @@ describe("what comes next", () => {
 
   it("sends each editable step to the one after it", () => {
     expect(nextStep("/apply/about")?.href).toBe("/apply/work");
-    expect(nextStep("/apply/work")?.href).toBe("/apply/schedule");
+    expect(nextStep("/apply/work")?.href).toBe("/apply/areas");
+    expect(nextStep("/apply/areas")?.href).toBe("/apply/schedule");
     expect(nextStep("/apply/schedule")?.href).toBe("/apply/documents");
     expect(nextStep("/apply/documents")?.href).toBe("/apply/review");
   });
@@ -113,5 +116,51 @@ describe("the rental owner path", () => {
       applicationSteps("STAY_HOST").map((step) => step.href),
     );
     expect(nextStep("/apply/about", "RENTAL_OWNER")?.href).toBe("/apply/documents");
+  });
+});
+
+describe("the services path", () => {
+  it("asks where you work on its own step, after the trades", () => {
+    expect(applicationSteps("SERVICES").map((step) => step.href)).toEqual([
+      "/apply",
+      "/apply/about",
+      "/apply/work",
+      "/apply/areas",
+      "/apply/schedule",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+});
+
+describe("what the first screen shows before starting", () => {
+  it("previews the same steps the application walks, without the overview", () => {
+    expect(trackPreview("SERVICES").steps.map((step) => step.href)).toEqual(
+      applicationSteps("SERVICES").slice(1).map((step) => step.href),
+    );
+    expect(trackPreview("STAY_HOST").steps.map((step) => step.href)).toEqual([
+      "/apply/about",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("says the short form is shorter, and what approval leads to for each", () => {
+    expect(trackPreview("SERVICES").timeKey).toBe("apply.overview.preview.time.services");
+    expect(trackPreview("RENTAL_OWNER").timeKey).toBe("apply.overview.preview.time.listing");
+    expect(trackPreview("STAY_HOST").afterKey).toBe("apply.overview.preview.after.stays");
+    expect(trackPreview("RENTAL_OWNER").afterKey).toBe("apply.overview.preview.after.rentals");
+  });
+});
+
+describe("whether the partner has chosen how to join", () => {
+  it("treats the draft the server creates on first sign-in as not chosen", () => {
+    expect(isUnchosenDraft({ status: "DRAFT", version: 1 })).toBe(true);
+  });
+
+  it("treats any saved choice or edit, or a sent application, as chosen", () => {
+    expect(isUnchosenDraft({ status: "DRAFT", version: 2 })).toBe(false);
+    expect(isUnchosenDraft({ status: "SUBMITTED", version: 1 })).toBe(false);
+    expect(isUnchosenDraft(null)).toBe(false);
   });
 });

@@ -43,6 +43,9 @@ const logoMark = require("../../../assets/logo-mark.png");
 export default function ApplyLayout() {
   const pathname = usePathname();
   const isStatusPage = pathname === "/apply/status" || pathname.endsWith("/status");
+  // `/apply` itself is the overview (the choice of how to join, then the checklist), as on the
+  // website: no step counter and no Continue dock.
+  const isOverview = pathname === "/apply" || pathname === "/apply/";
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const signOut = useMobileLogout("/login?next=%2Fapply");
@@ -99,7 +102,7 @@ export default function ApplyLayout() {
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
   const back = isStatusPage ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
-  const shouldShowDock = !isSubmitted && !isStatusPage;
+  const shouldShowDock = !isSubmitted && !isStatusPage && !isOverview;
 
   // Find the current step in this partner's own sequence
   const steps = applicationSteps(application?.track);
@@ -113,7 +116,7 @@ export default function ApplyLayout() {
   const initialLetter = application?.display_name?.trim()[0]?.toUpperCase() ?? "";
 
   // Primary action button configuration with robust fallbacks
-  const defaultLabel = currentStepIdx === 3 ? "Submit application" : "Continue";
+  const defaultLabel = currentStepIdx === steps.length - 1 ? "Send application" : "Continue";
   const primaryLabel = dockConfig?.label || defaultLabel;
   const isProceedDisabled = dockConfig ? Boolean(dockConfig.proceedDisabled) : false;
   const isSaving = dockConfig ? Boolean(dockConfig.isSaving) : false;
@@ -207,14 +210,16 @@ export default function ApplyLayout() {
           </View>
 
           {/* Stepper: Circles variant for Steps 1-3, Segmented variant for Mixed Documents & Step 4 */}
-          <View style={[styles.stepperWrapper, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            <OnboardingStepper
-              currentStep={currentStepIdx}
-              totalSteps={4}
-              stepLabel={currentStep.label}
-              variant="segmented"
-            />
-          </View>
+          {isOverview ? null : (
+            <View style={[styles.stepperWrapper, { maxWidth: isDesktop ? 672 : "100%" }]}>
+              <OnboardingStepper
+                currentStep={currentStepIdx}
+                totalSteps={steps.length}
+                stepLabel={currentStep.label}
+                variant="segmented"
+              />
+            </View>
+          )}
         </View>
 
         {/* Scrollable Main Content */}

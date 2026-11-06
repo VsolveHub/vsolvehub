@@ -1,11 +1,7 @@
 // Ported from frontend/apps/partner/features/application/model/steps.ts
 /**
- * The 4-step mobile onboarding sequence matching the VSolve Hub partner mobile app design.
- *
- * Step 1: About you (/apply/about)
- * Step 2: Agreements (/apply/consent)
- * Step 3: Documents (/apply/documents)
- * Step 4: Review and send (/apply/review)
+ * The same steps, in the same order, as the website: the agreements are accepted on the last
+ * screen, "Agree & send", and where a services partner works is its own step after the trades.
  */
 
 export interface ApplicationStep {
@@ -13,30 +9,66 @@ export interface ApplicationStep {
   label: string;
 }
 
+/** Stays and rentals list something they own: the short form. */
 export const APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/about", label: "About you" },
-  { href: "/apply/consent", label: "Agreements" },
   { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/review", label: "Review and send" },
+  { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
 /**
  * People who travel to a customer also say what they do, where and when. The server refuses a
- * services application without trades and areas, so these cannot be skipped. Stays and rentals list
- * something they own, and keep the short list above.
+ * services application without trades, areas and hours, so these cannot be skipped.
  */
 export const SERVICE_APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/about", label: "About you" },
   { href: "/apply/work", label: "Your work" },
-  { href: "/apply/schedule", label: "Working hours" },
-  { href: "/apply/consent", label: "Agreements" },
+  { href: "/apply/areas", label: "Where you work" },
+  { href: "/apply/schedule", label: "Your hours" },
   { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/review", label: "Review and send" },
+  { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
-/** The step sequence for this partner. Every caller goes through here, as on the web. */
+export function isListingTrack(track?: string | null): boolean {
+  return track === "STAY_HOST" || track === "RENTAL_OWNER";
+}
+
+/** The step sequence for this partner. Services is the server's default track, as on the web. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
-  return track === "SERVICES" ? SERVICE_APPLICATION_STEPS : APPLICATION_STEPS;
+  return isListingTrack(track) ? APPLICATION_STEPS : SERVICE_APPLICATION_STEPS;
+}
+
+/**
+ * A draft nobody has touched yet. The server creates one, on the Services track, the first time a
+ * signed-in partner's application is read; every choice or edit raises the version. Until then the
+ * partner has not chosen how to join, and is shown the choice.
+ */
+export function isUnchosenDraft(
+  application: { status: string; version: number } | null | undefined,
+): boolean {
+  return application?.status === "DRAFT" && application.version === 1;
+}
+
+/** The three ways to join offered on the first screen. */
+export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
+
+const AFTER_APPROVAL: Record<StartTrack, string> = {
+  SERVICES: "After approval, job offers come to you in the V Solve Hub partner app.",
+  STAY_HOST: "After approval, you add your property and rooms, and guests can book.",
+  RENTAL_OWNER: "After approval, you add your items, and customers can rent them.",
+};
+
+/** What the first screen shows once a way of joining is picked, before anything starts. */
+export function trackPreview(track: StartTrack): {
+  steps: readonly ApplicationStep[];
+  time: string;
+  after: string;
+} {
+  return {
+    steps: applicationSteps(track),
+    time: isListingTrack(track) ? "About 3 minutes" : "About 5 minutes",
+    after: AFTER_APPROVAL[track],
+  };
 }
 
 /**
