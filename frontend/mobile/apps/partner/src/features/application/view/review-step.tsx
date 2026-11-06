@@ -5,12 +5,16 @@ import { useRouter } from "expo-router";
 import {
   AlertCircle,
   Bell,
+  Briefcase,
+  Check,
   CheckCircle2,
+  Circle,
+  Clock,
   FileCheck2,
-  FileText,
+  MapPin,
   User,
 } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -20,14 +24,20 @@ import {
 
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
 import { useApplyDock } from "../model/dock-context";
-import { canSubmit, isEditable } from "../model/readiness";
+import { isEditable, outstandingRequirements } from "../model/readiness";
+import { isListingTrack } from "../model/steps";
 import {
   describeRefusal,
   isVersionConflict,
   usePartnerApplication,
+  usePartnerAvailability,
   useSubmitApplication,
   useUpdateApplication,
 } from "../queries";
+import { useApplicationReference } from "../reference-queries";
+import { ConsentList } from "./consent-step";
+
+const consentKey = (purpose: string, version: string) => `${purpose}@${version}`;
 
 export function ReviewStep() {
   const router = useRouter();
@@ -43,7 +53,51 @@ export function ReviewStep() {
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = query.data ?? null;
   const editable = application !== null && isEditable(application);
-  const ready = application !== null && canSubmit(application);
+  const availability = usePartnerAvailability();
+  const reference = useApplicationReference();
+  const requiredConsents = useMemo(
+    () => (reference.requiredConsents ?? []).filter((consent) => consent.is_required_for_submission),
+    [reference.requiredConsents],
+  );
+
+  // As on the website: agreements already on record stay ticked; new ticks are kept here and
+  // saved together with the send, after the "details are true" box.
+  const locked = useMemo(
+    () =>
+      new Set(
+        (application?.consents ?? [])
+          .filter((consent) => consent.withdrawn_at === null)
+          .map((consent) => consentKey(consent.purpose, consent.document_version)),
+      ),
+    [application?.consents],
+  );
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
+  const [declared, setDeclared] = useState(false);
+  const isAccepted = (purpose: string, version: string) => {
+    const key = consentKey(purpose, version);
+    return locked.has(key) || ticked.has(key);
+  };
+  const toggleConsent = (purpose: string, version: string) => {
+    const key = consentKey(purpose, version);
+    if (locked.has(key)) return;
+    setTicked((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const consentsTicked = requiredConsents.every((consent) =>
+    isAccepted(consent.purpose, consent.document_version),
+  );
+  const outstanding =
+    application === null
+      ? []
+      : outstandingRequirements(application, availability.data).filter(
+          (requirement) => requirement.code !== "CONSENTS",
+        );
+  const ready =
+    application !== null && editable && outstanding.length === 0 && consentsTicked && declared;
   const appStatus = (application?.status as string) || "";
   const isSubmitted =
     appStatus === "SUBMITTED" ||
@@ -66,9 +120,27 @@ export function ReviewStep() {
 
   const isSaving = submit.isPending || updateApp.isPending;
 
+  const addedConsents = useMemo(
+    () =>
+      requiredConsents.filter((consent) => {
+        const key = consentKey(consent.purpose, consent.document_version);
+        return ticked.has(key) && !locked.has(key);
+      }),
+    [requiredConsents, ticked, locked],
+  );
+  const saveConsents = updateApp.mutateAsync;
+
   const onCommit = useCallback(async () => {
     if (isSaving) return;
     try {
+      if (addedConsents.length > 0) {
+        await saveConsents({
+          consents: addedConsents.map((consent) => ({
+            purpose: consent.purpose,
+            document_version: consent.document_version,
+          })),
+        });
+      }
       submitMutateRef.current(undefined, {
         onSuccess: () => {
           void refetchRef.current();
@@ -76,9 +148,9 @@ export function ReviewStep() {
         },
       });
     } catch {
-      // Caught by react-query mutation error state
+      // Shown from the mutation state below.
     }
-  }, [isSaving, query.data, updateApp, router]);
+  }, [isSaving, router, addedConsents, saveConsents]);
 
   const canProceed = ready && !isSaving;
 
@@ -93,7 +165,7 @@ export function ReviewStep() {
     }
 
     registerDock({
-      label: "Submit application",
+      label: application?.status === "CHANGES_REQUIRED" ? "Send again" : "Send application",
       backHref: "/apply/documents",
       nextStepName: null,
       onCommit,
@@ -116,6 +188,7 @@ export function ReviewStep() {
     refusal,
     registerDock,
     onCommit,
+    application?.status,
   ]);
 
   useEffect(() => {
@@ -155,7 +228,7 @@ export function ReviewStep() {
   if (application === null) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.title}>Review & Submit</Text>
+        <Text style={styles.title}>Agree & send</Text>
         <Text style={styles.subtitle}>You have not started your application yet.</Text>
         <Pressable
           accessibilityRole="button"
@@ -170,14 +243,21 @@ export function ReviewStep() {
 
   const displayName = application.display_name;
   const bioLength = application.biography?.length ?? 0;
-  const agreedCount = application.consents.length;
+  const listing = isListingTrack(application.track);
+  const areaNames = application.service_area_ids.map(
+    (id) => reference.serviceAreas.find((area) => area.id === id)?.name ?? id.slice(0, 8),
+  );
+  const hoursSet = application.service_area_ids.filter((areaId) =>
+    (availability.data?.rules ?? []).some((rule) => rule.service_area_id === areaId && rule.is_active),
+  ).length;
   const documentsCount = application.documents.filter((document) => document.status !== "SUPERSEDED").length;
 
   return (
     <View style={styles.container}>
       {/* Title */}
       <View style={styles.header}>
-        <Text style={styles.title}>Review & Submit</Text>
+        <Text style={styles.title}>Agree & send</Text>
+        <Text style={styles.subtitle}>Check your details, accept the agreements and send.</Text>
       </View>
 
       {/* Error / Refusal Banner if submission failed */}
@@ -226,27 +306,31 @@ export function ReviewStep() {
           </Pressable>
         </View>
 
-        {/* Card 2: Agreements */}
-        <View style={styles.summaryCard}>
-          <View style={styles.cardLeft}>
-            <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
-            <View style={styles.iconWrapper}>
-              <FileText size={18} color="#00112e" strokeWidth={2.2} />
-            </View>
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle}>Agreements</Text>
-              <Text style={styles.cardSubtitle}>{agreedCount} agreed</Text>
-            </View>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Edit agreements"
-            onPress={() => router.push("/apply/consent")}
-            hitSlop={8}
-          >
-            <Text style={styles.editText}>Edit</Text>
-          </Pressable>
-        </View>
+        {listing ? null : (
+          <>
+            <SummaryCard
+              icon={<Briefcase size={18} color="#00112e" strokeWidth={2.2} />}
+              title="Your work"
+              subtitle={`${application.skill_codes.length} trades · ${application.service_variant_ids.length} job types`}
+              done={application.service_variant_ids.length > 0}
+              onEdit={() => router.push("/apply/work")}
+            />
+            <SummaryCard
+              icon={<MapPin size={18} color="#00112e" strokeWidth={2.2} />}
+              title="Where you work"
+              subtitle={areaNames.length > 0 ? areaNames.join(", ") : "Not set yet"}
+              done={application.service_area_ids.length > 0}
+              onEdit={() => router.push("/apply/areas" as never)}
+            />
+            <SummaryCard
+              icon={<Clock size={18} color="#00112e" strokeWidth={2.2} />}
+              title="Your hours"
+              subtitle={`Set for ${hoursSet} of ${application.service_area_ids.length} areas`}
+              done={application.service_area_ids.length > 0 && hoursSet === application.service_area_ids.length}
+              onEdit={() => router.push("/apply/schedule")}
+            />
+          </>
+        )}
 
         {/* Card 3: Documents */}
         <View style={styles.summaryCard}>
@@ -270,6 +354,31 @@ export function ReviewStep() {
           </Pressable>
         </View>
       </View>
+
+      {editable ? (
+        <View style={styles.agreements}>
+          <Text style={styles.agreementsTitle}>Agreements</Text>
+          <ConsentList
+            documents={requiredConsents}
+            isAccepted={isAccepted}
+            onToggle={toggleConsent}
+            disabled={isSaving}
+          />
+          <Pressable
+            cssInterop={false}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: declared, disabled: isSaving }}
+            disabled={isSaving}
+            onPress={() => setDeclared(!declared)}
+            style={styles.declaration}
+          >
+            <View style={[styles.declarationBox, declared ? styles.declarationBoxOn : null]}>
+              {declared ? <Check size={14} color="#ffffff" strokeWidth={3} /> : null}
+            </View>
+            <Text style={styles.declarationText}>{"The details and documents I've given are true."}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Notification Toggle Card matching User Uploaded Image 2 */}
       <View style={styles.notificationCard}>
@@ -318,7 +427,85 @@ export function ReviewStep() {
   );
 }
 
+function SummaryCard({
+  icon,
+  title,
+  subtitle,
+  done,
+  onEdit,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  done: boolean;
+  onEdit: () => void;
+}) {
+  return (
+    <View style={styles.summaryCard}>
+      <View style={styles.cardLeft}>
+        {done ? (
+          <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
+        ) : (
+          <Circle size={22} color="#cbd5e1" strokeWidth={2.2} />
+        )}
+        <View style={styles.iconWrapper}>{icon}</View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.cardSubtitle}>{subtitle}</Text>
+        </View>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${title.toLowerCase()}`}
+        onPress={onEdit}
+        hitSlop={8}
+      >
+        <Text style={styles.editText}>Edit</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  agreements: {
+    rowGap: 12,
+    marginBottom: 16,
+  },
+  agreementsTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#00112e",
+  },
+  declaration: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    columnGap: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#ffffff",
+  },
+  declarationBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#cbd5e1",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  declarationBoxOn: {
+    backgroundColor: "#ea580c",
+    borderColor: "#ea580c",
+  },
+  declarationText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#00112e",
+  },
   container: {
     flexDirection: "column",
     width: "100%",

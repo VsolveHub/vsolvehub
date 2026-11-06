@@ -30,12 +30,14 @@ from rest_framework.views import APIView
 from apps.commerce.models import Booking
 from apps.foundation.services import ResponseBody, execute_idempotent
 from apps.fulfilment import recovery_services
+from apps.fulfilment.cancellation import operations_cancel_booking
 from apps.fulfilment.otp import operations_assisted_start
 from apps.fulfilment.serializers import (
     LATE_STATUSES,
     AssistedStartRequestSerializer,
     OperationsBookingRowSerializer,
     OperationsBookingSerializer,
+    OperationsCancelRequestSerializer,
     RecoverBookingRequestSerializer,
 )
 from apps.identity.models import User
@@ -205,6 +207,50 @@ class OperationsAssistedStartView(APIView):
         result = execute_idempotent(
             actor=operator,
             operation="fulfilment.operations_assisted_start",
+            key=key,
+            request_payload={"booking_id": str(booking.id), **serializer.validated_data},
+            command=command,
+        )
+        return _replayable(result, lambda: _operations_projection(booking.id))
+
+
+class OperationsCancelBookingView(APIView):
+    """Operations cancels a visit for the customer and refunds it, from the visit page.
+
+    Moves money, so it sits behind the same step-up as refunds. Refunding used to mean copying the
+    order id into the Refunds page and typing the visit's fulfilment-unit id by hand.
+    """
+
+    permission_classes = (IsAuthenticated, IsOperationsUser, HasRecentOperationsStepUp)
+
+    @extend_schema(
+        tags=["Operations"],
+        operation_id="operations_booking_cancel",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=OperationsCancelRequestSerializer,
+        responses={200: OperationsBookingSerializer, 401: ApiErrorSerializer, **_ERRORS_4XX},
+    )
+    def post(self, request: Request, booking_id: UUID) -> Response:
+        serializer = OperationsCancelRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        operator = cast(User, request.user)
+        booking = get_object_or_404(Booking, id=booking_id)
+        key = _required_key(request)
+
+        def command() -> tuple[int, ResponseBody]:
+            operations_cancel_booking(
+                booking_id=booking.id,
+                operator=operator,
+                expected_version=serializer.validated_data["expected_version"],
+                reason=serializer.validated_data["reason"],
+                full_refund=serializer.validated_data["full_refund"],
+                idempotency_key=key,
+            )
+            return status.HTTP_200_OK, _operations_projection(booking.id)
+
+        result = execute_idempotent(
+            actor=operator,
+            operation="fulfilment.operations_cancel",
             key=key,
             request_payload={"booking_id": str(booking.id), **serializer.validated_data},
             command=command,

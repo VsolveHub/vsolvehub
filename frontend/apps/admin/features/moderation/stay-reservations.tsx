@@ -17,6 +17,7 @@ import {
   formatMoney,
 } from "@vsolve/ui";
 import { Phone } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { useDebounced } from "@/features/shared/use-debounced";
@@ -47,7 +48,9 @@ const STAY_TONE: Record<string, "warning" | "info" | "success" | "neutral" | "da
 export function StayReservations() {
   const qc = useQueryClient();
   const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
+  // `?q=` opens the list on one booking, from a link on the customer record.
+  const params = useSearchParams();
+  const [search, setSearch] = useState(() => params.get("q") ?? "");
   const [cancelling, setCancelling] = useState<OpsStayReservation | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);

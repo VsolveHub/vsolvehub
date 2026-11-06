@@ -17,7 +17,6 @@ import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 export function ConsentStep() {
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
-  const [selectedDoc, setSelectedDoc] = useState<RequiredConsent | null>(null);
 
   const isAccepted = (purpose: string, version: string) =>
     draft.consents.some(
@@ -74,113 +73,142 @@ export function ConsentStep() {
         <Text style={styles.subtitle}>Please review and accept the following documents to continue.</Text>
       </View>
 
-      {/* Cards List */}
-      <View style={styles.cardsContainer}>
-        {reference.requiredConsents.map((doc) => {
-          const accepted = isAccepted(doc.purpose, doc.document_version);
-          return (
-            <View key={`${doc.purpose}@${doc.document_version}`} style={styles.card}>
-              <View style={styles.cardLeft}>
-                {/* Square Checkbox */}
-                <Pressable cssInterop={false}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: accepted, disabled: isReadOnly }}
-                  disabled={isReadOnly}
-                  onPress={() => handleToggle(doc.purpose, doc.document_version)}
-                  style={({ pressed }) => [
-                    styles.checkbox,
-                    accepted ? styles.checkboxChecked : styles.checkboxUnchecked,
-                    pressed && !accepted ? { borderColor: "#ea580c" } : null,
-                  ]}
-                >
-                  {accepted ? <Check size={14} color="#ffffff" strokeWidth={3} /> : null}
-                </Pressable>
+      <ConsentList
+        documents={reference.requiredConsents}
+        isAccepted={isAccepted}
+        onToggle={handleToggle}
+        disabled={isReadOnly}
+      />
+    </View>
+  );
+}
 
-                {/* Details */}
-                <View style={styles.cardContent}>
-                  <Text style={styles.docTitle}>{doc.title}</Text>
-                  <View style={styles.docMetaRow}>
-                    <Text style={styles.docVersion}>v{doc.document_version} • </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setSelectedDoc(doc)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.readLink}>Read</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
+/**
+ * The agreements, each with a box to tick and a reader. Shared by the Agreements screen and the
+ * final "Agree & send" screen, which is where the website asks for them.
+ */
+export function ConsentList({
+  documents,
+  isAccepted,
+  onToggle,
+  disabled = false,
+}: {
+  documents: readonly RequiredConsent[];
+  isAccepted: (purpose: string, version: string) => boolean;
+  onToggle: (purpose: string, version: string) => void;
+  disabled?: boolean;
+}) {
+  const [selectedDoc, setSelectedDoc] = useState<RequiredConsent | null>(null);
 
-              {/* Right Document Icon */}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setSelectedDoc(doc)}
-                style={styles.iconButton}
-              >
-                <FileText size={22} color="#00112e" />
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
+  return (
+    <View>
+  {/* Cards List */}
+  <View style={styles.cardsContainer}>
+    {documents.map((doc) => {
+      const accepted = isAccepted(doc.purpose, doc.document_version);
+      return (
+        <View key={`${doc.purpose}@${doc.document_version}`} style={styles.card}>
+          <View style={styles.cardLeft}>
+            {/* Square Checkbox */}
+            <Pressable cssInterop={false}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: accepted, disabled: disabled }}
+              disabled={disabled}
+              onPress={() => onToggle(doc.purpose, doc.document_version)}
+              style={({ pressed }) => [
+                styles.checkbox,
+                accepted ? styles.checkboxChecked : styles.checkboxUnchecked,
+                pressed && !accepted ? { borderColor: "#ea580c" } : null,
+              ]}
+            >
+              {accepted ? <Check size={14} color="#ffffff" strokeWidth={3} /> : null}
+            </Pressable>
 
-      {/* Document Reader Modal */}
-      <Modal
-        visible={selectedDoc !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedDoc(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>{selectedDoc?.title}</Text>
-                <Text style={styles.modalVersion}>Version {selectedDoc?.document_version}</Text>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setSelectedDoc(null)}
-                style={styles.closeButton}
-              >
-                <X size={20} color="#00112e" />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
-              <Text style={styles.docBodyText}>
-                By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub's partner terms, service quality standards, and platform policies.
-                {"\n\n"}
-                Document URL: {selectedDoc?.document_url || "https://vsolvehub.com/terms"}
-              </Text>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              {selectedDoc && !isAccepted(selectedDoc.purpose, selectedDoc.document_version) ? (
+            {/* Details */}
+            <View style={styles.cardContent}>
+              <Text style={styles.docTitle}>{doc.title}</Text>
+              <View style={styles.docMetaRow}>
+                <Text style={styles.docVersion}>v{doc.document_version} • </Text>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => {
-                    handleToggle(selectedDoc.purpose, selectedDoc.document_version);
-                    setSelectedDoc(null);
-                  }}
-                  style={styles.modalAcceptButton}
+                  onPress={() => setSelectedDoc(doc)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.modalAcceptText}>Accept Agreement</Text>
+                  <Text style={styles.readLink}>Read</Text>
                 </Pressable>
-              ) : (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setSelectedDoc(null)}
-                  style={styles.modalCloseButton}
-                >
-                  <Text style={styles.modalCloseText}>Close</Text>
-                </Pressable>
-              )}
+              </View>
             </View>
           </View>
+
+          {/* Right Document Icon */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setSelectedDoc(doc)}
+            style={styles.iconButton}
+          >
+            <FileText size={22} color="#00112e" />
+          </Pressable>
         </View>
-      </Modal>
+      );
+    })}
+  </View>
+
+  {/* Document Reader Modal */}
+  <Modal
+    visible={selectedDoc !== null}
+    transparent
+    animationType="slide"
+    onRequestClose={() => setSelectedDoc(null)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.modalTitle}>{selectedDoc?.title}</Text>
+            <Text style={styles.modalVersion}>Version {selectedDoc?.document_version}</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setSelectedDoc(null)}
+            style={styles.closeButton}
+          >
+            <X size={20} color="#00112e" />
+          </Pressable>
+        </View>
+
+        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
+          <Text style={styles.docBodyText}>
+            By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub's partner terms, service quality standards, and platform policies.
+            {"\n\n"}
+            Document URL: {selectedDoc?.document_url || "https://vsolvehub.com/terms"}
+          </Text>
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          {selectedDoc && !isAccepted(selectedDoc.purpose, selectedDoc.document_version) ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                onToggle(selectedDoc.purpose, selectedDoc.document_version);
+                setSelectedDoc(null);
+              }}
+              style={styles.modalAcceptButton}
+            >
+              <Text style={styles.modalAcceptText}>Accept Agreement</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSelectedDoc(null)}
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  </Modal>
     </View>
   );
 }

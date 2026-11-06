@@ -815,6 +815,17 @@ class PartnerBookingPageSerializer(serializers.Serializer[dict[str, object]]):
     server_now = serializers.DateTimeField()
 
 
+class OperationsCancellationPreviewSerializer(serializers.Serializer[Any]):
+    refundable_paise = serializers.IntegerField(help_text="What a full refund returns.")
+    policy_fee_paise = serializers.IntegerField(
+        help_text="The customer's cancellation fee if it is not waived."
+    )
+    policy_fee_waiver = serializers.CharField(
+        allow_blank=True, help_text="Set when the fee is already waived (partner released or late)."
+    )
+    currency = serializers.CharField()
+
+
 class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     """Cross-unit recovery context, with the audit trail that justifies it.
 
@@ -838,6 +849,7 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     work_tasks = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     status_history = serializers.SerializerMethodField()
+    operations_cancellation = serializers.SerializerMethodField()
     replacement_offer_id = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
@@ -869,6 +881,7 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
             "evidence",
             "status_history",
             "replacement_offer_id",
+            "operations_cancellation",
             "server_now",
         )
         read_only_fields = fields
@@ -889,6 +902,20 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     def get_site_address(self, instance: Booking) -> dict[str, str] | None:
         address = _visit_address(instance)
         return None if address is None else site_address_payload(address)
+
+    @extend_schema_field(OperationsCancellationPreviewSerializer(allow_null=True))
+    def get_operations_cancellation(self, instance: Booking) -> Any:
+        """What Operations would refund on cancelling; `null` when the visit cannot be cancelled.
+
+        Imported inside the method for the same reason as `cancellation_preview`.
+        """
+        from apps.fulfilment.cancellation import preview_operations_cancellation  # noqa: PLC0415
+
+        unit = instance.fulfilment_unit
+        if unit is None:
+            return None
+        preview = preview_operations_cancellation(unit=unit, booking=instance)
+        return None if preview is None else OperationsCancellationPreviewSerializer(preview).data
 
     @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_replacement_offer_id(self, instance: Booking) -> Any:
@@ -983,6 +1010,13 @@ class PartnerVisitRouteSerializer(serializers.Serializer[dict[str, Any]]):
 
 class AssistedStartRequestSerializer(VersionedCommandSerializer):
     outage_reason = serializers.CharField(max_length=240, allow_blank=False, trim_whitespace=True)
+
+
+class OperationsCancelRequestSerializer(VersionedCommandSerializer):
+    reason = serializers.CharField(max_length=240, allow_blank=False, trim_whitespace=True)
+    full_refund = serializers.BooleanField(
+        help_text="`true` waives the cancellation fee; `false` applies the customer's fee ladder."
+    )
 
 
 class EvidenceUploadRequestSerializer(serializers.Serializer[dict[str, Any]]):

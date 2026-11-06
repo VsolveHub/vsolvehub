@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from apps.catalog.models import ServiceVariant
 from apps.partners.permissions import IsOperationsUser
 from apps.requirements.models import CustomerRequirement
+from apps.requirements.operations import STUCK_QUEUE_CODES, stuck_requirement_ids
 from common.errors.serializers import ApiErrorSerializer
 from common.pagination import (
     CURSOR_PARAMETER,
@@ -125,8 +126,8 @@ def operations_request_rows(request: Request) -> QuerySet[CustomerRequirement]:
     """Every crew and project request, narrowed by the list's filters. Exported for tests.
 
     `?status=` one state or several; `?open=true` everything not closed; `?archetype=` crew
-    (`A3_TIME_BLOCK`) or project (`A5_CUSTOM_PROJECT`); `?q=` the customer's name or phone, the
-    engaged vendor's name, or a request id.
+    (`A3_TIME_BLOCK`) or project (`A5_CUSTOM_PROJECT`); `?stuck=` the requests in one stuck queue;
+    `?q=` the customer's name or phone, the engaged vendor's name, or a request id.
     """
     rows = CustomerRequirement.objects.filter(archetype__in=ARCHETYPES).select_related(
         "customer",
@@ -147,6 +148,13 @@ def operations_request_rows(request: Request) -> QuerySet[CustomerRequirement]:
                 {"archetype": [f"Choose one of: {', '.join(ARCHETYPES)}."]}
             )
         rows = rows.filter(archetype=archetype)
+    stuck = (request.query_params.get("stuck") or "").strip().lower()
+    if stuck:
+        if stuck not in STUCK_QUEUE_CODES:
+            raise serializers.ValidationError(
+                {"stuck": [f"Choose one of: {', '.join(STUCK_QUEUE_CODES)}."]}
+            )
+        rows = rows.filter(id__in=stuck_requirement_ids(stuck))
     query = (request.query_params.get("q") or "").strip()
     if query:
         match = (
@@ -182,6 +190,13 @@ class OperationsRequestCollectionView(APIView):
                 OpenApiParameter.QUERY,
                 enum=list(ARCHETYPES),
                 description="Crew hire (A3_TIME_BLOCK) or custom project (A5_CUSTOM_PROJECT).",
+            ),
+            OpenApiParameter(
+                "stuck",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=list(STUCK_QUEUE_CODES),
+                description="Only the requests in this stuck queue (see the stuck-queue summary).",
             ),
             OpenApiParameter("q", OpenApiTypes.STR, OpenApiParameter.QUERY),
             CURSOR_PARAMETER,

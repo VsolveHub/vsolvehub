@@ -237,7 +237,7 @@ export function describeRegistrationPlan(
       (application?.service_area_ids.length ?? 0) > 0 ? "DONE" : "NOW",
       t("me.capability.plan.areas.title"),
       t("me.capability.plan.areas.why"),
-      { href: "/apply/work", label: t("me.capability.plan.areas.action") },
+      { href: "/apply/areas", label: t("me.capability.plan.areas.action") },
     ),
   );
 

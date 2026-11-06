@@ -1,10 +1,13 @@
 "use client";
 
-import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import { friendlyErrorMessage, queueRecoveryAction, usePagedList } from "@vsolve/query";
 import { Badge, Card, EmptyState, Field, Input, LoadMore, formatMoney } from "@vsolve/ui";
 import { ChevronRight, Phone } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+
+import { useStuckQueues } from "@/features/m2-requests/queries";
 
 import { useListingCounts } from "@/features/money/money-tab";
 import { filterChipStyles } from "@/features/money/service-tabs";
@@ -16,6 +19,7 @@ import {
   REQUEST_STATUS_LABEL,
   fetchWorkforceRequestsPage,
   type RequestGroupKey,
+  type StuckQueueCode,
   type WorkforceArchetype,
   type WorkforceRequestRow,
 } from "../queries";
@@ -86,19 +90,45 @@ function RequestCard({ row }: { row: WorkforceRequestRow }) {
   );
 }
 
+/** What clears each stuck queue, in an operator's words. An unknown action shows its code. */
+const RECOVERY_LABEL: Record<string, string> = {
+  rematch: "rematch it",
+  close_expired: "close it as expired",
+  release_offer_hold: "release the offer hold",
+  reconcile_payment: "reconcile the payment",
+  lapse_to_operations: "hand the cancellation to Operations",
+};
+
 /**
  * Every crew and project request, newest first, searchable and filtered on the server. Opening
  * one goes to its timeline, where rematch, deadline, reclassification and refund review live.
+ *
+ * The stuck queues are a filter here, not a tab of their own: the old tab showed only how deep
+ * each queue was, and opening one meant pasting a request id.
  */
 export function WorkforceRequests() {
+  const params = useSearchParams();
   const [group, setGroup] = useState<RequestGroupKey>("open");
+  const [stuck, setStuck] = useState<StuckQueueCode | null>(
+    () => (params.get("stuck") as StuckQueueCode | null) || null,
+  );
   const [archetype, setArchetype] = useState<WorkforceArchetype | "">("");
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
   const counts = useListingCounts("workforce");
+  const queues = useStuckQueues();
+  const stuckQueues = (queues.data?.queues ?? []).filter((queue) => queue.depth > 0);
+  const selectedQueue = (queues.data?.queues ?? []).find((queue) => queue.code === stuck) ?? null;
+  const recovery = selectedQueue ? queueRecoveryAction(selectedQueue) : null;
 
-  const groupFilters = REQUEST_GROUPS.find((entry) => entry.key === group)?.filters ?? {};
-  const filters = { ...groupFilters, archetype: archetype || undefined, q: q || undefined };
+  // A stuck queue already means "open and past a deadline", so it replaces the stage filter.
+  const groupFilters = stuck ? {} : (REQUEST_GROUPS.find((entry) => entry.key === group)?.filters ?? {});
+  const filters = {
+    ...groupFilters,
+    stuck: stuck ?? undefined,
+    archetype: archetype || undefined,
+    q: q || undefined,
+  };
   const requests = usePagedList(["ops-workforce-requests", filters], (cursor) =>
     fetchWorkforceRequestsPage(cursor, filters),
   );
@@ -114,9 +144,12 @@ export function WorkforceRequests() {
               <button
                 key={entry.key}
                 type="button"
-                aria-pressed={group === entry.key}
-                className={filterChipStyles(group === entry.key)}
-                onClick={() => setGroup(entry.key)}
+                aria-pressed={!stuck && group === entry.key}
+                className={filterChipStyles(!stuck && group === entry.key)}
+                onClick={() => {
+                  setStuck(null);
+                  setGroup(entry.key);
+                }}
               >
                 {entry.label}
                 {typeof count === "number" ? <span className="ml-1.5 tabular-nums opacity-70">{count}</span> : null}
@@ -138,6 +171,42 @@ export function WorkforceRequests() {
           ))}
         </div>
       </div>
+
+      {stuckQueues.length > 0 || stuck ? (
+        <div className="flex flex-col gap-2 rounded-card border border-warning-line bg-warning-surface p-3">
+          <div role="group" aria-label="Stuck requests" className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-warning-text">Stuck:</span>
+            {stuckQueues.map((queue) => (
+              <button
+                key={queue.code}
+                type="button"
+                aria-pressed={stuck === queue.code}
+                className={filterChipStyles(stuck === queue.code)}
+                onClick={() => setStuck(stuck === queue.code ? null : (queue.code as StuckQueueCode))}
+              >
+                {queue.queue_label}
+                <span className="ml-1.5 tabular-nums opacity-70">{queue.depth}</span>
+              </button>
+            ))}
+            {stuck ? (
+              <button
+                type="button"
+                className="text-sm font-semibold text-text-link hover:underline"
+                onClick={() => setStuck(null)}
+              >
+                Show all requests
+              </button>
+            ) : null}
+          </div>
+          {selectedQueue ? (
+            <p className="text-sm text-text-secondary">
+              {recovery
+                ? `Open a request to ${RECOVERY_LABEL[recovery] ?? recovery}.`
+                : "No automatic fix for these. Open each request and decide what happens next."}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <Field label="Search">
         <Input

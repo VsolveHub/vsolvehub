@@ -4,12 +4,13 @@ import { Platform, Pressable, useWindowDimensions, View } from "react-native";
 
 import { toggle } from "../model/draft";
 import { useApplicationReference } from "../reference-queries";
-import { useApplicationEditor } from "./application-editor";
+import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 import { SelectableRow } from "./selectable-row";
 
 export function AreasStep() {
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
+  useProceedDisabled(draft.serviceAreaIds.length === 0);
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 768;
 
@@ -92,7 +93,6 @@ export function AreasStep() {
               disabled={isReadOnly}
               onChange={() => update({ serviceAreaIds: toggle(draft.serviceAreaIds, area.id) })}
               label={area.name}
-              caption={area.timezone || undefined}
             />
           </View>
         ))}
@@ -103,6 +103,9 @@ export function AreasStep() {
           * Please select at least one service location.
         </Text>
       ) : null}
+      <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 18, color: "#64748b" }}>
+        {"Can't find your area? We are adding more. Ask us from Help and we will tell you when it opens."}
+      </Text>
     </View>
   );
 }

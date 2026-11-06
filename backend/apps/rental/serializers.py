@@ -521,6 +521,38 @@ class RentalPlatformFeeSerializer(serializers.Serializer[dict[str, Any]]):
     )
 
 
+class RentalPlatformFeeVersionSerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    version = serializers.IntegerField()
+    percent = serializers.IntegerField()
+    effective_from = serializers.DateTimeField()
+    approval_reference = serializers.CharField()
+    created_by_name = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField()
+
+    def get_created_by_name(self, version: Any) -> str:
+        return version.created_by.full_name if version.created_by else ""
+
+
+class OpsRentalPlatformFeeSerializer(serializers.Serializer[Any]):
+    percent = serializers.IntegerField(help_text="In force now. 0 when no version is.")
+    current = RentalPlatformFeeVersionSerializer(allow_null=True)
+    upcoming = RentalPlatformFeeVersionSerializer(
+        many=True, help_text="Scheduled, not yet in force. Soonest first; can be withdrawn."
+    )
+    history = RentalPlatformFeeVersionSerializer(
+        many=True, help_text="Earlier versions, newest first."
+    )
+
+
+class RentalPlatformFeeScheduleSerializer(serializers.Serializer[Any]):
+    percent = serializers.IntegerField(min_value=0, max_value=100)
+    approval_reference = serializers.CharField(max_length=120)
+    effective_from = serializers.DateTimeField(
+        required=False, help_text="When it takes effect. Leave out to take effect now."
+    )
+
+
 class RentalModerationSerializer(serializers.Serializer[dict[str, Any]]):
     action = serializers.ChoiceField(choices=["APPROVE", "REJECT", "REMOVE", "REINSTATE"])
     reason = serializers.CharField(max_length=480)

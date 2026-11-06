@@ -1,5 +1,66 @@
 # API Contract Changelog
 
+## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
+
+Additive.
+
+- **Added** `stuck` on `GET /operations/requests/`: only the requests in one stuck queue
+  (`unmatched`, `under_quoted`, `sla_breached`, `unconfirmed`, `inactive`, `unreconciled`,
+  `cancellation_unanswered`, `case_response_overdue`). The codes and their definitions are the
+  same as the stuck-queue summary's, so a queue's depth and its listed requests cannot disagree.
+  A case past its deadline that is not about a request counts in the depth but has no row.
+  `400` for any other code.
+- **Changed** `POST /operations/partners/import/` to proposal 0029, replacing the untyped endpoint.
+  `multipart/form-data` with `file` and `mode` (`check` or `import`; replaces the string
+  `dry_run`). `check` validates and changes nothing. `import` needs `Idempotency-Key`, re-checks
+  the file and creates every ready row in one transaction: a user, the partner role, a profile and
+  a **DRAFT** application (plus one service area and its skills for `SERVICES`), with an
+  `operations_import` transition naming the importer. Nobody is approved. Responds
+  `PartnerImportResult` (`mode`, `file_sha256`, `summary`, `rows[]` with `problems[]` per row).
+  Errors: `400 import_file_missing | import_file_invalid | import_columns_invalid |
+  import_too_many_rows`, `413 import_file_too_large`, `422 import_has_row_errors`,
+  `409 import_conflict`. Behaviour change: the old endpoint created bare profiles with no
+  application, which reviewers never saw.
+- **Added** `GET /operations/customers/` (`?q=` a name, or a mobile number typed any way;
+  cursor-paged, newest first): `OperationsCustomerRow` with `is_blocked` and `is_partner`.
+- **Added** `GET /operations/customers/{customer_id}/` (`OperationsCustomerRecord`): contact
+  details, `is_blocked` and the latest `block` (reason, when, by whom), `partner_id` when the person
+  is also a partner, `wallet_balance_paise`, `coins_spendable`, the 25 most recent `bookings` across
+  home visits, rentals, stays and crew or project requests, `open_quotes` (unpaid, unexpired quotes
+  Operations can check out for them), and `open_cases`. `404` for anyone who is not a customer.
+- **Added** `POST /operations/customers/{customer_id}/block/` (`blocked`, `reason`): blocks or
+  unblocks the account, revokes every session on block, and writes an access-audit row. Staff
+  accounts and the caller's own account are refused (`400 account_block_refused`). Repeating the
+  current state changes nothing.
+- **Changed** sign-in for a blocked account: a correct OTP, or a Firebase token, for an inactive
+  account now answers `403 account_blocked` ("This account is blocked. Contact Vsolve support.")
+  instead of signing in a session that then silently failed.
+- **Added** `POST /operations/bookings/{booking_id}/cancel/` (`expected_version`, `reason`,
+  `full_refund`; `Idempotency-Key`; recent Operations step-up): Operations cancels a home-service
+  visit and refunds it in one step, through the customer cancellation's refund and reservation
+  release. `full_refund: true` waives the fee (recorded as waiver `operations`); `false` applies the
+  customer's fee ladder. Refused, as for the customer, once work has started. Answers
+  `OperationsBooking`.
+- **Added** `operations_cancellation` on `OperationsBooking`: `refundable_paise`,
+  `policy_fee_paise`, `policy_fee_waiver`, `currency` — the two amounts the confirm step offers —
+  or `null` when the visit cannot be cancelled.
+- **Added** `GET /operations/partners/{partner_id}/activity/` (`OperationsPartnerActivity`): the
+  partner's payout `balance` (available, withdrawable, clearing, held, pending, reserved, paid —
+  the same figures as payouts) and their 25 most recent `bookings` across home visits, rental items,
+  hosted stays and crew or project engagements.
+- **Changed** the rental platform fee to versions, like the commercial policy. `GET
+  /ops/rentals/platform-fee` now answers `OpsRentalPlatformFee`: `percent` (in force now),
+  `current`, `upcoming` and `history` (`RentalPlatformFeeVersion`: `version`, `percent`,
+  `effective_from`, `approval_reference`, `created_by_name`). **Removed** `PUT`; **added** `POST`
+  (`percent`, `approval_reference`, optional `effective_from`, default now) which adds a version and
+  answers `201`. It is refused (`400`) without an approval reference, when it starts in the past, or
+  when it does not start after the latest version. **Added** `DELETE
+  /ops/rentals/platform-fee/{version_id}` to withdraw a version that has not taken effect. The
+  public `GET /rentals/platform-fee` is unchanged. A migration copies the existing fee into
+  version 1; bookings already store their own fee and are untouched.
+- **Added** `phone_number` on `OperationsPartnerDetail` (`GET /operations/partners/{partner_id}/`),
+  so the record can call the partner; the directory rows already had it.
+
 ## 1.97.0 - Job listings publish their photos
 
 Additive.

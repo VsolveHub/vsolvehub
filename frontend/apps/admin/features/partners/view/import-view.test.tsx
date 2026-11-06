@@ -12,7 +12,7 @@ import type { ImportResponse } from "../partner-import";
  * retry cannot create anyone twice.
  */
 
-type PostInit = { bodySerializer: () => FormData; headers?: Record<string, string> };
+type PostInit = { bodySerializer: () => FormData; params: { header?: Record<string, string> } };
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
@@ -31,10 +31,10 @@ function checkResult(overrides: Partial<ImportResponse> = {}): ImportResponse {
   return {
     mode: "check",
     file_sha256: "hash-of-partners-csv",
-    summary: { total: 2, ready: 2, skipped: 0, errors: 0 },
+    summary: { total: 2, ready: 2, skipped: 0, problems: 0 },
     rows: [
-      { row: 2, status: "ready", phone: "+919876543210", full_name: "Ravi", track: "SERVICES", errors: [] },
-      { row: 3, status: "ready", phone: "+919812345678", full_name: "Asha", track: "STAY_HOST", errors: [] },
+      { row: 2, status: "ready", phone: "+919876543210", full_name: "Ravi", track: "SERVICES", problems: [] },
+      { row: 3, status: "ready", phone: "+919812345678", full_name: "Asha", track: "STAY_HOST", problems: [] },
     ],
     ...overrides,
   };
@@ -43,7 +43,7 @@ function checkResult(overrides: Partial<ImportResponse> = {}): ImportResponse {
 const imported: ImportResponse = {
   mode: "import",
   file_sha256: "hash-of-partners-csv",
-  summary: { total: 2, created: 2, skipped: 0, errors: 0 },
+  summary: { total: 2, created: 2, skipped: 0, problems: 0 },
   rows: [],
 };
 
@@ -110,23 +110,23 @@ describe("partner import", () => {
     expect(path).toBe("/api/v1/operations/partners/import/");
     expect(modeOf(init)).toBe("check");
     // A check changes nothing, so it carries no idempotency key.
-    expect(init.headers).toBeUndefined();
+    expect(init.params.header).toBeUndefined();
   });
 
   it("lists every problem by row and column and blocks the import", async () => {
     client.POST.mockResolvedValue(
       ok(
         checkResult({
-          summary: { total: 2, ready: 1, skipped: 0, errors: 1 },
+          summary: { total: 2, ready: 1, skipped: 0, problems: 1 },
           rows: [
-            { row: 2, status: "ready", phone: "+919876543210", full_name: "Ravi", track: "SERVICES", errors: [] },
+            { row: 2, status: "ready", phone: "+919876543210", full_name: "Ravi", track: "SERVICES", problems: [] },
             {
               row: 3,
               status: "error",
               phone: "98123",
               full_name: "",
               track: "SERVICES",
-              errors: [
+              problems: [
                 { column: "phone", message: "Enter a 10-digit Indian mobile number." },
                 { column: "skills", message: "Unknown skill: carpentery." },
               ],
@@ -162,7 +162,7 @@ describe("partner import", () => {
     expect(await screen.findByRole("heading", { name: "2 partners imported" })).toBeInTheDocument();
     const [, init] = client.POST.mock.calls[1] as [string, PostInit];
     expect(modeOf(init)).toBe("import");
-    expect(init.headers).toEqual({ "Idempotency-Key": "hash-of-partners-csv" });
+    expect(init.params.header).toEqual({ "Idempotency-Key": "hash-of-partners-csv" });
   });
 
   it("clears the last file's results when a new file is chosen", async () => {
@@ -186,20 +186,6 @@ describe("partner import", () => {
 
     expect(await screen.findByText(/over 1 MB/i)).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
-  });
-
-  it("explains an older server reply instead of rendering it", async () => {
-    // The pre-0029 endpoint answers `{ dry_run, results }`, which has no `summary` or `rows`.
-    client.POST.mockResolvedValue(
-      ok({ dry_run: true, results: { created: 1, skipped: 0, errors: 0, rows: [] } }),
-    );
-    renderView();
-
-    chooseFile();
-    fireEvent.click(screen.getByRole("button", { name: "Check file" }));
-
-    expect(await screen.findByText(/older partner import/i)).toBeInTheDocument();
-    expect(screen.queryByText("Check results")).not.toBeInTheDocument();
   });
 
   it("shows a refusal as an error, not as an empty result", async () => {

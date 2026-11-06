@@ -157,7 +157,6 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
   const [draft, setDraft] = useState<RefundDraft>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [lookupId, setLookupId] = useState("");
 
   const create = useRequestRefund();
   const reconcile = useReconcileRefund();
@@ -188,11 +187,12 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
   return (
     <div>
       <Card className="p-5">
-        <h2 className="text-base font-bold text-text">Refund visits on an Order</h2>
+        <h2 className="text-base font-bold text-text">Refund several visits on one Order</h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          Refunds are per visit. Django works out how much is left to refund on
-          each one — this console does not choose an amount, and cannot refund
-          more than was paid.
+          To refund or cancel one visit, open it from Home services › Bookings — no ids needed.
+          This form is for refunding several visits of one Order together. Refunds are per
+          visit: Django works out how much is left on each one, and cannot refund more than was
+          paid.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -343,49 +343,11 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
       ) : null}
 
       <Card className="mt-5 p-5">
-        <h2 className="text-base font-bold text-text">Reconcile a refund by id</h2>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          There is no list of refunds and no staff lookup — the only
-          published read is the Customer&apos;s own. So a refund from a previous
-          session is reached by id, from the case you are working, and
-          reconciling it is what shows you where it got to.
-        </p>
-
-        <div className="mt-4 max-w-sm">
-          <Field label="Refund id" required>
-            <Input
-              value={lookupId}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => {
-                setLookupId(event.target.value);
-                reconcile.reset();
-              }}
-            />
-          </Field>
-        </div>
-
-        <Button
-          className="mt-4"
-          variant="outline"
-          loading={reconcile.isPending}
-          loadingLabel="Asking the provider"
-          onClick={() =>
-            reconcile.mutate(lookupId, {
-              onError: (error) => raiseStepUp(error, "the provider was asked"),
-            })
-          }
-        >
-          Reconcile this refund
-        </Button>
-      </Card>
-
-      <Card className="mt-5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-text">Refunds ledger & history</h2>
             <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-              Published operations audit feed of all platform refunds. Direct reconciliation by id remains available above.
+              Every platform refund. Reconcile asks the provider where a refund has got to.
             </p>
           </div>
           <Button
@@ -448,7 +410,6 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
                         size="sm"
                         loading={reconcile.isPending && reconcile.variables === r.id}
                         onClick={() => {
-                          setLookupId(r.id);
                           reconcile.mutate(r.id, {
                             onError: (error) => raiseStepUp(error, "the provider was asked"),
                           });

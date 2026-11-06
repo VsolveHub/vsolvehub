@@ -842,6 +842,133 @@ def _oldest(queryset: Any, field: str) -> datetime | None:
     return value if isinstance(value, datetime) else None
 
 
+@dataclass(frozen=True, slots=True)
+class _StuckDefinition:
+    code: str
+    queue_label: str
+    members: Any
+    oldest_field: str
+    recovery_action: str
+    #: The field on `members` that names the request. `id` when the members are requests.
+    requirement_field: str
+
+
+def _stuck_definitions(moment: datetime) -> list[_StuckDefinition]:
+    """The eight queues, defined once, so their depths and their members cannot disagree."""
+    live = ~Q(status__in=CustomerRequirement.CLOSED_STATUSES)
+
+    unmatched = (
+        CustomerRequirement.objects.filter(live, status=CustomerRequirement.Status.MATCHING)
+        .annotate(invitation_count=Count("invitations"))
+        .filter(invitation_count=0)
+    )
+    under_quoted = CustomerRequirement.objects.filter(
+        live,
+        status=CustomerRequirement.Status.MATCHING,
+        first_quote_due_at__isnull=False,
+        first_quote_due_at__lte=moment,
+    )
+    expired = CustomerRequirement.objects.filter(
+        live, service_by__isnull=False, service_by__lt=moment.date()
+    )
+    unconfirmed = RateCardBooking.objects.filter(
+        status=RateCardBooking.Status.OFFER_HELD,
+        hold_expires_at__isnull=False,
+        hold_expires_at__lte=moment,
+    )
+    inactive_engagements = Engagement.objects.filter(
+        status__in=(Engagement.Status.PENDING_START, Engagement.Status.ACTIVE),
+        updated_at__lt=moment - timedelta(days=14),
+    )
+    unreconciled_fees = BookingFee.objects.filter(
+        status=BookingFee.Status.PENDING,
+        created_at__lt=moment - timedelta(hours=1),
+    )
+    lapsed_cancellations = RequirementCancellation.objects.filter(
+        status=RequirementCancellation.Status.AWAITING_CONFIRMATION,
+        confirmation_due_at__isnull=False,
+        confirmation_due_at__lte=moment,
+    )
+    overdue_cases = OperationsCase.objects.filter(
+        response_due_at__isnull=False, response_due_at__lte=moment
+    ).exclude(status__in=tuple(TERMINAL_CASE_STATUSES))
+
+    return [
+        _StuckDefinition(
+            "unmatched", "Matching with nobody invited", unmatched, "submitted_at", "rematch", "id"
+        ),
+        _StuckDefinition(
+            "under_quoted",
+            "Past the first-quote promise",
+            under_quoted,
+            "first_quote_due_at",
+            "rematch",
+            "id",
+        ),
+        _StuckDefinition(
+            "sla_breached",
+            "Needed-by date has passed",
+            expired,
+            "submitted_at",
+            "close_expired",
+            "id",
+        ),
+        _StuckDefinition(
+            "unconfirmed",
+            "Accepted offer held past its expiry",
+            unconfirmed,
+            "hold_expires_at",
+            "release_offer_hold",
+            "requirement_id",
+        ),
+        _StuckDefinition(
+            "inactive",
+            "Engagement with no movement for a fortnight",
+            inactive_engagements,
+            "updated_at",
+            "",
+            "requirement_id",
+        ),
+        _StuckDefinition(
+            "unreconciled",
+            "Booking fee awaiting the provider",
+            unreconciled_fees,
+            "created_at",
+            "reconcile_payment",
+            "requirement_id",
+        ),
+        _StuckDefinition(
+            "cancellation_unanswered",
+            "Cancellation nobody confirmed or disputed",
+            lapsed_cancellations,
+            "confirmation_due_at",
+            "lapse_to_operations",
+            "requirement_id",
+        ),
+        _StuckDefinition(
+            "case_response_overdue",
+            "Case past the parties' response deadline",
+            overdue_cases,
+            "response_due_at",
+            "",
+            "requirement_id",
+        ),
+    ]
+
+
+#: Every stuck-queue code, in display order. The `?stuck=` filter accepts exactly these.
+STUCK_QUEUE_CODES: tuple[str, ...] = (
+    "unmatched",
+    "under_quoted",
+    "sla_breached",
+    "unconfirmed",
+    "inactive",
+    "unreconciled",
+    "cancellation_unanswered",
+    "case_response_overdue",
+)
+
+
 def stuck_queues(*, at: datetime | None = None) -> list[StuckQueue]:
     """Every M2 record that has stopped moving and is nobody's inbox item yet.
 
@@ -856,109 +983,30 @@ def stuck_queues(*, at: datetime | None = None) -> list[StuckQueue]:
     clock here".
     """
     moment = at or timezone.now()
-    live = ~Q(status__in=CustomerRequirement.CLOSED_STATUSES)
-
-    unmatched = (
-        CustomerRequirement.objects.filter(live, status=CustomerRequirement.Status.MATCHING)
-        .annotate(invitation_count=Count("invitations"))
-        .filter(invitation_count=0)
-    )
-
-    under_quoted = CustomerRequirement.objects.filter(
-        live,
-        status=CustomerRequirement.Status.MATCHING,
-        first_quote_due_at__isnull=False,
-        first_quote_due_at__lte=moment,
-    )
-
-    expired = CustomerRequirement.objects.filter(
-        live, service_by__isnull=False, service_by__lt=moment.date()
-    )
-
-    unconfirmed = RateCardBooking.objects.filter(
-        status=RateCardBooking.Status.OFFER_HELD,
-        hold_expires_at__isnull=False,
-        hold_expires_at__lte=moment,
-    )
-
-    inactive_engagements = Engagement.objects.filter(
-        status__in=(Engagement.Status.PENDING_START, Engagement.Status.ACTIVE),
-        updated_at__lt=moment - timedelta(days=14),
-    )
-
-    unreconciled_fees = BookingFee.objects.filter(
-        status=BookingFee.Status.PENDING,
-        created_at__lt=moment - timedelta(hours=1),
-    )
-
-    lapsed_cancellations = RequirementCancellation.objects.filter(
-        status=RequirementCancellation.Status.AWAITING_CONFIRMATION,
-        confirmation_due_at__isnull=False,
-        confirmation_due_at__lte=moment,
-    )
-
-    overdue_cases = OperationsCase.objects.filter(
-        response_due_at__isnull=False, response_due_at__lte=moment
-    ).exclude(status__in=tuple(TERMINAL_CASE_STATUSES))
-
     return [
         StuckQueue(
-            code="unmatched",
-            queue_label="Matching with nobody invited",
-            depth=unmatched.count(),
-            oldest_at=_oldest(unmatched, "submitted_at"),
-            recovery_action="rematch",
-        ),
-        StuckQueue(
-            code="under_quoted",
-            queue_label="Past the first-quote promise",
-            depth=under_quoted.count(),
-            oldest_at=_oldest(under_quoted, "first_quote_due_at"),
-            recovery_action="rematch",
-        ),
-        StuckQueue(
-            code="sla_breached",
-            queue_label="Needed-by date has passed",
-            depth=expired.count(),
-            oldest_at=_oldest(expired, "submitted_at"),
-            recovery_action="close_expired",
-        ),
-        StuckQueue(
-            code="unconfirmed",
-            queue_label="Accepted offer held past its expiry",
-            depth=unconfirmed.count(),
-            oldest_at=_oldest(unconfirmed, "hold_expires_at"),
-            recovery_action="release_offer_hold",
-        ),
-        StuckQueue(
-            code="inactive",
-            queue_label="Engagement with no movement for a fortnight",
-            depth=inactive_engagements.count(),
-            oldest_at=_oldest(inactive_engagements, "updated_at"),
-            recovery_action="",
-        ),
-        StuckQueue(
-            code="unreconciled",
-            queue_label="Booking fee awaiting the provider",
-            depth=unreconciled_fees.count(),
-            oldest_at=_oldest(unreconciled_fees, "created_at"),
-            recovery_action="reconcile_payment",
-        ),
-        StuckQueue(
-            code="cancellation_unanswered",
-            queue_label="Cancellation nobody confirmed or disputed",
-            depth=lapsed_cancellations.count(),
-            oldest_at=_oldest(lapsed_cancellations, "confirmation_due_at"),
-            recovery_action="lapse_to_operations",
-        ),
-        StuckQueue(
-            code="case_response_overdue",
-            queue_label="Case past the parties' response deadline",
-            depth=overdue_cases.count(),
-            oldest_at=_oldest(overdue_cases, "response_due_at"),
-            recovery_action="",
-        ),
+            code=definition.code,
+            queue_label=definition.queue_label,
+            depth=definition.members.count(),
+            oldest_at=_oldest(definition.members, definition.oldest_field),
+            recovery_action=definition.recovery_action,
+        )
+        for definition in _stuck_definitions(moment)
     ]
+
+
+def stuck_requirement_ids(code: str, *, at: datetime | None = None) -> Any:
+    """The requests in one stuck queue, as a subquery of ids for the requests list.
+
+    A case past its deadline that is not about a request has no request to list, so it is left out
+    here while still counting in that queue's depth.
+    """
+    moment = at or timezone.now()
+    for definition in _stuck_definitions(moment):
+        if definition.code == code:
+            field = definition.requirement_field
+            return definition.members.filter(**{f"{field}__isnull": False}).values(field)
+    raise ValueError(f"Unknown stuck queue: {code}")
 
 
 # ---------------------------------------------------------------------------

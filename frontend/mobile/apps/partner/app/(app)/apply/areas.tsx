@@ -5,7 +5,7 @@ export default function AreasPage() {
   return (
     <ApplicationEditor
       title="Where you work"
-      description="Pick the areas you are willing to travel to. You will only be offered jobs inside them."
+      description="Pick the areas you can travel to. You will only get jobs inside them."
     >
       <AreasStep />
     </ApplicationEditor>

@@ -18,6 +18,7 @@ from apps.assignments.ranking import (
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
 from apps.commerce.models import Booking, PaymentAttempt
+from apps.locations.pauses import is_area_paused
 from apps.notifications.services import request_notification
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
@@ -421,6 +422,13 @@ def dispatch_unit(
     apart — an offer is a question, a reservation is already an answer.
     """
 
+    if is_area_paused(unit.service_area):
+        # A paused area starts no new work. A booking still being checked out goes back to the
+        # customer to re-plan; a replacement search returns "no offer" and its caller waits
+        # (`fulfilment.replacement`) instead of treating the pause as nobody being left.
+        if not _is_post_booking_recovery(group, unit):
+            _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
+        return None
     if is_same_day_unit(unit=unit):
         return _create_offer(group=group, unit=unit, offer_ttl_seconds=offer_ttl_seconds)
     return directly_assign(unit=unit)

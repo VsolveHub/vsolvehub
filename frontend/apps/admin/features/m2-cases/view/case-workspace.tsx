@@ -25,6 +25,12 @@ export const CASE_VIEWS = [
   { key: "mine", label: "Mine", filters: { status: STILL_OPEN, owner: "me" } },
   { key: "late", label: "Past deadline", filters: { overdue: true } },
   { key: "open", label: "All open", filters: { status: STILL_OPEN } },
+  {
+    key: "off-platform",
+    label: "Paid outside the app",
+    filters: { status: STILL_OPEN, kind: "OFF_PLATFORM" },
+  },
+  { key: "chargebacks", label: "Chargebacks", filters: { status: STILL_OPEN, kind: "CHARGEBACK" } },
   { key: "closed", label: "Closed", filters: { status: "RESOLVED,CANCELLED" } },
 ] as const satisfies readonly { key: string; label: string; filters: CaseFilters }[];
 

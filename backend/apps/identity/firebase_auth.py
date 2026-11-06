@@ -17,6 +17,7 @@ from apps.identity.models import AccessAuditEvent, User, UserRole
 from apps.identity.phone import InvalidPhoneNumberError, normalize_phone_number
 from apps.identity.services import (
     FIREBASE_INTENDED_ROLES,
+    AccountBlockedError,
     NoAccountForRoleError,
     OtpVerificationError,
     provision_login_user,
@@ -206,7 +207,7 @@ def verify_firebase_login(
                 "reason": "user_inactive",
             },
         )
-        raise OtpVerificationError("User account is inactive.")
+        raise AccountBlockedError("This account is blocked. Contact Vsolve support.")
 
     # One-time token use: record token hash in cache with SET NX and TTL
     if not _spend_token(id_token, max_age):

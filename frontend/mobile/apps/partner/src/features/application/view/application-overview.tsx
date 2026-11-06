@@ -24,7 +24,8 @@ import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "reac
 
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { canSubmit, isEditable, rejectedDocuments } from "../model/readiness";
-import { usePartnerApplication, useUpdateApplication } from "../queries";
+import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { ApplicationStatusBanner } from "./status-banner";
 
 type Application = Schemas["PartnerApplication"];
@@ -54,13 +55,12 @@ export function ApplicationOverview() {
     );
   }
 
-  // If application is not started yet, or has no completed steps yet, show NotStarted track picker
+  // As on the website: the choice of how to join shows until the partner has made it. The server
+  // creates an untouched Services draft on first sign-in, so "no application" alone never shows it.
   const application = query.data;
-  const summary = application ? progressSummary(application) : null;
-  const hasStarted = application && application.display_name && summary && summary.done > 0;
 
-  if (isMissing || !application || !hasStarted) {
-    return <NotStarted application={application} />;
+  if (isMissing || !application || isUnchosenDraft(application)) {
+    return <NotStarted />;
   }
 
   return <Standing application={application} />;
@@ -70,23 +70,13 @@ export function ApplicationOverview() {
  * NotStarted — 100% replica of Web partner portal /apply (matching Images 1, 3, 4)
  * Shown when the user hasn't started their application yet or wants to pick their track.
  */
-function NotStarted({ application }: { application?: Application }) {
+function NotStarted() {
   const router = useRouter();
   const start = useUpdateApplication();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
-  const handleSelectTrack = (track: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER") => {
-    if (track === "SERVICES") {
-      if (application) {
-        start.mutate({ track: "SERVICES" }, { onSuccess: () => router.push("/apply/about") });
-      } else {
-        router.push("/apply/about");
-      }
-    } else {
-      start.mutate({ track }, { onSuccess: () => router.push("/apply/about") });
-    }
-  };
+  const [chosen, setChosen] = useState<StartTrack | null>(null);
 
   return (
     <View style={{ width: "100%", rowGap: 24, paddingBottom: 40 }}>
@@ -170,51 +160,127 @@ function NotStarted({ application }: { application?: Application }) {
             color: "#453f37",
           }}
         >
-          Tap one to start your application.
+          Pick one to see what happens next.
         </Text>
       </View>
 
-      {/* 3. Track Cards Grid (3-columns on desktop, stacked on mobile) Matching Image 4 */}
-      <View
-        style={{
-          flexDirection: isDesktop ? "row" : "column",
-          gap: 12,
-          width: "100%",
-        }}
-      >
-        <TrackCard
-          isDesktop={isDesktop}
-          icon={<Wrench size={22} color="#ea580c" />}
-          title="Offer services"
-          description="Repairs, cleaning and other work at customers' homes. You choose your areas and hours."
-          onPress={() => handleSelectTrack("SERVICES")}
-          disabled={start.isPending}
-        />
-
-        <TrackCard
-          isDesktop={isDesktop}
-          icon={<BedDouble size={22} color="#ea580c" />}
-          title="Stays"
-          description="Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about three minutes."
-          onPress={() => handleSelectTrack("STAY_HOST")}
-          disabled={start.isPending}
-        />
-
-        <TrackCard
-          isDesktop={isDesktop}
-          icon={<Package size={22} color="#ea580c" />}
-          title="Rent out items"
-          description="Tools and equipment. Same short application: your details, the agreements and an ID."
-          onPress={() => handleSelectTrack("RENTAL_OWNER")}
-          disabled={start.isPending}
-        />
+      {/* 3. The three ways to join, then what happens next for the one picked */}
+      <View accessibilityRole="radiogroup" style={{ gap: 12, width: "100%" }}>
+        {TRACK_CHOICES.map(({ track, title, description, Icon }) => (
+          <TrackCard
+            key={track}
+            icon={<Icon size={22} color="#ea580c" />}
+            title={title}
+            description={description}
+            selected={chosen === track}
+            onPress={() => setChosen(track)}
+          />
+        ))}
       </View>
 
-      {/* 4. Safety & Trust Checklist matching Image 4 */}
-      <View style={{ rowGap: 8, marginTop: 4 }}>
-        <PromiseItem text="Nothing is sent for review until you choose to send it" />
-        <PromiseItem text="Nothing is shared with customers until you are approved" />
+      {chosen ? (
+        <TrackPreview
+          track={chosen}
+          pending={start.isPending}
+          failed={start.isError}
+          onStart={() =>
+            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about") })
+          }
+          onBack={() => setChosen(null)}
+        />
+      ) : (
+        <View style={{ rowGap: 8, marginTop: 4 }}>
+          <PromiseItem text="Nothing is sent for review until you choose to send it" />
+          <PromiseItem text="Nothing is shared with customers until you are approved" />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const TRACK_CHOICES = [
+  {
+    track: "SERVICES",
+    title: "I do work at customers' homes",
+    description: "Electrician, plumber, cleaning, beauty, AC, pets, construction, events and more.",
+    Icon: Wrench,
+  },
+  {
+    track: "STAY_HOST",
+    title: "I have rooms to rent",
+    description: "PG, hostel, hotel or rooms.",
+    Icon: BedDouble,
+  },
+  {
+    track: "RENTAL_OWNER",
+    title: "I rent out tools or equipment",
+    description: "Tools, machinery, event or home items.",
+    Icon: Package,
+  },
+] as const;
+
+/** What a chosen way of joining asks for, before the applicant commits to it. */
+function TrackPreview({
+  track,
+  pending,
+  failed,
+  onStart,
+  onBack,
+}: {
+  track: StartTrack;
+  pending: boolean;
+  failed: boolean;
+  onStart: () => void;
+  onBack: () => void;
+}) {
+  const preview = trackPreview(track);
+  return (
+    <View
+      style={{
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#f87000",
+        backgroundColor: "#ffffff",
+        padding: 18,
+        rowGap: 14,
+      }}
+    >
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>What happens next</Text>
+        <Text style={{ fontSize: 13, color: "#453f37" }}>{preview.time}</Text>
       </View>
+      <View style={{ rowGap: 8 }}>
+        {preview.steps.map((step, index) => (
+          <View key={step.href} style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 9999,
+                backgroundColor: "#f4f1ec",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>{index + 1}</Text>
+            </View>
+            <Text style={{ fontSize: 14, color: "#00112e" }}>{step.label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={{ fontSize: 14, color: "#453f37" }}>You will need a government photo ID.</Text>
+      <View style={{ borderRadius: 10, backgroundColor: "#f4f1ec", padding: 12 }}>
+        <Text style={{ fontSize: 14, lineHeight: 20, color: "#00112e" }}>{preview.after}</Text>
+      </View>
+      {failed ? (
+        <Text style={{ fontSize: 14, color: "#be123c" }}>We could not start that. Please try again.</Text>
+      ) : null}
+      <Button size="lg" onPress={onStart} loading={pending}>
+        Start
+      </Button>
+      <Button variant="ghost" onPress={onBack} disabled={pending}>
+        Choose something else
+      </Button>
     </View>
   );
 }
@@ -223,36 +289,31 @@ function TrackCard({
   icon,
   title,
   description,
+  selected,
   onPress,
-  disabled,
-  isDesktop,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
+  selected: boolean;
   onPress: () => void;
-  disabled?: boolean;
-  isDesktop?: boolean;
 }) {
   return (
-    <Pressable cssInterop={false}
-      accessibilityRole="button"
+    <Pressable
+      cssInterop={false}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
       onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => ({
-        flex: isDesktop ? 1 : undefined,
+      style={{
         borderRadius: 16,
-        borderWidth: 1,
-        borderColor: pressed ? "#f87000" : "#e7e2da",
+        borderWidth: selected ? 2 : 1,
+        borderColor: selected ? "#f87000" : "#e7e2da",
         backgroundColor: "#ffffff",
-        padding: 16,
+        padding: selected ? 15 : 16,
         flexDirection: "row",
         alignItems: "center",
         columnGap: 14,
-        boxShadow: pressed
-          ? "0 4px 12px rgba(248, 112, 0, 0.15)"
-          : "0 1px 2px rgba(0, 0, 0, 0.05)",
-      })}
+      }}
     >
       <View
         style={{
@@ -269,40 +330,68 @@ function TrackCard({
       </View>
 
       <View style={{ flex: 1, rowGap: 4 }}>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "700",
-            color: "#00112e",
-          }}
-        >
-          {title}
-        </Text>
-        <Text
-          style={{
-            fontSize: 14,
-            lineHeight: 20,
-            color: "#453f37",
-          }}
-        >
-          {description}
-        </Text>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>{title}</Text>
+        <Text style={{ fontSize: 14, lineHeight: 20, color: "#453f37" }}>{description}</Text>
       </View>
 
       <View
         style={{
-          width: 32,
-          height: 32,
+          width: 24,
+          height: 24,
           borderRadius: 9999,
-          backgroundColor: "#f4f1ec",
+          borderWidth: 2,
+          borderColor: selected ? "#f87000" : "#cbd5e1",
+          backgroundColor: selected ? "#f87000" : "transparent",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
         }}
       >
-        <ChevronRight size={18} color="#00112e" />
+        {selected ? <Check size={14} color="#ffffff" strokeWidth={3} /> : null}
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * Switching between services, stays and rentals while the application is still a draft, as on
+ * the website. Only in DRAFT: once a reviewer has asked for changes, it stays what they looked at.
+ */
+function SwitchTrack({ current }: { current: string }) {
+  const router = useRouter();
+  const update = useUpdateApplication();
+  const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
+
+  return (
+    <View
+      style={{
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#e2e8f0",
+        backgroundColor: "#ffffff",
+        padding: 16,
+        rowGap: 10,
+      }}
+    >
+      <Text style={{ fontSize: 14, fontWeight: "700", color: "#00112e" }}>Signed up for the wrong thing?</Text>
+      <Text style={{ fontSize: 13, lineHeight: 18, color: "#64748b" }}>
+        You can switch until you send your application. Nothing you have filled in is lost.
+      </Text>
+      {others.map(({ track, title }) => (
+        <Button
+          key={track}
+          variant="outline"
+          size="sm"
+          disabled={update.isPending}
+          onPress={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about") })}
+        >
+          {title}
+        </Button>
+      ))}
+      {update.isError ? (
+        <Text style={{ fontSize: 13, color: "#be123c" }}>We could not start that. Please try again.</Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -341,11 +430,12 @@ function Standing({ application }: { application: Application }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
-  const steps = stepProgress(application).filter((step) => step.state !== "waypoint");
-  const summary = progressSummary(application);
+  const availability = usePartnerAvailability();
+  const steps = stepProgress(application, availability.data).filter((step) => step.state !== "waypoint");
+  const summary = progressSummary(application, availability.data);
   const rejected = rejectedDocuments(application);
   const editable = isEditable(application);
-  const ready = canSubmit(application);
+  const ready = canSubmit(application, availability.data);
   const percent = Math.round(summary.fraction * 100);
   const remaining = summary.total - summary.done;
   const nextHref = ready ? "/apply/review" : (summary.nextIncomplete?.href ?? "/apply/review");
@@ -450,8 +540,10 @@ function Standing({ application }: { application: Application }) {
             </View>
           ) : null}
 
+          {application.status === "DRAFT" ? <SwitchTrack current={application.track} /> : null}
+
           {/* Multi-crew Contractor Option */}
-          {application.track === "STAY_HOST" || application.track === "RENTAL_OWNER" ? null : (
+          {isListingTrack(application.track) ? null : (
             <View
               style={{
                 borderRadius: 20,

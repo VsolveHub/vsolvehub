@@ -19,8 +19,8 @@ export default function WorkPage() {
   }
   return (
     <ApplicationEditor
-      title="Your trades"
-      description="Choose your main categories and the job types you want under each one."
+      title="Your work"
+      description="Pick your trades and the jobs you take."
     >
       <WorkStep mainCategories={catalog.data.mainCategories} services={catalog.data.services} />
     </ApplicationEditor>

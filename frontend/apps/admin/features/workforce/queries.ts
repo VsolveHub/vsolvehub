@@ -1,15 +1,20 @@
-import { request, type Schemas } from "@vsolve/api-client";
+import { request, type Schemas, type operations } from "@vsolve/api-client";
 
 import { getApiClient } from "@/lib/api/browser";
 
 export type WorkforceRequestRow = Schemas["OperationsRequestRow"];
 export type WorkforceRequestPage = Schemas["OperationsRequestPage"];
 export type WorkforceArchetype = "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
+export type StuckQueueCode = NonNullable<
+  NonNullable<operations["operations_requests_list"]["parameters"]["query"]>["stuck"]
+>;
 
 export interface WorkforceRequestFilters {
   status?: string;
   open?: boolean;
   archetype?: WorkforceArchetype;
+  /** One stuck-queue code: only the requests in that queue. */
+  stuck?: StuckQueueCode;
   q?: string;
 }
 
@@ -25,6 +30,7 @@ export function fetchWorkforceRequestsPage(
           ...(filters.status ? { status: filters.status } : {}),
           ...(filters.open ? { open: true } : {}),
           ...(filters.archetype ? { archetype: filters.archetype } : {}),
+          ...(filters.stuck ? { stuck: filters.stuck } : {}),
           ...(filters.q ? { q: filters.q } : {}),
           ...(cursor ? { cursor } : {}),
         },

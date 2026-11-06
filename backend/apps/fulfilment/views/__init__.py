@@ -83,6 +83,7 @@ from .operations import (
     OperationsAssistedStartView,
     OperationsBookingCollectionView,
     OperationsBookingDetailView,
+    OperationsCancelBookingView,
     OperationsRecoverBookingView,
 )
 from .partner import (
@@ -130,6 +131,7 @@ __all__ = [
     "OperationsAssistedStartView",
     "OperationsBookingCollectionView",
     "OperationsBookingDetailView",
+    "OperationsCancelBookingView",
     "OperationsRecoverBookingView",
     "PartnerAbortView",
     "PartnerActiveBookingCursorPagination",

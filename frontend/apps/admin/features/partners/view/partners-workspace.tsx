@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { SplitView } from "@vsolve/ui";
@@ -9,8 +10,10 @@ import type { PartnerDirectoryFilters } from "@/features/partners/queries";
 
 export function PartnersWorkspace() {
   const [filters, setFilters] = useState<PartnerDirectoryFilters>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedIdRef = useRef<string | null>(null);
+  // `?partner=` opens one record, from a link on the customer record.
+  const params = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(() => params.get("partner"));
+  const selectedIdRef = useRef<string | null>(selectedId);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;

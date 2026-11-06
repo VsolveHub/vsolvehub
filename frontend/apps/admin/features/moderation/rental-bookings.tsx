@@ -17,6 +17,7 @@ import {
   formatMoney,
 } from "@vsolve/ui";
 import { Phone, Truck, Warehouse } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { useDebounced } from "@/features/shared/use-debounced";
@@ -43,7 +44,9 @@ function day(iso: string | null | undefined): string {
 export function RentalBookings() {
   const qc = useQueryClient();
   const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
+  // `?q=` opens the list on one booking, from a link on the customer record.
+  const params = useSearchParams();
+  const [search, setSearch] = useState(() => params.get("q") ?? "");
   const [cancelling, setCancelling] = useState<OpsRentalBooking | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");

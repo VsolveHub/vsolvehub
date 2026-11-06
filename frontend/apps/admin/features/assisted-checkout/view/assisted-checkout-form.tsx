@@ -1,10 +1,24 @@
 "use client";
 
 import { Badge, Button, Card, ErrorState, Field, Input } from "@vsolve/ui";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { Schemas } from "@vsolve/api-client";
 
-import { isConsentPurpose, isUuid, maskId } from "@/features/shared/identifiers";
+import {
+  isConsentPurpose,
+  isUuid,
+  maskId,
+} from "@/features/shared/identifiers";
+import {
+  isNotOfferable,
+  useCreateManualOffer,
+} from "@/features/manual-offer/queries";
+import {
+  PartnerPicker,
+  type PickedPartner,
+} from "@/features/partners/view/partner-picker";
 import {
   isInProgress,
   isKeyReused,
@@ -47,7 +61,8 @@ function validate(input: AssistedCheckoutInput): Record<string, string> {
   const errors: Record<string, string> = {};
 
   if (!isUuid(input.customerId)) {
-    errors.customerId = "Paste the Customer's id from the case you are working.";
+    errors.customerId =
+      "Paste the Customer's id from the case you are working.";
   }
   if (!isUuid(input.quoteId)) {
     errors.quoteId = "Paste the quote id the Customer agreed to.";
@@ -56,8 +71,12 @@ function validate(input: AssistedCheckoutInput): Record<string, string> {
     errors.consentPurpose =
       "Use the purpose exactly as it is recorded — letters, numbers, hyphens and underscores only.";
   }
-  if (input.consentVersion.trim() === "" || input.consentVersion.trim().length > 100) {
-    errors.consentVersion = "Name the version of the consent document they were read.";
+  if (
+    input.consentVersion.trim() === "" ||
+    input.consentVersion.trim().length > 100
+  ) {
+    errors.consentVersion =
+      "Name the version of the consent document they were read.";
   }
 
   return errors;
@@ -67,7 +86,9 @@ function CheckoutResult({ checkout }: { checkout: Schemas["Checkout"] }) {
   return (
     <Card className="mt-5 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-bold text-text">Checkout for this quote</h3>
+        <h3 className="text-base font-bold text-text">
+          Checkout for this quote
+        </h3>
         <Badge
           tone={
             checkout.status === "CANCELLED" || checkout.status === "EXPIRED"
@@ -94,12 +115,74 @@ function CheckoutResult({ checkout }: { checkout: Schemas["Checkout"] }) {
         The Customer pays from their own account. Send them to their bookings —
         this console does not take payment on their behalf.
       </p>
+      <OfferCheckout checkoutId={checkout.id} />
     </Card>
   );
 }
 
+/** Offer this checkout to a named partner, for a customer who asked for someone specific. */
+function OfferCheckout({ checkoutId }: { checkoutId: string }) {
+  const offer = useCreateManualOffer();
+  const [partner, setPartner] = useState<PickedPartner | null>(null);
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <h4 className="text-sm font-bold text-text">
+        Offer to a specific partner (optional)
+      </h4>
+      <div className="mt-2 max-w-md">
+        <PartnerPicker
+          value={partner}
+          onChange={(next) => {
+            setPartner(next);
+            offer.reset();
+          }}
+        />
+      </div>
+      {offer.isSuccess ? (
+        <p
+          role="status"
+          className="mt-3 text-sm font-semibold text-success-text"
+        >
+          Offer sent to {partner?.display_name}. It is theirs to accept.
+        </p>
+      ) : (
+        <Button
+          className="mt-3"
+          variant="outline"
+          disabled={partner === null}
+          loading={offer.isPending}
+          loadingLabel="Sending the offer"
+          onClick={() =>
+            partner &&
+            offer.mutate({
+              target: "checkout",
+              targetId: checkoutId,
+              partnerId: partner.id,
+            })
+          }
+        >
+          Send offer
+        </Button>
+      )}
+      {offer.isError ? (
+        <p role="alert" className="mt-2 text-sm text-danger-text">
+          {isNotOfferable(offer.error)
+            ? "This checkout cannot be offered right now."
+            : "The offer was not sent. Try again."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function AssistedCheckoutForm() {
-  const [input, setInput] = useState<AssistedCheckoutInput>(EMPTY);
+  // Opened from a customer's record ("Check out for them"), which names the customer and quote.
+  const params = useSearchParams();
+  const [input, setInput] = useState<AssistedCheckoutInput>(() => ({
+    ...EMPTY,
+    customerId: params.get("customer") ?? "",
+    quoteId: params.get("quote") ?? "",
+  }));
   const [submitted, setSubmitted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const create = useCreateAssistedCheckout();
@@ -115,10 +198,33 @@ export function AssistedCheckoutForm() {
     setConfirming(false);
   }
 
+  const opened = Boolean(params.get("customer") && params.get("quote"));
+  if (!opened) {
+    return (
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-text">Book for a customer</h2>
+        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+          Start from the customer. Open them in{" "}
+          <Link
+            href="/operations/customers"
+            className="font-semibold text-text-link hover:underline"
+          >
+            Customers
+          </Link>
+          , find the quote they built under &ldquo;Quotes waiting to be
+          paid&rdquo;, and choose &ldquo;Check out for them&rdquo;. It opens
+          here with the customer and quote filled in.
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <div>
       <Card className="p-5">
-        <h2 className="text-base font-bold text-text">Start a checkout for a Customer</h2>
+        <h2 className="text-base font-bold text-text">
+          Start a checkout for a Customer
+        </h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
           Use this only when you have already taken the Customer&apos;s consent
           for this booking. The checkout is recorded as assisted, with your
@@ -126,27 +232,18 @@ export function AssistedCheckoutForm() {
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Customer id"
-            required
-            error={submitted ? errors.customerId : undefined}
-          >
-            <Input
-              value={input.customerId}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => set("customerId", event.target.value)}
-            />
-          </Field>
-
-          <Field label="Quote id" required error={submitted ? errors.quoteId : undefined}>
-            <Input
-              value={input.quoteId}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => set("quoteId", event.target.value)}
-            />
-          </Field>
+          <div className="text-sm">
+            <p className="text-text-secondary">Customer</p>
+            <p className="font-semibold text-text" data-numeric>
+              {maskId(input.customerId)}
+            </p>
+          </div>
+          <div className="text-sm">
+            <p className="text-text-secondary">Quote</p>
+            <p className="font-semibold text-text" data-numeric>
+              {maskId(input.quoteId)}
+            </p>
+          </div>
 
           <Field
             label="Consent purpose"
@@ -193,7 +290,9 @@ export function AssistedCheckoutForm() {
 
       {confirming ? (
         <Card className="mt-5 p-5">
-          <h3 className="text-base font-bold text-text">Confirm before you commit them</h3>
+          <h3 className="text-base font-bold text-text">
+            Confirm before you commit them
+          </h3>
           <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
             <dt className="text-text-muted">Customer</dt>
             <dd className="text-text" data-numeric>
@@ -205,7 +304,8 @@ export function AssistedCheckoutForm() {
             </dd>
             <dt className="text-text-muted">Consent</dt>
             <dd className="text-text">
-              {input.consentPurpose.trim()}, version {input.consentVersion.trim()}
+              {input.consentPurpose.trim()}, version{" "}
+              {input.consentVersion.trim()}
             </dd>
           </dl>
 

@@ -18,6 +18,7 @@ from apps.assignments.models import DispatchOffer
 from apps.assignments.ranking import evaluate_unit_candidates
 from apps.carts.models import BookingGroup
 from apps.commerce.models import Booking
+from apps.locations.pauses import is_area_paused
 from apps.notifications.models import NotificationDelivery, NotificationIntent
 from apps.notifications.services import request_notification
 from apps.notifications.transport import OneSignalMessageTransport
@@ -92,6 +93,10 @@ def dispatch_instant_booking_task(_self: object, booking_id: str) -> dict[str, A
         unit = getattr(booking, "fulfilment_unit", None)
         if not unit:
             return {"skipped": True, "reason": "No fulfilment unit on booking"}
+        if is_area_paused(unit.service_area):
+            # Paused area (SERVICE_AREA kill switch): send nobody in. Not downgraded or cancelled:
+            # Operations decides about bookings already paid for.
+            return {"skipped": True, "reason": "service_area_paused"}
 
         ranking = evaluate_unit_candidates(unit)
         candidates = ranking.ordered
@@ -757,7 +762,7 @@ def expire_dispatch_offer_task(offer_id: str) -> bool:
 
 
 @shared_task
-def reassign_or_downgrade_booking_task(
+def reassign_or_downgrade_booking_task(  # noqa: PLR0911 - one exit per outcome
     booking_id: str,
     exhausted_partner_ids: list[str] | None = None,
 ) -> str | None:
@@ -832,6 +837,9 @@ def reassign_or_downgrade_booking_task(
 
         candidate_pool = []
         unit = getattr(booking, "fulfilment_unit", None)
+        if unit is not None and is_area_paused(unit.service_area):
+            # Paused area: no next offer, and no downgrade either. See the instant task above.
+            return None
         if unit and attempt_count < max_attempts:
             ranking = evaluate_unit_candidates(unit)
             candidate_pool = [c for c in ranking.ordered if c.id not in attempted_partner_ids]

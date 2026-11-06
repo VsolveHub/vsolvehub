@@ -15,15 +15,15 @@ describe("partner import file", () => {
 
   it("turns each failing cell into its own problem line and ignores clean rows", () => {
     const problems = importProblems([
-      { row: 2, status: "ready", phone: "+919876543210", full_name: "Ravi", track: "SERVICES", errors: [] },
-      { row: 3, status: "skipped", phone: "+919812345678", full_name: "Asha", track: "STAY_HOST", errors: [] },
+      { row: 2, status: "ready", phone: "+919876543210", full_name: "Ravi", track: "SERVICES", problems: [] },
+      { row: 3, status: "skipped", phone: "+919812345678", full_name: "Asha", track: "STAY_HOST", problems: [] },
       {
         row: 4,
         status: "error",
         phone: "98123",
         full_name: "",
         track: "SERVICES",
-        errors: [
+        problems: [
           { column: "phone", message: "Enter a 10-digit Indian mobile number." },
           { column: "full_name", message: "Name is required." },
         ],

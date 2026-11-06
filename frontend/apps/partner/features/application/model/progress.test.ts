@@ -137,7 +137,8 @@ describe("partial progress", () => {
 
     expect(about?.state).toBe("done");
     expect(work?.state).toBe("todo");
-    expect(work?.outstanding).toBe(2);
+    // Job types; the areas are counted on their own step.
+    expect(work?.outstanding).toBe(1);
   });
 
   it("keeps About you open until experience is entered", () => {
@@ -163,12 +164,13 @@ describe("partial progress", () => {
 
 describe("stepping backwards", () => {
   it("gives the previous step in the sequence", () => {
-    expect(previousStep("/apply/schedule")?.href).toBe("/apply/work");
+    expect(previousStep("/apply/schedule")?.href).toBe("/apply/areas");
+    expect(previousStep("/apply/areas")?.href).toBe("/apply/work");
     expect(previousStep("/apply/work")?.href).toBe("/apply/about");
   });
 
   it("tolerates a trailing slash, because Next produces either form", () => {
-    expect(previousStep("/apply/schedule/")?.href).toBe("/apply/work");
+    expect(previousStep("/apply/schedule/")?.href).toBe("/apply/areas");
   });
 
   it("has nowhere to go back to from the first step", () => {

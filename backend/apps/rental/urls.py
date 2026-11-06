@@ -85,6 +85,11 @@ urlpatterns = [
         name="ops-rental-platform-fee",
     ),
     path(
+        "ops/rentals/platform-fee/<uuid:version_id>",
+        views.OpsRentalPlatformFeeVersionView.as_view(),
+        name="ops-rental-platform-fee-version",
+    ),
+    path(
         "ops/rentals/disputes",
         views.OpsRentalDisputeCollectionView.as_view(),
         name="ops-rental-disputes",

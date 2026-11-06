@@ -4,7 +4,7 @@ import {
   BriefcaseBusiness,
   Building2,
   Coins,
-  FileCheck2,
+  Contact,
   FileText,
   HardHat,
   Home,
@@ -68,9 +68,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Partners",
     links: [
+      // Applications and crew documents: both "check a partner's papers" queues, as two tabs.
       { href: "/reviews", label: "Applications", icon: UserCheck },
       { href: "/operations/partners", label: "All partners", icon: Users },
-      { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
       // Working hours are edited on a partner's record (All partners), not from a menu item.
       // Job plans live on Jobs › Plans, next to the jobs they sell; stay plans on Stays › Plans.
       { href: "/operations/partners/import", label: "Import partners", icon: Upload },
@@ -79,6 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Customers",
     links: [
+      { href: "/operations/customers", label: "All customers", icon: Contact },
       { href: "/operations/stories", label: "Safety stories", icon: ShieldCheck },
       { href: "/operations/loyalty", label: "Wallet and rewards", icon: Coins },
       { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
@@ -90,7 +91,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/finance", label: "Refunds", icon: RotateCcw },
       { href: "/operations/payouts", label: "Payouts", icon: Wallet },
       { href: "/operations/commercial-policy", label: "Commission and tax", icon: Percent },
-      { href: "/operations/reports", label: "Reports", icon: FileText },
     ],
   },
   {
@@ -102,6 +102,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: BarChart3,
         activePrefix: "/operations/dashboards",
       },
+      { href: "/operations/reports", label: "Reports", icon: FileText },
     ],
   },
   {

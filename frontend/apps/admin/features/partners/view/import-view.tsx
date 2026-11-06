@@ -125,7 +125,7 @@ export function ImportView() {
   const skipped = check
     ? check.rows.filter((row) => row.status === "skipped")
     : [];
-  const canImport = check !== null && check.summary.errors === 0 && ready > 0;
+  const canImport = check !== null && check.summary.problems === 0 && ready > 0;
 
   if (imported) {
     const created = imported.summary.created ?? 0;
@@ -263,7 +263,7 @@ export function ImportView() {
               />
               <Count
                 label="Rows with problems"
-                value={check.summary.errors}
+                value={check.summary.problems}
                 tone="danger"
               />
             </dl>
@@ -299,7 +299,7 @@ export function ImportView() {
               </details>
             ) : null}
 
-            {check.summary.errors === 0 && ready === 0 ? (
+            {check.summary.problems === 0 && ready === 0 ? (
               <p className="text-sm text-text-secondary">
                 There is nobody new to import in this file.
               </p>

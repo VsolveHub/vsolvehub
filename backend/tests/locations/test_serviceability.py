@@ -127,3 +127,61 @@ def test_serviceability_never_uses_location_fallback() -> None:
     assert response.json()["is_serviceable"] is False
     assert response.json()["reason_code"] == "OUTSIDE_SERVICE_AREA"
     assert response.json()["service_area"] is None
+
+
+def _pause(target: str) -> None:
+    from apps.identity.models import User  # noqa: PLC0415 - test-local helper
+    from apps.notifications.services import engage_kill_switch  # noqa: PLC0415
+
+    operator = User.objects.create_user(phone_number="+919811100001")
+    engage_kill_switch(scope="SERVICE_AREA", target=target, reason="Flooding", actor=operator)
+
+
+def _check(variant: ServiceVariant) -> dict[str, object]:
+    response = APIClient().post(
+        "/api/v1/serviceability/check/",
+        {"postal_code": "500032", "service_variant_id": str(variant.id)},
+        format="json",
+    )
+    assert response.status_code == HTTPStatus.OK
+    return dict(response.json())
+
+
+def test_a_paused_area_takes_no_new_bookings_and_says_why() -> None:
+    """Regression: the SERVICE_AREA kill switch had no reader, so pausing an area did nothing."""
+    area, variant = _area_and_variant()
+    _pause(area.slug)
+
+    body = _check(variant)
+
+    assert body["is_serviceable"] is False
+    assert body["reason_code"] == "SERVICE_AREA_PAUSED"
+
+
+def test_an_area_is_bookable_again_once_the_switch_is_turned_back_on() -> None:
+    from apps.identity.models import User  # noqa: PLC0415
+    from apps.notifications.services import release_kill_switch  # noqa: PLC0415
+
+    area, variant = _area_and_variant()
+    _pause(area.slug)
+    release_kill_switch(
+        scope="SERVICE_AREA",
+        target=area.slug,
+        actor=User.objects.create_user(phone_number="+919811100002"),
+    )
+
+    assert _check(variant)["is_serviceable"] is True
+
+
+def test_pausing_another_area_leaves_this_one_open() -> None:
+    _area, variant = _area_and_variant()
+    _pause("some-other-area")
+
+    assert _check(variant)["is_serviceable"] is True
+
+
+def test_a_blank_target_pauses_every_area() -> None:
+    _area, variant = _area_and_variant()
+    _pause("")
+
+    assert _check(variant)["reason_code"] == "SERVICE_AREA_PAUSED"

@@ -12,19 +12,8 @@ const HomeBookings = dynamic(() => import("./home-bookings").then((m) => m.HomeB
 const MoneyTab = dynamic(() => import("@/features/money/money-tab").then((m) => m.MoneyTab), {
   loading: TabLoading,
 });
-const DispatchRecoveryWorkspace = dynamic(
-  () =>
-    import("@/features/dispatch-recovery/view/dispatch-recovery-workspace").then(
-      (m) => m.DispatchRecoveryWorkspace,
-    ),
-  { loading: TabLoading },
-);
 const AssistedCheckoutForm = dynamic(
   () => import("@/features/assisted-checkout/view/assisted-checkout-form").then((m) => m.AssistedCheckoutForm),
-  { loading: TabLoading },
-);
-const ManualOfferForm = dynamic(
-  () => import("@/features/manual-offer/view/manual-offer-form").then((m) => m.ManualOfferForm),
   { loading: TabLoading },
 );
 const CompatibilityRulesWorkspace = dynamic(
@@ -35,13 +24,12 @@ const CompatibilityRulesWorkspace = dynamic(
   { loading: TabLoading },
 );
 
-type HomeTab = "bookings" | "money" | "dispatch" | "book" | "offers" | "rules";
+type HomeTab = "bookings" | "money" | "book" | "rules";
 
 /** Exported so links elsewhere in the console name a tab that exists. */
 export const HOME_SERVICE_TABS: readonly WorkspaceTab<HomeTab>[] = [
   { key: "bookings", label: "Bookings", render: () => <HomeBookings /> },
   { key: "money", label: "Money", render: () => <MoneyTab service="home-services" /> },
-  { key: "dispatch", label: "Dispatch", render: () => <DispatchRecoveryWorkspace /> },
   {
     key: "book",
     label: "Book for a customer",
@@ -51,24 +39,18 @@ export const HOME_SERVICE_TABS: readonly WorkspaceTab<HomeTab>[] = [
       </div>
     ),
   },
-  {
-    key: "offers",
-    label: "Manual offers",
-    render: () => (
-      <div className="max-w-3xl">
-        <ManualOfferForm />
-      </div>
-    ),
-  },
   { key: "rules", label: "Service rules", render: () => <CompatibilityRulesWorkspace /> },
 ];
 
-/** Fixed-price home-service visits: find any visit, fix dispatch, book for a customer, money. */
+/**
+ * Fixed-price home-service visits: find any visit and act on it (dispatch, offers, cancel and
+ * refund live on the visit itself), book for a customer, money and service rules.
+ */
 export function HomeServicesWorkspace() {
   return (
     <ServiceWorkspace
       title="Home services"
-      description="Fixed-price visits: find any booking and act on it, fix dispatch, book on a customer's behalf, and see what the visits earned."
+      description="Fixed-price visits: find any booking and act on it, book on a customer's behalf, and see what the visits earned."
       tabs={HOME_SERVICE_TABS}
     />
   );

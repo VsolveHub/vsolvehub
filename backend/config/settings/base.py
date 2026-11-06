@@ -419,7 +419,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.97.0",
+    "VERSION": "1.98.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -440,6 +440,10 @@ SPECTACULAR_SETTINGS = {
             "apps.requirements.models.CommercialPolicy.SupplierOfRecord"
         ),
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
+        "PartnerImportModeEnum": "apps.partners.serializers.directory.PARTNER_IMPORT_MODES",
+        "PartnerImportRowStatusEnum": (
+            "apps.partners.serializers.directory.PARTNER_IMPORT_ROW_STATUSES"
+        ),
         "RevisionRequestStatusEnum": "apps.requirements.models.RevisionRequest.Status",
         "RevisionRequestReasonCodeEnum": "apps.requirements.models.RevisionRequest.ReasonCode",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",

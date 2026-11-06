@@ -83,6 +83,15 @@ Both agents are working the same tree concurrently. Two practical rules learned 
 way here: never `git add -A` (it swept six of Codex's live backend edits into a frontend
 commit, which had to be split back out), and stage explicit paths only.
 
+#### Operations console and partner import — owner directive, 6 November 2026
+
+Codex will not build these, so the owner directed Claude to build them end to end, **including**
+`backend/**`, `contracts/openapi/**` and their tests: the Operations (admin) console cleanup and
+its missing actions (customer directory and record, partner suspend/reinstate and bookings,
+cancelling and refunding a home visit, offering a visit to a partner, search pickers in place of
+typed ids) and the partner import in proposal 0029. It is that scope only, not a general transfer
+of backend ownership; the owner-run test rule still applies.
+
 ### Mobile apps (Customer + Partner) — owner directive, 30 September 2026
 
 The owner assigned the native mobile apps, **including the backend work they need**, to the

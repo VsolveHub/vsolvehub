@@ -29,6 +29,13 @@ describe("case queue views", () => {
     expect(viewCount("late", summary as never)).toBe(7);
     expect(viewCount("open", summary as never)).toBe(6);
     expect(viewCount("closed", summary as never)).toBeNull();
+    expect(viewCount("chargebacks", summary as never)).toBeNull();
     expect(viewCount("mine", undefined)).toBeNull();
+  });
+
+  it("has one-click views for off-platform payment claims and chargebacks, open only", () => {
+    const byKey = Object.fromEntries(CASE_VIEWS.map((view) => [view.key, view.filters]));
+    expect(byKey["off-platform"]).toEqual({ status: "OPEN,IN_PROGRESS,WAITING", kind: "OFF_PLATFORM" });
+    expect(byKey.chargebacks).toEqual({ status: "OPEN,IN_PROGRESS,WAITING", kind: "CHARGEBACK" });
   });
 });

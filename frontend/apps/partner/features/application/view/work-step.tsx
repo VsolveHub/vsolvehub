@@ -10,6 +10,7 @@ import {
   findSkillForCategory,
   isTradeCategorySelected,
   selectedTradeCategories,
+  tickableCategories,
   syncRequiredSkills,
   toggleTradeCategorySelection,
   variantIdsForCategory,
@@ -29,10 +30,17 @@ function servicesForCategory(
   return catalog.filter((service) => service.categoryName === category.name);
 }
 
-export function WorkStep({ mainCategories, services }: WorkStepProps) {
+export function WorkStep({ mainCategories: catalogCategories, services }: WorkStepProps) {
   const t = useT();
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
+
+  // A category is ticked through its skill, so one with no skill could never be ticked. Leave it
+  // out rather than show a checkbox that does nothing.
+  const mainCategories = useMemo(
+    () => tickableCategories(catalogCategories, reference.skills),
+    [catalogCategories, reference.skills],
+  );
 
   const selectedCategories = useMemo(
     () => selectedTradeCategories(mainCategories, reference.skills, draft.skillCodes),

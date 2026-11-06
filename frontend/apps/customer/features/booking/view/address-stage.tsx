@@ -8,6 +8,7 @@ import { LocationPicker } from "@/features/addresses/view/location-picker";
 
 import { AddressForm, EMPTY_DRAFT, draftFromLocated, type Draft } from "./address-form";
 import { ChoiceCard } from "./choice-card";
+import { AREA_PAUSED, AREA_PAUSED_MESSAGE } from "@/features/checkout/reasons";
 
 /**
  * Where the work happens, and whether Vsolve Hub covers it.
@@ -630,6 +631,11 @@ function ServiceabilityStatus({
         </p>
       ) : serviceability === null ? null : serviceability.is_serviceable ? (
         <p className="text-sm font-medium text-success-text">We cover this area.</p>
+      ) : serviceability.reason_code === AREA_PAUSED ? (
+        <div className="rounded-card border border-warning-line bg-warning-surface p-4">
+          <p className="font-semibold text-warning-text">Bookings are paused in this area</p>
+          <p className="mt-1 text-sm text-text-secondary">{AREA_PAUSED_MESSAGE}</p>
+        </div>
       ) : (
         <div className="rounded-card border border-warning-line bg-warning-surface p-4">
           <p className="font-semibold text-warning-text">We do not cover this address yet</p>

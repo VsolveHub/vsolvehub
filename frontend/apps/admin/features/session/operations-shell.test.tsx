@@ -135,12 +135,13 @@ describe("the workspaces", () => {
       "/operations/rentals",
       "/operations/stays",
       "/operations/listings",
-      // Partners (working hours are edited on a partner's record)
+      // Partners (working hours are edited on a partner's record; crew documents are a tab on
+      // Applications)
       "/reviews",
       "/operations/partners",
-      "/operations/crew-documents",
       "/operations/partners/import",
       // Customers
+      "/operations/customers",
       "/operations/stories",
       "/operations/loyalty",
       "/operations/feedback",
@@ -148,9 +149,9 @@ describe("the workspaces", () => {
       "/finance",
       "/operations/payouts",
       "/operations/commercial-policy",
-      "/operations/reports",
       // Insights
       "/operations/dashboards/overview",
+      "/operations/reports",
       // System
       "/operations/kill-switches",
       "/operations/profile",

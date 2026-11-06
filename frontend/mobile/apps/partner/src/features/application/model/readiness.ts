@@ -4,14 +4,12 @@ import type { Schemas } from "@vsolve/api-client";
 /**
  * What is still missing before an application can be submitted.
  *
- * This is a presentation of readiness for the 4-step mobile partner onboarding flow:
- * Step 1: About you (/apply/about)
- * Step 2: Agreements (/apply/consent)
- * Step 3: Documents (/apply/documents)
- * Step 4: Review and send (/apply/review)
+ * The same checklist as the website: About you, then for services Your work, Where you work and
+ * Your hours, then Documents, and the agreements on "Agree & send" (/apply/review).
  */
 
 type Application = Schemas["PartnerApplication"];
+type Schedule = Schemas["PartnerSchedule"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
 export type RequirementCode =
@@ -20,6 +18,7 @@ export type RequirementCode =
   | "SKILLS"
   | "SERVICES"
   | "SERVICE_AREAS"
+  | "WORKING_HOURS"
   | "GOVERNMENT_ID"
   | "ADDRESS_PROOF"
   | "CONSENTS";
@@ -54,7 +53,10 @@ function hasUsableDocument(application: Application | null, kind: DocumentKind):
   );
 }
 
-export function requirements(application: Application | null): Requirement[] {
+export function requirements(
+  application: Application | null,
+  availability?: Schedule | null,
+): Requirement[] {
   const list: Requirement[] = [
     {
       code: "DISPLAY_NAME",
@@ -85,15 +87,30 @@ export function requirements(application: Application | null): Requirement[] {
           {
             code: "SERVICE_AREAS",
             label: "Where you work",
-            href: "/apply/work",
+            href: "/apply/areas",
             isMet: application.service_area_ids.length > 0,
+          },
+          {
+            // The server refuses to send an application without hours for every chosen area,
+            // so the checklist says so first, as the website does.
+            code: "WORKING_HOURS",
+            label: "Your hours",
+            href: "/apply/schedule",
+            isMet:
+              application.service_area_ids.length > 0 &&
+              Boolean(availability) &&
+              application.service_area_ids.every((areaId) =>
+                (availability?.rules ?? []).some(
+                  (rule) => rule.service_area_id === areaId && rule.is_active,
+                ),
+              ),
           },
         ] satisfies Requirement[])
       : []),
     {
       code: "CONSENTS",
       label: "Agreements",
-      href: "/apply/consent",
+      href: "/apply/review",
       isMet: application?.consents_complete ?? false,
     },
     ...requiredDocumentKinds(application).map((kind) => {
@@ -110,8 +127,11 @@ export function requirements(application: Application | null): Requirement[] {
   return list;
 }
 
-export function outstandingRequirements(application: Application | null): Requirement[] {
-  return requirements(application).filter((requirement) => !requirement.isMet);
+export function outstandingRequirements(
+  application: Application | null,
+  availability?: Schedule | null,
+): Requirement[] {
+  return requirements(application, availability).filter((requirement) => !requirement.isMet);
 }
 
 /** Documents Operations rejected, which the Partner must replace. */
@@ -124,6 +144,6 @@ export function isEditable(application: Application): boolean {
 }
 
 /** Whether the Partner may act on the submit button at all. */
-export function canSubmit(application: Application): boolean {
-  return isEditable(application) && outstandingRequirements(application).length === 0;
+export function canSubmit(application: Application, availability?: Schedule | null): boolean {
+  return isEditable(application) && outstandingRequirements(application, availability).length === 0;
 }

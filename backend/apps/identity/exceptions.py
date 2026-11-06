@@ -20,6 +20,12 @@ class InvalidOtpApiError(APIException):
     default_code = "invalid_otp"
 
 
+class AccountBlockedApiError(APIException):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "This account is blocked. Contact Vsolve support."
+    default_code = "account_blocked"
+
+
 class NoAccountForRoleApiError(APIException):
     status_code = status.HTTP_404_NOT_FOUND
     default_detail = "No account with that role exists for this number."

@@ -33,6 +33,8 @@ from .directory import (
     OperationsPartnerDirectoryPageSerializer,
     OperationsPartnerDirectoryQuerySerializer,
     OperationsPartnerDocumentStateSerializer,
+    PartnerImportResultSerializer,
+    PartnerImportUploadSerializer,
     PartnerSkillChipSerializer,
 )
 from .m2 import (
@@ -144,6 +146,8 @@ __all__ = [
     "PartnerDocumentUploadRequestSerializer",
     "PartnerDocumentUploadSerializer",
     "PartnerGoOnlineSerializer",
+    "PartnerImportResultSerializer",
+    "PartnerImportUploadSerializer",
     "PartnerInsuranceSerializer",
     "PartnerInsuranceWriteSerializer",
     "PartnerLanguageListSerializer",

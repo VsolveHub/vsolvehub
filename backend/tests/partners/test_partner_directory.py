@@ -213,6 +213,8 @@ def test_the_detail_names_the_partner_but_never_a_document_url(
     body = client.get(f"{DIRECTORY_URL}{partner.id}/").json()
 
     assert body["display_name"] == "Approved Anita"
+    # The record's Call button dials this; the list had it, the record did not.
+    assert body["phone_number"] == "+919000000210"
     assert body["application_status"] == PartnerApplication.Status.APPROVED
     assert body["skills"] == [{"code": "electrician", "name": "Electrician"}]
     serialised = str(body)
