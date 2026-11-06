@@ -10,7 +10,12 @@ from typing import Any
 from django.db import models
 from django.db.models import Q
 
-__all__ = ["CaptainVehicle", "VehicleType"]
+__all__ = ["CaptainVehicle", "VehicleType", "normalise_registration_number"]
+
+
+def normalise_registration_number(value: str) -> str:
+    """Upper-case with no spaces, so two spellings of one plate are one plate."""
+    return "".join(value.split()).upper()
 
 
 class VehicleType(models.TextChoices):
@@ -48,5 +53,5 @@ class CaptainVehicle(models.Model):
         return self.registration_number
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        self.registration_number = "".join(self.registration_number.split()).upper()
+        self.registration_number = normalise_registration_number(self.registration_number)
         super().save(*args, **kwargs)

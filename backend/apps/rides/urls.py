@@ -1,7 +1,10 @@
-"""Rides routes. Endpoints are added with the captain API."""
+from django.urls import path
 
-from django.urls import URLPattern, URLResolver
+from apps.rides.views import CaptainMeView, CaptainVehicleView
 
 app_name = "rides"
 
-urlpatterns: list[URLPattern | URLResolver] = []
+urlpatterns = [
+    path("partner/rides/me/", CaptainMeView.as_view(), name="captain-me"),
+    path("partner/rides/vehicle/", CaptainVehicleView.as_view(), name="captain-vehicle"),
+]
