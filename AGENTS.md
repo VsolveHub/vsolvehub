@@ -120,6 +120,16 @@ Test execution: the owner authorized the Mobile developer's agent to **run** the
 suites, and the backend pytest modules under `backend/tests/mobile/`, plus lint, typecheck and
 `backend\scripts\quality-static.cmd`. Report exact commands and real results.
 
+### Rides V1 (Rapido) — owner directive, 5 November 2026
+
+The owner assigned VSolve Rides V1 (bike, auto and cab rides) to the **Rides developer**,
+backend and frontend, on branch `rapido/v1` only — never `main`. The complete brief, ownership
+list, registration points, mobile exceptions and test authorization are in
+`docs/rapido/README.md`. Any agent working on Rides reads it before its first edit; for Rides
+work it overrides the conflicting lines in this file and in `frontend/mobile/AGENTS.md`
+(screens with no web original, background location in the Captain app only, and the Rides test
+commands the developer is authorized to run). Outside Rides, this file is unchanged.
+
 ## Python environment
 
 - Use Python 3.13.
