@@ -13,7 +13,6 @@ crew contracts live in `m2`.
 
 from typing import Any
 
-from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -26,7 +25,7 @@ from apps.partners.models import (
     PartnerProfile,
     Skill,
 )
-from apps.partners.selectors import partner_has_required_consents
+from apps.partners.selectors import partner_has_required_consents, required_document_kinds
 from apps.payouts.models import PartnerPayoutAccount
 
 #: Serializer context value for the applicant reading their own application. Without it the
@@ -488,9 +487,9 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     @extend_schema_field(
         serializers.ListField(child=serializers.ChoiceField(choices=PartnerDocument.Kind.choices))
     )
-    def get_required_document_kinds(_application: PartnerApplication) -> list[str]:
+    def get_required_document_kinds(application: PartnerApplication) -> list[str]:
         """The document kinds submission and approval require — the server's list, not a copy."""
-        return list(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+        return list(required_document_kinds(application.track))
 
     @staticmethod
     @extend_schema_field(serializers.BooleanField())

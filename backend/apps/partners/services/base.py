@@ -34,7 +34,7 @@ from apps.partners.models import (
     PartnerServiceArea,
     PartnerSkill,
 )
-from apps.partners.selectors import partner_has_required_consents
+from apps.partners.selectors import partner_has_required_consents, required_document_kinds
 from apps.partners.storage import SignedUpload
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ def _record_transition(
 
 
 def _latest_required_documents_are_approved(application: PartnerApplication) -> bool:
-    required_kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    required_kinds = required_document_kinds(application.track)
     for kind in required_kinds:
         latest = (
             PartnerDocument.objects.filter(application=application, kind=kind)
@@ -134,6 +134,7 @@ def _base_application_is_complete(application: PartnerApplication) -> bool:
         PartnerApplication.Track.STAY_HOST,
         PartnerApplication.Track.RENTAL_OWNER,
         PartnerApplication.Track.EMPLOYER,
+        PartnerApplication.Track.RIDE_CAPTAIN,
     ):
         # A stay host or rental owner: who they are and the agreements are enough.
         # Trades, services and areas describe travelling to a customer and are not asked.

@@ -9,7 +9,6 @@ the draft. Reviewer-side decisions on the same row live in `review`; document ha
 import uuid
 from collections.abc import Iterable, Sequence
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -34,6 +33,7 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
+from apps.partners.selectors import required_document_kinds
 
 from .base import (
     PARTNER_APPLICATION_PROGRESS_PURPOSE,
@@ -399,6 +399,7 @@ def submit_partner_application(
     if application.track not in (
         PartnerApplication.Track.STAY_HOST,
         PartnerApplication.Track.RENTAL_OWNER,
+        PartnerApplication.Track.RIDE_CAPTAIN,
     ):
         _validate_service_configuration(
             skills=skills,
@@ -420,13 +421,13 @@ def submit_partner_application(
             "Complete your profile, services, areas, skills, and required consents "
             "before submitting.",
         )
-    required_kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    required_kinds = required_document_kinds(application.track)
     if any(
         not PartnerDocument.objects.filter(application=application, kind=kind).exists()
         for kind in required_kinds
     ):
         raise PartnerApplicationIncompleteError(
-            "Upload every required identity document before submitting.",
+            "Upload every required document before submitting.",
         )
 
     previous_status = application.status

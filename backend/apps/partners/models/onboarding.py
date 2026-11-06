@@ -127,6 +127,9 @@ class PartnerApplication(models.Model):
         #: A shop, clinic or office hiring staff. Same short onboarding as ``STAY_HOST``;
         #: approval grants job posting (A10) without a separate capability review.
         EMPLOYER = "EMPLOYER", "Hire staff"
+        #: A bike, auto or cab driver for VSolve Rides. Short onboarding like ``EMPLOYER`` plus
+        #: licence, RC and insurance documents; approval is the permission to go on duty.
+        RIDE_CAPTAIN = "RIDE_CAPTAIN", "Drive with VSolve Rides"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -420,6 +423,10 @@ class PartnerDocument(models.Model):
         BANK = "BANK", "Bank document"
         BACKGROUND_CHECK = "BACKGROUND_CHECK", "Background check"
         OTHER = "OTHER", "Other"
+        #: Rides captains only.
+        DRIVING_LICENCE = "DRIVING_LICENCE", "Driving licence"
+        VEHICLE_RC = "VEHICLE_RC", "Vehicle registration certificate"
+        VEHICLE_INSURANCE = "VEHICLE_INSURANCE", "Vehicle insurance"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending review"
