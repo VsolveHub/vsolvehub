@@ -174,6 +174,7 @@ def _notify_application_event(
                 recipient_id=application.partner.user_id,
                 purpose=purpose,
                 channel=NotificationIntent.Channel.IN_APP,
+                audience=NotificationIntent.Audience.PARTNER,
                 template_code=template_code,
                 context=context or {},
                 idempotency_key=idempotency_key,
@@ -185,6 +186,11 @@ def _notify_application_event(
         )
         return
     if not push or intent.status != NotificationIntent.Status.SENT:
+        return
+    # With OneSignal as the phone channel, every in-app notice is already copied to the
+    # Partner's devices (website included) by `apps.mobile`; a second send here would be a
+    # second banner for the same notice.
+    if getattr(settings, "MOBILE_PUSH_PROVIDER", "") == "onesignal":
         return
 
     intent_id = str(intent.id)

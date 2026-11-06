@@ -92,7 +92,7 @@ describe("the unread count", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.unread).toBe(3);
-    expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/unread-count/");
+    expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/unread-count/", { params: { query: { audience: "partner" } } });
   });
 
   it("keeps its own cache key, separate from the feed's", async () => {
@@ -184,7 +184,7 @@ describe("the feed", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.results.map((row) => row.id)).toEqual(["note-1"]);
-    expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/");
+    expect(client.GET).toHaveBeenCalledWith("/api/v1/notifications/", { params: { query: { audience: "partner" } } });
   });
 
   it("keeps an empty feed distinguishable from a failed one", async () => {
@@ -220,6 +220,7 @@ describe("marking a notice read", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(client.POST).toHaveBeenCalledWith("/api/v1/notifications/read/", {
+      params: { query: { audience: "partner" } },
       body: { notification_id: "note-1", all: false },
     });
   });
@@ -234,6 +235,7 @@ describe("marking a notice read", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(client.POST).toHaveBeenCalledWith("/api/v1/notifications/read/", {
+      params: { query: { audience: "partner" } },
       body: { all: true },
     });
   });

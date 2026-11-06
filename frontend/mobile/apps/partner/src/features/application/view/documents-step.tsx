@@ -7,29 +7,23 @@ import {
   AlertTriangle,
   CheckCircle2,
   CreditCard,
-  Eye,
   FileText,
   RotateCw,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
+import { requiredDocumentKinds } from "../model/readiness";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
 
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
-const REQUIRED: readonly { kind: DocumentKind; label: string }[] = [
-  {
-    kind: "GOVERNMENT_ID",
-    label: "Government photo ID",
-  },
-  {
-    kind: "ADDRESS_PROOF",
-    label: "Proof of address",
-  },
+const OFFERED: readonly { kind: DocumentKind; label: string }[] = [
+  { kind: "GOVERNMENT_ID", label: "Government photo ID" },
+  { kind: "ADDRESS_PROOF", label: "Proof of address" },
 ];
 
 function currentDocument(application: Application, kind: DocumentKind): Schemas["PartnerDocument"] | null {
@@ -47,16 +41,12 @@ export function DocumentsStep() {
   const [replacingKind, setReplacingKind] = useState<DocumentKind | null>(null);
 
   const application = query.data ?? null;
-  const isEditable =
-    application === null || application.status === "DRAFT" || application.status === "CHANGES_REQUIRED";
-
-  const govtIdDoc = application ? currentDocument(application, "GOVERNMENT_ID") : null;
-  const addressProofDoc = application ? currentDocument(application, "ADDRESS_PROOF") : null;
-
-  const hasGovtId = govtIdDoc !== null && govtIdDoc.status !== "REJECTED";
-  const hasAddressProof = addressProofDoc !== null && addressProofDoc.status !== "REJECTED";
-  const allUploaded = hasGovtId && hasAddressProof;
-  const anyUploaded = govtIdDoc !== null || addressProofDoc !== null;
+  const required = requiredDocumentKinds(application);
+  const allUploaded = required.every((kind) => {
+    const document = application ? currentDocument(application, kind) : null;
+    return document !== null && document.status !== "REJECTED";
+  });
+  const anyUploaded = OFFERED.some((item) => application !== null && currentDocument(application, item.kind) !== null);
 
   const onCommit = useCallback(() => {
     router.push("/apply/review");
@@ -117,24 +107,24 @@ export function DocumentsStep() {
 
       {/* Cards List */}
       <View style={styles.cardsContainer}>
-        {REQUIRED.map((item) => {
+        {OFFERED.map((item) => {
           const document = application ? currentDocument(application, item.kind) : null;
           const isUploaded = document !== null;
           const isReplacing = replacingKind === item.kind;
           const isApproved = document?.status === "APPROVED";
           const isRejected = document?.status === "REJECTED";
           const isPending = document?.status === "PENDING";
-          const isAddressProof = item.kind === "ADDRESS_PROOF";
-
-          // Mockup mixed state: if document is rejected or address proof marked replace
-          const isReplaceState = isRejected || (isUploaded && isAddressProof && !isApproved);
+          // Replaceable only when the server says so: a declined application refuses it with a 409.
+          const canReplace = document?.can_replace ?? false;
+          const isReplaceState = isRejected && canReplace;
 
           return (
             <View key={item.kind} style={styles.card}>
               {/* Card Header Row: Title + Status Pill */}
               <View style={styles.labelRow}>
                 <Text style={styles.label}>
-                  {item.label} <Text style={styles.requiredAsterisk}>*</Text>
+                  {item.label}{" "}
+                  {required.includes(item.kind) ? <Text style={styles.requiredAsterisk}>*</Text> : <Text>(optional)</Text>}
                 </Text>
 
                 {isUploaded && !isReplacing ? (
@@ -161,7 +151,7 @@ export function DocumentsStep() {
                 <View style={styles.expiredBanner}>
                   <AlertCircle size={15} color="#d32f1e" strokeWidth={2.2} />
                   <Text style={styles.expiredBannerText}>
-                    {document?.review_reason || "Expired document"}
+                    {document?.review_reason || "This document was not accepted."}
                   </Text>
                 </View>
               ) : null}
@@ -181,35 +171,17 @@ export function DocumentsStep() {
 
                     <View style={styles.fileInfo}>
                       <Text style={styles.fileName}>
-                        {(document as any).file_name || `${item.kind.toLowerCase()}_v${document.version}.jpg`}
+                        {document.file_name}
                       </Text>
                       <Text style={styles.fileMeta}>
-                        {document.size_bytes
-                          ? `${Math.round(document.size_bytes / 1024)} KB`
-                          : "216 KB"}{" "}
-                        · {document.content_type ? document.content_type.split("/")[1]?.toUpperCase() : "JPG"}
+                        {Math.round(document.size_bytes / 1024)} KB · {document.content_type.split("/")[1]?.toUpperCase()}
                       </Text>
                     </View>
 
-                    {/* View Button (Screen 4 Approved Tile) */}
-                    {isApproved ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="View document"
-                        onPress={() => {
-                          const url = (document as any).access_url || (document as any).url;
-                          if (url) void Linking.openURL(url);
-                        }}
-                        style={styles.viewButton}
-                      >
-                        <Eye size={14} color="#0b1b3a" strokeWidth={2.2} />
-                        <Text style={styles.viewButtonText}>View</Text>
-                      </Pressable>
-                    ) : null}
                   </View>
 
                   {/* Re-upload Outline Button (Screen 4 Replace Tile) */}
-                  {isReplaceState && isEditable ? (
+                  {isReplaceState ? (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="Re-upload document"

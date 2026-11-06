@@ -15,6 +15,7 @@ import uuid
 from typing import Any, cast
 
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.exceptions import NotFound
@@ -29,7 +30,12 @@ from apps.identity.phone import normalize_phone_number
 from apps.identity.services import record_access_event
 from apps.partners.capabilities import verify_business_tax_profile
 from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
-from apps.partners.models import PartnerDocument, PartnerProfile
+from apps.partners.models import (
+    PartnerConsent,
+    PartnerDocument,
+    PartnerProfile,
+    PartnerServiceArea,
+)
 from apps.partners.permissions import IsOperationsUser
 from apps.partners.selectors import (
     operations_partner_application_detail,
@@ -37,6 +43,7 @@ from apps.partners.selectors import (
     operations_partner_detail,
     operations_partner_directory,
     partner_application_for_user,
+    partner_schedule,
 )
 from apps.partners.serializers import (
     ExpectedVersionSerializer,
@@ -48,6 +55,7 @@ from apps.partners.serializers import (
     OperationsPartnerDirectoryItemSerializer,
     OperationsPartnerDirectoryPageSerializer,
     OperationsPartnerDirectoryQuerySerializer,
+    OperationsPartnerScheduleSerializer,
     OperationsPartnerScheduleUpdateSerializer,
     OperationsTaxProfileVerifySerializer,
     OperationsTransitionSerializer,
@@ -135,6 +143,11 @@ class OperationsPartnerDirectoryView(APIView):
                     "a directory multi-select reads as a union."
                 ),
             ),
+            OpenApiParameter(
+                "q",
+                str,
+                description="A name, or a mobile number typed any way (spaces, +91, dashes).",
+            ),
             OpenApiParameter("cursor", str, description="Opaque page cursor."),
         ],
         responses={
@@ -157,6 +170,7 @@ class OperationsPartnerDirectoryView(APIView):
         queryset = operations_partner_directory(
             status=cast(str | None, data.get("status")),
             skill_codes=cast(list[str], data.get("skill") or []),
+            query=cast(str, data.get("q") or ""),
         )
         paginator = OperationsPartnerDirectoryCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -472,7 +486,53 @@ class OperationsPartnerDocumentReviewView(APIView):
 
 
 class OperationsPartnerScheduleView(APIView):
+    """A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+
+    The read comes first so a change edits what is there instead of overwriting it blind.
+    """
+
     permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["Operations - Partners"],
+        operation_id="operations_partner_schedule_retrieve",
+        responses={
+            200: OperationsPartnerScheduleSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, _request: Request, partner_id: uuid.UUID) -> Response:
+        partner = get_object_or_404(PartnerProfile, id=partner_id)
+        rules, exceptions = partner_schedule(partner)
+        areas = (
+            PartnerServiceArea.objects.filter(partner=partner, is_active=True)
+            .select_related("service_area")
+            .order_by("service_area__name")
+        )
+        consents = PartnerConsent.objects.filter(
+            partner=partner, withdrawn_at__isnull=True
+        ).order_by("-accepted_at")
+        return Response(
+            OperationsPartnerScheduleSerializer(
+                {
+                    "rules": rules.order_by("service_area__name", "weekday", "starts_at"),
+                    "exceptions": exceptions.order_by("service_area__name", "date"),
+                    "service_areas": [
+                        {"id": link.service_area_id, "name": link.service_area.name}
+                        for link in areas
+                    ],
+                    "consents": [
+                        {
+                            "purpose": consent.purpose,
+                            "document_version": consent.document_version,
+                            "accepted_at": consent.accepted_at,
+                        }
+                        for consent in consents
+                    ],
+                }
+            ).data
+        )
 
     @extend_schema(
         tags=["Operations - Partners"],

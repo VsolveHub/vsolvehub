@@ -24,6 +24,7 @@ import {
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 import { PartnerHeaderTitleProvider } from "./partner-header-title";
+import { isPhoneOnlyTrack } from "./desktop-policy";
 import { DesktopMobileHandoff } from "./view/desktop-mobile-handoff";
 import { translateNavLabel } from "@/features/workspace/nav-labels";
 
@@ -281,6 +282,9 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     !application.isPending || applicationMissing || applicationUnknown;
   const applicationStatus = applicationMissing ? null : application.data?.status ?? null;
   const isApprovedPartner = applicationStatus === "APPROVED";
+  const phoneOnly = isApprovedPartner && isPhoneOnlyTrack(application.data?.track);
+  // Stay hosts, rental owners and employers: the full workspace, laid out for a wide screen.
+  const deskWorkspace = isApprovedPartner && !phoneOnly;
   const mustLeavePortal =
     needsApproval && applicationSettled && !applicationUnknown && !isApprovedPartner;
 
@@ -407,15 +411,14 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
       {(headerTitle) => (
         <>
           {/*
-            DESKTOP ONLY POLICY:
-            Once registration and verification are completed successfully, partner
-            operations (dispatches, work stack, live radar, jobs, payouts) are mobile-only.
-            On desktop screens (lg: and above), only the registration process (/apply/*)
-            and application/KYC document reviews (/me/documents) are accessible.
-            All other routes display the dedicated "Download Partner App - Registration Completed"
-            screen, and no partner operations portal can be opened on desktop.
+            DESKTOP POLICY:
+            Field partners (technicians and crew, the SERVICES track) work on their phone: jobs,
+            navigation and payouts are phone-only, so on a wide screen they see the "continue on
+            your phone" screen, with registration and documents still open. Stay hosts, rental
+            owners and employers manage listings and bookings at a desk, so they get the full
+            workspace on a computer too (owner decision, Nov 2026).
           */}
-          {isApprovedPartner && !isRegistrationDocumentsRoute ? (
+          {phoneOnly && !isRegistrationDocumentsRoute ? (
             <div className="hidden lg:flex w-full min-h-screen flex-col">
               <DesktopMobileHandoff
                 application={application.data}
@@ -429,14 +432,16 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
           <div
             className={cn(
               "flex min-h-screen w-full flex-col items-center bg-canvas overflow-x-clip",
-              isApprovedPartner && !isRegistrationDocumentsRoute && "lg:hidden",
+              phoneOnly && !isRegistrationDocumentsRoute && "lg:hidden",
             )}
           >
             <div
               className={cn(
                 "relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 shadow-sm",
-                // On registration documents page, expand on desktop for high-grade responsive layout
-                isRegistrationDocumentsRoute && "lg:max-w-none lg:border-x-0 lg:shadow-none",
+                // Wide on a computer for registration and documents, and for desk partners'
+                // whole workspace; a phone-width column otherwise.
+                (isRegistrationDocumentsRoute || deskWorkspace) &&
+                  "lg:max-w-none lg:border-x-0 lg:shadow-none",
                 isDarkHero ? "bg-[var(--color-ink-900)]" : "bg-canvas",
               )}
             >
@@ -445,13 +450,15 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                   <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)] lg:rounded-b-none lg:border-b lg:border-line lg:px-8 lg:py-3 lg:shadow-none">
                     <div className="flex items-center justify-between lg:mx-auto lg:w-full lg:max-w-7xl lg:gap-8">
                       <Link
-                        href={isApprovedPartner ? "/me/documents" : "/home"}
+                        href={isApprovedPartner && !deskWorkspace ? "/me/documents" : "/home"}
                         className="flex min-h-11 min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                       >
                         <Logo className="text-base h-7 w-auto" />
                       </Link>
 
-                      {isApprovedPartner && isRegistrationDocumentsRoute ? (
+                      {deskWorkspace ? (
+                        <DesktopPrimaryNav items={primaryNav} workspaceKeys={workspaceKeys} />
+                      ) : isApprovedPartner && isRegistrationDocumentsRoute ? (
                         <div className="hidden lg:flex items-center gap-2">
                           <span className="text-sm font-bold text-navy-900">
                             Partner Application & Documents Hub

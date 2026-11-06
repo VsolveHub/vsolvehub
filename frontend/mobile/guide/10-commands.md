@@ -26,7 +26,7 @@ Run from the folder shown. Everything here is safe to allow when the assistant a
 | `eas build:list --limit 5` | see queued/finished builds |
 | `eas device:create` | register an iPhone for dev/preview builds |
 | `eas credentials` | push keys, signing |
-| `eas update --channel <name> --message "…"` | over-the-air JS update |
+| `eas update --channel <name> --environment <name> --message "…"` | over-the-air JS update. **It does not read `env` in `eas.json`.** Every `EXPO_PUBLIC_*` value must be in that EAS environment (`eas env:list --environment <name>`), or the app crashes on launch with "Something went wrong". The Maps key is a secret an update cannot read, so the partner app also needs `EXPO_PUBLIC_MAPS_ENABLED=true` there, or an update turns its maps off. |
 | `eas submit --profile production --platform <p> --latest` | upload to the stores |
 
 ## Backend (from `backend/`)

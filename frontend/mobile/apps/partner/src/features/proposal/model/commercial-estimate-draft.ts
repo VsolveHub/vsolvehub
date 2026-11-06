@@ -962,13 +962,28 @@ export function hasEnteredModeData(draft: CommercialEstimateDraft): boolean {
    Autosave
    --------------------------------------------------------------------------- */
 
+// Kept in the app's key-value store (AsyncStorage on a phone, the browser's storage on the
+// web). The web version reads `window.localStorage`, which React Native does not have: there
+// the call threw, the `catch` swallowed it, and a vendor's draft was never kept.
 const STORAGE_PREFIX = "vsolve.m2.commercial-estimate.v1.";
 
-export async function saveCommercialEstimate(invitationId: string, draft: CommercialEstimateDraft): Promise<void> {
+export async function saveCommercialEstimate(
+  invitationId: string,
+  draft: CommercialEstimateDraft,
+): Promise<void> {
   try {
     await storageAdapter.setItem(`${STORAGE_PREFIX}${invitationId}`, JSON.stringify(draft));
   } catch {
     // Losing autosave is survivable; the controlled form remains intact.
+  }
+}
+
+export async function loadCommercialEstimate(invitationId: string): Promise<CommercialEstimateDraft | null> {
+  try {
+    const raw = await storageAdapter.getItem(`${STORAGE_PREFIX}${invitationId}`);
+    return raw === null ? null : parseCommercialEstimate(raw);
+  } catch {
+    return null;
   }
 }
 
@@ -977,10 +992,8 @@ export async function saveCommercialEstimate(invitationId: string, draft: Commer
  * written by an older bundle. Rows from before 1.48.0 carry no `isCustom`, and
  * a typed row with no catalogue id is custom by definition.
  */
-export async function loadCommercialEstimate(invitationId: string): Promise<CommercialEstimateDraft | null> {
+export function parseCommercialEstimate(raw: string): CommercialEstimateDraft | null {
   try {
-    const raw = await storageAdapter.getItem(`${STORAGE_PREFIX}${invitationId}`);
-    if (raw === null) return null;
     const parsed = JSON.parse(raw) as Partial<CommercialEstimateDraft>;
     if (!Array.isArray(parsed.itemLines) || !Array.isArray(parsed.labourLines)) return null;
     if (!Array.isArray(parsed.materialLines) || !Array.isArray(parsed.installments)) return null;

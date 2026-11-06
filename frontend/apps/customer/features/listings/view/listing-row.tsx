@@ -20,7 +20,7 @@ export interface ListingRowProps {
 
 export function ListingRow({ listing }: ListingRowProps) {
   const fields = listingFields(listing.structured_fields);
-  const { url: heroImage, fallback } = getCareerImage(listing);
+  const heroImage = getCareerImage(listing);
 
   // Pay calculation
   const rawPay = fields.pay_range || fields.salary_range || fields.compensation;
@@ -98,16 +98,11 @@ export function ListingRow({ listing }: ListingRowProps) {
       <div className="relative w-full md:w-[21%] md:min-w-[200px] md:max-w-[240px] h-52 md:h-auto self-stretch shrink-0 overflow-hidden bg-slate-100">
         <Link href={listingHref(listing.slug)} className="block size-full" tabIndex={-1}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          {heroImage ? (<img
             src={heroImage}
             alt={listing.title}
             className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={(e) => {
-              if (e.currentTarget.src !== fallback) {
-                e.currentTarget.src = fallback;
-              }
-            }}
-          />
+          />) : null}
         </Link>
       </div>
 

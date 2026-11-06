@@ -35,7 +35,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.identity.models import User
+from apps.identity.hashing import keyed_hash
+from apps.identity.models import User, UserSession
 from apps.notifications import onesignal
 from apps.notifications.feed import (
     NotificationNotFoundError,
@@ -47,6 +48,7 @@ from apps.notifications.feed import (
 from apps.notifications.models import (
     CustomerPushSubscription,
     KillSwitch,
+    NotificationIntent,
     PushNotificationPreference,
 )
 from apps.notifications.serializers import (
@@ -56,6 +58,7 @@ from apps.notifications.serializers import (
     EngageKillSwitchRequestSerializer,
     KillSwitchSerializer,
     MarkNotificationReadRequestSerializer,
+    NotificationAudienceQuerySerializer,
     NotificationPageSerializer,
     NotificationSerializer,
     PushPreferencesSerializer,
@@ -96,6 +99,40 @@ class NotificationApiException(APIException):
         self.default_code = error.code
         self.retryable = error.retryable
         super().__init__(detail=error.message, code=error.code)
+
+
+#: Role code (the wire value, and `Role.code`) → the audience its notices are recorded under.
+_ROLE_AUDIENCES = {
+    "customer": NotificationIntent.Audience.CUSTOMER,
+    "partner": NotificationIntent.Audience.PARTNER,
+    "operations": NotificationIntent.Audience.OPERATIONS,
+}
+
+
+def _feed_audience(request: Request) -> str:
+    """Whose side of this person's notices the request reads.
+
+    The app's own `?audience=` first: the customer app and the partner app can be signed in as
+    the same person, and only the app knows which one it is. Without it, the session's active
+    role; a session with none is a customer session, since every account holds that role.
+    """
+
+    query = NotificationAudienceQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    role_code = query.validated_data.get("audience")
+    session_key = request.session.session_key
+    if not role_code and session_key:
+        role_code = (
+            UserSession.objects.filter(
+                user=cast(User, request.user),
+                session_key_hash=keyed_hash(session_key),
+                revoked_at__isnull=True,
+                expires_at__gt=timezone.now(),
+            )
+            .values_list("active_role__code", flat=True)
+            .first()
+        )
+    return _ROLE_AUDIENCES.get(role_code or "customer", NotificationIntent.Audience.CUSTOMER)
 
 
 class NotificationCursorPagination(StrictCursorPagination):
@@ -174,7 +211,7 @@ class NotificationFeedView(APIView):
     @extend_schema(
         tags=[NOTIFICATIONS_TAG],
         operation_id="notification_feed_list",
-        parameters=[BoundedCursorQuerySerializer],
+        parameters=[BoundedCursorQuerySerializer, NotificationAudienceQuerySerializer],
         responses={
             200: NotificationPageSerializer,
             400: ApiErrorSerializer,
@@ -183,7 +220,7 @@ class NotificationFeedView(APIView):
     )
     def get(self, request: Request) -> Response:
         reject_invalid_cursor_query(request)
-        queryset = notification_feed(cast(User, request.user))
+        queryset = notification_feed(cast(User, request.user), audience=_feed_audience(request))
         paginator = NotificationCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response(NotificationSerializer(page or [], many=True).data)
@@ -202,10 +239,16 @@ class NotificationUnreadCountView(APIView):
     @extend_schema(
         tags=[NOTIFICATIONS_TAG],
         operation_id="notification_unread_count",
-        responses={200: UnreadNotificationCountSerializer, 403: ApiErrorSerializer},
+        parameters=[NotificationAudienceQuerySerializer],
+        responses={
+            200: UnreadNotificationCountSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
     )
     def get(self, request: Request) -> Response:
-        return Response({"unread": unread_count(cast(User, request.user))})
+        audience = _feed_audience(request)
+        return Response({"unread": unread_count(cast(User, request.user), audience=audience)})
 
 
 class NotificationReadView(ThrottledWriteMixin, APIView):
@@ -221,6 +264,7 @@ class NotificationReadView(ThrottledWriteMixin, APIView):
     @extend_schema(
         tags=[NOTIFICATIONS_TAG],
         operation_id="notification_mark_read",
+        parameters=[NotificationAudienceQuerySerializer],
         request=MarkNotificationReadRequestSerializer,
         responses={
             200: UnreadNotificationCountSerializer,
@@ -236,17 +280,19 @@ class NotificationReadView(ThrottledWriteMixin, APIView):
         serializer = MarkNotificationReadRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         recipient = cast(User, request.user)
+        audience = _feed_audience(request)
         if serializer.validated_data.get("all"):
-            mark_all_read(recipient=recipient)
+            mark_all_read(recipient=recipient, audience=audience)
         else:
             try:
                 mark_read(
                     recipient=recipient,
+                    audience=audience,
                     notification_id=serializer.validated_data["notification_id"],
                 )
             except NotificationNotFoundError as error:
                 raise NotificationApiException(error) from error
-        return Response({"unread": unread_count(recipient)})
+        return Response({"unread": unread_count(recipient, audience=audience)})
 
 
 class DevOneSignalTestPushView(APIView):
@@ -267,6 +313,9 @@ class DevOneSignalTestPushView(APIView):
         body = request.data.get("body", "This is a test Instant booking notification.")
         data = request.data.get("data", {"type": "DEV_TEST"})
         url = request.data.get("url")
+        # The caller's own OneSignal app: a partner's, else a customer's.
+        is_partner = getattr(request.user, "partner_profile", None) is not None
+        app_id, rest_api_key = onesignal.app_credentials("PARTNER" if is_partner else "CUSTOMER")
 
         result = onesignal.send_push_to_external_ids(
             external_ids=[str(request.user.id)],
@@ -274,6 +323,8 @@ class DevOneSignalTestPushView(APIView):
             body=body,
             data=data,
             url=url,
+            app_id=app_id,
+            rest_api_key=rest_api_key,
         )
         return Response(
             result, status=status.HTTP_200_OK if result["success"] else status.HTTP_400_BAD_REQUEST
@@ -292,6 +343,7 @@ class DevMobileTestPushView(APIView):
         from django.conf import settings
 
         from apps.identity.models import User
+        from apps.mobile.models import PushDevice
         from apps.mobile.services import active_devices_for, deliver_push_intent
         from apps.notifications.services import request_notification
 
@@ -312,7 +364,7 @@ class DevMobileTestPushView(APIView):
         if not user:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        devices = active_devices_for(user)
+        devices = active_devices_for(user, app=PushDevice.App.PARTNER)
         if not devices:
             return Response(
                 {
@@ -328,6 +380,7 @@ class DevMobileTestPushView(APIView):
             recipient_id=user.id,
             purpose="partner.offer_created",
             channel="PUSH",
+            audience="PARTNER",
             template_code="partner_dispatch_offer",
             context={
                 "offer_id": offer_id,
@@ -511,7 +564,7 @@ class CustomerPushSubscriptionDetailView(APIView):
 
 
 class BasePushNotificationPreferencesView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
     role: str = ""
 
     @extend_schema(
@@ -558,7 +611,7 @@ class BasePushNotificationPreferencesView(APIView):
             ),
         },
     )
-    def patch(self, request: Request) -> Response:
+    def patch(self, request: Request) -> Response:  # noqa: PLR0912
         role = self.role
         user = cast(User, request.user)
         metadata = PushNotificationPreference.CATEGORY_METADATA.get(role, {})

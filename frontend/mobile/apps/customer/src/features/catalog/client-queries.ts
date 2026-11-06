@@ -8,6 +8,7 @@ import { getApiClient } from "@vsolve/mobile-core";
 export type Category = Schemas["Category"];
 export type ServiceCard = Schemas["ServiceCard"];
 export type ServiceDetail = Schemas["ServiceDetail"];
+export type PromoBanner = Schemas["PromoBanner"];
 
 const CATALOG_FRESHNESS = { ...STATIC_CONTENT, staleTime: 300_000 };
 
@@ -15,6 +16,20 @@ export function useCategories(enabled = true) {
   return useQuery({
     queryKey: queryKeys.catalog.categories(),
     queryFn: () => request(() => getApiClient().GET("/api/v1/categories/")),
+    enabled,
+    ...CATALOG_FRESHNESS,
+  });
+}
+
+export function usePromoBanners(categorySlug?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["catalog", "promo-banners", categorySlug ?? null],
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/promo-banners/", {
+          params: categorySlug ? { query: { category: categorySlug } } : undefined,
+        }),
+      ),
     enabled,
     ...CATALOG_FRESHNESS,
   });

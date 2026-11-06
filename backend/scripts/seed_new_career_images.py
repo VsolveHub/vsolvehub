@@ -13,11 +13,11 @@ sys.path.insert(0, str(backend_dir))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
 import django
+
 django.setup()
 
 from apps.listings.management.commands.seed_new_career_images import (
     Command,
-    sync_images_to_destinations,
 )
 
 if __name__ == "__main__":
@@ -25,4 +25,3 @@ if __name__ == "__main__":
     cmd = Command()
     cmd.handle()
     print("Done!")
-

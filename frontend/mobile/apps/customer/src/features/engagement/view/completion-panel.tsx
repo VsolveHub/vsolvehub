@@ -6,16 +6,19 @@ import { View } from "react-native";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { useAcceptCompletion } from "@/features/engagement/queries";
+import type { ProjectView } from "@/features/project/adapters";
 import type { EngagementView } from "@/features/engagement/adapters";
 import type { ModeNouns } from "@/features/engagement/view/engagement-status";
 
 export function CompletionPanel({
   engagement,
+  project = null,
   nouns,
   onDone,
   embedded = false,
 }: {
   engagement: EngagementView;
+  project?: ProjectView | null;
   nouns: ModeNouns;
   onDone: () => void;
   embedded?: boolean;
@@ -47,6 +50,7 @@ export function CompletionPanel({
   }
 
   if (!engagement.canAcceptCompletion) return null;
+  const handoverBlocks = project?.handover.blocksCompletion ?? false;
   const blocker = engagement.completionBlocker;
 
   return (
@@ -59,6 +63,10 @@ export function CompletionPanel({
       ) : blocker === "open_stage" ? (
         <Text className="mt-1 text-sm leading-6 text-text-secondary">
           There is still a {nouns.stage} outstanding on this {nouns.engagement}. That can happen after a change is agreed — the new work keeps its own check, and confirming here would not sweep it through. It comes back to you once that {nouns.stage} is settled.
+        </Text>
+      ) : handoverBlocks ? (
+        <Text className="mt-1 text-sm leading-6 text-text-secondary">
+          The professional has handed over what they made for you and you have not answered it yet. Accept it below first — this {nouns.engagement} deliberately cannot close while a delivery is unanswered.
         </Text>
       ) : (
         <>

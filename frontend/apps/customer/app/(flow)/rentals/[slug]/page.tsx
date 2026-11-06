@@ -15,6 +15,7 @@ import { Badge, ErrorState, Skeleton } from "@vsolve/ui";
 import { formatPaise } from "@/features/rentals/model";
 import { fetchRentalAsset } from "@/features/rentals/queries";
 import { RentalBookPanel } from "@/features/rentals/view";
+import { StayImageGallery } from "@/features/stays/view";
 import { RENTALS_HREF } from "@/lib/routes";
 import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
@@ -83,6 +84,7 @@ export default function RentalDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Asset Details & Trust Protocol */}
         <div className="lg:col-span-7 flex flex-col gap-6">
+          <StayImageGallery media={asset.media} title={asset.title} fit="contain" />
           <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold">

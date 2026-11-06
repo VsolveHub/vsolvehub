@@ -33,19 +33,19 @@ This guide details how to configure, test, and verify the end-to-end Instant Boo
 
 ```env
 # OneSignal Configuration
-ONESIGNAL_APP_ID=a4b12340-473f-4349-a874-bd4d1128688e
-ONESIGNAL_REST_API_KEY=os_v2_app_xxxxxxxxxxxxxxxxxxxxxxxx
+ONESIGNAL_PARTNER_APP_ID=a4b12340-473f-4349-a874-bd4d1128688e
+ONESIGNAL_PARTNER_REST_API_KEY=os_v2_app_xxxxxxxxxxxxxxxxxxxxxxxx
 ONESIGNAL_ENV=local
 DISPATCH_OFFER_EXPIRY_SECONDS=60
 ```
 
-> **Security Note:** `ONESIGNAL_REST_API_KEY` is strictly server-side. It must **never** be exposed in Next.js public variables (`NEXT_PUBLIC_*`).
+> **Security Note:** `ONESIGNAL_PARTNER_REST_API_KEY` is strictly server-side. It must **never** be exposed in Next.js public variables (`NEXT_PUBLIC_*`).
 
 ### Partner Portal (`frontend/apps/partner/.env.local`)
 
 ```env
 NEXT_PUBLIC_APP_ENV="local"
-NEXT_PUBLIC_ONESIGNAL_APP_ID="a4b12340-473f-4349-a874-bd4d1128688e"
+NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID="a4b12340-473f-4349-a874-bd4d1128688e"
 NEXT_PUBLIC_API_URL="http://localhost:8000"
 ```
 
@@ -206,7 +206,7 @@ cd backend
 ## 7. Production Deployment Checklist
 
 - [ ] **OneSignal REST API Key**:
-  - Configured securely in backend environment variables or secret manager (`ONESIGNAL_REST_API_KEY`).
+  - Configured securely in backend environment variables or secret manager (`ONESIGNAL_PARTNER_REST_API_KEY`).
   - **Never** prefixed with `NEXT_PUBLIC_` or bundled in frontend client code.
 - [ ] **OneSignal Environment**:
   - `ONESIGNAL_ENV=production` in Django backend.

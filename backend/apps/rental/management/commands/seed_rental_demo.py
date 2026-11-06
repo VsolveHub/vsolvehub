@@ -4,6 +4,7 @@ from datetime import time, timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -431,7 +432,6 @@ class Command(BaseCommand):
                 hold_deposit_for_demo=True,
             )
 
-        from django.core.management import call_command
         call_command("seed_new_rental_images")
 
         self.stdout.write(self.style.SUCCESS("seed_rental_demo completed."))

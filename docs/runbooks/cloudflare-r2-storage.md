@@ -61,6 +61,34 @@ python manage.py copy_files_to_r2 --include-supabase   # only if Supabase held p
 
 The command can safely be run again. Anything already in R2 is skipped.
 
+## 4. Move off the `r2.dev` address
+
+Production still serves the public bucket from `https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev`. Cloudflare rate-limits that address and does not cache it, so move to the custom domain:
+
+1. **Public bucket → Settings → Custom Domains → Connect domain:** `media.vsolvehub.com`. Cloudflare adds the DNS record; wait until the domain shows **Active**.
+2. Check one image opens on the new domain: replace `pub-32e84da8140449ddbc61c13539728e0e.r2.dev` with `media.vsolvehub.com` in any catalogue image link.
+3. On the server, set `R2_PUBLIC_BASE_URL=https://media.vsolvehub.com` and restart. New uploads use it from then on.
+4. Repoint the links saved before (catalogue artwork, stay, rental and listing photos). The first command only reports; the second writes:
+
+   ```
+   python manage.py rehost_public_media --from https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev
+   python manage.py rehost_public_media --from https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev --apply
+   ```
+
+5. Once a check finds nothing left on the old address, remove it from `OPTIMIZED_IMAGE_HOSTS` in `frontend/apps/customer/lib/remote-images.ts`. `media.vsolvehub.com` is already listed.
+
+Keep the `r2.dev` address enabled until step 4 has run, so no saved link breaks in between.
+
 ## Photo rules
 
 JPEG, PNG or WebP, at most **10 MB** per photo, checked by the file's contents. A review can have up to 5 photos, and only the reviewer's own uploads.
+
+## Catalogue photos
+
+Rental, stay, career, tile and safety story photos are served from the public bucket only, under
+`catalog/`. The originals in `frontend/apps/customer/public/catalog/` are the upload's source.
+
+`manage.py upload_catalog_images --source <folder>` uploads them and rewrites any saved `/catalog/...`
+link. It must run where `R2_*` names the bucket you mean: a developer's `.env` names a development
+bucket, so production uploads run on the server. Seeds save the full address through
+`apps.foundation.catalog_media.catalog_image_url`.

@@ -288,7 +288,7 @@ function MobileMyApplicationsScreen() {
 
                 {/* Employer */}
                 <Text className="text-xs text-text-secondary font-medium">
-                  {app.employer_name || "Apex Staffing Solutions"}
+                  {app.employer_name || "Verified Employer"}
                 </Text>
 
                 {/* 4-Stage Stepper Progress Bar */}
@@ -297,7 +297,7 @@ function MobileMyApplicationsScreen() {
                 {/* Applicant Info Box */}
                 <View className="rounded-xl bg-surface-sunken p-3.5 border border-line/40">
                   <Text className="text-xs text-text-secondary font-medium">
-                    Applicant: {app.applicant_name || snapshot.name || "Nune Rajesh"}
+                    Applicant: {app.applicant_name || snapshot.name || "You"}
                   </Text>
                 </View>
 

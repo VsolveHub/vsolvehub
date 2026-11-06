@@ -39,20 +39,20 @@ describe("resolveStatusView decision table", () => {
     expect(result).toBe("changes_needed");
   });
 
-  it("returns 'changes_needed' when a document has status REJECTED", () => {
+  it("returns 'changes_needed' when a rejected document can be replaced", () => {
     const result = resolveStatusView(
       { status: "UNDER_REVIEW" },
-      [{ status: "APPROVED" }, { status: "REJECTED" }],
+      [{ status: "APPROVED" }, { status: "REJECTED", can_replace: true } as any],
     );
     expect(result).toBe("changes_needed");
   });
 
-  it("returns 'changes_needed' when a document has scan_status REJECTED", () => {
+  it("asks for nothing when the rejected document cannot be replaced", () => {
     const result = resolveStatusView(
       { status: "SUBMITTED" },
-      [{ status: "PENDING", scan_status: "REJECTED" } as any],
+      [{ status: "REJECTED", can_replace: false } as any],
     );
-    expect(result).toBe("changes_needed");
+    expect(result).toBe("in_review");
   });
 
   it("returns 'changes_needed' when an expired doc is flagged", () => {

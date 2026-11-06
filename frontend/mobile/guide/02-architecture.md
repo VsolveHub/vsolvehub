@@ -138,22 +138,31 @@ Which screens need sign-in: exactly the ones the web gates. Public in Customer: 
 ## 6. Push notifications
 
 ```
-backend event ──► NotificationIntent (PUSH, or IN_APP mirrored) ──► apps.mobile ──► Expo Push ──► phone
+backend event ──► NotificationIntent (PUSH) ──► OneSignal (by external_id) ──► the person's browsers and phones
 ```
 
-- On sign-in (and on every app start while signed in), the app asks for permission once, gets the
-  Expo push token, and calls `POST /api/v1/mobile/devices/` with
-  `{ expo_push_token, app: "partner"|"customer", platform, app_version }`.
-- Every push carries `data: { notification_id?, target: { kind, id } | null, purpose }`.
-- A tap opens `targetHref(target)`. That is the same function the web notification feed uses,
-  ported from `features/notifications/model/feed.ts`. For `null` or an unknown kind, it opens the
-  notification panel. A tap from a closed app works the same way via
-  `Notifications.getLastNotificationResponseAsync()`.
-- Android channels: `offers` (max importance, alert sound, used for `partner.offer_created`) and
-  `default`.
-- In the foreground, a push shows as a banner. For offers, the Partner app's live offer sheet also
+The apps are OneSignal subscribers exactly like the websites: one send from Django reaches every
+device the person uses. All of it lives in `packages/core/src/push/onesignal.ts`.
+
+- Each app uses its own OneSignal app, the same one as its website (`EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID` /
+  `EXPO_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID` in `eas.json`; no shared App ID). `startPush()` runs at app start.
+- On sign-in (and on every app start while signed in), `linkPushUser()` calls
+  `OneSignal.login(user.id)` (the web's `OneSignal.login(userId)`), asks for permission once, and
+  reports the subscription to `POST /api/v1/{partner|customer}/push-subscriptions/sync/` with
+  `platform: ANDROID|IOS`. Django only pushes to people with a verified subscription, and dispatch
+  only offers instant jobs to partners with one. Sign-out deactivates it, then `OneSignal.logout()`.
+- Django sends the web link as `web_url` (browsers only) and in `data.url`, so a tap on a phone
+  opens the app, never the browser. A tap routes, in order: the job offer (`data.type ==
+  "DISPATCH_OFFER"` + `offer_id`), `targetHref(data.target)` (the web feed's function), the app
+  screen at `data.url`'s path when the app has that route, else the notification panel.
+- Partner job offers ride the partner OneSignal app's "Job offers" Android channel
+  (`ONESIGNAL_PARTNER_OFFER_CHANNEL_ID`): high importance and `booking_alert.wav`, which
+  `onesignal-expo-plugin` bundles.
+- In the foreground, a push shows as usual. For offers, the Partner app's live offer sheet also
   refreshes (it invalidates the offers query).
-- Browser preview: push is a no-op.
+- Expo Go and the browser preview: push is a no-op (OneSignal has no native module there).
+- The old Expo path (`apps.mobile` devices) only serves app builds made before OneSignal and is
+  off when `MOBILE_PUSH_PROVIDER=onesignal`.
 
 ## 7. Deep links
 
@@ -185,7 +194,7 @@ The server creates the payment attempt exactly as for the web (`provider`,
 | Location (presence, address pin) | `expo-location`, when-in-use only | "Vsolve Hub uses your location to find work near you and to confirm arrival." / "…to set the service address." |
 | Camera + photos (KYC, work evidence, request photos) | `expo-image-picker` | "Take photos of documents and work." / "Choose photos of documents and work." |
 | Files (PDF documents where web accepts PDF) | `expo-document-picker` | — |
-| Notifications | `expo-notifications` | Android 13+: POST_NOTIFICATIONS |
+| Notifications | `react-native-onesignal` | Android 13+: POST_NOTIFICATIONS |
 
 Blocked on Android: `ACCESS_BACKGROUND_LOCATION`, `RECORD_AUDIO`.
 

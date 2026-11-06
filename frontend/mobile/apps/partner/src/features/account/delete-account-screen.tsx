@@ -54,11 +54,8 @@ export function DeleteAccountScreen() {
         setIsDeleting(false);
         setStep("STEP_3_DONE");
       },
-      onError: () => {
-        // Even if the backend mock/network has an issue, transition to done for complete UI testability
-        setIsDeleting(false);
-        setStep("STEP_3_DONE");
-      },
+      // Never say "requested" when it was not: stay here and let them try again.
+      onError: () => setIsDeleting(false),
     });
   };
 
@@ -125,6 +122,11 @@ export function DeleteAccountScreen() {
         ) : null}
 
         {/* Screen 16: Delete account - Step 2 (Type DELETE) */}
+        {createRequest.isError ? (
+          <Text accessibilityRole="alert" style={{ color: "#b91c1c", fontWeight: "600", marginBottom: 12 }}>
+            We could not send your request. Nothing has changed. Check your connection and try again.
+          </Text>
+        ) : null}
         {step === "STEP_2_CONFIRM" ? (
           <View style={styles.stepContainer}>
             {/* Smaller Red Trash Icon */}

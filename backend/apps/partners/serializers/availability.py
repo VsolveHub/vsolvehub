@@ -103,6 +103,25 @@ class PartnerScheduleSerializer(serializers.Serializer[dict[str, object]]):
     exceptions = PartnerAvailabilityExceptionSerializer(many=True, read_only=True)
 
 
+class OperationsScheduleAreaSerializer(serializers.Serializer[dict[str, object]]):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+
+
+class OperationsScheduleConsentSerializer(serializers.Serializer[dict[str, object]]):
+    purpose = serializers.CharField()
+    document_version = serializers.CharField()
+    accepted_at = serializers.DateTimeField()
+
+
+class OperationsPartnerScheduleSerializer(PartnerScheduleSerializer):
+    """A Partner's current hours, with what an operator needs to change them without typing ids:
+    the areas the Partner serves and the consent receipts a change may be recorded against."""
+
+    service_areas = OperationsScheduleAreaSerializer(many=True, read_only=True)
+    consents = OperationsScheduleConsentSerializer(many=True, read_only=True)
+
+
 class PartnerGoOnlineSerializer(serializers.Serializer[dict[str, object]]):
     service_area_id = serializers.UUIDField()
     latitude = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=-90, max_value=90)

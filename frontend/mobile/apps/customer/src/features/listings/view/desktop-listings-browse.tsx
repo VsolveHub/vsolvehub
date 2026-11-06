@@ -26,7 +26,6 @@ import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useSavedItems } from "../../stays/use-saved-items";
 import { getCareerImage } from "../career-images";
 import { fetchListingFilters, fetchListings, type Listing } from "../queries";
-import { DEMO_LISTINGS } from "./listings-browse-screen";
 
 export const DEFAULT_CATEGORY_PILLS = [
   { label: "All Roles", value: "" },
@@ -152,7 +151,7 @@ function DesktopListingCard({ listing }: { listing: Listing }) {
     .replace(/^general(\s*shift)?$/i, "General shift")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const { url: heroImage } = getCareerImage(listing);
+  const heroImage = getCareerImage(listing);
   const employerName =
     listing.company_name ||
     listing.poster_name ||
@@ -172,12 +171,16 @@ function DesktopListingCard({ listing }: { listing: Listing }) {
         onPress={handleCardPress}
         className="w-full md:w-[21%] md:min-w-[200px] md:max-w-[240px] h-52 md:h-full self-stretch shrink-0 overflow-hidden rounded-t-[24px] md:rounded-tr-none md:rounded-l-[24px] bg-slate-100 cursor-pointer"
       >
-        <Image
-          source={{ uri: heroImage }}
-          contentFit="cover"
-          style={{ width: "100%", height: "100%" }}
-          transition={300}
-        />
+        {heroImage ? (
+          <Image
+            source={{ uri: heroImage }}
+            contentFit="cover"
+            style={{ width: "100%", height: "100%" }}
+            transition={300}
+          />
+        ) : (
+          <View className="h-full w-full bg-surface-sunken" />
+        )}
       </Pressable>
 
       {/* Right Section: Job Information */}
@@ -378,7 +381,7 @@ export function DesktopListingsBrowse() {
 
   const displayListings = useMemo(() => {
     const list =
-      (rawListings as Listing[]).length > 0 ? (rawListings as Listing[]) : DEMO_LISTINGS;
+      rawListings as Listing[];
     if (selectedCategory) {
       return list.filter((item) => {
         const cat = (item.job_category || item.service_name || "").toLowerCase();

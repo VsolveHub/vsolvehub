@@ -3,18 +3,40 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 from rest_framework.test import APIClient
 
 from apps.identity.models import User
 from apps.notifications.onesignal import send_push_to_external_ids
 
+#: Every send names its OneSignal app; there is no default to fall back to.
+CREDS = {"app_id": "test-app-id-12345", "rest_api_key": "test-rest-key-99999"}
+
 
 @pytest.fixture(autouse=True)
 def configure_onesignal_settings(settings):
-    settings.ONESIGNAL_APP_ID = "test-app-id-12345"
-    settings.ONESIGNAL_REST_API_KEY = "test-rest-key-99999"
     settings.ONESIGNAL_API_URL = "https://api.onesignal.com/notifications"
     settings.ONESIGNAL_ENV = "local"
+
+
+@pytest.mark.parametrize("channel", ["offer-channel-uuid", None])
+def test_android_channel_is_sent_only_when_given(channel: str | None) -> None:
+    with patch("requests.Session.post") as mock_post:
+        mock_post.return_value = MagicMock(status_code=200, content=b'{"id": "n-1"}')
+        mock_post.return_value.json.return_value = {"id": "n-1"}
+
+        send_push_to_external_ids(
+            external_ids=["user-1"],
+            heading="h",
+            body="b",
+            data={},
+            android_channel_id=channel,
+            **CREDS,
+        )
+
+    payload = mock_post.call_args.kwargs["json"]
+    assert payload.get("android_channel_id") == channel
+    assert "web_url" not in payload
 
 
 def test_send_push_to_external_ids_correct_payload():
@@ -37,6 +59,7 @@ def test_send_push_to_external_ids_correct_payload():
             body=body,
             data=data,
             url=launch_url,
+            **CREDS,
         )
 
         assert result["success"] is True
@@ -54,17 +77,18 @@ def test_send_push_to_external_ids_correct_payload():
         assert json_payload["include_aliases"] == {"external_id": ["partner-uuid-1", "user-uuid-1"]}
         assert json_payload["headings"] == {"en": heading}
         assert json_payload["contents"] == {"en": body}
-        assert json_payload["data"] == data
-        assert json_payload["url"] == launch_url
+        # The link rides in `data` for the apps and as `web_url` for browsers only: a phone
+        # given `url` opens the browser instead of the app.
+        assert json_payload["data"] == {**data, "url": launch_url}
+        assert json_payload["web_url"] == launch_url
+        assert "url" not in json_payload
 
         # Verify Authorization header uses server-side REST API key
         assert headers["Authorization"] == "Basic test-rest-key-99999"
         assert headers["Content-Type"] == "application/json; charset=utf-8"
 
 
-def test_send_push_os_v2_key_authorization_header(settings):
-    settings.ONESIGNAL_APP_ID = "test-app-id-12345"
-    settings.ONESIGNAL_REST_API_KEY = "os_v2_app_real_api_key_here"
+def test_send_push_os_v2_key_authorization_header() -> None:
 
     with patch("requests.Session.post") as mock_post:
         mock_response = MagicMock()
@@ -78,10 +102,25 @@ def test_send_push_os_v2_key_authorization_header(settings):
             heading="Title",
             body="Body",
             data={},
+            app_id="test-app-id-12345",
+            rest_api_key="os_v2_app_real_api_key_here",
         )
         assert result["success"] is True
         headers = mock_post.call_args.kwargs["headers"]
         assert headers["Authorization"] == "Key os_v2_app_real_api_key_here"
+
+
+@pytest.mark.parametrize(
+    "creds", [{"app_id": "", "rest_api_key": "k"}, {"app_id": "a", "rest_api_key": ""}]
+)
+def test_a_send_without_its_app_is_refused_not_redirected(creds: dict[str, str]) -> None:
+    with patch("requests.Session.post") as mock_post:
+        result = send_push_to_external_ids(
+            external_ids=["u-1"], heading="h", body="b", data={}, **creds
+        )
+
+    assert result["success"] is False
+    mock_post.assert_not_called()
 
 
 def test_send_push_empty_external_ids_rejected():
@@ -91,6 +130,7 @@ def test_send_push_empty_external_ids_rejected():
             heading="Test",
             body="Test body",
             data={},
+            **CREDS,
         )
         assert result["success"] is False
         assert "No valid external_ids provided" in result["errors"]
@@ -110,6 +150,7 @@ def test_send_push_api_error_response_handled():
             heading="Test",
             body="Test",
             data={},
+            **CREDS,
         )
 
         assert result["success"] is False
@@ -118,7 +159,6 @@ def test_send_push_api_error_response_handled():
 
 
 def test_send_push_network_exception_handled():
-    import requests
 
     with patch(
         "requests.Session.post", side_effect=requests.exceptions.ConnectTimeout("Network timeout")
@@ -128,6 +168,7 @@ def test_send_push_network_exception_handled():
             heading="Test",
             body="Test",
             data={},
+            **CREDS,
         )
 
         assert result["success"] is False
@@ -153,6 +194,7 @@ def test_send_push_with_collapse_id_web_push_topic_ttl_priority():
             ttl=45,
             priority=10,
             app_id="partner-app-999",
+            rest_api_key="test-rest-key-99999",
         )
 
         assert result["success"] is True

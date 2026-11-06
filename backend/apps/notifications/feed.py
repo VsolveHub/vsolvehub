@@ -14,6 +14,13 @@ make the kill switch a lie. `FAILED` cannot occur on in-app — the write is the
 excluded rather than assumed away, because the day a sender does touch these rows, silently
 showing failures as if they had arrived is the bug nobody would look for.
 
+## Why the feed is split by audience
+
+One person can be a Customer and a Partner. Each notice records the side it speaks to
+(`NotificationIntent.audience`), and each app reads only its own side, so a partner job offer
+never lands in the customer app's bell. A blank audience is a row written before audiences were
+recorded that the backfill could not place; it is shown on both sides rather than hidden.
+
 ## Why reading someone else's notice is a 404
 
 The same rule the requirement selectors use: existence is itself private, and a 403 confirms a
@@ -23,7 +30,7 @@ confirmed guess would be worth something.
 
 import uuid
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.identity.models import User
@@ -54,31 +61,32 @@ class NotificationNotFoundError(RuntimeError):
         self.retryable = False
 
 
-def notification_feed(recipient: User) -> QuerySet[NotificationIntent]:
-    """This person's in-app notices, newest first.
+def notification_feed(recipient: User, *, audience: str) -> QuerySet[NotificationIntent]:
+    """This person's in-app notices for one side of the platform, newest first.
 
     Ordering comes from `Meta.ordering` — `("-created_at", "id")` — which is also what the cursor
     paginator declares, so the page boundary and the sort cannot disagree.
     """
 
     return NotificationIntent.objects.filter(
+        Q(audience=audience) | Q(audience=""),
         recipient=recipient,
         channel=NotificationIntent.Channel.IN_APP,
         status__in=_VISIBLE_STATUSES,
     )
 
 
-def unread_count(recipient: User) -> int:
+def unread_count(recipient: User, *, audience: str) -> int:
     """How many of this person's in-app notices are unopened.
 
     This is the number behind a badge polled on every authenticated screen in both apps, so it is
     a `COUNT` over the covering index and never a length of a materialised page.
     """
 
-    return notification_feed(recipient).filter(read_at__isnull=True).count()
+    return notification_feed(recipient, audience=audience).filter(read_at__isnull=True).count()
 
 
-def mark_read(*, recipient: User, notification_id: uuid.UUID) -> NotificationIntent:
+def mark_read(*, recipient: User, audience: str, notification_id: uuid.UUID) -> NotificationIntent:
     """Mark one notice read. Idempotent — a second call keeps the first timestamp.
 
     Keeping the original `read_at` matters more than it looks: "when did they first see this" is
@@ -86,7 +94,9 @@ def mark_read(*, recipient: User, notification_id: uuid.UUID) -> NotificationInt
     forward would make a notice look freshly seen every time the panel was reopened.
     """
 
-    notification = notification_feed(recipient).filter(id=notification_id).first()
+    notification = (
+        notification_feed(recipient, audience=audience).filter(id=notification_id).first()
+    )
     if notification is None:
         raise NotificationNotFoundError
     if notification.read_at is None:
@@ -95,11 +105,16 @@ def mark_read(*, recipient: User, notification_id: uuid.UUID) -> NotificationInt
     return notification
 
 
-def mark_all_read(*, recipient: User) -> int:
-    """Mark every unread notice read, and report how many moved.
+def mark_all_read(*, recipient: User, audience: str) -> int:
+    """Mark every unread notice on one side read, and report how many moved.
 
     One `UPDATE`, so a feed with a long unread tail does not become a long transaction. Rows
-    already read keep their timestamps because the filter excludes them.
+    already read keep their timestamps because the filter excludes them. "Mark all read" in the
+    customer app leaves the partner side's unread notices alone.
     """
 
-    return notification_feed(recipient).filter(read_at__isnull=True).update(read_at=timezone.now())
+    return (
+        notification_feed(recipient, audience=audience)
+        .filter(read_at__isnull=True)
+        .update(read_at=timezone.now())
+    )

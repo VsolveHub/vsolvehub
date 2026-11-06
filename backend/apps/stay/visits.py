@@ -195,6 +195,11 @@ def _notify(
             recipient_id=prop.host.user_id if to_host else visit.customer_id,
             purpose=purpose,
             channel=NotificationIntent.Channel.IN_APP,
+            audience=(
+                NotificationIntent.Audience.PARTNER
+                if to_host
+                else NotificationIntent.Audience.CUSTOMER
+            ),
             template_code=template_code,
             context={
                 "property_title": prop.title,

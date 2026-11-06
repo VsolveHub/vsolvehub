@@ -578,7 +578,9 @@ class Command(BaseCommand):
                 unit_name="Double sharing AC",
                 nightly_rate_paise=85000,
                 sharing_count=2,
-                image_urls=["https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop"],
+                image_urls=[
+                    "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop"
+                ],
             )
             prop.structured_fields = {
                 "ac": True,
@@ -650,7 +652,9 @@ class Command(BaseCommand):
                 unit_name="Executive Single AC Room",
                 nightly_rate_paise=160000,
                 sharing_count=1,
-                image_urls=["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop"],
+                image_urls=[
+                    "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop"
+                ],
             )
             single_prop.structured_fields = {
                 "ac": True,
@@ -704,7 +708,9 @@ class Command(BaseCommand):
                 unit_name="Deluxe Suite",
                 nightly_rate_paise=450000,
                 sharing_count=2,
-                image_urls=["https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1200&fit=crop"],
+                image_urls=[
+                    "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1200&fit=crop"
+                ],
             )
             hotel_prop.structured_fields = {
                 "star_rating": "5 Star",
@@ -750,7 +756,9 @@ class Command(BaseCommand):
                 location_text="Hyderabad",
                 unit_name="Bed",
                 nightly_rate_paise=45000,
-                image_urls=["https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop"],
+                image_urls=[
+                    "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&fit=crop"
+                ],
             )
             submit_property(prop=pending, host=profile)
 
@@ -834,7 +842,9 @@ class Command(BaseCommand):
                 "rating": 5,
                 "body": "Excellent stay! Clean rooms, fast WiFi, and delicious food provided daily.",
                 "comment": "Excellent stay! Clean rooms, fast WiFi, and delicious food provided daily.",
-                "image_urls": ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop"],
+                "image_urls": [
+                    "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&fit=crop"
+                ],
             },
         )
 

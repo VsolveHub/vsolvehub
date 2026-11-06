@@ -34,6 +34,11 @@ import { useRequestStartOtp, useVisit } from "@/features/visit/queries";
  * nobody else. A job never waits on a text message arriving; the SMS, when one
  * is sent, is a copy.
  */
+/** Whether a visit at this status has a start code to show. Callers draw no frame around nothing. */
+export function showsStartCode(status: Schemas["BookingStatusEnum"]): boolean {
+  return status === "ARRIVED";
+}
+
 export function VisitStartCode({
   bookingId,
   status,
@@ -46,7 +51,7 @@ export function VisitStartCode({
   const visit = useVisit(bookingId);
   const requestOtp = useRequestStartOtp();
 
-  if (status !== "ARRIVED") return null;
+  if (!showsStartCode(status)) return null;
 
   const code = requestOtp.data?.code ?? null;
 

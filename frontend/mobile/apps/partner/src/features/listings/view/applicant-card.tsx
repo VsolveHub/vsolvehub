@@ -70,14 +70,15 @@ export function ApplicantCard({
     snapshot.area ||
     snapshot.city ||
     (application as any).location_text ||
-    "Hitech City, Hyderabad";
+    null;
 
+  // What the candidate said, or the role they applied for: never a stand-in.
   const jobsWanted =
     snapshot.jobs_wanted ||
     snapshot.role ||
     snapshot.desired_roles ||
     application.listing_title ||
-    "Junior Full Stack Developer";
+    null;
 
   const resumeUrl =
     application.resume_url ||
@@ -170,14 +171,18 @@ export function ApplicantCard({
 
       {/* Candidate Metadata */}
       <View className="mt-3 gap-1">
-        <Text className="text-xs text-[#334155]">
-          <Text className="font-semibold text-[#64748b]">location: </Text>
-          {locationText}
-        </Text>
-        <Text className="text-xs text-[#334155]">
-          <Text className="font-semibold text-[#64748b]">jobs wanted: </Text>
-          {jobsWanted}
-        </Text>
+        {locationText ? (
+          <Text className="text-xs text-[#334155]">
+            <Text className="font-semibold text-[#64748b]">location: </Text>
+            {locationText}
+          </Text>
+        ) : null}
+        {jobsWanted ? (
+          <Text className="text-xs text-[#334155]">
+            <Text className="font-semibold text-[#64748b]">jobs wanted: </Text>
+            {jobsWanted}
+          </Text>
+        ) : null}
         {snapshot.experience ? (
           <Text className="text-xs text-[#334155]">
             <Text className="font-semibold text-[#64748b]">experience: </Text>
@@ -218,15 +223,17 @@ export function ApplicantCard({
       <View className="mt-3 rounded-xl border border-[#e2e8f0] bg-white p-3 flex-row items-center justify-between">
         {isContactUnlocked ? (
           <>
-            <Pressable
-              onPress={handleCall}
-              className="flex-row items-center gap-2"
-            >
-              <Phone size={15} color="#059669" />
-              <Text className="text-sm font-bold text-[#071328]">
-                {phone || "Phone provided"}
-              </Text>
-            </Pressable>
+            {phone ? (
+              <Pressable
+                onPress={handleCall}
+                className="flex-row items-center gap-2"
+              >
+                <Phone size={15} color="#059669" />
+                <Text className="text-sm font-bold text-[#071328]">{phone}</Text>
+              </Pressable>
+            ) : (
+              <Text className="text-xs text-[#64748b]">No phone number on file</Text>
+            )}
             <Text className="text-xs text-[#64748b]">
               Unlocked on {formatDmy(application.contact_revealed_at)}
             </Text>

@@ -186,6 +186,7 @@ class PartnerOnlineSession(models.Model):
         PRESENCE_EXPIRED = "PRESENCE_EXPIRED", "Presence expired"
         SUSPENDED = "SUSPENDED", "Partner suspended"
         OFFBOARDED = "OFFBOARDED", "Partner offboarded"
+        MISSED_OFFERS = "MISSED_OFFERS", "Missed consecutive offers"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner = models.ForeignKey(

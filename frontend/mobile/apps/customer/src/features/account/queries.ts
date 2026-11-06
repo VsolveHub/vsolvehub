@@ -378,24 +378,12 @@ export function useCoinTransactions() {
    Referral queries
    ------------------------------------------------------------------------- */
 
-export interface CustomerReferralSummary {
-  code: string;
-  referral_code?: string;
-  share_url: string;
-  share_message: string;
-  total_earned_paise: number;
-  total_earned_coins: number;
-  invited_count: number;
-  successful_referral_count: number;
-  pending_referral_count: number;
-  current_tier_min: number | null;
-  next_tier_min: number | null;
-  referrals_to_next_tier: number | null;
-  active_program?: {
-    name?: string;
-    description?: string;
-  };
-}
+/**
+ * The generated contract type, not a hand-written copy: the copy this replaced invented a
+ * `referral_code` field the server never sends (it sends `code`), so every customer saw and
+ * shared a placeholder code.
+ */
+export type CustomerReferralSummary = Schemas["CustomerReferralSummary"];
 
 export interface ReferralAttribution {
   id: string;
@@ -416,10 +404,10 @@ export function useCustomerReferral() {
   return useQuery({
     queryKey: referralKeys.summary,
     queryFn: async () => {
-      const data = await request(() =>
+      const data: CustomerReferralSummary = await request(() =>
         getApiClient().GET("/api/v1/customer/referral/"),
       );
-      return data as unknown as CustomerReferralSummary;
+      return data;
     },
     ...SESSION_STATE,
   });
@@ -439,5 +427,47 @@ export function useReferralAttributions() {
       return page?.results ?? [];
     },
     ...SESSION_STATE,
+  });
+}
+
+export function useValidateReferralCode() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      request(() =>
+        getApiClient().POST("/api/v1/customer/referral/validate/", {
+          body: { code },
+        }),
+      ),
+  });
+}
+
+export type PushPreferenceItem = Schemas["PushPreferenceItem"];
+export type PushPreferencesResponse = Schemas["PushPreferences"];
+
+export function usePushNotificationPreferences() {
+  return useQuery<PushPreferencesResponse>({
+    queryKey: ["customer", "push-preferences"],
+    queryFn: () =>
+      request<PushPreferencesResponse>(() =>
+        getApiClient().GET("/api/v1/customer/notification-preferences/"),
+      ),
+    ...SESSION_STATE,
+  });
+}
+
+export function useUpdatePushNotificationPreference() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { category: string; isEnabled: boolean }) =>
+      request<PushPreferencesResponse>(() =>
+        getApiClient().PATCH("/api/v1/customer/notification-preferences/", {
+          body: { category: input.category, is_enabled: input.isEnabled },
+        }),
+      ),
+    onSuccess: (data: PushPreferencesResponse) => {
+      queryClient.setQueryData(["customer", "push-preferences"], data);
+    },
+    retry: false,
   });
 }

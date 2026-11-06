@@ -73,11 +73,13 @@ def _notice(
     purpose: str = "m2.requirement.closed",
     context: dict[str, Any] | None = None,
     idempotency_key: str = "",
+    audience: str = NotificationIntent.Audience.CUSTOMER,
 ) -> NotificationIntent:
     return request_notification(
         recipient_id=recipient.id,
         purpose=purpose,
         channel=NotificationIntent.Channel.IN_APP,
+        audience=audience,
         template_code=template_code,
         context=context or {},
         idempotency_key=idempotency_key,
@@ -110,6 +112,7 @@ def test_only_an_in_app_notice_may_carry_a_read_timestamp() -> None:
         recipient_id=recipient.id,
         purpose="partner.offer_created",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_offer_created",
     )
 
@@ -155,6 +158,43 @@ def test_every_registered_template_renders_from_its_documented_context() -> None
         # Partner application notices (`apps.partners.services.base._notify_application_event`).
         "reason": "The photo is blurred",
         "document": "Government identity",
+        # Booked-visit notices (`apps.fulfilment.visit_notices`).
+        "service": "Door Repair",
+        "when": "Thu 5 Nov, 2:00 pm",
+        "time": "2:00 pm",
+        "booking_id": "VSH-1042",
+        # Stays (`apps.stay`): enquiries and visits.
+        "property_title": "Lakeview 2BHK",
+        "host_name": "Ravi",
+        "guest_name": "Anita",
+        "response_text": "Yes, it is available.",
+        "check_in": "Mon, 1 Dec",
+        "host_note": "Booked for those dates.",
+        "visit_date": "Sat, 8 Nov",
+        "visit_time": "11:00 am",
+        "reason_text": "The owner is travelling.",
+        # Jobs board (`apps.listings`).
+        "job_title": "Site supervisor",
+        "place": "Gachibowli",
+        "score": "92",
+        "business_name": "Anvaya Interiors",
+        "count": "4",
+        "message": "Shortlisted",
+        "mode": "phone call",
+        "candidate_name": "Suresh",
+        "note": "Please bring your ID.",
+        # Rentals (`apps.rental`).
+        "asset_title": "Concrete mixer",
+        "customer_name": "Kiran",
+        "start_date": "Mon, 10 Nov",
+        "end_date": "Wed, 12 Nov",
+        "approved_amount": "₹800",
+        "pin": "4821",
+        "total_amount": "₹2,400",
+        "deposit_amount": "₹1,000",
+        "amount_asked": "₹1,200",
+        "refund_amount": "₹400",
+        "deducted_amount": "₹800",
     }
     for template_code in registered_template_codes():
         rendered = render_notification(template_code=template_code, context=context)
@@ -192,10 +232,11 @@ def test_a_feed_carries_only_this_persons_in_app_notices() -> None:
         recipient_id=mine.id,
         purpose="partner.offer_created",
         channel=NotificationIntent.Channel.PUSH,
+        audience=NotificationIntent.Audience.PARTNER,
         template_code="partner_offer_created",
     )
 
-    feed = list(notification_feed(mine))
+    feed = list(notification_feed(mine, audience=NotificationIntent.Audience.CUSTOMER))
 
     assert len(feed) == 1, "A feed showed another channel, another person, or both."
     assert feed[0].recipient_id == mine.id
@@ -206,11 +247,13 @@ def test_unread_count_falls_as_notices_are_opened() -> None:
     first = _notice(recipient)
     _notice(recipient)
     _notice(recipient)
-    assert unread_count(recipient) == THREE_NOTICES
+    assert unread_count(recipient, audience=NotificationIntent.Audience.CUSTOMER) == THREE_NOTICES
 
-    mark_read(recipient=recipient, notification_id=first.id)
+    mark_read(
+        recipient=recipient, audience=NotificationIntent.Audience.CUSTOMER, notification_id=first.id
+    )
 
-    assert unread_count(recipient) == TWO_NOTICES
+    assert unread_count(recipient, audience=NotificationIntent.Audience.CUSTOMER) == TWO_NOTICES
 
 
 def test_reading_a_notice_twice_keeps_the_first_timestamp() -> None:
@@ -219,8 +262,16 @@ def test_reading_a_notice_twice_keeps_the_first_timestamp() -> None:
     recipient = _user()
     notice = _notice(recipient)
 
-    first_read = mark_read(recipient=recipient, notification_id=notice.id).read_at
-    second_read = mark_read(recipient=recipient, notification_id=notice.id).read_at
+    first_read = mark_read(
+        recipient=recipient,
+        audience=NotificationIntent.Audience.CUSTOMER,
+        notification_id=notice.id,
+    ).read_at
+    second_read = mark_read(
+        recipient=recipient,
+        audience=NotificationIntent.Audience.CUSTOMER,
+        notification_id=notice.id,
+    ).read_at
 
     assert first_read == second_read, "Reopening the panel made an old notice look freshly seen."
 
@@ -230,10 +281,10 @@ def test_marking_all_read_leaves_nothing_unread_and_reports_what_moved() -> None
     _notice(recipient)
     _notice(recipient)
 
-    moved = mark_all_read(recipient=recipient)
+    moved = mark_all_read(recipient=recipient, audience=NotificationIntent.Audience.CUSTOMER)
 
     assert moved == TWO_NOTICES
-    assert unread_count(recipient) == 0
+    assert unread_count(recipient, audience=NotificationIntent.Audience.CUSTOMER) == 0
 
 
 def test_reading_somebody_elses_notice_is_a_not_found() -> None:
@@ -244,7 +295,127 @@ def test_reading_somebody_elses_notice_is_a_not_found() -> None:
     theirs_notice = _notice(theirs)
 
     with pytest.raises(NotificationNotFoundError):
-        mark_read(recipient=mine, notification_id=theirs_notice.id)
+        mark_read(
+            recipient=mine,
+            audience=NotificationIntent.Audience.CUSTOMER,
+            notification_id=theirs_notice.id,
+        )
+
+
+# --------------------------------------------------------------------------------------------
+# Which side of a person a row belongs to
+# --------------------------------------------------------------------------------------------
+
+
+def _partner_notice(recipient: User) -> NotificationIntent:
+    return _notice(
+        recipient,
+        purpose="m2.proposal.rejected",
+        template_code="m2_proposal_rejected",
+        audience=NotificationIntent.Audience.PARTNER,
+    )
+
+
+def test_a_dual_role_persons_customer_feed_leaves_out_their_partner_notices() -> None:
+    """Registered as a Partner first, then as a Customer: each app shows only its own side."""
+
+    person = _user()
+    customer_notice = _notice(person)
+    partner_notice = _partner_notice(person)
+
+    customer_side = list(notification_feed(person, audience=NotificationIntent.Audience.CUSTOMER))
+    partner_side = list(notification_feed(person, audience=NotificationIntent.Audience.PARTNER))
+
+    assert [row.id for row in customer_side] == [customer_notice.id]
+    assert [row.id for row in partner_side] == [partner_notice.id]
+
+
+def test_marking_all_read_in_one_app_leaves_the_other_sides_notices_unread() -> None:
+    person = _user()
+    _notice(person)
+    _partner_notice(person)
+
+    moved = mark_all_read(recipient=person, audience=NotificationIntent.Audience.CUSTOMER)
+
+    assert moved == 1
+    assert unread_count(person, audience=NotificationIntent.Audience.PARTNER) == 1
+
+
+def test_a_partner_notice_cannot_be_marked_read_from_the_customer_side() -> None:
+    person = _user()
+    partner_notice = _partner_notice(person)
+
+    with pytest.raises(NotificationNotFoundError):
+        mark_read(
+            recipient=person,
+            audience=NotificationIntent.Audience.CUSTOMER,
+            notification_id=partner_notice.id,
+        )
+
+
+def test_a_row_written_before_audiences_shows_on_both_sides() -> None:
+    """A row the backfill could not place is shown rather than hidden."""
+
+    person = _user()
+    legacy = _notice(person)
+    NotificationIntent.objects.filter(id=legacy.id).update(audience="")
+
+    for audience in (NotificationIntent.Audience.CUSTOMER, NotificationIntent.Audience.PARTNER):
+        assert [row.id for row in notification_feed(person, audience=audience)] == [legacy.id]
+
+
+def test_the_endpoints_read_the_side_the_app_names() -> None:
+    person = _user()
+    _notice(person)
+    _partner_notice(person)
+    _partner_notice(person)
+    client = _client(person)
+
+    customer_feed = client.get("/api/v1/notifications/", {"audience": "customer"})
+    partner_count = client.get("/api/v1/notifications/unread-count/", {"audience": "partner"})
+    customer_count = client.get("/api/v1/notifications/unread-count/", {"audience": "customer"})
+
+    assert [row["title"] for row in customer_feed.json()["results"]] == [
+        render_notification(template_code=SIMPLE_TEMPLATE, context={}).title
+    ]
+    assert partner_count.json() == {"unread": TWO_NOTICES}
+    assert customer_count.json() == {"unread": 1}
+
+
+def test_mark_all_read_through_the_endpoint_stays_on_its_side() -> None:
+    person = _user()
+    _notice(person)
+    _partner_notice(person)
+    client = _client(person)
+
+    response = client.post(
+        "/api/v1/notifications/read/?audience=partner",
+        {"all": True},
+        content_type="application/json",
+    )
+
+    assert response.json() == {"unread": 0}
+    assert unread_count(person, audience=NotificationIntent.Audience.CUSTOMER) == 1
+
+
+def test_without_an_audience_a_session_with_no_role_reads_the_customer_side() -> None:
+    """Every account holds the customer role, so that is the side an unnamed read gets."""
+
+    person = _user()
+    _partner_notice(person)
+    client = _client(person)
+
+    response = client.get("/api/v1/notifications/unread-count/")
+
+    assert response.json() == {"unread": 0}
+
+
+def test_an_unknown_audience_is_refused() -> None:
+    client = _client(_user())
+
+    response = client.get("/api/v1/notifications/", {"audience": "vendor"})
+
+    assert response.status_code == HTTP_BAD_REQUEST
 
 
 # --------------------------------------------------------------------------------------------
@@ -280,6 +451,7 @@ def test_an_explicit_target_is_published_before_generic_context_ids() -> None:
         recipient,
         purpose="m2.invitation.received",
         template_code="m2_invitation_received",
+        audience=NotificationIntent.Audience.PARTNER,
         context={
             "requirement_id": requirement_id,
             "target_kind": "PROJECT_INVITATION",
@@ -288,7 +460,7 @@ def test_an_explicit_target_is_published_before_generic_context_ids() -> None:
     )
     client = _client(recipient)
 
-    response = client.get("/api/v1/notifications/")
+    response = client.get("/api/v1/notifications/", {"audience": "partner"})
 
     assert response.status_code == HTTP_OK
     assert response.json()["results"][0]["target"] == {

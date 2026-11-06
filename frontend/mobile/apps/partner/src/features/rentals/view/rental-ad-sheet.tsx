@@ -1,11 +1,13 @@
+// Ported from frontend/apps/partner/features/rentals/view/rentals-workspace.tsx
 import { Button, COLOR_TOKENS, Dialog, QuantityStepper, Text } from "@vsolve/mobile-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, Trash2, X } from "lucide-react-native";
+import { Camera, MapPin, Trash2, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
+import { getCurrentPosition, PlaceSearch, useReverseGeocode } from "@vsolve/mobile-core";
 import type { AssetSchema, PartnerRentalAsset } from "../model";
 import {
   createPartnerRentalAsset,
@@ -44,6 +46,50 @@ export function RentalAdSheet({
   const [depositOverridden, setDepositOverridden] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [locationText, setLocationText] = useState("");
+  const [pin, setPin] = useState<{ latitude: string; longitude: string } | null>(null);
+  const [addressLine, setAddressLine] = useState("");
+  const [area, setArea] = useState("");
+  const [city, setCity] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [formattedAddress, setFormattedAddress] = useState("");
+
+  const reverseGeocode = useReverseGeocode();
+
+  function placePin(lat: string, lng: string) {
+    setPin({ latitude: lat, longitude: lng });
+    reverseGeocode.mutate(
+      { latitude: lat, longitude: lng },
+      {
+        onSuccess: (found) => {
+          setArea(found.locality || "");
+          setCity(found.city || "");
+          setPincode(found.postal_code ? found.postal_code.replace(/\D/g, "").slice(0, 6) : "");
+          setFormattedAddress(
+            found.formatted_address ||
+              [found.line1, found.locality, found.city, found.postal_code].filter(Boolean).join(", "),
+          );
+          if (!addressLine.trim() && found.line1) {
+            setAddressLine(found.line1);
+          }
+        },
+      },
+    );
+  }
+
+  async function handleLocate() {
+    try {
+      const pos = await getCurrentPosition();
+      placePin(
+        pos.coords.latitude.toFixed(6),
+        pos.coords.longitude.toFixed(6),
+      );
+    } catch {
+      Alert.alert(
+        "Location Unavailable",
+        "Could not detect your current location. Please search for your area or landmark.",
+      );
+    }
+  }
   const [description, setDescription] = useState("");
 
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState("");
@@ -75,9 +121,7 @@ export function RentalAdSheet({
   const requiredSchemaKeys = new Set(Array.isArray(assetSchema?.required) ? assetSchema.required : []);
 
   // React 19 State Adjustment during render when editingAsset changes
-  const [prevEditingAssetId, setPrevEditingAssetId] = useState<string | null | undefined>(
-    editingAsset?.id,
-  );
+  const [prevEditingAssetId, setPrevEditingAssetId] = useState<string | null | undefined>(undefined);
   if (editingAsset?.id !== prevEditingAssetId) {
     setPrevEditingAssetId(editingAsset?.id);
     if (editingAsset) {
@@ -87,6 +131,23 @@ export function RentalAdSheet({
       setDepositOverridden(true);
       setQuantity(editingAsset.quantity_available || 1);
       setLocationText(editingAsset.location_text || "");
+      if (editingAsset.pickup_latitude && editingAsset.pickup_longitude) {
+        setPin({
+          latitude: editingAsset.pickup_latitude,
+          longitude: editingAsset.pickup_longitude,
+        });
+      } else {
+        setPin(null);
+      }
+      const initialLine = editingAsset.pickup_address_line || editingAsset.pickup_address?.line_1 || "";
+      const initialArea = editingAsset.pickup_area || editingAsset.pickup_address?.area || "";
+      const initialCity = editingAsset.pickup_city || editingAsset.pickup_address?.city || "";
+      const initialPincode = editingAsset.pickup_pincode || editingAsset.pickup_address?.pincode || "";
+      setAddressLine(initialLine);
+      setArea(initialArea);
+      setCity(initialCity);
+      setPincode(initialPincode);
+      setFormattedAddress([initialLine, initialArea, initialCity, initialPincode].filter(Boolean).join(", "));
       setDescription(editingAsset.description || "");
       setSelectedVariantId(editingAsset.variant_id || "");
       setStructuredFields((editingAsset.structured_fields as Record<string, string>) || {});
@@ -118,6 +179,12 @@ export function RentalAdSheet({
       setSelectedSubcategorySlug("");
       setSelectedServiceId("");
       setSelectedVariantId("");
+      setPin(null);
+      setAddressLine("");
+      setArea("");
+      setCity("");
+      setPincode("");
+      setFormattedAddress("");
       setPhotos([]);
       setRemovedMediaIds([]);
       setOtherModeFields({});
@@ -159,6 +226,11 @@ export function RentalAdSheet({
         depositRupees !== origDeposit ||
         quantity !== origQty ||
         locationText !== origLocation ||
+        addressLine !== (editingAsset.pickup_address_line || editingAsset.pickup_address?.line_1 || "") ||
+        area !== (editingAsset.pickup_area || editingAsset.pickup_address?.area || "") ||
+        city !== (editingAsset.pickup_city || editingAsset.pickup_address?.city || "") ||
+        pincode !== (editingAsset.pickup_pincode || editingAsset.pickup_address?.pincode || "") ||
+        (pin ? pin.latitude !== (editingAsset.pickup_latitude || "") || pin.longitude !== (editingAsset.pickup_longitude || "") : Boolean(editingAsset.pickup_latitude)) ||
         description !== origDesc ||
         removedMediaIds.length > 0 ||
         photos.some((p) => !p.mediaId)
@@ -569,16 +641,112 @@ export function RentalAdSheet({
           />
         </View>
 
-        {/* Location */}
-        <View className="gap-1">
-          <Text className="text-xs font-bold text-navy-900">Pickup Location Address *</Text>
-          <TextInput
-            placeholder="e.g. Shop 12, Ameerpet Commercial Complex, Hyderabad"
-            placeholderTextColor={COLOR_TOKENS.placeholderText}
-            value={locationText}
-            onChangeText={setLocationText}
-            className="rounded-xl border border-line bg-surface p-3 text-xs text-navy-900"
+        {/* Pickup Location & Map Pin */}
+        <View className="gap-3 rounded-2xl border border-line bg-canvas p-3.5">
+          <View className="gap-1">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+                Pickup Address & Location Pin
+              </Text>
+              {pin ? (
+                <View className="flex-row items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5">
+                  <Text className="text-[10px] font-bold text-emerald-800">✓ Pinned</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text className="text-[11px] text-text-muted">
+              Where the customer will pick up and return the equipment.
+            </Text>
+          </View>
+
+          {/* Place Search */}
+          <PlaceSearch
+            onPick={(place) => placePin(place.latitude, place.longitude)}
+            placeholder="Search pickup area, street or landmark"
           />
+
+          {/* Use My Location Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={handleLocate}
+            className="flex-row items-center justify-center gap-1.5"
+          >
+            <MapPin size={13} color={COLOR_TOKENS.text} />
+            <Text className="text-xs font-medium text-navy-900">
+              {pin ? "Move pin to current location" : "Use my current location"}
+            </Text>
+          </Button>
+
+          {reverseGeocode.isPending ? (
+            <View className="flex-row items-center gap-2 rounded-xl bg-surface-muted p-2.5">
+              <ActivityIndicator size="small" color={COLOR_TOKENS.brand} />
+              <Text className="text-xs text-text-secondary">Finding address for pin…</Text>
+            </View>
+          ) : null}
+
+          {/* Confirmed Pin Banner */}
+          {pin && formattedAddress ? (
+            <View className="flex-row items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5">
+              <MapPin size={15} color="#059669" />
+              <View className="min-w-0 flex-1">
+                <Text className="text-xs font-semibold text-emerald-900">{formattedAddress}</Text>
+                <Text className="mt-0.5 text-[10px] text-emerald-700">
+                  Pin placed: {Number(pin.latitude).toFixed(4)}, {Number(pin.longitude).toFixed(4)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Detailed Address Fields */}
+          <View className="gap-2">
+            <View className="gap-1">
+              <Text className="text-xs font-semibold text-navy-900">Shop / Building / Street Line *</Text>
+              <TextInput
+                placeholder="e.g. Shop 12, Ameerpet Commercial Complex"
+                placeholderTextColor={COLOR_TOKENS.placeholderText}
+                value={addressLine}
+                onChangeText={setAddressLine}
+                className="rounded-xl border border-line bg-surface p-2.5 text-xs text-navy-900"
+              />
+            </View>
+
+            <View className="flex-row gap-2">
+              <View className="flex-1 gap-1">
+                <Text className="text-xs font-semibold text-navy-900">Locality / Area</Text>
+                <TextInput
+                  placeholder="e.g. Ameerpet"
+                  placeholderTextColor={COLOR_TOKENS.placeholderText}
+                  value={area}
+                  onChangeText={setArea}
+                  className="rounded-xl border border-line bg-surface p-2.5 text-xs text-navy-900"
+                />
+              </View>
+              <View className="flex-1 gap-1">
+                <Text className="text-xs font-semibold text-navy-900">City</Text>
+                <TextInput
+                  placeholder="e.g. Hyderabad"
+                  placeholderTextColor={COLOR_TOKENS.placeholderText}
+                  value={city}
+                  onChangeText={setCity}
+                  className="rounded-xl border border-line bg-surface p-2.5 text-xs text-navy-900"
+                />
+              </View>
+            </View>
+
+            <View className="gap-1">
+              <Text className="text-xs font-semibold text-navy-900">Pincode</Text>
+              <TextInput
+                placeholder="6-digit pincode"
+                placeholderTextColor={COLOR_TOKENS.placeholderText}
+                value={pincode}
+                onChangeText={(val) => setPincode(val.replace(/\D/g, '').slice(0, 6))}
+                keyboardType="number-pad"
+                maxLength={6}
+                className="rounded-xl border border-line bg-surface p-2.5 text-xs text-navy-900"
+              />
+            </View>
+          </View>
         </View>
 
         {/* Dynamic Schema Fields from Variant (W-073: supports prop.examples and 'Other…' fallback) */}

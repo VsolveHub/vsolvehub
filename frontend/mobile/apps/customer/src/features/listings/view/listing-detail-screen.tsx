@@ -279,8 +279,9 @@ const LANGUAGE_LABELS: Record<string, string> = {
   TELUGU: "Telugu",
 };
 
-function humanize(val: string | undefined, map: Record<string, string>, fallback: string): string {
-  if (!val) return fallback;
+/** The employer's value in words, or `null` when they gave none: never a stand-in value. */
+function humanize(val: string | undefined, map: Record<string, string>): string | null {
+  if (!val) return null;
   const upper = val.toUpperCase();
   if (map[upper]) return map[upper];
   if (map[val]) return map[val];
@@ -288,63 +289,41 @@ function humanize(val: string | undefined, map: Record<string, string>, fallback
 }
 
   const structuredFields = (listing.structured_fields || {}) as Record<string, any>;
-  const posterName = listing.poster_name || listing.company_name || "Apex Staffing Solutions";
-  const locationText = listing.location_text || "Hitech City, Hyderabad";
-  const applicationCount = listing.application_count ?? 1;
+  // Every fact on this page is the employer's own; a missing one is left out, never stood in
+  // for. Only approved employers can post, so the web's "Verified Employer" is true of any.
+  const posterName = listing.poster_name || listing.company_name || "Verified Employer";
+  const locationText: string | null = listing.location_text || null;
+  const applicationCount = listing.application_count ?? 0;
 
   // Extract structured highlights
-  const vacancies = listing.vacancies || structuredFields.vacancies || 2;
-  const jobType = humanize(listing.job_type || structuredFields.job_type || structuredFields.employment_type, JOB_TYPE_LABELS, "Full time");
-  const experienceBand = humanize(listing.experience_band || structuredFields.experience_band || structuredFields.experience_years, EXP_BAND_LABELS, "1 to 3 years");
-  const shift = humanize(listing.shift || structuredFields.shift, SHIFT_LABELS, "Day shift");
-  const weeklyOff = humanize(listing.weekly_off || structuredFields.weekly_off, WEEKLY_OFF_LABELS, "Sunday off");
-  const rawLanguages = (listing.languages || structuredFields.languages || ["ENGLISH"]) as string[];
-  const languages = rawLanguages.map((l) => humanize(l, LANGUAGE_LABELS, l)).join(", ");
+  const vacancies: number | null = listing.vacancies || structuredFields.vacancies || null;
+  const jobType = humanize(listing.job_type || structuredFields.job_type || structuredFields.employment_type, JOB_TYPE_LABELS);
+  const experienceBand = humanize(listing.experience_band || structuredFields.experience_band || structuredFields.experience_years, EXP_BAND_LABELS);
+  const shift = humanize(listing.shift || structuredFields.shift, SHIFT_LABELS);
+  const weeklyOff = humanize(listing.weekly_off || structuredFields.weekly_off, WEEKLY_OFF_LABELS);
+  const workMode: string | null = listing.work_mode || structuredFields.work_mode || null;
+  const rawLanguages = (listing.languages || structuredFields.languages || []) as string[];
+  const languages = rawLanguages.map((l) => humanize(l, LANGUAGE_LABELS) ?? l).join(", ");
+  const typeLine = [jobType, experienceBand].filter(Boolean).join(" · ");
+  const shiftLine = [shift, weeklyOff].filter(Boolean).join(" · ");
+  const placeLine = [locationText, workMode].filter(Boolean).join(" · ");
 
-  const requiredSkills = ((listing.required_skills?.length ? listing.required_skills : structuredFields.required_skills) || [
-    "JavaScript",
-    "Python",
-    "Databases",
-  ]) as string[];
+  const requiredSkills = ((listing.required_skills?.length ? listing.required_skills : structuredFields.required_skills) || []) as string[];
+  const preferredSkills = ((listing.preferred_skills?.length ? listing.preferred_skills : structuredFields.preferred_skills) || []) as string[];
+  const duties = ((listing.responsibilities?.length ? listing.responsibilities : structuredFields.responsibilities) || []) as string[];
+  const benefits = ((listing.benefits?.length ? listing.benefits : structuredFields.benefits) || []) as string[];
 
-  const preferredSkills = ((listing.preferred_skills?.length ? listing.preferred_skills : structuredFields.preferred_skills) || [
-    "Git",
-  ]) as string[];
-
-  const duties = ((listing.responsibilities?.length ? listing.responsibilities : structuredFields.responsibilities) || [
-    "Build and fix software",
-    "Write clean code",
-    "Work with the team",
-  ]) as string[];
-
-  const benefits = ((listing.benefits?.length ? listing.benefits : structuredFields.benefits) || [
-    "Incentives",
-    "PF & ESI",
-  ]) as string[];
-
-  const descriptionText =
-    listing.description ||
-    `${posterName} is hiring ${vacancies} ${listing.title}s in ${locationText}. Full time job, ${shift.toLowerCase()} and ${weeklyOff.toLowerCase()}. Experience: ${experienceBand}. Must have: ${requiredSkills.join(", ")}. Good to have: ${preferredSkills.join(", ")}. You will build and fix software, write clean code and work with the team.`;
+  const descriptionText = listing.description?.trim() ?? "";
 
   const isFeatured =
-    listing.is_premium ||
+    Boolean(listing.is_premium) ||
     Boolean(structuredFields.is_featured) ||
     Boolean(structuredFields.featured) ||
     (listing as any).tier === "SPOTLIGHT" ||
-    (listing as any).tier === "PRIORITY" ||
-    true;
+    (listing as any).tier === "PRIORITY";
 
-  // Candidate Match fallback for visual fidelity matching screenshot
-  const displayMatch: JobMatch = matchQuery.data ?? {
-    score: 40,
-    level: "OTHER",
-    matched: [
-      `Wants to work as ${listing.title}`,
-      `Lives in ${locationText.split(",")[0]?.trim() || "Hitech City"}`,
-      "Expected salary within range",
-    ],
-    missing: ["No JavaScript", "No Python", "No Databases"],
-  };
+  // The match is the server's verdict on this applicant, so it shows only once it has one.
+  const match: JobMatch | null = matchQuery.data ?? null;
 
   return (
     <View className="flex-1 bg-[#fcfbfa]">
@@ -419,11 +398,15 @@ function humanize(val: string | undefined, map: Record<string, string>, fallback
 
           {/* Location & Applicants count */}
           <View className="flex-row items-center gap-2 flex-wrap">
-            <View className="flex-row items-center gap-1">
-              <MapPin size={13} color="#6B6560" />
-              <Text className="text-xs font-medium text-text-secondary">{locationText}</Text>
-            </View>
-            <Text className="text-text-muted text-xs">•</Text>
+            {locationText ? (
+              <>
+                <View className="flex-row items-center gap-1">
+                  <MapPin size={13} color="#6B6560" />
+                  <Text className="text-xs font-medium text-text-secondary">{locationText}</Text>
+                </View>
+                <Text className="text-text-muted text-xs">•</Text>
+              </>
+            ) : null}
             <Text className="text-xs text-text-muted">
               {applicationCount} {applicationCount === 1 ? "applicant" : "applicants"} applied
             </Text>
@@ -447,45 +430,49 @@ function humanize(val: string | undefined, map: Record<string, string>, fallback
             </Pressable>
           </View>
 
-          {/* Match Score Card */}
-          <MatchCard match={displayMatch} />
+          {/* Match Score Card: the server's verdict, shown once it has one (as on the web) */}
+          {match ? <MatchCard match={match} /> : null}
 
-          {/* Structured Job Highlight Tiles (Stacked) */}
+          {/* Structured Job Highlight Tiles: one per fact the employer gave */}
           <View className="gap-2 pt-1">
-            <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
-              <Users size={16} color="#ea580c" />
-              <Text className="text-xs font-bold text-navy-900">
-                {vacancies} {vacancies === 1 ? "person" : "people"} needed
-              </Text>
-            </View>
+            {vacancies ? (
+              <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
+                <Users size={16} color="#ea580c" />
+                <Text className="text-xs font-bold text-navy-900">
+                  {vacancies} {vacancies === 1 ? "person" : "people"} needed
+                </Text>
+              </View>
+            ) : null}
 
-            <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
-              <Briefcase size={16} color="#ea580c" />
-              <Text className="text-xs font-bold text-navy-900">
-                {jobType} · {experienceBand}
-              </Text>
-            </View>
+            {typeLine ? (
+              <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
+                <Briefcase size={16} color="#ea580c" />
+                <Text className="text-xs font-bold text-navy-900">{typeLine}</Text>
+              </View>
+            ) : null}
 
-            <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
-              <Clock size={16} color="#ea580c" />
-              <Text className="text-xs font-bold text-navy-900">
-                {shift} · {weeklyOff}
-              </Text>
-            </View>
+            {shiftLine ? (
+              <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
+                <Clock size={16} color="#ea580c" />
+                <Text className="text-xs font-bold text-navy-900">{shiftLine}</Text>
+              </View>
+            ) : null}
 
-            <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
-              <MapPin size={16} color="#ea580c" />
-              <Text className="text-xs font-bold text-navy-900">
-                {locationText} · At the workplace
-              </Text>
-            </View>
+            {placeLine ? (
+              <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
+                <MapPin size={16} color="#ea580c" />
+                <Text className="text-xs font-bold text-navy-900">{placeLine}</Text>
+              </View>
+            ) : null}
 
-            <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
-              <Languages size={16} color="#ea580c" />
-              <Text className="text-xs font-bold text-navy-900">
-                Speaks {languages}
-              </Text>
-            </View>
+            {languages ? (
+              <View className="flex-row items-center gap-3 rounded-xl bg-[#f4f1ec] px-3.5 py-3 border border-line/40">
+                <Languages size={16} color="#ea580c" />
+                <Text className="text-xs font-bold text-navy-900">
+                  Speaks {languages}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* MUST HAVE Section */}
@@ -559,23 +546,25 @@ function humanize(val: string | undefined, map: Record<string, string>, fallback
             This job is shown based on what the employer shared. Please read the full details before applying.
           </Text>
 
-          {/* JOB DESCRIPTION Section */}
-          <View className="gap-2">
-            <Text className="text-xs font-bold uppercase tracking-wider text-text-muted">
-              JOB DESCRIPTION
-            </Text>
-            <Text
-              numberOfLines={descriptionExpanded ? undefined : 6}
-              className="text-xs text-text-secondary leading-relaxed"
-            >
-              {descriptionText}
-            </Text>
-            <Pressable onPress={() => setDescriptionExpanded((v) => !v)}>
-              <Text className="text-xs font-bold text-navy-900">
-                {descriptionExpanded ? "Show less" : "Read more"}
+          {/* JOB DESCRIPTION Section: the employer's own words, or no section */}
+          {descriptionText ? (
+            <View className="gap-2">
+              <Text className="text-xs font-bold uppercase tracking-wider text-text-muted">
+                JOB DESCRIPTION
               </Text>
-            </Pressable>
-          </View>
+              <Text
+                numberOfLines={descriptionExpanded ? undefined : 6}
+                className="text-xs text-text-secondary leading-relaxed"
+              >
+                {descriptionText}
+              </Text>
+              <Pressable onPress={() => setDescriptionExpanded((v) => !v)}>
+                <Text className="text-xs font-bold text-navy-900">
+                  {descriptionExpanded ? "Show less" : "Read more"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* Privacy-Protected Contact Exchange Box */}
           <View className="rounded-2xl border border-navy-200 bg-[#f0f4fd] p-4 gap-1.5">
@@ -585,16 +574,14 @@ function humanize(val: string | undefined, map: Record<string, string>, fallback
                 Privacy-Protected Contact Exchange
               </Text>
             </View>
-            <Text className="text-xs text-text-secondary leading-relaxed">
-              Hiring contact info:{" "}
-              <Text className="font-bold text-navy-900">
-                {listing.contact_masked?.phone || "98******85"}
-              </Text>{" "}
-              |{" "}
-              <Text className="font-bold text-navy-900">
-                {listing.contact_masked?.email || "c*****@example.com"}
+            {listing.contact_masked?.phone || listing.contact_masked?.email ? (
+              <Text className="text-xs text-text-secondary leading-relaxed">
+                Hiring contact info:{" "}
+                <Text className="font-bold text-navy-900">
+                  {[listing.contact_masked?.phone, listing.contact_masked?.email].filter(Boolean).join(" | ")}
+                </Text>
               </Text>
-            </Text>
+            ) : null}
             <Text className="text-[11px] text-text-muted leading-relaxed">
               Neither your direct phone nor email is published publicly. Verified posters unlock candidate details only for legitimate recruitment interviews.
             </Text>

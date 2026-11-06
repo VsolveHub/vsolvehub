@@ -45,91 +45,30 @@ import {
   openSupportWhatsApp,
 } from "@/features/support/contact";
 
-export interface ApplicationStatusScreenProps {
-  forcedStatus?: ApplicationStatusView | "SUBMITTED" | "CHANGES_REQUIRED" | "APPROVED" | "DECLINED" | "REJECTED";
-  forcedReason?: string;
-  forcedCanAppeal?: boolean;
-}
-
-export function ApplicationStatusScreen({
-  forcedStatus,
-  forcedReason,
-  forcedCanAppeal,
-}: ApplicationStatusScreenProps) {
+export function ApplicationStatusScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    status?: string;
-    reason?: string;
-    appeal?: string;
-  }>();
-
   const query = usePartnerApplication();
   const application = query.data ?? null;
 
   // Modals state
   const [supportModalOpen, setSupportModalOpen] = useState(false);
-  const [appealModalOpen, setAppealModalOpen] = useState(false);
-  const [appealSubmitted, setAppealSubmitted] = useState(false);
 
-  // 1. Determine effective view mode
-  const rawParamStatus = params.status?.toLowerCase();
-  const normalizedForced = forcedStatus
-    ? (forcedStatus === "SUBMITTED"
-        ? "in_review"
-        : forcedStatus === "CHANGES_REQUIRED"
-        ? "changes_needed"
-        : forcedStatus === "APPROVED"
-        ? "approved"
-        : forcedStatus === "DECLINED" || forcedStatus === "REJECTED"
-        ? "rejected"
-        : forcedStatus)
-    : null;
-
-  const paramStatus: ApplicationStatusView | null =
-    rawParamStatus === "rejected" || rawParamStatus === "declined"
-      ? "rejected"
-      : rawParamStatus === "changes_needed" || rawParamStatus === "changes_required"
-      ? "changes_needed"
-      : rawParamStatus === "approved"
-      ? "approved"
-      : rawParamStatus === "in_review" || rawParamStatus === "submitted"
-      ? "in_review"
-      : null;
-
-  const effectiveView: ApplicationStatusView =
-    normalizedForced || paramStatus || resolveStatusView(application, application?.documents);
-
-  // 2. Extract Rejection Reason
-  let effectiveReason = "";
-  if (params.reason !== undefined) {
-    effectiveReason = params.reason === "none" ? "" : params.reason;
-  } else if (forcedReason !== undefined) {
-    effectiveReason = forcedReason;
-  } else {
-    effectiveReason = extractRejectionReason(application) || "Documents could not be verified.";
-  }
-
-  // 3. Appeal capability
-  const canAppeal =
-    forcedCanAppeal !== undefined
-      ? forcedCanAppeal
-      : params.appeal === "false"
-      ? false
-      : true;
+  const effectiveView: ApplicationStatusView = resolveStatusView(application, application?.documents);
+  const effectiveReason = extractRejectionReason(application);
 
   // 4. Timestamps
   const timelineDates = extractTimelineDates(application);
   const submittedAtFormatted = formatSpecTimestamp(
     timelineDates.submittedAt,
-    "26 Oct 2026, 6:39 pm",
+    "",
   );
   const inReviewAtFormatted = formatSpecTimestamp(
     timelineDates.inReviewAt,
-    "26 Oct 2026, 6:41 pm",
+    "",
   );
   const decidedAtFormatted = formatSpecTimestamp(
     timelineDates.decidedAt,
-    "27 Oct 2026, 10:20 am",
+    "",
   );
 
   // 5. Build Timeline Nodes
@@ -193,7 +132,7 @@ export function ApplicationStatusScreen({
           },
           {
             title: "Decision",
-            subtitle: `Approved on ${decidedAtFormatted}.`,
+            subtitle: decidedAtFormatted ? `Approved on ${decidedAtFormatted}.` : "Approved.",
             state: "completed",
           },
         ];
@@ -215,32 +154,15 @@ export function ApplicationStatusScreen({
           },
           {
             title: "Decision",
-            subtitle: `Not approved on ${decidedAtFormatted}.`,
+            subtitle: decidedAtFormatted ? `Not approved on ${decidedAtFormatted}.` : "Not approved.",
             state: "rejected",
           },
         ];
     }
   };
 
-  const handleOpenPartnerApp = async () => {
-    try {
-      const supported = await Linking.canOpenURL("vsolvepartner://");
-      if (supported) {
-        await Linking.openURL("vsolvepartner://");
-      } else {
-        router.push("/(app)/(tabs)/home" as any);
-      }
-    } catch {
-      router.push("/(app)/(tabs)/home" as any);
-    }
-  };
-
-  const handleSendAppeal = () => {
-    setAppealSubmitted(true);
-    setAppealModalOpen(false);
-    openSupportWhatsApp(
-      `Appeal Request for Partner Application ${application?.id || "webaura"}.\nReason: I would like to request an appeal review for my unapproved application.`,
-    );
+  const handleOpenPartnerApp = () => {
+    router.replace("/home" as never);
   };
 
   return (
@@ -357,11 +279,11 @@ export function ApplicationStatusScreen({
           <View style={styles.nextStepCard}>
             <View style={styles.nextStepBlock}>
               <Text style={styles.nextStepCaption}>Next step</Text>
-              <Text style={styles.nextStepTitle}>Open the V Solve Partner app.</Text>
+              <Text style={styles.nextStepTitle}>Your workspace is ready.</Text>
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Open partner app"
+                accessibilityLabel="Go to home"
                 onPress={handleOpenPartnerApp}
                 style={({ pressed }) => [
                   styles.primaryOrangeButton,
@@ -370,7 +292,7 @@ export function ApplicationStatusScreen({
                 ]}
               >
                 <ExternalLink size={18} color="#ffffff" strokeWidth={2.2} style={{ marginRight: 8 }} />
-                <Text style={styles.primaryOrangeButtonText}>Open partner app</Text>
+                <Text style={styles.primaryOrangeButtonText}>Go to home</Text>
               </Pressable>
             </View>
           </View>
@@ -419,19 +341,6 @@ export function ApplicationStatusScreen({
               <Text style={styles.primaryOrangeButtonText}>Contact support</Text>
             </Pressable>
 
-            {canAppeal ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Appeal"
-                onPress={() => setAppealModalOpen(true)}
-                style={({ pressed }) => [
-                  styles.outlineAppealButton,
-                  pressed ? { backgroundColor: "#f8fafc" } : null,
-                ]}
-              >
-                <Text style={styles.outlineAppealButtonText}>Appeal</Text>
-              </Pressable>
-            ) : null}
           </View>
         </View>
       ) : null}
@@ -522,51 +431,6 @@ export function ApplicationStatusScreen({
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* Appeal Sheet Modal                                                        */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={appealModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAppealModalOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setAppealModalOpen(false)} />
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeaderRow}>
-              <View style={styles.modalHeaderTitleBox}>
-                <Text style={styles.modalTitle}>Submit an Appeal</Text>
-              </View>
-              <Pressable onPress={() => setAppealModalOpen(false)} hitSlop={12}>
-                <X size={20} color="#64748b" />
-              </Pressable>
-            </View>
-
-            <Text style={styles.modalBodyText}>
-              If you believe there was an error in reviewing your documents or profile, you can submit an appeal request directly to our Senior Partner Review Desk.
-            </Text>
-
-            <View style={styles.modalActionStack}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={handleSendAppeal}
-                style={[styles.primaryOrangeButton, { width: "100%" }]}
-              >
-                <Text style={styles.primaryOrangeButtonText}>Continue with Appeal</Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setAppealModalOpen(false)}
-                style={[styles.outlineAppealButton, { width: "100%", height: 44 }]}
-              >
-                <Text style={styles.outlineAppealButtonText}>Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

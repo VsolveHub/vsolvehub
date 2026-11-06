@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from apps.assignments.models import DispatchOffer
+from apps.assignments.models import AssignmentAttempt, DispatchOffer
 from apps.assignments.ranking import ExclusionReason
 from apps.assignments.ranking import evaluate_unit_candidates as rank_unit_candidates
 from apps.assignments.tasks import (
@@ -35,7 +35,6 @@ def _prepare_instant_unit(booked):
     booked.group.booking_mode = BookingGroup.BookingMode.INSTANT
     booked.group.save(update_fields=["booking_mode"])
     booked.unit.booking_group.booking_mode = BookingGroup.BookingMode.INSTANT
-    from apps.assignments.models import AssignmentAttempt
 
     AssignmentAttempt.objects.filter(fulfilment_unit=booked.unit).delete()
     return booked.partner, booked.unit
@@ -335,7 +334,8 @@ def test_onesignal_200_without_id_is_marked_failed() -> None:
     )
 
     with patch("apps.notifications.onesignal.send_push_to_external_ids") as mock_send:
-        # OneSignal returns HTTP 200 but notification_id is None (e.g. no valid subscribed recipients)
+        # OneSignal returns HTTP 200 but notification_id is None (e.g. no valid subscribed
+        # recipients)
         mock_send.return_value = {
             "success": False,
             "notification_id": None,
@@ -527,7 +527,8 @@ def test_reconcile_stuck_sending_offers() -> None:
     )
     DispatchOffer.objects.filter(id=offer1.id).update(updated_at=now - timedelta(minutes=6))
 
-    # Offer 2: Stuck in SENDING > 5 mins without ID, retry_count < 5, expires_at in future -> returned PENDING
+    # Offer 2: Stuck in SENDING > 5 mins without ID, retry_count < 5, expires_at in future ->
+    # returned PENDING
     offer2 = DispatchOffer.objects.create(
         booking=booking,
         partner=partner,

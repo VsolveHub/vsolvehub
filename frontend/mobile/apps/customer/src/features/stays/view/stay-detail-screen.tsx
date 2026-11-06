@@ -61,11 +61,9 @@ import { StayCard } from "./stay-card";
 import { StayReviewSheet } from "./stay-review-sheet";
 import { StayVisitSheet } from "./stay-visit-sheet";
 import { LookSwitcher } from "./look-switcher";
+import { NoStayPhotos } from "./no-stay-photos";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { pickLook, visibleLooks } from "../looks";
-
-const FALLBACK_STAY_IMAGE =
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop";
 
 /** Server limits, in the property's unit: 24 months or 90 nights. */
 const LENGTH_CHOICES = { MONTH: 24, NIGHT: 90 } as const;
@@ -270,10 +268,7 @@ function StayDetailLoaded({
   const lookMediaUrls = currentLook?.media?.map((m) => m.url).filter(Boolean) ?? [];
   const unitMediaUrls =
     currentUnit?.media?.map((m) => m.url).filter(Boolean) ?? [];
-  const propertyImages =
-    property.image_urls && property.image_urls.length > 0
-      ? property.image_urls
-      : [FALLBACK_STAY_IMAGE];
+  const propertyImages = property.image_urls ?? [];
   const rawImages =
     lookMediaUrls.length > 0
       ? lookMediaUrls
@@ -484,16 +479,20 @@ function StayDetailLoaded({
         {/* Inset Photo Gallery Carousel */}
         <View className="flex-col gap-2">
           <View className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl border border-line bg-surface-sunken">
-            <Pressable
-              onPress={() => setFullscreenPhoto(images[activePhotoIdx])}
-              className="h-full w-full"
-            >
-              <Image
-                source={{ uri: images[activePhotoIdx] }}
-                contentFit="cover"
-                style={{ width: "100%", height: "100%" }}
-              />
-            </Pressable>
+            {images.length > 0 ? (
+              <Pressable
+                onPress={() => setFullscreenPhoto(images[activePhotoIdx])}
+                className="h-full w-full"
+              >
+                <Image
+                  source={{ uri: images[activePhotoIdx] }}
+                  contentFit="cover"
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </Pressable>
+            ) : (
+              <NoStayPhotos title={property.title} />
+            )}
 
             {images.length > 1 ? (
               <>

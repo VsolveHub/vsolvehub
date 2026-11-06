@@ -29,4 +29,6 @@ class Command(BaseCommand):
             raise CommandError("Pass --dev-only to seed demo safety stories.")
 
         seed_stories()
-        self.stdout.write(self.style.SUCCESS("Successfully seeded safety stories across all service categories."))
+        self.stdout.write(
+            self.style.SUCCESS("Successfully seeded safety stories across all service categories.")
+        )

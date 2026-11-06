@@ -18,6 +18,11 @@ from apps.notifications.models import (
 from apps.notifications.services import is_engaged
 from apps.partners.models import PartnerPushSubscription
 
+#: Failure-rate percentages above which the report raises an alert.
+SYNC_FAILURE_ALERT_PERCENT = 10.0
+DISPATCH_FAILURE_ALERT_PERCENT = 10.0
+RATE_LIMITED_ALERT_PERCENT = 5.0
+
 
 class Command(BaseCommand):
     help = "Generates a health and observability report for OneSignal push notifications."
@@ -40,7 +45,7 @@ class Command(BaseCommand):
             help="Exit with non-zero exit code if any critical alerts are triggered.",
         )
 
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *_args: Any, **options: Any) -> None:  # noqa: PLR0912, PLR0915
         hours = options["hours"]
         as_json = options["json"]
         fail_on_alert = options["fail_on_alert"]
@@ -165,7 +170,7 @@ class Command(BaseCommand):
         # 5. Alert Checks
         alerts: list[dict[str, Any]] = []
 
-        if cust_sync_failure_rate > 10.0:
+        if cust_sync_failure_rate > SYNC_FAILURE_ALERT_PERCENT:
             alerts.append(
                 {
                     "severity": "CRITICAL",
@@ -173,7 +178,7 @@ class Command(BaseCommand):
                     "message": f"Customer sync failure rate is {cust_sync_failure_rate}% (> 10%)",
                 }
             )
-        if part_sync_failure_rate > 10.0:
+        if part_sync_failure_rate > SYNC_FAILURE_ALERT_PERCENT:
             alerts.append(
                 {
                     "severity": "CRITICAL",
@@ -181,7 +186,7 @@ class Command(BaseCommand):
                     "message": f"Partner sync failure rate is {part_sync_failure_rate}% (> 10%)",
                 }
             )
-        if dispatch_failure_rate > 10.0:
+        if dispatch_failure_rate > DISPATCH_FAILURE_ALERT_PERCENT:
             alerts.append(
                 {
                     "severity": "CRITICAL",
@@ -189,7 +194,7 @@ class Command(BaseCommand):
                     "message": f"Instant dispatch failure rate is {dispatch_failure_rate}% (> 10%)",
                 }
             )
-        if rate_429 > 5.0:
+        if rate_429 > RATE_LIMITED_ALERT_PERCENT:
             alerts.append(
                 {
                     "severity": "CRITICAL",
@@ -311,30 +316,37 @@ class Command(BaseCommand):
             self.stdout.write("-" * 60)
             self.stdout.write("SUBSCRIPTION HEALTH:")
             self.stdout.write(
-                f"  Customer: {cust_active} active ({cust_fresh} fresh, {cust_stale} stale, {cust_freshness_rate}% freshness), {cust_denied} denied"
+                f"  Customer: {cust_active} active ({cust_fresh} fresh, {cust_stale} stale, "
+                f"{cust_freshness_rate}% freshness), {cust_denied} denied"
             )
             self.stdout.write(
-                f"  Partner:  {part_active} active ({part_fresh} fresh, {part_stale} stale, {part_freshness_rate}% freshness), {part_denied} denied"
+                f"  Partner:  {part_active} active ({part_fresh} fresh, {part_stale} stale, "
+                f"{part_freshness_rate}% freshness), {part_denied} denied"
             )
             self.stdout.write(
-                f"  Sync Failure Rates: Customer={cust_sync_failure_rate}%, Partner={part_sync_failure_rate}%"
+                f"  Sync Failure Rates: Customer={cust_sync_failure_rate}%, "
+                f"Partner={part_sync_failure_rate}%"
             )
             self.stdout.write("-" * 60)
             self.stdout.write("DISPATCH HEALTH:")
             self.stdout.write(
-                f"  Offers: {total_offers} total, {sent_offers} sent, {failed_offers} failed ({dispatch_failure_rate}% failure rate)"
+                f"  Offers: {total_offers} total, {sent_offers} sent, {failed_offers} failed "
+                f"({dispatch_failure_rate}% failure rate)"
             )
             self.stdout.write(f"  Stuck Offers (>5m in SENDING): {stuck_offers}")
             self.stdout.write("-" * 60)
             self.stdout.write("DELIVERY HEALTH:")
             self.stdout.write(
-                f"  Deliveries: {total_deliveries} total, {delivered_count} delivered, {failed_deliveries} failed, {blocked_deliveries} blocked"
+                f"  Deliveries: {total_deliveries} total, {delivered_count} delivered, "
+                f"{failed_deliveries} failed, {blocked_deliveries} blocked"
             )
             self.stdout.write(
-                f"  Skipped: {skipped_deliveries} (Preferences: {preference_skipped}, Stale: {stale_skipped}, No Sub: {no_sub_skipped})"
+                f"  Skipped: {skipped_deliveries} (Preferences: {preference_skipped}, Stale: "
+                f"{stale_skipped}, No Sub: {no_sub_skipped})"
             )
             self.stdout.write(
-                f"  Errors: 429 Rate-limits={rate_limited_429} ({rate_429}%), 5xx Server={server_error_5xx} ({rate_5xx}%)"
+                f"  Errors: 429 Rate-limits={rate_limited_429} ({rate_429}%), 5xx "
+                f"Server={server_error_5xx} ({rate_5xx}%)"
             )
             self.stdout.write("-" * 60)
             self.stdout.write(f"ALERTS ({len(alerts)}):")

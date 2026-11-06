@@ -34,7 +34,7 @@ export function DesktopMobileHandoff({
   const router = useRouter();
   const signOut = useMobileLogout();
   const partnerName = name || application?.display_name || "Partner";
-  const partnerPhone = phone || "Registered Phone";
+  const partnerPhone = phone || null;
   const track = application?.track;
 
   const trackLabel =
@@ -400,7 +400,7 @@ export function DesktopMobileHandoff({
                         </Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: "#94a3b8" }}>{partnerPhone}</Text>
+                    {partnerPhone ? <Text style={{ fontSize: 12, color: "#94a3b8" }}>{partnerPhone}</Text> : null}
                   </View>
                 </View>
 

@@ -1,7 +1,8 @@
 """OneSignal REST API client for targeted push notifications."""
 
 import logging
-from typing import Any
+from http import HTTPStatus
+from typing import Any, Literal
 
 import requests
 from django.conf import settings
@@ -11,6 +12,20 @@ from urllib3.util.retry import Retry
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 10
+
+#: Each audience has its own OneSignal app, shared by its website and mobile app.
+Audience = Literal["PARTNER", "CUSTOMER"]
+
+
+def app_credentials(audience: Audience) -> tuple[str, str]:
+    """The OneSignal app ID and REST API key for one audience.
+
+    Partner and customer are separate OneSignal apps, and there is deliberately no shared
+    default: a push that does not say which app it is for must fail, not go to the wrong one.
+    """
+    if audience == "CUSTOMER":
+        return settings.ONESIGNAL_CUSTOMER_APP_ID, settings.ONESIGNAL_CUSTOMER_REST_API_KEY
+    return settings.ONESIGNAL_PARTNER_APP_ID, settings.ONESIGNAL_PARTNER_REST_API_KEY
 
 
 def _build_retry_session(retries: int = 3, backoff_factor: float = 0.5) -> requests.Session:
@@ -27,18 +42,20 @@ def _build_retry_session(retries: int = 3, backoff_factor: float = 0.5) -> reque
     return session
 
 
-def send_push_to_external_ids(
+def send_push_to_external_ids(  # noqa: PLR0917
     external_ids: list[str],
     heading: str,
     body: str,
     data: dict[str, Any],
     url: str | None = None,
-    app_id: str | None = None,
-    rest_api_key: str | None = None,
+    *,
+    app_id: str,
+    rest_api_key: str,
     collapse_id: str | None = None,
     web_push_topic: str | None = None,
     ttl: int | None = None,
     priority: int | None = 10,
+    android_channel_id: str | None = None,
 ) -> dict[str, Any]:
     """Send a push notification to specific users identified by their external_id aliases.
 
@@ -55,54 +72,47 @@ def send_push_to_external_ids(
             "raw_response": {},
         }
 
-    resolved_app_id = (
-        app_id
-        or getattr(settings, "ONESIGNAL_PARTNER_APP_ID", "")
-        or getattr(settings, "ONESIGNAL_APP_ID", "")
-    )
-    resolved_rest_api_key: str = (
-        rest_api_key
-        or getattr(settings, "ONESIGNAL_PARTNER_REST_API_KEY", "")
-        or getattr(settings, "ONESIGNAL_REST_API_KEY", "")
-        or ""
-    )
     api_url = getattr(settings, "ONESIGNAL_API_URL", "https://api.onesignal.com/notifications")
 
-    if not resolved_app_id:
-        logger.error("[OneSignal] Target app ID is not configured")
+    # No fallback: the caller names the app (see `app_credentials`).
+    if not app_id or not rest_api_key:
+        logger.error("[OneSignal] Target app ID or REST API key is not configured")
         return {
             "success": False,
             "notification_id": None,
-            "errors": ["Target app ID not configured"],
+            "errors": ["Target app ID or REST API key not configured"],
             "raw_response": {},
         }
 
     payload: dict[str, Any] = {
-        "app_id": resolved_app_id,
+        "app_id": app_id,
         "target_channel": "push",
         "include_aliases": {
             "external_id": cleaned_external_ids,
         },
         "headings": {"en": heading},
         "contents": {"en": body},
-        "data": data,
+        "data": {**data, "url": data.get("url") or url} if url else data,
     }
 
-    if url:
-        payload["url"] = url
-    if collapse_id:
-        payload["collapse_id"] = collapse_id
-    if web_push_topic:
-        payload["web_push_topic"] = web_push_topic
+    # `web_url`, not `url`: a phone would open `url` in the browser instead of the app. The
+    # apps route from `data` (its `url`, `target` or offer id) to their own screen.
+    optional_fields = {
+        "web_url": url,
+        "android_channel_id": android_channel_id,
+        "collapse_id": collapse_id,
+        "web_push_topic": web_push_topic,
+    }
+    payload.update({name: value for name, value in optional_fields.items() if value})
     if ttl is not None:
         payload["ttl"] = ttl
     if priority is not None:
         payload["priority"] = priority
 
-    auth_prefix = "Key" if resolved_rest_api_key.startswith("os_v2_") else "Basic"
+    auth_prefix = "Key" if rest_api_key.startswith("os_v2_") else "Basic"
     headers = {
         "Content-Type": "application/json; charset=utf-8",
-        "Authorization": f"{auth_prefix} {resolved_rest_api_key}",
+        "Authorization": f"{auth_prefix} {rest_api_key}",
     }
 
     session = _build_retry_session()
@@ -136,7 +146,7 @@ def send_push_to_external_ids(
     elif isinstance(errors, dict):
         errors = [f"{k}: {v}" for k, v in errors.items()]
 
-    success = response.status_code == 200 and bool(notification_id) and not errors
+    success = response.status_code == HTTPStatus.OK and bool(notification_id) and not errors
 
     if success:
         logger.info(
@@ -178,7 +188,7 @@ def get_notification_view_metrics(
     session = _build_retry_session(retries=1)
     try:
         response = session.get(api_url, headers=headers, timeout=DEFAULT_TIMEOUT_SECONDS)
-        if response.status_code == 200:
+        if response.status_code == HTTPStatus.OK:
             data = response.json()
             return {
                 "success": True,

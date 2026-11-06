@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/model/steps.test.ts
-import { APPLICATION_STEPS, isLastStep, nextStep, stepIndexOf } from "./steps";
+import { APPLICATION_STEPS, applicationSteps, isLastStep, nextStep, stepIndexOf } from "./steps";
 
 describe("finding the current step in the 4-step sequence", () => {
   it("matches each step exactly", () => {
@@ -60,5 +60,29 @@ describe("the list itself", () => {
       expect(step.label.length).toBeGreaterThan(0);
       expect(step.href.startsWith("/apply")).toBe(true);
     }
+  });
+});
+
+describe("the steps follow what the partner signed up for", () => {
+  const hrefs = (track: string) => applicationSteps(track).map((step) => step.href);
+
+  it("walks someone offering services through their work and hours", () => {
+    expect(hrefs("SERVICES")).toEqual([
+      "/apply/about",
+      "/apply/work",
+      "/apply/schedule",
+      "/apply/consent",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+    expect(nextStep("/apply/about", "SERVICES")?.href).toBe("/apply/work");
+    expect(nextStep("/apply/schedule", "SERVICES")?.href).toBe("/apply/consent");
+    expect(isLastStep("/apply/review", "SERVICES")).toBe(true);
+  });
+
+  it("keeps the short list for stays and rentals", () => {
+    expect(hrefs("RENTAL_OWNER")).toEqual(APPLICATION_STEPS.map((step) => step.href));
+    expect(hrefs("STAY_HOST")).toEqual(APPLICATION_STEPS.map((step) => step.href));
+    expect(nextStep("/apply/about", "RENTAL_OWNER")?.href).toBe("/apply/consent");
   });
 });

@@ -3,7 +3,6 @@ import {
   Briefcase,
   BriefcaseBusiness,
   Building2,
-  Calendar,
   Coins,
   FileCheck2,
   FileText,
@@ -72,7 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/reviews", label: "Applications", icon: UserCheck },
       { href: "/operations/partners", label: "All partners", icon: Users },
       { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
-      { href: "/operations/partner-availability", label: "Availability", icon: Calendar },
+      // Working hours are edited on a partner's record (All partners), not from a menu item.
       // Job plans live on Jobs › Plans, next to the jobs they sell; stay plans on Stays › Plans.
       { href: "/operations/partners/import", label: "Import partners", icon: Upload },
     ],

@@ -86,6 +86,12 @@ export interface PartnerRentalAsset {
   image_urls?: string[];
   structured_fields?: Record<string, string | number | boolean>;
   delivery_available?: boolean;
+  pickup_latitude?: string | null;
+  pickup_longitude?: string | null;
+  pickup_address_line?: string;
+  pickup_area?: string;
+  pickup_city?: string;
+  pickup_pincode?: string;
   pickup_address?: {
     line_1?: string;
     area?: string;
@@ -221,6 +227,13 @@ export interface CreateAssetRequest {
   asset_identifier?: string;
   structured_fields?: Record<string, string | number | boolean>;
   image_urls: string[];
+  pickup_latitude?: string | null;
+  pickup_longitude?: string | null;
+  pickup_address_line?: string;
+  pickup_area?: string;
+  pickup_city?: string;
+  pickup_pincode?: string;
+  delivery_available?: boolean;
 }
 
 export interface UpdateAssetRequest {
@@ -231,6 +244,13 @@ export interface UpdateAssetRequest {
   location_text?: string;
   quantity_available?: number;
   structured_fields?: Record<string, string | number | boolean>;
+  pickup_latitude?: string | null;
+  pickup_longitude?: string | null;
+  pickup_address_line?: string;
+  pickup_area?: string;
+  pickup_city?: string;
+  pickup_pincode?: string;
+  delivery_available?: boolean;
 }
 
 export interface PartnerBookingActionRequest {

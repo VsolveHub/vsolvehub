@@ -241,8 +241,8 @@ Time-boxed dispatch offer presented sequentially to candidates for an Instant bo
   - Partner ID is bound to OneSignal via `OneSignal.login(partnerId)`.
   - Push dispatch targets `include_aliases: {"external_id": [partner_id]}`.
 - **Security Rule**:
-  - OneSignal REST API Key (`ONESIGNAL_REST_API_KEY`) is stored strictly in server environment settings (`backend/.env`, `infra/env.production`).
-  - Next.js apps only have access to `NEXT_PUBLIC_ONESIGNAL_APP_ID`.
+  - OneSignal REST API Key (`ONESIGNAL_PARTNER_REST_API_KEY`) is stored strictly in server environment settings (`backend/.env`, `infra/env.production`).
+  - Next.js apps only have access to `NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID`.
 
 ---
 
@@ -273,7 +273,7 @@ Time-boxed dispatch offer presented sequentially to candidates for an Instant bo
   - `DISPATCH_OFFER_EXPIRY_SECONDS=60`
   - `MAX_DISPATCH_ATTEMPTS=5`
   - `MAX_CONSECUTIVE_MISSED_OFFERS=3`
-  - `ONESIGNAL_REST_API_KEY=<staging_key>`
+  - `ONESIGNAL_PARTNER_REST_API_KEY=<staging_key>`
 - [ ] Verify Celery Beat schedules are running:
   - `reconcile-partner-shifts` (every 300s)
   - `reconcile-expired-dispatch-offers` (every 30s)

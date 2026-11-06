@@ -1,7 +1,8 @@
 // Ported from frontend/apps/customer/features/bookings/view/visit-progress.tsx
 import type { Schemas } from "@vsolve/api-client";
 import { Text } from "@vsolve/mobile-ui";
-import { View } from "react-native";
+import { useEffect, useState } from "react";
+import { Animated, Easing, View } from "react-native";
 
 type VisitStatus = Schemas["BookingStatusEnum"];
 
@@ -20,6 +21,22 @@ function reachedStep(status: VisitStatus): number | null {
     default:
       return null;
   }
+}
+
+/** The current step breathes, so the screen reads as live. Stops itself on unmount. */
+function PulseDot() {
+  const [scale] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.7, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scale]);
+  return <Animated.View className="size-2 rounded-full bg-success" style={{ transform: [{ scale }] }} />;
 }
 
 export function VisitProgress({ status }: { status: VisitStatus }) {
@@ -50,7 +67,7 @@ export function VisitProgress({ status }: { status: VisitStatus }) {
                   }`}
                 >
                   {isDone ? <Text className="text-[10px] text-text-inverse">✓</Text> : null}
-                  {isCurrent ? <View className="size-2 rounded-full bg-success" /> : null}
+                  {isCurrent ? <PulseDot /> : null}
                 </View>
                 <View
                   className={`h-0.5 flex-1 ${

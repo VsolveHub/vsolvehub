@@ -16,9 +16,6 @@ import { useSavedItems } from "../use-saved-items";
 import { getAmenityIcon } from "./amenity-icon";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 
-const FALLBACK_STAY_IMAGE = "/catalog/stays/compact-apartment-interior-layout.jpg";
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop";
-
 export function StayCard({ property }: { property: StayPropertySummary }) {
   const router = useRouter();
   const saved = useSavedItems("stay");
@@ -33,18 +30,17 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
         )
       : property.min_price_paise ?? 0;
 
-  const rawMedia = property.media;
-  const rawImage =
-    (Array.isArray(rawMedia) && rawMedia[0]?.url) ||
-    property.image_urls?.[0] ||
-    FALLBACK_STAY_IMAGE;
-  const imageUrl = resolveImageUrl(rawImage) || rawImage;
+  const rawMedia = (property as { media?: { url?: string }[] }).media;
+  // The listing's own photo and host, or nothing, as on the web: never a stand-in.
+  const imageUrl = resolveImageUrl(
+    (Array.isArray(rawMedia) && rawMedia[0]?.url) || property.image_urls?.[0],
+  );
 
   const hostName =
     property.host_name ||
     property.partner?.company_name ||
     property.partner?.full_name ||
-    "Verified Host";
+    null;
 
   const rawPref =
     property.tenant_preference ||
@@ -79,13 +75,15 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
       className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs active:border-line-strong active:shadow-raised"
     >
       {/* Cover Image */}
-      <View className="relative aspect-[16/10] w-full bg-surface-sunken">
-        <Image
-          source={{ uri: imageUrl }}
-          contentFit="cover"
-          style={{ width: "100%", height: "100%" }}
-        />
-      </View>
+      {imageUrl ? (
+        <View className="relative aspect-[16/10] w-full bg-surface-sunken">
+          <Image
+            source={{ uri: imageUrl }}
+            contentFit="cover"
+            style={{ width: "100%", height: "100%" }}
+          />
+        </View>
+      ) : null}
 
       {/* Card Content */}
       <View className="gap-2.5 p-4">
@@ -129,9 +127,11 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
           <Text className="text-base font-extrabold text-navy-900" numberOfLines={1}>
             {property.title}
           </Text>
-          <Text className="mt-0.5 text-xs text-text-secondary">
-            Hosted by <Text className="font-semibold text-navy-900">{hostName}</Text>
-          </Text>
+          {hostName ? (
+            <Text className="mt-0.5 text-xs text-text-secondary">
+              Hosted by <Text className="font-semibold text-navy-900">{hostName}</Text>
+            </Text>
+          ) : null}
         </View>
 
         {/* Description line-clamp */}

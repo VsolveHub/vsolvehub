@@ -8,10 +8,17 @@ import { useState } from "react";
 import { Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { evidenceIndex, toProjectView } from "@/features/project/adapters";
+import { useProject } from "@/features/project/queries";
+import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/project-panels";
+import { toShiftDayView, type ShiftDayView } from "@/features/shift-day/adapters";
+import { useShiftDay } from "@/features/shift-day/queries";
+import { NotRightSheet } from "@/features/shift-day/view/not-right-sheet";
 import {
   toAmendmentsView,
   toEngagementEvents,
   toEngagementView,
+  type AmendmentView,
   type EngagementView,
   type StageView,
 } from "@/features/engagement/adapters";
@@ -23,6 +30,7 @@ import {
   useFundStage,
 } from "@/features/engagement/queries";
 import { AgreementHistory } from "@/features/engagement/view/agreement-history";
+import { AmendmentPanel } from "@/features/engagement/view/amendment-panel";
 import { CompletionPanel } from "@/features/engagement/view/completion-panel";
 import {
   EngagementStatusBadge,
@@ -35,6 +43,7 @@ import {
 } from "@/features/engagement/view/engagement-status";
 import { EngagementTimeline } from "@/features/engagement/view/engagement-timeline";
 import { ProjectCompletionCodePanel } from "@/features/engagement/view/project-completion-code";
+import { TodayCard } from "@/features/engagement/view/today-card";
 import { REQUESTS_HREF, bookCrewHref, engagementListHref, receiptHref, requestHref, stageHref } from "@/lib/routes";
 
 function BackToBookingsButton() {
@@ -65,15 +74,25 @@ export function EngagementScreen({ engagementId }: { engagementId: string }) {
   const [fundingStageId, setFundingStageId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const refetchAll = async () => {
-    setRefreshing(true);
-    await Promise.all([engagementQuery.refetch(), amendmentsQuery.refetch()]);
-    setRefreshing(false);
-  };
-
   const view = engagementQuery.data === undefined ? null : toEngagementView(engagementQuery.data);
   const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
   const isProject = view?.mode === "managed";
+  const projectQuery = useProject(engagementId, isProject);
+  const project =
+    projectQuery.data === undefined || view === null
+      ? null
+      : toProjectView(projectQuery.data, evidenceIndex(view.stages));
+
+  const refetchAll = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      engagementQuery.refetch(),
+      amendmentsQuery.refetch(),
+      ...(isProject ? [projectQuery.refetch()] : []),
+    ]);
+    setRefreshing(false);
+  };
+
   const requestLink = view === null ? REQUESTS_HREF : requestHref(view.requirementId);
   const nouns = nounsFor(view?.mode ?? "unknown");
   const fundingStage = view?.stages.find((stage) => stage.stageId === fundingStageId) ?? null;
@@ -168,9 +187,32 @@ export function EngagementScreen({ engagementId }: { engagementId: string }) {
       ) : (
         <AccessRefusal error={fund.error} attempting={`fund this ${nouns.stage}`} />
       )}
-      {isProject ? <ProjectCompletionCodePanel engagementId={view.engagementId} status={view.status} /> : (
-        <CompletionPanel engagement={view} nouns={nouns} onDone={refetchAll} />
+      <AmendmentPanel engagement={view} nouns={nouns} />
+      {isProject ? (
+        <ProjectDecisions
+          engagementId={engagementId}
+          project={project}
+          isPending={projectQuery.isPending}
+          error={projectQuery.error}
+          engagementNoun={nouns.engagement}
+          stageNoun={nouns.stage}
+          stagesNoun={nouns.stages}
+          onDone={refetchAll}
+          showRecoveryRoute={view.status === "CANCELLED" || view.isDisputed}
+        />
+      ) : null}
+      {isProject ? (
+        <ProjectCompletionCodePanel engagementId={view.engagementId} status={view.status} />
+      ) : (
+        <CompletionPanel engagement={view} project={project} nouns={nouns} onDone={refetchAll} />
       )}
+      {isProject ? (
+        <ProjectWarranty
+          project={project}
+          isPending={projectQuery.isPending}
+          engagementNoun={nouns.engagement}
+        />
+      ) : null}
       <View className={isProject ? "mt-6" : "mt-8"}>
         <Text className="text-lg font-semibold text-text">What was agreed, and how it changed</Text>
         {amendments === null ? (
@@ -210,12 +252,29 @@ export function EngagementScreen({ engagementId }: { engagementId: string }) {
   );
 }
 
+function firstUnsettledDay(stages: readonly StageView[]): StageView | null {
+  const ordered = [...stages].sort((left, right) => left.position - right.position);
+  const open = ordered.find((stage) => {
+    const chipState = stage.shiftSummary?.chip.state ?? null;
+    return chipState !== "paid" && stage.status !== "CANCELLED";
+  });
+  return open ?? ordered[ordered.length - 1] ?? null;
+}
+
 function LeadOnlyHub({ view, onRefresh }: { view: EngagementView; onRefresh: () => void }) {
+  const amendmentsQuery = useEngagementAmendments(view.engagementId);
+  const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [notRightDay, setNotRightDay] = useState<ShiftDayView | null>(null);
+
   const phase = leadOnlyHubPhase(view.status);
   const isDone = phase === "done";
   const isCompleting = phase === "completion";
-  const activeDay = isDone || isCompleting ? null : view.stages[0] ?? null;
+  const activeDay = isDone || isCompleting ? null : firstUnsettledDay(view.stages);
+  const liveAmendment = amendments === null ? null : amendments.live;
+  const pendingAmendmentForDay =
+    activeDay === null || liveAmendment === null ? null : liveAmendment.stageId === activeDay.stageId ? liveAmendment : null;
+
   return (
     <View className="gap-4">
       <View className="flex-row flex-wrap items-start justify-between gap-2">
@@ -240,7 +299,7 @@ function LeadOnlyHub({ view, onRefresh }: { view: EngagementView; onRefresh: () 
         <Text className="text-sm text-text-secondary">You can contact each other from {view.contactReleasedAt}.</Text>
       ) : null}
       {isCompleting ? (
-        <CompletionPanel engagement={view} nouns={nounsFor(view.mode)} onDone={onRefresh} embedded />
+        <CompletionPanel engagement={view} project={null} nouns={nounsFor(view.mode)} onDone={onRefresh} embedded />
       ) : isDone ? (
         <DoneCard view={view} />
       ) : activeDay !== null ? (
@@ -248,10 +307,14 @@ function LeadOnlyHub({ view, onRefresh }: { view: EngagementView; onRefresh: () 
           <Text className="mb-1 text-xs font-bold uppercase tracking-[0.08em] text-text-muted">
             Today · {activeDay.scheduledOn ?? activeDay.label}
           </Text>
-          <View className="rounded-card border border-line bg-surface p-4">
-            <Text className="font-semibold text-text">{activeDay.label}</Text>
-            <Text className="mt-1 text-sm text-text-secondary">{activeDay.amountLabel}</Text>
-          </View>
+          <TodayCard
+            engagementId={view.engagementId}
+            requirementId={view.requirementId}
+            day={activeDay}
+            pendingAmendment={pendingAmendmentForDay}
+            onDone={onRefresh}
+            onNotRight={setNotRightDay}
+          />
         </View>
       ) : (
         <EmptyState title="Nothing due today" compact description="Check the days above for what is next." />
@@ -270,7 +333,46 @@ function LeadOnlyHub({ view, onRefresh }: { view: EngagementView; onRefresh: () 
         </Pressable>
       </View>
       <HistorySheet engagementId={view.engagementId} open={historyOpen} onOpenChange={setHistoryOpen} />
+      {notRightDay !== null ? (
+        <NotRightDaySheet
+          engagementId={view.engagementId}
+          shift={notRightDay}
+          onClose={() => setNotRightDay(null)}
+          onDone={() => {
+            setNotRightDay(null);
+            onRefresh();
+          }}
+        />
+      ) : null}
     </View>
+  );
+}
+
+function NotRightDaySheet({
+  engagementId,
+  shift,
+  onClose,
+  onDone,
+}: {
+  engagementId: string;
+  shift: ShiftDayView;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const dayQuery = useShiftDay(engagementId, shift.stageId, true);
+  const live = dayQuery.data === undefined ? shift : toShiftDayView(dayQuery.data);
+
+  return (
+    <NotRightSheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      engagementId={engagementId}
+      day={live}
+      amendmentHref="#amendments"
+      onDone={onDone}
+    />
   );
 }
 
@@ -315,7 +417,7 @@ function HistorySheet({
   engagementId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+  }) {
   const query = useEngagementEvents(open ? engagementId : null);
   const events = query.data === undefined ? null : toEngagementEvents(query.data);
   return (
@@ -721,8 +823,6 @@ function FundStageDialog({
 }) {
   const fund = useFundStage();
   const completeOrOpenCheckout = useCompleteOrOpenCheckout();
-  // Capture is confirmed only by the provider's webhook, so once Razorpay closes the dialog
-  // says the charge is with the provider rather than pretending money moved.
   const [settled, setSettled] = useState<"awaiting-provider" | null>(null);
   const [handoffError, setHandoffError] = useState<unknown>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
@@ -730,8 +830,6 @@ function FundStageDialog({
   const failure = fund.error ?? handoffError;
 
   async function pay() {
-    // `useFundStage` keys its idempotency on the stage, so a second press returns the same
-    // attempt rather than a second charge.
     setHandoffError(null);
     const checkout = await fund.mutateAsync({ engagementId, stageId: stage.stageId });
     const attemptId = checkout?.payment_attempt_id ?? null;
@@ -752,7 +850,6 @@ function FundStageDialog({
 
   return (
     <Dialog
-      // Hidden while Razorpay is open: iOS cannot show the checkout over another modal.
       open={!isHandingOff}
       onOpenChange={(next) => {
         if (!next && !isWorking) onClose();

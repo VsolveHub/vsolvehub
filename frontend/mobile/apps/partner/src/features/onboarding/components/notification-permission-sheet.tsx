@@ -1,6 +1,5 @@
 import { Text } from "@vsolve/mobile-ui";
-import { registerForPush } from "@vsolve/mobile-core";
-import * as Notifications from "expo-notifications";
+import { enablePush } from "@vsolve/mobile-core";
 import Svg, { G, Path } from "react-native-svg";
 import { useState } from "react";
 import {
@@ -31,18 +30,9 @@ export function NotificationPermissionSheet({
   const handleAllow = async () => {
     setRequesting(true);
     try {
-      if (Platform.OS !== "web") {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== "granted") {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus === "granted") {
-          await registerForPush({ appKind: "partner" });
-        }
+      if (Platform.OS !== "web" && (await enablePush()) === "granted") {
+        onGranted?.();
       }
-      onGranted?.();
     } catch {
       // Permission request error handling
     } finally {

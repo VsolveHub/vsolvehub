@@ -23,22 +23,25 @@ import {
 
 import {
   configureCore,
-  getNotifications,
+  linkPushUser,
   MobileQueryProvider,
+  onPushTap,
   ProviderCheckoutHost,
-  registerForPush,
+  reportError,
+  startCrashReporting,
+  startPush,
   useAuthStore,
   VersionGate,
 } from "@vsolve/mobile-core";
-import { useQueryClient } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { ErrorState } from "@vsolve/mobile-ui";
+import { Stack, useRouter, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
 import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
-import { resolveCustomerPush } from "@/features/notifications/push-routing";
+import { resolveCustomerPushData } from "@/features/notifications/push-routing";
 
-import { LogBox, Platform } from "react-native";
+import { LogBox, Platform, View } from "react-native";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import "../global.css";
 
@@ -50,7 +53,29 @@ configureReanimatedLogger({
 LogBox.ignoreAllLogs();
 
 configureCore({ appKind: "customer" });
+startCrashReporting();
+startPush();
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * Shown in place of a screen that crashed while rendering, word for word the web's error page,
+ * so a crash is a recoverable screen instead of a closed app. The error goes to Crashlytics.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    reportError(error, "root error boundary");
+  }, [error]);
+  return (
+    <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#FAF9F7" }}>
+      <ErrorState
+        title="Something went wrong"
+        message="The page ran into an unexpected error. Nothing was charged or changed."
+        actionLabel="Try again"
+        onAction={() => void retry()}
+      />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const status = useAuthStore((state) => state.status);
@@ -107,25 +132,22 @@ function PushRouting() {
 function NativePushRouting() {
   const status = useAuthStore((state) => state.status);
   const router = useRouter();
-  const queryClient = useQueryClient();
 
+  // Link this phone to the signed-in customer in OneSignal (the web does the same), ask for
+  // permission once, and report the subscription: Django pushes to customers with one only.
   useEffect(() => {
     if (status !== "signedIn") return;
-    void registerForPush({ appKind: "customer" });
+    void linkPushUser({ appKind: "customer" });
   }, [status]);
 
   useEffect(() => {
-    // Null in Expo Go on Android, where the notifications package cannot load.
-    const Notifications = getNotifications();
-    if (Notifications === null) return;
-    const response = Notifications.addNotificationResponseReceivedListener((event) => {
-      const data = event.notification.request.content.data as { target?: { kind: string; id?: string } | null };
-      const destination = resolveCustomerPush(data.target ?? null);
+    // A no-op in Expo Go and the browser. A tap that launched the app is delivered here too.
+    return onPushTap((data) => {
+      const destination = resolveCustomerPushData(data);
       if (destination.type === "route") router.push(destination.href as never);
       else requestOpenNotifications();
     });
-    return () => response.remove();
-  }, [queryClient, router]);
+  }, [router]);
 
   return null;
 }

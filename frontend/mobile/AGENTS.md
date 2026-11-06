@@ -86,8 +86,9 @@ keystores (`*.jks`, `*.keystore`), `*.p8`, `*.p12`, `*.mobileprovision`,
 | Images | `expo-image` | RN `Image` for remote images |
 | Secure token | `expo-secure-store` | AsyncStorage for secrets |
 | Other storage | `@react-native-async-storage/async-storage` (non-secret only) | — |
-| Push | `expo-notifications` + Expo Push Service | direct FCM/APNs SDKs, OneSignal |
+| Push | OneSignal (`react-native-onesignal` + `onesignal-expo-plugin`), through `@vsolve/mobile-core` push functions only (owner decision 2026-11-04: one channel with the web, campaigns) | `expo-notifications`, Expo Push Service, direct FCM/APNs SDKs: two push SDKs on Android fight over the same messages |
 | Location | `expo-location` (foreground only) | background location |
+| Maps | `react-native-maps` (owner decision 2026-11-05: the Partner job screen's route map). Google maps on Android with the EAS secret `GOOGLE_MAPS_ANDROID_API_KEY`, Apple Maps on iOS; the route comes from Django (`POST /partner/bookings/{id}/route/`), never from a key in the app | Google Navigation SDK, routing keys in the app, `expo-maps` |
 | Camera / photos / files | `expo-image-picker`, `expo-document-picker` | — |
 | Payments | `react-native-webview` hosting Razorpay Checkout (see `guide/02-architecture.md` §8) | `react-native-razorpay` or any Razorpay SDK |
 | Network state | `@react-native-community/netinfo` | — |
@@ -194,6 +195,26 @@ frontend/mobile/
   only shows on a phone. Use `className` with `active:` variants instead. If you must keep a
   `StyleSheet` function style, add `cssInterop={false}` to that `Pressable` (and then it cannot
   take `className`).
+- **Never bundle a copy of data the API serves** (catalogue photos, category or service
+  lists, prices, reward amounts, support numbers). Render what the API returns, exactly as
+  the web does, and show the web's empty state when a value is missing. A bundled copy
+  drifts from the web and can only change with an app release. Never substitute stock
+  photos (Unsplash) or invented values for a missing one: no stand-in names, companies,
+  cities, dates, plans, skills, descriptions, match scores or demo lists "for visual fidelity".
+  A missing fact is left out, or shown as an honest neutral label ("Your booking").
+- **Type API data with the generated `Schemas["…"]`, never a hand-written interface plus
+  `as unknown as`.** A hand-written copy once invented `referral_code` (the server sends
+  `code`), so every customer shared a placeholder code.
+- **Never use `window.localStorage` / `window.sessionStorage`.** React Native has `window`
+  but not those, so the call throws and the `catch` silently drops the data. Use `kvGet`/`kvSet`
+  (kept across launches) or `sessionGet`/`sessionSet` (this app session) from
+  `@vsolve/mobile-core/storage`.
+- **Support contacts come from `@/features/support/contact`** (partner), the same values as the
+  web. Never type a phone number or hours into a screen.
+- **A bundled image's contents must match its extension.** Photos are `.jpg`, art with
+  transparency is `.png`. Android's release build (AAPT2) rejects a JPEG named `.png` ("file does
+  not start with PNG signature") and the EAS build fails, while Expo Go, Metro and the browser
+  accept it, so it only shows on EAS. Check new images with `file <path>`.
 
 ---
 
@@ -214,6 +235,11 @@ For every phase:
     `pnpm exec vitest run packages/api-client` from `frontend/` for the api-client bearer-mode test
   - backend: `.\.venv\Scripts\python.exe -m pytest tests/mobile -q` and
     `.\scripts\quality-static.cmd` from `backend/`
+- Every Babel preset or plugin named in `babel.config.js`, including ones NativeWind's preset
+  names (`@babel/plugin-transform-react-jsx`), must be in that app's `package.json`. EAS's Gradle
+  runs Node directly, without the module path `pnpm exec` adds, so an undeclared one bundles fine
+  locally and fails on EAS. To reproduce a Gradle step locally, run it with plain `node`, never
+  through `pnpm exec`.
 - Never write "tests pass" unless you ran them in this session and they passed.
 - Never skip, delete or weaken a test to make it pass.
 

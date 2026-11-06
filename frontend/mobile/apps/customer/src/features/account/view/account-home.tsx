@@ -3,7 +3,7 @@ import { useMobileLogout, webBaseUrl } from "@vsolve/mobile-core";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import * as WebBrowser from "expo-web-browser";
-import { FileText, LifeBuoy, RotateCcw, ShieldCheck } from "lucide-react-native";
+import { Bell, FileText, LifeBuoy, RotateCcw, ShieldCheck, User } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
@@ -25,6 +25,7 @@ import { MessagesScreen } from "./messages-screen";
 import { DocumentsScreen } from "./documents-screen";
 import { PrivacyScreen } from "./privacy-screen";
 import { SessionsScreen } from "./sessions-screen";
+import { PushPreferencesScreen } from "./push-preferences-screen";
 import { ProfileEditor } from "./profile-editor";
 
 export function AccountHome({ initialSection = "profile" }: { initialSection?: AccountSectionKey } = {}) {
@@ -67,8 +68,10 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
   }
 
   const person = profile.data;
-  const name = person.display_name || person.full_name || "Rajesh";
-  const userInitial = name.trim().charAt(0).toUpperCase() || "R";
+  // The customer's own name, else the number or email they signed in with: never a stand-in name.
+  const name = person.display_name || person.full_name || person.phone_number || person.email || "Your account";
+  // An initial only from a real name; without one the avatar shows the person icon.
+  const userInitial = (person.display_name || person.full_name || "").trim().charAt(0).toUpperCase();
 
   const memberSince = person.date_joined
     ? `V Solve Hub member since ${new Date(person.date_joined).toLocaleDateString("en-IN", {
@@ -76,7 +79,7 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
         month: "short",
         year: "numeric",
       })}.`
-    : "V Solve Hub member since 2 Oct 2025.";
+    : null;
 
   if (isDesktop) {
     return (
@@ -122,7 +125,11 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
                       <View className="flex-row items-center gap-4">
                         {/* Avatar with initial */}
                         <View className="size-[4.5rem] shrink-0 items-center justify-center rounded-full bg-white shadow-md">
-                          <Text className="text-3xl font-extrabold text-[#0B162C]">{userInitial}</Text>
+                          {userInitial ? (
+                            <Text className="text-3xl font-extrabold text-[#0B162C]">{userInitial}</Text>
+                          ) : (
+                            <User size={30} color="#0B162C" />
+                          )}
                         </View>
 
                         {/* User Details */}
@@ -133,9 +140,11 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
                           <Text className="mt-0.5 text-[1.75rem] font-bold leading-tight text-white" numberOfLines={1}>
                             {name}
                           </Text>
-                          <Text className="mt-1 text-sm text-[#94A3B8]" numberOfLines={1}>
-                            {memberSince}
-                          </Text>
+                          {memberSince ? (
+                            <Text className="mt-1 text-sm text-[#94A3B8]" numberOfLines={1}>
+                              {memberSince}
+                            </Text>
+                          ) : null}
                         </View>
                       </View>
 
@@ -242,12 +251,14 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
 
                   {/* 3. Signed in as + Sign Out Row */}
                   <View className="flex-row items-center justify-between rounded-xl border border-[#F1EFEB] bg-white p-4">
-                    <View className="flex-row items-center gap-2">
-                      <Text className="text-xs font-semibold text-navy-900">Signed in as:</Text>
-                      <Text className="text-xs text-[#64748B]">
-                        {person.phone_number || person.email || "Active User"}
-                      </Text>
-                    </View>
+                    {person.phone_number || person.email ? (
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-xs font-semibold text-navy-900">Signed in as:</Text>
+                        <Text className="text-xs text-[#64748B]">{person.phone_number || person.email}</Text>
+                      </View>
+                    ) : (
+                      <View />
+                    )}
                     <LogoutButton variant="ghost" />
                   </View>
                 </View>
@@ -299,6 +310,12 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
             {activeSection === "devices" && (
               <View className="min-w-0 flex-1">
                 <SessionsScreen embedded />
+              </View>
+            )}
+
+            {activeSection === "notifications" && (
+              <View className="min-w-0 flex-1">
+                <PushPreferencesScreen embedded />
               </View>
             )}
           </View>
@@ -391,7 +408,11 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
         <View className="flex-row items-center gap-3.5">
           {/* Avatar with initial */}
           <View className="size-16 shrink-0 items-center justify-center rounded-full bg-white shadow-xs">
-            <Text className="text-3xl font-extrabold text-[#0B162C]">{userInitial}</Text>
+            {userInitial ? (
+              <Text className="text-3xl font-extrabold text-[#0B162C]">{userInitial}</Text>
+            ) : (
+              <User size={28} color="#0B162C" />
+            )}
           </View>
 
           {/* User Details */}
@@ -402,9 +423,11 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
             <Text className="mt-0.5 text-[1.4rem] font-bold leading-tight text-white" numberOfLines={1}>
               {name}
             </Text>
-            <Text className="mt-1 text-[12px] text-[#94A3B8]" numberOfLines={1}>
-              {memberSince}
-            </Text>
+            {memberSince ? (
+              <Text className="mt-1 text-[12px] text-[#94A3B8]" numberOfLines={1}>
+                {memberSince}
+              </Text>
+            ) : null}
           </View>
 
           {/* Orange Outline Edit Button */}
@@ -485,6 +508,15 @@ export function AccountHome({ initialSection = "profile" }: { initialSection?: A
           title="Devices"
           subtitle="Where you're signed in"
           onPress={() => router.push("/account/sessions")}
+          showDivider
+        />
+
+        {/* Item 8: Notifications */}
+        <MenuItemRow
+          icon={<Bell size={22} color="#EA580C" />}
+          title="Notifications"
+          subtitle="Alerts & preferences"
+          onPress={() => router.push("/account/notifications")}
           showDivider={false}
         />
       </View>

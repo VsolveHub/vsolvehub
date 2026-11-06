@@ -131,6 +131,18 @@ class UnreadNotificationCountSerializer(serializers.Serializer[dict[str, Any]]):
     unread = serializers.IntegerField()
 
 
+class NotificationAudienceQuerySerializer(serializers.Serializer[dict[str, Any]]):
+    """Which side's notices to read: the app asking says which app it is.
+
+    One person can be a Customer and a Partner, and each app shows only its own side. Left out,
+    the session's active role decides, which is what app builds from before this parameter get.
+    """
+
+    audience = serializers.ChoiceField(
+        choices=("customer", "partner", "operations"), required=False
+    )
+
+
 class MarkNotificationReadRequestSerializer(serializers.Serializer[dict[str, Any]]):
     """Mark one notice read, or all of them.
 

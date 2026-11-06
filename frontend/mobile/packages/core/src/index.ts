@@ -17,10 +17,19 @@ export type { MobileApiClient, ExtendedHttpMethods } from "./api/client";
 export { getMobileQueryClient, bindAppStateFocus, bindNetworkOnline } from "./query/query-client";
 export { MobileQueryProvider } from "./query/provider";
 
-export { registerForPush, unregisterPush, readRegisteredPushToken, isPushSupported } from "./push/register";
-export { getNotifications, notificationsUnavailable } from "./push/notifications-module";
-export type { NotificationsModule } from "./push/notifications-module";
-export { routePushData } from "./push/routing";
+export {
+  enablePush,
+  isPushSupported,
+  linkPushUser,
+  onPushReceived,
+  onPushTap,
+  pushPermission,
+  pushStatus,
+  startPush,
+  unlinkPushUser,
+} from "./push/onesignal";
+export type { PushPayload, PushPermission } from "./push/onesignal";
+export { pushedAppPath, routePushData } from "./push/routing";
 export type { PushData, PushTarget } from "./push/routing";
 
 export { describeLocalFile, LocalFileUnreadableError, uploadToSignedUrl } from "./upload/upload";
@@ -43,11 +52,13 @@ export {
 export type { HandoffTarget, PaymentAttemptDetail } from "./payments/handoff";
 export { razorpayCheckoutHtml, shouldOpenPaymentUrlExternally } from "./payments/checkout-html";
 
-export { getCurrentPosition } from "./location/position";
+export { getCurrentPosition, hasLocationPermission, lookupPlace } from "./location/position";
+export type { PositionOptions } from "./location/position";
 export {
   mapLocationError,
   PERMISSION_DENIED,
   POSITION_UNAVAILABLE,
+  SERVICES_DISABLED,
   TIMEOUT,
 } from "./location/errors";
 export type { CurrentPosition, PositionError } from "./location/errors";
@@ -58,6 +69,17 @@ export { compareVersions, versionIsBelow } from "./version/compare";
 export { kvGet, kvSet, kvRemove } from "./storage/kv";
 export { storageAdapter } from "./storage/adapter";
 export type { StorageAdapter } from "./storage/adapter";
+export { sessionGet, sessionSet, sessionRemove } from "./storage/session";
+
+export { startCrashReporting, reportError } from "./crash/crash-reporting";
+
+export { PlaceSearch, usePlaceSearch, useReverseGeocode } from './places';
+export type {
+  PlaceSearchProps,
+  PlaceSuggestion,
+  ResolvedLocation,
+  ReverseGeocodeRequest,
+} from './places';
 
 
 export type {

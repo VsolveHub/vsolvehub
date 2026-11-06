@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MarketingHeader } from "@/components/marketing-header";
 import { usePartnerApplication } from "@/features/application/queries";
-import { homeForApplication } from "@/features/session/model/redirect";
+import { destinationAfterSignIn } from "@/features/session/model/redirect";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -42,6 +42,10 @@ export default function LoginScreen() {
   const next = safeNextPath(typeof params.next === "string" ? params.next : null);
   const missing = application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || missing;
+  const applicationStatus = missing ? null : (application.data?.status ?? null);
+  // An approved Partner goes to their workspace even when `next` points back into the application.
+  const destination = destinationAfterSignIn(next, applicationStatus);
+  const goingToApplication = destination.startsWith("/apply");
 
   // Prefill phone if provided in query params
   useEffect(() => {
@@ -61,14 +65,10 @@ export default function LoginScreen() {
   useEffect(() => {
     if (!signedIn || !knowsWhereToGo || params.switch === "true") return;
     const timer = setTimeout(() => {
-      if (next) {
-        router.replace(next as never);
-        return;
-      }
-      router.replace(homeForApplication(missing ? null : (application.data?.status ?? null)));
+      router.replace(destination as never);
     }, 1200);
     return () => clearTimeout(timer);
-  }, [application.data?.status, knowsWhereToGo, missing, next, params.switch, router, signedIn]);
+  }, [destination, knowsWhereToGo, params.switch, router, signedIn]);
 
   if (status === "loading") {
     return (
@@ -98,12 +98,12 @@ export default function LoginScreen() {
             Already Signed In
           </Text>
           <Text style={{ fontSize: 13, color: "#756c5e", textAlign: "center", marginBottom: 20 }}>
-            Taking you to your application…
+            {goingToApplication ? "Taking you to your application…" : "Taking you to your workspace…"}
           </Text>
           <View style={{ width: "100%", rowGap: 10 }}>
             <Pressable cssInterop={false}
               accessibilityRole="button"
-              onPress={() => router.replace((next ?? "/apply") as never)}
+              onPress={() => router.replace(destination as never)}
               style={({ pressed }) => ({
                 width: "100%",
                 height: 44,
@@ -114,7 +114,7 @@ export default function LoginScreen() {
               })}
             >
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>
-                Continue to Application
+                {goingToApplication ? "Continue to Application" : "Continue to your workspace"}
               </Text>
             </Pressable>
             <Pressable cssInterop={false}

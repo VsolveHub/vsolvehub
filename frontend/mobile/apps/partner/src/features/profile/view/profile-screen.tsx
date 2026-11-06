@@ -27,31 +27,12 @@ export function ProfileScreen() {
 
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const profileQuery = usePartnerProfile();
-  const updateProfile = useUpdatePartnerProfile();
 
-  const [name, setName] = useState("webaura");
-  const [bio, setBio] = useState("Home appliance service partner in Hyderabad.");
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
-  useEffect(() => {
-    if (profileQuery.data?.display_name) {
-      setName(profileQuery.data.display_name);
-    }
-  }, [profileQuery.data?.display_name]);
-
-  const partnerPhone = profileQuery.data?.phone_number || "+91 98765 43210";
-  const partnerCity = "Hyderabad";
-  const initial = (name.trim()[0] || "W").toUpperCase();
-
-  const handleSave = () => {
-    setSaveSuccess(false);
-    updateProfile.mutate(name.trim(), {
-      onSuccess: () => {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-      },
-    });
-  };
+  // The owner decided against a name-change feature, and `/partner/me` ignores the field: this
+  // screen shows what is on record, and support changes it.
+  const name = profileQuery.data?.display_name?.trim() ?? "";
+  const partnerPhone = profileQuery.data?.phone_number ?? "";
+  const initial = name[0]?.toUpperCase() ?? "";
 
   return (
     <View style={styles.root}>
@@ -82,32 +63,9 @@ export function ProfileScreen() {
         {/* Card 1: Editable Full Name & Bio */}
         <View style={styles.card}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Full name <Text style={styles.requiredAsterisk}>*</Text>
-            </Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="e.g. John Doe"
-              placeholderTextColor="#94a3b8"
-              style={styles.textInput}
-            />
-          </View>
-
-          <View style={[styles.inputGroup, { marginTop: 16 }]}>
-            <Text style={styles.label}>Bio (optional)</Text>
-            <TextInput
-              value={bio}
-              onChangeText={setBio}
-              placeholder="e.g. Home appliance service partner in Hyderabad."
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={4}
-              maxLength={200}
-              textAlignVertical="top"
-              style={styles.textArea}
-            />
-            <Text style={styles.charCounter}>{bio.length} / 200</Text>
+            <Text style={styles.label}>Full name</Text>
+            <Text style={styles.lockedValue}>{name || "Not added yet"}</Text>
+            <Text style={styles.charCounter}>To change this, contact support.</Text>
           </View>
         </View>
 
@@ -126,50 +84,7 @@ export function ProfileScreen() {
           </View>
         </View>
 
-        {/* Card 3: Locked City */}
-        <View style={styles.lockedCard}>
-          <View style={styles.lockedRow}>
-            <View style={styles.lockedIconWrapper}>
-              <MapPin size={18} color="#00112e" strokeWidth={2.2} />
-            </View>
-            <Text style={styles.lockedLabel}>City</Text>
-            <Text style={styles.lockedValue}>{partnerCity}</Text>
-          </View>
-          <View style={styles.lockedBadge}>
-            <Lock size={12} color="#64748b" strokeWidth={2.2} style={{ marginRight: 4 }} />
-            <Text style={styles.lockedBadgeText}>Locked after submission</Text>
-          </View>
-        </View>
-
-        {saveSuccess ? (
-          <View style={styles.successBanner}>
-            <Text style={styles.successBannerText}>Changes saved successfully!</Text>
-          </View>
-        ) : null}
       </ScrollView>
-
-      {/* Fixed Bottom Save Button */}
-      <View style={[styles.dockContainer, { paddingBottom: bottomInset + 12 }]}>
-        <View style={[styles.dockInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Save changes"
-            disabled={updateProfile.isPending || !name.trim()}
-            onPress={handleSave}
-            style={({ pressed }) => [
-              styles.saveButton,
-              pressed ? { opacity: 0.9 } : null,
-              !name.trim() ? { backgroundColor: "#cbd5e1" } : null,
-            ]}
-          >
-            {updateProfile.isPending ? (
-              <ActivityIndicator color="#ffffff" size="small" />
-            ) : (
-              <Text style={styles.saveButtonText}>Save changes</Text>
-            )}
-          </Pressable>
-        </View>
-      </View>
 
       {/* Screen 11: Profile Menu Bottom Sheet */}
       <ProfileMenuSheet

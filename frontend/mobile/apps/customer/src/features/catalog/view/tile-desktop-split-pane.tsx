@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react-native";
 
-import { LOCAL_CATEGORY_TILES, resolveImageUrl } from "@/features/catalog/category-artwork";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import type { Category, ServiceCard } from "@/features/catalog/client-queries";
 import { serviceHref } from "@/features/catalog/service-href";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
@@ -46,10 +46,6 @@ function sidebarTilesForDisplay(tiles: TileGroup[], activeSlug: string): TileGro
 
 function TileItemGraphic({ tile, size = 48 }: { tile: TileGroup; size?: number }) {
   const [error, setError] = useState(false);
-  const localAsset = LOCAL_CATEGORY_TILES[tile.slug];
-  if (localAsset) {
-    return <Image source={localAsset} contentFit="contain" style={{ width: size, height: size }} />;
-  }
   const resolved = resolveImageUrl(tile.imageUrl);
   if (resolved && !error) {
     return (

@@ -30,8 +30,8 @@ export interface ProfileMenuSheetProps {
 export function ProfileMenuSheet({
   visible,
   onClose,
-  partnerName = "webaura",
-  partnerPhone = "+91 98765 43210",
+  partnerName,
+  partnerPhone,
   partnerInitial,
 }: ProfileMenuSheetProps) {
   const router = useRouter();
@@ -39,7 +39,8 @@ export function ProfileMenuSheet({
   const signOut = useMobileLogout("/login?next=%2Fapply");
   const bottomInset = Math.max(insets.bottom, Platform.OS === "ios" ? 34 : 16);
 
-  const initial = (partnerInitial || partnerName.trim()[0] || "W").toUpperCase();
+  const name = partnerName?.trim() || "Your account";
+  const initial = (partnerInitial || name[0] || "").toUpperCase();
 
   const handleNavigate = (route: string) => {
     onClose();
@@ -76,8 +77,8 @@ export function ProfileMenuSheet({
               <Text style={styles.avatarTextLarge}>{initial}</Text>
             </View>
             <View style={styles.headerInfo}>
-              <Text style={styles.nameText}>{partnerName}</Text>
-              <Text style={styles.phoneText}>{partnerPhone}</Text>
+              <Text style={styles.nameText}>{name}</Text>
+              {partnerPhone ? <Text style={styles.phoneText}>{partnerPhone}</Text> : null}
             </View>
           </View>
 

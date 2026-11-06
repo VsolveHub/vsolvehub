@@ -104,9 +104,18 @@ def _comment(text: str) -> str:
 
 
 def _stream_filter(*, recipient_id: UUID, since: datetime) -> Q:
-    """Intents this connection may carry for one partner."""
+    """Intents this connection may carry for one partner.
 
-    return Q(recipient_id=recipient_id, created_at__gt=since) & (
+    Partner-side rows only. A booking fee and an opened engagement are told to both sides under
+    one purpose, so without the audience a Partner who also books as a Customer would see their
+    own customer notice raised in the partner app.
+    """
+
+    return Q(
+        recipient_id=recipient_id,
+        created_at__gt=since,
+        audience=NotificationIntent.Audience.PARTNER,
+    ) & (
         Q(
             purpose=OFFER_CREATED_PURPOSE,
             channel=NotificationIntent.Channel.PUSH,

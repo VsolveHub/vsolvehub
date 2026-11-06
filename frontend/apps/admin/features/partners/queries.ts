@@ -33,6 +33,8 @@ export type PartnerApplicationStatus = PartnerDirectoryRow["application_status"]
 export interface PartnerDirectoryFilters {
   status?: string;
   skills?: string[];
+  /** A name, or a mobile number typed any way: the server ignores spaces, +91 and dashes. */
+  q?: string;
 }
 
 export function usePartnerDirectory(filters: PartnerDirectoryFilters = {}) {
@@ -47,6 +49,7 @@ export function usePartnerDirectory(filters: PartnerDirectoryFilters = {}) {
               // Repeated rather than comma-joined: the server reads `getlist`, so
               // `?skill=a&skill=b` is the shape it filters on.
               ...(filters.skills?.length ? { skill: filters.skills } : {}),
+              ...(filters.q ? { q: filters.q } : {}),
               ...(pageParam ? { cursor: pageParam } : {}),
             },
           },

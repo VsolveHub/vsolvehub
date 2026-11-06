@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.94.0
+  version: 1.97.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -6377,6 +6377,19 @@ paths:
         which is the same reasoning that keeps `partner_id` off the partner ledger.
       parameters:
       - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
+      - in: query
         name: cursor
         schema:
           type: string
@@ -6412,6 +6425,20 @@ paths:
 
         `ThrottledWriteMixin` exempts safe methods, so mounting a scope here costs the polled reads
         above nothing while still bounding a script hammering the write.
+      parameters:
+      - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
       tags:
       - Notifications
       requestBody:
@@ -6461,6 +6488,20 @@ paths:
         Its own endpoint rather than a field on the feed page, because the badge is polled on every
         authenticated screen and the feed is read only when somebody opens the panel. Making the cheap
         question carry the expensive answer is how a poll becomes a page fetch every few seconds.
+      parameters:
+      - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
       tags:
       - Notifications
       security:
@@ -6471,6 +6512,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnreadNotificationCount'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -9072,6 +9119,11 @@ paths:
           type: string
         description: Opaque page cursor.
       - in: query
+        name: q
+        schema:
+          type: string
+        description: A name, or a mobile number typed any way (spaces, +91, dashes).
+      - in: query
         name: skill
         schema:
           type: array
@@ -9147,8 +9199,48 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/operations/partners/{partner_id}/availability/:
+    get:
+      operationId: operations_partner_schedule_retrieve
+      description: |-
+        A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+
+        The read comes first so a change edits what is there instead of overwriting it blind.
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPartnerSchedule'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
     put:
       operationId: operations_partners_availability_update
+      description: |-
+        A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+
+        The read comes first so a change edits what is there instead of overwriting it blind.
       parameters:
       - in: path
         name: partner_id
@@ -14033,6 +14125,69 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/route/:
+    post:
+      operationId: partner_booking_route
+      description: |-
+        The road route from where the Partner is to the visit, for the in-app map.
+
+        A read, sent as `POST` so the Partner's position travels in the body rather than in a URL
+        that proxies log. Under the same gate as the address: the route ends at the Customer's
+        door, so it is served exactly when the address is.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerVisitRoute'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -30748,6 +30903,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -30833,6 +30993,7 @@ components:
       - job_type
       - languages
       - listing_type_schema
+      - media
       - min_qualification
       - poster_name
       - preferred_skills
@@ -30861,6 +31022,56 @@ components:
             $ref: '#/components/schemas/ListingCategoryOption'
       required:
       - categories
+    ListingMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          $ref: '#/components/schemas/ListingMediaKindEnum'
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        alt_text:
+          type: string
+          maxLength: 200
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - id
+      - url
+    ListingMediaKindEnum:
+      enum:
+      - IMAGE
+      - ATTACHMENT
+      type: string
+      description: |-
+        * `IMAGE` - Image
+        * `ATTACHMENT` - Attachment
+    ListingMediaRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/ListingMediaKindEnum'
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
+        alt_text:
+          type: string
+          maxLength: 200
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - url
     ListingModerationStatusEnum:
       enum:
       - DRAFT
@@ -30976,6 +31187,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -31044,6 +31260,7 @@ components:
       - job_category
       - job_type
       - languages
+      - media
       - min_qualification
       - poster_name
       - preferred_skills
@@ -32722,6 +32939,9 @@ components:
         display_name:
           type: string
           readOnly: true
+        phone_number:
+          type: string
+          readOnly: true
         experience_years:
           type: integer
           readOnly: true
@@ -32762,6 +32982,7 @@ components:
       - display_name
       - experience_years
       - id
+      - phone_number
       - reviewed_at
       - service_area_count
       - service_count
@@ -32825,6 +33046,37 @@ components:
       - reviewed_at
       - status
       - uploaded_at
+    OperationsPartnerSchedule:
+      type: object
+      description: |-
+        A Partner's current hours, with what an operator needs to change them without typing ids:
+        the areas the Partner serves and the consent receipts a change may be recorded against.
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityRule'
+          readOnly: true
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityException'
+          readOnly: true
+        service_areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsScheduleArea'
+          readOnly: true
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsScheduleConsent'
+          readOnly: true
+      required:
+      - consents
+      - exceptions
+      - rules
+      - service_areas
     OperationsPartnerScheduleUpdateRequest:
       type: object
       properties:
@@ -33091,6 +33343,31 @@ components:
       - status
       - submitted_at
       - vendor_display_name
+    OperationsScheduleArea:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    OperationsScheduleConsent:
+      type: object
+      properties:
+        purpose:
+          type: string
+        document_version:
+          type: string
+        accepted_at:
+          type: string
+          format: date-time
+      required:
+      - accepted_at
+      - document_version
+      - purpose
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -35963,6 +36240,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -36083,6 +36365,7 @@ components:
       - job_type
       - languages
       - listing_type_schema
+      - media
       - min_qualification
       - moderation_reason
       - moderation_status
@@ -36806,6 +37089,21 @@ components:
           type: string
           default: ''
           maxLength: 200
+    PartnerRouteOriginRequest:
+      type: object
+      description: Where the Partner is now. Used for this one route and not stored.
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+      required:
+      - latitude
+      - longitude
     PartnerSchedule:
       type: object
       properties:
@@ -37253,6 +37551,34 @@ components:
       - nightly_rate_paise
       - rooms
       - upcoming_booking_count
+    PartnerVisitRoute:
+      type: object
+      description: |-
+        The road route to the visit, for the Partner's map.
+
+        There is no separate destination point: the line ends at the Customer's pin, which is all a
+        map needs, and the pin still never travels as bare coordinates (see
+        `PartnerSiteAddressSerializer`).
+      properties:
+        encoded_polyline:
+          type: string
+          description: Google encoded polyline from the Partner to the Customer's
+            pin.
+        distance_meters:
+          type: integer
+          minimum: 0
+        duration_seconds:
+          type: integer
+          minimum: 0
+          description: Two-wheeler travel time with live traffic.
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - distance_meters
+      - duration_seconds
+      - encoded_polyline
+      - server_now
     PartnerWithdrawal:
       type: object
       description: |-

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from apps.stay.models import Property, PropertyMedia, Unit, UnitMedia, RoomLook
+from apps.foundation.catalog_media import catalog_image_url
+from apps.stay.models import Property, PropertyMedia, RoomLook, UnitMedia
 
 DOWNLOADS_DIR = Path(r"C:\Users\nuner\Downloads\stays")
 FRONTEND_WEB_STAYS_DIR = (
@@ -89,14 +89,14 @@ def sync_images_to_destinations() -> dict[str, Path]:
 
     Returns a mapping from raw pattern keyword to the copied file.
     """
-    FRONTEND_WEB_STAYS_DIR.mkdir(parents=True, exist_ok=True)
-    FRONTEND_EXPO_STAYS_DIR.mkdir(parents=True, exist_ok=True)
-    BACKEND_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-
     copied_files: dict[str, Path] = {}
 
     if not DOWNLOADS_DIR.exists():
         return copied_files
+
+    FRONTEND_WEB_STAYS_DIR.mkdir(parents=True, exist_ok=True)
+    FRONTEND_EXPO_STAYS_DIR.mkdir(parents=True, exist_ok=True)
+    BACKEND_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
     for config in STAY_IMAGE_MAPPINGS:
         raw_pattern = config["raw_pattern"].lower()
@@ -142,13 +142,11 @@ class Command(BaseCommand):
 
             if not prop:
                 self.stdout.write(
-                    self.style.WARNING(
-                        f"[Skip] Could not find stay property for {config['title']}"
-                    )
+                    self.style.WARNING(f"[Skip] Could not find stay property for {config['title']}")
                 )
                 continue
 
-            image_url = config["url"]
+            image_url = catalog_image_url(config["url"])
             caption = config["caption"]
 
             # Replace any existing property media with the verified primary image
@@ -175,9 +173,7 @@ class Command(BaseCommand):
                     )
 
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"[Seeded] Property '{prop.title}' -> {image_url} ({caption})"
-                )
+                self.style.SUCCESS(f"[Seeded] Property '{prop.title}' -> {image_url} ({caption})")
             )
             updated_count += 1
 

@@ -47,8 +47,6 @@ import { THEME_COLORS } from "../theme-colors";
 import { useSavedItems } from "../use-saved-items";
 import { getAmenityIcon } from "./amenity-icon";
 
-const FALLBACK_STAY_IMAGE =
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop";
 
 const TENANT_OPTIONS = [
   { value: "", label: "Anyone" },
@@ -692,17 +690,16 @@ function DesktopStayCard({ property }: { property: StayPropertySummary }) {
       : property.min_price_paise ?? 0;
 
   const rawMedia = (property as { media?: { url?: string }[] }).media;
-  const rawImage =
-    (Array.isArray(rawMedia) && rawMedia[0]?.url) ||
-    property.image_urls?.[0] ||
-    FALLBACK_STAY_IMAGE;
-  const imageUrl = resolveImageUrl(rawImage) || rawImage;
+  // The listing's own photo and host, or nothing, as on the web: never a stand-in.
+  const imageUrl = resolveImageUrl(
+    (Array.isArray(rawMedia) && rawMedia[0]?.url) || property.image_urls?.[0],
+  );
 
   const hostName =
     property.host_name ||
     property.partner?.company_name ||
     property.partner?.full_name ||
-    "Lakeview PG";
+    null;
 
   const rawPref =
     property.tenant_preference ||
@@ -741,13 +738,15 @@ function DesktopStayCard({ property }: { property: StayPropertySummary }) {
       >
         {/* Cover Image Container (16:10 aspect ratio) */}
         <View className="relative -mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-slate-100 rounded-t-2xl">
-          <Image
-            source={{ uri: imageUrl }}
-            contentFit="cover"
-            style={{ width: "100%", height: "100%" }}
-            transition={300}
-            className="group-hover:scale-105 transition duration-300"
-          />
+          {imageUrl ? (
+            <Image
+              source={{ uri: imageUrl }}
+              contentFit="cover"
+              style={{ width: "100%", height: "100%" }}
+              transition={300}
+              className="group-hover:scale-105 transition duration-300"
+            />
+          ) : null}
 
           {/* Heart Save Button */}
           <Pressable
@@ -793,9 +792,11 @@ function DesktopStayCard({ property }: { property: StayPropertySummary }) {
           >
             {property.title}
           </Text>
-          <Text className="text-xs text-[#6B6560]">
-            Hosted by <Text className="font-semibold text-navy-900">{hostName}</Text>
-          </Text>
+          {hostName ? (
+            <Text className="text-xs text-[#6B6560]">
+              Hosted by <Text className="font-semibold text-navy-900">{hostName}</Text>
+            </Text>
+          ) : null}
         </View>
 
         {/* Description (2 lines clamp) */}

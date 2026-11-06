@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Pencil,
   Smartphone,
+  UserRound,
   Users,
   Wallet,
 } from "lucide-react";
@@ -17,7 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useCustomerSession } from "@/features/session/queries";
-import { profileName } from "@/features/session/view/profile-mark";
+import { profileInitials, profileName } from "@/features/session/view/profile-mark";
 import { getApiClient } from "@/lib/api/browser";
 
 import { useCustomerProfile, useUpdateCustomerProfile } from "../queries";
@@ -27,8 +28,9 @@ export function ProfileOverview() {
   const session = useCustomerSession();
   const logout = useLogout(getApiClient());
   const router = useRouter();
-  const name = profileName(session) || "Rajesh";
-  const userInitial = name.trim().charAt(0).toUpperCase() || "R";
+  // The customer's own name, else the number or email they signed in with: never a stand-in name.
+  const name = profileName(session) || session.phoneNumber || session.email || "Your account";
+  const userInitial = profileInitials(session);
   const [isEditing, setIsEditing] = useState(false);
 
   const memberSince = session.dateJoined
@@ -37,7 +39,7 @@ export function ProfileOverview() {
         month: "short",
         year: "numeric",
       })}.`
-    : "V Solve Hub member since 2 Oct 2025.";
+    : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -50,7 +52,7 @@ export function ProfileOverview() {
           <div className="flex items-center gap-4">
             {/* White Circular Avatar */}
             <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-white text-3xl font-extrabold text-[#0B162C] shadow-md sm:size-[4.5rem]">
-              {userInitial}
+              {userInitial ?? <UserRound className="size-8" aria-hidden />}
             </div>
 
             {/* Profile Info */}
@@ -64,9 +66,11 @@ export function ProfileOverview() {
               >
                 {name}
               </h2>
-              <p className="mt-1 text-xs text-[#94A3B8] sm:text-sm">
-                {memberSince}
-              </p>
+              {memberSince ? (
+                <p className="mt-1 text-xs text-[#94A3B8] sm:text-sm">
+                  {memberSince}
+                </p>
+              ) : null}
             </div>
           </div>
 

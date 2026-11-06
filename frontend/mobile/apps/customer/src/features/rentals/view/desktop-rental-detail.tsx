@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { RentalPhotos } from "./rental-photos";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
@@ -81,14 +82,17 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
   const deliveryOffered = Boolean(asset.delivery_available);
   const [mode, setMode] = useState<"PICKUP" | "DELIVERY">("PICKUP");
 
-  const partnerName =
+  // The listing's own partner and place, or nothing: a stand-in pickup place would send the
+  // customer to the wrong address.
+  const partnerName: string | null =
     asset.partner_name ||
     asset.partner?.company_name ||
     asset.partner?.full_name ||
-    "Hyderabad Tool Rentals";
+    null;
 
-  const locationText = asset.location_text || "Kondapur, Hyderabad";
+  const locationText: string | null = asset.location_text || null;
   const pickupAddress = asset.pickup_address;
+  const pickupLine = [pickupAddress?.line, locationText].filter(Boolean).join(", ");
 
   // Active bookings query to detect existing reservation
   const myRentalsQuery = useQuery({
@@ -201,7 +205,7 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
     const url =
       pickupAddress?.maps_url ||
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        locationText || partnerName,
+        locationText || partnerName || asset.title,
       )}`;
     if (Platform.OS === "web") {
       window.open(url, "_blank");
@@ -248,6 +252,8 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
           <View style={{ flex: 7, minWidth: 0 }} className="flex-col gap-6">
             {/* Card 1: Equipment Details Card */}
             <View className="rounded-2xl border border-[#E5E1DC] bg-white p-6 shadow-xs flex-col gap-5">
+              <RentalPhotos media={asset.media ?? []} title={asset.title} />
+
               {/* Top Badges matching Screenshot */}
               <View className="flex-row items-center gap-2">
                 <View className="flex-row items-center gap-1.5 rounded-full bg-[#EEF2FB] border border-[#BFDBFE] px-3 py-1">
@@ -266,9 +272,11 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
                 <Text className="text-2xl sm:text-3xl font-extrabold tracking-tight text-navy-950">
                   {asset.title}
                 </Text>
-                <Text className="text-xs text-slate-500 font-medium">
-                  Offered by <Text className="font-bold text-navy-950">{partnerName}</Text>
-                </Text>
+                {partnerName ? (
+                  <Text className="text-xs text-slate-500 font-medium">
+                    Offered by <Text className="font-bold text-navy-950">{partnerName}</Text>
+                  </Text>
+                ) : null}
               </View>
 
               {/* Self Pickup Location info */}
@@ -531,11 +539,12 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
                     <MapPin size={14} color="#EA580C" />
                     <Text className="text-xs font-bold text-navy-950">Pickup Location</Text>
                   </View>
-                  <Text className="text-xs font-bold text-navy-950 mt-1">{partnerName}</Text>
-                  <Text className="text-xs text-slate-600 mt-0.5">
-                    {pickupAddress?.line ? `${pickupAddress.line}, ` : ""}
-                    {locationText}
-                  </Text>
+                  {partnerName ? (
+                    <Text className="text-xs font-bold text-navy-950 mt-1">{partnerName}</Text>
+                  ) : null}
+                  {pickupLine ? (
+                    <Text className="text-xs text-slate-600 mt-0.5">{pickupLine}</Text>
+                  ) : null}
 
                   <Pressable
                     accessibilityRole="button"

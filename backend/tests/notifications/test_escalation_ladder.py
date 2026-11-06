@@ -75,6 +75,7 @@ def test_escalating_records_one_intent_per_due_channel() -> None:
 
     intents = escalation.escalate(
         recipient_id=recipient.id,
+        audience=NotificationIntent.Audience.PARTNER,
         purpose="m2.invitation.received",
         template_code="invitation_received",
         time_remaining=timedelta(hours=5),
@@ -89,6 +90,7 @@ def test_a_repeated_sweep_does_not_call_the_same_vendor_twice() -> None:
     recipient = _recipient()
     kwargs = {
         "recipient_id": recipient.id,
+        "audience": NotificationIntent.Audience.PARTNER,
         "purpose": "m2.invitation.received",
         "template_code": "invitation_received",
         "time_remaining": timedelta(minutes=20),
@@ -114,6 +116,7 @@ def test_a_whatsapp_kill_switch_suppresses_only_whatsapp() -> None:
 
     intents = escalation.escalate(
         recipient_id=recipient.id,
+        audience=NotificationIntent.Audience.PARTNER,
         purpose="m2.invitation.received",
         template_code="invitation_received",
         time_remaining=timedelta(minutes=20),

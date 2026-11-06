@@ -129,25 +129,16 @@ describe("the workspaces", () => {
       // Today
       "/",
       "/operations/cases",
-      // Home services
-      "/operations/visits",
-      "/operations/dispatch",
-      "/operations/manual-offers",
-      "/operations/assisted-checkouts",
-      "/operations/compatibility-rules",
-      // Workforce & projects
+      // Services: one workspace per service
+      "/operations/home-services",
       "/operations/requests",
-      "/operations/work-items",
-      "/operations/rate-cards",
-      // Marketplace
       "/operations/rentals",
       "/operations/stays",
       "/operations/listings",
-      // Partners
+      // Partners (working hours are edited on a partner's record)
       "/reviews",
       "/operations/partners",
       "/operations/crew-documents",
-      "/operations/partner-availability",
       "/operations/partners/import",
       // Customers
       "/operations/stories",
@@ -167,13 +158,13 @@ describe("the workspaces", () => {
   });
 
   it("marks the workspace being looked at, and only that one", async () => {
-    route.pathname = "/operations/dispatch";
+    route.pathname = "/operations/home-services";
     client.GET.mockResolvedValue(ok(sessionState()));
     renderShell();
 
     const current = await screen.findAllByRole("link", { current: "page" });
     expect(current).toHaveLength(1);
-    expect(current[0]).toHaveAttribute("href", "/operations/dispatch");
+    expect(current[0]).toHaveAttribute("href", "/operations/home-services");
   });
 
   it("marks a workspace on its sub-routes too", async () => {

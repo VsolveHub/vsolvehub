@@ -32,6 +32,8 @@ from apps.fulfilment import completion as completion_services
 from apps.fulfilment import recovery_services
 from apps.fulfilment.amendments import propose_scope_amendment
 from apps.fulfilment.evidence import record_work_evidence, request_work_evidence_upload
+from apps.fulfilment.exceptions import RoutingUnavailableApiError, SiteDetailsLockedApiError
+from apps.fulfilment.gates import booking_gates, discloses_site_details
 from apps.fulfilment.otp import verify_start_otp
 from apps.fulfilment.serializers import (
     CustomerContactAttemptRequestSerializer,
@@ -41,6 +43,8 @@ from apps.fulfilment.serializers import (
     PartnerBookingListQuerySerializer,
     PartnerBookingPageSerializer,
     PartnerBookingSerializer,
+    PartnerRouteOriginSerializer,
+    PartnerVisitRouteSerializer,
     ProposeAmendmentRequestSerializer,
     ReasonedCommandSerializer,
     StartOtpVerifyRequestSerializer,
@@ -55,6 +59,7 @@ from apps.fulfilment.services import (
     record_customer_contact_attempt,
 )
 from apps.identity.models import User
+from apps.locations.routing import RoutingError, compute_route
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsPartnerUser
 from common.errors.serializers import ApiErrorSerializer
@@ -191,6 +196,65 @@ class PartnerBookingDetailView(APIView):
         profile = _partner_profile(cast(User, request.user))
         booking = _partner_booking(booking_id, profile)
         return Response(PartnerBookingSerializer(booking).data)
+
+
+class PartnerBookingRouteView(APIView):
+    """The road route from where the Partner is to the visit, for the in-app map.
+
+    A read, sent as `POST` so the Partner's position travels in the body rather than in a URL
+    that proxies log. Under the same gate as the address: the route ends at the Customer's
+    door, so it is served exactly when the address is.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=[FULFILMENT_TAG],
+        operation_id="partner_booking_route",
+        request=PartnerRouteOriginSerializer,
+        responses={
+            200: PartnerVisitRouteSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, booking_id: UUID) -> Response:
+        profile = _partner_profile(cast(User, request.user))
+        booking = _partner_booking(booking_id, profile)
+        serializer = PartnerRouteOriginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        unit = booking.fulfilment_unit
+        address = None if unit is None else unit.booking_group.address
+        now = timezone.now()
+        if (
+            address is None
+            or address.latitude is None
+            or address.longitude is None
+            or not discloses_site_details(booking, booking_gates(booking, unit, now))
+        ):
+            raise SiteDetailsLockedApiError
+        try:
+            route = compute_route(
+                origin=(
+                    serializer.validated_data["latitude"],
+                    serializer.validated_data["longitude"],
+                ),
+                destination=(address.latitude, address.longitude),
+            )
+        except RoutingError as exc:
+            raise RoutingUnavailableApiError from exc
+        return Response(
+            PartnerVisitRouteSerializer(
+                {
+                    "encoded_polyline": route.encoded_polyline,
+                    "distance_meters": route.distance_meters,
+                    "duration_seconds": route.duration_seconds,
+                    "server_now": now,
+                }
+            ).data
+        )
 
 
 class PartnerEnRouteView(_PartnerCommandView):

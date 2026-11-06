@@ -669,6 +669,7 @@ def _context_for_route(route: NotificationRoute, context: dict[str, Any]) -> dic
 def _notify(
     *,
     recipient_id: uuid.UUID,
+    audience: str,
     route: NotificationRoute,
     template_code: str,
     event: OutboxEvent,
@@ -678,6 +679,7 @@ def _notify(
         recipient_id=recipient_id,
         purpose=route.purpose,
         channel=NotificationIntent.Channel.IN_APP,
+        audience=audience,
         template_code=template_code,
         context=context,
         idempotency_key=f"in-app:{event.idempotency_key}:{recipient_id}",
@@ -705,6 +707,7 @@ def notify_for_outbox_event(event: OutboxEvent) -> list[NotificationIntent]:
         intents.append(
             _notify(
                 recipient_id=recipients.customer_id,
+                audience=NotificationIntent.Audience.CUSTOMER,
                 route=route,
                 template_code=route.customer_template,
                 event=event,
@@ -723,6 +726,7 @@ def notify_for_outbox_event(event: OutboxEvent) -> list[NotificationIntent]:
         intents.append(
             _notify(
                 recipient_id=recipients.partner_user_id,
+                audience=NotificationIntent.Audience.PARTNER,
                 route=route,
                 template_code=partner_template,
                 event=event,

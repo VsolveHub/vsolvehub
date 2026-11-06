@@ -36,9 +36,6 @@ import {
 import { fetchRentals, fetchRentalTaxonomy } from "../queries";
 import { useSavedItems } from "../use-saved-items";
 
-const FALLBACK_TOOL_IMAGE =
-  "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?q=80&w=800&auto=format&fit=crop";
-
 const SLIDER_MIN_PAISE = 0;
 const SLIDER_MAX_PAISE = 500_000; // â‚¹5,000 / day
 const SLIDER_STEP_PAISE = 5_000; // â‚¹50 step
@@ -562,14 +559,14 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
 
   const dailyPrice = formatPaise(asset.daily_rate_paise);
   const deposit = formatPaise(asset.deposit_paise);
-  const rawImageUrl = asset.media?.[0]?.url || asset.thumbnail_url || FALLBACK_TOOL_IMAGE;
-  const imageUrl = resolveImageUrl(rawImageUrl) || rawImageUrl;
+  // The listing's own photo and partner, or nothing, as on the web: never a stand-in.
+  const imageUrl = resolveImageUrl(asset.media?.[0]?.url || asset.thumbnail_url);
 
   const partnerDisplay =
     asset.partner_name ||
     asset.partner?.company_name ||
     asset.partner?.full_name ||
-    "Hyderabad Tool Rentals";
+    null;
 
   const handleCardPress = () => {
     router.push(`/rentals/${asset.slug || asset.id}` as never);
@@ -580,19 +577,21 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
       className="group relative flex flex-1 flex-col justify-between overflow-hidden rounded-2xl border border-[#E5E1DC] bg-white p-5 shadow-xs transition hover:border-slate-400 hover:shadow-raised"
     >
       {/* Cover Image */}
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel={`View ${asset.title}`}
-        onPress={handleCardPress}
-        className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden rounded-t-2xl bg-[#F8F6F2] cursor-pointer"
-      >
-        <Image
-          source={{ uri: imageUrl }}
-          contentFit="cover"
-          style={{ width: "100%", height: "100%" }}
-          transition={200}
-        />
-      </Pressable>
+      {imageUrl ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`View ${asset.title}`}
+          onPress={handleCardPress}
+          className="-mx-5 -mt-5 mb-3 aspect-[4/3] overflow-hidden rounded-t-2xl bg-white p-3 cursor-pointer"
+        >
+          <Image
+            source={{ uri: imageUrl }}
+            contentFit="contain"
+            style={{ width: "100%", height: "100%" }}
+            transition={200}
+          />
+        </Pressable>
+      ) : null}
 
       <View className="flex flex-col gap-3">
         {/* Top Badges & Heart Row matching Web */}
@@ -643,9 +642,11 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
           >
             {asset.title}
           </Text>
-          <Text className="mt-0.5 text-xs font-medium text-slate-500" numberOfLines={1}>
-            Offered by <Text className="font-semibold text-navy-900">{partnerDisplay}</Text>
-          </Text>
+          {partnerDisplay ? (
+            <Text className="mt-0.5 text-xs font-medium text-slate-500" numberOfLines={1}>
+              Offered by <Text className="font-semibold text-navy-900">{partnerDisplay}</Text>
+            </Text>
+          ) : null}
         </Pressable>
 
         {/* Description */}

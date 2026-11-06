@@ -1,6 +1,8 @@
 export const PERMISSION_DENIED = 1;
 export const POSITION_UNAVAILABLE = 2;
 export const TIMEOUT = 3;
+/** Not in the web API: the phone's location switch is off, which no permission prompt fixes. */
+export const SERVICES_DISABLED = 4;
 
 export interface CurrentPosition {
   coords: { latitude: number; longitude: number; accuracy: number | null };

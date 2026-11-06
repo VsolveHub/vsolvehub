@@ -19,7 +19,8 @@ export type AccountTabKey =
   | "messages"
   | "documents"
   | "privacy"
-  | "devices";
+  | "devices"
+  | "notifications";
 
 interface TabItem {
   key: AccountTabKey;
@@ -37,6 +38,7 @@ const TABS: TabItem[] = [
   { key: "documents", label: "Documents", href: "/account/documents" },
   { key: "privacy", label: "Privacy", href: "/account/privacy" },
   { key: "devices", label: "Devices", href: "/account/sessions" },
+  { key: "notifications", label: "Notifications", href: "/account/notifications" },
 ];
 
 export function AccountPageShell({

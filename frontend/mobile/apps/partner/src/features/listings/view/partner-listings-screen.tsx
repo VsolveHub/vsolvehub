@@ -171,7 +171,15 @@ export function PartnerListingsScreen() {
 
   const activeCount = home?.active_listings ?? listings.filter((l) => (l.status ?? "").toUpperCase() === "ACTIVE" || (l.status ?? "").toUpperCase() === "PUBLISHED").length;
   const applicantsCount = home?.new_applications ?? listings.reduce((acc, c) => acc + (c.application_count ?? 0), 0);
-  const planName = home?.subscription?.plan_name ?? "Enterprise Plan";
+  // The partner's own plan and its real end date, or none: never a stand-in plan or date.
+  const planName = home?.subscription?.plan_name ?? "No active plan";
+  const planEndsAt = home?.subscription?.ends_at
+    ? new Date(home.subscription.ends_at).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <ScrollView
@@ -271,7 +279,9 @@ export function PartnerListingsScreen() {
         >
           <Text className="text-[11px] font-medium text-[#64748b]">Active placement plan</Text>
           <Text className="text-sm font-bold text-[#071328] mt-1">{planName}</Text>
-          <Text className="text-[11px] text-[#64748b] mt-0.5">Renews 28/05/2026</Text>
+          {planEndsAt ? (
+            <Text className="text-[11px] text-[#64748b] mt-0.5">Valid until {planEndsAt}</Text>
+          ) : null}
         </View>
       </View>
 

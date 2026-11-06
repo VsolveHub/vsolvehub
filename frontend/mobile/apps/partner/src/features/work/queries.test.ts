@@ -8,6 +8,7 @@ import {
   canReportCompletion,
   canStartWork,
   isSettled,
+  waitingGate,
   type PartnerVisit,
   type VisitStatus,
 } from "./queries";
@@ -26,8 +27,21 @@ const ALL_STATUSES: VisitStatus[] = [
   "CANCELLED",
 ];
 
+/** A visit whose clocked steps the server has opened, so only the status decides. */
 function visit(status: VisitStatus): PartnerVisit {
-  return { status } as PartnerVisit;
+  return { status, allowed_actions: ["MARK_EN_ROUTE", "MARK_ARRIVED"] } as unknown as PartnerVisit;
+}
+
+const GATES = {
+  address_unlocks_at: "2026-11-06T06:30:00Z",
+  en_route_opens_at: "2026-11-06T07:30:00Z",
+  en_route_closes_at: "2026-11-06T10:00:00Z",
+  arrival_opens_at: "2026-11-06T08:00:00Z",
+  arrival_closes_at: "2026-11-06T10:00:00Z",
+};
+
+function gated(status: VisitStatus, allowed: string[]): PartnerVisit {
+  return { status, allowed_actions: allowed, gates: GATES } as unknown as PartnerVisit;
 }
 
 describe("the one forward action available at each step", () => {
@@ -93,5 +107,32 @@ describe("polling", () => {
     ] as const) {
       expect(isSettled(visit(status))).toBe(true);
     }
+  });
+});
+
+describe("the server's clock on the way and on arrival", () => {
+  it("does not offer I am on my way until the server opens it", () => {
+    // The bug as reported: the button showed a day early and the tap answered "too early".
+    expect(canGoEnRoute(gated("CONFIRMED", []))).toBe(false);
+    expect(canGoEnRoute(gated("CONFIRMED", ["MARK_EN_ROUTE"]))).toBe(true);
+  });
+
+  it("says when the step opens instead", () => {
+    const before = Date.parse("2026-11-06T05:00:00Z");
+    expect(waitingGate(gated("CONFIRMED", []), before)).toEqual({
+      action: "MARK_EN_ROUTE",
+      state: "not_yet",
+      opensAt: GATES.en_route_opens_at,
+      closesAt: GATES.en_route_closes_at,
+    });
+  });
+
+  it("asks again once the clock passes the opening, and reports a closed window", () => {
+    expect(waitingGate(gated("CONFIRMED", []), Date.parse("2026-11-06T07:45:00Z"))?.state).toBe("opening");
+    expect(waitingGate(gated("EN_ROUTE", []), Date.parse("2026-11-06T11:00:00Z"))?.state).toBe("closed");
+  });
+
+  it("has nothing to wait for once the step is open", () => {
+    expect(waitingGate(gated("CONFIRMED", ["MARK_EN_ROUTE"]), Date.parse("2026-11-06T07:45:00Z"))).toBeNull();
   });
 });

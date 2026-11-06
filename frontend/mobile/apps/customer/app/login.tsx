@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
 import { CustomerLoginExperience } from "@/features/session/view/customer-login-experience";
+import { readPendingReferral } from "@/features/referral/pending-referral";
 
 function BackArrowIcon() {
   return (
@@ -29,8 +30,14 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ next?: string }>();
   const status = useAuthStore((state) => state.status);
-  const flow = useMobileOtpFlow();
+  const flow = useMobileOtpFlow({ getReferralCode: readPendingReferral });
   const next = safeNextPath(typeof params.next === "string" ? params.next : null);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     if (status !== "signedIn") return;
@@ -46,13 +53,6 @@ export default function LoginScreen() {
       </View>
     );
   }
-
-  const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setRefreshing(false);
-  };
 
   return (
     <View className="flex-1 bg-[#FAF9F7]">

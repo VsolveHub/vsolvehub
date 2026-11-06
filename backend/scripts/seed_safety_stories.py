@@ -16,7 +16,9 @@ import django
 
 django.setup()
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from PIL import Image, ImageOps
@@ -134,19 +136,48 @@ STORIES_DATA: list[StorySeedItem] = [
 
 def ensure_story_images() -> None:
     """Ensure high-resolution category images are generated and present in customer tiles folder."""
-    if not TILES_DIR.exists():
-        TILES_DIR.mkdir(parents=True, exist_ok=True)
+    # The originals exist only on a developer's machine. A server reads the finished tiles from R2.
+    if not IMAGES_DIR.exists():
+        return
+    TILES_DIR.mkdir(parents=True, exist_ok=True)
 
     generation_map = [
-        ("story-technician.png", IMAGES_DIR / "Technition" / "Technician_assembling_a_table_202608261547.jpeg"),
-        ("story-electrician.png", next((IMAGES_DIR / "Electrition").glob("Electrician_connecting_backup_ge*.jpeg"), None)),
-        ("story-plumber.png", IMAGES_DIR / "PlumberServices" / "Man_repairing_leaking_tap_202608261714.jpeg"),
-        ("story-ac-services.png", IMAGES_DIR / "AC Services" / "Technician_cleaning_split_AC_202608261913.jpeg"),
-        ("story-beautician.png", IMAGES_DIR / "Beautician" / "Artist_applying_airbrush_makeup_202608261908.jpeg"),
-        ("story-home-services.png", IMAGES_DIR / "Home Services" / "Cleaners_cleaning_modern_villa_202608261908.jpeg"),
-        ("story-pet-services.png", IMAGES_DIR / "Pet Services" / "Groomer_brushing_dog_202608262024.jpeg"),
-        ("story-construction.png", IMAGES_DIR / "Construction" / "Specialist_installing_floor_tiles_202608262159.jpeg"),
-        ("story-events.png", IMAGES_DIR / "Events" / "Team_preparing_wedding_venue_tables_202608262024.jpeg"),
+        (
+            "story-technician.png",
+            IMAGES_DIR / "Technition" / "Technician_assembling_a_table_202608261547.jpeg",
+        ),
+        (
+            "story-electrician.png",
+            next((IMAGES_DIR / "Electrition").glob("Electrician_connecting_backup_ge*.jpeg"), None),
+        ),
+        (
+            "story-plumber.png",
+            IMAGES_DIR / "PlumberServices" / "Man_repairing_leaking_tap_202608261714.jpeg",
+        ),
+        (
+            "story-ac-services.png",
+            IMAGES_DIR / "AC Services" / "Technician_cleaning_split_AC_202608261913.jpeg",
+        ),
+        (
+            "story-beautician.png",
+            IMAGES_DIR / "Beautician" / "Artist_applying_airbrush_makeup_202608261908.jpeg",
+        ),
+        (
+            "story-home-services.png",
+            IMAGES_DIR / "Home Services" / "Cleaners_cleaning_modern_villa_202608261908.jpeg",
+        ),
+        (
+            "story-pet-services.png",
+            IMAGES_DIR / "Pet Services" / "Groomer_brushing_dog_202608262024.jpeg",
+        ),
+        (
+            "story-construction.png",
+            IMAGES_DIR / "Construction" / "Specialist_installing_floor_tiles_202608262159.jpeg",
+        ),
+        (
+            "story-events.png",
+            IMAGES_DIR / "Events" / "Team_preparing_wedding_venue_tables_202608262024.jpeg",
+        ),
     ]
 
     for out_name, src_path in generation_map:
@@ -158,8 +189,37 @@ def ensure_story_images() -> None:
             print(f"Generated {out_name} from {src_path.name}")
 
 
+def read_tile(name: str) -> bytes | None:
+    """A story's photo: from this checkout when it has one, else from the public bucket."""
+    local = TILES_DIR / name
+    if local.exists():
+        return local.read_bytes()
+    if not settings.R2_PUBLIC_ENABLED:
+        return None
+    try:
+        with default_storage.open(f"catalog/tiles/{name}") as stored:
+            return bytes(stored.read())
+    except OSError:
+        return None
+
+
 def seed_stories() -> None:
     ensure_story_images()
+
+    # Read every photo before touching anything, so a missing one cannot leave no stories at all.
+    images: dict[str, bytes] = {}
+    missing: list[str] = []
+    for item in STORIES_DATA:
+        data = read_tile(item["image_name"])
+        if data is None:
+            missing.append(item["image_name"])
+        else:
+            images[item["image_name"]] = data
+    if missing:
+        raise RuntimeError(
+            "Story photos not found, nothing was changed. Run upload_catalog_images first. "
+            f"Missing: {', '.join(sorted(missing))}"
+        )
 
     admin_user = (
         User.objects.filter(userrole__role__code="operations").first()
@@ -174,15 +234,8 @@ def seed_stories() -> None:
     created = 0
     for item in STORIES_DATA:
         img_name: str = item["image_name"]
-        img_path = TILES_DIR / img_name
-        if img_path.exists():
-            with open(img_path, "rb") as f:
-                data = f.read()
-            file_obj = SimpleUploadedFile(img_name, data, content_type="image/png")
-        else:
-            print(f"Warning: Image {img_path} not found, generating placeholder.")
-            data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"\x00" * 50
-            file_obj = SimpleUploadedFile(img_name, data, content_type="image/png")
+        data = images[img_name]
+        file_obj = SimpleUploadedFile(img_name, data, content_type="image/png")
 
         story = SafetyStory(
             title=item["title"],
@@ -200,7 +253,9 @@ def seed_stories() -> None:
         story.expires_at = now + timedelta(hours=24)
         story.save()
         created += 1
-        print(f"Created story [{item['display_order']}]: '{story.title}' (expires: {story.expires_at})")
+        print(
+            f"Created story [{item['display_order']}]: '{story.title}' (expires: {story.expires_at})"
+        )
 
     print(f"Successfully seeded {created} active safety stories.")
 

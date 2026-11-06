@@ -418,7 +418,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.94.0",
+    "VERSION": "1.97.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -789,6 +789,9 @@ MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 
 # Mobile apps (frontend/mobile). Push is fail-closed like MESSAGE_TRANSPORT.
+# "onesignal": the apps are OneSignal subscribers like the web, so every push (job offers
+# included) reaches phones through OneSignal and the Expo path is off. "expo": the old path,
+# job offers only, kept for app builds made before OneSignal.
 MOBILE_PUSH_PROVIDER = env("MOBILE_PUSH_PROVIDER", default="unconfigured")
 MOBILE_PUSH_ALLOW_FAKE = env.bool("MOBILE_PUSH_ALLOW_FAKE", default=False)
 EXPO_ACCESS_TOKEN = env("EXPO_ACCESS_TOKEN", default="")
@@ -808,6 +811,9 @@ GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GOOGLE_MAPS_SERVER_KEY = env("GOOGLE_MAPS_SERVER_KEY", default="")
 GEOCODING_TIMEOUT_SECONDS = env.float("GEOCODING_TIMEOUT_SECONDS", default=3.0)
 GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 24 * 7)
+# 60: the Partner app re-asks for the road route as the Partner moves; a minute per rounded
+# origin keeps a still Partner, or a re-rendering screen, at one Routes API call a minute.
+ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -887,6 +893,13 @@ M2_VISIT_SLOT_TOKEN_TTL_SECONDS = env.int("M2_VISIT_SLOT_TOKEN_TTL_SECONDS", def
 # long a person reasonably takes to finish paying.
 M2_VISIT_PLAN_HOLD_SECONDS = env.int("M2_VISIT_PLAN_HOLD_SECONDS", default=1800)
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
+# 7200: a Partner whose phone OneSignal can reach stays online with the app closed, because the
+# offer rings the phone. Two hours without opening the app ends it, and so does missing
+# `PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS` offers in a row; either way the Partner is told.
+PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS = env.int(
+    "PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS", default=7200
+)
+PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS = env.int("PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS", default=2)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
     default=300,
@@ -1027,6 +1040,12 @@ CELERY_BEAT_SCHEDULE = {
     "sweep-completion-auto-finalize": {
         "task": "apps.fulfilment.tasks.sweep_completion_auto_finalize",
         "schedule": 300.0,
+    },
+    "sweep-visit-time-to-leave-reminders": {
+        "task": "apps.fulfilment.tasks.sweep_visit_time_to_leave_reminders",
+        # 120s: the reminder fires when "On my way" opens, an hour out; two minutes late is
+        # still a reminder, and the idempotency key makes every later pass a no-op.
+        "schedule": 120.0,
     },
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
@@ -1382,16 +1401,17 @@ LOGGING = {
 }
 
 # OneSignal Push & Instant Dispatch settings
-ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
-ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
-ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default=ONESIGNAL_APP_ID)
-ONESIGNAL_PARTNER_REST_API_KEY = env(
-    "ONESIGNAL_PARTNER_REST_API_KEY", default=ONESIGNAL_REST_API_KEY
-)
+# One OneSignal app per audience, each shared by its website and mobile app. No shared
+# ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY and no fallback between them (owner, 2026-11-04).
+ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default="")
+ONESIGNAL_PARTNER_REST_API_KEY = env("ONESIGNAL_PARTNER_REST_API_KEY", default="")
 ONESIGNAL_CUSTOMER_APP_ID = env("ONESIGNAL_CUSTOMER_APP_ID", default="")
 ONESIGNAL_CUSTOMER_REST_API_KEY = env("ONESIGNAL_CUSTOMER_REST_API_KEY", default="")
 ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
 ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
+#: The partner OneSignal app's "Job offers" Android channel (Settings -> Push -> Android
+#: Notification Channels): high importance and the booking_alert sound. Blank: OneSignal's default.
+ONESIGNAL_PARTNER_OFFER_CHANNEL_ID = env("ONESIGNAL_PARTNER_OFFER_CHANNEL_ID", default="")
 DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
 PARTNER_PORTAL_BASE_URL = env("PARTNER_PORTAL_BASE_URL", default="http://localhost:3001")
 

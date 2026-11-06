@@ -17,10 +17,8 @@ import {
 import { request } from "@vsolve/api-client";
 import { browserApiBaseUrl, getApiClient } from "@/lib/api/browser";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const PARTNER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ?? "";
 
 export interface PushPreferenceItem {
   category: string;
@@ -83,7 +81,7 @@ export function PartnerPushPreferencesCard() {
     userId,
     triggerEvent: "manual_settings",
     apiBaseUrl: browserApiBaseUrl(),
-    appId: ONESIGNAL_APP_ID,
+    appId: PARTNER_ONESIGNAL_APP_ID,
   });
 
   const handleManualEnable = async () => {
@@ -93,7 +91,7 @@ export function PartnerPushPreferencesCard() {
       platform: "web",
       permission_state: permissionState,
       trigger_event: "manual_settings",
-      app_id_present: Boolean(ONESIGNAL_APP_ID),
+      app_id_present: Boolean(PARTNER_ONESIGNAL_APP_ID),
     });
 
     setIsRequesting(true);
@@ -365,7 +363,7 @@ export function PushOptInCard({ variant = "card" }: { variant?: "card" | "row" }
     userId: session.data?.user?.id ?? null,
     triggerEvent: variant === "card" ? "application_submit" : "account_menu",
     apiBaseUrl: browserApiBaseUrl(),
-    appId: ONESIGNAL_APP_ID,
+    appId: PARTNER_ONESIGNAL_APP_ID,
   });
 
   async function turnOn() {

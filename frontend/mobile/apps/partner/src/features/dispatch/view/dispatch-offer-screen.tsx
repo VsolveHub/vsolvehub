@@ -3,6 +3,7 @@ import { Button, COLOR_TOKENS, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   AlertTriangle,
+  BellOff,
   CheckCircle2,
   Clock,
   MapPin,
@@ -11,9 +12,11 @@ import {
   Zap,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
+
+import { shouldRing, useOfferRingtone } from "@/features/notifications/use-offer-ringtone";
 
 import {
   useAcceptDispatchOffer,
@@ -65,6 +68,9 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
 
     return () => clearInterval(interval);
   }, [offer, initialRemaining]);
+
+  // Ring until answered or expired, on the server's clock (never the phone's).
+  const ring = useOfferRingtone(offer ? shouldRing(offer.status, secondsRemaining) && actionResult === null : false);
 
   const handleAccept = async () => {
     if (!offer || acceptMutation.isPending || declineMutation.isPending) return;
@@ -229,6 +235,18 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
           </View>
         </View>
 
+        {isPending && !ring.silenced ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Silence the ringing. The offer stays open."
+            onPress={ring.silence}
+            className="mt-3 min-h-11 flex-row items-center gap-1.5 rounded-full border border-line bg-surface-sunken px-4 active:opacity-70"
+          >
+            <BellOff size={16} color={COLOR_TOKENS.textMuted} />
+            <Text className="text-xs font-bold text-text-secondary">Silence</Text>
+          </Pressable>
+        ) : null}
+
         <Text className="mt-2 text-xs text-text-secondary text-center">
           {secondsRemaining > 0
             ? isUrgent
@@ -313,7 +331,7 @@ export function DispatchOfferScreen({ offerId }: { offerId: string }) {
                 {t("work.dispatch.serviceArea")}
               </Text>
               <Text className="text-sm font-bold text-navy-950">
-                {offer.booking.location_area || "Hyderabad"}
+                {offer.booking.location_area || "Area not given"}
               </Text>
             </View>
           </View>

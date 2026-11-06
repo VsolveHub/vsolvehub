@@ -571,17 +571,21 @@ def remove_media(*, asset: RentalAsset, partner: Any, media_id: UUID | str) -> N
 def _notify_rental(
     *,
     recipient_id: UUID,
+    audience: str,
     purpose: str,
     template_code: str,
     context: dict[str, Any],
     idempotency_key: str,
 ) -> None:
-    """Fire an in-app rental notification. Best-effort: never breaks the caller."""
+    """Fire an in-app rental notification. Best-effort: never breaks the caller.
+
+    `audience` is PARTNER for the owner and CUSTOMER for the renter."""
     try:
         request_notification(
             recipient_id=recipient_id,
             purpose=purpose,
             channel=NotificationIntent.Channel.IN_APP,
+            audience=audience,
             template_code=template_code,
             context=context,
             idempotency_key=idempotency_key,
@@ -935,6 +939,7 @@ def create_booking(
     # Notify the owner of the new booking (best-effort, outside the txn lock).
     _notify_rental(
         recipient_id=asset.partner.user_id,
+        audience=NotificationIntent.Audience.PARTNER,
         purpose="rental.booking.confirmed",
         template_code="rental_new_booking",
         context={
@@ -950,6 +955,7 @@ def create_booking(
     # Notify the customer with confirmation and their PIN.
     _notify_rental(
         recipient_id=customer.id,
+        audience=NotificationIntent.Audience.CUSTOMER,
         purpose="rental.booking.confirmed",
         template_code="rental_booking_confirmed",
         context={

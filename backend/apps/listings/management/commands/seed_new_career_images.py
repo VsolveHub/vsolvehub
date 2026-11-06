@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from apps.foundation.catalog_media import catalog_image_url
 from apps.listings.models import Listing, ListingMedia
 
 DOWNLOADS_DIR = Path(r"C:\Users\nuner\Downloads\career")
@@ -214,14 +214,14 @@ def sync_images_to_destinations() -> dict[str, Path]:
 
     Returns a mapping from raw pattern keyword to the copied clean file.
     """
-    FRONTEND_WEB_CAREER_DIR.mkdir(parents=True, exist_ok=True)
-    FRONTEND_EXPO_CAREER_DIR.mkdir(parents=True, exist_ok=True)
-    BACKEND_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-
     copied_files: dict[str, Path] = {}
 
     if not DOWNLOADS_DIR.exists():
         return copied_files
+
+    FRONTEND_WEB_CAREER_DIR.mkdir(parents=True, exist_ok=True)
+    FRONTEND_EXPO_CAREER_DIR.mkdir(parents=True, exist_ok=True)
+    BACKEND_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
     for config in CAREER_IMAGE_MAPPINGS:
         raw_pattern = config["raw_pattern"].lower()
@@ -263,7 +263,7 @@ class Command(BaseCommand):
             f"Synced {len(copied)} career images to Web customer public, Expo customer assets, and Backend media."
         )
 
-        all_listings = {str(l.id): l for l in Listing.objects.all()}
+        all_listings = {str(listing.id): listing for listing in Listing.objects.all()}
         updated_count = 0
 
         for config in CAREER_IMAGE_MAPPINGS:
@@ -283,7 +283,7 @@ class Command(BaseCommand):
                 )
                 continue
 
-            image_url = config["url"]
+            image_url = catalog_image_url(config["url"])
             caption = config["caption"]
 
             # Replace any existing media with the verified primary image
@@ -308,4 +308,3 @@ class Command(BaseCommand):
                 f"\nSuccessfully seeded {updated_count}/17 career listing images perfectly across Web Customer and Expo Customer portals."
             )
         )
-

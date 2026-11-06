@@ -101,40 +101,21 @@ export function StayHome() {
   const visits = visitsQuery.data ?? [];
   const reservations = reservationsQuery.data ?? [];
 
-  // Summary counts with fallback to demo values matching mockup
-  const roomsFree = summary?.available_rooms ?? 5;
+  // Counts from the server. Zero until it answers, never a sample number.
+  const roomsFree = summary?.available_rooms ?? 0;
   const roomsBooked = summary?.booked_rooms ?? 0;
-  const totalRooms = summary?.total_rooms ?? 5;
-  const totalProperties = summary?.total_properties ?? properties.length ?? 5;
+  const totalRooms = summary?.total_rooms ?? 0;
+  const totalProperties = summary?.total_properties ?? properties.length;
   const liveProperties =
     (summary as any)?.live_properties ??
     (properties.length > 0
       ? properties.filter((p) => p.listing_status !== "ARCHIVED").length
-      : 4);
-  const reviewCount = summary?.review_count ?? 2;
-  const averageRating = summary?.average_rating ?? 5;
+      : 0);
+  const reviewCount = summary?.review_count ?? 0;
+  const averageRating = summary?.average_rating ?? 0;
 
   // 1. Calls to make: enquiries with status SUBMITTED
-  const rawToCall = useMemo(
-    () => enquiries.filter((e) => e.status === "SUBMITTED"),
-    [enquiries],
-  );
-
-  // If no live SUBMITTED enquiries in DB, provide the demo card matching mockup
-  const toCall =
-    rawToCall.length > 0
-      ? rawToCall
-      : [
-          {
-            id: "demo-enq-1",
-            customer_name: "Rajesh",
-            customer_phone: "+919876543210",
-            property_title: "Grand Hyatt Hotel Demo",
-            unit_name: "Deluxe Suite",
-            check_in: "2026-11-09",
-            guest_count: 1,
-          } as unknown as StayEnquiry,
-        ];
+  const toCall = useMemo(() => enquiries.filter((e) => e.status === "SUBMITTED"), [enquiries]);
 
   // 2. Visits to answer: status REQUESTED
   const visitRequests = useMemo(

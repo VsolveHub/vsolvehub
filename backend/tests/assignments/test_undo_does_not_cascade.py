@@ -182,11 +182,12 @@ def test_a_merely_offered_partner_is_not_told_their_job_was_cancelled() -> None:
 
 
 @freeze_time(FROZEN_NOW)
-def test_undo_redispatches_to_a_second_partner_without_compensating() -> None:
+def test_a_decline_redispatches_to_a_second_partner_without_compensating() -> None:
     """The board's second acceptance criterion: the non-buggy path must not regress.
 
-    With another qualified Partner available, undo redispatches to them and the group
-    stays alive. Nothing here is compensated, and nobody is told a job was cancelled.
+    Accepting is final since 5 November 2026, so the way a Partner passes on a job is to
+    decline it. With another qualified Partner available, that redispatches to them and the
+    group stays alive. Nothing here is compensated, and nobody is told a job was cancelled.
     """
 
     call_command("seed_technician_catalog")
@@ -196,9 +197,8 @@ def test_undo_redispatches_to_a_second_partner_without_compensating() -> None:
     group = offer.fulfilment_unit.booking_group
     offered_to = offer.partner
     other = second if offered_to == first else first
-    accept_unit_offer(offer_id=offer.id, partner=offered_to)
 
-    successor = decline_or_undo_unit_offer(offer_id=offer.id, partner=offered_to, undo=True)
+    successor = decline_or_undo_unit_offer(offer_id=offer.id, partner=offered_to, undo=False)
 
     assert successor is not None
     assert successor.partner == other
@@ -212,7 +212,7 @@ def test_undo_redispatches_to_a_second_partner_without_compensating() -> None:
 
 
 @freeze_time(FROZEN_NOW)
-def test_a_sole_partner_undo_still_compensates_the_group() -> None:
+def test_a_sole_partner_decline_still_compensates_the_group() -> None:
     """The board's third acceptance criterion, and the decision recorded.
 
     With nobody left to offer the unit to, the group cannot be fulfilled — and under
@@ -225,9 +225,8 @@ def test_a_sole_partner_undo_still_compensates_the_group() -> None:
     partner = online_partner(suffix="97", variant_slugs=("switch-socket-repair",))
     offer = same_day_offer(phone=CUSTOMER, key="cascade-sole")
     group = offer.fulfilment_unit.booking_group
-    accept_unit_offer(offer_id=offer.id, partner=partner)
 
-    successor = decline_or_undo_unit_offer(offer_id=offer.id, partner=partner, undo=True)
+    successor = decline_or_undo_unit_offer(offer_id=offer.id, partner=partner, undo=False)
 
     assert successor is None
     group.refresh_from_db()

@@ -14,6 +14,7 @@ outcome). Everything else is read from the domain layer.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -949,6 +950,35 @@ class CustomerContactAttemptRequestSerializer(serializers.Serializer[dict[str, A
 
 class StartOtpVerifyRequestSerializer(VersionedCommandSerializer):
     code = serializers.CharField(max_length=12, trim_whitespace=True)
+
+
+class PartnerRouteOriginSerializer(serializers.Serializer[dict[str, Any]]):
+    """Where the Partner is now. Used for this one route and not stored."""
+
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal("-90"), max_value=Decimal("90")
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal("-180"), max_value=Decimal("180")
+    )
+
+
+class PartnerVisitRouteSerializer(serializers.Serializer[dict[str, Any]]):
+    """The road route to the visit, for the Partner's map.
+
+    There is no separate destination point: the line ends at the Customer's pin, which is all a
+    map needs, and the pin still never travels as bare coordinates (see
+    `PartnerSiteAddressSerializer`).
+    """
+
+    encoded_polyline = serializers.CharField(
+        help_text="Google encoded polyline from the Partner to the Customer's pin."
+    )
+    distance_meters = serializers.IntegerField(min_value=0)
+    duration_seconds = serializers.IntegerField(
+        min_value=0, help_text="Two-wheeler travel time with live traffic."
+    )
+    server_now = serializers.DateTimeField()
 
 
 class AssistedStartRequestSerializer(VersionedCommandSerializer):

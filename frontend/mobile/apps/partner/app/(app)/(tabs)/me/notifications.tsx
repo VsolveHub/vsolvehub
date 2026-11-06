@@ -1,5 +1,6 @@
-import { NotificationSettingsScreen } from "@/features/account/notification-settings-screen";
+import { PartnerPushPreferencesScreen } from "@/features/notifications/view/partner-push-preferences-screen";
 
-export default function NotificationsRoute() {
-  return <NotificationSettingsScreen />;
+export default function Screen() {
+  return <PartnerPushPreferencesScreen />;
 }
+

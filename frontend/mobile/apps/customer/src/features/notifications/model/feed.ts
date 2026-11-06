@@ -1,7 +1,7 @@
 // Ported from frontend/apps/customer/features/notifications/model/feed.ts
 import type { Schemas } from "@vsolve/api-client";
 
-import { engagementHref, requestHref, requestQuotesHref } from "@/lib/routes";
+import { bookingGroupHref, engagementHref, requestHref, requestQuotesHref } from "@/lib/routes";
 
 /**
  * What a notice is called, and where it leads — contract 1.34.0.
@@ -52,6 +52,8 @@ const HREF_BY_KIND: Record<string, (id: string) => string> = {
   REQUIREMENT_QUOTES: requestQuotesHref,
   RENTAL: () => "/activity",
   BOOKING: () => "/activity",
+  // A booked visit moved (1.96.0): on the way, arrived, work reported done.
+  BOOKING_GROUP: bookingGroupHref,
   STAY: () => "/activity",
   ORDER: () => "/activity",
   LISTING: () => "/activity",

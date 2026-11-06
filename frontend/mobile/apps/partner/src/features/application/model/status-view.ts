@@ -33,7 +33,8 @@ export function resolveStatusView(
   // Check document statuses
   const docs = documents ?? (application && "documents" in application ? application.documents : []) ?? [];
   const hasRejectedDoc = docs.some(
-    (d) => d.status === "REJECTED" || ("scan_status" in d && d.scan_status === "REJECTED"),
+    // Only one the Partner can act on: an old rejected file that was replaced needs nothing.
+    (d) => d.status === "REJECTED" && "can_replace" in d && d.can_replace,
   );
 
   // 2. Changes needed takes precedence over approved and in_review

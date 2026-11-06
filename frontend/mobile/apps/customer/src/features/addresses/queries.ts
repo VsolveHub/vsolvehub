@@ -3,7 +3,8 @@ import { request, type Schemas } from "@vsolve/api-client";
 import { SESSION_STATE, queryKeys } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "@vsolve/mobile-core";
+import { getApiClient, usePlaceSearch, useReverseGeocode, type PlaceSuggestion, type ResolvedLocation } from "@vsolve/mobile-core";
+export { usePlaceSearch, useReverseGeocode, type PlaceSuggestion, type ResolvedLocation };
 
 /**
  * The saved address book — one implementation, two callers.
@@ -41,7 +42,6 @@ import { getApiClient } from "@vsolve/mobile-core";
 export type Address = Schemas["Address"];
 export type AddressInput = Schemas["AddressRequest"];
 export type AddressPatch = Schemas["PatchedAddressRequest"];
-export type ResolvedLocation = Schemas["ReverseGeocodeResponse"];
 
 /**
  * The address a booking should open with.
@@ -74,33 +74,6 @@ export function preferredAddressId(
  * answer would mean holding address text against a coordinate in a query the
  * screen no longer needs.
  */
-export function useReverseGeocode() {
-  return useMutation({
-    mutationFn: (input: Schemas["ReverseGeocodeRequestRequest"]) =>
-      request(() => getApiClient().POST("/api/v1/geocoding/reverse/", { body: input })),
-    retry: false,
-  });
-}
-
-export type PlaceSuggestion = Schemas["PlaceSuggestion"];
-
-/**
- * Places matching what the person typed, for picking a pin. The web searches with Google's
- * browser library; the app asks Django, which runs the same lookup with the server key. A result
- * only places the pin: the address text then comes from `useReverseGeocode` for that pin.
- */
-export function usePlaceSearch(query: string) {
-  const q = query.trim();
-  return useQuery({
-    queryKey: ["geocoding", "search", q.toLowerCase()],
-    queryFn: () =>
-      request(() => getApiClient().GET("/api/v1/geocoding/search/", { params: { query: { q } } })),
-    enabled: q.length >= 3,
-    staleTime: 10 * 60 * 1000,
-    retry: false,
-  });
-}
-
 export function useAddresses(enabled = true) {
   return useQuery({
     queryKey: queryKeys.addresses.list(),

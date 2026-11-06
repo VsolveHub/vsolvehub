@@ -2,7 +2,7 @@
 import { Text } from "@vsolve/mobile-ui";
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
-import { Slot, usePathname, useRouter } from "expo-router";
+import { Redirect, Slot, usePathname, useRouter } from "expo-router";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Phone,
   Send,
+  User,
   X,
 } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
@@ -31,8 +32,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
 import { previousStep } from "@/features/application/model/progress";
-import { APPLICATION_STEPS, nextStep } from "@/features/application/model/steps";
+import { applicationSteps, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication } from "@/features/application/queries";
+import { PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
 import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
 import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
 
@@ -96,18 +98,19 @@ export default function ApplyLayout() {
   const application = missing ? null : (query.data ?? null);
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
-  const back = isStatusPage ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname));
+  const back = isStatusPage ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
   const shouldShowDock = !isSubmitted && !isStatusPage;
 
-  // Find current step index in the 4-step sequence
+  // Find the current step in this partner's own sequence
+  const steps = applicationSteps(application?.track);
   const currentStepIdx = Math.max(
     0,
-    APPLICATION_STEPS.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
+    steps.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
   );
-  const currentStep = APPLICATION_STEPS[currentStepIdx] ?? APPLICATION_STEPS[0];
+  const currentStep = steps[currentStepIdx] ?? steps[0];
 
-  // User initial (defaults to "W" matching mockup)
-  const initialLetter = (application?.display_name || "webaura").trim()[0]?.toUpperCase() || "W";
+  // The applicant's own initial; with no name yet the avatar shows the person icon.
+  const initialLetter = application?.display_name?.trim()[0]?.toUpperCase() ?? "";
 
   // Primary action button configuration with robust fallbacks
   const defaultLabel = currentStepIdx === 3 ? "Submit application" : "Continue";
@@ -121,11 +124,15 @@ export default function ApplyLayout() {
       onCommitRef.current();
       return;
     }
-    const next = nextStep(pathname);
+    const next = nextStep(pathname, application?.track);
     if (next) {
       router.push(next.href as any);
     }
   };
+
+  // An approved Partner has finished onboarding: their place is the workspace, not this form.
+  // Every way in (a sign-in with next=/apply, an Apply button, a back gesture) ends up here.
+  if (application?.status === "APPROVED") return <Redirect href="/home" />;
 
   return (
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
@@ -191,7 +198,11 @@ export default function ApplyLayout() {
                 pressed ? styles.avatarBadgePressed : null,
               ]}
             >
-              <Text style={styles.avatarText}>{initialLetter}</Text>
+              {initialLetter ? (
+                <Text style={styles.avatarText}>{initialLetter}</Text>
+              ) : (
+                <User size={16} color="#ea580c" />
+              )}
             </Pressable>
           </View>
 
@@ -332,19 +343,19 @@ export default function ApplyLayout() {
                   accessibilityRole="button"
                   onPress={() => {
                     setHelpModalOpen(false);
-                    void Linking.openURL("tel:+918008765832");
+                    void Linking.openURL(`tel:${PARTNER_SUPPORT_PHONE}`);
                   }}
                   style={styles.helpPrimaryAction}
                 >
                   <Phone size={18} color="#ffffff" />
-                  <Text style={styles.helpPrimaryActionText}>Call Support (+91 8008765832)</Text>
+                  <Text style={styles.helpPrimaryActionText}>Call Support ({PARTNER_SUPPORT_PHONE_DISPLAY})</Text>
                 </Pressable>
 
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {
                     setHelpModalOpen(false);
-                    void Linking.openURL("https://wa.me/918008765832");
+                    void Linking.openURL(`https://wa.me/${PARTNER_SUPPORT_PHONE.replace("+", "")}`);
                   }}
                   style={styles.helpSecondaryAction}
                 >
@@ -368,8 +379,7 @@ export default function ApplyLayout() {
         <ProfileMenuSheet
           visible={profileModalOpen}
           onClose={() => setProfileModalOpen(false)}
-          partnerName={application?.display_name || "webaura"}
-          partnerPhone="+91 98765 43210"
+          partnerName={application?.display_name}
           partnerInitial={initialLetter}
         />
       </View>

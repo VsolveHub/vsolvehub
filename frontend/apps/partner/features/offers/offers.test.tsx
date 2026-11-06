@@ -181,16 +181,15 @@ describe("accepting", () => {
 
   it("writes the returned offer back rather than refetching what it was just told", async () => {
     client.GET.mockResolvedValue(ok(offerPage()));
-    client.POST.mockResolvedValue(
-      ok(offer({ status: "ACCEPTED_PENDING_UNDO", undo_deadline: "2026-08-03T09:02:00Z" })),
-    );
+    // Accepting is final (1.96.0): the command answers with the committed offer.
+    client.POST.mockResolvedValue(ok(offer({ status: "COMMITTED" })));
 
     render(<OfferInbox />, { wrapper });
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
 
-    expect(await screen.findByText(/this is yours/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /commit now/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /undo — no penalty/i })).toBeInTheDocument();
+    expect(await screen.findByText(/this job is yours/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /commit now/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
     // One read on mount. The command's own response was the answer.
     expect(client.GET).toHaveBeenCalledTimes(1);
   });
@@ -215,14 +214,12 @@ describe("accepting", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
 
     const firstKey = client.POST.mock.calls[0]![1].params.header["Idempotency-Key"];
-    client.POST.mockResolvedValue(
-      ok(offer({ status: "ACCEPTED_PENDING_UNDO", undo_deadline: "2026-08-03T09:02:00Z" })),
-    );
+    client.POST.mockResolvedValue(ok(offer({ status: "COMMITTED" })));
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
 
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
     expect(client.POST.mock.calls[1]![1].params.header["Idempotency-Key"]).toBe(firstKey);
-    expect(await screen.findByText(/this is yours/i)).toBeInTheDocument();
+    expect(await screen.findByText(/this job is yours/i)).toBeInTheDocument();
   });
 
   it("does not present a reservation conflict as success", async () => {
@@ -234,7 +231,7 @@ describe("accepting", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/another professional already holds/i);
-    expect(alert).not.toHaveTextContent(/this is yours/i);
+    expect(alert).not.toHaveTextContent(/this job is yours/i);
   });
 
   it("does not present an idempotency key-reuse conflict as success", async () => {
@@ -305,8 +302,8 @@ describe("a command whose outcome cannot be known", () => {
   });
 });
 
-describe("the undo window", () => {
-  it("offers commit and undo while the window is open", async () => {
+describe("accepting is final", () => {
+  it("shows an offer left in the old undo state as accepted, with nothing to commit or undo", async () => {
     client.GET.mockResolvedValue(
       ok(
         offerPage({
@@ -319,36 +316,10 @@ describe("the undo window", () => {
 
     render(<OfferInbox />, { wrapper });
 
-    expect(await screen.findByRole("button", { name: /commit now/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /undo — no penalty/i })).toBeInTheDocument();
+    expect(await screen.findByText(/this job is yours/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /commit now/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
-  });
-
-  it("sends undo as its own command", async () => {
-    client.GET.mockResolvedValue(
-      ok(
-        offerPage({
-          results: [
-            offer({ status: "ACCEPTED_PENDING_UNDO", undo_deadline: "2026-08-03T09:02:00Z" }),
-          ],
-        }),
-      ),
-    );
-    client.POST.mockResolvedValue(ok(offer({ status: "UNDONE" })));
-
-    render(<OfferInbox />, { wrapper });
-    fireEvent.click(await screen.findByRole("button", { name: /undo — no penalty/i }));
-
-    await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith("/api/v1/partner/offers/{offer_id}/{action}/", {
-        params: {
-          path: { offer_id: "offer-1", action: "undo" },
-          header: {
-            "Idempotency-Key": offerCommandIntentKey({ offerId: "offer-1", action: "undo" }),
-          },
-        },
-      }),
-    );
   });
 
   it("offers no further action once committed", async () => {
@@ -356,7 +327,7 @@ describe("the undo window", () => {
 
     render(<OfferInbox />, { wrapper });
 
-    expect(await screen.findByText(/^Committed$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Accepted — it is yours$/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /commit now/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
   });

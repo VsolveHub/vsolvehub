@@ -6,10 +6,8 @@ import { ApiRequestError, request } from "@vsolve/api-client";
 import { useCurrentSession } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const PARTNER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_PARTNER_APP_ID ?? "";
 
 const QUEUE_STORAGE_KEY = "vsh_pending_partner_push_sync";
 const MAX_ATTEMPTS = 10;
@@ -92,6 +90,7 @@ async function executePushSubscriptionSync(item: PendingPartnerPushSync): Promis
         },
       }),
     );
+    lastAccepted = { signature: syncSignature(item), at: Date.now() };
     savePendingSync(null);
     return true;
   } catch (error) {
@@ -146,6 +145,29 @@ async function processPendingSyncQueue(): Promise<void> {
   }
 }
 
+/**
+ * The last state Django accepted, so a tab regaining focus does not resend it. Every focus used to
+ * post the same subscription again — the repeated error in the console when the server refused it.
+ * Anything that changed (a new id, a permission answer, another account) still goes at once.
+ */
+let lastAccepted: { signature: string; at: number } | null = null;
+const RESYNC_AFTER_MS = 30 * 60 * 1000;
+
+function syncSignature(item: {
+  subscriptionId: string;
+  isActive: boolean;
+  optedIn: boolean;
+  permissionState: string;
+  action: string;
+  userId?: string | null;
+}): string {
+  return [item.subscriptionId, item.isActive, item.optedIn, item.permissionState, item.action, item.userId ?? ""].join("|");
+}
+
+function alreadyAccepted(signature: string): boolean {
+  return lastAccepted !== null && lastAccepted.signature === signature && Date.now() - lastAccepted.at < RESYNC_AFTER_MS;
+}
+
 async function syncPushSubscription(
   subscriptionId: string,
   isActive: boolean = true,
@@ -155,6 +177,15 @@ async function syncPushSubscription(
   userId: string | null = null,
 ): Promise<void> {
   if (!subscriptionId) return;
+  const resolvedPermission =
+    permissionState || (typeof Notification !== "undefined" ? Notification.permission : "");
+  if (
+    alreadyAccepted(
+      syncSignature({ subscriptionId, isActive, optedIn, permissionState: resolvedPermission, action, userId }),
+    )
+  ) {
+    return;
+  }
 
   const now = Date.now();
   const existing = loadPendingSync();
@@ -246,7 +277,7 @@ export function OneSignalInit() {
 
   // OneSignal Web Push SDK initialization
   useEffect(() => {
-    if (typeof window === "undefined" || !ONESIGNAL_APP_ID) return;
+    if (typeof window === "undefined" || !PARTNER_ONESIGNAL_APP_ID) return;
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async (OneSignal) => {
@@ -258,7 +289,7 @@ export function OneSignalInit() {
 
       try {
         await OneSignal.init({
-          appId: ONESIGNAL_APP_ID,
+          appId: PARTNER_ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: isLocalEnv,
           autoRegister: false,
           autoResubscribe: true,
@@ -314,7 +345,7 @@ export function OneSignalInit() {
 
   // Sync external partner id with OneSignal and sync subscription state
   useEffect(() => {
-    if (typeof window === "undefined" || !ONESIGNAL_APP_ID) return;
+    if (typeof window === "undefined" || !PARTNER_ONESIGNAL_APP_ID) return;
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
 

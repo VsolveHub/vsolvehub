@@ -1,5 +1,7 @@
 import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+
+import { openSupportCall, openSupportEmail } from "@/features/support/contact";
 import {
   ChevronRight,
   HelpCircle,
@@ -61,7 +63,7 @@ export function HelpSupportScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Call support"
-            onPress={() => handleOpenUrl("tel:+918008765832")}
+            onPress={openSupportCall}
             style={({ pressed }) => [styles.rowCard, pressed ? styles.rowCardPressed : null]}
           >
             <View style={styles.rowLeft}>
@@ -80,7 +82,7 @@ export function HelpSupportScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Email us"
-            onPress={() => handleOpenUrl("mailto:support@vsolvehub.com")}
+            onPress={() => openSupportEmail()}
             style={({ pressed }) => [styles.rowCard, pressed ? styles.rowCardPressed : null]}
           >
             <View style={styles.rowLeft}>

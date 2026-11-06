@@ -122,7 +122,7 @@ function Editor({
   const pathname = usePathname();
   const { registerDock } = useApplyDock();
 
-  const following = continueOnSave ? nextStep(pathname) : null;
+  const following = continueOnSave ? nextStep(pathname, application?.track) : null;
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
   const currentVersion = useCurrentVersion();
@@ -184,7 +184,7 @@ function Editor({
     commitRef.current();
   }, []);
 
-  const previous = previousStep(pathname);
+  const previous = previousStep(pathname, application?.track);
   const backHref = previous ? previous.href : "/apply/about";
 
   const isSaving = save.isPending;

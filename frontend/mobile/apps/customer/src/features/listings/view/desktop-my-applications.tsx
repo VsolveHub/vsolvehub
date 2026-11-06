@@ -651,7 +651,7 @@ function DesktopApplicationCard({
       <View className="rounded-xl border border-line/60 bg-[#F5F3EF] px-4 py-3 flex-row items-center justify-between text-xs text-text-secondary">
         <View className="flex-row items-center gap-1">
           <Text className="text-xs font-semibold text-text-secondary">
-            Applicant: <Text className="font-bold text-navy-950">{app.applicant_name || snapshot.name || "Nune Rajesh"}</Text>
+            Applicant: <Text className="font-bold text-navy-950">{app.applicant_name || snapshot.name || "You"}</Text>
           </Text>
         </View>
         {snapshot.experience ? (

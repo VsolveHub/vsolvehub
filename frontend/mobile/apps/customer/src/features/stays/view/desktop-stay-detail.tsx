@@ -57,11 +57,9 @@ import { getAmenityIcon } from "./amenity-icon";
 import { StayCard } from "./stay-card";
 import { StayReviewSheet } from "./stay-review-sheet";
 import { LookSwitcher } from "./look-switcher";
+import { NoStayPhotos } from "./no-stay-photos";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { pickLook, visibleLooks } from "../looks";
-
-const FALLBACK_STAY_IMAGE =
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop";
 
 const LENGTH_CHOICES = { MONTH: 24, NIGHT: 90 } as const;
 
@@ -187,10 +185,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
   // Gallery media selection
   const lookMediaUrls = currentLook?.media?.map((m) => m.url).filter(Boolean) ?? [];
   const unitMediaUrls = currentUnit?.media?.map((m) => m.url).filter(Boolean) ?? [];
-  const propertyImages =
-    property.image_urls && property.image_urls.length > 0
-      ? property.image_urls
-      : [FALLBACK_STAY_IMAGE];
+  const propertyImages = property.image_urls ?? [];
   const rawImages =
     lookMediaUrls.length > 0
       ? lookMediaUrls
@@ -362,7 +357,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
     property.partner?.business_name ||
     property.partner?.company_name ||
     property.partner?.full_name ||
-    "Lakeview PG";
+    null;
 
   // Similar Stays Query
   const city = property.location_text ? property.location_text.split(",")[0]?.trim() : undefined;
@@ -412,12 +407,16 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
             {/* Inset Photo Gallery Carousel matching Web */}
             <View className="flex-col gap-2">
               <View className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl border border-line bg-surface-sunken">
-                <Image
-                  source={{ uri: images[activePhotoIdx] }}
-                  contentFit="cover"
-                  style={{ width: "100%", height: "100%" }}
-                  transition={250}
-                />
+                {images.length > 0 ? (
+                  <Image
+                    source={{ uri: images[activePhotoIdx] }}
+                    contentFit="cover"
+                    style={{ width: "100%", height: "100%" }}
+                    transition={250}
+                  />
+                ) : (
+                  <NoStayPhotos title={property.title} />
+                )}
 
                 {images.length > 1 ? (
                   <>
@@ -504,10 +503,12 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                 {property.title}
               </Text>
 
-              {/* Host info */}
-              <Text className="mt-1 text-xs text-slate-500 font-medium">
-                Hosted by <Text className="font-bold text-navy-900">{hostName}</Text>
-              </Text>
+              {/* Host info: the listing's own host, or no line */}
+              {hostName ? (
+                <Text className="mt-1 text-xs text-slate-500 font-medium">
+                  Hosted by <Text className="font-bold text-navy-900">{hostName}</Text>
+                </Text>
+              ) : null}
 
               {/* Location with MapPin */}
               {property.location_text ? (

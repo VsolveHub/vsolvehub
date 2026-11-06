@@ -25,33 +25,24 @@ export function AboutStep() {
 
   const signUpName = (profile.data?.full_name ?? "").trim();
 
-  // Initialize display name from profile, application, or default to "webaura" matching mockup
+  // Prefill the display name with the person's own name (sign-up, else the saved application).
+  // With neither, the field stays empty for them to fill: never a placeholder name they might submit.
   useEffect(() => {
     if (!isReadOnly && !draft.displayName.trim()) {
-      const initialName = (
-        signUpName ||
-        application?.display_name ||
-        "webaura"
-      ).trim();
+      const initialName = (signUpName || application?.display_name || "").trim();
       if (initialName) {
         update({ displayName: initialName });
       }
     }
   }, [signUpName, application?.display_name, isReadOnly, draft.displayName, update]);
 
-  // Ensure default experience years is at least 1 so backend validation passes cleanly
+  // A stay host or rental owner is not asked for experience, and the server does not need it.
+  // Someone offering services answers for themselves below: never a made-up number.
   useEffect(() => {
-    if (!isReadOnly && draft.experienceYears <= 0) {
+    if (!isReadOnly && application?.track !== "SERVICES" && draft.experienceYears <= 0) {
       update({ experienceYears: 1 });
     }
-  }, [draft.experienceYears, isReadOnly, update]);
-
-  // Ensure default track is RENTAL_OWNER for the 4-step mobile flow
-  useEffect(() => {
-    if (!isReadOnly && draft.track !== "RENTAL_OWNER" && draft.track !== "STAY_HOST") {
-      update({ track: "RENTAL_OWNER" });
-    }
-  }, [draft.track, isReadOnly, update]);
+  }, [application?.track, draft.experienceYears, isReadOnly, update]);
 
   const trimmedName = draft.displayName.trim();
   const isNameInvalid = trimmedName.length < 2;
@@ -87,6 +78,25 @@ export function AboutStep() {
             <Text style={styles.errorText}>Please enter at least 2 characters.</Text>
           ) : null}
         </View>
+
+        {/* Years of experience: services only, and the server requires it */}
+        {application?.track === "SERVICES" ? (
+          <View style={[styles.fieldGroup, { marginTop: 18 }]}>
+            <Text style={styles.label}>
+              Years of experience <Text style={styles.requiredAsterisk}>*</Text>
+            </Text>
+            <TextInput
+              keyboardType="number-pad"
+              maxLength={2}
+              placeholder="e.g. 5"
+              placeholderTextColor="#8c96a3"
+              value={draft.experienceYears > 0 ? String(draft.experienceYears) : ""}
+              editable={!isReadOnly}
+              onChangeText={(value) => update({ experienceYears: Number(value.replace(/\D/g, "")) })}
+              style={styles.input}
+            />
+          </View>
+        ) : null}
 
         {/* Short Bio Field */}
         <View style={[styles.fieldGroup, { marginTop: 18 }]}>

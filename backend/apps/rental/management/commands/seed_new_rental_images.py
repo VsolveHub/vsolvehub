@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from apps.foundation.catalog_media import catalog_image_url
 from apps.rental.models import RentalAsset, RentalAssetMedia
 
 # Source and destination directories
@@ -117,11 +117,11 @@ RENTAL_IMAGE_MAPPINGS: list[dict[str, Any]] = [
 
 def sync_images_from_downloads() -> None:
     """Ensure all images from Downloads/New folder are synced to frontend public and backend media."""
-    FRONTEND_RENTAL_DIR.mkdir(parents=True, exist_ok=True)
-    BACKEND_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-
     if not DOWNLOADS_DIR.exists():
         return
+
+    FRONTEND_RENTAL_DIR.mkdir(parents=True, exist_ok=True)
+    BACKEND_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
     alias_map = {
         "Angle_grinder_cutting_disc_8ce5739a.jpg": "angle-grinder-cutting-disc.jpg",
@@ -170,13 +170,14 @@ class Command(BaseCommand):
         all_assets = list(RentalAsset.objects.all())
 
         for config in RENTAL_IMAGE_MAPPINGS:
-            matching_assets: list[RentalAsset] = []
-            for asset in all_assets:
-                if all(kw.lower() in asset.title.lower() for kw in config["title_keywords"]):
-                    matching_assets.append(asset)
+            matching_assets = [
+                asset
+                for asset in all_assets
+                if all(kw.lower() in asset.title.lower() for kw in config["title_keywords"])
+            ]
 
             for asset in matching_assets:
-                image_url = config["url"]
+                image_url = catalog_image_url(config["url"])
                 caption = config["caption"]
 
                 # Clean existing media and create primary clean image
@@ -189,9 +190,7 @@ class Command(BaseCommand):
                 )
 
                 self.stdout.write(
-                    self.style.SUCCESS(
-                        f"[Seeded] '{asset.title}' -> {image_url} ({caption})"
-                    )
+                    self.style.SUCCESS(f"[Seeded] '{asset.title}' -> {image_url} ({caption})")
                 )
                 updated_count += 1
 

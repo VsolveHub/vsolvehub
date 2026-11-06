@@ -15,26 +15,29 @@ export function appKind(): AppKind {
 }
 
 /**
- * Resolves the backend API URL.
- * Automatically resolves 'localhost' or '127.0.0.1' to the machine's LAN IP
- * (via Expo's hostUri) when running on mobile devices or emulators, so network
- * calls never fail due to mobile loopback or Wi-Fi IP changes.
+ * The backend API URL this build was made for (`EXPO_PUBLIC_API_BASE_URL`).
+ *
+ * A store or test build uses it exactly as given: `app.config.ts` stops an EAS build whose
+ * address is missing or not https, so a release never quietly swaps in some other server.
+ * Only development rewrites a local address, to the machine's LAN IP (via Expo's hostUri) on
+ * a phone or emulator, so calls survive mobile loopback and Wi-Fi IP changes.
  */
 export function apiBaseUrl(): string {
   const configured =
     process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ||
     (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.trim();
+
+  if (!__DEV__) {
+    if (!configured) throw new Error("EXPO_PUBLIC_API_BASE_URL is not set for this build.");
+    return configured.replace(/\/$/, "");
+  }
+
   const rawUrl = configured && configured.length > 0 ? configured.replace(/\/$/, "") : "http://localhost:8000";
 
   const isLocalOrLan =
     rawUrl.includes("localhost") ||
     rawUrl.includes("127.0.0.1") ||
     /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/.*)?$/.test(rawUrl);
-
-  // In production builds, guard against cleartext LAN/localhost URLs to satisfy ATS and cleartext traffic policies.
-  if (!__DEV__ && isLocalOrLan) {
-    return "https://api.vsolvehub.com";
-  }
 
   if (Platform.OS === "web") {
     if (isLocalOrLan && typeof window !== "undefined" && window.location) {
@@ -78,6 +81,7 @@ export function apiBaseUrl(): string {
   return rawUrl;
 }
 
+/** The website this build links to (`EXPO_PUBLIC_WEB_BASE_URL`); same rules as `apiBaseUrl`. */
 export function webBaseUrl(): string {
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const hostname = window.location.hostname;
@@ -91,11 +95,7 @@ export function webBaseUrl(): string {
     }
   }
   const configured = process.env.EXPO_PUBLIC_WEB_BASE_URL?.trim();
-  if (configured && configured.length > 0 && !configured.includes("vsolvehub.com")) {
-    return configured.replace(/\/$/, "");
-  }
-  if (__DEV__) {
-    return apiBaseUrl();
-  }
+  if (configured && configured.length > 0) return configured.replace(/\/$/, "");
+  if (!__DEV__) throw new Error("EXPO_PUBLIC_WEB_BASE_URL is not set for this build.");
   return configuredKind === "partner" ? "https://partner.vsolvehub.com" : "https://vsolvehub.com";
 }

@@ -20,6 +20,7 @@ from apps.commerce.services.base import _open_exception
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError, BookingVersionConflictApiError
 from apps.fulfilment.gates import GatedAction, assert_gate_open, booking_gates
 from apps.fulfilment.models import BookingStatusHistory, CustomerContactAttempt, WorkTask
+from apps.fulfilment.visit_notices import notify_customer_of_visit_step
 from apps.identity.models import User
 
 # The fine-grained physical-work machine (03-lifecycle-and-state-machines.md). Payment, refund
@@ -310,7 +311,7 @@ def mark_en_route(
         to_status=Booking.Status.EN_ROUTE,
         action=GatedAction.MARK_EN_ROUTE,
     )
-    return apply_transition(
+    moved = apply_transition(
         group=group,
         unit=unit,
         booking=booking,
@@ -320,6 +321,8 @@ def mark_en_route(
         idempotency_key=idempotency_key,
         extra_booking_fields={"en_route_at": now},
     )
+    notify_customer_of_visit_step(booking=moved)
+    return moved
 
 
 @transaction.atomic
@@ -340,7 +343,7 @@ def mark_arrived(
         to_status=Booking.Status.ARRIVED,
         action=GatedAction.MARK_ARRIVED,
     )
-    return apply_transition(
+    moved = apply_transition(
         group=group,
         unit=unit,
         booking=booking,
@@ -350,6 +353,8 @@ def mark_arrived(
         idempotency_key=idempotency_key,
         extra_booking_fields={"arrived_at": now},
     )
+    notify_customer_of_visit_step(booking=moved)
+    return moved
 
 
 @transaction.atomic

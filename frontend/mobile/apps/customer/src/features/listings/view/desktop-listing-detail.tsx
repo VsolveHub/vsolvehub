@@ -93,13 +93,9 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
     enabled: isAuthenticated,
   });
 
-  const profile = profileQuery.data ?? ({
-    full_name: "Nune Rajesh",
-    roles: ["Junior Full Stack Developer"],
-    area: "Hitech City",
-    city: "Hyderabad",
-    skills: ["Full Stack Developer", "TypeScript", "React"],
-  } as JobProfile);
+  // The applicant's own profile; until it loads (or if they have none) it is empty, never a
+  // stand-in person whose skills would be offered, and saved, as theirs.
+  const profile = profileQuery.data ?? ({} as JobProfile);
 
   const applicationsQuery = useQuery({
     queryKey: ["my-listing-applications"],
@@ -139,18 +135,22 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
   });
 
   const structuredFields = (listing.structured_fields || {}) as Record<string, any>;
-  const posterName = listing.poster_name || listing.company_name || "Apex Staffing Solutions";
-  const locationText = listing.location_text || "Suryapet";
+  // Every fact on this page is the employer's own; a missing one is left out, never stood in
+  // for. Only approved employers can post, so the web's "Verified Employer" is true of any.
+  const posterName = listing.poster_name || listing.company_name || "Verified Employer";
+  const locationText: string | null = listing.location_text || null;
   const applicationCount = listing.application_count ?? 0;
+  const isFeatured =
+    Boolean((listing as { is_featured?: boolean }).is_featured) ||
+    (listing as { tier?: string }).tier === "SPOTLIGHT" ||
+    (listing as { tier?: string }).tier === "PRIORITY" ||
+    structuredFields.is_featured === "true";
 
   // Skills
   const rawRequired = listing.required_skills?.length
     ? listing.required_skills
     : structuredFields.required_skills;
-  const requiredSkills: string[] =
-    rawRequired && rawRequired.length > 0
-      ? rawRequired
-      : ["Jewellery sales", "Customer handling", "Gold & silver knowledge"];
+  const requiredSkills: string[] = rawRequired && rawRequired.length > 0 ? rawRequired : [];
 
   const rawPreferred = listing.preferred_skills?.length
     ? listing.preferred_skills
@@ -194,38 +194,23 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
     },
   });
 
-  const vacancies = listing.vacancies || structuredFields.vacancies || 1;
-  const jobType = listing.job_type || structuredFields.job_type || "Full time";
-  const shift = listing.shift || structuredFields.shift || "Day shift";
-  const workMode = listing.work_mode || structuredFields.work_mode || "At the workplace";
+  const vacancies: number | null = listing.vacancies || structuredFields.vacancies || null;
+  const jobType: string | null = listing.job_type || structuredFields.job_type || null;
+  const shift: string | null = listing.shift || structuredFields.shift || null;
+  const workMode: string | null = listing.work_mode || structuredFields.work_mode || null;
+  const placeLine = [locationText, workMode].filter(Boolean).join(" · ");
 
   const duties: string[] =
     listing.responsibilities?.length
       ? listing.responsibilities
       : structuredFields.responsibilities?.length
         ? structuredFields.responsibilities
-        : [
-            "Show and explain jewellery",
-            "Handle customer queries",
-            "Support billing",
-            "Maintain stock records",
-          ];
+        : [];
 
-  const defaultDescription = `${posterName} is hiring ${vacancies} ${listing.title} in ${locationText}. Full time job, ${shift.toLowerCase()}. Must have: ${requiredSkills.join(", ")}. You will show and explain jewellery, handle customer queries, support billing and maintain stock records. Salary: ₹30,000 to ₹50,000 per month.`;
+  const descriptionText = listing.description?.trim() ?? "";
 
-  const descriptionText = listing.description?.trim() || defaultDescription;
-
-  // Match score fallback matching screenshot
-  const displayMatch: JobMatch = matchQuery.data ?? {
-    score: 30,
-    level: "OTHER",
-    matched: ["Expected salary within range"],
-    missing: [
-      `Hasn't listed ${listing.title} as a job they want`,
-      ...requiredSkills.map((s) => `No ${s}`),
-      `Not in ${locationText.split(",")[0]?.trim() || "Suryapet"}`,
-    ],
-  };
+  // The match is the server's verdict on this applicant, so it shows only once it has one.
+  const match: JobMatch | null = matchQuery.data ?? null;
 
   const handleApply = () => {
     if (!isAuthenticated) {
@@ -292,11 +277,13 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
                   <Text className="text-xs font-semibold text-slate-700">{posterName}</Text>
                 </View>
 
-                <View className="flex-row items-center gap-1.5 rounded-full bg-[#FFF7ED] border border-[#FFEDD5] px-2.5 py-1">
-                  <View className="size-1.5 rounded-full bg-[#EA580C]" />
-                  <Flame size={12} color="#EA580C" />
-                  <Text className="text-xs font-bold text-[#C2410C]">Featured</Text>
-                </View>
+                {isFeatured ? (
+                  <View className="flex-row items-center gap-1.5 rounded-full bg-[#FFF7ED] border border-[#FFEDD5] px-2.5 py-1">
+                    <View className="size-1.5 rounded-full bg-[#EA580C]" />
+                    <Flame size={12} color="#EA580C" />
+                    <Text className="text-xs font-bold text-[#C2410C]">Featured</Text>
+                  </View>
+                ) : null}
 
                 <View className="flex-row items-center gap-1 text-slate-500 ml-1">
                   <Clock size={13} color="#94A3B8" />
@@ -312,11 +299,15 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
                   {listing.title}
                 </Text>
                 <View className="flex-row items-center gap-2 pt-0.5">
-                  <View className="flex-row items-center gap-1">
-                    <MapPin size={14} color="#6B6560" />
-                    <Text className="text-sm font-medium text-slate-600">{locationText}</Text>
-                  </View>
-                  <Text className="text-slate-400">•</Text>
+                  {locationText ? (
+                    <>
+                      <View className="flex-row items-center gap-1">
+                        <MapPin size={14} color="#6B6560" />
+                        <Text className="text-sm font-medium text-slate-600">{locationText}</Text>
+                      </View>
+                      <Text className="text-slate-400">•</Text>
+                    </>
+                  ) : null}
                   <Text className="text-xs text-slate-500">
                     {applicationCount} {applicationCount === 1 ? "applicant" : "applicants"} applied
                   </Text>
@@ -356,78 +347,82 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
                 </Pressable>
               </View>
 
-              {/* Match Score Card matching Screenshot */}
-              <View className="rounded-2xl border border-[#E5E1DC] bg-[#FAF8F5] p-5 gap-3">
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-2xl font-black text-navy-950">
-                    {displayMatch.score}% match
+              {/* Match Score Card: the server's verdict, shown once it has one */}
+              {match ? (
+                <View className="rounded-2xl border border-[#E5E1DC] bg-[#FAF8F5] p-5 gap-3">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-2xl font-black text-navy-950">
+                      {match.score}% match
+                    </Text>
+                    <View className="rounded-full bg-[#EFECE6] px-3 py-1 border border-[#E2DDD5]">
+                      <Text className="text-xs font-bold text-navy-900">
+                        {match.level === "STRONG"
+                          ? "Strong match"
+                          : match.level === "GOOD"
+                            ? "Good match"
+                            : "Some match"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View className="gap-1.5 pt-0.5">
+                    {(match.matched ?? []).map((m) => (
+                      <Text key={m} className="text-xs font-semibold text-[#15803D]">
+                        ✓ {m}
+                      </Text>
+                    ))}
+                    {(match.missing ?? []).map((m) => (
+                      <Text key={m} className="text-xs text-slate-600">
+                        △ {m}
+                      </Text>
+                    ))}
+                  </View>
+
+                  <Text className="text-[11px] text-slate-500 pt-1">
+                    Based on your profile and the job details. Please read the full job before applying.
                   </Text>
-                  <View className="rounded-full bg-[#EFECE6] px-3 py-1 border border-[#E2DDD5]">
-                    <Text className="text-xs font-bold text-navy-900">
-                      {displayMatch.level === "STRONG"
-                        ? "Strong match"
-                        : displayMatch.level === "GOOD"
-                          ? "Good match"
-                          : "Some match"}
-                    </Text>
-                  </View>
                 </View>
+              ) : null}
 
-                <View className="gap-1.5 pt-0.5">
-                  {(displayMatch.matched ?? []).map((m) => (
-                    <Text key={m} className="text-xs font-semibold text-[#15803D]">
-                      ✓ {m}
-                    </Text>
-                  ))}
-                  {(displayMatch.missing ?? []).map((m) => (
-                    <Text key={m} className="text-xs text-slate-600">
-                      △ {m}
-                    </Text>
-                  ))}
-                </View>
-
-                <Text className="text-[11px] text-slate-500 pt-1">
-                  Based on your profile and the job details. Please read the full job before applying.
-                </Text>
-              </View>
-
-              {/* 4-Box Highlight Grid (2 Columns x 2 Rows) matching Screenshot */}
+              {/* Highlight Grid: one box per fact the employer gave */}
               <View className="flex-row flex-wrap -mx-1.5 gap-y-3">
-                {/* 1. Vacancies */}
-                <View className="w-1/2 px-1.5">
-                  <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
-                    <Users size={16} color="#EA580C" />
-                    <Text className="text-xs font-bold text-navy-950">
-                      {vacancies} {vacancies === 1 ? "person" : "people"} needed
-                    </Text>
+                {vacancies ? (
+                  <View className="w-1/2 px-1.5">
+                    <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
+                      <Users size={16} color="#EA580C" />
+                      <Text className="text-xs font-bold text-navy-950">
+                        {vacancies} {vacancies === 1 ? "person" : "people"} needed
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                ) : null}
 
-                {/* 2. Job Type */}
-                <View className="w-1/2 px-1.5">
-                  <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
-                    <Briefcase size={16} color="#EA580C" />
-                    <Text className="text-xs font-bold text-navy-950">{jobType}</Text>
+                {jobType ? (
+                  <View className="w-1/2 px-1.5">
+                    <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
+                      <Briefcase size={16} color="#EA580C" />
+                      <Text className="text-xs font-bold text-navy-950">{jobType}</Text>
+                    </View>
                   </View>
-                </View>
+                ) : null}
 
-                {/* 3. Shift */}
-                <View className="w-1/2 px-1.5">
-                  <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
-                    <Clock size={16} color="#EA580C" />
-                    <Text className="text-xs font-bold text-navy-950">{shift}</Text>
+                {shift ? (
+                  <View className="w-1/2 px-1.5">
+                    <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
+                      <Clock size={16} color="#EA580C" />
+                      <Text className="text-xs font-bold text-navy-950">{shift}</Text>
+                    </View>
                   </View>
-                </View>
+                ) : null}
 
-                {/* 4. Location & Work Mode */}
-                <View className="w-1/2 px-1.5">
-                  <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
-                    <MapPin size={16} color="#EA580C" />
-                    <Text className="text-xs font-bold text-navy-950">
-                      {locationText} · {workMode}
-                    </Text>
+                {placeLine ? (
+                  <View className="w-1/2 px-1.5">
+                    <View className="flex-row items-center gap-2.5 rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5">
+                      <MapPin size={16} color="#EA580C" />
+                      <Text className="text-xs font-bold text-navy-950">{placeLine}</Text>
+                    </View>
                   </View>
-                </View>
+                ) : null}
               </View>
 
               {/* MUST HAVE Section */}
@@ -471,26 +466,28 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
                 before applying.
               </Text>
 
-              {/* JOB DESCRIPTION Section */}
-              <View className="gap-2">
-                <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  JOB DESCRIPTION
-                </Text>
-                <Text
-                  numberOfLines={descriptionExpanded ? undefined : 5}
-                  className="text-xs text-slate-700 leading-relaxed"
-                >
-                  {descriptionText}
-                </Text>
-                <Pressable
-                  onPress={() => setDescriptionExpanded((v) => !v)}
-                  className="cursor-pointer self-start"
-                >
-                  <Text className="text-xs font-bold text-navy-950 hover:underline">
-                    {descriptionExpanded ? "Show less" : "Read more"}
+              {/* JOB DESCRIPTION Section: the employer's own words, or no section */}
+              {descriptionText ? (
+                <View className="gap-2">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    JOB DESCRIPTION
                   </Text>
-                </Pressable>
-              </View>
+                  <Text
+                    numberOfLines={descriptionExpanded ? undefined : 5}
+                    className="text-xs text-slate-700 leading-relaxed"
+                  >
+                    {descriptionText}
+                  </Text>
+                  <Pressable
+                    onPress={() => setDescriptionExpanded((v) => !v)}
+                    className="cursor-pointer self-start"
+                  >
+                    <Text className="text-xs font-bold text-navy-950 hover:underline">
+                      {descriptionExpanded ? "Show less" : "Read more"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
 
               {/* Privacy-Protected Contact Exchange Box */}
               <View className="rounded-2xl border border-blue-200 bg-[#F0F4FD] p-4.5 gap-1.5">
@@ -500,16 +497,14 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
                     Privacy-Protected Contact Exchange
                   </Text>
                 </View>
-                <Text className="text-xs text-slate-700 leading-relaxed">
-                  Hiring contact info:{" "}
-                  <Text className="font-mono font-medium text-navy-950">
-                    {listing.contact_masked?.phone || "+91 98••••••88"}
-                  </Text>{" "}
-                  |{" "}
-                  <Text className="font-mono font-medium text-navy-950">
-                    {listing.contact_masked?.email || "co••••@example.com"}
+                {listing.contact_masked?.phone || listing.contact_masked?.email ? (
+                  <Text className="text-xs text-slate-700 leading-relaxed">
+                    Hiring contact info:{" "}
+                    <Text className="font-mono font-medium text-navy-950">
+                      {[listing.contact_masked?.phone, listing.contact_masked?.email].filter(Boolean).join(" | ")}
+                    </Text>
                   </Text>
-                </Text>
+                ) : null}
                 <Text className="text-[11px] text-slate-500 leading-relaxed">
                   Neither your direct phone nor email is published publicly. Verified posters unlock
                   candidate details only for legitimate recruitment interviews.
@@ -578,12 +573,12 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
                   {/* Candidate Profile Box */}
                   <View className="rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5 gap-0.5">
                     <Text className="text-sm font-bold text-navy-950">
-                      {profile.full_name || profile.name || "Nune Rajesh"}
+                      {profile.full_name || profile.name || "Your job profile"}
                     </Text>
                     <Text className="text-xs text-slate-600">
                       {[
-                        (profile.roles || ["Junior Full Stack Developer"]).join(", "),
-                        [profile.area || "Hitech City", profile.city || "Hyderabad"]
+                        (profile.roles || []).join(", "),
+                        [profile.area, profile.city]
                           .filter(Boolean)
                           .join(", "),
                       ]

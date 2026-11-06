@@ -167,7 +167,7 @@ export function JobCard({ listing }: { listing: Listing }) {
     listing.poster_name ||
     listing.partner?.company_name ||
     listing.partner?.full_name ||
-    "Apex Staffing Solutions";
+    "Verified Employer";
 
   const location =
     listing.location_text ||

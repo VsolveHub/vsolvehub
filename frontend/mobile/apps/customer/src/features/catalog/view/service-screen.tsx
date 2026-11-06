@@ -8,7 +8,8 @@ import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { useAddCartItem, useCart, useRemoveCartItem, useUpdateCartItem } from "@/features/checkout/queries";
-import { useCategories, useCategoryServices, useServiceDetail, type ServiceCard, type ServiceDetail } from "@/features/catalog/client-queries";
+import { useCategories, useCategoryServices, usePromoBanners, useServiceDetail, type ServiceCard, type ServiceDetail } from "@/features/catalog/client-queries";
+import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { recordViewed } from "@/features/catalog/recently-viewed";
 import { serviceHref } from "@/features/catalog/service-href";
@@ -19,8 +20,6 @@ import { bookCrewHref } from "@/lib/routes";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 const FIT_OUT_PICKER_SERVICE = "interior-fit-out-project";
-const COVER_FALLBACK =
-  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop";
 
 const ACTION = "#f87000";
 const NAVY = "#00112e";
@@ -427,6 +426,7 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
   const services = useCategoryServices(categorySlug.length > 0 ? categorySlug : null);
   const viewed = detail.data;
   const viewedCategory = viewed?.category_slug;
+  const promoBannersQuery = usePromoBanners(categorySlug.length > 0 ? categorySlug : (viewedCategory ?? null));
   useEffect(() => {
     if (!viewed || !viewedCategory) return;
     void recordViewed({
@@ -483,7 +483,10 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
 
   const processSteps = service.policies.filter((policy) => policy.kind === "PROCESS");
   const otherPolicies = service.policies.filter((policy) => policy.kind !== "PROCESS");
-  const coverUrl = service.cover?.url ? resolveImageUrl(service.cover.url) : COVER_FALLBACK;
+  // The web's rule: the service's cover, else the first option photo, else the plain panel.
+  const coverUrl = resolveImageUrl(
+    service.cover?.url || service.variants.find((variant) => Boolean(variant.image_url))?.image_url || null,
+  );
 
   return (
     <ScrollView
@@ -529,7 +532,9 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
         <View className="mt-8 gap-8">
           <View className="w-full">
             <View className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.25rem] bg-surface-sunken shadow-sm" style={{ aspectRatio: 4 / 3 }}>
-              <Image source={{ uri: coverUrl || undefined }} contentFit="cover" accessibilityLabel={service.cover?.alt_text ?? ""} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
+              {coverUrl ? (
+                <Image source={{ uri: coverUrl }} contentFit="cover" accessibilityLabel={service.cover?.alt_text || service.name} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
+              ) : null}
             </View>
           </View>
 

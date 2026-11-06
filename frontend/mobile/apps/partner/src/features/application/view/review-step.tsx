@@ -36,7 +36,7 @@ export function ReviewStep() {
   const updateApp = useUpdateApplication();
   const { registerDock } = useApplyDock();
 
-  // Notification toggle state - starts FALSE so submit button is dark and disabled until turned on
+  // Optional: nobody has to accept push notifications to send an application.
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permissionSheetOpen, setPermissionSheetOpen] = useState(false);
 
@@ -69,13 +69,6 @@ export function ReviewStep() {
   const onCommit = useCallback(async () => {
     if (isSaving) return;
     try {
-      const app = query.data;
-      if (app && app.track !== "RENTAL_OWNER" && app.track !== "STAY_HOST") {
-        await updateApp.mutateAsync({
-          expected_version: app.version,
-          track: "RENTAL_OWNER",
-        });
-      }
       submitMutateRef.current(undefined, {
         onSuccess: () => {
           void refetchRef.current();
@@ -87,8 +80,7 @@ export function ReviewStep() {
     }
   }, [isSaving, query.data, updateApp, router]);
 
-  // Submit button requires both ready AND notificationsEnabled to be turned on
-  const canProceed = ready && notificationsEnabled && !isSaving;
+  const canProceed = ready && !isSaving;
 
   const activeError = submit.error || updateApp.error;
   const conflict = isVersionConflict(activeError);
@@ -176,10 +168,10 @@ export function ReviewStep() {
     );
   }
 
-  const displayName = application.display_name || "webaura";
+  const displayName = application.display_name;
   const bioLength = application.biography?.length ?? 0;
-  const agreedCount = application.consents?.length ?? 2;
-  const documentsCount = application.documents?.length ?? 2;
+  const agreedCount = application.consents.length;
+  const documentsCount = application.documents.filter((document) => document.status !== "SUPERSEDED").length;
 
   return (
     <View style={styles.container}>
