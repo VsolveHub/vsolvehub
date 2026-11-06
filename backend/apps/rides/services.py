@@ -68,6 +68,11 @@ def save_captain_vehicle(
 
     logger.info(
         "ride_captain_vehicle_saved",
-        extra={"partner_id": str(partner.id), "vehicle_type": vehicle_type, "created": created},
+        # Not "created": that name is reserved on LogRecord and logging raises KeyError for it.
+        extra={
+            "partner_id": str(partner.id),
+            "vehicle_type": vehicle_type,
+            "vehicle_created": created,
+        },
     )
     return vehicle
