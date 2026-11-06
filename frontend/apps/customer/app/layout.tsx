@@ -7,6 +7,7 @@ import { AppChrome } from "@/features/session/view/app-chrome";
 import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "@/features/session/view/app-chrome-layout";
 import { DEFAULT_DESCRIPTION, HOME_TITLE, SITE_NAME, SITE_URL } from "@/lib/site";
 import { OneSignalInit } from "@/features/notifications/view/onesignal-init";
+import { AssistantWidget } from "@/features/assistant/view/assistant-widget";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -83,6 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 component that decides whether it renders must also reserve the
                 space it covers. See `AppChrome`. */}
             <AppChrome>{children}</AppChrome>
+            <AssistantWidget />
             <OneSignalInit />
           </ToastProvider>
         </QueryProvider>

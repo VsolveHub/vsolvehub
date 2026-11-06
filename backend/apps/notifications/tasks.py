@@ -3,6 +3,8 @@
 import logging
 from datetime import timedelta
 from http import HTTPStatus
+from typing import Any
+from uuid import UUID
 
 from celery import shared_task
 from django.conf import settings
@@ -298,3 +300,23 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
         "duplicate_partner_deactivated": duplicate_partner_count,
         "invalid_delivery_deactivated": invalid_delivery_count,
     }
+
+
+#: Retry spacing for a WhatsApp message Meta could not take right now (rate limit, 5xx, timeout).
+WHATSAPP_RETRY_SECONDS = (60, 300, 900)
+
+
+@shared_task(bind=True, autoretry_for=(), retry_kwargs={"max_retries": len(WHATSAPP_RETRY_SECONDS)})
+def send_whatsapp_notice(self: Any, intent_id: str) -> str:
+    """Send one recorded WhatsApp booking update (`notifications.whatsapp`).
+
+    Every attempt is written as a `NotificationDelivery`; a temporary refusal is retried on a
+    widening schedule, and anything else settles the intent so it never sits `PENDING` forever.
+    """
+
+    from apps.notifications.whatsapp import RETRY, deliver_whatsapp_intent  # noqa: PLC0415
+
+    outcome = deliver_whatsapp_intent(intent_id=UUID(intent_id))
+    if outcome == RETRY and self.request.retries < len(WHATSAPP_RETRY_SECONDS):
+        raise self.retry(countdown=WHATSAPP_RETRY_SECONDS[self.request.retries])
+    return outcome

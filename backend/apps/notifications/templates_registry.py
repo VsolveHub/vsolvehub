@@ -531,6 +531,10 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Booking confirmed: {service}",
         "{when}. The customer has paid. Open the job for the details.",
     ),
+    "customer_booking_confirmed": (
+        "Booking confirmed: {service}",
+        "Payment received. {partner_name} will visit on {when}. Open the booking for details.",
+    ),
     "partner_visit_time_to_leave": (
         "Time to leave for {service}",
         "The visit starts at {time}. Open the job for the address and the route.",

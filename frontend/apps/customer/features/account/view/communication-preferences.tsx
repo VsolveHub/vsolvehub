@@ -72,6 +72,7 @@ const CHANNEL_LABEL: Record<PreferenceChannel, string> = {
   SMS: "SMS",
   EMAIL: "Email",
   PUSH: "Push",
+  WHATSAPP: "WhatsApp",
 };
 
 function PreferenceRow({

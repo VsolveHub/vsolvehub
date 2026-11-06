@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.97.0
+  version: 1.99.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -181,6 +181,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationReport'
+          description: ''
+  /api/v1/assistant/conversation/:
+    get:
+      operationId: assistant_conversation_retrieve
+      description: 'The conversation so far. Safe to poll: it also posts booking progress
+        as it happens.'
+      parameters:
+      - in: header
+        name: X-Assistant-Token
+        schema:
+          type: string
+        description: The conversation token returned when the conversation was started.
+        required: true
+      tags:
+      - Assistant
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantConversation'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/assistant/conversation/messages/:
+    post:
+      operationId: assistant_message_create
+      description: Send one message and receive the assistant's answer to it.
+      parameters:
+      - in: header
+        name: X-Assistant-Token
+        schema:
+          type: string
+        description: The conversation token returned when the conversation was started.
+        required: true
+      tags:
+      - Assistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantTurn'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/assistant/conversations/:
+    post:
+      operationId: assistant_conversation_create
+      description: Start a conversation. The token in the response is shown once.
+      tags:
+      - Assistant
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantConversationCreated'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/auth/csrf/:
     get:
@@ -22564,6 +22675,24 @@ components:
         reason:
           type: string
           maxLength: 480
+    ActionTypeEnum:
+      enum:
+      - QUICK_REPLY
+      - LOGIN
+      - ADD_ADDRESS
+      - OPEN_LINK
+      - QUOTE
+      - PAY
+      - VIEW_BOOKING
+      type: string
+      description: |-
+        * `QUICK_REPLY` - QUICK_REPLY
+        * `LOGIN` - LOGIN
+        * `ADD_ADDRESS` - ADD_ADDRESS
+        * `OPEN_LINK` - OPEN_LINK
+        * `QUOTE` - QUOTE
+        * `PAY` - PAY
+        * `VIEW_BOOKING` - VIEW_BOOKING
     ActiveRole:
       type: object
       properties:
@@ -23130,6 +23259,111 @@ components:
       - display_name
       - experience_years
       - headline
+    AssistantAction:
+      type: object
+      description: A card under a message. `message` is the text to send when a reply
+        chip is tapped.
+      properties:
+        action_type:
+          $ref: '#/components/schemas/ActionTypeEnum'
+        label:
+          type: string
+        href:
+          type: string
+        message:
+          type: string
+        amount:
+          type: string
+        lines:
+          type: array
+          items:
+            type: string
+      required:
+      - action_type
+      - label
+    AssistantConversation:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantMessage'
+        is_answering:
+          type: boolean
+        signed_in:
+          type: boolean
+        has_open_booking:
+          type: boolean
+      required:
+      - has_open_booking
+      - is_answering
+      - messages
+      - signed_in
+    AssistantConversationCreated:
+      type: object
+      properties:
+        conversation_token:
+          type: string
+          description: Send as the X-Assistant-Token header. Shown once; keep it on
+            the device.
+        conversation:
+          $ref: '#/components/schemas/AssistantConversation'
+      required:
+      - conversation
+      - conversation_token
+    AssistantMessage:
+      type: object
+      properties:
+        sequence:
+          type: integer
+          readOnly: true
+        sender:
+          allOf:
+          - $ref: '#/components/schemas/SenderEnum'
+          readOnly: true
+        text:
+          type: string
+          readOnly: true
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantAction'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actions
+      - created_at
+      - sender
+      - sequence
+      - text
+    AssistantMessageCreateRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        client_message_id:
+          type: string
+          minLength: 1
+          description: A client-generated id. Resending the same id replays the stored
+            answer.
+          pattern: ^[A-Za-z0-9_-]{8,64}$
+      required:
+      - client_message_id
+      - text
+    AssistantTurn:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantMessage'
+      required:
+      - messages
     AssistedCheckoutCreateRequest:
       type: object
       properties:
@@ -24663,11 +24897,13 @@ components:
       - SMS
       - EMAIL
       - PUSH
+      - WHATSAPP
       type: string
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
         * `PUSH` - Push
+        * `WHATSAPP` - WhatsApp
     ChargebackRequest:
       type: object
       description: |-
@@ -45805,6 +46041,14 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
       required:
       - reason_code
+    SenderEnum:
+      enum:
+      - customer
+      - assistant
+      type: string
+      description: |-
+        * `customer` - customer
+        * `assistant` - assistant
     ServiceArea:
       type: object
       properties:

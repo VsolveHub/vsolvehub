@@ -193,6 +193,7 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
     )
     # Imported here: `fulfilment` builds on `commerce`, so a module-level import would cycle.
     from apps.fulfilment.visit_notices import (  # noqa: PLC0415
+        notify_customer_booking_confirmed,
         notify_partner_booking_confirmed,
     )
 
@@ -203,6 +204,7 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
             status=Reservation.Status.CONFIRMED,
         ).select_related("partner")
     }
+    first_booking: Booking | None = None
     for unit in group.units.select_for_update().order_by("position"):
         reservation = reservations.get(unit.id)
         if reservation is None:
@@ -218,9 +220,13 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
         )
         # Paid is when the job becomes real for the Partner; until now nothing told them.
         notify_partner_booking_confirmed(booking=booking)
+        first_booking = first_booking or booking
         unit.status = FulfilmentUnit.Status.BOOKED
         unit.version += 1
         unit.save(update_fields=("status", "version", "updated_at"))
+    if first_booking is not None:
+        # One notice per order: a multi-visit booking is one purchase to the Customer.
+        notify_customer_booking_confirmed(booking=first_booking)
     group.status = BookingGroup.Status.BOOKED
     group.version += 1
     group.save(update_fields=("status", "version", "updated_at"))

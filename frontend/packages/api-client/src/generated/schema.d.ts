@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.97.0)
- * Checksum: 8f6a03fb9d3030bf
+ * Source:   contracts/openapi/v1.yaml (version 1.99.0)
+ * Checksum: 90be8e34ee05b165
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -49,6 +49,57 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["applications_reports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/conversation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The conversation so far. Safe to poll: it also posts booking progress as it happens. */
+        get: operations["assistant_conversation_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/conversation/messages/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send one message and receive the assistant's answer to it. */
+        post: operations["assistant_message_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/conversations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Start a conversation. The token in the response is shown once. */
+        post: operations["assistant_conversation_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9231,6 +9282,17 @@ export interface components {
         ActionReasonRequest: {
             reason?: string;
         };
+        /**
+         * @description * `QUICK_REPLY` - QUICK_REPLY
+         *     * `LOGIN` - LOGIN
+         *     * `ADD_ADDRESS` - ADD_ADDRESS
+         *     * `OPEN_LINK` - OPEN_LINK
+         *     * `QUOTE` - QUOTE
+         *     * `PAY` - PAY
+         *     * `VIEW_BOOKING` - VIEW_BOOKING
+         * @enum {string}
+         */
+        ActionTypeEnum: "QUICK_REPLY" | "LOGIN" | "ADD_ADDRESS" | "OPEN_LINK" | "QUOTE" | "PAY" | "VIEW_BOOKING";
         ActiveRole: {
             readonly active_role: string | null;
         };
@@ -9448,6 +9510,42 @@ export interface components {
             display_name: string;
             headline: string;
             experience_years: number;
+        };
+        /** @description A card under a message. `message` is the text to send when a reply chip is tapped. */
+        AssistantAction: {
+            action_type: components["schemas"]["ActionTypeEnum"];
+            label: string;
+            href?: string;
+            message?: string;
+            amount?: string;
+            lines?: string[];
+        };
+        AssistantConversation: {
+            messages: components["schemas"]["AssistantMessage"][];
+            is_answering: boolean;
+            signed_in: boolean;
+            has_open_booking: boolean;
+        };
+        AssistantConversationCreated: {
+            /** @description Send as the X-Assistant-Token header. Shown once; keep it on the device. */
+            conversation_token: string;
+            conversation: components["schemas"]["AssistantConversation"];
+        };
+        AssistantMessage: {
+            readonly sequence: number;
+            readonly sender: components["schemas"]["SenderEnum"];
+            readonly text: string;
+            readonly actions: components["schemas"]["AssistantAction"][];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        AssistantMessageCreateRequest: {
+            text: string;
+            /** @description A client-generated id. Resending the same id replays the stored answer. */
+            client_message_id: string;
+        };
+        AssistantTurn: {
+            messages: components["schemas"]["AssistantMessage"][];
         };
         AssistedCheckoutCreateRequest: {
             /** Format: uuid */
@@ -10093,9 +10191,10 @@ export interface components {
          * @description * `SMS` - SMS
          *     * `EMAIL` - Email
          *     * `PUSH` - Push
+         *     * `WHATSAPP` - WhatsApp
          * @enum {string}
          */
-        ChannelEnum: "SMS" | "EMAIL" | "PUSH";
+        ChannelEnum: "SMS" | "EMAIL" | "PUSH" | "WHATSAPP";
         /**
          * @description `M2-BE-708`. The provider reference is required: a chargeback with no bank reference cannot
          *     be represented or reconciled, and recording one would be recording a rumour.
@@ -18412,6 +18511,12 @@ export interface components {
         SelectionDeclineRequest: {
             reason_code: string;
         };
+        /**
+         * @description * `customer` - customer
+         *     * `assistant` - assistant
+         * @enum {string}
+         */
+        SenderEnum: "customer" | "assistant";
         ServiceArea: {
             /** Format: uuid */
             readonly id: string;
@@ -20469,6 +20574,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationReport"];
+                };
+            };
+        };
+    };
+    assistant_conversation_retrieve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The conversation token returned when the conversation was started. */
+                "X-Assistant-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConversation"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    assistant_message_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The conversation token returned when the conversation was started. */
+                "X-Assistant-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantMessageCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssistantMessageCreateRequest"];
+                "multipart/form-data": components["schemas"]["AssistantMessageCreateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantTurn"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    assistant_conversation_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantConversationCreated"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

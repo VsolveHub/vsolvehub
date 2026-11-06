@@ -19,8 +19,10 @@ from django.utils import timezone
 
 from apps.commerce.models import Booking
 from apps.notifications.services import request_notification
+from apps.notifications.whatsapp import queue_whatsapp_copy
 
 __all__ = [
+    "notify_customer_booking_confirmed",
     "notify_customer_of_visit_step",
     "notify_partner_booking_confirmed",
     "send_time_to_leave_reminders",
@@ -87,6 +89,16 @@ def _notify(
             context=context,
             idempotency_key=idempotency_key,
         )
+        if audience == "CUSTOMER":
+            # A no-op unless WhatsApp is enabled, this notice has an approved template and the
+            # Customer opted in. See `notifications.whatsapp`.
+            queue_whatsapp_copy(
+                recipient_id=recipient_id,
+                purpose=purpose,
+                template_code=template_code,
+                context=context,
+                idempotency_key=idempotency_key,
+            )
     except Exception:
         logger.exception(
             "visit_notice_failed",
@@ -133,6 +145,32 @@ def notify_partner_booking_confirmed(*, booking: Booking) -> None:
             "target_id": str(booking.id),
         },
         idempotency_key=f"booking-confirmed:{booking.id}",
+    )
+
+
+def notify_customer_booking_confirmed(*, booking: Booking) -> None:
+    """The payment was captured and the visit is booked. Sent once per order, for its first visit.
+
+    Until this existed the Customer learned their booking was confirmed only by looking at it.
+    Called from the capture path, so it can only follow money the provider confirmed.
+    """
+
+    unit = booking.fulfilment_unit
+    if unit is None:
+        return
+    _notify(
+        recipient_id=booking.customer_id,
+        purpose="booking.confirmed",
+        audience="CUSTOMER",
+        template_code="customer_booking_confirmed",
+        context={
+            "service": _service_label(booking),
+            "partner_name": _partner_name(booking),
+            "when": _when(booking.scheduled_start),
+            "target_kind": "BOOKING_GROUP",
+            "target_id": str(unit.booking_group_id),
+        },
+        idempotency_key=f"customer-booking-confirmed:{booking.order_id}",
     )
 
 

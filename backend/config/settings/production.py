@@ -118,6 +118,12 @@ if PAYMENT_PROVIDER != "razorpay":
 # without the auth key must not boot.
 if MESSAGE_TRANSPORT == "msg91" and not MSG91_AUTH_KEY:
     raise ImproperlyConfigured("MSG91_AUTH_KEY must be set when MESSAGE_TRANSPORT is msg91.")
+# WhatsApp switched on without its credentials would record every update as "not configured" and
+# send none of them; refuse to boot instead, as every other provider does (ADR 0004).
+if WHATSAPP_ENABLED and not (WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID):
+    raise ImproperlyConfigured(
+        "WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set when WHATSAPP_ENABLED."
+    )
 if OTP_PROVIDER == "msg91" and not (MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID):
     raise ImproperlyConfigured(
         "MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID must be set when OTP_PROVIDER is msg91."
