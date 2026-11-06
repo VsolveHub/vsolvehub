@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { Button, PageHeader } from "@vsolve/ui";
 import { Users } from "lucide-react";
-import { ReviewsWorkspace } from "@/features/partner-review/view/reviews-workspace";
+import { ApplicationsPage } from "@/features/partner-review/view/applications-page";
 
 export const metadata: Metadata = { title: "Partner applications" };
 
@@ -33,7 +34,9 @@ export default function ReviewsPage() {
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col px-4 sm:px-0">
-        <ReviewsWorkspace />
+        <Suspense fallback={null}>
+          <ApplicationsPage />
+        </Suspense>
       </div>
     </div>
   );

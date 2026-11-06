@@ -405,34 +405,43 @@ class RentalPickupClosedDate(models.Model):
         return f"{self.partner_id}:{self.date}"
 
 
-class RentalPlatformFee(models.Model):
-    """The one percentage added on top of every rental fee. The deposit is excluded."""
+class RentalPlatformFeeVersion(models.Model):
+    """One rental platform-fee rate, in force from `effective_from` until the next version starts.
 
-    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
-    percent = models.PositiveSmallIntegerField(default=0)
-    updated_by = models.ForeignKey(
+    Append-only: a change is a new version, never an edit, so "what was the fee in October, and
+    who approved it" always has an answer. Only a version that has not taken effect yet may be
+    withdrawn. The fee is a whole percent of the rental fee; the deposit is never included.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.PositiveIntegerField(unique=True)
+    percent = models.PositiveSmallIntegerField()
+    effective_from = models.DateTimeField(unique=True)
+    approval_reference = models.CharField(max_length=120)
+    created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="+",
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        ordering = ("-effective_from",)
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(id=1),
-                name="rental_platform_fee_singleton",
+                condition=models.Q(percent__lte=100),
+                name="rental_platform_fee_version_percent_range",
             ),
             models.CheckConstraint(
-                condition=models.Q(percent__lte=100),
-                name="rental_platform_fee_percent_range",
+                condition=models.Q(approval_reference__gt=""),
+                name="rental_platform_fee_version_needs_approval",
             ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.percent}%"
+        return f"v{self.version}: {self.percent}% from {self.effective_from:%Y-%m-%d %H:%M}"
 
 
 class RentalBookingLine(models.Model):

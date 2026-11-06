@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { PageHeader, Button } from "@vsolve/ui";
 
@@ -19,7 +20,9 @@ export default function PartnersPage() {
         </Link>
       </div>
       <div className="flex min-h-0 flex-1 flex-col px-4 sm:px-0">
-        <PartnersWorkspace />
+        <Suspense fallback={null}>
+          <PartnersWorkspace />
+        </Suspense>
       </div>
     </div>
   );

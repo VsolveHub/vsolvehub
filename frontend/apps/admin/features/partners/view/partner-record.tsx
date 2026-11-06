@@ -6,6 +6,8 @@ import { usePartnerRecord } from "@/features/partners/queries";
 import { STATUS_LABELS, STATUS_TONE } from "./partner-directory";
 import { PartnerHours } from "@/features/partner-availability/view/partner-hours";
 
+import { PartnerActivity } from "./partner-activity";
+import { PartnerStanding } from "./partner-standing";
 import { TaxProfileSection } from "./tax-profile";
 
 /**
@@ -112,6 +114,8 @@ export function PartnerRecord({ partnerId }: { partnerId: string | null }) {
         </Badge>
       </header>
 
+      <PartnerStanding partner={partner} />
+
       {partner.biography ? (
         <p className="text-sm leading-6 text-text">{partner.biography}</p>
       ) : null}
@@ -139,6 +143,10 @@ export function PartnerRecord({ partnerId }: { partnerId: string | null }) {
           </dd>
         </div>
       </dl>
+
+      <Section title="Money and work">
+        <PartnerActivity partnerId={partner.id} />
+      </Section>
 
       <Section title="Skills">
         <Chips items={partner.skills} empty="No skills recorded." />

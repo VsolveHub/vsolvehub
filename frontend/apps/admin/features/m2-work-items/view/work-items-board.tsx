@@ -3,7 +3,6 @@
 import { cn } from "@vsolve/ui";
 import { useState } from "react";
 
-import { CustomItemReviewQueue } from "./custom-item-review-queue";
 import { GuardrailPolicyPanel } from "./guardrail-policy-panel";
 import { WorkItemCatalog } from "./work-item-catalog";
 
@@ -19,7 +18,6 @@ import { WorkItemCatalog } from "./work-item-catalog";
 const SECTIONS = [
   { key: "catalog", label: "Catalog" },
   { key: "guardrails", label: "Guardrail policy" },
-  { key: "reviews", label: "Custom-item reviews" },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
@@ -33,8 +31,8 @@ export function WorkItemsBoard() {
         <h1 className="text-xl font-bold text-text">Work items</h1>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
           The catalog every Partner&rsquo;s item-wise rate card is built from, the
-          percentages every rate and quote are checked against, and the items
-          Partners have priced outside the catalog.
+          percentages every rate and quote are checked against. Items Partners
+          price outside the catalog are reviewed on the Custom-item reviews tab.
         </p>
       </div>
 
@@ -60,7 +58,6 @@ export function WorkItemsBoard() {
 
       {section === "catalog" ? <WorkItemCatalog /> : null}
       {section === "guardrails" ? <GuardrailPolicyPanel /> : null}
-      {section === "reviews" ? <CustomItemReviewQueue /> : null}
     </div>
   );
 }

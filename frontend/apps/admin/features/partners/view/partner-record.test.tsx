@@ -9,6 +9,7 @@ vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 // The tax section loads its own data; it is not what this test is about.
 vi.mock("./tax-profile", () => ({ TaxProfileSection: () => null }));
 vi.mock("@/features/partner-availability/view/partner-hours", () => ({ PartnerHours: () => null }));
+vi.mock("./partner-activity", () => ({ PartnerActivity: () => null }));
 
 const { PartnerRecord } = await import("./partner-record");
 

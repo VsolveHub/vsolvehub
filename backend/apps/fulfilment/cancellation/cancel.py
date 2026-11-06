@@ -37,6 +37,7 @@ from apps.fulfilment.services import (
     is_partner_late,
     locked_booking_context,
 )
+from apps.identity.models import User
 
 from .base import (
     _by_unit_id,
@@ -46,6 +47,9 @@ from .base import (
 )
 
 REFUND_REASON_CUSTOMER_CANCELLATION = "customer_cancellation"
+REFUND_REASON_OPERATIONS_CANCELLATION = "operations_cancellation"
+#: Recorded as the waiver when Operations cancels with a full refund.
+FEE_WAIVER_OPERATIONS = "operations"
 
 _MORE_THAN_24H_HOURS = 24
 _MORE_THAN_2H_HOURS = 2
@@ -235,6 +239,12 @@ def _uncancellable_reason(booking: Booking) -> str:
     return f"A Booking in {booking.status} can no longer be cancelled by the Customer."
 
 
+def _operations_uncancellable_reason(booking: Booking) -> str:
+    if booking.status == Booking.Status.RECOVERY_REQUIRED:
+        return _uncancellable_reason(booking)
+    return f"A visit that is {booking.get_status_display().lower()} can no longer be cancelled."
+
+
 def _release_booking_reservation(booking: Booking) -> None:
     if booking.reservation_id is None:
         return
@@ -314,6 +324,94 @@ def cancel_booking(
         reason=reason,
         idempotency_key=idempotency_key,
     )
+    return booking, refunds
+
+
+@dataclass(frozen=True, slots=True)
+class OperationsCancellationPreview:
+    """What Operations would refund either way, so the confirm step states numbers.
+
+    `None` from `preview_operations_cancellation` when the visit cannot be cancelled at all.
+    """
+
+    refundable_paise: int
+    policy_fee_paise: int
+    #: Set when the policy fee is already waived (the partner released or is late).
+    policy_fee_waiver: str
+    currency: str
+
+
+def preview_operations_cancellation(
+    *, unit: FulfilmentUnit, booking: Booking
+) -> OperationsCancellationPreview | None:
+    if not customer_can_cancel(booking):
+        return None
+    _band, fee_paise, waiver = _cancellation_fee(unit=unit, booking=booking)
+    refundable = sum(
+        amount for _allocation, amount in refundable_unit_allocations(unit=unit, for_update=False)
+    )
+    return OperationsCancellationPreview(
+        refundable_paise=refundable,
+        policy_fee_paise=fee_paise,
+        policy_fee_waiver=waiver,
+        currency=unit.currency,
+    )
+
+
+@transaction.atomic
+def operations_cancel_booking(
+    *,
+    booking_id: UUID,
+    operator: User,
+    expected_version: int,
+    reason: str,
+    full_refund: bool,
+    idempotency_key: str = "",
+) -> tuple[Booking, list[Refund]]:
+    """Operations cancels a visit for the customer, from the visit page.
+
+    The same rules as a customer cancellation — nothing that has started work can be cancelled,
+    because completed lines settle through the completion report — and the same refund and
+    reservation release. The one difference is the fee: `full_refund` waives it (the usual case
+    when the platform cancels), otherwise the customer's own fee ladder applies.
+    """
+    if not reason.strip():
+        raise BookingCommandInvalidApiError(reason="Give a reason for cancelling this visit.")
+    _guard_cancellation_reason(reason)
+    group, unit, booking = locked_booking_context(booking_id)
+    guard_booking_version(booking, expected_version)
+    if not customer_can_cancel(booking):
+        raise BookingCommandInvalidApiError(reason=_operations_uncancellable_reason(booking))
+    band, fee_paise, waiver = _cancellation_fee(unit=unit, booking=booking)
+    if full_refund:
+        fee_paise, waiver = 0, waiver or FEE_WAIVER_OPERATIONS
+    refunds = _apply_fee_and_refund(
+        booking=booking,
+        unit=unit,
+        fee_paise=fee_paise,
+        reason_code=REFUND_REASON_OPERATIONS_CANCELLATION,
+        requested_by_id=operator.id,
+        idempotency_key=idempotency_key,
+    )
+    booking = apply_transition(
+        group=group,
+        unit=unit,
+        booking=booking,
+        to_status=Booking.Status.CANCELLED,
+        command=BookingCommand.CANCEL,
+        actor=operator,
+        reason=reason,
+        idempotency_key=idempotency_key,
+        context={
+            "cancelled_by": "operations",
+            "band_code": band["code"],
+            "fee_paise": fee_paise,
+            "fee_waiver": waiver,
+            "refund_ids": [str(refund.id) for refund in refunds],
+        },
+        extra_booking_fields={"cancelled_at": timezone.now(), "cancellation_reason": reason},
+    )
+    _release_booking_reservation(booking)
     return booking, refunds
 
 

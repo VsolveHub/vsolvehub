@@ -194,3 +194,32 @@ def test_release_leaves_the_booking_awaiting_recovery() -> None:
     booked.booking.refresh_from_db()
     assert booked.booking.status == Booking.Status.RECOVERY_REQUIRED
     assert timezone.now() - booked.booking.updated_at < timedelta(minutes=1)
+
+
+def test_a_paused_area_sends_no_replacement_and_does_not_cancel_the_booking() -> None:
+    """A paused area (SERVICE_AREA kill switch) sends nobody in, and the pause is not read as
+    "nobody left": the booking waits for the area to reopen instead of being settled."""
+    from apps.identity.models import User  # noqa: PLC0415 - test-local helper
+    from apps.notifications.services import engage_kill_switch  # noqa: PLC0415
+
+    booked = create_booked_group(key_prefix="replacement-paused-area")
+    _replacement_partner()
+    engage_kill_switch(
+        scope="SERVICE_AREA",
+        target=booked.unit.service_area.slug,
+        reason="Flooding",
+        actor=User.objects.create_user(phone_number="+919811100003"),
+    )
+
+    release_booking_partner(
+        booking_id=booked.booking.id,
+        partner_id=booked.partner.id,
+        reason="Something came up.",
+        expected_version=booked.booking.version,
+    )
+
+    booked.booking.refresh_from_db()
+    assert booked.booking.status == Booking.Status.RECOVERY_REQUIRED
+    assert not PartnerOffer.objects.filter(
+        fulfilment_unit=booked.unit, status=PartnerOffer.Status.OFFERED
+    ).exists()

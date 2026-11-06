@@ -28,6 +28,12 @@ import { checkout, ok, refusal } from "@/features/shared/fixtures";
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
+// The form is opened from a customer's record, whose link names the customer and the quote.
+const search = vi.hoisted(() => ({ value: "" }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(search.value) }));
+vi.mock("next/link", () => ({
+  default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
+}));
 
 const { AssistedCheckoutForm } = await import("./assisted-checkout-form");
 
@@ -44,12 +50,12 @@ function field(label: RegExp) {
   return screen.getByLabelText(label);
 }
 
-/** Fills a valid form without pressing anything. */
-function fillValidly(overrides: Partial<Record<"customer" | "quote" | "purpose" | "version", string>> = {}) {
-  fireEvent.change(field(/customer id/i), {
-    target: { value: overrides.customer ?? CUSTOMER_ID },
-  });
-  fireEvent.change(field(/quote id/i), { target: { value: overrides.quote ?? QUOTE_ID } });
+function openedFor(customer = CUSTOMER_ID, quote = QUOTE_ID) {
+  search.value = `customer=${customer}&quote=${quote}`;
+}
+
+/** Fills a valid form without pressing anything. The customer and quote come from the link. */
+function fillValidly(overrides: Partial<Record<"purpose" | "version", string>> = {}) {
   fireEvent.change(field(/consent purpose/i), {
     target: { value: overrides.purpose ?? "assisted-booking" },
   });
@@ -59,6 +65,7 @@ function fillValidly(overrides: Partial<Record<"customer" | "quote" | "purpose" 
 }
 
 beforeEach(() => {
+  openedFor();
   window.sessionStorage.clear();
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -143,9 +150,9 @@ describe("confirm before, because there is no undo after", () => {
     fillValidly();
     fireEvent.click(screen.getByRole("button", { name: /review this checkout/i }));
 
-    fireEvent.change(field(/quote id/i), { target: { value: "cccccccc-3333-4333-8333-cccccccccccc" } });
+    fireEvent.change(field(/consent document version/i), { target: { value: "2026-08" } });
 
-    // The read-back described the old quote. Leaving it up next to a new input
+    // The read-back described the old details. Leaving it up next to a new input
     // is how the wrong purchase gets confirmed.
     expect(
       screen.queryByRole("button", { name: /start checkout for this customer/i }),
@@ -180,14 +187,17 @@ describe("one key per Customer and quote", () => {
 
   it("mints a different key for a different quote", async () => {
     client.POST.mockResolvedValue(ok(checkout(), 201));
-    render(<AssistedCheckoutForm />, { wrapper });
+    const { unmount } = render(<AssistedCheckoutForm />, { wrapper });
 
     fillValidly();
     fireEvent.click(screen.getByRole("button", { name: /review this checkout/i }));
     fireEvent.click(screen.getByRole("button", { name: /start checkout for this customer/i }));
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
 
-    fillValidly({ quote: "cccccccc-3333-4333-8333-cccccccccccc" });
+    unmount();
+    openedFor(CUSTOMER_ID, "cccccccc-3333-4333-8333-cccccccccccc");
+    render(<AssistedCheckoutForm />, { wrapper });
+    fillValidly();
     fireEvent.click(screen.getByRole("button", { name: /review this checkout/i }));
     fireEvent.click(screen.getByRole("button", { name: /start checkout for this customer/i }));
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
@@ -273,5 +283,15 @@ describe("what the operator is told afterwards", () => {
     await screen.findByText(/checkout for this quote/i);
 
     expect(container.textContent ?? "").not.toMatch(/newly created|already existed|replay/i);
+  });
+});
+
+describe("starting from the customer", () => {
+  it("asks for no ids: opened bare, it says to start from the customer's record", () => {
+    search.value = "";
+    render(<AssistedCheckoutForm />, { wrapper });
+
+    expect(screen.getByRole("link", { name: "Customers" })).toHaveAttribute("href", "/operations/customers");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 });

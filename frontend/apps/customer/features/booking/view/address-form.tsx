@@ -3,6 +3,7 @@
 import type { Schemas } from "@vsolve/api-client";
 import { ChoiceChips, Disclosure, Field, Input, Spinner } from "@vsolve/ui";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AREA_PAUSED, AREA_PAUSED_MESSAGE } from "@/features/checkout/reasons";
 
 /**
  * Completing a new address, after the pin is on the map.
@@ -400,6 +401,10 @@ function Coverage({
         </p>
       ) : serviceability === null ? null : serviceability.is_serviceable ? (
         <p className="text-sm font-semibold text-success-text">We serve here.</p>
+      ) : serviceability.reason_code === AREA_PAUSED ? (
+        <p className="text-sm text-warning-text">
+          <strong className="font-semibold">Bookings are paused here.</strong> {AREA_PAUSED_MESSAGE}
+        </p>
       ) : (
         <p className="text-sm text-warning-text">
           <strong className="font-semibold">We do not cover this pincode yet.</strong> You

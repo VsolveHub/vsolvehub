@@ -2,6 +2,7 @@
 requests and no money before."""
 
 import uuid
+from datetime import timedelta
 from http import HTTPStatus
 
 import pytest
@@ -10,8 +11,10 @@ from rest_framework.test import APIClient
 
 from apps.commerce.models import PaymentAttempt
 from apps.identity.models import Role, User, UserRole
+from apps.requirements.models import CustomerRequirement
+from apps.requirements.operations import STUCK_QUEUE_CODES, stuck_queues
 from tests.helpers import force_role_client
-from tests.requirements.conftest import M2World, submitted_requirement
+from tests.requirements.conftest import M2World, draft_requirement, submitted_requirement
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -85,3 +88,39 @@ def test_workforce_money_keeps_vendor_money_out_of_vsolve_fees() -> None:
     assert _total(after, "fees") == _total(before, "fees")
     stage = next(p for p in payments if p["item"].startswith("Project stage"))
     assert stage["platform_paise"] == 0
+
+
+# --- Stuck queues as a filter on the requests list --------------------------------------------
+
+
+def test_stuck_filter_lists_the_requests_in_one_queue(world: M2World) -> None:
+    """The Stuck tab showed only how deep each queue was; the list now shows who is in it."""
+    # A draft has invited nobody; moving it to MATCHING puts it in the "unmatched" queue.
+    requirement = draft_requirement(world=world)
+    requirement.status = CustomerRequirement.Status.MATCHING
+    requirement.service_by = None
+    requirement.save(update_fields=("status", "service_by"))
+    client = _operations_client()
+
+    def ids(code: str) -> set[str]:
+        response = client.get("/api/v1/operations/requests/", {"stuck": code})
+        assert response.status_code == HTTPStatus.OK
+        return {row["id"] for row in response.json()["results"]}
+
+    assert str(requirement.id) in ids("unmatched")
+    assert str(requirement.id) not in ids("sla_breached")
+
+    requirement.service_by = timezone.localdate() - timedelta(days=1)
+    requirement.save(update_fields=("service_by",))
+    assert str(requirement.id) in ids("sla_breached")
+
+
+def test_stuck_filter_refuses_an_unknown_queue() -> None:
+    response = _operations_client().get("/api/v1/operations/requests/", {"stuck": "lost"})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_every_stuck_queue_can_be_listed() -> None:
+    """The filter's allowed codes and the published queues are the same eight, in the same order."""
+    assert tuple(queue.code for queue in stuck_queues()) == STUCK_QUEUE_CODES

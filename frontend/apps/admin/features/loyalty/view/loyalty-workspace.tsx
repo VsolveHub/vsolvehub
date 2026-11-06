@@ -6,7 +6,6 @@ import { useState } from "react";
 import type { StepUpSession } from "@/features/finance/queries";
 import { StepUpGate } from "@/features/finance/view/step-up-gate";
 
-import { CustomerLedgerPanel } from "./customer-ledger-panel";
 import { EarnRulesPanel } from "./earn-rules-panel";
 import { LoyaltyBoard } from "./loyalty-board";
 import { ReferralProgramEditor } from "./referral-program-editor";
@@ -17,7 +16,6 @@ const TABS = [
   { key: "earn", label: "Earn rules" },
   { key: "program", label: "Referral program" },
   { key: "review", label: "Referral review" },
-  { key: "customer", label: "Customer lookup" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -25,9 +23,9 @@ export function LoyaltyWorkspace() {
   const [tab, setTab] = useState<TabKey>("settings");
   const [session, setSession] = useState<StepUpSession | null>(null);
   const [stepUpReason, setStepUpReason] = useState<string | null>(null);
-  // Reject, reverse and coin adjustments move value, so they sit behind the same
-  // step-up confirmation as refunds.
-  const needsStepUp = tab === "review" || tab === "customer";
+  // Reject and reverse move value, so they sit behind the same step-up confirmation as refunds.
+  // One customer's wallet and coin corrections are on their customer record.
+  const needsStepUp = tab === "review";
 
   return (
     <div className="mt-4">
@@ -64,7 +62,6 @@ export function LoyaltyWorkspace() {
         {tab === "earn" ? <EarnRulesPanel /> : null}
         {tab === "program" ? <ReferralProgramEditor /> : null}
         {tab === "review" ? <ReferralReviewQueue onStepUpRequired={setStepUpReason} /> : null}
-        {tab === "customer" ? <CustomerLedgerPanel onStepUpRequired={setStepUpReason} /> : null}
       </div>
     </div>
   );

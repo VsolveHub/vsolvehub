@@ -1,5 +1,11 @@
 from django.urls import path
 
+from .customer_views import (
+    OperationsCustomerBlockView,
+    OperationsCustomerCollectionView,
+    OperationsCustomerDetailView,
+    OperationsPartnerActivityView,
+)
 from .views import (
     OpsDashboardPreferenceView,
     OpsDashboardView,
@@ -12,6 +18,26 @@ from .views import (
 )
 
 urlpatterns = [
+    path(
+        "operations/customers/",
+        OperationsCustomerCollectionView.as_view(),
+        name="operations_customers",
+    ),
+    path(
+        "operations/customers/<uuid:customer_id>/",
+        OperationsCustomerDetailView.as_view(),
+        name="operations_customer",
+    ),
+    path(
+        "operations/partners/<uuid:partner_id>/activity/",
+        OperationsPartnerActivityView.as_view(),
+        name="operations_partner_activity",
+    ),
+    path(
+        "operations/customers/<uuid:customer_id>/block/",
+        OperationsCustomerBlockView.as_view(),
+        name="operations_customer_block",
+    ),
     path("ops/reports/", OpsReportsCatalogView.as_view(), name="ops_reports_catalog"),
     path(
         "ops/reports/presets/", OpsReportPresetListCreateView.as_view(), name="ops_reports_presets"

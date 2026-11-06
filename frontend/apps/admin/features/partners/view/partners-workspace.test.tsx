@@ -10,10 +10,15 @@ vi.mock("@/features/partners/view/partner-directory", () => ({
   ),
 }));
 vi.mock("@/features/partners/view/partner-record", () => ({ PartnerRecord: () => null }));
+const search = vi.hoisted(() => ({ value: "" }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(search.value) }));
 
 const { PartnersWorkspace } = await import("./partners-workspace");
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  search.value = "";
+});
 
 describe("partners workspace history", () => {
   it("pushes one entry for an open record, outside any state updater", () => {
@@ -28,5 +33,16 @@ describe("partners workspace history", () => {
 
     expect(push).toHaveBeenCalledTimes(1);
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it("opens the record a link names", () => {
+    // The customer record links here with `?partner=` when the customer is also a partner.
+    search.value = "partner=b";
+    const push = vi.spyOn(window.history, "pushState");
+    render(<PartnersWorkspace />);
+
+    // Already open, so choosing it again adds no history entry of its own.
+    fireEvent.click(screen.getByRole("button", { name: "Second" }));
+    expect(push).not.toHaveBeenCalled();
   });
 });

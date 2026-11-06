@@ -8,9 +8,10 @@ import { ServiceWorkspace, TabLoading, type WorkspaceTab } from "@/features/mone
 const WorkforceRequests = dynamic(() => import("./workforce-requests").then((m) => m.WorkforceRequests), {
   loading: TabLoading,
 });
-const QueueBoard = dynamic(() => import("@/features/m2-requests/view/queue-board").then((m) => m.QueueBoard), {
-  loading: TabLoading,
-});
+const CustomItemReviewQueue = dynamic(
+  () => import("@/features/m2-work-items/view/custom-item-review-queue").then((m) => m.CustomItemReviewQueue),
+  { loading: TabLoading },
+);
 const MoneyTab = dynamic(() => import("@/features/money/money-tab").then((m) => m.MoneyTab), {
   loading: TabLoading,
 });
@@ -23,22 +24,23 @@ const RateCardBoard = dynamic(
   { loading: TabLoading },
 );
 
-type WorkforceTab = "requests" | "stuck" | "money" | "work-items" | "rate-cards";
+type WorkforceTab = "requests" | "item-reviews" | "money" | "work-items" | "rate-cards";
 
 export const WORKFORCE_TABS: readonly WorkspaceTab<WorkforceTab>[] = [
   { key: "requests", label: "Requests", render: () => <WorkforceRequests /> },
-  { key: "stuck", label: "Stuck", render: () => <QueueBoard /> },
+  // A daily review queue, so it is a tab of its own, not a section under the catalogue settings.
+  { key: "item-reviews", label: "Custom-item reviews", render: () => <CustomItemReviewQueue /> },
   { key: "money", label: "Money", render: () => <MoneyTab service="workforce" /> },
   { key: "work-items", label: "Work items", render: () => <WorkItemsBoard /> },
   { key: "rate-cards", label: "Crew rate cards", render: () => <RateCardBoard /> },
 ];
 
-/** Crew hire (A3) and custom projects (A5): every request, the stuck ones, money and pricing. */
+/** Crew hire (A3) and custom projects (A5): every request (stuck ones as a filter), reviews, money and pricing. */
 export function WorkforceWorkspace() {
   return (
     <ServiceWorkspace
       title="Crew & projects"
-      description="Crew hire and custom projects: find any request, unstick the ones past a deadline, review work items, set crew rates and see the money."
+      description="Crew hire and custom projects: find any request, unstick the ones past a deadline, review custom items, set crew rates and see the money."
       tabs={WORKFORCE_TABS}
     />
   );

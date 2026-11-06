@@ -1,6 +1,8 @@
 # 0029 — Operations partner import (CSV)
 
-Status: **Proposed**. Frontend by Claude; backend and contract publication by Codex.
+Status: **Published** at contract 1.98.0. Built end to end by Claude on the owner's direction
+(`AGENTS.md`, "Operations console and partner import"). Row and summary problem fields are named
+`problems`, not `errors`: a serializer field named `errors` shadows DRF's own `Serializer.errors`.
 
 ## Why
 
@@ -78,15 +80,15 @@ transaction.
 {
   "mode": "check",
   "file_sha256": "9f2c…",
-  "summary": { "total": 3, "ready": 1, "skipped": 1, "errors": 1 },
+  "summary": { "total": 3, "ready": 1, "skipped": 1, "problems": 1 },
   "rows": [
     { "row": 2, "status": "ready", "phone": "+919876543210", "full_name": "Ravi Kumar",
-      "track": "SERVICES", "errors": [] },
+      "track": "SERVICES", "problems": [] },
     { "row": 3, "status": "skipped", "phone": "+919812345678", "full_name": "Asha",
-      "track": "STAY_HOST", "errors": [], "message": "This phone is already registered." },
+      "track": "STAY_HOST", "problems": [], "message": "This phone is already registered." },
     { "row": 4, "status": "error", "phone": "98123", "full_name": "",
       "track": "SERVICES",
-      "errors": [
+      "problems": [
         { "column": "phone", "message": "Enter a 10-digit Indian mobile number." },
         { "column": "full_name", "message": "Name is required." },
         { "column": "skills", "message": "Unknown skill: carpentery." }

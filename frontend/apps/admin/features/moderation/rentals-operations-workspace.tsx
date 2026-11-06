@@ -49,17 +49,12 @@ const MoneyTab = dynamic(() => import("@/features/money/money-tab").then((m) => 
 const RentalDisputeQueue = dynamic(() => import("./rental-disputes").then((m) => m.RentalDisputeQueue), {
   loading: TabLoading,
 });
-const RentalPlatformFeeForm = dynamic(
-  () => import("./rental-platform-fee").then((m) => m.RentalPlatformFeeForm),
-  { loading: TabLoading },
-);
 
 const TABS = [
   { key: "listings", label: "Listings" },
   { key: "bookings", label: "Bookings" },
   { key: "money", label: "Money" },
   { key: "disputes", label: "Disputes" },
-  { key: "fee", label: "Fee setting" },
 ] as const;
 
 type StatusFilter = "ALL" | "ACTIVE" | "PAUSED" | "REMOVED" | "PENDING";
@@ -246,7 +241,6 @@ export function RentalsOperationsWorkspace() {
       {tab === "bookings" ? <RentalBookings /> : null}
       {tab === "money" ? <MoneyTab service="rentals" /> : null}
       {tab === "disputes" ? <RentalDisputeQueue /> : null}
-      {tab === "fee" ? <RentalPlatformFeeForm /> : null}
 
       {tab === "listings" ? (
       <>

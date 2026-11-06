@@ -1,49 +1,15 @@
-import { request } from "@vsolve/api-client";
+import { request, type Schemas } from "@vsolve/api-client";
 
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * Operations partner import, built against contract proposal 0029
- * (`contracts/proposals/0029-operations-partner-import.md`).
- *
- * The published contract does not describe this endpoint's response yet, so the proposal's shape
- * lives here. When the backend publishes 0029, replace these types with `Schemas[...]` and drop
- * the cast in `runPartnerImport`.
+ * Operations partner import (contract proposal 0029, published at 1.98.0): `check` validates a
+ * CSV and changes nothing; `import` creates a draft application for every ready row, or nothing.
  */
 
-export type ImportMode = "check" | "import";
-export type ImportRowStatus = "ready" | "created" | "skipped" | "error";
-
-export interface ImportCellError {
-  column: string;
-  message: string;
-}
-
-export interface ImportRow {
-  row: number;
-  status: ImportRowStatus;
-  phone: string;
-  full_name: string;
-  track: string;
-  errors: ImportCellError[];
-  message?: string;
-  partner_id?: string;
-}
-
-export interface ImportSummary {
-  total: number;
-  ready?: number;
-  created?: number;
-  skipped: number;
-  errors: number;
-}
-
-export interface ImportResponse {
-  mode: ImportMode;
-  file_sha256: string;
-  summary: ImportSummary;
-  rows: ImportRow[];
-}
+export type ImportMode = Schemas["PartnerImportModeEnum"];
+export type ImportRow = Schemas["PartnerImportRow"];
+export type ImportResponse = Schemas["PartnerImportResult"];
 
 /** The server's limits, repeated here only so an oversized file is refused before upload. */
 export const MAX_IMPORT_BYTES = 1024 * 1024;
@@ -113,9 +79,10 @@ export async function runPartnerImport({
   /** Required for `import`; the server refuses an import without one. */
   idempotencyKey?: string;
 }): Promise<ImportResponse> {
-  const data = await request(() =>
+  return request(() =>
     getApiClient().POST("/api/v1/operations/partners/import/", {
-      body: { file, mode },
+      params: idempotencyKey ? { header: { "Idempotency-Key": idempotencyKey } } : {},
+      body: { file: file as unknown as string, mode },
       // Multipart by hand: the client's default serialiser would send JSON.
       bodySerializer() {
         const form = new FormData();
@@ -123,26 +90,15 @@ export async function runPartnerImport({
         form.append("mode", mode);
         return form;
       },
-      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     }),
   );
-  // The contract does not type this response yet, so check its shape here rather than render a
-  // body this screen does not understand. The old endpoint replies with `results`, not `summary`.
-  const body = data as unknown as Partial<ImportResponse> | undefined;
-  if (!body || typeof body.summary !== "object" || !Array.isArray(body.rows)) {
-    throw new Error(
-      "The server is running an older partner import that this screen does not support. " +
-        "Nothing was imported.",
-    );
-  }
-  return body as ImportResponse;
 }
 
 /** One line per problem, for the problems table: a row can fail several columns at once. */
 export function importProblems(rows: readonly ImportRow[]) {
   return rows.flatMap((row) =>
     row.status === "error"
-      ? row.errors.map((error, index) => ({
+      ? row.problems.map((error, index) => ({
           key: `${row.row}-${index}`,
           row: row.row,
           column: error.column,

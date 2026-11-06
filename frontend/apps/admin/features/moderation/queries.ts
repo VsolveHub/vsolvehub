@@ -86,10 +86,28 @@ export function fetchOpsRentalPlatformFee() {
   return request(() => getApiClient().GET("/api/v1/ops/rentals/platform-fee"));
 }
 
-export function saveOpsRentalPlatformFee(percent: number) {
+/** Add a fee version. `effectiveFrom` omitted means it takes effect now. */
+export function scheduleOpsRentalPlatformFee(input: {
+  percent: number;
+  approvalReference: string;
+  effectiveFrom?: string;
+}) {
   return request(() =>
-    getApiClient().PUT("/api/v1/ops/rentals/platform-fee", {
-      body: { percent },
+    getApiClient().POST("/api/v1/ops/rentals/platform-fee", {
+      body: {
+        percent: input.percent,
+        approval_reference: input.approvalReference,
+        ...(input.effectiveFrom ? { effective_from: input.effectiveFrom } : {}),
+      },
+    }),
+  );
+}
+
+/** Withdraw a version that has not taken effect yet. */
+export function withdrawOpsRentalPlatformFee(versionId: string) {
+  return request(() =>
+    getApiClient().DELETE("/api/v1/ops/rentals/platform-fee/{version_id}", {
+      params: { path: { version_id: versionId } },
     }),
   );
 }

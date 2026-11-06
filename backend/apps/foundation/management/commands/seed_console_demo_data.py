@@ -819,19 +819,21 @@ class Command(BaseCommand):
             reason="Demo: provider incident drill.",
             actor=ops_primary,
         )
+        # Engaged, then released, so the board shows real history. Not left on: a paused area takes
+        # no new bookings, and this is the only area the demo seeds, so it would stop local work.
         engage_kill_switch(
             scope="SERVICE_AREA",
             target=DEMO_AREA_SLUG,
             reason="Demo: flooding reported in the service area.",
             actor=ops_secondary,
         )
-        # Engaged, then released, so the board shows a switch with real history too.
+        release_kill_switch(scope="SERVICE_AREA", target=DEMO_AREA_SLUG, actor=ops_primary)
         engage_kill_switch(
-            scope="PAYMENTS",
-            reason="Demo: payment provider degraded briefly.",
+            scope="PAYOUTS",
+            reason="Demo: payout provider degraded briefly.",
             actor=ops_secondary,
         )
-        release_kill_switch(scope="PAYMENTS", actor=ops_primary)
+        release_kill_switch(scope="PAYOUTS", actor=ops_primary)
 
     # -- Partner review queue -------------------------------------------------------------------
 

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { VisitLookup } from "@/features/visits/view/visit-lookup";
 
 export const metadata: Metadata = {
-  title: "Visit lookup",
+  title: "Visit",
   robots: { index: false, follow: false },
 };
 

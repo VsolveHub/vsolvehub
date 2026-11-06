@@ -14,6 +14,7 @@ import {
   type MoneyService,
   type MoneySummary,
 } from "./queries";
+import { ChargebackAction, canRecordChargeback } from "./chargeback-action";
 import { filterChipStyles } from "./service-tabs";
 
 const PERIODS: MoneyPeriod[] = ["this_month", "last_month", "all"];
@@ -168,6 +169,7 @@ function Payments({ service, period }: { service: MoneyService; period: MoneyPer
                 <th className="px-4 py-2 font-medium">Refunded</th>
                 <th className="px-4 py-2 font-medium">Platform share</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                {service === "workforce" ? <th className="px-4 py-2 font-medium"><span className="sr-only">Actions</span></th> : null}
               </tr>
             </thead>
             <tbody>
@@ -185,6 +187,13 @@ function Payments({ service, period }: { service: MoneyService; period: MoneyPer
                   </td>
                   <td className="px-4 py-2.5 font-semibold">{formatMoney(row.platform_paise)}</td>
                   <td className="px-4 py-2.5 text-xs">{row.status.replaceAll("_", " ").toLowerCase()}</td>
+                  {service === "workforce" ? (
+                    <td className="px-4 py-2.5 text-right">
+                      {canRecordChargeback(row) ? (
+                        <ChargebackAction paymentId={row.id} amountPaise={row.amount_paise} />
+                      ) : null}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

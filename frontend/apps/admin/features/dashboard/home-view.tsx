@@ -16,6 +16,7 @@ import { useMemo, useState, type ComponentType } from "react";
 import { useOperationsCases } from "@/features/cases/queries";
 import { BarList } from "@/features/charts/bar-list";
 import { useKillSwitches } from "@/features/kill-switches/queries";
+import { useServiceAreas } from "@/features/m2-rate-cards/queries";
 
 import {
   PERIOD_LABELS,
@@ -49,7 +50,13 @@ const SCOPE_LABELS: Record<string, string> = {
 /** Shown only while something is switched off, because then nothing else on the page matters. */
 export function KillSwitchBanner() {
   const switches = useKillSwitches();
+  const areas = useServiceAreas();
   const engaged = (switches.data ?? []).filter((entry) => entry.is_engaged);
+  const areaName = new Map((areas.data ?? []).map((area) => [area.slug, area.name]));
+  const describe = (entry: { scope: string; target: string }) =>
+    entry.scope === "SERVICE_AREA" && entry.target
+      ? `bookings in ${areaName.get(entry.target) ?? entry.target}`
+      : (SCOPE_LABELS[entry.scope] ?? entry.scope);
   if (engaged.length === 0) return null;
   return (
     <Link
@@ -62,7 +69,7 @@ export function KillSwitchBanner() {
         <span className="font-bold">
           {engaged.length === 1 ? "1 kill switch is on" : `${engaged.length} kill switches are on`}:
         </span>{" "}
-        {engaged.map((entry) => SCOPE_LABELS[entry.scope] ?? entry.scope).join(", ")} stopped.{" "}
+        {engaged.map(describe).join(", ")} stopped.{" "}
         <span className="underline">Review switches</span>
       </span>
     </Link>

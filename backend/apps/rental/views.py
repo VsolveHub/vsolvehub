@@ -4,6 +4,7 @@ from uuid import UUID
 
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
@@ -24,6 +25,7 @@ from apps.rental.models import (
     RentalDeposit,
     RentalDisputePhoto,
     RentalPhotoUpload,
+    RentalPlatformFeeVersion,
 )
 from apps.rental.pickup_hours import (
     DayHours,
@@ -36,6 +38,7 @@ from apps.rental.serializers import (
     CreateBookingSerializer,
     OpsRentalBookingSerializer,
     OpsRentalDisputeDecisionSerializer,
+    OpsRentalPlatformFeeSerializer,
     PartnerBookingActionSerializer,
     PartnerRentalBookingSerializer,
     PickupHoursSerializer,
@@ -45,6 +48,7 @@ from apps.rental.serializers import (
     RentalBookingSerializer,
     RentalModerationSerializer,
     RentalPhotoUploadSerializer,
+    RentalPlatformFeeScheduleSerializer,
     RentalPlatformFeeSerializer,
     RentalTaxonomySubcategorySerializer,
     TransportNoteSerializer,
@@ -65,17 +69,20 @@ from apps.rental.services import (
     moderate_asset,
     partner_owns_rental_photo,
     pause_asset,
+    platform_fee_in_force,
     public_assets,
     release_deposit,
     remove_media,
     resume_asset,
     return_booking,
-    save_platform_fee,
+    schedule_platform_fee,
     store_rental_dispute_photo,
     store_rental_photo,
     submit_asset,
     update_asset,
+    withdraw_platform_fee_version,
 )
+from common.errors.serializers import ApiErrorSerializer
 from common.pagination import (
     BROWSE_PARAMETERS,
     CURSOR_PARAMETER,
@@ -659,19 +666,71 @@ class OpsRentalDisputeDecisionView(APIView):
         return Response(_ops_dispute_row(booking, request))
 
 
+def _platform_fee_overview() -> dict[str, Any]:
+    now = timezone.now()
+    current = platform_fee_in_force(now)
+    versions = RentalPlatformFeeVersion.objects.select_related("created_by")
+    past = versions.filter(effective_from__lte=now).order_by("-effective_from")
+    if current is not None:
+        past = past.exclude(id=current.id)
+    return {
+        "percent": current.percent if current else 0,
+        "current": current,
+        "upcoming": list(versions.filter(effective_from__gt=now).order_by("effective_from")),
+        "history": list(past[:20]),
+    }
+
+
 class OpsRentalPlatformFeeView(APIView):
+    """The rental platform fee, versioned: what is in force, what is scheduled, and history."""
+
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=RentalPlatformFeeSerializer)
+    @extend_schema(
+        operation_id="ops_rentals_platform_fee_retrieve",
+        responses=OpsRentalPlatformFeeSerializer,
+    )
     def get(self, _request: Any) -> Response:
-        return Response({"percent": current_platform_fee_percent()})
+        return Response(OpsRentalPlatformFeeSerializer(_platform_fee_overview()).data)
 
-    @extend_schema(request=RentalPlatformFeeSerializer, responses=RentalPlatformFeeSerializer)
-    def put(self, request: Any) -> Response:
-        serializer = RentalPlatformFeeSerializer(data=request.data)
+    @extend_schema(
+        operation_id="ops_rentals_platform_fee_schedule",
+        request=RentalPlatformFeeScheduleSerializer,
+        responses={201: OpsRentalPlatformFeeSerializer, 400: ApiErrorSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = RentalPlatformFeeScheduleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        row = save_platform_fee(percent=serializer.validated_data["percent"], actor=request.user)
-        return Response({"percent": row.percent})
+        try:
+            schedule_platform_fee(
+                percent=serializer.validated_data["percent"],
+                approval_reference=serializer.validated_data["approval_reference"],
+                effective_from=serializer.validated_data.get("effective_from"),
+                actor=request.user,
+            )
+        except RentalStateError as exc:
+            _raise_domain_error(exc)
+        return Response(
+            OpsRentalPlatformFeeSerializer(_platform_fee_overview()).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class OpsRentalPlatformFeeVersionView(APIView):
+    """Withdraw a fee version that has not taken effect yet."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="ops_rentals_platform_fee_withdraw",
+        responses={200: OpsRentalPlatformFeeSerializer, 400: ApiErrorSerializer},
+    )
+    def delete(self, _request: Any, version_id: UUID) -> Response:
+        try:
+            withdraw_platform_fee_version(version_id=version_id)
+        except RentalStateError as exc:
+            _raise_domain_error(exc)
+        return Response(OpsRentalPlatformFeeSerializer(_platform_fee_overview()).data)
 
 
 class OpsRentalCollectionView(APIView):

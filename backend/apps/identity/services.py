@@ -44,6 +44,18 @@ class OtpVerificationError(RuntimeError):
     """Generic error that does not reveal which OTP condition failed."""
 
 
+class AccountBlockedError(OtpVerificationError):
+    """The code was right, but Operations has blocked this account.
+
+    A subclass of `OtpVerificationError` so a caller that does not know about blocking still
+    refuses the sign-in (as an invalid code) rather than signing a blocked person in.
+    """
+
+
+class AccountBlockError(RuntimeError):
+    """Operations asked for a block or unblock that is not allowed."""
+
+
 class NoAccountForRoleError(RuntimeError):
     """Raised when an OTP is requested for a role the phone number does not hold.
 
@@ -179,6 +191,9 @@ def verify_login_otp(
             challenge.consumed_at = timezone.now()
             challenge.save(update_fields=("consumed_at",))
 
+            blocked = User.objects.filter(phone_number=canonical_phone, is_active=False).exists()
+            if blocked:
+                raise AccountBlockedError("This account is blocked. Contact Vsolve support.")
             user, _user_created = provision_login_user(
                 canonical_phone=canonical_phone,
                 referral_code=referral_code,
@@ -512,3 +527,49 @@ def verify_firebase_login(
         request_ip=request_ip,
         request_id=request_id,
     )
+
+
+#: The audit actions a block and an unblock write. The customer record reads the latest one.
+ACCOUNT_BLOCKED_ACTION = "operations.account_blocked"
+ACCOUNT_UNBLOCKED_ACTION = "operations.account_unblocked"
+
+
+@transaction.atomic
+def set_account_blocked(*, actor: User, user_id: uuid.UUID, blocked: bool, reason: str) -> User:
+    """Block or unblock one person's account, from the Operations customer record.
+
+    Blocking sets `is_active` off, which the session check and both sign-in paths refuse, and
+    revokes every open session so the person is signed out everywhere at once. Staff accounts
+    are refused: they are managed outside the console. Repeating the current state changes
+    nothing and writes no second audit row.
+    """
+    if not reason.strip():
+        raise AccountBlockError("Give a reason. It is kept in the account's history.")
+    user = User.objects.select_for_update().filter(id=user_id).first()
+    if user is None:
+        raise User.DoesNotExist
+    if user.id == actor.id:
+        raise AccountBlockError("You cannot block or unblock your own account.")
+    staff_roles = UserRole.objects.filter(
+        user=user, revoked_at__isnull=True, role__code="operations"
+    )
+    if user.is_staff or user.is_superuser or staff_roles.exists():
+        raise AccountBlockError("Staff accounts are not blocked from the console.")
+
+    if user.is_active == (not blocked):
+        return user
+    user.is_active = not blocked
+    user.save(update_fields=("is_active", "updated_at"))
+    if blocked:
+        UserSession.objects.filter(user=user, revoked_at__isnull=True).update(
+            revoked_at=timezone.now()
+        )
+    record_access_event(
+        actor=actor,
+        subject_user=user,
+        action=ACCOUNT_BLOCKED_ACTION if blocked else ACCOUNT_UNBLOCKED_ACTION,
+        object_type="user",
+        object_id=user.id,
+        metadata={"reason": reason.strip()[:480]},
+    )
+    return user

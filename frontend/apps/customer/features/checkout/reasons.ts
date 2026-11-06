@@ -50,8 +50,16 @@ const PLAN_REASONS: Record<string, string> = {
 };
 
 /** Reasons the planner gives for one item it could not place. */
+/** The server's reason while Operations has paused bookings in an area (flooding, an incident). */
+export const AREA_PAUSED = "SERVICE_AREA_PAUSED";
+
+/** What a customer sees when an area is paused. Kept in one place so every screen says the same. */
+export const AREA_PAUSED_MESSAGE =
+  "We've paused new bookings in this area for now. Please check back later.";
+
 const ITEM_FAILURE_REASONS: Record<string, string> = {
   not_serviceable: "We do not cover this address for this job yet.",
+  [AREA_PAUSED]: AREA_PAUSED_MESSAGE,
   different_service_area: "This job is served by a different area from the rest of your cart.",
   dependency_cycle: "These jobs each need to happen before the other, so no order works.",
   no_eligible_capacity: "No professional is available for this job at the time you asked for.",

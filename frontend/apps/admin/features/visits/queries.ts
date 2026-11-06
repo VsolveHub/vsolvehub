@@ -71,6 +71,29 @@ export function useAssistedStart() {
   });
 }
 
+/** Cancel a visit for the customer and refund it. Needs a recent step-up, like refunds. */
+export function useCancelVisit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { bookingId: string; reason: string; fullRefund: boolean; expectedVersion: number }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/bookings/{booking_id}/cancel/", {
+          params: {
+            path: { booking_id: input.bookingId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `visit-cancel:${input.bookingId}:${input.expectedVersion}`,
+              ),
+            },
+          },
+          body: { reason: input.reason, full_refund: input.fullRefund, expected_version: input.expectedVersion },
+        }),
+      ),
+    onSuccess: (booking) => queryClient.setQueryData(visitKey(booking.id), booking),
+    retry: false,
+  });
+}
+
 export const VISIT_STATUS_LABEL: Record<string, string> = {
   CONFIRMED: "Confirmed",
   EN_ROUTE: "Partner on the way",
