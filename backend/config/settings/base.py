@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "apps.ops_reports",
     "apps.mobile",
     "apps.stories",
+    "apps.rides",
 ]
 
 MIDDLEWARE = [
