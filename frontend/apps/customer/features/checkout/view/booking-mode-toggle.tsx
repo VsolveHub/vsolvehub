@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, cn } from "@vsolve/ui";
+import { Calendar } from "lucide-react";
 import type { InstantView } from "../../booking/adapters/windows";
 
 export type BookingMode = "INSTANT" | "SCHEDULED";
@@ -81,7 +82,7 @@ export function BookingModeToggle({
           )}
         >
           <span className="flex items-center gap-1">
-            <span aria-hidden>📅</span>
+            <Calendar aria-hidden className="size-3.5 sm:size-4" />
             <span>Schedule</span>
           </span>
         </button>
