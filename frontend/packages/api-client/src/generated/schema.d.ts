@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.98.0)
- * Checksum: b9fba9d35bc565ef
+ * Source:   contracts/openapi/v1.yaml (version 1.99.0)
+ * Checksum: ba0e57062231d71d
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7213,6 +7213,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Where the signed-in partner stands as a ride captain. */
+        get: operations["partner_rides_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/vehicle/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Save the captain's vehicle. Allowed only while the application is still editable. */
+        put: operations["partner_rides_vehicle_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/site-visits/{site_visit_id}/arrival/": {
         parameters: {
             query?: never;
@@ -9951,6 +9985,25 @@ export interface components {
             readonly reason: string;
             /** Format: date-time */
             readonly occurred_at: string;
+        };
+        CaptainStatus: {
+            /** @description The application status, or NOT_STARTED before a captain application exists. */
+            approval: string;
+            is_approved: boolean;
+            readonly vehicle: components["schemas"]["CaptainVehicle"] | null;
+            blocked_reasons: string[];
+        };
+        CaptainVehicle: {
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly registration_number: string;
+            readonly make_model: string;
+            readonly colour: string;
+        };
+        CaptainVehicleWriteRequest: {
+            vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            registration_number: string;
+            make_model: string;
+            colour: string;
         };
         Cart: {
             /** Format: uuid */
@@ -14690,9 +14743,12 @@ export interface components {
          *     * `BANK` - Bank document
          *     * `BACKGROUND_CHECK` - Background check
          *     * `OTHER` - Other
+         *     * `DRIVING_LICENCE` - Driving licence
+         *     * `VEHICLE_RC` - Vehicle registration certificate
+         *     * `VEHICLE_INSURANCE` - Vehicle insurance
          * @enum {string}
          */
-        PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "OTHER";
+        PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "OTHER" | "DRIVING_LICENCE" | "VEHICLE_RC" | "VEHICLE_INSURANCE";
         PartnerDocumentReviewAccess: {
             /** Format: uri */
             readonly review_url: string;
@@ -19864,9 +19920,10 @@ export interface components {
          *     * `STAY_HOST` - List my property
          *     * `RENTAL_OWNER` - Rent out items
          *     * `EMPLOYER` - Hire staff
+         *     * `RIDE_CAPTAIN` - Drive with VSolve Rides
          * @enum {string}
          */
-        TrackEnum: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
+        TrackEnum: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER" | "RIDE_CAPTAIN";
         /** @description The replacement's price for one unfinished milestone. */
         TransferQuoteRequest: {
             /** Format: uuid */
@@ -19993,6 +20050,13 @@ export interface components {
             readonly expires_at: string;
             readonly is_current: boolean;
         };
+        /**
+         * @description * `BIKE` - Bike
+         *     * `AUTO` - Auto
+         *     * `CAB` - Cab
+         * @enum {string}
+         */
+        VehicleTypeEnum: "BIKE" | "AUTO" | "CAB";
         /**
          * @description A responding vendor, as much of one as the Customer has paid to see.
          *
@@ -37159,6 +37223,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerConsentDocument"][];
+                };
+            };
+        };
+    };
+    partner_rides_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainStatus"];
+                };
+            };
+        };
+    };
+    partner_rides_vehicle_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptainVehicleWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaptainVehicleWriteRequest"];
+                "multipart/form-data": components["schemas"]["CaptainVehicleWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainVehicle"];
                 };
             };
         };

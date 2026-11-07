@@ -1,5 +1,25 @@
 # API Contract Changelog
 
+## 1.99.0 - Rides V1: captain onboarding
+
+Additive. The first part of VSolve Rides (`docs/rapido/README.md`); later Rides endpoints are
+added to this entry.
+
+- **Added** `RIDE_CAPTAIN` to the Partner application `track`. A captain gives a name and accepts
+  the agreements; trades, service areas and working hours are not asked.
+- **Added** `DRIVING_LICENCE`, `VEHICLE_RC` and `VEHICLE_INSURANCE` to the Partner document
+  `kind`. `required_document_kinds` on a `RIDE_CAPTAIN` application lists them after the identity
+  documents, and submission and approval require all of them. Every other track is unchanged.
+- **Added** `GET /partner/rides/me/` (`CaptainStatus`): `approval` (the application status, or
+  `NOT_STARTED`), `is_approved`, `vehicle` (or `null`) and `blocked_reasons` (`not_approved`,
+  `vehicle_missing`). Pass, duty and ride state are added later.
+- **Added** `PUT /partner/rides/vehicle/` (`CaptainVehicleWriteRequest` → `CaptainVehicle`):
+  `vehicle_type` (`BIKE`, `AUTO`, `CAB`), `registration_number` (stored upper-case without
+  spaces), `make_model`, `colour`. Creates or replaces the vehicle; repeating it changes nothing.
+  Allowed only while the captain application is `DRAFT` or `CHANGES_REQUIRED`:
+  `403 captain_not_approved` otherwise, or with no captain application.
+  `409 registration_already_used` when another captain holds the plate.
+
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 
 Additive.

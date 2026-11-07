@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.98.0
+  version: 1.99.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -17566,6 +17566,49 @@ paths:
                 items:
                   $ref: '#/components/schemas/PartnerConsentDocument'
           description: ''
+  /api/v1/partner/rides/me/:
+    get:
+      operationId: partner_rides_me_retrieve
+      description: Where the signed-in partner stands as a ride captain.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainStatus'
+          description: ''
+  /api/v1/partner/rides/vehicle/:
+    put:
+      operationId: partner_rides_vehicle_update
+      description: Save the captain's vehicle. Allowed only while the application
+        is still editable.
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptainVehicleWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaptainVehicleWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaptainVehicleWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainVehicle'
+          description: ''
   /api/v1/partner/site-visits/{site_visit_id}/arrival/:
     post:
       operationId: m2_site_visit_arrival_with_code
@@ -24419,6 +24462,72 @@ components:
       - reason
       - reason_code
       - to_status
+    CaptainStatus:
+      type: object
+      properties:
+        approval:
+          type: string
+          description: The application status, or NOT_STARTED before a captain application
+            exists.
+        is_approved:
+          type: boolean
+        vehicle:
+          allOf:
+          - $ref: '#/components/schemas/CaptainVehicle'
+          nullable: true
+          readOnly: true
+        blocked_reasons:
+          type: array
+          items:
+            type: string
+      required:
+      - approval
+      - blocked_reasons
+      - is_approved
+      - vehicle
+    CaptainVehicle:
+      type: object
+      properties:
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        registration_number:
+          type: string
+          readOnly: true
+        make_model:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+      required:
+      - colour
+      - make_model
+      - registration_number
+      - vehicle_type
+    CaptainVehicleWriteRequest:
+      type: object
+      properties:
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleTypeEnum'
+        registration_number:
+          type: string
+          minLength: 1
+          maxLength: 16
+        make_model:
+          type: string
+          minLength: 1
+          maxLength: 120
+        colour:
+          type: string
+          minLength: 1
+          maxLength: 40
+      required:
+      - colour
+      - make_model
+      - registration_number
+      - vehicle_type
     Cart:
       type: object
       properties:
@@ -36513,6 +36622,9 @@ components:
       - BANK
       - BACKGROUND_CHECK
       - OTHER
+      - DRIVING_LICENCE
+      - VEHICLE_RC
+      - VEHICLE_INSURANCE
       type: string
       description: |-
         * `GOVERNMENT_ID` - Government identity
@@ -36521,6 +36633,9 @@ components:
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
         * `OTHER` - Other
+        * `DRIVING_LICENCE` - Driving licence
+        * `VEHICLE_RC` - Vehicle registration certificate
+        * `VEHICLE_INSURANCE` - Vehicle insurance
     PartnerDocumentReviewAccess:
       type: object
       properties:
@@ -49302,12 +49417,14 @@ components:
       - STAY_HOST
       - RENTAL_OWNER
       - EMPLOYER
+      - RIDE_CAPTAIN
       type: string
       description: |-
         * `SERVICES` - Offer services
         * `STAY_HOST` - List my property
         * `RENTAL_OWNER` - Rent out items
         * `EMPLOYER` - Hire staff
+        * `RIDE_CAPTAIN` - Drive with VSolve Rides
     TransferQuoteRequest:
       type: object
       description: The replacement's price for one unfinished milestone.
@@ -49624,6 +49741,16 @@ components:
       - id
       - is_current
       - last_seen_at
+    VehicleTypeEnum:
+      enum:
+      - BIKE
+      - AUTO
+      - CAB
+      type: string
+      description: |-
+        * `BIKE` - Bike
+        * `AUTO` - Auto
+        * `CAB` - Cab
     VendorCard:
       type: object
       description: |-
