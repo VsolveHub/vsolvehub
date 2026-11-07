@@ -11,7 +11,17 @@ import { cn } from "./cn";
  * install icon. On a slow phone the PNG was competing with the page's own
  * scripts for the first half-second.
  */
-export function Logo({ className, dark = false }: { className?: string; dark?: boolean }) {
+export function Logo({
+  className,
+  dark = false,
+  hideWordmarkOnMobile = false,
+  wordmarkClassName,
+}: {
+  className?: string;
+  dark?: boolean;
+  hideWordmarkOnMobile?: boolean;
+  wordmarkClassName?: string;
+}) {
   return (
     <span className={cn("inline-flex items-center gap-2 font-bold whitespace-nowrap shrink-0", className)}>
       <span
@@ -28,7 +38,14 @@ export function Logo({ className, dark = false }: { className?: string; dark?: b
           className="h-full w-full object-contain"
         />
       </span>
-      <span className={cn("font-sans font-extrabold tracking-tight text-[1.15rem] whitespace-nowrap", dark ? "text-white" : "text-navy-900")}>
+      <span
+        className={cn(
+          "font-sans font-extrabold tracking-tight text-[1.15rem] whitespace-nowrap",
+          dark ? "text-white" : "text-navy-900",
+          hideWordmarkOnMobile && "hidden sm:inline",
+          wordmarkClassName,
+        )}
+      >
         V Solve <span className={dark ? "text-[#FF8F50]" : "text-[#EA580C]"}>Hub</span>
       </span>
     </span>

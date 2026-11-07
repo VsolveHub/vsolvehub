@@ -15,6 +15,8 @@ Where each part lives:
   `CheckoutSession`, `BookingGroup` and its fulfilment units.
 """
 
+from apps.carts.availability import InstantAvailability, compute_instant_availability
+
 from .base import (
     _assert_cart_version,
     _cart_for,
@@ -40,12 +42,10 @@ from .windows import (
     BookingWindow,
     BookingWindowDay,
     BookingWindows,
-    InstantAvailability,
     _resolve_scheduling_group,
     _signed_window_id,
     _window_start_from_id,
     build_arrival_window_grid,
-    compute_instant_availability,
     create_booking_windows,
 )
 
@@ -56,7 +56,6 @@ __all__ = [
     "BookingWindowDay",
     "BookingWindows",
     "InstantAvailability",
-    "compute_instant_availability",
     "_assert_cart_version",
     "_cart_for",
     "_cart_item_fingerprint",
@@ -71,6 +70,7 @@ __all__ = [
     "add_cart_item",
     "build_arrival_window_grid",
     "clear_booked_cart_items",
+    "compute_instant_availability",
     "create_booking_windows",
     "create_checkout",
     "create_quote",

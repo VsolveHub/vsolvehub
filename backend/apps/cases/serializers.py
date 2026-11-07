@@ -76,6 +76,96 @@ def case_source(idempotency_key: str) -> tuple[str, str] | None:
         return None
 
 
+class CasePersonSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Customer, Partner, Vendor, Employer or Applicant: how this person relates to the case.
+    role = serializers.CharField()
+    name = serializers.CharField(allow_blank=True)
+    phone = serializers.CharField(allow_blank=True)
+
+
+def _person(role: str, name: str | None, phone: str | None) -> dict[str, str]:
+    return {"role": role, "name": (name or "").strip(), "phone": phone or ""}
+
+
+def _partner(role: str, profile: Any) -> dict[str, str] | None:
+    if profile is None:
+        return None
+    return _person(role, profile.display_name, profile.user.phone_number)
+
+
+def _user(role: str, user: Any) -> dict[str, str] | None:
+    if user is None:
+        return None
+    return _person(role, user.full_name, user.phone_number)
+
+
+def case_people(case: OperationsCase) -> list[dict[str, str]]:
+    """Who a case is about, named, so an operator can call them without opening the subject.
+
+    Read from the subject the case was opened on; each person once, customer first. A case is
+    Operations-only, so naming both sides here discloses nothing the subject screens do not.
+    """
+    people: list[dict[str, str] | None] = []
+    if (booking := case.booking) is not None:
+        people += [_user("Customer", booking.customer), _partner("Partner", booking.partner)]
+    if (order := case.order) is not None:
+        people.append(_user("Customer", order.customer))
+    if (requirement := case.requirement) is not None:
+        people.append(_user("Customer", requirement.customer))
+        engaged = getattr(requirement, "engagement", None)
+        if engaged is not None:
+            people.append(_partner("Vendor", engaged.partner))
+    if (engagement := case.engagement) is not None:
+        people += [
+            _user("Customer", engagement.customer),
+            _partner("Vendor", engagement.partner),
+        ]
+    if (application := case.application) is not None:
+        people += [
+            _user("Applicant", application.applicant),
+            _partner("Employer", application.listing.poster),
+        ]
+    if (listing := case.listing) is not None:
+        people.append(_partner("Employer", listing.poster))
+    if case.partner is not None:
+        people.append(_partner("Partner", case.partner))
+    seen: set[tuple[str, str]] = set()
+    result = []
+    for person in people:
+        if person is None:
+            continue
+        key = (person["role"], person["phone"] or person["name"])
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(person)
+    return result
+
+
+def _owner_name(case: OperationsCase) -> str | None:
+    owner = case.owner
+    if owner is None:
+        return None
+    return (owner.full_name or "").strip() or owner.phone_number
+
+
+#: Everything `case_people` and `owner_name` read, so a page of cases is a fixed number of queries.
+CASE_PEOPLE_RELATED = (
+    "owner",
+    "booking__customer",
+    "booking__partner__user",
+    "order__customer",
+    "partner__user",
+    "requirement__customer",
+    "requirement__engagement__partner__user",
+    "engagement__customer",
+    "engagement__partner__user",
+    "application__applicant",
+    "application__listing__poster__user",
+    "listing__poster__user",
+)
+
+
 class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     """One case, with the vocabulary a reviewer needs to close it.
 
@@ -104,6 +194,8 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     server_now = serializers.SerializerMethodField()
     source_kind = serializers.SerializerMethodField()
     source_id = serializers.SerializerMethodField()
+    people = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = OperationsCase
@@ -144,9 +236,19 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
             "server_now",
             "source_kind",
             "source_id",
+            "people",
+            "owner_name",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(CasePersonSerializer(many=True))
+    def get_people(self, instance: OperationsCase) -> list[dict[str, str]]:
+        return case_people(instance)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_owner_name(self, instance: OperationsCase) -> str | None:
+        return _owner_name(instance)
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_source_kind(self, instance: OperationsCase) -> str | None:
@@ -192,6 +294,8 @@ class OperationsCaseListSerializer(serializers.ModelSerializer[OperationsCase]):
     partner_id = serializers.UUIDField(read_only=True, allow_null=True)
     owner_id = serializers.UUIDField(read_only=True, allow_null=True)
     is_overdue = serializers.BooleanField(read_only=True)
+    people = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = OperationsCase
@@ -202,6 +306,7 @@ class OperationsCaseListSerializer(serializers.ModelSerializer[OperationsCase]):
             "status",
             "owner_team",
             "owner_id",
+            "owner_name",
             "booking_id",
             "partner_id",
             "summary",
@@ -209,9 +314,18 @@ class OperationsCaseListSerializer(serializers.ModelSerializer[OperationsCase]):
             "is_overdue",
             "version",
             "holds_payout",
+            "people",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(CasePersonSerializer(many=True))
+    def get_people(self, instance: OperationsCase) -> list[dict[str, str]]:
+        return case_people(instance)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_owner_name(self, instance: OperationsCase) -> str | None:
+        return _owner_name(instance)
 
 
 class OpenCaseRequestSerializer(serializers.Serializer[dict[str, Any]]):

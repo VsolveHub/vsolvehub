@@ -24,6 +24,7 @@ OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="google")
 CUSTOMER_SITE_URL = env("CUSTOMER_SITE_URL", default="http://localhost:3000")
 DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="development")
+DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="development")
 
 # ngrok tunnels for Razorpay (and similar) webhooks hit Django with a public Host
 # header. Leading-dot entries are subdomain wildcards (Django ALLOWED_HOSTS).
@@ -73,7 +74,7 @@ def _local_dev_frontend_origins() -> list[str]:
     console looks down.
     """
 
-    ports = (3000, 3001, 3002)
+    ports = (3000, 3001, 3002, 8081, 8082)
     hosts = ["localhost", "127.0.0.1"]
     try:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -99,3 +100,30 @@ CORS_ALLOWED_ORIGINS = list(dict.fromkeys([*CORS_ALLOWED_ORIGINS, *_local_dev_fr
 
 MESSAGE_TRANSPORT = env("MESSAGE_TRANSPORT", default="fake")
 NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = env.bool("NOTIFICATIONS_ALLOW_FAKE_TRANSPORT", default=True)
+
+
+def _redis_is_available() -> bool:
+    import socket
+    from urllib.parse import urlparse
+
+    redis_url = env("REDIS_URL", default="redis://127.0.0.1:56379/0")
+    try:
+        parsed = urlparse(redis_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 56379
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.3)
+        sock.connect((host, port))
+        sock.close()
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+if not _redis_is_available():
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "vsolve-local-fallback",
+        }
+    }

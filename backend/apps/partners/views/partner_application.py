@@ -21,10 +21,11 @@ from rest_framework.views import APIView
 from apps.identity.models import User
 from apps.locations.serializers import PartnerServiceAreaOptionSerializer
 from apps.partners.exceptions import PartnerDomainError
-from apps.partners.models import PartnerProfile
+from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import (
     applicant_service_areas,
+    partner_application_for_user,
     applicant_skills,
     partner_profile_for_user,
     partner_schedule,
@@ -52,6 +53,8 @@ from apps.partners.serializers import (
     PartnerSkillOptionSerializer,
 )
 from apps.partners.services import (
+    _ensure_partner_role,
+    _record_transition,
     ScheduleExceptionInput,
     ScheduleRuleInput,
     create_partner_document_applicant_access,
@@ -150,8 +153,9 @@ class PartnerMeView(APIView):
     def patch(self, request: Request) -> Response:
         """Changes what a Partner may change about themselves.
 
-        Deliberately narrow. The phone number is the login credential and is not
-        accepted here — see `PartnerProfileUpdateSerializer`.
+        Deliberately narrow. Neither the phone number (the login credential) nor the
+        name (checked against the Partner's ID) is accepted here — see
+        `PartnerProfileUpdateSerializer`.
         """
         serializer = PartnerProfileUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -159,18 +163,13 @@ class PartnerMeView(APIView):
         if profile is None:
             raise NotFound("No Partner profile exists for this account.")
         updates = ["updated_at"]
-        if "display_name" in serializer.validated_data:
-            profile.display_name = cast(str, serializer.validated_data["display_name"])
-            updates.append("display_name")
         if "default_location_text" in serializer.validated_data:
             profile.default_location_text = cast(
                 str, serializer.validated_data["default_location_text"]
             )
             updates.append("default_location_text")
         if len(updates) == 1:
-            raise ValidationError(
-                {"non_field_errors": ["Provide display_name and/or default_location_text."]}
-            )
+            raise ValidationError({"non_field_errors": ["Provide default_location_text."]})
         profile.save(update_fields=updates)
         profile = (
             PartnerProfile.objects.select_related("user", "application")
@@ -191,7 +190,30 @@ class PartnerApplicationView(APIView):
         responses={200: PartnerApplicationSerializer, 404: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
-        return _application_response(cast(User, request.user))
+        user = cast(User, request.user)
+        application = partner_application_for_user(user)
+        if application is None:
+            partner = PartnerProfile.objects.filter(user=user).first()
+            if partner is None:
+                partner = PartnerProfile.objects.create(
+                    user=user,
+                    display_name=user.full_name or "",
+                    biography="",
+                    experience_years=0,
+                )
+                application = PartnerApplication.objects.create(partner=partner)
+                _ensure_partner_role(user)
+                _record_transition(
+                    application=application,
+                    from_status="",
+                    actor=user,
+                    reason_code="application_created",
+                )
+            else:
+                application = PartnerApplication.objects.filter(partner=partner).first()
+                if application is None:
+                    application = PartnerApplication.objects.create(partner=partner)
+        return Response(PartnerApplicationSerializer(application).data)
 
     @extend_schema(
         tags=["Partner application"],
@@ -371,7 +393,7 @@ class PartnerScheduleView(APIView):
     def get(self, request: Request) -> Response:
         partner = partner_profile_for_user(cast(User, request.user))
         if partner is None:
-            raise NotFound("Partner application was not found.")
+            return Response({"rules": [], "exceptions": []})
         rules, exceptions = partner_schedule(partner)
         return Response(
             PartnerScheduleSerializer({"rules": rules, "exceptions": exceptions}).data,

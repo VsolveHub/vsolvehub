@@ -3,11 +3,11 @@ import { request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * One marketplace service's money, for its Money tab. The server reads only that service's
- * records, so the Rentals tab can never show stays money.
+ * One service's money, for its Money tab. The server reads only that service's records, so the
+ * Rentals tab can never show stays money.
  */
 
-export type MoneyService = "rentals" | "stays" | "listings";
+export type MoneyService = "rentals" | "stays" | "listings" | "home-services" | "workforce";
 export type MoneyPeriod = "this_month" | "last_month" | "all";
 export type MoneySummary = Schemas["MoneySummary"];
 export type MoneyPayment = Schemas["MoneyPayment"];
@@ -32,6 +32,10 @@ export function fetchMoneySummary(service: MoneyService, period: MoneyPeriod) {
       return request(() => client.GET("/api/v1/ops/stays/money", query));
     case "listings":
       return request(() => client.GET("/api/v1/ops/listings/money", query));
+    case "home-services":
+      return request(() => client.GET("/api/v1/ops/home-services/money", query));
+    case "workforce":
+      return request(() => client.GET("/api/v1/ops/workforce/money", query));
   }
 }
 
@@ -50,5 +54,9 @@ export function fetchMoneyPayments(
       return request(() => client.GET("/api/v1/ops/stays/money/payments", query));
     case "listings":
       return request(() => client.GET("/api/v1/ops/listings/money/payments", query));
+    case "home-services":
+      return request(() => client.GET("/api/v1/ops/home-services/money/payments", query));
+    case "workforce":
+      return request(() => client.GET("/api/v1/ops/workforce/money/payments", query));
   }
 }

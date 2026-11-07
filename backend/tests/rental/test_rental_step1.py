@@ -29,13 +29,14 @@ from apps.identity.models import Role, UserRole
 from apps.partners.capabilities.eligibility import is_approved_rental_owner, workspace_grants
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.partners.services.base import _base_application_is_complete
-from apps.rental.models import RentalAsset, RentalPlatformFee
+from apps.rental.models import RentalAsset, RentalPlatformFeeVersion
 from apps.rental.pickup_hours import DayHours, save_pickup_hours
 from apps.rental.serializers import PartnerRentalBookingSerializer, RentalBookingSerializer
 from apps.rental.services import (
     RentalStateError,
     auto_publish_asset,
     create_booking,
+    current_platform_fee_percent,
     delete_asset,
     initiate_rental_booking_payment,
     pause_asset,
@@ -397,9 +398,19 @@ def _book_two_days(rental_world, asset):
     )
 
 
+def _fee_in_force(percent: int, version: int = 1) -> RentalPlatformFeeVersion:
+    """A fee version that took effect a moment ago."""
+    return RentalPlatformFeeVersion.objects.create(
+        version=version,
+        percent=percent,
+        effective_from=timezone.now() - timedelta(minutes=10 - version),
+        approval_reference=f"TEST-{version}",
+    )
+
+
 @pytest.mark.django_db
 def test_platform_fee_is_added_on_top_of_the_rental_and_not_the_deposit(rental_world):
-    RentalPlatformFee.objects.create(pk=1, percent=10, updated_by=rental_world["owner"])
+    _fee_in_force(10)
     booking = _book_two_days(rental_world, _fee_asset(rental_world))
     rental_fee = 100_000 * 2
     deposit = 50_000
@@ -423,9 +434,9 @@ def test_missing_platform_fee_leaves_the_charge_unchanged(rental_world):
 
 @pytest.mark.django_db
 def test_changing_the_platform_fee_does_not_rewrite_an_existing_booking(rental_world):
-    RentalPlatformFee.objects.create(pk=1, percent=10, updated_by=rental_world["owner"])
+    _fee_in_force(10)
     booking = _book_two_days(rental_world, _fee_asset(rental_world))
-    RentalPlatformFee.objects.filter(pk=1).update(percent=25)
+    _fee_in_force(25, version=2)
     booking.refresh_from_db()
     assert booking.platform_fee_percent == 10
     assert booking.platform_fee_paise == 20_000
@@ -434,7 +445,8 @@ def test_changing_the_platform_fee_does_not_rewrite_an_existing_booking(rental_w
 
 
 @pytest.mark.django_db
-def test_operations_sets_the_platform_fee_and_rejects_an_out_of_range_percent():
+def test_operations_versions_the_platform_fee_with_an_approval_reference():
+    """The fee was one overwritten number: no history, no approval, no way to schedule it."""
     role, _created = Role.objects.get_or_create(
         code="operations",
         defaults={"name": "Operations", "is_system": True},
@@ -442,19 +454,80 @@ def test_operations_sets_the_platform_fee_and_rejects_an_out_of_range_percent():
     ops = User.objects.create(phone_number="+919800000099", full_name="Ops Fee")
     UserRole.objects.create(user=ops, role=role)
     client = force_role_client(user=ops, role_code="operations")
+    url = "/api/v1/ops/rentals/platform-fee"
 
     public = APIClient().get("/api/v1/rentals/platform-fee")
     assert public.status_code == status.HTTP_200_OK
-    assert public.json() == {"percent": 0}
+    assert public.json()["percent"] == 0
 
-    saved = client.put("/api/v1/ops/rentals/platform-fee", {"percent": 10}, format="json")
-    assert saved.status_code == status.HTTP_200_OK
-    assert saved.json() == {"percent": 10}
-    assert RentalPlatformFee.objects.get(pk=1).updated_by_id == ops.id
+    saved = client.post(url, {"percent": 10, "approval_reference": "FIN-14"}, format="json")
+    assert saved.status_code == status.HTTP_201_CREATED
+    body = saved.json()
+    assert body["percent"] == 10
+    assert body["current"]["version"] == 1
+    assert body["current"]["approval_reference"] == "FIN-14"
+    assert body["current"]["created_by_name"] == "Ops Fee"
 
-    rejected = client.put("/api/v1/ops/rentals/platform-fee", {"percent": 101}, format="json")
-    assert rejected.status_code == status.HTTP_400_BAD_REQUEST
-    assert RentalPlatformFee.objects.get(pk=1).percent == 10
+    later = timezone.now() + timedelta(days=7)
+    scheduled = client.post(
+        url,
+        {"percent": 12, "approval_reference": "FIN-15", "effective_from": later.isoformat()},
+        format="json",
+    ).json()
+    # Scheduled, not in force: customers are still charged 10% until it starts.
+    assert scheduled["percent"] == 10
+    assert [v["percent"] for v in scheduled["upcoming"]] == [12]
+    assert APIClient().get("/api/v1/rentals/platform-fee").json()["percent"] == 10
 
-    again = APIClient().get("/api/v1/rentals/platform-fee")
-    assert again.json() == {"percent": 10}
+    for refused in (
+        {"percent": 101, "approval_reference": "FIN-16"},
+        {"percent": 11, "approval_reference": "  "},
+        {"percent": 11, "approval_reference": "FIN-16"},  # not after the scheduled version
+        {
+            "percent": 11,
+            "approval_reference": "FIN-16",
+            "effective_from": (timezone.now() - timedelta(days=1)).isoformat(),
+        },
+    ):
+        assert client.post(url, refused, format="json").status_code == status.HTTP_400_BAD_REQUEST
+    assert RentalPlatformFeeVersion.objects.count() == 2
+
+
+@pytest.mark.django_db
+def test_a_scheduled_fee_can_be_withdrawn_but_one_in_force_cannot():
+    role, _created = Role.objects.get_or_create(
+        code="operations",
+        defaults={"name": "Operations", "is_system": True},
+    )
+    ops = User.objects.create(phone_number="+919800000098", full_name="Ops Fee")
+    UserRole.objects.create(user=ops, role=role)
+    client = force_role_client(user=ops, role_code="operations")
+    in_force = _fee_in_force(10)
+    upcoming = RentalPlatformFeeVersion.objects.create(
+        version=2,
+        percent=12,
+        effective_from=timezone.now() + timedelta(days=7),
+        approval_reference="FIN-15",
+    )
+
+    refused = client.delete(f"/api/v1/ops/rentals/platform-fee/{in_force.id}")
+    withdrawn = client.delete(f"/api/v1/ops/rentals/platform-fee/{upcoming.id}")
+
+    assert refused.status_code == status.HTTP_400_BAD_REQUEST
+    assert withdrawn.status_code == status.HTTP_200_OK
+    assert withdrawn.json()["upcoming"] == []
+    assert list(RentalPlatformFeeVersion.objects.values_list("version", flat=True)) == [1]
+
+
+@pytest.mark.django_db
+def test_the_fee_in_force_is_the_latest_version_that_has_started():
+    _fee_in_force(10)
+    RentalPlatformFeeVersion.objects.create(
+        version=2,
+        percent=12,
+        effective_from=timezone.now() + timedelta(days=7),
+        approval_reference="FIN-15",
+    )
+
+    assert current_platform_fee_percent() == 10
+    assert current_platform_fee_percent(at=timezone.now() + timedelta(days=8)) == 12

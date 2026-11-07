@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { CaseWorkspace } from "@/features/m2-cases/view/case-workspace";
-import { CasesTabs } from "@/features/m2-cases/view/cases-tabs";
 
 
 export const metadata: Metadata = {
@@ -24,10 +23,7 @@ export const metadata: Metadata = {
 export default function CasesPage() {
   return (
     <>
-
-      <CasesTabs />
-
-      <div className="mt-6">
+      <div className="mt-4">
         {/* `useSearchParams` needs a boundary. The page is force-dynamic, so this never
             suspends in practice — it is here so the build cannot start depending on that. */}
         <Suspense fallback={null}>

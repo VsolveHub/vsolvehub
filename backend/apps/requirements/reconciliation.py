@@ -221,6 +221,7 @@ def _alert_on_chargeback_rate(*, requirement: CustomerRequirement) -> None:
     for recipient_id in operations_recipient_ids():
         request_notification(
             recipient_id=recipient_id,
+            audience=NotificationIntent.Audience.OPERATIONS,
             purpose="m2_chargeback_rate_alarm",
             channel=NotificationIntent.Channel.EMAIL,
             template_code="m2_chargeback_rate_alarm",

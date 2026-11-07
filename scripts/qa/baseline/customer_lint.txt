@@ -1,0 +1,563 @@
+﻿node : $ expo lint
+At C:\Users\nuner\AppData\Roaming\npm\pnpm.ps1:1 char:1
++ node C:\Users\nuner\AppData\Local\node\corepack\v1\pnpm\11.2.2\bin\pn ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ expo lint:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+env: load .env
+env: export EAS_PROJECT_ID EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_WEB_BASE_URL
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\app\(tabs)\_layout.tsx
+  7:21  warning  'useRef' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\app\login.tsx
+  50:39  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\account-home.tsx
+  2:10  warning  'useMobileLogout' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\account-page-shell.tsx
+  8:10  warning  'requestOpenNotifications' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\address-book.tsx
+  4:10  warning  'Badge' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\documents-screen.tsx
+   6:15  warning  'Circle' is defined but never used                 @typescript-eslint/no-unused-vars
+  25:21  warning  'setDocuments' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\messages-screen.tsx
+  6:10  warning  'Pressable' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\privacy-screen.tsx
+   5:17  warning  'Button' is defined but never used          @typescript-eslint/no-unused-vars
+  13:8   warning  'PrivacyRequest' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\sessions-screen.tsx
+  5:10  warning  'Badge' is defined but never used   @typescript-eslint/no-unused-vars
+  5:17  warning  'Button' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\account\view\wallet-screen.tsx
+  7:15  warning  'Circle' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\bookings\view\booking-visit.tsx
+  5:49  warning  'View' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\bookings\view\full-screen-search.tsx
+  12:34  warning  'D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\bookings\view\group-status.tsx' imported multiple times  import/no-duplicates
+  16:31  warning  'D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\bookings\view\group-status.tsx' imported multiple times  import/no-duplicates
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\cart\view\cart-screen.tsx
+  19:8  warning  'Cart' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\category-artwork.tsx
+    7:3  warning  'Calendar' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+    8:3  warning  'ChefHat' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   14:3  warning  'Scissors' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  242:8  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\category-artwork.tsx:242:8
+  240 |   return (
+  241 |     <View className="items-center justify-center">
+> 242 |       <FallbackIcon size={iconSize} color="#00112e" strokeWidth={1.8} />
+      |        ^^^^^^^^^^^^ This component is created during render
+  243 |     </View>
+  244 |   );
+  245 | }
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\category-artwork.tsx:239:24
+  237 |   }
+  238 |
+> 239 |   const FallbackIcon = getCategoryFallbackIcon(category.slug, category.icon_key);
+      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  240 |   return (
+  241 |     <View className="items-center justify-center">
+  242 |       <FallbackIcon size={iconSize} color="#00112e" strokeWidth={1.8} />  react-hooks/static-components
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\client-queries.ts
+   3:19  warning  'unwrap' is defined but never used        @typescript-eslint/no-unused-vars
+  74:1   warning  Import in body of module; reorder to top  import/first
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\catalog-screen.tsx
+  242:10  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\catalog-screen.tsx:242:10
+  240 |         />
+  241 |       ) : (
+> 242 |         <FallbackIcon size={isDesktop ? 32 : 26} color="#00112e" strokeWidth={1.8} />
+      |          ^^^^^^^^^^^^ This component is created during render
+  243 |       )}
+  244 |     </View>
+  245 |   );
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\catalog-screen.tsx:224:24
+  222 |   const resolved = resolveImageUrl(imageUrl);
+  223 |   const isCover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
+> 224 |   const FallbackIcon = getCategoryFallbackIcon(slug, iconKey);
+      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  225 |
+  226 |   return (
+  227 |     <View  react-hooks/static-components
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\catalog-service-thumb.tsx
+  41:8  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\catalog-service-thumb.tsx:41:8
+  39 |       className={`h-[4.75rem] w-[7rem] shrink-0 items-center justify-center rounded-2xl border border-line bg-[#F4F1EC] ${className}`}
+  40 |     >
+> 41 |       <IconComponent size={28} color="#0B1B3D" strokeWidth={1.8} />
+     |        ^^^^^^^^^^^^^ This component is created during render
+  42 |     </View>
+  43 |   );
+  44 | }
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\catalog-service-thumb.tsx:36:25
+  34 |   }
+  35 |
+> 36 |   const IconComponent = iconForService(iconKey);
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  37 |   return (
+  38 |     <View
+  39 |       className={`h-[4.75rem] w-[7rem] shrink-0 items-center justify-center rounded-2xl border border-line bg-[#F4F1EC] ${className}`}  react-hooks/static-components
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\category-screen.tsx
+    7:21  warning  'ChevronLeft' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+   11:56  warning  'StyleSheet' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+  124:8   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\category-screen.tsx:124:8
+  122 |   return (
+  123 |     <View className="size-12 items-center justify-center">
+> 124 |       <Icon color="#453f37" size={28} strokeWidth={1.6} />
+      |        ^^^^ This component is created during render
+  125 |     </View>
+  126 |   );
+  127 | }
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\category-screen.tsx:121:16
+  119 |
+  120 | function TradeMark({ iconKey }: { iconKey: string }) {
+> 121 |   const Icon = iconForService(iconKey);
+      |                ^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  122 |   return (
+  123 |     <View className="size-12 items-center justify-center">
+  124 |       <Icon color="#453f37" size={28} strokeWidth={1.6} />                                                                                                                         react-hooks/static-components
+  144:10  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\category-screen.tsx:144:10
+  142 |         />
+  143 |       ) : (
+> 144 |         <Icon color="#453f37" size={28} strokeWidth={1.6} />
+      |          ^^^^ This component is created during render
+  145 |       )}
+  146 |     </View>
+  147 |   );
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\category-screen.tsx:133:16
+  131 |   const resolved = resolveImageUrl(uri);
+  132 |   const cover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
+> 133 |   const Icon = iconForService(iconKey);
+      |                ^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  134 |   return (
+  135 |     <View className="shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC]" style={{ width: px, height: px }}>
+  136 |       {resolved && !loadError ? (  react-hooks/static-components
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx
+  202:17  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx:202:17
+  200 |
+  201 | export function ReviewsMarquee() {
+> 202 |   const shift = useRef(new Animated.Value(0)).current;
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  203 |
+  204 |   useEffect(() => {
+  205 |     let isCancelled = false;  react-hooks/refs
+  202:17  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx:202:17
+  200 |
+  201 | export function ReviewsMarquee() {
+> 202 |   const shift = useRef(new Animated.Value(0)).current;
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  203 |
+  204 |   useEffect(() => {
+  205 |     let isCancelled = false;  react-hooks/refs
+  202:17  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx:202:17
+  200 |
+  201 | export function ReviewsMarquee() {
+> 202 |   const shift = useRef(new Animated.Value(0)).current;
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  203 |
+  204 |   useEffect(() => {
+  205 |     let isCancelled = false;  react-hooks/refs
+  202:17  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx:202:17
+  200 |
+  201 | export function ReviewsMarquee() {
+> 202 |   const shift = useRef(new Animated.Value(0)).current;
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  203 |
+  204 |   useEffect(() => {
+  205 |     let isCancelled = false;  react-hooks/refs
+  202:17  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx:202:17
+  200 |
+  201 | export function ReviewsMarquee() {
+> 202 |   const shift = useRef(new Animated.Value(0)).current;
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  203 |
+  204 |   useEffect(() => {
+  205 |     let isCancelled = false;  react-hooks/refs
+  202:17  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\reviews-marquee.tsx:202:17
+  200 |
+  201 | export function ReviewsMarquee() {
+> 202 |   const shift = useRef(new Animated.Value(0)).current;
+      |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  203 |
+  204 |   useEffect(() => {
+  205 |     let isCancelled = false;  react-hooks/refs
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\tile-desktop-split-pane.tsx
+    1:29  warning  'D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\node_modules\@vsolve\mobile-ui\src\index.ts' imported multiple times                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          import/no-duplicates
+   15:22  warning  'D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\node_modules\@vsolve\mobile-ui\src\index.ts' imported multiple times                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          import/no-duplicates
+  111:8   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\tile-desktop-split-pane.tsx:111:8
+  109 |   return (
+  110 |     <View style={{ width: size, height: size }} className="items-center justify-center">
+> 111 |       <Icon color="#453f37" size={Math.round(size * 0.6)} strokeWidth={1.6} />
+      |        ^^^^ This component is created during render
+  112 |     </View>
+  113 |   );
+  114 | }
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\tile-desktop-split-pane.tsx:108:16
+  106 |     );
+  107 |   }
+> 108 |   const Icon = iconForService(tile.iconKey);
+      |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  109 |   return (
+  110 |     <View style={{ width: size, height: size }} className="items-center justify-center">
+  111 |       <Icon color="#453f37" size={Math.round(size * 0.6)} strokeWidth={1.6} />  react-hooks/static-components
+  132:10  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\tile-desktop-split-pane.tsx:132:10
+  130 |         />
+  131 |       ) : (
+> 132 |         <Icon color="#453f37" size={32} strokeWidth={1.6} />
+      |          ^^^^ This component is created during render
+  133 |       )}
+  134 |     </View>
+  135 |   );
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\catalog\view\tile-desktop-split-pane.tsx:120:16
+  118 |   const resolved = resolveImageUrl(uri);
+  119 |   const cover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
+> 120 |   const Icon = iconForService(iconKey);
+      |                ^^^^^^^^^^^^^^^^^^^^^^^ The component is created during render here
+  121 |
+  122 |   return (
+  123 |     <View className="size-[5.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC]">   react-hooks/static-components
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\checkout\conflicts.ts
+  2:29  warning  'ApiRequestError' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\checkout\view\address-sheet.tsx
+   3:17  warning  'Button' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   7:8   warning  'Svg' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+   7:15  warning  'Circle' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   7:23  warning  'Path' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  43:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\checkout\view\address-sheet.tsx:43:7
+  41 |   useEffect(() => {
+  42 |     if (open) {
+> 43 |       setPendingAddressId(selectedAddressId ?? addresses[0]?.id ?? null);
+     |       ^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  44 |     }
+  45 |   }, [open, selectedAddressId]);
+  46 |  react-hooks/set-state-in-effect
+  45:6   warning  React Hook useEffect has a missing dependency: 'addresses'. Either include it or remove the dependency array. If 'setPendingAddressId' needs the current value of 'addresses', you can also switch to useReducer instead of useState and read 'addresses' in the reducer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              react-hooks/exhaustive-deps
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\checkout\view\checkout-screen.tsx
+   10:29  warning  'Rect' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   26:10  warning  'BookingModeToggle' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  148:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\checkout\view\checkout-screen.tsx:148:7
+  146 |   useEffect(() => {
+  147 |     if (bookingMode === "INSTANT" && windowsQuery.data && !instant?.isAvailable) {
+> 148 |       setBookingMode("SCHEDULED");
+      |       ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  149 |     }
+  150 |   }, [bookingMode, windowsQuery.data, instant?.isAvailable]);
+  151 |  react-hooks/set-state-in-effect
+  157:9   warning  'planSet' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\checkout\view\order-summary.tsx
+  2:10  warning  'Badge' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\crew\view\crew-address-picker.tsx
+  44:25  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\crew\view\crew-address-picker.tsx:44:25
+  42 |
+  43 |   useEffect(() => {
+> 44 |     if (openSignal > 0) setOpen(true);
+     |                         ^^^^^^^ Avoid calling setState() directly within an effect
+  45 |   }, [openSignal]);
+  46 |
+  47 |   async function locate() {  react-hooks/set-state-in-effect
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\crew\view\job-form-screen.tsx
+  1:10  warning  'Check' is defined but never used                 @typescript-eslint/no-unused-vars
+  2:37  warning  'useState' is defined but never used              @typescript-eslint/no-unused-vars
+  3:40  warning  'TextInput' is defined but never used             @typescript-eslint/no-unused-vars
+  9:10  warning  'formatReportingTime' is defined but never used   @typescript-eslint/no-unused-vars
+  9:31  warning  'reportingTimeOptions' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\crew\view\occasion-screen.tsx
+  2:17  warning  'Info' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\crew\view\preset-questions.tsx
+  1:30  warning  'Input' is defined but never used            @typescript-eslint/no-unused-vars
+  1:37  warning  'QuantityStepper' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\crew\view\rate-screen.tsx
+  2:24  warning  'D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\node_modules\@vsolve\mobile-ui\src\index.ts' imported multiple times  import/no-duplicates
+  6:22  warning  'D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\node_modules\@vsolve\mobile-ui\src\index.ts' imported multiple times  import/no-duplicates
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\listings\view\apply-sheet.tsx
+  19:3  warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  20:3  warning  'FileCheck2' is defined but never used    @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\listings\view\listings-browse-screen.tsx
+   31:10  warning  'fetchListingFilters' is defined but never used                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+  193:9   warning  The 'rawListings' logical expression could make the dependencies of useMemo Hook (at line 215) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'rawListings' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\notifications\view\notification-sheet.tsx
+  40:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\notifications\view\notification-sheet.tsx:40:7
+  38 |   useEffect(() => {
+  39 |     if (!open) {
+> 40 |       setDismissedIds(new Set());
+     |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  41 |       setDismissedAll(false);
+  42 |     }
+  43 |   }, [open]);  react-hooks/set-state-in-effect
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\quotes\view\quote-comparison.tsx
+  4:25  warning  'ReactNode' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\model.ts
+  45:21  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead  @typescript-eslint/array-type
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-book-panel.tsx
+    8:3   warning  'Info' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+    9:3   warning  'MapPin' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+   20:49  warning  'Address' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+   36:20  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/array-type
+   69:20  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/array-type
+  113:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-book-panel.tsx:113:7
+  111 |   useEffect(() => {
+  112 |     if (profileQuery.data?.phone_number && !contactPhone) {
+> 113 |       setContactPhone(extractPhoneDigits(profileQuery.data.phone_number));
+      |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  114 |     }
+  115 |   }, [profileQuery.data?.phone_number, contactPhone]);
+  116 |                                                                 react-hooks/set-state-in-effect
+  135:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-book-panel.tsx:135:7
+  133 |     if (checkDateOverlap(startDate, endDate, asset.reserved_ranges)) {
+  134 |       const fresh = getInitialAvailableDates(minStart, asset.reserved_ranges, 2);
+> 135 |       setStartDate(fresh.start);
+      |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  136 |       setEndDate(fresh.end);
+  137 |     }
+  138 |   }, [asset.reserved_ranges, minStart, startDate, endDate]);  react-hooks/set-state-in-effect
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-book-sheet.tsx
+    7:3   warning  'Check' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+    9:3   warning  'Clock' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+   10:3   warning  'MapPin' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+   21:49  warning  'Address' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+   31:20  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/array-type
+   64:20  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/array-type
+  116:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-book-sheet.tsx:116:7
+  114 |   useEffect(() => {
+  115 |     if (profileQuery.data?.phone_number && !contactPhone) {
+> 116 |       setContactPhone(extractPhoneDigits(profileQuery.data.phone_number));
+      |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  117 |     }
+  118 |   }, [profileQuery.data?.phone_number, contactPhone]);
+  119 |                                                                 react-hooks/set-state-in-effect
+  138:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-book-sheet.tsx:138:7
+  136 |     if (checkDateOverlap(startDate, endDate, asset.reserved_ranges)) {
+  137 |       const fresh = getInitialAvailableDates(minStart, asset.reserved_ranges, 2);
+> 138 |       setStartDate(fresh.start);
+      |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  139 |       setEndDate(fresh.end);
+  140 |     }
+  141 |   }, [asset.reserved_ranges, minStart, startDate, endDate]);  react-hooks/set-state-in-effect
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rental-detail-screen.tsx
+  2:10  warning  'Badge' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\rentals\view\rentals-browse-screen.tsx
+  9:3  warning  'Filter' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\requirement\view\new-request-screen.tsx
+    2:10  warning  'Button' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+   12:3   warning  'MapPin' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+  410:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\requirement\view\new-request-screen.tsx:410:7
+  408 |   useEffect(() => {
+  409 |     if (!addressId && (addresses.data ?? []).length > 0) {
+> 410 |       setAddressId(addresses.data![0].id);
+      |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  411 |     }
+  412 |   }, [addressId, addresses.data]);
+  413 |  react-hooks/set-state-in-effect
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\stays\view\desktop-stays-browse.tsx
+   2:10  warning  'Button' is defined but never used                @typescript-eslint/no-unused-vars
+   2:18  warning  'Skeleton' is defined but never used              @typescript-eslint/no-unused-vars
+  20:3   warning  'X' is defined but never used                     @typescript-eslint/no-unused-vars
+  23:10  warning  'Platform' is defined but never used              @typescript-eslint/no-unused-vars
+  33:8   warning  'StayTaxonomyCategory' is defined but never used  @typescript-eslint/no-unused-vars
+  36:10  warning  'THEME_COLORS' is defined but never used          @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\stays\view\stay-detail-screen.tsx
+   59:10  warning  'StayVisitSheet' is defined but never used           @typescript-eslint/no-unused-vars
+  201:10  warning  'visitSheetOpen' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\web\VSolveHub app\vsolvehub\frontend\mobile\apps\customer\src\features\stays\view\stays-browse-screen.tsx
+   11:3   warning  'Filter' is defined but never used                                                                                                                                                          @typescript-eslint/no-unused-vars
+   61:39  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   62:45  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   63:43  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   64:49  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   67:59  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   68:57  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   69:35  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   70:39  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   71:35  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   72:35  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   73:10  warning  'minInputStr' is assigned a value but never used                                                                                                                                            @typescript-eslint/no-unused-vars
+   73:41  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   74:10  warning  'maxInputStr' is assigned a value but never used                                                                                                                                            @typescript-eslint/no-unused-vars
+   74:41  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   75:51  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   76:27  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   79:53  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   80:47  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   81:49  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   82:47  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   83:45  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   84:41  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   85:41  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   88:33  error    React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+   90:25  error    React Hook "useQuery" is called conditionally. React Hooks must be called in the exact same order in every component render                                                                 react-hooks/rules-of-hooks
+  100:22  error    React Hook "useQuery" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+
+Γ£û 124 problems (47 errors, 77 warnings)
+  0 errors and 8 warnings potentially fixable with the `--fix` option.
+
+[ELIFECYCLE] Command failed with exit code 1.

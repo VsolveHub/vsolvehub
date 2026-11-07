@@ -14,6 +14,7 @@ outcome). Everything else is read from the domain layer.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -814,6 +815,17 @@ class PartnerBookingPageSerializer(serializers.Serializer[dict[str, object]]):
     server_now = serializers.DateTimeField()
 
 
+class OperationsCancellationPreviewSerializer(serializers.Serializer[Any]):
+    refundable_paise = serializers.IntegerField(help_text="What a full refund returns.")
+    policy_fee_paise = serializers.IntegerField(
+        help_text="The customer's cancellation fee if it is not waived."
+    )
+    policy_fee_waiver = serializers.CharField(
+        allow_blank=True, help_text="Set when the fee is already waived (partner released or late)."
+    )
+    currency = serializers.CharField()
+
+
 class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     """Cross-unit recovery context, with the audit trail that justifies it.
 
@@ -837,6 +849,7 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     work_tasks = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     status_history = serializers.SerializerMethodField()
+    operations_cancellation = serializers.SerializerMethodField()
     replacement_offer_id = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
@@ -868,6 +881,7 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
             "evidence",
             "status_history",
             "replacement_offer_id",
+            "operations_cancellation",
             "server_now",
         )
         read_only_fields = fields
@@ -888,6 +902,20 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     def get_site_address(self, instance: Booking) -> dict[str, str] | None:
         address = _visit_address(instance)
         return None if address is None else site_address_payload(address)
+
+    @extend_schema_field(OperationsCancellationPreviewSerializer(allow_null=True))
+    def get_operations_cancellation(self, instance: Booking) -> Any:
+        """What Operations would refund on cancelling; `null` when the visit cannot be cancelled.
+
+        Imported inside the method for the same reason as `cancellation_preview`.
+        """
+        from apps.fulfilment.cancellation import preview_operations_cancellation  # noqa: PLC0415
+
+        unit = instance.fulfilment_unit
+        if unit is None:
+            return None
+        preview = preview_operations_cancellation(unit=unit, booking=instance)
+        return None if preview is None else OperationsCancellationPreviewSerializer(preview).data
 
     @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_replacement_offer_id(self, instance: Booking) -> Any:
@@ -951,8 +979,44 @@ class StartOtpVerifyRequestSerializer(VersionedCommandSerializer):
     code = serializers.CharField(max_length=12, trim_whitespace=True)
 
 
+class PartnerRouteOriginSerializer(serializers.Serializer[dict[str, Any]]):
+    """Where the Partner is now. Used for this one route and not stored."""
+
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal("-90"), max_value=Decimal("90")
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal("-180"), max_value=Decimal("180")
+    )
+
+
+class PartnerVisitRouteSerializer(serializers.Serializer[dict[str, Any]]):
+    """The road route to the visit, for the Partner's map.
+
+    There is no separate destination point: the line ends at the Customer's pin, which is all a
+    map needs, and the pin still never travels as bare coordinates (see
+    `PartnerSiteAddressSerializer`).
+    """
+
+    encoded_polyline = serializers.CharField(
+        help_text="Google encoded polyline from the Partner to the Customer's pin."
+    )
+    distance_meters = serializers.IntegerField(min_value=0)
+    duration_seconds = serializers.IntegerField(
+        min_value=0, help_text="Two-wheeler travel time with live traffic."
+    )
+    server_now = serializers.DateTimeField()
+
+
 class AssistedStartRequestSerializer(VersionedCommandSerializer):
     outage_reason = serializers.CharField(max_length=240, allow_blank=False, trim_whitespace=True)
+
+
+class OperationsCancelRequestSerializer(VersionedCommandSerializer):
+    reason = serializers.CharField(max_length=240, allow_blank=False, trim_whitespace=True)
+    full_refund = serializers.BooleanField(
+        help_text="`true` waives the cancellation fee; `false` applies the customer's fee ladder."
+    )
 
 
 class EvidenceUploadRequestSerializer(serializers.Serializer[dict[str, Any]]):
@@ -1096,3 +1160,80 @@ class AmendmentApprovalResultSerializer(serializers.Serializer[dict[str, Any]]):
     payment_attempt_id = serializers.UUIDField()
     amount_paise = serializers.IntegerField()
     currency = serializers.CharField()
+
+
+#: A visit is late once its start time has passed and the professional has not started.
+LATE_STATUSES = (Booking.Status.CONFIRMED, Booking.Status.EN_ROUTE)
+
+
+class OperationsBookingRowSerializer(serializers.ModelSerializer[Booking]):
+    """One home-service visit in the Operations bookings list: enough to find it and see if it
+    needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`."""
+
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    partner_display_name = serializers.SerializerMethodField()
+    partner_phone = serializers.SerializerMethodField()
+    services = serializers.SerializerMethodField()
+    area = serializers.SerializerMethodField()
+    total_paise = serializers.SerializerMethodField()
+    is_late = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Booking
+        fields = (
+            "id",
+            "status",
+            "scheduled_start",
+            "estimated_duration_minutes",
+            "created_at",
+            "customer_name",
+            "customer_phone",
+            "partner_display_name",
+            "partner_phone",
+            "services",
+            "area",
+            "total_paise",
+            "is_late",
+            "payout_hold",
+            "needs_redispatch",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_name(self, instance: Booking) -> str:
+        return instance.customer.full_name
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_phone(self, instance: Booking) -> str:
+        return instance.customer.phone_number
+
+    @extend_schema_field(serializers.CharField())
+    def get_partner_display_name(self, instance: Booking) -> str:
+        return instance.partner.display_name
+
+    @extend_schema_field(serializers.CharField())
+    def get_partner_phone(self, instance: Booking) -> str:
+        return instance.partner.user.phone_number
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_services(self, instance: Booking) -> list[str]:
+        """What is being done: the service lines, never the fee or minimum-visit lines."""
+        unit = instance.fulfilment_unit
+        if unit is None:
+            return []
+        return [line.label for line in unit.lines.all() if line.kind == QuoteLine.Kind.SERVICE]
+
+    @extend_schema_field(serializers.CharField())
+    def get_area(self, instance: Booking) -> str:
+        unit = instance.fulfilment_unit
+        return "" if unit is None else unit.service_area.name
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total_paise(self, instance: Booking) -> int:
+        unit = instance.fulfilment_unit
+        return 0 if unit is None else int(unit.total_paise)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_late(self, instance: Booking) -> bool:
+        return instance.status in LATE_STATUSES and instance.scheduled_start < timezone.now()

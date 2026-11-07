@@ -127,7 +127,7 @@ class Command(BaseCommand):
         """Record acceptance of every currently published required consent.
 
         The receipt points at the document row rather than repeating its version,
-        because `_required_consents_exist` compares document ids — a receipt
+        because `partner_has_required_consents` compares document ids — a receipt
         carrying the right version string but no `document` would satisfy a
         reading of the data and not the check that matters.
 

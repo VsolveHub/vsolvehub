@@ -24,6 +24,7 @@ def notify_booking_completed(event: OutboxEvent) -> NotificationIntent | None:
         recipient_id=UUID(str(customer_id)),
         purpose="booking.completed",
         channel=NotificationIntent.Channel.IN_APP,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="booking_completed",
         context={"booking_id": str(booking_id)},
         idempotency_key=f"notify-booking-completed:{booking_id}",

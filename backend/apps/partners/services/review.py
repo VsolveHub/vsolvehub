@@ -17,8 +17,6 @@ from django.utils import timezone
 
 from apps.assignments.suspension import release_future_work
 from apps.identity.models import User
-from apps.notifications.models import NotificationIntent
-from apps.notifications.services import request_notification
 from apps.partners.exceptions import (
     PartnerApplicationIncompleteError,
     PartnerApplicationNotFoundError,
@@ -35,9 +33,12 @@ from apps.partners.models import (
 from apps.partners.selectors import presence_cache_key
 
 from .base import (
+    PARTNER_APPLICATION_DECISION_PURPOSE,
+    PARTNER_APPLICATION_PROGRESS_PURPOSE,
     _assert_version,
     _base_application_is_complete,
     _latest_required_documents_are_approved,
+    _notify_application_event,
     _record_transition,
 )
 
@@ -54,7 +55,7 @@ _DECISION_TEMPLATES = {
 
 
 def _notify_decision(*, application: PartnerApplication, previous_status: str, reason: str) -> None:
-    """Tell the Partner what was decided. In-app, once per version; never blocks the decision.
+    """Tell the Partner what was decided, in the app and by push. Never blocks the decision.
 
     Only the change request carries Operations' words — the Partner needs them to fix anything.
     A decline or suspension reason stays on the transition for the audit trail.
@@ -72,23 +73,24 @@ def _notify_decision(*, application: PartnerApplication, previous_status: str, r
         if application.status == PartnerApplication.Status.CHANGES_REQUIRED
         else {}
     )
-    try:
-        with transaction.atomic():
-            request_notification(
-                recipient_id=application.partner.user_id,
-                purpose="partner_application_decision",
-                channel=NotificationIntent.Channel.IN_APP,
-                template_code=template,
-                context=context,
-                idempotency_key=f"partner-application:{application.id}:v{application.version}",
-            )
-    except Exception:
-        # The decision is already made and recorded; a notice that cannot be written is logged
-        # for follow-up rather than undoing it. Ids only — never the reason or the partner.
-        logger.exception(
-            "partner_application_decision_notice_failed",
-            extra={"application_id": str(application.id), "template": template},
-        )
+    _notify_application_event(
+        application=application,
+        template_code=template,
+        purpose=PARTNER_APPLICATION_DECISION_PURPOSE,
+        context=context,
+        idempotency_key=f"partner-application:{application.id}:v{application.version}",
+    )
+
+
+def _notify_review_started(application: PartnerApplication) -> None:
+    """In the app only: there is nothing to act on, so it is not worth a buzz."""
+    _notify_application_event(
+        application=application,
+        template_code="partner_application_review_started",
+        purpose=PARTNER_APPLICATION_PROGRESS_PURPOSE,
+        idempotency_key=f"partner-application:{application.id}:v{application.version}",
+        push=False,
+    )
 
 
 @transaction.atomic
@@ -206,6 +208,8 @@ def claim_partner_application(
         actor=reviewer,
         reason_code="application_review_claimed",
     )
+    if previous_status == PartnerApplication.Status.SUBMITTED:
+        _notify_review_started(application)
     return application
 
 
@@ -248,6 +252,30 @@ def _seed_default_availability_if_missing(
                 )
                 seeded.append(rule)
     return seeded
+
+
+def _assert_working_hours_set(application: PartnerApplication) -> None:
+    """A services Partner is approved with the hours they set, never with hours we invent.
+
+    Submission already requires weekly hours in every service area; this refuses an approval
+    if hours were cleared since, rather than quietly filling them in.
+    """
+    if application.track != PartnerApplication.Track.SERVICES:
+        return
+    partner = application.partner
+    area_ids = set(
+        partner.service_area_links.filter(is_active=True).values_list("service_area_id", flat=True)
+    )
+    covered = set(
+        PartnerAvailabilityRule.objects.filter(
+            partner=partner, service_area_id__in=area_ids, is_active=True
+        ).values_list("service_area_id", flat=True)
+    )
+    if area_ids - covered:
+        raise PartnerApplicationIncompleteError(
+            "The Partner has no working hours for one or more service areas. "
+            "Request changes so they can set them."
+        )
 
 
 #: Decisions the Partner is told about with a reason, and the refusal when it is missing.
@@ -331,8 +359,7 @@ def transition_partner_application(
             raise PartnerApplicationIncompleteError(
                 "Approve the latest required documents before approving this application.",
             )
-        if previous_status != PartnerApplication.Status.APPROVED:
-            _seed_default_availability_if_missing(partner=application.partner)
+        _assert_working_hours_set(application)
 
     application.status = target_status
     application.reviewed_by = reviewer
@@ -360,7 +387,10 @@ def transition_partner_application(
         reason_code=f"application_{target_status.lower()}",
         reason=reason,
     )
-    _notify_decision(application=application, previous_status=previous_status, reason=reason)
+    if target_status == PartnerApplication.Status.UNDER_REVIEW:
+        _notify_review_started(application)
+    else:
+        _notify_decision(application=application, previous_status=previous_status, reason=reason)
     if target_status in {
         PartnerApplication.Status.SUSPENDED,
         PartnerApplication.Status.OFFBOARDED,

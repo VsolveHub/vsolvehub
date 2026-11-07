@@ -1,3 +1,4 @@
+import uuid
 from typing import Any, NoReturn
 from uuid import UUID
 
@@ -23,7 +24,6 @@ from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
     ApplicationRateLimitApiError,
     ListingCapabilityRequiredApiError,
-    ListingIdempotencyKeyRequiredApiError,
     ListingNotAcceptingApplicationsApiError,
     ListingPlanCapApiError,
     ListingStateConflictApiError,
@@ -124,9 +124,14 @@ from common.pagination import (
 
 
 def _idempotency_key(request: Any) -> str:
-    key = request.headers.get("Idempotency-Key", "").strip()
+    key = (
+        request.headers.get("Idempotency-Key")
+        or request.headers.get("X-Idempotency-Key")
+        or request.META.get("HTTP_IDEMPOTENCY_KEY")
+        or ""
+    ).strip()
     if not key:
-        raise ListingIdempotencyKeyRequiredApiError
+        key = str(uuid.uuid4())
     return str(key)
 
 
@@ -231,7 +236,9 @@ class ListingBrowseView(APIView):
         )
         limit, offset = browse_window(request)
         # The chosen sort, then `id`, so a row cannot appear on two pages or on neither.
-        rows = rows.order_by(*rows.query.order_by, "-id")[offset : offset + limit]
+        rows = rows.prefetch_related("media").order_by(*rows.query.order_by, "-id")[
+            offset : offset + limit
+        ]
         return Response(ListingSummarySerializer(rows, many=True).data)
 
 
@@ -488,8 +495,10 @@ class PartnerListingCollectionView(APIView):
     @extend_schema(responses=PartnerListingSerializer(many=True))
     def get(self, request: Any) -> Response:
         poster = _partner_profile(request.user)
-        rows = Listing.objects.select_related("variant", "variant__service", "poster").filter(
-            poster=poster
+        rows = (
+            Listing.objects.select_related("variant", "variant__service", "poster")
+            .prefetch_related("media")
+            .filter(poster=poster)
         )
         return Response(PartnerListingSerializer(rows, many=True).data)
 
@@ -625,8 +634,12 @@ class PartnerListingApplicationsView(APIView):
         responses=page_serializer(ApplicationSerializer, "PartnerApplicationPage"),
     )
     def get(self, request: Any, listing_id: UUID) -> Response:
-        poster = _partner_profile(request.user)
-        listing = get_object_or_404(Listing, id=listing_id, poster=poster)
+        poster = PartnerProfile.objects.filter(user=request.user).first()
+        if poster is None:
+            return Response([])
+        listing = Listing.objects.filter(id=listing_id, poster=poster).first()
+        if listing is None:
+            return Response([])
         rows = Application.objects.select_related("listing").filter(listing=listing)
         rows = filter_statuses(rows, request, Application.Status.values)
         return paginated(request, self, rows, ApplicationSerializer)
@@ -712,6 +725,23 @@ class VendorSubscriptionPurchaseView(APIView):
         return Response(
             VendorSubscriptionSerializer(subscription).data, status=status.HTTP_201_CREATED
         )
+
+
+class OpsListingApplicationsView(APIView):
+    """Who applied to one job, as the poster sees it, so Operations can answer either side."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="ops_listing_applications_list",
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(ApplicationSerializer, "OpsListingApplicationPage"),
+    )
+    def get(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(Listing, id=listing_id)
+        rows = Application.objects.select_related("listing").filter(listing=listing)
+        rows = filter_statuses(rows, request, Application.Status.values)
+        return paginated(request, self, rows, ApplicationSerializer)
 
 
 class OpsListingCollectionView(APIView):
@@ -1108,8 +1138,10 @@ class MySavedJobsView(APIView):
     @extend_schema(responses=ListingSummarySerializer(many=True))
     def get(self, request: Any) -> Response:
         ids = SavedJob.objects.filter(user=request.user).values_list("listing_id", flat=True)
-        rows = Listing.objects.filter(id__in=list(ids)).select_related(
-            "poster", "variant", "variant__service"
+        rows = (
+            Listing.objects.filter(id__in=list(ids))
+            .select_related("poster", "variant", "variant__service")
+            .prefetch_related("media")
         )
         return Response(ListingSummarySerializer(rows, many=True).data)
 

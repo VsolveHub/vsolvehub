@@ -18,6 +18,7 @@ from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
+    PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
     PartnerLocation,
@@ -73,6 +74,26 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
     )
 
 
+def partner_has_required_consents(partner: PartnerProfile) -> bool:
+    """Whether the Partner holds a live receipt for every agreement submission requires.
+
+    Compared by document id, so a receipt for a superseded version does not count: republishing
+    the legal text re-prompts every applicant. No published requirement means nobody can submit,
+    rather than everybody — an empty legal set is a deployment fault, not a waiver.
+    """
+    required_ids = set(required_partner_consent_documents().values_list("id", flat=True))
+    if not required_ids:
+        return False
+    accepted_ids = set(
+        PartnerConsent.objects.filter(
+            partner=partner,
+            document_id__in=required_ids,
+            withdrawn_at__isnull=True,
+        ).values_list("document_id", flat=True),
+    )
+    return required_ids.issubset(accepted_ids)
+
+
 def partner_application_for_user(user: User) -> PartnerApplication | None:
     return (
         PartnerApplication.objects.filter(partner__user=user)
@@ -124,10 +145,31 @@ def operations_partner_application_queue(
     return queryset.order_by("submitted_at", "id")
 
 
+#: Fewer digits than this is too short to be a number anyone is looking for.
+MIN_PHONE_SEARCH_DIGITS = 4
+#: An Indian mobile number without its country code.
+MOBILE_DIGITS = 10
+
+
+def directory_search(query: str) -> Q:
+    """A name, or a mobile number however it was typed.
+
+    Phones are stored as `+91XXXXXXXXXX`. Spaces, dashes and a leading `+91`/`0` are dropped and
+    the last ten digits matched, so "98765 43210", "+91 98765-43210" and "098765 43210" all find
+    the same Partner; four or more digits match part of a number. Exported for tests.
+    """
+    match = Q(display_name__icontains=query) | Q(user__full_name__icontains=query)
+    digits = "".join(character for character in query if character.isdigit())
+    if len(digits) >= MIN_PHONE_SEARCH_DIGITS:
+        match |= Q(user__phone_number__contains=digits[-MOBILE_DIGITS:])
+    return match
+
+
 def operations_partner_directory(
     *,
     status: str | None = None,
     skill_codes: Sequence[str] = (),
+    query: str = "",
 ) -> QuerySet[PartnerProfile]:
     """Every Partner on the platform, filtered the way a manager browses them.
 
@@ -168,6 +210,8 @@ def operations_partner_directory(
     )
     if status is not None:
         queryset = queryset.filter(application__status=status)
+    if query.strip():
+        queryset = queryset.filter(directory_search(query.strip()))
     if skill_codes:
         queryset = queryset.filter(
             skill_links__skill__code__in=list(skill_codes),

@@ -1019,6 +1019,7 @@ def _tell_candidate(application: Application, status: str) -> None:
 
     _notify(
         recipient_id=application.applicant_id,
+        audience="CUSTOMER",
         template_code="job_application_update",
         purpose=f"jobs.application.{status.lower()}",
         key=f"job-app-status:{application.id}:{status}",

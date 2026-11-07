@@ -4,7 +4,6 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -20,7 +19,6 @@ from apps.partners.models import (
     PartnerServiceArea,
     PartnerShift,
 )
-from apps.assignments.models import DispatchOffer
 
 
 @pytest.fixture
@@ -33,12 +31,14 @@ def partner_user() -> User:
 
 @pytest.fixture
 def approved_partner(partner_user: User) -> tuple[PartnerProfile, ServiceArea]:
-    area = ServiceArea.objects.create(slug=f"area-{uuid.uuid4().hex[:6]}", name="Hitec City", timezone="Asia/Kolkata")
+    area = ServiceArea.objects.create(
+        slug=f"area-{uuid.uuid4().hex[:6]}", name="Hitec City", timezone="Asia/Kolkata"
+    )
     profile = PartnerProfile.objects.create(
         user=partner_user,
         display_name="Shift Partner",
     )
-    application = PartnerApplication.objects.create(
+    PartnerApplication.objects.create(
         partner=profile,
         status=PartnerApplication.Status.APPROVED,
     )
@@ -48,7 +48,9 @@ def approved_partner(partner_user: User) -> tuple[PartnerProfile, ServiceArea]:
 
 @pytest.mark.django_db
 @patch("apps.partners.services.presence._assert_operational_eligibility")
-def test_go_online_flag_off_does_not_create_shift(mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User):
+def test_go_online_flag_off_does_not_create_shift(
+    _mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+):
     profile, area = approved_partner
     with override_settings(FEATURE_PUSH_GATED_INSTANT=False):
         session = services.go_online(
@@ -65,7 +67,9 @@ def test_go_online_flag_off_does_not_create_shift(mock_elig, approved_partner: t
 
 @pytest.mark.django_db
 @patch("apps.partners.services.presence._assert_operational_eligibility")
-def test_go_online_flag_on_creates_and_reuses_shift(mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User):
+def test_go_online_flag_on_creates_and_reuses_shift(
+    _mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+):
     profile, area = approved_partner
     with override_settings(FEATURE_PUSH_GATED_INSTANT=True):
         session1 = services.go_online(
@@ -83,7 +87,7 @@ def test_go_online_flag_on_creates_and_reuses_shift(mock_elig, approved_partner:
         assert shift1.scheduled_end_at > timezone.now()
 
         # Simulate returning to foreground / going online again: should reuse active shift
-        session2 = services.go_online(
+        services.go_online(
             user=partner_user,
             service_area_id=area.id,
             latitude=Decimal("17.441000"),
@@ -98,7 +102,9 @@ def test_go_online_flag_on_creates_and_reuses_shift(mock_elig, approved_partner:
 
 @pytest.mark.django_db
 @patch("apps.partners.services.presence._assert_operational_eligibility")
-def test_go_offline_flag_on_ends_session_and_shift(mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User):
+def test_go_offline_flag_on_ends_session_and_shift(
+    _mock_elig, approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+):
     profile, area = approved_partner
     with override_settings(FEATURE_PUSH_GATED_INSTANT=True):
         session = services.go_online(
@@ -141,12 +147,16 @@ def test_shift_reconciliation_expiry(approved_partner: tuple[PartnerProfile, Ser
 
 
 @pytest.mark.django_db
-def test_push_subscription_sync_api(approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User):
+def test_push_subscription_sync_api(
+    approved_partner: tuple[PartnerProfile, ServiceArea], partner_user: User
+):
     profile, _area = approved_partner
     client = APIClient()
 
     # Unauthenticated should fail
-    resp = client.post("/api/v1/partner/push-subscriptions/sync/", {"onesignal_subscription_id": "sub-123"})
+    resp = client.post(
+        "/api/v1/partner/push-subscriptions/sync/", {"onesignal_subscription_id": "sub-123"}
+    )
     assert resp.status_code in (401, 403)
 
     client.force_authenticate(user=partner_user)

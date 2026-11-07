@@ -137,7 +137,7 @@ def _starts_by_item(
 
 
 @transaction.atomic
-def create_fulfilment_plan_set(
+def create_fulfilment_plan_set(  # noqa: PLR0912, PLR0915
     *,
     customer: User,
     cart: Cart,
@@ -427,7 +427,8 @@ def create_plan_quote(*, customer: User, plan: FulfilmentPlan) -> Quote:
         if (
             existing_quote.status == Quote.Status.ACTIVE
             and existing_quote.fulfilment_plan_id == locked_plan.id
-            and plan_set.status in (FulfilmentPlanSet.Status.ACTIVE, FulfilmentPlanSet.Status.SELECTED)
+            and plan_set.status
+            in (FulfilmentPlanSet.Status.ACTIVE, FulfilmentPlanSet.Status.SELECTED)
         ):
             # Safely idempotent: return active quote for this plan
             return existing_quote

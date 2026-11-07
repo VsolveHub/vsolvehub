@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.vsolvehub.partner",
+        "paths": ["/work/*", "/me/*", "/money", "/home", "/apply/*"]
+      }
+    ]
+  }
+}

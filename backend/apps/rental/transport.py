@@ -116,10 +116,17 @@ def _deadline(booking: RentalBooking, *, now: datetime) -> datetime:
 
 
 def _notify(
-    *, recipient_id: Any, template_code: str, booking: RentalBooking, key: str, **ctx: Any
+    *,
+    recipient_id: Any,
+    audience: str,
+    template_code: str,
+    booking: RentalBooking,
+    key: str,
+    **ctx: Any,
 ) -> None:
     _notify_rental(
         recipient_id=recipient_id,
+        audience=audience,
         purpose="rental.transport",
         template_code=template_code,
         context={"asset_title": booking.asset.title, "booking_id": str(booking.id), **ctx},
@@ -139,6 +146,7 @@ def open_transport_request(
     )
     _notify(
         recipient_id=booking.asset.partner.user_id,
+        audience="PARTNER",
         template_code="rental_delivery_requested",
         booking=booking,
         key=f"rental-delivery-requested:{request.id}",
@@ -206,6 +214,7 @@ def quote_transport(
     request.save()
     _notify(
         recipient_id=booking.customer_id,
+        audience="CUSTOMER",
         template_code="rental_delivery_quoted",
         booking=booking,
         key=f"rental-delivery-quoted:{request.id}:{request.quote_count}",
@@ -240,6 +249,7 @@ def decline_transport(
     _end_request(booking=booking, request=request, status=RentalTransportRequest.Status.DECLINED)
     _notify(
         recipient_id=booking.customer_id,
+        audience="CUSTOMER",
         template_code="rental_delivery_declined",
         booking=booking,
         key=f"rental-delivery-declined:{request.id}",
@@ -270,6 +280,7 @@ def reject_quote(
         request.save(update_fields=("status", "reject_note", "respond_by", "updated_at"))
     _notify(
         recipient_id=booking.asset.partner.user_id,
+        audience="PARTNER",
         template_code="rental_delivery_quote_rejected",
         booking=booking,
         key=f"rental-delivery-rejected:{request.id}:{request.quote_count}",
@@ -311,6 +322,7 @@ def accept_quote(*, booking: RentalBooking, customer: Any) -> RentalBooking:
     initiate_rental_booking_payment(booking=booking)
     _notify(
         recipient_id=booking.asset.partner.user_id,
+        audience="PARTNER",
         template_code="rental_delivery_quote_accepted",
         booking=booking,
         key=f"rental-delivery-accepted:{request.id}:{request.quote_count}",
@@ -375,6 +387,7 @@ def mark_out_for_delivery(*, booking: RentalBooking, partner: Any) -> RentalTran
     request.save(update_fields=("status", "updated_at"))
     _notify(
         recipient_id=booking.customer_id,
+        audience="CUSTOMER",
         template_code="rental_out_for_delivery",
         booking=booking,
         key=f"rental-out-for-delivery:{request.id}",
@@ -417,6 +430,7 @@ def expire_transport_requests(*, now: datetime | None = None) -> int:
             )
             _notify(
                 recipient_id=booking.customer_id,
+                audience="CUSTOMER",
                 template_code="rental_delivery_expired",
                 booking=booking,
                 key=f"rental-delivery-expired:{request.id}",

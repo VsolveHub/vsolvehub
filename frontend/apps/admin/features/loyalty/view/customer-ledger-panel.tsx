@@ -12,9 +12,17 @@ function when(value?: string | null): string {
   return value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
 }
 
-export function CustomerLedgerPanel({ onStepUpRequired }: { onStepUpRequired: (reason: string) => void }) {
-  const [phoneInput, setPhoneInput] = useState("");
-  const [phone, setPhone] = useState("");
+/**
+ * One customer's wallet, coins and referral history, with corrections. Lives on the customer
+ * record, which passes the customer's phone; there is no separate lookup any more.
+ */
+export function CustomerLedgerPanel({
+  phone,
+  onStepUpRequired,
+}: {
+  phone: string;
+  onStepUpRequired: (reason: string) => void;
+}) {
   const ledger = useCustomerLedger(phone);
   const adjust = useAdjustCoins();
   const [amount, setAmount] = useState("");
@@ -30,25 +38,10 @@ export function CustomerLedgerPanel({ onStepUpRequired }: { onStepUpRequired: (r
 
   return (
     <div className="grid gap-4">
-      <Card padding="md">
-        <p className="text-sm text-text-secondary">
-          One customer&apos;s wallet, V Coins and referral history, with the booking and rule
-          behind every entry.
-        </p>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
-          <Field label="Customer phone">
-            <Input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="+91…" />
-          </Field>
-          <Button onClick={() => setPhone(phoneInput.trim())} disabled={phoneInput.trim() === ""}>
-            Look up
-          </Button>
-        </div>
-      </Card>
-
-      {phone === "" ? null : ledger.isPending ? (
+      {ledger.isPending ? (
         <Spinner />
       ) : ledger.isError || !data ? (
-        <ErrorState severity="warning" title="Customer not found" message="Check the phone number." />
+        <ErrorState severity="warning" title="The wallet could not be loaded" message="Try again in a moment." />
       ) : (
         <>
           <Card padding="md">

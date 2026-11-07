@@ -1,0 +1,1253 @@
+{
+  "nav": {
+    "container": {
+      "tag": "BUTTON",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "57px",
+        "height": "44px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(248, 112, 0, 0.3) 0px 4px 6px 0px",
+        "opacity": "1",
+        "overflow": "hidden",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 258,
+          "y": 23,
+          "width": 57,
+          "height": 44
+        }
+      }
+    },
+    "joinBtn": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "800",
+        "lineHeight": "16px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "57px",
+        "height": "44px",
+        "padding": "6px 16px 6px 16px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "linear-gradient(90deg, rgb(248, 112, 0), rgb(245, 158, 11), rgb(251, 146, 60))",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 258,
+          "y": 23,
+          "width": 57,
+          "height": 44
+        }
+      }
+    }
+  },
+  "hero": {
+    "tag": {
+      "tag": "DIV",
+      "text": "Free to join",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "lineHeight": "19.5px",
+        "letterSpacing": "1.04px",
+        "textTransform": "uppercase",
+        "textAlign": "start",
+        "color": "rgb(251, 129, 48)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "19.5px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 20,
+          "y": 100,
+          "width": 350,
+          "height": 20
+        }
+      }
+    },
+    "headingWhite": {
+      "tag": "DIV",
+      "text": "Your skill. Their doorstep.",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "36px",
+        "fontWeight": "800",
+        "lineHeight": "37.8px",
+        "letterSpacing": "-0.72px",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgb(255, 255, 255)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "75.6px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 20,
+          "y": 144,
+          "width": 350,
+          "height": 76
+        }
+      }
+    },
+    "headingOrange": {
+      "tag": "DIV",
+      "text": "Paid instantly.",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "36px",
+        "fontWeight": "800",
+        "lineHeight": "37.8px",
+        "letterSpacing": "-0.72px",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgb(248, 112, 0)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "37.8px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 20,
+          "y": 219,
+          "width": 350,
+          "height": 38
+        }
+      }
+    },
+    "subtitle": {
+      "tag": "DIV",
+      "text": "Join 5,000+ professionals across Telangana. Get local jobs and weekly payouts.",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "400",
+        "lineHeight": "27.2px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgba(255, 255, 255, 0.72)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "54.4px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 20,
+          "y": 281,
+          "width": 350,
+          "height": 54
+        }
+      }
+    },
+    "input": {
+      "tag": "INPUT",
+      "text": "",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "600",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "52px",
+        "padding": "0px 16px 0px 72px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "1px solid rgb(211, 204, 192)",
+        "borderRadius": "8px",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "clip",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "static",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 20,
+          "y": 367,
+          "width": 350,
+          "height": 52
+        }
+      }
+    },
+    "applyBtn": {
+      "tag": "BUTTON",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "700",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "52px",
+        "padding": "0px 24px 0px 24px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "8px",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "8px",
+        "backgroundColor": "rgb(248, 112, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.1) 0px 4px 6px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 20,
+          "y": 427,
+          "width": 350,
+          "height": 52
+        }
+      }
+    },
+    "otpNote": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "13px",
+        "fontWeight": "400",
+        "lineHeight": "19.5px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgba(255, 255, 255, 0.7)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "19.5px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "8px",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 20,
+          "y": 487,
+          "width": 350,
+          "height": 20
+        }
+      }
+    },
+    "signInBox": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "350px",
+        "height": "66px",
+        "padding": "10px 16px 10px 16px",
+        "margin": "8px 0px 0px 0px",
+        "gap": "8px",
+        "border": "1px solid rgba(255, 255, 255, 0.15)",
+        "borderRadius": "16px",
+        "backgroundColor": "rgba(255, 255, 255, 0.1)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "blur(12px)"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "space-between",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 20,
+          "y": 523,
+          "width": 350,
+          "height": 66
+        }
+      }
+    },
+    "signInBtn": {
+      "tag": "BUTTON",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "800",
+        "lineHeight": "16px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "68.8px",
+        "height": "44px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.1) 0px 1px 3px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 284,
+          "y": 534,
+          "width": 69,
+          "height": 44
+        }
+      }
+    }
+  },
+  "stats-strip": {
+    "section": null
+  },
+  "how-it-works": {
+    "section": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(169, 73, 0)"
+      },
+      "boxStyles": {
+        "width": "183px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgb(255, 196, 160)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(255, 244, 236)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 104,
+          "y": 1628,
+          "width": 183,
+          "height": 26
+        }
+      }
+    },
+    "badge": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(169, 73, 0)"
+      },
+      "boxStyles": {
+        "width": "183px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgb(255, 196, 160)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(255, 244, 236)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 104,
+          "y": 1628,
+          "width": 183,
+          "height": 26
+        }
+      }
+    },
+    "heading": {
+      "tag": "DIV",
+      "text": "How Becoming a Partner Works",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "30px",
+        "fontWeight": "800",
+        "lineHeight": "36px",
+        "letterSpacing": "-0.75px",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "358px",
+        "height": "72px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "16px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 16,
+          "y": 1670,
+          "width": 358,
+          "height": 72
+        }
+      }
+    }
+  },
+  "platform-advantages": {
+    "section": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "176px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgba(0, 17, 46, 0.15)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(224, 231, 255)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 107,
+          "y": 3055,
+          "width": 176,
+          "height": 26
+        }
+      }
+    },
+    "badge": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "176px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgba(0, 17, 46, 0.15)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(224, 231, 255)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 107,
+          "y": 3055,
+          "width": 176,
+          "height": 26
+        }
+      }
+    },
+    "heading": {
+      "tag": "DIV",
+      "text": "Built for Your Independence & Growth",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "30px",
+        "fontWeight": "800",
+        "lineHeight": "36px",
+        "letterSpacing": "-0.75px",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "358px",
+        "height": "72px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "16px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 16,
+          "y": 3097,
+          "width": 358,
+          "height": 72
+        }
+      }
+    }
+  },
+  "trades": {
+    "section": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(169, 73, 0)"
+      },
+      "boxStyles": {
+        "width": "174.1px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgb(255, 196, 160)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(255, 244, 236)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 108,
+          "y": 4436,
+          "width": 174,
+          "height": 26
+        }
+      }
+    },
+    "badge": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(169, 73, 0)"
+      },
+      "boxStyles": {
+        "width": "174.1px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgb(255, 196, 160)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(255, 244, 236)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 108,
+          "y": 4436,
+          "width": 174,
+          "height": 26
+        }
+      }
+    },
+    "heading": {
+      "tag": "DIV",
+      "text": "Choose Your Trade to Start Earning",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "30px",
+        "fontWeight": "800",
+        "lineHeight": "36px",
+        "letterSpacing": "-0.75px",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "358px",
+        "height": "72px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "16px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 16,
+          "y": 4478,
+          "width": 358,
+          "height": 72
+        }
+      }
+    }
+  },
+  "testimonials": {
+    "section": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(6, 95, 70)"
+      },
+      "boxStyles": {
+        "width": "189.3px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgb(167, 243, 208)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(236, 253, 245)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 100,
+          "y": 6449,
+          "width": 189,
+          "height": 26
+        }
+      }
+    },
+    "badge": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(6, 95, 70)"
+      },
+      "boxStyles": {
+        "width": "189.3px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgb(167, 243, 208)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(236, 253, 245)",
+        "backgroundImage": "none",
+        "boxShadow": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 100,
+          "y": 6449,
+          "width": 189,
+          "height": 26
+        }
+      }
+    },
+    "heading": {
+      "tag": "DIV",
+      "text": "Trusted by 5,000+ Skilled Professionals",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "30px",
+        "fontWeight": "800",
+        "lineHeight": "36px",
+        "letterSpacing": "-0.75px",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "358px",
+        "height": "72px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "16px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 16,
+          "y": 6491,
+          "width": 358,
+          "height": 72
+        }
+      }
+    }
+  },
+  "faq": {
+    "section": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "118.6px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgba(0, 17, 46, 0.15)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 17, 46, 0.05)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 136,
+          "y": 7157,
+          "width": 119,
+          "height": 26
+        }
+      }
+    },
+    "badge": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "118.6px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgba(0, 17, 46, 0.15)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 17, 46, 0.05)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 136,
+          "y": 7157,
+          "width": 119,
+          "height": 26
+        }
+      }
+    },
+    "heading": {
+      "tag": "DIV",
+      "text": "Frequently Asked Questions",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "30px",
+        "fontWeight": "800",
+        "lineHeight": "36px",
+        "letterSpacing": "-0.75px",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(0, 17, 46)"
+      },
+      "boxStyles": {
+        "width": "358px",
+        "height": "72px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "16px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 16,
+          "y": 7199,
+          "width": 358,
+          "height": 72
+        }
+      }
+    }
+  },
+  "final-cta": {
+    "card": null,
+    "badge": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgb(252, 211, 77)"
+      },
+      "boxStyles": {
+        "width": "191.6px",
+        "height": "26px",
+        "padding": "4px 14px 4px 14px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "6px",
+        "border": "1px solid rgba(248, 112, 0, 0.3)",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(248, 112, 0, 0.2)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 99,
+          "y": 8024,
+          "width": 192,
+          "height": 26
+        }
+      }
+    },
+    "heading": {
+      "tag": "DIV",
+      "text": "Ready to Build a High-Earning Service Business?",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+        "fontSize": "30px",
+        "fontWeight": "800",
+        "lineHeight": "36px",
+        "letterSpacing": "-0.75px",
+        "textTransform": "none",
+        "textAlign": "center",
+        "color": "rgb(255, 255, 255)"
+      },
+      "boxStyles": {
+        "width": "292px",
+        "height": "108px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "20px 0px 0px 0px",
+        "gap": "normal",
+        "border": "0px solid rgb(0, 0, 0)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "visible",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "auto",
+        "boundingRect": {
+          "x": 49,
+          "y": 8070,
+          "width": 292,
+          "height": 108
+        }
+      }
+    }
+  },
+  "footer": {
+    "container": {
+      "tag": "DIV",
+      "textStyles": {
+        "fontFamily": "\"Plus Jakarta Sans\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "textAlign": "start",
+        "color": "rgb(203, 213, 225)"
+      },
+      "boxStyles": {
+        "width": "390px",
+        "height": "1080.5px",
+        "padding": "0px 0px 0px 0px",
+        "margin": "0px 0px 0px 0px",
+        "gap": "normal",
+        "border": "1px solid rgba(30, 41, 59, 0.8)",
+        "borderRadius": "0px",
+        "backgroundColor": "rgb(0, 14, 41)",
+        "backgroundImage": "none",
+        "boxShadow": "none",
+        "opacity": "1",
+        "overflow": "hidden",
+        "backdropFilter": "none"
+      },
+      "layout": {
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "justifyContent": "normal",
+        "position": "relative",
+        "zIndex": "0",
+        "boundingRect": {
+          "x": 0,
+          "y": 8557,
+          "width": 390,
+          "height": 1081
+        }
+      }
+    }
+  }
+}

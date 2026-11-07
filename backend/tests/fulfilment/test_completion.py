@@ -1,5 +1,5 @@
 """Abort, line-level outcomes, completion submission, Customer confirm/dispute and the
-evidence-gated auto-finalize watchdog."""
+auto-finalize watchdog."""
 
 from datetime import timedelta
 
@@ -423,7 +423,7 @@ def test_confirm_after_dispute_is_refused_as_already_decided() -> None:
         )
 
 
-# --- auto_finalize_completion (evidence-gated watchdog) -----------------------------------------
+# --- auto_finalize_completion (watchdog) --------------------------------------------------------
 
 
 def test_auto_finalize_before_the_deadline_does_nothing() -> None:
@@ -434,16 +434,19 @@ def test_auto_finalize_before_the_deadline_does_nothing() -> None:
     assert booked.booking.status == Booking.Status.COMPLETION_SUBMITTED
 
 
-def test_auto_finalize_past_deadline_without_evidence_is_gated_and_does_nothing() -> None:
+def test_auto_finalize_past_deadline_without_a_photo_still_finalizes() -> None:
+    """Photos are optional (owner decision, 5 November 2026). A report with none used to wait
+    forever, with the Partner unpaid, because no app ever took one."""
     booked = _submitted("auto-finalize-no-evidence", "COMPLETED")
     submission = CompletionSubmission.objects.get(booking=booked.booking)
     submission.submitted_at = timezone.now() - timedelta(hours=25)
     submission.save(update_fields=("submitted_at",))
 
-    result = auto_finalize_completion(booking_id=booked.booking.id)
-    assert result is None
-    booked.booking.refresh_from_db()
-    assert booked.booking.status == Booking.Status.COMPLETION_SUBMITTED
+    booking = auto_finalize_completion(booking_id=booked.booking.id)
+    assert booking is not None
+    assert booking.status == Booking.Status.COMPLETED
+    response = CompletionResponse.objects.get(completion_submission=submission)
+    assert response.decision == CompletionResponse.Decision.AUTO_FINALIZED
 
 
 def test_auto_finalize_past_deadline_with_evidence_finalizes_the_completion() -> None:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Copy, Check, Send, BellRing, Bug, ChevronUp, ChevronDown } from "lucide-react";
 import { useCurrentSession } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
@@ -35,7 +35,7 @@ export function OneSignalDebugPanel() {
     subscriptionId: null,
   });
 
-  const refreshDebugInfo = () => {
+  const refreshDebugInfo = useCallback(() => {
     if (typeof window === "undefined") return;
 
     const browserPermission = "Notification" in window ? Notification.permission : "unsupported";
@@ -70,7 +70,7 @@ export function OneSignalDebugPanel() {
         externalId: currentUserId,
       }));
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!isLocalEnv) return;
@@ -89,7 +89,7 @@ export function OneSignalDebugPanel() {
     }
 
     return () => clearInterval(interval);
-  }, [isLocalEnv, currentUserId]);
+  }, [isLocalEnv, refreshDebugInfo]);
 
   if (!isLocalEnv) {
     return null;
@@ -203,20 +203,21 @@ export function OneSignalDebugPanel() {
   return (
     <aside
       aria-label="OneSignal Local Debug Panel"
-      className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2 text-xs font-mono"
+      className="fixed bottom-20 sm:bottom-4 right-2 sm:right-4 z-50 flex flex-col items-end gap-2 text-xs font-mono pointer-events-auto"
     >
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-1.5 rounded-full bg-navy-950 px-3.5 py-2 text-amber-300 shadow-xl border border-amber-500/30 hover:bg-navy-900 transition cursor-pointer"
+        className="flex items-center gap-1.5 rounded-full bg-navy-950 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-amber-300 shadow-xl border border-amber-500/30 hover:bg-navy-900 transition cursor-pointer"
+        aria-label="OneSignal Local Debug Panel"
       >
         <Bug className="h-4 w-4" />
-        <span className="font-bold">OneSignal Dev</span>
+        <span className="font-bold hidden sm:inline">OneSignal Dev</span>
         {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
       </button>
 
       {isOpen && (
-        <div className="w-80 rounded-2xl border border-line bg-surface/95 p-4 shadow-2xl backdrop-blur-md space-y-3 text-text">
+        <div className="w-[calc(100vw-1.5rem)] max-w-sm sm:w-80 max-h-[75vh] overflow-y-auto rounded-2xl border border-line bg-surface/95 p-4 shadow-2xl backdrop-blur-md space-y-3 text-text">
           <div className="flex items-center justify-between border-b border-line pb-2">
             <span className="font-bold text-sm flex items-center gap-1.5 text-primary">
               <BellRing className="h-4 w-4" /> Push Debug Info

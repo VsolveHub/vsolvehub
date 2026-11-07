@@ -74,6 +74,9 @@ export function StayRoomCard({
             src={photoUrl}
             alt=""
             className="absolute inset-0 size-full object-cover transition duration-slow group-hover:scale-[1.03]"
+            onError={(e) => {
+              e.currentTarget.src = "/catalog/tiles/rooms-pg-hostel-hotels.png";
+            }}
           />
         ) : (
           <div className="flex size-full items-center justify-center text-text-muted">

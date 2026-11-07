@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { renderHook, act } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from "vitest";
 import {
   usePushPermission,
   PARTNER_DISMISS_KEY,
@@ -8,6 +8,15 @@ import {
   PARTNER_PROMPT_COUNT_KEY,
   CUSTOMER_PROMPT_COUNT_KEY,
 } from "./usePushPermission";
+
+type OneSignalTestWindow = {
+  OneSignal: {
+    User?: unknown;
+    Notifications: { permissionNative: NotificationPermission; requestPermission: Mock };
+  };
+  OneSignalDeferred: unknown[];
+};
+const testWindow = window as unknown as OneSignalTestWindow;
 
 describe("usePushPermission hook", () => {
   const originalNotification = globalThis.Notification;
@@ -30,7 +39,7 @@ describe("usePushPermission hook", () => {
     } as unknown as typeof Notification;
 
     // Reset OneSignal globals
-    (window as any).OneSignal = {
+    testWindow.OneSignal = {
       User: {
         PushSubscription: {
           id: "sub-test-123",
@@ -46,13 +55,13 @@ describe("usePushPermission hook", () => {
         requestPermission: vi.fn().mockResolvedValue(true),
       },
     };
-    (window as any).OneSignalDeferred = [];
+    testWindow.OneSignalDeferred = [];
   });
 
   afterEach(() => {
     globalThis.Notification = originalNotification;
-    delete (window as any).OneSignal;
-    delete (window as any).OneSignalDeferred;
+    Reflect.deleteProperty(window, "OneSignal");
+    Reflect.deleteProperty(window, "OneSignalDeferred");
     vi.restoreAllMocks();
   });
 
@@ -73,7 +82,7 @@ describe("usePushPermission hook", () => {
     );
 
     expect(Notification.requestPermission).not.toHaveBeenCalled();
-    expect((window as any).OneSignal.Notifications.requestPermission).not.toHaveBeenCalled();
+    expect(testWindow.OneSignal.Notifications.requestPermission).not.toHaveBeenCalled();
   });
 
   it("dismissal sets 7-day cooldown for Partner and tracks analytics", () => {
@@ -188,8 +197,8 @@ describe("usePushPermission hook", () => {
   });
 
   it("handles permission denial and emits denial event without repeating prompt", async () => {
-    (Notification.requestPermission as any).mockResolvedValue("denied");
-    (window as any).OneSignal.Notifications.requestPermission.mockResolvedValue(false);
+    vi.mocked(Notification.requestPermission).mockResolvedValue("denied");
+    testWindow.OneSignal.Notifications.requestPermission.mockResolvedValue(false);
 
     const { result } = renderHook(() =>
       usePushPermission({ role: "CUSTOMER", userId: "cust-denied" }),

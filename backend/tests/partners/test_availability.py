@@ -8,6 +8,7 @@ from django.utils import timezone
 from apps.carts.availability import load_snapshot
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
+from apps.partners.exceptions import PartnerApplicationIncompleteError
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityException,
@@ -244,16 +245,15 @@ def test_approval_does_not_overwrite_existing_custom_availability(
     assert rules.first().ends_at == time(14, 0)
 
 
-def test_approval_seeds_default_rules_only_for_service_areas_with_zero_active_rules(
+def test_approval_is_refused_when_a_service_area_has_no_hours(
     partner_setup: PartnerSetup, operations_user: User
 ) -> None:
+    """Approval uses the hours the Partner set. It never fills in hours on their behalf."""
     _create_application(partner_setup)
     app = PartnerApplication.objects.get(partner__user=partner_setup.user)
     _approve_required_document(app)
     second_area = ServiceArea.objects.create(slug="east-hyderabad", name="East Hyderabad")
     PartnerServiceArea.objects.create(partner=app.partner, service_area=second_area, is_active=True)
-
-    # First area has 1 custom rule, second area has 0 rules
     PartnerAvailabilityRule.objects.create(
         partner=app.partner,
         service_area=partner_setup.service_area,
@@ -263,62 +263,39 @@ def test_approval_seeds_default_rules_only_for_service_areas_with_zero_active_ru
         ends_next_day=False,
         is_active=True,
     )
-
     app.status = PartnerApplication.Status.UNDER_REVIEW
     app.review_assigned_to = operations_user
     app.save(update_fields=("status", "review_assigned_to"))
 
-    transition_partner_application(
-        reviewer=operations_user,
-        application_id=app.id,
-        expected_version=app.version,
-        target_status=PartnerApplication.Status.APPROVED,
-        reason="Verification approved",
-    )
+    with pytest.raises(PartnerApplicationIncompleteError):
+        transition_partner_application(
+            reviewer=operations_user,
+            application_id=app.id,
+            expected_version=app.version,
+            target_status=PartnerApplication.Status.APPROVED,
+            reason="",
+        )
 
-    # First area still has its 1 custom rule
-    first_area_rules = PartnerAvailabilityRule.objects.filter(
-        partner=app.partner, service_area=partner_setup.service_area, is_active=True
-    )
-    assert first_area_rules.count() == 1
-    assert first_area_rules.first().weekday == 1
-    assert first_area_rules.first().starts_at == time(11, 0)
-
-    # Second area has 7 seeded rules (Mon-Sun 09:00-19:00)
-    second_area_rules = PartnerAvailabilityRule.objects.filter(
-        partner=app.partner, service_area=second_area, is_active=True
-    )
-    assert second_area_rules.count() == 7
-    assert set(second_area_rules.values_list("weekday", flat=True)) == set(range(7))
-    for rule in second_area_rules:
-        assert rule.starts_at == time(9, 0)
-        assert rule.ends_at == time(19, 0)
+    app.refresh_from_db()
+    assert app.status == PartnerApplication.Status.UNDER_REVIEW
+    assert not PartnerAvailabilityRule.objects.filter(
+        partner=app.partner, service_area=second_area
+    ).exists()
 
 
-def test_approval_seeding_is_idempotent(partner_setup: PartnerSetup, operations_user: User) -> None:
+def test_backfill_seeding_is_idempotent(partner_setup: PartnerSetup) -> None:
+    """The ops backfill command's helper adds a default week once and never duplicates it."""
     _create_application(partner_setup)
     app = PartnerApplication.objects.get(partner__user=partner_setup.user)
-    _approve_required_document(app)
-    app.status = PartnerApplication.Status.UNDER_REVIEW
-    app.review_assigned_to = operations_user
-    app.save(update_fields=("status", "review_assigned_to"))
 
-    transition_partner_application(
-        reviewer=operations_user,
-        application_id=app.id,
-        expected_version=app.version,
-        target_status=PartnerApplication.Status.APPROVED,
-        reason="Verification approved",
-    )
-    assert PartnerAvailabilityRule.objects.filter(partner=app.partner, is_active=True).count() == 7
-
-    # Calling safety net seeding again directly doesn't duplicate rules
+    seeded = _seed_default_availability_if_missing(partner=app.partner)
+    assert len(seeded) == 7
     seeded_again = _seed_default_availability_if_missing(partner=app.partner)
     assert len(seeded_again) == 0
     assert PartnerAvailabilityRule.objects.filter(partner=app.partner, is_active=True).count() == 7
 
 
-def test_approval_only_seeds_during_real_transition_to_approved(
+def test_requesting_changes_creates_no_hours(
     partner_setup: PartnerSetup, operations_user: User
 ) -> None:
     _create_application(partner_setup)
@@ -327,7 +304,6 @@ def test_approval_only_seeds_during_real_transition_to_approved(
     app.review_assigned_to = operations_user
     app.save(update_fields=("status", "review_assigned_to"))
 
-    # Transition to CHANGES_REQUIRED should NOT seed rules
     transition_partner_application(
         reviewer=operations_user,
         application_id=app.id,
@@ -396,3 +372,50 @@ def test_booking_engine_returns_no_capacity_for_approved_partner_with_zero_activ
         horizon_end=target_start + timedelta(days=2),
     )
     assert snapshot.capacity(starts_at=target_start, duration_minutes=60) == 0
+
+
+def test_operations_reads_current_hours_with_the_areas_and_consents_to_change_them(
+    partner_setup: PartnerSetup,
+    operations_user: User,
+) -> None:
+    """Regression: Operations could only overwrite a schedule blind, typing area and consent ids."""
+    _create_application(partner_setup)
+    application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+    client = force_role_client(user=operations_user, role_code="operations")
+    url = f"/api/v1/operations/partners/{application.partner_id}/availability/"
+    client.put(
+        url,
+        {
+            "consent_purpose": "partner_terms",
+            "consent_document_version": "2026-07",
+            "rules": [
+                {
+                    "service_area_id": str(partner_setup.service_area.id),
+                    "weekday": 2,
+                    "starts_at": "10:00",
+                    "ends_at": "18:00",
+                },
+            ],
+            "exceptions": [],
+        },
+        format="json",
+    )
+
+    body = client.get(url).json()
+
+    assert [(rule["weekday"], rule["starts_at"]) for rule in body["rules"]] == [(2, "10:00:00")]
+    assert {area["id"] for area in body["service_areas"]} == {str(partner_setup.service_area.id)}
+    assert {(consent["purpose"], consent["document_version"]) for consent in body["consents"]} >= {
+        ("partner_terms", "2026-07")
+    }
+
+
+def test_a_customer_cannot_read_a_partners_hours(partner_setup: PartnerSetup) -> None:
+    _create_application(partner_setup)
+    application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+
+    response = partner_setup.client.get(
+        f"/api/v1/operations/partners/{application.partner_id}/availability/"
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN

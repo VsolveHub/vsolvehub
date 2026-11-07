@@ -20,7 +20,7 @@ from uuid import UUID
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 
 from apps.identity.models import CommunicationPreference, User
 from apps.notifications.models import (
@@ -29,9 +29,9 @@ from apps.notifications.models import (
     NotificationDelivery,
     NotificationIntent,
 )
+from apps.notifications.templates_registry import assert_template_registered
 
 logger = logging.getLogger(__name__)
-from apps.notifications.templates_registry import assert_template_registered
 
 #: The provider name recorded against an in-app delivery. Not a provider at all — the row is
 #: written by this process — but `NotificationDelivery` asks who carried the message, and "we did"
@@ -149,6 +149,10 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "rental.claim.decided",
         "rental.overdue",
         "rental.enquiry.quoted",
+        # Where a Partner's application stands. Muting it would leave an applicant waiting on a
+        # decision that was already made, or on a document they were asked to replace.
+        "partner_application_progress",
+        "partner_application_decision",
     }
 )
 
@@ -277,12 +281,16 @@ def request_notification(
     recipient_id: UUID,
     purpose: str,
     channel: str,
+    audience: str,
     template_code: str,
     context: dict[str, Any] | None = None,
     idempotency_key: str = "",
-    deep_link: str = "",
 ) -> NotificationIntent:
     """Record the decision to notify somebody. Sending is a separate, later step.
+
+    `audience` is the side of the platform the notice speaks to (`NotificationIntent.Audience`).
+    One person can be a Customer and a Partner, so the recipient alone cannot say which app's
+    feed a notice belongs in; the code that decides to notify always knows.
 
     Suppression is recorded as an intent with a reason rather than as nothing at all. "We chose
     not to send this, because a kill switch was engaged" is a fact an incident review needs; a
@@ -297,6 +305,8 @@ def request_notification(
     that wrote it, never in front of the person reading their feed.
     """
 
+    if audience not in NotificationIntent.Audience.values:
+        raise ValueError(f"Unknown notification audience {audience!r}.")
     if channel == NotificationIntent.Channel.IN_APP:
         assert_template_registered(template_code)
 
@@ -314,6 +324,7 @@ def request_notification(
         recipient=recipient,
         purpose=purpose,
         channel=channel,
+        audience=audience,
         template_code=template_code,
         context=context or {},
         idempotency_key=idempotency_key,
@@ -397,6 +408,7 @@ def retryable_intents(*, limit: int = 100) -> list[NotificationIntent]:
         ).order_by("created_at")[:limit]
     )
 
+
 class CustomerPushReachabilityReason:
     ACTIVE_SUBSCRIPTION = "ACTIVE_SUBSCRIPTION"
     NO_ACTIVE_SUBSCRIPTION = "NO_ACTIVE_SUBSCRIPTION"
@@ -405,13 +417,14 @@ class CustomerPushReachabilityReason:
     PERMISSION_DENIED = "PERMISSION_DENIED"
 
 
-def get_customer_push_reachability(user: User | None) -> dict[str, object]:
+def get_customer_push_reachability(user: User | None) -> dict[str, object]:  # noqa: PLR0912
     """Answers whether a customer can receive OneSignal web push right now.
 
     Returns:
         dict:
             reachable: bool
-            reason: str (ACTIVE_SUBSCRIPTION, NO_ACTIVE_SUBSCRIPTION, OPTED_OUT, STALE_SUBSCRIPTION, PERMISSION_DENIED)
+            reason: str (ACTIVE_SUBSCRIPTION, NO_ACTIVE_SUBSCRIPTION, OPTED_OUT,
+                STALE_SUBSCRIPTION, PERMISSION_DENIED)
             subscription_id: str | None
     """
     if user is None or not getattr(user, "is_authenticated", False):
@@ -430,10 +443,14 @@ def get_customer_push_reachability(user: User | None) -> dict[str, object]:
         reason = CustomerPushReachabilityReason.NO_ACTIVE_SUBSCRIPTION
         sub_id = None
     else:
-        active_sub = CustomerPushSubscription.objects.filter(
-            user=user,
-            is_active=True,
-        ).order_by("-last_verified_at").first()
+        active_sub = (
+            CustomerPushSubscription.objects.filter(
+                user=user,
+                is_active=True,
+            )
+            .order_by("-last_verified_at")
+            .first()
+        )
 
         if active_sub is None:
             sub_id = latest_sub.onesignal_subscription_id
@@ -454,7 +471,9 @@ def get_customer_push_reachability(user: User | None) -> dict[str, object]:
                 reachable = False
             else:
                 freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
-                is_stale = (timezone.now() - active_sub.last_verified_at) > timedelta(days=freshness_days)
+                is_stale = (timezone.now() - active_sub.last_verified_at) > timedelta(
+                    days=freshness_days
+                )
                 if is_stale:
                     reason = CustomerPushReachabilityReason.STALE_SUBSCRIPTION
                     reachable = False
@@ -514,23 +533,23 @@ def sync_customer_push_subscription(
         },
     )
 
-    # Cross-user validation: Ensure subscription does not belong to another user
+    # A OneSignal subscription belongs to the browser or phone, not to a person: when somebody
+    # else signs in on that device, `OneSignal.login` moves it to them. The row follows, so the
+    # new account is reachable instead of being refused for as long as the device lives. Pushes
+    # are addressed by user id at OneSignal, so moving this row cannot redirect anyone's messages.
     existing = CustomerPushSubscription.objects.filter(
         onesignal_subscription_id=clean_sub_id,
     ).first()
     if existing and existing.user_id != user.id:
-        logger.warning(
-            "customer_push_subscription_sync_failed",
+        logger.info(
+            "customer_push_subscription_reassigned",
             extra={
                 "user_id": user_id_str,
                 "role": "CUSTOMER",
-                "existing_user_id": str(existing.user_id),
+                "previous_user_id": str(existing.user_id),
                 "subscription_id": clean_sub_id,
-                "sync_status": "FAILED",
-                "failure_reason": "cross_user_denied",
             },
         )
-        raise PermissionDenied("This push subscription belongs to another user account.")
 
     now = timezone.now()
     is_deactivate = action == "deactivate"
@@ -605,4 +624,3 @@ def sync_customer_push_subscription(
     )
 
     return subscription, is_created
-

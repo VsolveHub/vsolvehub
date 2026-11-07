@@ -5,19 +5,17 @@ import { ApplicationEditor } from "@/features/application/view/application-edito
 import { WorkStep } from "@/features/application/view/work-step";
 import { getWorkCatalog } from "@/features/catalog/queries";
 
-export const metadata: Metadata = { title: "Your trades" };
+export const metadata: Metadata = { title: "Your work" };
 
+/** Trades and job types. Where the partner works is the next step, `/apply/areas`. */
 export default async function WorkPage() {
   const { mainCategories, services } = await getWorkCatalog();
 
   return (
     <ListingStepGuard redirectTo="/apply/about">
-    <ApplicationEditor
-      title="apply.work.pageTitle"
-      description="apply.work.pageDescription"
-    >
-      <WorkStep mainCategories={mainCategories} services={services} />
-    </ApplicationEditor>
+      <ApplicationEditor title="apply.work.pageTitle" description="apply.work.pageDescription">
+        <WorkStep mainCategories={mainCategories} services={services} />
+      </ApplicationEditor>
     </ListingStepGuard>
   );
 }

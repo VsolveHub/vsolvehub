@@ -1,6 +1,6 @@
 "use client";
 
-import { segmentStyles } from "@vsolve/ui";
+import { cn } from "@vsolve/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 /**
@@ -43,19 +43,43 @@ export function ServiceTabs<K extends string>({
   label: string;
 }) {
   return (
-    <div role="tablist" aria-label={label} className="flex flex-wrap gap-1 border-b border-line pb-3">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          role="tab"
-          aria-selected={active === tab.key}
-          className={segmentStyles({ selected: active === tab.key })}
-          onClick={() => onChange(tab.key)}
-        >
-          {tab.label}
-        </button>
-      ))}
+    <div role="tablist" aria-label={label} className="-mb-px flex gap-1 overflow-x-auto border-b border-line">
+      {tabs.map((tab) => {
+        const selected = active === tab.key;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            className={cn(
+              // An underline, not a raised chip: the open tab must read at a glance on any background.
+              "min-h-11 shrink-0 whitespace-nowrap border-b-2 px-4 text-sm font-semibold transition-colors",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+              selected
+                ? "border-[#EA580C] text-navy-900"
+                : "border-transparent text-text-secondary hover:border-line-strong hover:text-text",
+            )}
+            onClick={() => onChange(tab.key)}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+/**
+ * A filter chip (a period, a stage, a kind) under a tab. The selected chip is filled so it never
+ * blends into the page, which the bare segment style does when it has no track behind it.
+ */
+export function filterChipStyles(selected: boolean): string {
+  return cn(
+    "inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition-colors",
+    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+    selected
+      ? "border-navy-900 bg-navy-900 text-warm-0"
+      : "border-line bg-surface text-text-secondary hover:border-line-strong hover:text-text",
   );
 }

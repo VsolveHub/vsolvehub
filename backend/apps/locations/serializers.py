@@ -69,6 +69,20 @@ class ReverseGeocodeResponseSerializer(serializers.Serializer[dict[str, object]]
     provider = serializers.CharField(read_only=True)
 
 
+class PlaceSearchQuerySerializer(serializers.Serializer[dict[str, object]]):
+    q = serializers.CharField(min_length=3, max_length=200, trim_whitespace=True)
+
+
+class PlaceSuggestionSerializer(serializers.Serializer[dict[str, object]]):
+    label = serializers.CharField(read_only=True)  # type: ignore[assignment]
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, read_only=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, read_only=True)
+
+
+class PlaceSearchResponseSerializer(serializers.Serializer[dict[str, object]]):
+    results = PlaceSuggestionSerializer(many=True, read_only=True)
+
+
 class ServiceabilityRequestSerializer(serializers.Serializer[dict[str, object]]):
     postal_code = PostalCodeField(max_length=12)
     service_variant_id = serializers.UUIDField(required=False)

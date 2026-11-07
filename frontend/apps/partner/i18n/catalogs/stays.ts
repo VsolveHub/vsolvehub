@@ -466,6 +466,8 @@ const en: Catalog = {
   "stays.roomBlock.guestNamePlaceholder": "For your own reference",
   "stays.roomBlock.releaseTitle": "Make {number} available again?",
   "stays.roomBlock.releaseBody": "Use this when the guest has moved out or the booking fell through. Guests will see the room as available.",
+
+  "stays.addRoom.errorUnexpected": "An unexpected error occurred.",
 };
 
 const te: Catalog = {
@@ -929,6 +931,8 @@ const te: Catalog = {
   "stays.roomBlock.guestNamePlaceholder": "మీ గుర్తు కోసం",
   "stays.roomBlock.releaseTitle": "{number}ని మళ్ళీ ఖాళీగా చేయాలా?",
   "stays.roomBlock.releaseBody": "అతిథి ఖాళీ చేసినప్పుడు లేదా బుకింగ్ రద్దయినప్పుడు దీన్ని వాడండి. అతిథులకు రూమ్ ఖాళీగా కనిపిస్తుంది.",
+
+  "stays.addRoom.errorUnexpected": "అనుకోని లోపం జరిగింది.",
 };
 
 const hi: Catalog = {
@@ -1392,6 +1396,8 @@ const hi: Catalog = {
   "stays.roomBlock.guestNamePlaceholder": "आपकी अपनी जानकारी के लिए",
   "stays.roomBlock.releaseTitle": "{number} को फिर से खाली करें?",
   "stays.roomBlock.releaseBody": "जब मेहमान चले जाएं या बुकिंग न हो पाए, तब इसका इस्तेमाल करें। मेहमानों को कमरा खाली दिखेगा।",
+
+  "stays.addRoom.errorUnexpected": "एक अप्रत्याशित त्रुटि हुई।",
 };
 
 export const catalogsByLocale: Record<Locale, Catalog> = {

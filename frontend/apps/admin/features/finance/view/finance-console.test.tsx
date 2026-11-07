@@ -255,20 +255,6 @@ describe("reconciling", () => {
     expect(screen.getByText(/do not issue another refund/i)).toBeInTheDocument();
   });
 
-  it("reaches a refund from an earlier session by id, because no lookup exists", async () => {
-    client.POST.mockResolvedValue(ok(refund({ status: "SUCCEEDED" })));
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
-
-    expect(screen.getByText(/no list of refunds and no staff lookup/i)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText(/refund id/i), { target: { value: refund().id } });
-    fireEvent.click(screen.getByRole("button", { name: /reconcile this refund/i }));
-
-    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
-    expect(client.POST.mock.calls[0]![0]).toBe(
-      "/api/v1/finance/refunds/{refund_id}/reconcile/",
-    );
-  });
 });
 
 describe("the step-up", () => {

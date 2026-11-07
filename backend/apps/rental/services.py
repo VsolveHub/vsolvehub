@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -48,7 +48,7 @@ from apps.rental.models import (
     RentalDisputePhoto,
     RentalModerationEvent,
     RentalPhotoUpload,
-    RentalPlatformFee,
+    RentalPlatformFeeVersion,
     RentalTransportRequest,
     overlapping_reservations,
     overlapping_reserved_quantity,
@@ -571,17 +571,21 @@ def remove_media(*, asset: RentalAsset, partner: Any, media_id: UUID | str) -> N
 def _notify_rental(
     *,
     recipient_id: UUID,
+    audience: str,
     purpose: str,
     template_code: str,
     context: dict[str, Any],
     idempotency_key: str,
 ) -> None:
-    """Fire an in-app rental notification. Best-effort: never breaks the caller."""
+    """Fire an in-app rental notification. Best-effort: never breaks the caller.
+
+    `audience` is PARTNER for the owner and CUSTOMER for the renter."""
     try:
         request_notification(
             recipient_id=recipient_id,
             purpose=purpose,
             channel=NotificationIntent.Channel.IN_APP,
+            audience=audience,
             template_code=template_code,
             context=context,
             idempotency_key=idempotency_key,
@@ -742,12 +746,20 @@ def moderate_asset(
 PLATFORM_FEE_PERCENT_MAX = 100
 
 
-def current_platform_fee_percent() -> int:
-    """The live rate. No saved row means customers are not charged a platform fee."""
-    row = RentalPlatformFee.objects.filter(pk=1).only("percent").first()
-    if row is None:
-        return 0
-    return int(row.percent)
+def platform_fee_in_force(at: datetime | None = None) -> RentalPlatformFeeVersion | None:
+    """The version in force at `at` (now by default): the latest one that has taken effect."""
+    moment = at or timezone.now()
+    return (
+        RentalPlatformFeeVersion.objects.filter(effective_from__lte=moment)
+        .order_by("-effective_from")
+        .first()
+    )
+
+
+def current_platform_fee_percent(at: datetime | None = None) -> int:
+    """The live rate. No version in force means customers are not charged a platform fee."""
+    version = platform_fee_in_force(at)
+    return int(version.percent) if version is not None else 0
 
 
 def rental_platform_fee_paise(rental_fee_paise: int, percent: int) -> int:
@@ -757,17 +769,73 @@ def rental_platform_fee_paise(rental_fee_paise: int, percent: int) -> int:
     return rental_fee_paise * percent // 100
 
 
-def save_platform_fee(*, percent: int, actor: Any) -> RentalPlatformFee:
+#: A new version may start up to this long before "now", to absorb a slow form submit, but no
+#: earlier: back-dating would rewrite what bookings already made were charged under.
+PLATFORM_FEE_BACKDATE_TOLERANCE = timedelta(minutes=5)
+
+
+@transaction.atomic
+def schedule_platform_fee(
+    *,
+    percent: int,
+    approval_reference: str,
+    actor: Any,
+    effective_from: datetime | None = None,
+) -> RentalPlatformFeeVersion:
+    """Add a new fee version, in force from `effective_from` (now when not given).
+
+    Refused when the percent is out of range, the approval reference is blank, the start is in
+    the past, or it is not after the latest version's start: versions run in order, one after
+    another, so the fee at any moment has exactly one answer.
+    """
     if percent < 0 or percent > PLATFORM_FEE_PERCENT_MAX:
         raise RentalStateError(
             "Platform fee must be a whole number from 0 to 100.",
             code="platform_fee_invalid",
         )
-    row, _created = RentalPlatformFee.objects.update_or_create(
-        pk=1,
-        defaults={"percent": percent, "updated_by": actor},
+    reference = approval_reference.strip()
+    if not reference:
+        raise RentalStateError(
+            "Give the Finance approval reference for this change.",
+            code="platform_fee_approval_required",
+        )
+    now = timezone.now()
+    starts = effective_from or now
+    if starts < now - PLATFORM_FEE_BACKDATE_TOLERANCE:
+        raise RentalStateError(
+            "A fee change cannot start in the past. Choose now or a later time.",
+            code="platform_fee_backdated",
+        )
+    # Lock the newest version so two people scheduling at once cannot both take the next number.
+    latest = RentalPlatformFeeVersion.objects.select_for_update().order_by("-version").first()
+    if latest is not None and starts <= latest.effective_from:
+        latest_start = timezone.localtime(latest.effective_from)
+        raise RentalStateError(
+            "This change must start after the latest version "
+            f"(v{latest.version}, from {latest_start:%d %b %Y %H:%M}).",
+            code="platform_fee_out_of_order",
+        )
+    return RentalPlatformFeeVersion.objects.create(
+        version=(latest.version + 1) if latest is not None else 1,
+        percent=percent,
+        effective_from=starts,
+        approval_reference=reference[:120],
+        created_by=actor,
     )
-    return row
+
+
+@transaction.atomic
+def withdraw_platform_fee_version(*, version_id: UUID | str) -> None:
+    """Withdraw a version that has not taken effect yet. One in force or past is history."""
+    version = RentalPlatformFeeVersion.objects.select_for_update().filter(id=version_id).first()
+    if version is None:
+        raise RentalStateError("No such fee version.", code="platform_fee_version_not_found")
+    if version.effective_from <= timezone.now():
+        raise RentalStateError(
+            "This version has already taken effect, so it is kept as history.",
+            code="platform_fee_version_in_force",
+        )
+    version.delete()
 
 
 def _check_bookable(
@@ -935,6 +1003,7 @@ def create_booking(
     # Notify the owner of the new booking (best-effort, outside the txn lock).
     _notify_rental(
         recipient_id=asset.partner.user_id,
+        audience=NotificationIntent.Audience.PARTNER,
         purpose="rental.booking.confirmed",
         template_code="rental_new_booking",
         context={
@@ -950,6 +1019,7 @@ def create_booking(
     # Notify the customer with confirmation and their PIN.
     _notify_rental(
         recipient_id=customer.id,
+        audience=NotificationIntent.Audience.CUSTOMER,
         purpose="rental.booking.confirmed",
         template_code="rental_booking_confirmed",
         context={

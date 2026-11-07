@@ -40,6 +40,11 @@ export interface CreateApiClientOptions {
    * there is one at all.
    */
   timeoutMs?: number;
+  /**
+   * How the session travels. Web apps omit this (cookie + CSRF, unchanged).
+   * Native apps use a bearer token: no cookies, no CSRF bootstrap.
+   */
+  auth?: { mode: "cookie" } | { mode: "bearer"; getToken: () => string | null };
 }
 
 /**
@@ -238,6 +243,7 @@ function withDeadline(
  * prices, capacity, state transitions and payment truth.
  */
 export function createApiClient(options: CreateApiClientOptions): ApiClient {
+  const bearerAuth = options.auth?.mode === "bearer" ? options.auth : undefined;
   const { baseUrl, fetch: customFetch, onUnauthorized, getCsrfToken } = options;
   const send = customFetch ?? ((request: Request) => fetch(request));
   const fetchImpl = withDeadline(send, options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
@@ -303,18 +309,32 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
     // Session cookies are HttpOnly and set by Django; the browser must send them
     // cross-origin. No session value is ever read from JavaScript, and the CSRF
     // token lives in memory only — never in browser storage.
-    credentials: "include",
-    fetch: fetchWithCsrf,
+    // Bearer mode is the native apps. When signed in, the session key travels as
+    // a header and cookies are omitted. When unauthenticated (e.g. guest cart),
+    // credentials are included so the server session cookie is preserved across requests.
+    credentials: bearerAuth ? "omit" : "include",
+    fetch: bearerAuth
+      ? async (request: Request) => {
+          const token = bearerAuth.getToken();
+          if (!token) {
+            const attempt = new Request(request.clone(), { credentials: "include" });
+            return fetchWithCsrf(attempt);
+          }
+          const attempt = request.clone();
+          attempt.headers.set("Authorization", `Bearer ${token}`);
+          return fetchImpl(attempt);
+        }
+      : fetchWithCsrf,
   });
 
   const sentAtByRequestId = new Map<string, number>();
 
   const middleware: Middleware = {
-    onRequest({ request, id }) {
+    onRequest({ id }) {
       sentAtByRequestId.set(id, Date.now());
       // The CSRF header is attached in `fetchWithCsrf` rather than here: the
       // token may need fetching, and this hook is synchronous.
-      return request;
+      return undefined;
     },
 
     onResponse({ request, response, id }) {
@@ -359,7 +379,7 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
         }
       });
 
-      return response;
+      return undefined;
     },
 
     onError({ id }) {

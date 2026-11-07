@@ -2,11 +2,11 @@
 
 import { getStableIdempotencyKey } from "@vsolve/api-client";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Card, Field, Input, Select, Textarea, formatMoney } from "@vsolve/ui";
-import { useMemo, useState } from "react";
+import { Button, Card, Field, Input, Textarea, formatMoney } from "@vsolve/ui";
+import { useState } from "react";
 
 import { isStepUpRequired } from "@/features/finance/queries";
-import { usePartnerDirectory } from "@/features/partners/queries";
+import { PartnerPicker, type PickedPartner } from "@/features/partners/view/partner-picker";
 
 import { useLedgerAdjustment } from "../queries";
 
@@ -23,20 +23,13 @@ export function signedPaise(raw: string): number | null {
  * with a reason, picked up by the next payout run.
  */
 export function LedgerAdjustment({ onStepUpRequired }: { onStepUpRequired: (reason: string) => void }) {
-  const directory = usePartnerDirectory({ status: "APPROVED" });
   const adjust = useLedgerAdjustment();
-  const [filter, setFilter] = useState("");
-  const [partnerId, setPartnerId] = useState("");
+  const [partner, setPartner] = useState<PickedPartner | null>(null);
+  const partnerId = partner?.id ?? "";
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [saved, setSaved] = useState(0);
   const paise = signedPaise(amount);
-
-  const partners = useMemo(() => {
-    const rows = directory.data?.pages.flatMap((page) => page.results) ?? [];
-    const query = filter.trim().toLowerCase();
-    return query ? rows.filter((row) => row.display_name.toLowerCase().includes(query)) : rows;
-  }, [directory.data, filter]);
 
   const ready = partnerId !== "" && paise !== null && reason.trim() !== "";
 
@@ -48,19 +41,9 @@ export function LedgerAdjustment({ onStepUpRequired }: { onStepUpRequired: (reas
         overpayment). The next payout run includes it. Entries are never edited, only added.
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field label="Find partner">
-          <Input value={filter} placeholder="Type a name" onChange={(event) => setFilter(event.target.value)} />
-        </Field>
-        <Field label="Partner" required>
-          <Select value={partnerId} onChange={(event) => setPartnerId(event.target.value)}>
-            <option value="">Choose…</option>
-            {partners.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.display_name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="sm:col-span-2">
+          <PartnerPicker value={partner} onChange={setPartner} />
+        </div>
         <Field label="Amount ₹ (e.g. 500 or -500)" required>
           <Input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
         </Field>
@@ -68,17 +51,6 @@ export function LedgerAdjustment({ onStepUpRequired }: { onStepUpRequired: (reas
           <Textarea value={reason} maxLength={240} onChange={(event) => setReason(event.target.value)} />
         </Field>
       </div>
-      {directory.hasNextPage ? (
-        <Button
-          className="mt-2"
-          size="sm"
-          variant="ghost"
-          loading={directory.isFetchingNextPage}
-          onClick={() => void directory.fetchNextPage()}
-        >
-          Load more partners
-        </Button>
-      ) : null}
       <div className="mt-3">
         <Button
           disabled={!ready}

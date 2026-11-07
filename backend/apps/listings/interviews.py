@@ -29,6 +29,7 @@ _CAN_INTERVIEW = (
     Application.Status.SHORTLISTED,
     Application.Status.INTERVIEW,
     Application.Status.CONTACTED,
+    Application.Status.REJECTED,
 )
 
 
@@ -84,6 +85,7 @@ def propose_interview(
         )
     _notify(
         recipient_id=application.applicant_id,
+        audience="CUSTOMER",
         template_code="job_interview_invite",
         purpose="jobs.interview.invite",
         key=f"job-interview:{interview.id}",
@@ -135,6 +137,7 @@ def respond_to_interview(
     candidate = str(application.applicant_snapshot.get("name") or "The candidate")
     _notify(
         recipient_id=application.listing.poster.user_id,
+        audience="PARTNER",
         template_code=templates[action],
         purpose=f"jobs.interview.{action}",
         key=f"job-interview-{action}:{interview.id}",

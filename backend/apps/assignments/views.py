@@ -2,10 +2,9 @@ import logging
 from typing import Any, cast
 from uuid import UUID
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-
-logger = logging.getLogger(__name__)
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -21,8 +20,9 @@ from apps.assignments.group_services import (
     create_manual_unit_offer,
     decline_or_undo_unit_offer,
 )
-from apps.assignments.models import PartnerOffer
+from apps.assignments.models import DispatchOffer, PartnerOffer, Reservation
 from apps.assignments.serializers import (
+    DispatchOfferSerializer,
     ManualOfferSerializer,
     OfferPageSerializer,
     OfferSerializer,
@@ -35,7 +35,9 @@ from apps.assignments.services import (
     decline_or_undo_offer,
     start_partner_search,
 )
+from apps.assignments.tasks import reassign_or_downgrade_booking_task
 from apps.carts.models import CheckoutSession
+from apps.commerce.models import Booking
 from apps.foundation.services import ResponseBody, execute_idempotent
 from apps.identity.models import User
 from apps.partners.models import PartnerProfile
@@ -48,6 +50,8 @@ from common.pagination import (
     reject_invalid_cursor_query,
 )
 from common.schema import IDEMPOTENCY_KEY_HEADER, OFFER_ACTION_PATH_PARAMETER, OFFER_ACTIONS
+
+logger = logging.getLogger(__name__)
 
 PARTNER_OFFER_COMMAND_OPERATION = "partner_offer.command"
 
@@ -288,7 +292,6 @@ class BaseDispatchOfferView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def _get_offer(self, request: Request, offer_id: UUID) -> tuple[Any, PartnerProfile]:
-        from apps.assignments.models import DispatchOffer
 
         user = cast(User, request.user)
         profile = partner_profile_for_user(user)
@@ -311,17 +314,29 @@ class DispatchOfferDetailView(BaseDispatchOfferView):
     """Retrieve details of an instant booking dispatch offer."""
 
     def get(self, request: Request, offer_id: UUID) -> Response:
-        from django.db import transaction
-        from apps.assignments.models import DispatchOffer
-        from apps.assignments.serializers import DispatchOfferSerializer
 
         offer, profile = self._get_offer(request, offer_id)
         now = timezone.now()
-        if offer.status in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT) and offer.expires_at <= now:
+        if (
+            offer.status
+            in (
+                DispatchOffer.Status.PENDING,
+                DispatchOffer.Status.SENDING,
+                DispatchOffer.Status.SENT,
+            )
+            and offer.expires_at <= now
+        ):
             with transaction.atomic():
                 offer_locked = (
                     DispatchOffer.objects.select_for_update()
-                    .filter(id=offer_id, status__in=[DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT])
+                    .filter(
+                        id=offer_id,
+                        status__in=[
+                            DispatchOffer.Status.PENDING,
+                            DispatchOffer.Status.SENDING,
+                            DispatchOffer.Status.SENT,
+                        ],
+                    )
                     .first()
                 )
                 if offer_locked and offer_locked.expires_at <= now:
@@ -345,10 +360,6 @@ class DispatchOfferAcceptView(BaseDispatchOfferView):
     """Accept an instant booking dispatch offer."""
 
     def post(self, request: Request, offer_id: UUID) -> Response:
-        from django.db import transaction
-        from apps.assignments.models import DispatchOffer, Reservation
-        from apps.assignments.serializers import DispatchOfferSerializer
-        from apps.commerce.models import Booking
 
         user = cast(User, request.user)
         profile = partner_profile_for_user(user)
@@ -372,7 +383,11 @@ class DispatchOfferAcceptView(BaseDispatchOfferView):
             if offer.partner_id != profile.id:
                 raise PermissionDenied("This offer belongs to another partner.")
 
-            if offer.status not in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT):
+            if offer.status not in (
+                DispatchOffer.Status.PENDING,
+                DispatchOffer.Status.SENDING,
+                DispatchOffer.Status.SENT,
+            ):
                 return Response(
                     {"error": f"Offer is not active (current status: {offer.status})."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -399,11 +414,7 @@ class DispatchOfferAcceptView(BaseDispatchOfferView):
             offer.responded_at = now
             offer.save(update_fields=["status", "responded_at", "updated_at"])
 
-            booking = (
-                Booking.objects.select_for_update()
-                .filter(id=offer.booking_id)
-                .first()
-            )
+            booking = Booking.objects.select_for_update().filter(id=offer.booking_id).first()
             if booking is not None:
                 booking.partner = profile
                 booking.status = Booking.Status.CONFIRMED
@@ -418,7 +429,11 @@ class DispatchOfferAcceptView(BaseDispatchOfferView):
             # Cancel any other competing active offers for this booking
             DispatchOffer.objects.filter(
                 booking_id=offer.booking_id,
-                status__in=[DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT],
+                status__in=[
+                    DispatchOffer.Status.PENDING,
+                    DispatchOffer.Status.SENDING,
+                    DispatchOffer.Status.SENT,
+                ],
             ).exclude(id=offer.id).update(
                 status=DispatchOffer.Status.CANCELLED,
                 responded_at=now,
@@ -441,10 +456,6 @@ class DispatchOfferDeclineView(BaseDispatchOfferView):
     """Decline an instant booking dispatch offer."""
 
     def post(self, request: Request, offer_id: UUID) -> Response:
-        from django.db import transaction
-        from apps.assignments.models import DispatchOffer
-        from apps.assignments.serializers import DispatchOfferSerializer
-        from apps.assignments.tasks import reassign_or_downgrade_booking_task
 
         user = cast(User, request.user)
         profile = partner_profile_for_user(user)
@@ -456,18 +467,18 @@ class DispatchOfferDeclineView(BaseDispatchOfferView):
         now = timezone.now()
 
         with transaction.atomic():
-            offer = (
-                DispatchOffer.objects.select_for_update()
-                .filter(id=offer_id)
-                .first()
-            )
+            offer = DispatchOffer.objects.select_for_update().filter(id=offer_id).first()
             if offer is None:
                 return Response({"error": "Offer not found."}, status=status.HTTP_404_NOT_FOUND)
 
             if offer.partner_id != profile.id:
                 raise PermissionDenied("This offer belongs to another partner.")
 
-            if offer.status not in (DispatchOffer.Status.PENDING, DispatchOffer.Status.SENDING, DispatchOffer.Status.SENT):
+            if offer.status not in (
+                DispatchOffer.Status.PENDING,
+                DispatchOffer.Status.SENDING,
+                DispatchOffer.Status.SENT,
+            ):
                 return Response(
                     {"error": f"Offer is not active (current status: {offer.status})."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -493,4 +504,3 @@ class DispatchOfferDeclineView(BaseDispatchOfferView):
             )
 
         return Response(DispatchOfferSerializer(offer).data, status=status.HTTP_200_OK)
-

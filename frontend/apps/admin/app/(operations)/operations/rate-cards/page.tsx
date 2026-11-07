@@ -1,19 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { RateCardBoard } from "@/features/m2-rate-cards/view/rate-card-board";
-
-
-export const metadata: Metadata = {
-  title: "Rate cards",
-  robots: { index: false, follow: false },
-};
-
-export default function RateCardsPage() {
-  return (
-    <>
-      <div className="mt-6">
-        <RateCardBoard />
-      </div>
-    </>
-  );
+/** Moved into a tab of its service's page; old links and bookmarks land there. */
+export default function MovedPage() {
+  redirect("/operations/requests?tab=rate-cards");
 }

@@ -1,6 +1,6 @@
 """The deploy step publishes the Partner agreements, not only the schema.
 
-A database that was only migrated had no published agreements, so `_required_consents_exist`
+A database that was only migrated had no published agreements, so `partner_has_required_consents`
 was False for everyone and no Partner application could ever be submitted.
 """
 

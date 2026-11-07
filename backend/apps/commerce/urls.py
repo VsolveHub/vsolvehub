@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.commerce import home_money
 from apps.commerce.views import (
     CheckoutPaymentView,
     FinanceRefundCollectionView,
@@ -18,6 +19,13 @@ from apps.commerce.views import (
 )
 
 urlpatterns = [
+    # Operations: the Home services Money tab.
+    path("ops/home-services/money", home_money.MoneySummaryView.as_view(), name="ops-home-money"),
+    path(
+        "ops/home-services/money/payments",
+        home_money.MoneyPaymentsView.as_view(),
+        name="ops-home-money-payments",
+    ),
     # Public: what the Refund & Cancellation page states, and the receipt reviewers ask to see.
     path("legal/cancellation-policy/", PublishedCancellationPolicyView.as_view()),
     path("legal/sample-receipt/", SampleReceiptView.as_view()),

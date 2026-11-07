@@ -8,13 +8,10 @@ Two guards run through the whole slice: a reviewer may not act on their own reco
 of a named person is recorded.
 """
 
-import csv
-import hashlib
-import io
 import uuid
-from typing import Any, cast
+from typing import cast
 
-from django.db import transaction
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.exceptions import NotFound
@@ -24,12 +21,17 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.identity.models import AccessAuditEvent, Role, User, UserRole
-from apps.identity.phone import normalize_phone_number
+from apps.foundation.services import execute_idempotent
+from apps.identity.models import AccessAuditEvent, User
 from apps.identity.services import record_access_event
 from apps.partners.capabilities import verify_business_tax_profile
 from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
-from apps.partners.models import PartnerDocument, PartnerProfile
+from apps.partners.models import (
+    PartnerConsent,
+    PartnerDocument,
+    PartnerProfile,
+    PartnerServiceArea,
+)
 from apps.partners.permissions import IsOperationsUser
 from apps.partners.selectors import (
     operations_partner_application_detail,
@@ -37,6 +39,7 @@ from apps.partners.selectors import (
     operations_partner_detail,
     operations_partner_directory,
     partner_application_for_user,
+    partner_schedule,
 )
 from apps.partners.serializers import (
     ExpectedVersionSerializer,
@@ -48,6 +51,7 @@ from apps.partners.serializers import (
     OperationsPartnerDirectoryItemSerializer,
     OperationsPartnerDirectoryPageSerializer,
     OperationsPartnerDirectoryQuerySerializer,
+    OperationsPartnerScheduleSerializer,
     OperationsPartnerScheduleUpdateSerializer,
     OperationsTaxProfileVerifySerializer,
     OperationsTransitionSerializer,
@@ -55,6 +59,8 @@ from apps.partners.serializers import (
     PartnerBusinessProfileSerializer,
     PartnerDocumentReviewAccessSerializer,
     PartnerDocumentSerializer,
+    PartnerImportResultSerializer,
+    PartnerImportUploadSerializer,
     PartnerScheduleSerializer,
 )
 from apps.partners.services import (
@@ -67,6 +73,13 @@ from apps.partners.services import (
     review_partner_document,
     transition_partner_application,
 )
+from apps.partners.services.partner_import import (
+    MAX_IMPORT_BYTES,
+    PartnerImportError,
+    check_partner_import,
+    file_sha256,
+    import_partners,
+)
 from common.errors.serializers import ApiErrorSerializer
 from common.observability.context import get_request_id
 from common.schema import PARTNER_VERSION_CONFLICT_EXAMPLE
@@ -74,7 +87,9 @@ from common.schema import PARTNER_VERSION_CONFLICT_EXAMPLE
 from .base import (
     OperationsApplicationCursorPagination,
     OperationsPartnerDirectoryCursorPagination,
+    PartnerApiException,
     _audit_self_review_denial,
+    _idempotency_key,
     _raise_api_error,
 )
 
@@ -135,6 +150,11 @@ class OperationsPartnerDirectoryView(APIView):
                     "a directory multi-select reads as a union."
                 ),
             ),
+            OpenApiParameter(
+                "q",
+                str,
+                description="A name, or a mobile number typed any way (spaces, +91, dashes).",
+            ),
             OpenApiParameter("cursor", str, description="Opaque page cursor."),
         ],
         responses={
@@ -157,6 +177,7 @@ class OperationsPartnerDirectoryView(APIView):
         queryset = operations_partner_directory(
             status=cast(str | None, data.get("status")),
             skill_codes=cast(list[str], data.get("skill") or []),
+            query=cast(str, data.get("q") or ""),
         )
         paginator = OperationsPartnerDirectoryCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -472,7 +493,53 @@ class OperationsPartnerDocumentReviewView(APIView):
 
 
 class OperationsPartnerScheduleView(APIView):
+    """A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+
+    The read comes first so a change edits what is there instead of overwriting it blind.
+    """
+
     permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["Operations - Partners"],
+        operation_id="operations_partner_schedule_retrieve",
+        responses={
+            200: OperationsPartnerScheduleSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, _request: Request, partner_id: uuid.UUID) -> Response:
+        partner = get_object_or_404(PartnerProfile, id=partner_id)
+        rules, exceptions = partner_schedule(partner)
+        areas = (
+            PartnerServiceArea.objects.filter(partner=partner, is_active=True)
+            .select_related("service_area")
+            .order_by("service_area__name")
+        )
+        consents = PartnerConsent.objects.filter(
+            partner=partner, withdrawn_at__isnull=True
+        ).order_by("-accepted_at")
+        return Response(
+            OperationsPartnerScheduleSerializer(
+                {
+                    "rules": rules.order_by("service_area__name", "weekday", "starts_at"),
+                    "exceptions": exceptions.order_by("service_area__name", "date"),
+                    "service_areas": [
+                        {"id": link.service_area_id, "name": link.service_area.name}
+                        for link in areas
+                    ],
+                    "consents": [
+                        {
+                            "purpose": consent.purpose,
+                            "document_version": consent.document_version,
+                            "accepted_at": consent.accepted_at,
+                        }
+                        for consent in consents
+                    ],
+                }
+            ).data
+        )
 
     @extend_schema(
         tags=["Operations - Partners"],
@@ -504,90 +571,83 @@ class OperationsPartnerScheduleView(APIView):
 
 
 class PartnerImportView(APIView):
+    """Operations imports partners from a CSV (contract proposal 0029).
+
+    Each ready row becomes a partner with a DRAFT application, which the partner finishes and
+    submits themselves. `check` changes nothing; `import` is all-or-nothing and idempotent on
+    `Idempotency-Key`, so a double click or a retry imports once.
+    """
+
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
     parser_classes = (MultiPartParser,)
 
-    @extend_schema(summary="Import partners via CSV", request=dict, tags=["operations"])
-    def post(self, request: Request) -> Response:
-        file_obj = request.FILES.get("file")
-        if not file_obj:
-            return Response({"detail": "File required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        dry_run = request.data.get("dry_run", "true").lower() == "true"
-
-        file_bytes = file_obj.read()
-        file_hash = hashlib.sha256(file_bytes).hexdigest()
-
-        try:
-            content = file_bytes.decode("utf-8")
-            reader = csv.DictReader(io.StringIO(content))
-        except Exception:
-            return Response({"detail": "Invalid CSV file"}, status=status.HTTP_400_BAD_REQUEST)
-
-        created = 0
-        skipped = 0
-        errors = 0
-        rows: list[dict[str, Any]] = []
-
-        # We need to import User and PartnerProfile to create them
-
-        try:
-            with transaction.atomic():
-                partner_role, _ = Role.objects.get_or_create(
-                    code="partner", defaults={"name": "Partner"}
-                )
-                for i, row in enumerate(reader, start=2):
-                    phone = row.get("phone", "").strip()
-                    full_name = row.get("full_name", "").strip()
-
-                    if not phone or not full_name:
-                        errors += 1
-                        rows.append(
-                            {"row": i, "status": "error", "message": "Phone and full_name required"}
-                        )
-                        continue
-
-                    try:
-                        phone = normalize_phone_number(phone)
-                    except Exception:
-                        errors += 1
-                        rows.append(
-                            {"row": i, "status": "error", "message": "Invalid phone number format"}
-                        )
-                        continue
-
-                    if User.objects.filter(phone_number=phone).exists():
-                        skipped += 1
-                        rows.append({"row": i, "status": "skipped", "message": "Phone exists"})
-                        continue
-
-                    if not dry_run:
-                        user = User.objects.create_user(phone_number=phone, full_name=full_name)
-                        UserRole.objects.create(user=user, role=partner_role)
-                        PartnerProfile.objects.create(
-                            user=user,
-                            display_name=full_name,
-                        )
-
-                    created += 1
-                    rows.append({"row": i, "status": "created", "phone": phone})
-
-                if dry_run:
-                    transaction.set_rollback(True)
-        except Exception as e:
-            return Response(
-                {"detail": f"Import failed: {e!s}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    @extend_schema(
+        tags=["operations"],
+        operation_id="operations_partners_import_create",
+        summary="Check or import a partner CSV",
+        parameters=[
+            OpenApiParameter(
+                "Idempotency-Key",
+                str,
+                OpenApiParameter.HEADER,
+                required=False,
+                description=(
+                    "Required when `mode` is `import`. The frontend sends the file's SHA-256, so "
+                    "re-sending the same file replays the first result."
+                ),
             )
+        ],
+        request={"multipart/form-data": PartnerImportUploadSerializer},
+        responses={
+            200: PartnerImportResultSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+            413: ApiErrorSerializer,
+            422: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise PartnerApiException(
+                PartnerImportError(
+                    code="import_file_missing", message="Choose a CSV file to upload."
+                )
+            )
+        serializer = PartnerImportUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        mode = serializer.validated_data["mode"]
+        if upload.size is not None and upload.size > MAX_IMPORT_BYTES:
+            raise PartnerApiException(
+                PartnerImportError(
+                    code="import_file_too_large",
+                    message="This file is over 1 MB.",
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                )
+            )
+        data = upload.read()
 
-        return Response(
-            {
-                "dry_run": dry_run,
-                "file_hash": file_hash,
-                "results": {
-                    "created": created,
-                    "skipped": skipped,
-                    "errors": errors,
-                    "rows": rows,
-                },
-            }
+        if mode == "check":
+            try:
+                return Response(check_partner_import(data))
+            except PartnerDomainError as exc:
+                raise PartnerApiException(exc) from exc
+
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                return status.HTTP_200_OK, import_partners(actor=actor, data=data)
+            except PartnerDomainError as exc:
+                raise PartnerApiException(exc) from exc
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="operations.partners.import",
+            key=key,
+            request_payload={"file_sha256": file_sha256(data), "mode": "import"},
+            command=command,
         )
+        return Response(result.body, status=result.status_code)

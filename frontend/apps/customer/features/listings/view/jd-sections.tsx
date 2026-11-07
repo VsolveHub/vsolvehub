@@ -11,7 +11,7 @@ export interface JdSectionsProps {
 
 export function JdSections({ listing, onOpenReport }: JdSectionsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const isLongDescription = listing.description.length > 250;
+  const isLongDescription = (listing.description?.length ?? 0) > 250;
 
   return (
     <>

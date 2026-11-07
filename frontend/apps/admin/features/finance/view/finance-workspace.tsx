@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { RefundHealth } from "@/features/finance/view/refund-health";
 import { RefundConsole } from "@/features/finance/view/refund-console";
 import { StepUpGate } from "@/features/finance/view/step-up-gate";
 import type { StepUpSession } from "@/features/finance/queries";
@@ -12,6 +13,7 @@ export function FinanceWorkspace() {
 
   return (
     <div className="mt-6 flex flex-col gap-6">
+      <RefundHealth />
       <StepUpGate
         session={session}
         reason={reason ?? undefined}

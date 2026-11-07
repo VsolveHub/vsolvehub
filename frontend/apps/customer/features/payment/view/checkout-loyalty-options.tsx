@@ -20,15 +20,19 @@ export function useCheckoutLoyalty(payablePaise: number) {
   const preview = useQuery({
     queryKey: ["customer", "coins", "preview-burn", payablePaise, spendable],
     enabled: applyCoins && payablePaise > 0 && spendable > 0,
-    queryFn: () =>
-      request(() =>
-        getApiClient().POST("/api/v1/customer/coins/preview-burn/", {
+    queryFn: async () => {
+      const data = await request(() =>
+        (getApiClient() as any).POST("/api/v1/customer/coins/preview-burn/", {
           body: {
             order_payable_paise: payablePaise,
             requested_coins: spendable,
           },
         }),
-      ),
+      );
+      return data as
+        | { discount_paise?: number; applied_burn_coins?: number; max_burn_paise?: number }
+        | undefined;
+    },
   });
   const discountPaise = applyCoins ? (preview.data?.discount_paise ?? 0) : 0;
   const appliedCoins = applyCoins ? (preview.data?.applied_burn_coins ?? 0) : 0;

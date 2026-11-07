@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { describeError, useBrowseList } from "@vsolve/query";
-import { ErrorState, LoadMore, Skeleton, formatDate, formatMoney, segmentStyles } from "@vsolve/ui";
+import { ErrorState, LoadMore, Skeleton, formatDate, formatMoney } from "@vsolve/ui";
 
 import {
   PERIOD_LABELS,
@@ -14,6 +14,8 @@ import {
   type MoneyService,
   type MoneySummary,
 } from "./queries";
+import { ChargebackAction, canRecordChargeback } from "./chargeback-action";
+import { filterChipStyles } from "./service-tabs";
 
 const PERIODS: MoneyPeriod[] = ["this_month", "last_month", "all"];
 
@@ -30,13 +32,13 @@ export function MoneyTab({ service }: { service: MoneyService }) {
 
   return (
     <div className="space-y-5">
-      <div role="group" aria-label="Period" className="flex flex-wrap gap-1">
+      <div role="group" aria-label="Period" className="flex flex-wrap gap-2">
         {PERIODS.map((value) => (
           <button
             key={value}
             type="button"
             aria-pressed={period === value}
-            className={segmentStyles({ selected: period === value })}
+            className={filterChipStyles(period === value)}
             onClick={() => setPeriod(value)}
           >
             {PERIOD_LABELS[value]}
@@ -167,6 +169,7 @@ function Payments({ service, period }: { service: MoneyService; period: MoneyPer
                 <th className="px-4 py-2 font-medium">Refunded</th>
                 <th className="px-4 py-2 font-medium">Platform share</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                {service === "workforce" ? <th className="px-4 py-2 font-medium"><span className="sr-only">Actions</span></th> : null}
               </tr>
             </thead>
             <tbody>
@@ -184,6 +187,13 @@ function Payments({ service, period }: { service: MoneyService; period: MoneyPer
                   </td>
                   <td className="px-4 py-2.5 font-semibold">{formatMoney(row.platform_paise)}</td>
                   <td className="px-4 py-2.5 text-xs">{row.status.replaceAll("_", " ").toLowerCase()}</td>
+                  {service === "workforce" ? (
+                    <td className="px-4 py-2.5 text-right">
+                      {canRecordChargeback(row) ? (
+                        <ChargebackAction paymentId={row.id} amountPaise={row.amount_paise} />
+                      ) : null}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

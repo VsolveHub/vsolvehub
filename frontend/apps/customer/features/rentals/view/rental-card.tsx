@@ -16,17 +16,19 @@ interface RentalCardProps {
 export function RentalCard({ asset }: RentalCardProps) {
   const saved = useSavedItems("rental");
   const hero =
-    Array.isArray((asset as { media?: { url?: string }[] }).media) &&
-    (asset as { media: { url?: string }[] }).media[0]?.url
-      ? (asset as { media: { url: string }[] }).media[0].url
-      : null;
+    (Array.isArray((asset as { media?: { url?: string }[] }).media) &&
+      (asset as { media: { url?: string }[] }).media[0]?.url);
 
   return (
-    <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
+    <article className="group relative flex flex-col justify-between overflow-hidden rounded-card border border-line bg-surface p-4 shadow-card transition duration-fast hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised">
       {hero ? (
-        <div className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
+        <div className="relative mb-3 aspect-[4/3] w-full overflow-hidden rounded-control border border-line bg-white">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={hero} alt="" className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]" />
+          <img
+            src={hero}
+            alt={asset.title}
+            className="h-full w-full object-contain p-3 transition duration-slow group-hover:scale-[1.03]"
+          />
         </div>
       ) : null}
       <div className="flex flex-col gap-3">
@@ -66,35 +68,36 @@ export function RentalCard({ asset }: RentalCardProps) {
         {/* Location text */}
         {asset.location_text && (
           <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <MapPin className="size-3.5 shrink-0 text-text-secondary" />
+            <MapPin className="size-3.5 text-text-muted shrink-0" />
             <span className="truncate">{asset.location_text}</span>
-            {/* Only when the customer searched a place. */}
-            {asset.distance_km != null ? (
-              <span className="shrink-0 font-semibold text-text">· {asset.distance_km} km away</span>
-            ) : null}
           </div>
         )}
-      </div>
 
-      {/* Pricing and Action Footer */}
-      <div className="mt-5 border-t border-line/70 pt-4">
-        <div className="flex items-end justify-between gap-3">
+        {/* Price and Action */}
+        <div className="mt-1 flex items-center justify-between border-t border-line/60 pt-3">
           <div>
             <div className="flex items-baseline gap-1">
-              <span className="text-xl font-extrabold text-text">
+              <span className="text-xl font-black text-text">
                 {formatPaise(asset.daily_rate_paise)}
               </span>
-              <span className="text-xs font-medium text-text-secondary">/ day</span>
+              <span className="text-xs text-text-muted font-medium">/day</span>
             </div>
-            <p className="mt-0.5 text-[11px] font-medium text-text-secondary">
-              Deposit: <span className="font-semibold text-text">{formatPaise(asset.deposit_paise)}</span> (100% refundable)
-            </p>
+            {asset.deposit_paise && asset.deposit_paise > 0 ? (
+              <p className="text-[11px] text-text-muted">
+                Deposit: {formatPaise(asset.deposit_paise)}
+              </p>
+            ) : null}
           </div>
-
-          <Link href={rentalHref(asset.slug)} className={buttonStyles({ size: "sm", className: "inline-flex items-center gap-1.5 font-bold" })}>
-              Rent Now
-              <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
-            </Link>
+          <Link
+            href={rentalHref(asset.slug || asset.id)}
+            className={buttonStyles({
+              size: "sm",
+              className: "inline-flex items-center gap-1 font-bold shadow-xs",
+            })}
+          >
+            Rent Now
+            <ArrowRight className="size-3.5" />
+          </Link>
         </div>
       </div>
     </article>

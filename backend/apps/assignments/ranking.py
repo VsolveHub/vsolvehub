@@ -29,6 +29,7 @@ from psycopg.types.range import Range
 from apps.assignments.models import AssignmentAttempt, Reservation
 from apps.carts.availability import schedule_available_partner_ids
 from apps.carts.models import BookingGroup, FulfilmentUnit
+from apps.mobile.models import PushDevice
 from apps.partners.models import (
     PartnerApplication,
     PartnerLocation,
@@ -140,7 +141,7 @@ def is_same_day_unit(*, unit: FulfilmentUnit, now: datetime | None = None) -> bo
     return unit.requested_start <= clock + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
 
 
-def _exclusions_for(
+def _exclusions_for(  # noqa: PLR0912
     *,
     candidate: PartnerProfile,
     required: frozenset[str],
@@ -171,42 +172,65 @@ def _exclusions_for(
             if candidate.id not in active_shift_ids:
                 reasons.append(ExclusionReason.NO_ACTIVE_SHIFT)
             elif candidate.id not in push_capable_ids:
-                sub = PartnerPushSubscription.objects.filter(partner_id=candidate.id).order_by("-updated_at").first()
+                sub = (
+                    PartnerPushSubscription.objects.filter(partner_id=candidate.id)
+                    .order_by("-updated_at")
+                    .first()
+                )
                 if sub is None:
                     reasons.append(ExclusionReason.NO_ACTIVE_PUSH_SUBSCRIPTION)
                     logger.info(
                         "dispatch_candidate_excluded_no_active_subscription",
-                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "NO_ACTIVE_PUSH_SUBSCRIPTION"},
+                        extra={
+                            "partner_id": str(candidate.id),
+                            "unit_id": str(unit_id) if unit_id else "",
+                            "exclusion_reason": "NO_ACTIVE_PUSH_SUBSCRIPTION",
+                        },
                     )
                 elif sub.permission_state.lower() == "denied":
                     reasons.append(ExclusionReason.PUSH_PERMISSION_DENIED)
                     logger.info(
                         "dispatch_candidate_excluded_permission_denied",
-                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "PUSH_PERMISSION_DENIED"},
+                        extra={
+                            "partner_id": str(candidate.id),
+                            "unit_id": str(unit_id) if unit_id else "",
+                            "exclusion_reason": "PUSH_PERMISSION_DENIED",
+                        },
                     )
                 elif not sub.opted_in or not sub.is_active:
                     reasons.append(ExclusionReason.PUSH_OPTED_OUT)
                     logger.info(
                         "dispatch_candidate_excluded_opted_out",
-                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "PUSH_OPTED_OUT"},
+                        extra={
+                            "partner_id": str(candidate.id),
+                            "unit_id": str(unit_id) if unit_id else "",
+                            "exclusion_reason": "PUSH_OPTED_OUT",
+                        },
                     )
                 elif freshness_cutoff and sub.last_verified_at < freshness_cutoff:
                     reasons.append(ExclusionReason.PUSH_SUBSCRIPTION_STALE)
                     logger.info(
                         "dispatch_candidate_excluded_stale_subscription",
-                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "PUSH_SUBSCRIPTION_STALE"},
+                        extra={
+                            "partner_id": str(candidate.id),
+                            "unit_id": str(unit_id) if unit_id else "",
+                            "exclusion_reason": "PUSH_SUBSCRIPTION_STALE",
+                        },
                     )
                 else:
                     reasons.append(ExclusionReason.NO_ACTIVE_PUSH_SUBSCRIPTION)
                     logger.info(
                         "dispatch_candidate_excluded_no_active_subscription",
-                        extra={"partner_id": str(candidate.id), "unit_id": str(unit_id) if unit_id else "", "exclusion_reason": "NO_ACTIVE_PUSH_SUBSCRIPTION"},
+                        extra={
+                            "partner_id": str(candidate.id),
+                            "unit_id": str(unit_id) if unit_id else "",
+                            "exclusion_reason": "NO_ACTIVE_PUSH_SUBSCRIPTION",
+                        },
                     )
             elif candidate.id not in fresh_location_ids:
                 reasons.append(ExclusionReason.LOCATION_STALE)
-        else:
-            if candidate.id not in online_partner_ids:
-                reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
+        elif candidate.id not in online_partner_ids:
+            reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
 
     # Availability is read last so a Partner excluded for the wrong service is not also
     # reported as unavailable.
@@ -288,18 +312,33 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
                     scheduled_end_at__gt=now,
                 ).values_list("partner_id", flat=True)
             )
-            freshness_days = getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)
-            freshness_cutoff = now - timedelta(days=freshness_days)
-            push_capable_ids = frozenset(
+            web_push_ids = frozenset(
                 PartnerPushSubscription.objects.filter(
                     partner_id__in=pool_ids,
                     is_active=True,
                     opted_in=True,
                     last_verified_at__gte=freshness_cutoff,
-                ).exclude(
+                )
+                .exclude(
                     permission_state__iexact="denied",
-                ).values_list("partner_id", flat=True)
+                )
+                .values_list("partner_id", flat=True)
             )
+            # PartnerPushSubscription above holds the partner app's OneSignal subscriptions too
+            # (platform ANDROID/IOS). Expo devices count only while that path is the one in use.
+            mobile_push_ids: frozenset[UUID] = (
+                frozenset(
+                    PushDevice.objects.filter(
+                        user__partner_profile__id__in=pool_ids,
+                        disabled_at__isnull=True,
+                        session__revoked_at__isnull=True,
+                        session__expires_at__gt=now,
+                    ).values_list("user__partner_profile__id", flat=True)
+                )
+                if getattr(settings, "MOBILE_PUSH_PROVIDER", "") != "onesignal"
+                else frozenset()
+            )
+            push_capable_ids = web_push_ids | mobile_push_ids
             max_age = getattr(settings, "PARTNER_LOCATION_MAX_AGE_MINUTES", 30)
             fresh_location_ids = frozenset(
                 PartnerLocation.objects.filter(
@@ -337,7 +376,10 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
             fresh_location_ids=fresh_location_ids,
             schedule_available_ids=schedule_available_ids,
             booked_ids=booked_ids,
-            freshness_cutoff=now - timedelta(days=getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30)) if feature_push_gated else None,
+            freshness_cutoff=now
+            - timedelta(days=getattr(settings, "PUSH_SUBSCRIPTION_FRESHNESS_DAYS", 30))
+            if feature_push_gated
+            else None,
             unit_id=unit.id,
         )
         if not exclusions:

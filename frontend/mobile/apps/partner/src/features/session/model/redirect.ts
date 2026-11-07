@@ -1,0 +1,55 @@
+// Ported from frontend/apps/partner/features/session/model/redirect.ts
+import type { Schemas } from "@vsolve/api-client";
+import { safeNextPath } from "@vsolve/query/native";
+
+/**
+ * Where login sends someone next.
+ *
+ * Two separate questions, kept apart because only one of them is a security
+ * boundary: which path the visitor asked to return to, and — when they asked for
+ * nothing — where a Partner in their situation belongs.
+ *
+ * The security half now lives in `@vsolve/query` so the Customer login route
+ * enforces the identical rule rather than a second copy of it. It is re-exported
+ * here because that is the name this app's callers and tests already use.
+ */
+
+export { safeNextPath };
+
+type Status = Schemas["PartnerApplicationStatusEnum"];
+
+/** Statuses whose remaining work lives in the onboarding tree. */
+const UNFINISHED: readonly Status[] = ["DRAFT", "CHANGES_REQUIRED"];
+
+/**
+ * The signed-in landing page for an application in this state.
+ *
+ * An absent application counts as unfinished: the person has not started, and
+ * `/apply` is where starting happens.
+ * A declined/rejected application lands directly on `/apply/status` to show
+ * the decision and appeal options.
+ * Approved and submitted applications land on `/home`.
+ */
+export function homeForApplication(
+  status: Status | null,
+): "/apply" | "/home" | "/apply/status" {
+  if (status === null || UNFINISHED.includes(status)) return "/apply";
+  if (status === "DECLINED") return "/apply/status";
+  return "/home";
+}
+
+/** Whether a path is inside the onboarding tree (`/apply` and its steps). */
+function isApplicationPath(path: string): boolean {
+  return path === "/apply" || path.startsWith("/apply/") || path.startsWith("/apply?");
+}
+
+/**
+ * Where to go once signed in: the page asked for (`next`), unless it is the application of a
+ * Partner who is already approved. Signing out of the application form, or opening "Apply" while
+ * signed out, sets `next=/apply`; following it would land an approved Partner back on a finished
+ * application instead of their workspace.
+ */
+export function destinationAfterSignIn(next: string | null, status: Status | null): string {
+  if (next !== null && !(status === "APPROVED" && isApplicationPath(next))) return next;
+  return homeForApplication(status);
+}

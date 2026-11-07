@@ -330,7 +330,8 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     ),
     "booking_downgraded_to_scheduled": (
         "Instant booking moved to scheduled",
-        "No technician was available for immediate dispatch. Your booking #{booking_id} has been moved to our next available scheduled slot.",
+        "No technician was available for immediate dispatch. Your booking #{booking_id} has been "
+        "moved to our next available scheduled slot.",
     ),
     "booking_completed": (
         "Your booking is complete",
@@ -485,6 +486,18 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     #: One notice per Operations decision on a Partner's application. The decline and
     #: suspension notices give no reason on purpose: Operations' reason can be a fraud finding,
     #: and it is kept on the transition for the audit trail, not sent to the applicant.
+    "partner_application_submitted": (
+        "We have your application",
+        "A reviewer will check it, usually within 24 hours. We will tell you when it is decided.",
+    ),
+    "partner_application_review_started": (
+        "Your application is being reviewed",
+        "Nothing to do now. We will tell you when it is decided.",
+    ),
+    "partner_document_rejected": (
+        "Replace your {document}",
+        "{reason}. Open your application to upload a new file.",
+    ),
     "partner_application_approved": (
         "You are approved",
         "Your Vsolve Hub partner account is active. Open the app to set up and start taking work.",
@@ -512,6 +525,31 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     "partner_account_reinstated": (
         "Your partner account is active again",
         "You can take work again, and your listings are back on the app.",
+    ),
+    # Booked visits (5 November 2026): the notices a visit never sent.
+    "partner_booking_confirmed": (
+        "Booking confirmed: {service}",
+        "{when}. The customer has paid. Open the job for the details.",
+    ),
+    "partner_visit_time_to_leave": (
+        "Time to leave for {service}",
+        "The visit starts at {time}. Open the job for the address and the route.",
+    ),
+    "partner_went_offline": (
+        "You are offline now",
+        "{reason} Open the app and go online to get jobs again.",
+    ),
+    "customer_visit_en_route": (
+        "{partner_name} is on the way",
+        "Your professional has set off for your {service}. Keep your phone close.",
+    ),
+    "customer_visit_arrived": (
+        "{partner_name} has arrived",
+        "Open your booking for the start code, and share it when you are ready to begin.",
+    ),
+    "customer_visit_work_submitted": (
+        "Check the work and confirm",
+        "{partner_name} has finished your {service}. Confirm it, or tell us if something is wrong.",
     ),
 }
 

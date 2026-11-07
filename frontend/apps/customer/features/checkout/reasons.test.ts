@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { conflict, planSet } from "./fixtures";
 import {
+  AREA_PAUSED_MESSAGE,
   describeConfirmFailure,
   describeItemFailure,
   describePlanReasons,
@@ -139,5 +140,12 @@ describe("a refused confirmation", () => {
     const message = describeConfirmFailure(new Error("offline"));
     expect(message).not.toMatch(/expired/i);
     expect(message).not.toMatch(/wait a moment/i);
+  });
+});
+
+describe("a paused service area", () => {
+  it("tells the customer bookings are paused, not that the address is unserved", () => {
+    expect(describeItemFailure("SERVICE_AREA_PAUSED")).toBe(AREA_PAUSED_MESSAGE);
+    expect(describeItemFailure("SERVICE_AREA_PAUSED")).not.toMatch(/do not cover/i);
   });
 });

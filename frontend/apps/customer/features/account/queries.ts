@@ -234,7 +234,8 @@ export interface PushPreferenceItem {
 }
 
 export interface PushPreferencesResponse {
-  role: "CUSTOMER" | "PARTNER";
+  // The server publishes this as a plain string.
+  role: string;
   preferences: PushPreferenceItem[];
 }
 
@@ -243,7 +244,7 @@ export function usePushNotificationPreferences() {
     queryKey: ["privacy", "push-preferences"],
     queryFn: () =>
       request<PushPreferencesResponse>(() =>
-        (getApiClient() as any).GET("/api/v1/customer/notification-preferences/")
+        getApiClient().GET("/api/v1/customer/notification-preferences/")
       ),
     ...SESSION_STATE,
   });
@@ -255,6 +256,7 @@ export function useUpdatePushNotificationPreference() {
   return useMutation({
     mutationFn: (input: { category: string; isEnabled: boolean }) =>
       request<PushPreferencesResponse>(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- this endpoint publishes no request schema yet
         (getApiClient() as any).PATCH("/api/v1/customer/notification-preferences/", {
           body: { category: input.category, is_enabled: input.isEnabled },
         })

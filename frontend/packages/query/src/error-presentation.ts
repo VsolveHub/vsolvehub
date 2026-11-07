@@ -3,6 +3,7 @@ import {
   ApiNetworkError,
   ApiRequestError,
   isApiClientError,
+  isApiRequestError,
   type RecoveryIntent,
 } from "@vsolve/api-client";
 
@@ -78,7 +79,7 @@ const ACTION_COPY: Record<RecoveryIntent, { messageKey: string; label: string }>
  * failed in transit never arrived.
  */
 function inferStateChange(error: unknown, operation: OperationKind): StateChange {
-  if (error instanceof ApiRequestError) {
+  if (isApiRequestError(error)) {
     // The server answered, so it applied its own rules. A 409 describes a state
     // that already changed on the server side; everything else was rejected.
     return error.status === 409 ? "changed" : "none";
@@ -138,14 +139,14 @@ export function friendlyErrorMessage(
   error: unknown,
   fallback = "Something went wrong. Please try again.",
 ): string {
-  if (error instanceof ApiRequestError) {
+  if (isApiRequestError(error)) {
     const mapped = FRIENDLY_DOMAIN_MESSAGES[error.code];
     if (mapped) return mapped.message;
     // Known domain codes without a map still avoid dumping nested details.
     if (error.code && error.code !== "validation_error") {
       return error.message || fallback;
     }
-    if (Object.keys(error.fieldErrors).length > 0) {
+    if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
       return "Check the highlighted fields and try again.";
     }
     return fallback;
@@ -159,7 +160,7 @@ export function describeError(
 ): ErrorPresentation {
   const stateChange = inferStateChange(error, operation);
 
-  if (error instanceof ApiRequestError) {
+  if (isApiRequestError(error)) {
     const action = ACTION_COPY[error.recovery];
     const mapped = FRIENDLY_DOMAIN_MESSAGES[error.code];
     return {

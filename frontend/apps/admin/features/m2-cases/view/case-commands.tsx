@@ -119,7 +119,7 @@ function Panel({
    Close the case
    --------------------------------------------------------------------------- */
 
-function ResolvePanel({ item }: { item: OperationsCase }) {
+export function ResolvePanel({ item }: { item: OperationsCase }) {
   const resolve = useResolveCase();
   const [resolution, setResolution] = useState("");
   const [note, setNote] = useState("");
@@ -132,14 +132,14 @@ function ResolvePanel({ item }: { item: OperationsCase }) {
     <Panel
       id="resolve-case"
       heading="Close this case"
-      description="Name what actually happened. A case does not close because somebody was contacted."
+      description="Pick what happened and add a short note for the record."
     >
       <CommandError error={resolve.error} whatFailed="We could not close this case" />
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field
           label="Outcome"
-          description="Straight from the server. This console carries no copy of which outcomes this kind allows."
+          description="Only the outcomes this kind of case allows."
         >
           <Select value={resolution} onChange={(event) => setResolution(event.target.value)}>
             <option value="">Choose an outcome…</option>
@@ -150,7 +150,7 @@ function ResolvePanel({ item }: { item: OperationsCase }) {
             ))}
           </Select>
         </Field>
-        <Field label="What happened" description="Recorded on the case and readable in the audit trail.">
+        <Field label="Note" description="One line on what was done.">
           <Input value={note} onChange={(event) => setNote(event.target.value)} />
         </Field>
       </div>
@@ -216,7 +216,7 @@ function ResolvePanel({ item }: { item: OperationsCase }) {
    The parties' clock
    --------------------------------------------------------------------------- */
 
-function ResponseDeadlinePanel({ item }: { item: OperationsCase }) {
+export function ResponseDeadlinePanel({ item }: { item: OperationsCase }) {
   const setDeadline = useSetCaseResponseDeadline();
   const [value, setValue] = useState("");
   const [reason, setReason] = useState("");
@@ -233,8 +233,8 @@ function ResponseDeadlinePanel({ item }: { item: OperationsCase }) {
   return (
     <Panel
       id="response-deadline"
-      heading="The deadline the parties answer by"
-      description="Distinct from the SLA above, which is the clock Operations is measured on. This one is the window a Customer or a vendor has to respond before silence counts as an answer."
+      heading="Reply deadline"
+      description="How long the customer or vendor has to respond before no reply counts as their answer."
     >
       <CommandError error={setDeadline.error} whatFailed="We could not move this deadline" />
 
@@ -247,7 +247,7 @@ function ResponseDeadlinePanel({ item }: { item: OperationsCase }) {
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field
           label="New deadline"
-          description="Forward only. A deadline moved backwards would time somebody out of a window they were still inside, so the server refuses it rather than clamping it."
+          description="Can only be moved later, never earlier."
           error={
             chosen !== null && !isFuture
               ? "That is in the past on the server's clock."
@@ -262,7 +262,7 @@ function ResponseDeadlinePanel({ item }: { item: OperationsCase }) {
             onChange={(event) => setValue(event.target.value)}
           />
         </Field>
-        <Field label="Why" description="Required. Recorded on the case as a DEADLINE_SET event.">
+        <Field label="Why" description="Required. Saved in the case history.">
           <Input value={reason} onChange={(event) => setReason(event.target.value)} />
         </Field>
       </div>
@@ -317,7 +317,7 @@ function ResponseDeadlinePanel({ item }: { item: OperationsCase }) {
    Appeal
    --------------------------------------------------------------------------- */
 
-function AppealPanel({ item }: { item: OperationsCase }) {
+export function AppealPanel({ item }: { item: OperationsCase }) {
   const decide = useDecideCaseAppeal();
   const [outcome, setOutcome] = useState<CaseAppealOutcome | "">("");
   const [note, setNote] = useState("");
@@ -353,7 +353,7 @@ function AppealPanel({ item }: { item: OperationsCase }) {
     <Panel
       id="appeal"
       heading="An appeal is waiting on a decision"
-      description="A party asked for this case to be looked at again. Read what they said before deciding — the appeal is a second decision, not a re-run of the first."
+      description="Someone asked for this decision to be looked at again. Read their reason, then decide."
     >
       <CommandError error={decide.error} whatFailed="We could not decide this appeal" />
 
@@ -443,7 +443,7 @@ function AppealPanel({ item }: { item: OperationsCase }) {
    Override
    --------------------------------------------------------------------------- */
 
-function OverridePanel({ item }: { item: OperationsCase }) {
+export function OverridePanel({ item }: { item: OperationsCase }) {
   const override = useOverrideCaseOutcome();
   const [resolution, setResolution] = useState("");
   const [note, setNote] = useState("");
@@ -454,8 +454,8 @@ function OverridePanel({ item }: { item: OperationsCase }) {
   return (
     <Panel
       id="override"
-      heading="Override the outcome by hand"
-      description="For when the recorded outcome is wrong and the appeal route is not the right one. The audit is the whole of the control: the previous result stays in the trail, so it reads “we said this, then we said that, and here is who and why”."
+      heading="Change the outcome"
+      description="Correct a closed case. The old outcome stays in the history with who changed it and why."
     >
       <CommandError error={override.error} whatFailed="We could not override this outcome" />
 
@@ -467,7 +467,7 @@ function OverridePanel({ item }: { item: OperationsCase }) {
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field
           label="New outcome"
-          description="Still checked against this kind's allowed outcomes. An override reaches a different documented outcome, never an undocumented one."
+          description="Only the outcomes this kind of case allows."
         >
           <Select value={resolution} onChange={(event) => setResolution(event.target.value)}>
             <option value="">Choose an outcome…</option>
@@ -561,8 +561,8 @@ function EscalatePanel({ item }: { item: OperationsCase }) {
         pending={escalate.isPending}
         consequence={
           <p>
-            The SLA deadline Operations is measured on tightens to the urgent window, and this case
-            moves to the top of its team&rsquo;s queue ahead of everything else waiting there.
+            Its deadline shortens to the urgent window and it moves to the top of its team&rsquo;s
+            queue.
           </p>
         }
         onConfirm={() =>

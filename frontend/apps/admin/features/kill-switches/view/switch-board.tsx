@@ -3,6 +3,8 @@
 import { Badge, Button, Card, ErrorState, Field, Input, Select, Spinner } from "@vsolve/ui";
 import { useState } from "react";
 
+import { useServiceAreas } from "@/features/m2-rate-cards/queries";
+
 import {
   useEngageKillSwitch,
   useKillSwitches,
@@ -21,29 +23,55 @@ import {
  * at 3am" should have an answer on the screen rather than in a database query.
  */
 
-const SCOPES: { value: KillSwitchScope; label: string; takesTarget: boolean }[] = [
-  { value: "NOTIFICATIONS", label: "All outbound notifications", takesTarget: false },
-  { value: "SMS", label: "SMS channel", takesTarget: false },
-  { value: "PAYMENTS", label: "Payment collection", takesTarget: false },
-  { value: "PAYOUTS", label: "Partner payouts", takesTarget: false },
-  { value: "DISPATCH", label: "Partner dispatch", takesTarget: false },
-  { value: "SERVICE_AREA", label: "One service area", takesTarget: true },
-  { value: "SERVICE", label: "One service", takesTarget: true },
+/**
+ * Only switches the platform actually obeys. Payment collection, partner dispatch and a single
+ * service have no reader on the server yet, so offering them would let someone believe they had
+ * stopped something they had not. Exported for tests.
+ */
+export const SCOPES: { value: KillSwitchScope; label: string; effect: string; takesArea: boolean }[] = [
+  {
+    value: "SERVICE_AREA",
+    label: "Pause one service area",
+    effect: "No new bookings or requests there, and no partner is sent new work there.",
+    takesArea: true,
+  },
+  { value: "NOTIFICATIONS", label: "All notifications", effect: "Stops every outgoing message.", takesArea: false },
+  { value: "SMS", label: "SMS", effect: "Stops text messages.", takesArea: false },
+  { value: "WHATSAPP", label: "WhatsApp", effect: "Stops WhatsApp messages.", takesArea: false },
+  { value: "VOICE", label: "Voice calls", effect: "Stops automated calls.", takesArea: false },
+  { value: "PUSH", label: "Push notifications", effect: "Stops app and browser push.", takesArea: false },
+  { value: "PAYOUTS", label: "Partner payouts", effect: "Stops payout runs and withdrawals.", takesArea: false },
+  {
+    value: "M2_PURCHASES",
+    label: "Crew & project purchases",
+    effect: "Stops new crew and project purchases.",
+    takesArea: false,
+  },
 ];
+
+const SCOPE_LABEL = new Map<string, string>(SCOPES.map((entry) => [entry.value, entry.label]));
+
+/** A released switch for a scope no longer offered is history nobody needs. Exported for tests. */
+export function rowsToShow<T extends { scope: string; is_engaged: boolean }>(rows: readonly T[]): T[] {
+  return rows
+    .filter((row) => row.is_engaged || SCOPE_LABEL.has(row.scope))
+    .sort((a, b) => Number(b.is_engaged) - Number(a.is_engaged));
+}
 
 export function SwitchBoard() {
   const switches = useKillSwitches();
   const engage = useEngageKillSwitch();
   const release = useReleaseKillSwitch();
 
-  const [scope, setScope] = useState<KillSwitchScope>("NOTIFICATIONS");
+  const [scope, setScope] = useState<KillSwitchScope>("SERVICE_AREA");
+  const areas = useServiceAreas();
+  const areaName = new Map((areas.data ?? []).map((area) => [area.slug, area.name]));
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
 
-  const takesTarget = SCOPES.find((entry) => entry.value === scope)?.takesTarget ?? false;
-  const rows = [...(switches.data ?? [])].sort(
-    (a, b) => Number(b.is_engaged) - Number(a.is_engaged),
-  );
+  const chosen = SCOPES.find((entry) => entry.value === scope);
+  const takesTarget = chosen?.takesArea ?? false;
+  const rows = rowsToShow(switches.data ?? []);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
@@ -73,8 +101,8 @@ export function SwitchBoard() {
                     {entry.is_engaged ? "Off" : "Running"}
                   </Badge>
                   <span className="font-semibold text-text">
-                    {entry.scope.replaceAll("_", " ").toLowerCase()}
-                    {entry.target ? ` · ${entry.target}` : ""}
+                    {SCOPE_LABEL.get(entry.scope) ?? entry.scope.replaceAll("_", " ").toLowerCase()}
+                    {entry.target ? ` · ${areaName.get(entry.target) ?? entry.target}` : ""}
                   </span>
                 </span>
                 {entry.is_engaged && entry.reason ? (
@@ -120,14 +148,18 @@ export function SwitchBoard() {
               ))}
             </Select>
           </Field>
+          {chosen ? <p className="-mt-1 text-xs text-text-secondary">{chosen.effect}</p> : null}
 
           {takesTarget ? (
-            <Field label="Which one">
-              <Input
-                value={target}
-                onChange={(event) => setTarget(event.target.value)}
-                placeholder="slug"
-              />
+            <Field label="Area">
+              <Select value={target} onChange={(event) => setTarget(event.target.value)}>
+                <option value="">Choose an area…</option>
+                {(areas.data ?? []).map((area) => (
+                  <option key={area.slug} value={area.slug}>
+                    {area.name}
+                  </option>
+                ))}
+              </Select>
             </Field>
           ) : null}
 
@@ -139,13 +171,18 @@ export function SwitchBoard() {
         <Button
           className="mt-3"
           variant="danger"
-          disabled={reason.trim() === "" || engage.isPending}
+          disabled={reason.trim() === "" || (takesTarget && target === "") || engage.isPending}
           loading={engage.isPending}
           loadingLabel="Switching off"
           onClick={() =>
             engage.mutate(
               { scope, target: takesTarget ? target : "", reason: reason.trim() },
-              { onSuccess: () => setReason("") },
+              {
+                onSuccess: () => {
+                  setReason("");
+                  setTarget("");
+                },
+              },
             )
           }
         >

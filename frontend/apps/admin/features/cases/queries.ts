@@ -38,6 +38,9 @@ export interface CaseFilters {
   overdue?: boolean;
   /** `me` or `unclaimed`. Resolved server-side against the session — never an id. */
   owner?: string;
+  severity?: string;
+  /** Summary words, a customer's or partner's name or phone, or a case/booking/request id. */
+  q?: string;
 }
 
 /**
@@ -71,6 +74,8 @@ export function useOperationsCases(filters: CaseFilters = {}) {
               ...(filters.kind ? { kind: filters.kind } : {}),
               ...(filters.overdue ? { overdue: true } : {}),
               ...(filters.owner ? { owner: filters.owner } : {}),
+              ...(filters.severity ? { severity: filters.severity } : {}),
+              ...(filters.q ? { q: filters.q } : {}),
               ...(pageParam ? { cursor: pageParam } : {}),
             },
           },

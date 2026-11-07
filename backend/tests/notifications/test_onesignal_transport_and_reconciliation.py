@@ -1,9 +1,8 @@
-from datetime import timedelta
-from unittest.mock import MagicMock, patch
 import uuid
+from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from django.utils import timezone
 
 from apps.assignments.models import DispatchOffer
@@ -24,7 +23,6 @@ from apps.notifications.tasks import reconcile_onesignal_push_delivery_status_ta
 from apps.notifications.transport import (
     MessageTransportError,
     OneSignalMessageTransport,
-    TransportResult,
 )
 from apps.partners.models import PartnerProfile, PartnerPushSubscription
 from tests.fulfilment.conftest import create_booked_group
@@ -35,6 +33,7 @@ pytestmark = pytest.mark.django_db(transaction=True)
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def customer_user() -> User:
@@ -82,8 +81,11 @@ def active_partner_subscription(partner_user: User) -> PartnerPushSubscription:
 # 1. Transport Routing and Interface Tests
 # ============================================================================
 
+
 def test_transport_customer_routing_credentials(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-id-1234"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-rest-key-5678"
@@ -120,7 +122,9 @@ def test_transport_customer_routing_credentials(
 
 
 def test_transport_partner_routing_credentials(
-    settings, partner_user: User, active_partner_subscription: PartnerPushSubscription
+    settings,
+    partner_user: User,
+    active_partner_subscription: PartnerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-id-9999"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-rest-key-9999"
@@ -210,9 +214,7 @@ def test_transport_no_active_subscription_skips_without_onesignal_call(
         assert intent.suppressed_reason == "NO_ACTIVE_SUBSCRIPTION"
 
 
-def test_transport_stale_subscription_skips(
-    settings, customer_user: User
-) -> None:
+def test_transport_stale_subscription_skips(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-id"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "rest-key"
     settings.PUSH_SUBSCRIPTION_FRESHNESS_DAYS = 30
@@ -243,9 +245,7 @@ def test_transport_stale_subscription_skips(
         mock_send.assert_not_called()
 
 
-def test_transport_opted_out_subscription_skips(
-    settings, customer_user: User
-) -> None:
+def test_transport_opted_out_subscription_skips(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-id"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "rest-key"
 
@@ -273,9 +273,7 @@ def test_transport_opted_out_subscription_skips(
         mock_send.assert_not_called()
 
 
-def test_transport_permission_denied_subscription_skips(
-    settings, customer_user: User
-) -> None:
+def test_transport_permission_denied_subscription_skips(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-id"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "rest-key"
 
@@ -307,8 +305,11 @@ def test_transport_permission_denied_subscription_skips(
 # 2. Auditability and Idempotency Tests
 # ============================================================================
 
+
 def test_audit_intent_and_delivery_created_on_success(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -357,7 +358,9 @@ def test_audit_intent_and_delivery_created_on_success(
 
 
 def test_idempotency_prevents_duplicate_intent_and_send(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -402,6 +405,7 @@ def test_idempotency_prevents_duplicate_intent_and_send(
 # 3. Response Handling Tests (200 without ID, 429, 5xx, 400)
 # ============================================================================
 
+
 def test_onesignal_200_without_id_recorded_as_no_valid_recipients(
     settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
 ) -> None:
@@ -438,7 +442,9 @@ def test_onesignal_200_without_id_recorded_as_no_valid_recipients(
 
 
 def test_onesignal_429_recorded_as_rate_limited(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -465,7 +471,9 @@ def test_onesignal_429_recorded_as_rate_limited(
 
 
 def test_onesignal_5xx_recorded_as_retryable(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -525,8 +533,11 @@ def test_onesignal_400_recorded_as_failed_and_deactivates_on_invalid(
 # 4. Kill Switch Tests
 # ============================================================================
 
+
 def test_push_kill_switch_blocks_send_and_records_blocked(
-    settings, customer_user: User, active_customer_subscription: CustomerPushSubscription
+    settings,
+    customer_user: User,
+    active_customer_subscription: CustomerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "app-123"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "key-123"
@@ -584,9 +595,7 @@ def test_push_kill_switch_blocks_send_and_records_blocked(
         assert res2.provider_message_id == "nid-after-release"
 
 
-def test_push_kill_switch_does_not_affect_sms_or_in_app(
-    customer_user: User
-) -> None:
+def test_push_kill_switch_does_not_affect_sms_or_in_app(customer_user: User) -> None:
     # Engage PUSH kill switch
     engage_kill_switch(
         scope=KillSwitch.Scope.PUSH,
@@ -599,6 +608,7 @@ def test_push_kill_switch_does_not_affect_sms_or_in_app(
         recipient_id=customer_user.id,
         purpose="booking.downgraded_to_scheduled",
         channel=NotificationIntent.Channel.IN_APP,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="booking_downgraded_to_scheduled",
         context={"booking_id": "123"},
         idempotency_key="in-app-ks-test",
@@ -613,9 +623,8 @@ def test_push_kill_switch_does_not_affect_sms_or_in_app(
 # 5. Delivery Status Reconciliation Tests
 # ============================================================================
 
-def test_reconciliation_updates_delivery_metrics(
-    settings, customer_user: User
-) -> None:
+
+def test_reconciliation_updates_delivery_metrics(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-rec"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-key-rec"
 
@@ -657,9 +666,7 @@ def test_reconciliation_updates_delivery_metrics(
         assert delivery.metrics["successful"] == 1
 
 
-def test_reconciliation_429_does_not_crash(
-    settings, customer_user: User
-) -> None:
+def test_reconciliation_429_does_not_crash(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-rec"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-key-rec"
 
@@ -690,9 +697,7 @@ def test_reconciliation_429_does_not_crash(
         assert res["reconciled"] == 0
 
 
-def test_reconciliation_5xx_does_not_crash(
-    settings, customer_user: User
-) -> None:
+def test_reconciliation_5xx_does_not_crash(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-rec"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-key-rec"
 
@@ -723,9 +728,7 @@ def test_reconciliation_5xx_does_not_crash(
         assert res["reconciled"] == 0
 
 
-def test_reconciliation_skips_older_than_7_days(
-    settings, customer_user: User
-) -> None:
+def test_reconciliation_skips_older_than_7_days(settings, customer_user: User) -> None:
     settings.ONESIGNAL_CUSTOMER_APP_ID = "cust-app-rec"
     settings.ONESIGNAL_CUSTOMER_REST_API_KEY = "cust-key-rec"
     now = timezone.now()
@@ -757,8 +760,11 @@ def test_reconciliation_skips_older_than_7_days(
 # 6. Dispatch Send Migration Tests
 # ============================================================================
 
+
 def test_dispatch_task_uses_transport_and_creates_intent_delivery(
-    settings, partner_user: User, active_partner_subscription: PartnerPushSubscription
+    settings,
+    partner_user: User,
+    active_partner_subscription: PartnerPushSubscription,  # noqa: ARG001
 ) -> None:
     settings.ONESIGNAL_PARTNER_APP_ID = "partner-app-dispatch"
     settings.ONESIGNAL_PARTNER_REST_API_KEY = "partner-key-dispatch"
@@ -809,4 +815,3 @@ def test_dispatch_task_uses_transport_and_creates_intent_delivery(
         assert delivery.provider_message_id == "dispatch-onesignal-nid-999"
         assert delivery.status == NotificationDelivery.Status.ACCEPTED
         assert delivery.app_id == "partner-app-dispatch"
-

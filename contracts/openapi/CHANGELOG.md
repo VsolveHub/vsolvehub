@@ -1,6 +1,186 @@
 # API Contract Changelog
 
-## 1.90.0 - Every payment goes through Razorpay Checkout
+## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
+
+Additive.
+
+- **Added** `stuck` on `GET /operations/requests/`: only the requests in one stuck queue
+  (`unmatched`, `under_quoted`, `sla_breached`, `unconfirmed`, `inactive`, `unreconciled`,
+  `cancellation_unanswered`, `case_response_overdue`). The codes and their definitions are the
+  same as the stuck-queue summary's, so a queue's depth and its listed requests cannot disagree.
+  A case past its deadline that is not about a request counts in the depth but has no row.
+  `400` for any other code.
+- **Changed** `POST /operations/partners/import/` to proposal 0029, replacing the untyped endpoint.
+  `multipart/form-data` with `file` and `mode` (`check` or `import`; replaces the string
+  `dry_run`). `check` validates and changes nothing. `import` needs `Idempotency-Key`, re-checks
+  the file and creates every ready row in one transaction: a user, the partner role, a profile and
+  a **DRAFT** application (plus one service area and its skills for `SERVICES`), with an
+  `operations_import` transition naming the importer. Nobody is approved. Responds
+  `PartnerImportResult` (`mode`, `file_sha256`, `summary`, `rows[]` with `problems[]` per row).
+  Errors: `400 import_file_missing | import_file_invalid | import_columns_invalid |
+  import_too_many_rows`, `413 import_file_too_large`, `422 import_has_row_errors`,
+  `409 import_conflict`. Behaviour change: the old endpoint created bare profiles with no
+  application, which reviewers never saw.
+- **Added** `GET /operations/customers/` (`?q=` a name, or a mobile number typed any way;
+  cursor-paged, newest first): `OperationsCustomerRow` with `is_blocked` and `is_partner`.
+- **Added** `GET /operations/customers/{customer_id}/` (`OperationsCustomerRecord`): contact
+  details, `is_blocked` and the latest `block` (reason, when, by whom), `partner_id` when the person
+  is also a partner, `wallet_balance_paise`, `coins_spendable`, the 25 most recent `bookings` across
+  home visits, rentals, stays and crew or project requests, `open_quotes` (unpaid, unexpired quotes
+  Operations can check out for them), and `open_cases`. `404` for anyone who is not a customer.
+- **Added** `POST /operations/customers/{customer_id}/block/` (`blocked`, `reason`): blocks or
+  unblocks the account, revokes every session on block, and writes an access-audit row. Staff
+  accounts and the caller's own account are refused (`400 account_block_refused`). Repeating the
+  current state changes nothing.
+- **Changed** sign-in for a blocked account: a correct OTP, or a Firebase token, for an inactive
+  account now answers `403 account_blocked` ("This account is blocked. Contact Vsolve support.")
+  instead of signing in a session that then silently failed.
+- **Added** `POST /operations/bookings/{booking_id}/cancel/` (`expected_version`, `reason`,
+  `full_refund`; `Idempotency-Key`; recent Operations step-up): Operations cancels a home-service
+  visit and refunds it in one step, through the customer cancellation's refund and reservation
+  release. `full_refund: true` waives the fee (recorded as waiver `operations`); `false` applies the
+  customer's fee ladder. Refused, as for the customer, once work has started. Answers
+  `OperationsBooking`.
+- **Added** `operations_cancellation` on `OperationsBooking`: `refundable_paise`,
+  `policy_fee_paise`, `policy_fee_waiver`, `currency` — the two amounts the confirm step offers —
+  or `null` when the visit cannot be cancelled.
+- **Added** `GET /operations/partners/{partner_id}/activity/` (`OperationsPartnerActivity`): the
+  partner's payout `balance` (available, withdrawable, clearing, held, pending, reserved, paid —
+  the same figures as payouts) and their 25 most recent `bookings` across home visits, rental items,
+  hosted stays and crew or project engagements.
+- **Changed** the rental platform fee to versions, like the commercial policy. `GET
+  /ops/rentals/platform-fee` now answers `OpsRentalPlatformFee`: `percent` (in force now),
+  `current`, `upcoming` and `history` (`RentalPlatformFeeVersion`: `version`, `percent`,
+  `effective_from`, `approval_reference`, `created_by_name`). **Removed** `PUT`; **added** `POST`
+  (`percent`, `approval_reference`, optional `effective_from`, default now) which adds a version and
+  answers `201`. It is refused (`400`) without an approval reference, when it starts in the past, or
+  when it does not start after the latest version. **Added** `DELETE
+  /ops/rentals/platform-fee/{version_id}` to withdraw a version that has not taken effect. The
+  public `GET /rentals/platform-fee` is unchanged. A migration copies the existing fee into
+  version 1; bookings already store their own fee and are untouched.
+- **Added** `phone_number` on `OperationsPartnerDetail` (`GET /operations/partners/{partner_id}/`),
+  so the record can call the partner; the directory rows already had it.
+
+## 1.97.0 - Job listings publish their photos
+
+Additive.
+
+- **Added** `media` (`ListingMedia[]`: `id`, `kind`, `url`, `alt_text`, `display_order`) to
+  `ListingSummary` and everything built on it. A listing's own photos, empty when it has none. The
+  list endpoints prefetch it, so it adds one query, not one per row.
+
+## 1.96.0 - Accepting is final, visit route, partner hours on the record, mobile search, and background presence
+
+Additive, with three behaviour changes to existing endpoints.
+
+- **Added** `POST /partner/bookings/{booking_id}/route/` (`PartnerRouteOriginRequest` →
+  `PartnerVisitRoute`): the two-wheeler road route, with live traffic, from where the Partner is
+  to the visit — `encoded_polyline`, `distance_meters`, `duration_seconds`, `server_now`. Served
+  under the same gate as `site_address`; the line ends at the Customer's pin, which is still never
+  published as separate coordinates. `409 site_details_locked` before the unlock or once the visit
+  is over, `503 routing_unavailable` without a provider (the app falls back to `directions_url`).
+  The Partner's position is used for this one request and not stored.
+- **Added** `q` on `GET /operations/partners/`: a name, or a mobile number typed any way
+  (spaces, `+91`, a leading `0` and dashes are ignored; four or more digits match part of a
+  number).
+- **Added** `phone_number` on each directory row.
+- **Added** `GET /operations/partners/{partner_id}/availability/`: the partner's current rules
+  and exceptions, the service areas they serve, and their active consent receipts, so a change
+  is made against what is there with no ids typed. `PUT` is unchanged.
+- **Changed** `POST /partner/offers/{offer_id}/accept/` on a Fulfilment Unit offer now answers
+  `COMMITTED`: accepting is final and there is no undo window. `.../commit/` on a committed offer
+  answers it unchanged (older apps still send it); `.../undo/` is `400 offer_invalid`.
+  `undo_deadline` is the instant of acceptance. `ACCEPTED_PENDING_UNDO` stays in the enum for
+  offers written before this release.
+- **Changed** `POST /partner/push-subscriptions/sync/` and `POST /customer/push-subscriptions/sync/`
+  no longer answer `403` when another account last used the device: the subscription moves to the
+  account now signed in on it, as it already has at OneSignal.
+- **Changed** presence: a Partner whose phone has a live OneSignal subscription stays online with
+  the app closed for up to `PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS` (2 hours) after last opening
+  it, instead of 90 seconds; letting `PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS` (2) offers lapse in a
+  row ends the session. Either way the Partner gets the `partner_went_offline` notice.
+- **Added** notification target kinds `BOOKING` (Partner, a Booking id → the job) and
+  `BOOKING_GROUP` (Customer, a Booking Group id → the booking page), used by the new notices
+  `partner_booking_confirmed`, `partner_visit_time_to_leave`, `partner_went_offline`,
+  `customer_visit_en_route`, `customer_visit_arrived` and `customer_visit_work_submitted`.
+- Removed: none. Renamed: none.
+
+## 1.95.0 - Each app reads only its own side's notifications
+
+Additive. One person can be a Customer and a Partner; until now the customer app's bell also
+showed their partner notices.
+
+- **Added** optional query parameter `audience` (`customer` | `partner` | `operations`) on
+  `GET /notifications/`, `GET /notifications/unread-count/` and `POST /notifications/read/`. The
+  app names its own side; the feed, the badge and "mark all read" then cover only that side.
+  Left out, the session's active role decides (customer when the session has none). Any other
+  value is `400 validation_error`.
+- Removed: none. Renamed: none.
+
+## 1.94.0 - Firebase sign-in for the apps, and address search
+
+Additive.
+
+- **Added** `POST /auth/mobile/firebase/verify/` (`MobileFirebaseVerifyRequest` →
+  `MobileAuthenticatedSession`): the web's Firebase verify body (`id_token`, `intended_role`,
+  `referral_code`, `device_label`) with a required `device_identifier`. Same checks as
+  `POST /auth/firebase/verify/`, answered with `session_token` for bearer auth instead of cookies.
+  `404` while Firebase auth is off. The apps send `POST /auth/firebase/precheck/` first, as the web.
+- **Added** `GET /geocoding/search/?q=` (`PlaceSearchResponse`: `results[]` of `{label, latitude,
+  longitude}`, at most five, India only): address search for the apps, which cannot load Google's
+  browser library. `q` is 3–200 characters. A result only places the pin; the address text comes
+  from `POST /geocoding/reverse/`. `503 geocoding_unavailable` without a provider.
+- Removed: none. Renamed: none.
+
+## 1.93.0 - Mobile app sign-in, push devices and version check
+
+Additive. Published from the `mobile-expo-apps` branch's backend, which already served these
+routes; the mobile apps were calling them outside the contract.
+
+- **Added** `POST /auth/mobile/otp/verify/` (`MobileOtpVerifyRequest` → `MobileAuthenticatedSession`):
+  the web OTP body plus a required `device_identifier` (and optional `device_label`). Returns
+  `session_token` for bearer auth instead of setting a cookie.
+- **Added** `POST /mobile/devices/` (`PushDeviceRegisterRequest` → `PushDevice`): register an Expo
+  push token for the signed-in session (`app`, `platform` `ios`/`android`, `app_version`).
+- **Added** `POST /mobile/devices/unregister/` (`PushDeviceUnregisterRequest`, `204`).
+- **Added** `GET /mobile/app-config/` (`AppConfig`): `minimum_version`, `latest_version`,
+  `update_required`, `store_url`, for the "please update" screen.
+- **Development only** (mounted only under `DEBUG` or development storage; production refuses
+  both): `POST /dev/mobile/test-push/` and `GET`/`PUT /dev-storage/{bucket}/{object_key}`.
+- **Fixed**: `GET`/`PATCH /customer/notification-preferences/` and
+  `/partner/notification-preferences/` now publish their real bodies (`PushPreferences`,
+  `PatchedPushPreferenceUpdateRequest`); 1.90.0 described them in prose only.
+- Removed: none. Renamed: none (`PlatformEnum` is pinned so the new `platform` choice set does
+  not rename it).
+
+## 1.92.0 - Cases say who they are about, and can be searched
+
+Additive, Operations only.
+
+- **Added** `people` on `OperationsCase` and `OperationsCaseList`: `[{role, name, phone}]` for
+  everyone the case's subject names (customer, partner, vendor, employer, applicant).
+- **Added** `owner_name` on both: who claimed it, by name. `owner_id` is unchanged.
+- **Added** `q` and `severity` filters on `GET /operations/cases/`. `q` matches the summary, a
+  customer's or partner's name or phone, or a case, booking, order, request or engagement id.
+
+## 1.91.0 - Operations lists for home services, crew and projects, and job applicants
+
+Additive, Operations only. The Operations console is the only consumer.
+
+- **Added** `GET /operations/bookings/`: every home-service visit, newest first. Filters
+  `status` (one or a comma list), `q` (customer or partner name or phone, booking, order or
+  booking-group id), `late=true`, `date_from` / `date_to` (visit day). Rows are
+  `OperationsBookingRow`: who, what (`services`), where (`area`), `total_paise`, `is_late`.
+- **Added** `GET /ops/home-services/money` and `/money/payments`: the shared `MoneySummary` and
+  `MoneyPayment` shapes, for visit payments and scope changes. Commission and partner earnings
+  are counted when the earning is written (at completion).
+- **Added** `GET /operations/requests/`: every crew (A3) and project (A5) request, not only stuck
+  ones. Filters `status`, `open=true`, `archetype`, `q`. Rows carry the engaged vendor and value.
+- **Added** `GET /ops/workforce/money` and `/money/payments`: Vsolve's fees, visit charges and
+  project money held for vendors, reported separately.
+- **Added** `GET /ops/listings/{listing_id}/applications`: who applied to one job.
+
+## 1.90.0 - Every payment goes through Razorpay Checkout; Partner onboarding updates
 
 Breaking for clients that used the development "Mark as paid" shortcut. The Customer and Partner
 apps are updated with this change.
@@ -9,8 +189,10 @@ apps are updated with this change.
 - **Removed** `simulated_capture_available` from `PaymentAttempt`, `RentalDeposit`, `BookingFee`
   and `VisitPlan`. A pending payment is always paid by opening Razorpay Checkout; locally that is
   Razorpay test mode.
-- **Published**: the customer and partner `notification-preferences` endpoints, which were in
-  the code but missing from this document.
+- **Added** to `PartnerDocument`: `can_replace` and `file_name`.
+- **Added** to `PartnerApplication`: `can_edit`, `required_document_kinds`, and `consents_complete`.
+- **Notifications**: in-app notices and OneSignal web push for partner application milestones.
+- **Published**: the customer and partner `notification-preferences` and push subscription endpoints.
 
 ## 1.89.0 - Operations reports an admin can use without knowing codes
 
@@ -571,6 +753,23 @@ snapshots `transport_paise`, `transport_fee_percent` and `transport_fee_paise`;
   `AWAITING_TRANSPORT_QUOTE`, which changed its generated name). No app referenced it by name.
 - Removed: none. `pickup_or_delivery_mode` was a free string that the server always forced to
   `PICKUP`; it is now the `RentalBookingModeEnum` choice and `DELIVERY` is honoured.
+## 1.67.0 - Native apps sign in with a bearer session
+
+The phone apps use the same Django session as the web, carried as `Authorization: Bearer`
+instead of a cookie. Four endpoints publish that:
+
+- `POST /api/v1/auth/mobile/otp/verify/` checks the same OTP as the web and returns the session
+  key as `session_token`. The response sets no session or CSRF cookie.
+- `POST /api/v1/mobile/devices/` registers an Expo push token for the current session. Sending
+  the same token again re-binds it and clears a previous disable.
+- `POST /api/v1/mobile/devices/unregister/` disables the caller's token. An unknown token answers
+  204 and changes nothing.
+- `GET /api/v1/mobile/app-config/` tells an installation whether its version is still allowed,
+  and where to get the store update.
+
+- Removed: none.
+
+
 
 ## 1.66.0 - A requested price reduction becomes an overall estimate discount
 

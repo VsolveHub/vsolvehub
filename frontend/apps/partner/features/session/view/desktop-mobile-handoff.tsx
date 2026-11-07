@@ -1,20 +1,19 @@
 "use client";
 
 import { useLogout } from "@vsolve/query";
-import { Logo } from "@vsolve/ui";
+import { Logo, useT } from "@vsolve/ui";
 import {
   CheckCircle2,
-  Download,
   FileCheck2,
   LogOut,
   Smartphone,
-  ShieldCheck,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import type { Schemas } from "@vsolve/api-client";
+import { trackLabelKey } from "@/features/application/model/status";
 import { getApiClient } from "@/lib/api/browser";
+import { SITE_URL } from "@/lib/site";
 
 interface DesktopMobileHandoffProps {
   application?: Schemas["PartnerApplication"] | null;
@@ -27,19 +26,13 @@ export function DesktopMobileHandoff({
   phone,
   name,
 }: DesktopMobileHandoffProps) {
+  const t = useT();
   const logout = useLogout(getApiClient());
   const partnerName = name || application?.display_name || "Partner";
   const partnerPhone = phone || "Registered Phone";
   const track = application?.track;
 
-  const trackLabel =
-    track === "SERVICES"
-      ? "Services & Skilled Trades"
-      : track === "RENTAL_OWNER"
-      ? "Equipment & Tool Rentals"
-      : track === "STAY_HOST"
-      ? "Accommodation & Stays"
-      : "Verified Service Partner";
+  const trackLabel = t(trackLabelKey(track));
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#FAF9F7] text-navy-900">
@@ -101,14 +94,14 @@ export function DesktopMobileHandoff({
             {/* Main Title & Narrative */}
             <div className="flex flex-col gap-3">
               <h1 className="text-3xl font-extrabold tracking-tight text-navy-900 sm:text-4xl lg:text-5xl lg:leading-tight">
-                Download Partner App{" "}
+                You are approved{" "}
                 <span className="block text-2xl font-bold sm:text-3xl lg:text-4xl text-signal-500 mt-1">
-                  Now your registration is completed!
+                  Continue on your phone
                 </span>
               </h1>
               <p className="max-w-xl text-base leading-relaxed text-text-secondary sm:text-lg">
-                Your partner onboarding, verification, and KYC documents have been approved.
-                Live partner operations—including receiving bookings, radar dispatch, customer navigation, and instant payouts—operate exclusively on mobile.
+                Jobs, navigation and payouts run on your phone. On a computer you can see your
+                profile and documents.
               </p>
             </div>
 
@@ -172,7 +165,7 @@ export function DesktopMobileHandoff({
             </div>
           </div>
 
-          {/* Right Column: Download QR & Store Badges */}
+          {/* Right Column: where to continue */}
           <div className="flex flex-col items-center justify-center lg:col-span-5">
             <div className="relative flex w-full max-w-md flex-col items-center rounded-3xl border border-line bg-white p-7 text-center shadow-[0_16px_40px_rgba(0,17,46,0.06)]">
               {/* Top Tag */}
@@ -186,100 +179,15 @@ export function DesktopMobileHandoff({
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-extrabold text-navy-900">Scan to Download App</h2>
-                  <p className="mt-1 text-xs text-text-secondary leading-relaxed max-w-xs mx-auto">
-                    Point your phone camera at this QR code to download the VSolve Partner App or open directly on your mobile browser.
+                  <h2 className="text-xl font-extrabold text-navy-900">Open this on your phone</h2>
+                  <p className="mt-1 text-sm text-text-secondary leading-relaxed max-w-xs mx-auto">
+                    Open this address in the browser on your phone and sign in with the same mobile number.
                   </p>
                 </div>
 
-                {/* QR Code Container with subtle warm frame */}
-                <div className="relative my-2 flex items-center justify-center rounded-2xl border-2 border-line bg-surface-sunken p-4 shadow-sm">
-                  <svg
-                    viewBox="0 0 160 160"
-                    className="h-44 w-44"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    {/* Corner Position Detection Patterns */}
-                    <rect x="10" y="10" width="40" height="40" rx="8" stroke="#00112e" strokeWidth="6" />
-                    <rect x="22" y="22" width="16" height="16" rx="4" fill="#00112e" />
-
-                    <rect x="110" y="10" width="40" height="40" rx="8" stroke="#00112e" strokeWidth="6" />
-                    <rect x="122" y="22" width="16" height="16" rx="4" fill="#00112e" />
-
-                    <rect x="10" y="110" width="40" height="40" rx="8" stroke="#00112e" strokeWidth="6" />
-                    <rect x="22" y="122" width="16" height="16" rx="4" fill="#00112e" />
-
-                    {/* QR Code Dot Matrix Patterns */}
-                    <rect x="58" y="15" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="74" y="15" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="90" y="15" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="58" y="32" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="74" y="32" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="90" y="32" width="8" height="8" fill="#00112e" rx="1.5" />
-
-                    <rect x="15" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="32" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="58" y="58" width="14" height="14" fill="#ea580c" rx="3" />
-                    <rect x="80" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="96" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="112" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="128" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="144" y="58" width="8" height="8" fill="#00112e" rx="1.5" />
-
-                    <rect x="15" y="74" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="32" y="74" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="80" y="74" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="104" y="74" width="16" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="128" y="74" width="8" height="8" fill="#00112e" rx="1.5" />
-
-                    <rect x="15" y="90" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="32" y="90" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="58" y="80" width="8" height="18" fill="#00112e" rx="1.5" />
-                    <rect x="74" y="90" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="90" y="90" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="112" y="90" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="136" y="90" width="8" height="8" fill="#00112e" rx="1.5" />
-
-                    <rect x="58" y="112" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="74" y="112" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="90" y="112" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="106" y="112" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="122" y="112" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="138" y="112" width="8" height="8" fill="#00112e" rx="1.5" />
-
-                    <rect x="58" y="128" width="16" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="82" y="128" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="98" y="128" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="114" y="128" width="16" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="138" y="128" width="8" height="8" fill="#00112e" rx="1.5" />
-
-                    <rect x="58" y="144" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="74" y="144" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="90" y="144" width="16" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="114" y="144" width="8" height="8" fill="#00112e" rx="1.5" />
-                    <rect x="130" y="144" width="16" height="8" fill="#00112e" rx="1.5" />
-                  </svg>
-                </div>
-
-                {/* App Store & Google Play Styled Download Badges */}
-                <div className="flex w-full flex-col gap-2.5">
-                  <div className="flex items-center justify-center gap-2.5 rounded-2xl bg-navy-900 px-4 py-3 text-xs font-bold text-white shadow-sm hover:bg-navy-800 transition-colors cursor-pointer">
-                    <Download size={15} className="text-signal-500" />
-                    <span>Download for Android (APK / Play Store)</span>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-xs font-bold text-navy-900 shadow-xs hover:bg-surface-hover transition-colors cursor-pointer">
-                    <Download size={15} className="text-text-secondary" />
-                    <span>Download for iOS (App Store / TestFlight)</span>
-                  </div>
-                </div>
-
-                {/* Compatibility tag */}
-                <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-medium text-text-secondary">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <span>Supports Android 10+ and iOS 15+</span>
-                </div>
+                <p className="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-base font-bold text-navy-900 break-all">
+                  {SITE_URL.replace(/^https?:\/\//, "")}
+                </p>
               </div>
             </div>
           </div>

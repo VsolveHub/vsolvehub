@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes reviews-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.reviews-marquee-track {
+  display: flex !important;
+  width: max-content !important;
+  animation: reviews-marquee 55s linear infinite !important;
+}
+
+.reviews-marquee-track:hover {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reviews-marquee-track {
+    animation: none !important;
+  }
+}

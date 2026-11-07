@@ -41,13 +41,13 @@ export const METRIC_KEY_HREF: Record<string, string> = {
   total_cases: "/operations/cases",
 
   // Bookings & requests
-  overdue_bookings: "/operations/requests",
-  cancelled_bookings: "/operations/requests",
-  bookings: "/operations/requests",
-  booking: "/operations/requests",
+  overdue_bookings: "/operations/home-services",
+  cancelled_bookings: "/operations/home-services",
+  bookings: "/operations/home-services",
+  booking: "/operations/home-services",
   requests: "/operations/requests",
   request: "/operations/requests",
-  status_breakdown: "/operations/requests",
+  status_breakdown: "/operations/home-services",
 
   // Reports & financial summaries
   reports: "/operations/reports",
@@ -174,12 +174,13 @@ export function hrefForMetric(kind: string, key: string): string | null {
   if (k.includes("wallet") || k.includes("loyalty") || k.includes("coin") || k.includes("signup") || k.includes("referral")) return "/operations/loyalty";
   if (k.includes("refund")) return "/finance";
   if (k.includes("report") || k.includes("gmv") || k.includes("revenue")) return "/operations/reports";
-  if (k.includes("booking") || k.includes("request")) return "/operations/requests";
+  if (k.includes("request")) return "/operations/requests";
+  if (k.includes("booking")) return "/operations/home-services";
   if (kind === "overview" || kind === "business") return "/operations/reports";
   if (kind === "categories") return "/operations/listings";
   if (kind === "customer") return "/operations/loyalty";
   if (kind === "vendor" || kind === "partner" || kind === "partners") return "/operations/partners";
-  if (kind === "booking" || kind === "bookings") return "/operations/requests";
+  if (kind === "booking" || kind === "bookings") return "/operations/home-services";
   if (kind === "case" || kind === "cases") return "/operations/cases";
   if (kind === "rental" || kind === "rentals") return "/operations/rentals";
   if (kind === "stay" || kind === "stays") return "/operations/stays";

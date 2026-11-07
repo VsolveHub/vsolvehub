@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID": "a4b12340-473f-4349-a874-bd4d1128688e",
+        "APP_ENV": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.vsolvehub.com",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://partner.vsolvehub.com",
+        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "firebase",
+        "EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID": "a4b12340-473f-4349-a874-bd4d1128688e"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.vsolvehub.com",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://partner.vsolvehub.com",
+        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "firebase",
+        "EXPO_PUBLIC_ONESIGNAL_PARTNER_APP_ID": "a4b12340-473f-4349-a874-bd4d1128688e"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      },
+      "ios": {
+        "appleId": "ENTER_APPLE_ID",
+        "ascAppId": "ENTER_ASC_APP_ID",
+        "appleTeamId": "ENTER_APPLE_TEAM_ID"
+      }
+    }
+  }
+}

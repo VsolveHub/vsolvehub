@@ -48,7 +48,6 @@ from .base import (
     _base_application_is_complete,
     _latest_required_documents_are_approved,
     _record_transition,
-    _required_consents_exist,
 )
 from .documents import (
     _assert_application_editable,
@@ -117,7 +116,6 @@ __all__ = [
     "_record_partner_consents",
     "_record_transition",
     "_replace_schedule_for_application",
-    "_required_consents_exist",
     "_resolve_application_service_areas",
     "_resolve_application_skills",
     "_resolve_application_variants",

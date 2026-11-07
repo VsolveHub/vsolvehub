@@ -1,7 +1,7 @@
 "use client";
 
 import { ErrorState, Spinner, useT } from "@vsolve/ui";
-import { useApplicationEditor } from "./application-editor";
+import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 import { useApplicationReference } from "../reference-queries";
 import { toggle } from "../model/draft";
 import { SelectableRow } from "./selectable-row";
@@ -10,6 +10,7 @@ export function AreasStep() {
   const t = useT();
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
+  useProceedDisabled(draft.serviceAreaIds.length === 0);
 
   if (reference.isPending) {
     return (
@@ -81,7 +82,6 @@ export function AreasStep() {
               update({ serviceAreaIds: toggle(draft.serviceAreaIds, area.id) })
             }
             label={area.name}
-            caption={area.timezone || undefined}
           />
         ))}
       </div>
@@ -91,6 +91,7 @@ export function AreasStep() {
           {t("apply.areas.selectAtLeastOne")}
         </p>
       )}
+      <p className="text-xs text-text-secondary">{t("apply.areas.notListed")}</p>
     </fieldset>
   );
 }

@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from apps.identity.auth_cookies import mark_auth_cookies_for_clearing
 from apps.identity.delivery import OtpDeliveryError
 from apps.identity.exceptions import (
+    AccountBlockedApiError,
     InvalidOtpApiError,
     NoAccountForRoleApiError,
     OtpThrottled,
@@ -55,6 +56,7 @@ from apps.identity.serializers import (
     UserSessionSerializer,
 )
 from apps.identity.services import (
+    AccountBlockedError,
     NoAccountForRoleError,
     OtpRateLimitError,
     OtpVerificationError,
@@ -164,6 +166,8 @@ class OtpVerifyView(APIView):
                 code=data["code"],
                 referral_code=data.get("referral_code", ""),
             )
+        except AccountBlockedError as exc:
+            raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
 
@@ -229,6 +233,8 @@ class FirebasePrecheckView(APIView):
             raise OtpThrottled(wait=exc.retry_after_seconds) from exc
         except NoAccountForRoleError as exc:
             raise NoAccountForRoleApiError from exc
+        except AccountBlockedError as exc:
+            raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
 
@@ -280,6 +286,8 @@ class FirebaseVerifyView(APIView):
             )
         except NoAccountForRoleError as exc:
             raise NoAccountForRoleApiError from exc
+        except AccountBlockedError as exc:
+            raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
 
@@ -494,6 +502,8 @@ class FinanceStepUpView(APIView):
                 phone_number=data["phone_number"],
                 code=data["code"],
             )
+        except AccountBlockedError as exc:
+            raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
         user = cast(User, request.user)
@@ -555,6 +565,8 @@ class FirebaseStepUpView(APIView):
             raise PermissionDenied(
                 "Step-up verification did not match the current session."
             ) from exc
+        except AccountBlockedError as exc:
+            raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
 

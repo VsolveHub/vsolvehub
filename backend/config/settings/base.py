@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "apps.wallet",
     "apps.loyalty",
     "apps.ops_reports",
+    "apps.mobile",
     "apps.stories",
 ]
 
@@ -79,7 +80,7 @@ MIDDLEWARE = [
     # re-issue the sign-out Set-Cookie with the Secure flag Django's own
     # delete omits. See apps.identity.middleware.
     "apps.identity.middleware.ClearAuthCookiesMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "apps.mobile.middleware.BearerAwareSessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -89,10 +90,12 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
+_TEMPLATE_DIRS: list[Path] = []
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": _TEMPLATE_DIRS,
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -415,7 +418,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.90.0",
+    "VERSION": "1.98.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -436,6 +439,10 @@ SPECTACULAR_SETTINGS = {
             "apps.requirements.models.CommercialPolicy.SupplierOfRecord"
         ),
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
+        "PartnerImportModeEnum": "apps.partners.serializers.directory.PARTNER_IMPORT_MODES",
+        "PartnerImportRowStatusEnum": (
+            "apps.partners.serializers.directory.PARTNER_IMPORT_ROW_STATUSES"
+        ),
         "RevisionRequestStatusEnum": "apps.requirements.models.RevisionRequest.Status",
         "RevisionRequestReasonCodeEnum": "apps.requirements.models.RevisionRequest.ReasonCode",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
@@ -455,6 +462,10 @@ SPECTACULAR_SETTINGS = {
         # the generator emits a positional `CodeF25Enum` that shifts whenever any unrelated model
         # gains a `code` choice set — silently renaming a component both frontends import.
         "PlatformFeedbackTagEnum": "apps.ratings.models.PlatformFeedback.Tag",
+        # Web push subscriptions (customer and partner share this set). The mobile app's
+        # `PushDevice.platform` is a second `platform` choice set; without this the web one is
+        # renamed to a hashed `Platform798Enum`.
+        "PlatformEnum": "apps.notifications.models.CustomerPushSubscription.Platform",
         "QuoteLineKindEnum": "apps.carts.models.QuoteLine.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
         "ScopeAmendmentStatusEnum": "apps.fulfilment.models.ScopeAmendment.Status",
@@ -781,12 +792,32 @@ MSG91_SENDER_ID = env("MSG91_SENDER_ID", default="")
 MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 
+# Mobile apps (frontend/mobile). Push is fail-closed like MESSAGE_TRANSPORT.
+# "onesignal": the apps are OneSignal subscribers like the web, so every push (job offers
+# included) reaches phones through OneSignal and the Expo path is off. "expo": the old path,
+# job offers only, kept for app builds made before OneSignal.
+MOBILE_PUSH_PROVIDER = env("MOBILE_PUSH_PROVIDER", default="unconfigured")
+MOBILE_PUSH_ALLOW_FAKE = env.bool("MOBILE_PUSH_ALLOW_FAKE", default=False)
+EXPO_ACCESS_TOKEN = env("EXPO_ACCESS_TOKEN", default="")
+EXPO_PUSH_TIMEOUT_SECONDS = env.int("EXPO_PUSH_TIMEOUT_SECONDS", default=10)
+MOBILE_PARTNER_MIN_VERSION = env("MOBILE_PARTNER_MIN_VERSION", default="1.0.0")
+MOBILE_CUSTOMER_MIN_VERSION = env("MOBILE_CUSTOMER_MIN_VERSION", default="1.0.0")
+MOBILE_PARTNER_LATEST_VERSION = env("MOBILE_PARTNER_LATEST_VERSION", default="1.0.0")
+MOBILE_CUSTOMER_LATEST_VERSION = env("MOBILE_CUSTOMER_LATEST_VERSION", default="1.0.0")
+MOBILE_PARTNER_ANDROID_STORE_URL = env("MOBILE_PARTNER_ANDROID_STORE_URL", default="")
+MOBILE_PARTNER_IOS_STORE_URL = env("MOBILE_PARTNER_IOS_STORE_URL", default="")
+MOBILE_CUSTOMER_ANDROID_STORE_URL = env("MOBILE_CUSTOMER_ANDROID_STORE_URL", default="")
+MOBILE_CUSTOMER_IOS_STORE_URL = env("MOBILE_CUSTOMER_IOS_STORE_URL", default="")
+
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 # Server-only Google key, restricted to the Geocoding API and the servers' IPs. The browser key the
 # frontends use for the map is a different key and never reaches Django.
 GOOGLE_MAPS_SERVER_KEY = env("GOOGLE_MAPS_SERVER_KEY", default="")
 GEOCODING_TIMEOUT_SECONDS = env.float("GEOCODING_TIMEOUT_SECONDS", default=3.0)
 GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 24 * 7)
+# 60: the Partner app re-asks for the road route as the Partner moves; a minute per rounded
+# origin keeps a still Partner, or a re-rendering screen, at one Routes API call a minute.
+ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -866,6 +897,13 @@ M2_VISIT_SLOT_TOKEN_TTL_SECONDS = env.int("M2_VISIT_SLOT_TOKEN_TTL_SECONDS", def
 # long a person reasonably takes to finish paying.
 M2_VISIT_PLAN_HOLD_SECONDS = env.int("M2_VISIT_PLAN_HOLD_SECONDS", default=1800)
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
+# 7200: a Partner whose phone OneSignal can reach stays online with the app closed, because the
+# offer rings the phone. Two hours without opening the app ends it, and so does missing
+# `PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS` offers in a row; either way the Partner is told.
+PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS = env.int(
+    "PARTNER_PRESENCE_BACKGROUND_TTL_SECONDS", default=7200
+)
+PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS = env.int("PARTNER_MAX_CONSECUTIVE_MISSED_OFFERS", default=2)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
     default=300,
@@ -1007,6 +1045,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.fulfilment.tasks.sweep_completion_auto_finalize",
         "schedule": 300.0,
     },
+    "sweep-visit-time-to-leave-reminders": {
+        "task": "apps.fulfilment.tasks.sweep_visit_time_to_leave_reminders",
+        # 120s: the reminder fires when "On my way" opens, an hour out; two minutes late is
+        # still a reminder, and the idempotency key makes every later pass a no-op.
+        "schedule": 120.0,
+    },
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
         "schedule": 60.0,
@@ -1025,11 +1069,15 @@ CELERY_BEAT_SCHEDULE = {
     },
     "reconcile-onesignal-push-deliveries": {
         "task": "apps.notifications.tasks.reconcile_onesignal_push_delivery_status_task",
-        "schedule": env.float("RECONCILE_ONESIGNAL_PUSH_DELIVERIES_INTERVAL_SECONDS", default=900.0),
+        "schedule": env.float(
+            "RECONCILE_ONESIGNAL_PUSH_DELIVERIES_INTERVAL_SECONDS", default=900.0
+        ),
     },
     "reconcile-stale-push-subscriptions": {
         "task": "apps.notifications.tasks.reconcile_stale_push_subscriptions",
-        "schedule": env.float("RECONCILE_STALE_PUSH_SUBSCRIPTIONS_INTERVAL_SECONDS", default=3600.0),
+        "schedule": env.float(
+            "RECONCILE_STALE_PUSH_SUBSCRIPTIONS_INTERVAL_SECONDS", default=3600.0
+        ),
     },
     "reconcile-payments": {
         "task": "apps.commerce.tasks.reconcile_payments",
@@ -1292,6 +1340,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.listings.tasks.expire_vendor_subscriptions",
         "schedule": 60.0 * 15,
     },
+    # Mobile push notifications
+    "sweep-pending-push-intents": {
+        "task": "apps.mobile.tasks.sweep_pending_push_intents",
+        "schedule": 30.0,
+    },
+    "check-push-receipts": {
+        "task": "apps.mobile.tasks.check_push_receipts",
+        "schedule": 900.0,
+    },
     # A7 rental delivery. A quote has a 24-hour answer window, so 5 minutes late is close enough;
     # an expired request only lets go of dates nobody has paid for.
     "expire-rental-transport-requests": {
@@ -1348,14 +1405,17 @@ LOGGING = {
 }
 
 # OneSignal Push & Instant Dispatch settings
-ONESIGNAL_APP_ID = env("ONESIGNAL_APP_ID", default="")
-ONESIGNAL_REST_API_KEY = env("ONESIGNAL_REST_API_KEY", default="")
-ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default=ONESIGNAL_APP_ID)
-ONESIGNAL_PARTNER_REST_API_KEY = env("ONESIGNAL_PARTNER_REST_API_KEY", default=ONESIGNAL_REST_API_KEY)
+# One OneSignal app per audience, each shared by its website and mobile app. No shared
+# ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY and no fallback between them (owner, 2026-11-04).
+ONESIGNAL_PARTNER_APP_ID = env("ONESIGNAL_PARTNER_APP_ID", default="")
+ONESIGNAL_PARTNER_REST_API_KEY = env("ONESIGNAL_PARTNER_REST_API_KEY", default="")
 ONESIGNAL_CUSTOMER_APP_ID = env("ONESIGNAL_CUSTOMER_APP_ID", default="")
 ONESIGNAL_CUSTOMER_REST_API_KEY = env("ONESIGNAL_CUSTOMER_REST_API_KEY", default="")
 ONESIGNAL_ENV = env("ONESIGNAL_ENV", default="local")
 ONESIGNAL_API_URL = env("ONESIGNAL_API_URL", default="https://api.onesignal.com/notifications")
+#: The partner OneSignal app's "Job offers" Android channel (Settings -> Push -> Android
+#: Notification Channels): high importance and the booking_alert sound. Blank: OneSignal's default.
+ONESIGNAL_PARTNER_OFFER_CHANNEL_ID = env("ONESIGNAL_PARTNER_OFFER_CHANNEL_ID", default="")
 DISPATCH_OFFER_EXPIRY_SECONDS = env.int("DISPATCH_OFFER_EXPIRY_SECONDS", default=60)
 PARTNER_PORTAL_BASE_URL = env("PARTNER_PORTAL_BASE_URL", default="http://localhost:3001")
 
@@ -1367,4 +1427,3 @@ PARTNER_LOCATION_MAX_AGE_MINUTES = env.int("PARTNER_LOCATION_MAX_AGE_MINUTES", d
 MAX_DISPATCH_ATTEMPTS = env.int("MAX_DISPATCH_ATTEMPTS", default=5)
 MAX_CONSECUTIVE_MISSED_OFFERS = env.int("MAX_CONSECUTIVE_MISSED_OFFERS", default=3)
 PUSH_SUBSCRIPTION_FRESHNESS_DAYS = env.int("PUSH_SUBSCRIPTION_FRESHNESS_DAYS", default=30)
-

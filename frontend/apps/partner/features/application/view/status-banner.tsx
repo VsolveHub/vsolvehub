@@ -1,154 +1,87 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { cn, useT, type Translator } from "@vsolve/ui";
+import { Badge, cn, useT } from "@vsolve/ui";
+import { Check } from "lucide-react";
+
+import { applicationStatusPresentation, trackerStage } from "../model/status";
 
 /**
- * The application's current standing, stated plainly.
+ * Where the application is, on one card: the status, a four-stop tracker, and what happens next.
  *
- * Onboarding is where a Partner is most likely to be confused and least likely
- * to ask, so each state says three things: where the application is, whether the
- * Partner needs to do anything, and — when they are waiting — that waiting is
- * correct.
- *
- * `CHANGES_REQUIRED` carries the reviewer's own message. It is rendered verbatim
- * rather than summarised: a generic "some documents need attention" is exactly
- * the copy that sends someone back to re-upload the wrong thing.
- *
- * `SUSPENDED` and `OFFBOARDED` deliberately do not explain themselves here.
- * Those decisions have appeal paths that run through support, and a banner is
- * the wrong surface for a dispute.
+ * Replaces a status banner, a progress hero, a "submitted" hero and a desktop guide box that each
+ * restated the same status in their own words. The reviewer's message appears here and only
+ * here, verbatim — a generic "something needs attention" sends people to fix the wrong thing.
  */
 
 type Application = Schemas["PartnerApplication"];
-type Status = Schemas["PartnerApplicationStatusEnum"];
 
-interface Presentation {
-  tone: "neutral" | "info" | "success" | "warning" | "danger";
-  label: string;
-  headline: string;
-  detail: string;
-  /** True when the Partner is waiting on someone else and should not act. */
-  isWaiting: boolean;
-}
+const STOPS = [
+  "apply.tracker.fill",
+  "apply.tracker.sent",
+  "apply.tracker.review",
+  "apply.tracker.decision",
+] as const;
 
-function presentationFor(status: Status, t: Translator["t"]): Presentation {
-  switch (status) {
-    case "DRAFT":
-      return {
-        tone: "neutral",
-        label: t("apply.statusBanner.draft.label"),
-        headline: t("apply.statusBanner.draft.headline"),
-        detail: t("apply.statusBanner.draft.detail"),
-        isWaiting: false,
-      };
-    case "SUBMITTED":
-      return {
-        tone: "info",
-        label: t("apply.statusBanner.submitted.label"),
-        headline: t("apply.statusBanner.submitted.headline"),
-        detail: t("apply.statusBanner.submitted.detail"),
-        isWaiting: true,
-      };
-    case "UNDER_REVIEW":
-      return {
-        tone: "info",
-        label: t("apply.statusBanner.underReview.label"),
-        headline: t("apply.statusBanner.underReview.headline"),
-        detail: t("apply.statusBanner.underReview.detail"),
-        isWaiting: true,
-      };
-    case "CHANGES_REQUIRED":
-      return {
-        tone: "warning",
-        label: t("apply.statusBanner.changesRequired.label"),
-        headline: t("apply.statusBanner.changesRequired.headline"),
-        detail: "",
-        isWaiting: false,
-      };
-    case "APPROVED":
-      return {
-        tone: "success",
-        label: t("apply.statusBanner.approved.label"),
-        headline: t("apply.statusBanner.approved.headline"),
-        detail: t("apply.statusBanner.approved.detail"),
-        isWaiting: false,
-      };
-    case "SUSPENDED":
-      return {
-        tone: "danger",
-        label: t("apply.statusBanner.suspended.label"),
-        headline: t("apply.statusBanner.suspended.headline"),
-        detail: t("apply.statusBanner.suspended.detail"),
-        isWaiting: false,
-      };
-    case "OFFBOARDED":
-      return {
-        tone: "neutral",
-        label: t("apply.statusBanner.offboarded.label"),
-        headline: t("apply.statusBanner.offboarded.headline"),
-        detail: t("apply.statusBanner.offboarded.detail"),
-        isWaiting: false,
-      };
-    case "DECLINED":
-      return {
-        tone: "neutral",
-        label: t("apply.statusBanner.declined.label"),
-        headline: t("apply.statusBanner.declined.headline"),
-        detail: t("apply.statusBanner.declined.detail"),
-        isWaiting: false,
-      };
-  }
-}
-
-export interface ApplicationStatusBannerProps {
-  application: Application;
-}
-
-export function ApplicationStatusBanner({ application }: ApplicationStatusBannerProps) {
+export function ApplicationStatusTracker({ application }: { application: Application }) {
   const t = useT();
-  // When in DRAFT, the NextAction hero card handles the primary progress guidance directly.
-  if (application.status === "DRAFT") return null;
-
-  const presentation = presentationFor(application.status, t);
-
-  const detail =
-    application.status === "CHANGES_REQUIRED"
-      ? application.change_request_message || t("apply.statusBanner.changesRequired.fallbackDetail")
-      : presentation.detail;
+  const presentation = applicationStatusPresentation(application.status);
+  const stage = trackerStage(application.status);
+  const isWaiting = application.status === "SUBMITTED" || application.status === "UNDER_REVIEW";
 
   return (
     <section
-      aria-live={presentation.isWaiting ? "polite" : "assertive"}
-      className={cn(
-        "rounded-2xl border p-5 shadow-xs transition-all",
-        presentation.tone === "info" && "bg-sky-50 border-sky-200 text-sky-950",
-        presentation.tone === "warning" && "bg-amber-50 border-amber-300 text-amber-950",
-        presentation.tone === "success" && "bg-emerald-50 border-emerald-300 text-emerald-950",
-        presentation.tone === "danger" && "bg-rose-50 border-rose-300 text-rose-950",
-        presentation.tone === "neutral" && "bg-surface-sunken border-line text-text",
-      )}
+      aria-live="polite"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-3.5 shadow-xs sm:p-5"
     >
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span
-          className={cn(
-            "rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider",
-            presentation.tone === "info" && "bg-sky-600 text-white",
-            presentation.tone === "warning" && "bg-amber-600 text-white",
-            presentation.tone === "success" && "bg-emerald-600 text-white",
-            presentation.tone === "danger" && "bg-rose-600 text-white",
-            presentation.tone === "neutral" && "bg-navy-900 text-white",
-          )}
-        >
-          {presentation.label}
-        </span>
-        <h2 className="text-base font-bold text-navy-900">{presentation.headline}</h2>
+      <div className="flex flex-col gap-1.5">
+        <Badge tone={presentation.tone} className="self-start">
+          {t(presentation.labelKey)}
+        </Badge>
+        <h1 className="text-xl font-extrabold tracking-tight text-text">{t(presentation.headlineKey)}</h1>
       </div>
 
-      <p className="mt-2 text-sm text-text-secondary leading-relaxed">{detail}</p>
+      <ol className="grid list-none grid-cols-4 gap-1 p-0" aria-label={t("apply.tracker.label")}>
+        {STOPS.map((key, index) => {
+          const isDone = index < stage;
+          const isCurrent = index === stage;
+          return (
+            <li key={key} className="flex flex-col items-center gap-1.5 text-center min-w-0">
+              <span
+                aria-hidden
+                className={cn(
+                  "grid h-6 w-6 sm:h-7 sm:w-7 place-items-center rounded-full border-2 text-[10px] sm:text-xs font-bold shrink-0",
+                  isDone && "border-success-text bg-success-text text-surface",
+                  isCurrent && "border-action bg-action text-action-text",
+                  !isDone && !isCurrent && "border-line-strong text-text-muted",
+                )}
+              >
+                {isDone ? <Check size={13} strokeWidth={3} /> : index + 1}
+              </span>
+              <span
+                className={cn(
+                  "text-[10px] sm:text-xs break-words leading-tight",
+                  isCurrent ? "font-bold text-text" : "text-text-secondary",
+                )}
+                aria-current={isCurrent ? "step" : undefined}
+              >
+                {t(key)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
 
-      {application.submitted_at && presentation.isWaiting ? (
-        <p className="mt-3 text-xs text-text-muted font-medium border-t border-line/40 pt-2">
+      {application.status === "CHANGES_REQUIRED" ? (
+        <p className="rounded-control border border-warning-line bg-warning-surface p-3 text-sm text-text">
+          {application.change_request_message || t("apply.statusBanner.changesRequired.fallbackDetail")}
+        </p>
+      ) : null}
+
+      <p className="text-sm text-text-secondary">{t(presentation.nextKey)}</p>
+
+      {isWaiting && application.submitted_at ? (
+        <p className="text-xs text-text-muted">
           {t("apply.statusBanner.submittedOn", {
             date: new Intl.DateTimeFormat("en-IN", {
               dateStyle: "medium",

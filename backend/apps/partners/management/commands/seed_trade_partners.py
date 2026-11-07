@@ -193,7 +193,7 @@ class Command(BaseCommand):
         """Record acceptance of every currently published required consent.
 
         Mirrors `seed_test_partner._accept_current_consents`: the receipt points at the
-        document row rather than repeating its version, because `_required_consents_exist`
+        document row rather than repeating its version, because `partner_has_required_consents`
         compares document ids. `request_ip_hash` and `device_hash` are left blank on purpose —
         those record where a real acceptance came from, and inventing them would forge the
         provenance of a legal receipt.

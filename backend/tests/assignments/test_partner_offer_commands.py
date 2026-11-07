@@ -90,21 +90,20 @@ def test_same_key_accept_replay_creates_exactly_one_reservation() -> None:
     replay_status, replay_body = _command(client, offer, "accept", key="accept-once")
 
     assert first_status == replay_status == HTTPStatus.OK
-    assert first_body["status"] == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
-    assert replay_body["status"] == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
+    # Accepting is final: the replay answers with the same committed offer.
+    assert first_body["status"] == PartnerOffer.Status.COMMITTED
+    assert replay_body["status"] == PartnerOffer.Status.COMMITTED
     assert replay_body["id"] == first_body["id"] == str(offer.id)
-    assert replay_body["undo_deadline"] == first_body["undo_deadline"]
     assert Reservation.objects.filter(fulfilment_unit=offer.fulfilment_unit).count() == 1
     offer.refresh_from_db()
-    assert offer.status == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
+    assert offer.status == PartnerOffer.Status.COMMITTED
 
 
 def test_replay_answers_with_a_freshly_measured_server_instant() -> None:
     """A replay must not hand back a frozen clock.
 
-    The undo window is 120 seconds. Replaying the stored response body would republish
-    the `server_now` of the original request, and a client that calibrates from it would
-    believe it has more of that window left than it does.
+    Replaying the stored response body would republish the `server_now` of the original
+    request, and a client that calibrates its countdowns from it would run them late.
     """
     call_command("seed_technician_catalog")
     partner = _partner(suffix="52", variant_slugs=("switch-socket-repair",))
@@ -119,9 +118,6 @@ def test_replay_answers_with_a_freshly_measured_server_instant() -> None:
     assert first_now is not None
     assert replay_now is not None
     assert replay_now >= first_now
-    undo_deadline = parse_datetime(replay["undo_deadline"])
-    assert undo_deadline is not None
-    assert replay_now < undo_deadline
 
 
 def test_lost_response_recovery_returns_authoritative_truth_where_a_new_key_refuses() -> None:
@@ -141,8 +137,7 @@ def test_lost_response_recovery_returns_authoritative_truth_where_a_new_key_refu
     reinvented_status, reinvented = _command(client, offer, "accept", key="a-different-key")
 
     assert recovered_status == HTTPStatus.OK
-    assert recovered["status"] == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
-    assert recovered["undo_deadline"] is not None
+    assert recovered["status"] == PartnerOffer.Status.COMMITTED
     assert reinvented_status == HTTPStatus.BAD_REQUEST
     assert _error_code(reinvented) == "offer_invalid"
     assert Reservation.objects.filter(fulfilment_unit=offer.fulfilment_unit).count() == 1
@@ -161,7 +156,7 @@ def test_reusing_a_key_for_another_action_is_refused() -> None:
     assert reused_status == HTTPStatus.CONFLICT
     assert _error_code(reused) == "idempotency_key_reused"
     offer.refresh_from_db()
-    assert offer.status == PartnerOffer.Status.ACCEPTED_PENDING_UNDO
+    assert offer.status == PartnerOffer.Status.COMMITTED
     assert Reservation.objects.filter(status=Reservation.Status.TENTATIVE).count() == 1
 
 
@@ -304,32 +299,6 @@ def test_duplicate_decline_replay_does_not_advance_dispatch_twice() -> None:
     assert not Reservation.objects.exists()
 
 
-def test_duplicate_undo_replay_releases_exactly_one_reservation() -> None:
-    call_command("seed_technician_catalog")
-    _first = _partner(suffix="64", variant_slugs=("switch-socket-repair",))
-    _second = _partner(suffix="65", variant_slugs=("switch-socket-repair",))
-    offer = _live_offer(phone=FIRST_CUSTOMER, key="undo-replay")
-    client = _partner_client(offer.partner)
-    accepted_status, _accepted = _command(client, offer, "accept", key="undo-accept")
-    assert accepted_status == HTTPStatus.OK
-
-    undone_status, undone = _command(client, offer, "undo", key="undo-once")
-    reservation = Reservation.objects.get(fulfilment_unit=offer.fulfilment_unit)
-    released_at = reservation.released_at
-    replay_status, replay = _command(client, offer, "undo", key="undo-once")
-
-    assert undone_status == replay_status == HTTPStatus.OK
-    assert undone["status"] == replay["status"] == PartnerOffer.Status.UNDONE
-    reservation.refresh_from_db()
-    assert reservation.status == Reservation.Status.RELEASED
-    assert reservation.released_at == released_at
-    assert Reservation.objects.count() == 1
-    assert (
-        PartnerOffer.objects.filter(fulfilment_unit=offer.fulfilment_unit).count()
-        == EXPECTED_SUCCESSOR_OFFERS
-    )
-
-
 def test_duplicate_commit_replay_does_not_extend_the_payment_hold_twice() -> None:
     call_command("seed_technician_catalog")
     _committing = _partner(suffix="66", variant_slugs=("switch-socket-repair",))
@@ -442,7 +411,7 @@ def test_concurrent_accepts_for_one_partner_capacity_produce_one_winner() -> Non
 
     assert outcomes == [HTTPStatus.OK, HTTPStatus.CONFLICT]
     assert Reservation.objects.count() == 1
-    accepted = PartnerOffer.objects.filter(status=PartnerOffer.Status.ACCEPTED_PENDING_UNDO)
+    accepted = PartnerOffer.objects.filter(status=PartnerOffer.Status.COMMITTED)
     assert accepted.count() == 1
     assert PartnerOffer.objects.filter(status=PartnerOffer.Status.OFFERED).count() == 1
 

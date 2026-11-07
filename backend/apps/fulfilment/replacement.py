@@ -41,6 +41,7 @@ from apps.fulfilment.services import (
     apply_transition,
     locked_booking_context,
 )
+from apps.locations.pauses import is_area_paused
 from apps.notifications.services import request_notification
 
 #: The refund reason code for a visit nobody could be found for. Distinct from
@@ -161,6 +162,7 @@ def settle_unstaffable_booking(*, booking_id: UUID) -> tuple[Booking, list[Refun
         recipient_id=booking.customer_id,
         purpose="booking.replacement_unavailable",
         channel="PUSH",
+        audience="CUSTOMER",
         template_code="customer_booking_unstaffable",
         context={
             "booking_id": str(booking.id),
@@ -174,7 +176,7 @@ def settle_unstaffable_booking(*, booking_id: UUID) -> tuple[Booking, list[Refun
 
 
 @transaction.atomic
-def attempt_booking_replacement(*, booking_id: UUID) -> Booking:
+def attempt_booking_replacement(*, booking_id: UUID) -> Booking:  # noqa: PLR0911 - one exit per outcome
     """One pass at finding a replacement Partner. Safe to call as often as you like.
 
     Every early return is a real "nothing to do here", not a swallowed failure:
@@ -196,6 +198,11 @@ def attempt_booking_replacement(*, booking_id: UUID) -> Booking:
     if timezone.now() >= _replacement_deadline(unit):
         settled, _refunds = settle_unstaffable_booking(booking_id=booking.id)
         return settled
+    if is_area_paused(unit.service_area):
+        # Paused (the SERVICE_AREA kill switch): send nobody in, and do not settle either. The
+        # pause is temporary; the search resumes on the next sweep once the area is back on, and
+        # the replacement deadline above still settles it if the pause outlasts the visit.
+        return booking
     outcome = dispatch_unit(
         group=group,
         unit=unit,

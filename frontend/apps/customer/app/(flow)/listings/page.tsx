@@ -204,7 +204,7 @@ function ListingsBrowseContent() {
 
       <PartAResultHeader
         count={listings.length}
-        place={appliedLocation || "Hyderabad"}
+        place={appliedLocation || ""}
         noun="jobs"
         sort={sort}
         onSort={setSort}

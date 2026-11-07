@@ -69,6 +69,24 @@ if not R2_PRIVATE_ENABLED:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must be configured in production.")
 if R2_PRIVATE_BUCKET == R2_PUBLIC_BUCKET:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must not be the public photo bucket.")
+# Push: one OneSignal app per audience and no shared fallback, so a missing value would silently
+# drop that audience's notifications. Refuse to start instead.
+_missing_onesignal = [
+    name
+    for name in (
+        "ONESIGNAL_PARTNER_APP_ID",
+        "ONESIGNAL_PARTNER_REST_API_KEY",
+        "ONESIGNAL_CUSTOMER_APP_ID",
+        "ONESIGNAL_CUSTOMER_REST_API_KEY",
+    )
+    if not globals()[name]
+]
+if _missing_onesignal:
+    raise ImproperlyConfigured(f"{', '.join(_missing_onesignal)} must be configured in production.")
+if ONESIGNAL_PARTNER_APP_ID == ONESIGNAL_CUSTOMER_APP_ID:
+    raise ImproperlyConfigured("The partner and customer OneSignal apps must be different apps.")
+if MOBILE_PUSH_PROVIDER not in ("onesignal", "expo"):
+    raise ImproperlyConfigured("MOBILE_PUSH_PROVIDER must be onesignal (or expo) in production.")
 
 if not PARTNER_LEGAL_BASE_URL.startswith("https://"):
     raise ImproperlyConfigured(

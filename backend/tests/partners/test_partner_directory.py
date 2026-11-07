@@ -213,6 +213,8 @@ def test_the_detail_names_the_partner_but_never_a_document_url(
     body = client.get(f"{DIRECTORY_URL}{partner.id}/").json()
 
     assert body["display_name"] == "Approved Anita"
+    # The record's Call button dials this; the list had it, the record did not.
+    assert body["phone_number"] == "+919000000210"
     assert body["application_status"] == PartnerApplication.Status.APPROVED
     assert body["skills"] == [{"code": "electrician", "name": "Electrician"}]
     serialised = str(body)
@@ -271,3 +273,24 @@ def test_the_detail_carries_the_business_profile_for_tax_verification(
     assert profile["legal_name"] == "Asha Staffing Pvt Ltd"
     assert profile["gstin"] == "36ABCDE1234F1Z5"
     assert profile["gstin_verified_at"] is None
+
+
+@pytest.mark.parametrize(
+    "typed",
+    ["9000000301", "+91 90000 00301", "090000-00301", "00301", "Mobile Meena"],
+)
+def test_the_directory_finds_a_partner_by_mobile_number_however_it_is_typed(
+    partner_setup: PartnerSetup, operations_user: User, typed: str
+) -> None:
+    del partner_setup
+    wanted = _partner(
+        phone="+919000000301", name="Mobile Meena", status=PartnerApplication.Status.APPROVED
+    )
+    _partner(phone="+919000000302", name="Other Omkar", status=PartnerApplication.Status.APPROVED)
+
+    response = _ops_client(operations_user).get(DIRECTORY_URL, {"q": typed})
+
+    assert response.status_code == HTTPStatus.OK
+    rows = response.json()["results"]
+    assert [row["id"] for row in rows] == [str(wanted.id)]
+    assert rows[0]["phone_number"] == "+919000000301"

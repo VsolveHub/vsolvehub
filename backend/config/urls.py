@@ -30,6 +30,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/v1/", include("apps.ops_reports.urls")),
     path("api/v1/", include("apps.stories.urls")),
     path("api/v1/health/", include("apps.health.urls")),
+    path("api/v1/", include("apps.mobile.urls")),
 ]
 
 if settings.API_DOCS_ENABLED:
@@ -42,5 +43,17 @@ if settings.API_DOCS_ENABLED:
         ),
     ]
 
+if settings.DEBUG or getattr(settings, "DOCUMENT_STORAGE_PROVIDER", "") in ("development", "local"):
+    from apps.foundation.views import DevStorageView
+
+    urlpatterns += [
+        path(
+            "api/v1/dev-storage/<str:bucket>/<path:object_key>",
+            DevStorageView.as_view(),
+            name="dev-storage",
+        ),
+    ]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static("/catalog/", document_root=settings.MEDIA_ROOT)

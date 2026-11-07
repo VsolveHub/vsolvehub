@@ -18,6 +18,7 @@ from apps.assignments.ranking import (
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
 from apps.commerce.models import Booking, PaymentAttempt
+from apps.locations.pauses import is_area_paused
 from apps.notifications.services import request_notification
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
@@ -151,6 +152,7 @@ def _notify_lost_commitments(group: BookingGroup, *, terminal_status: str) -> No
             recipient_id=reservation.partner.user_id,
             purpose="partner.job_cancelled",
             channel="PUSH",
+            audience="PARTNER",
             template_code="partner_job_cancelled",
             context={
                 "fulfilment_unit_id": str(unit.id),
@@ -307,6 +309,7 @@ def _create_offer(
         recipient_id=candidate.user_id,
         purpose="partner.offer_created",
         channel="PUSH",
+        audience="PARTNER",
         template_code="partner_offer_created",
         context={
             "offer_id": str(offer.id),
@@ -419,6 +422,13 @@ def dispatch_unit(
     apart — an offer is a question, a reservation is already an answer.
     """
 
+    if is_area_paused(unit.service_area):
+        # A paused area starts no new work. A booking still being checked out goes back to the
+        # customer to re-plan; a replacement search returns "no offer" and its caller waits
+        # (`fulfilment.replacement`) instead of treating the pause as nobody being left.
+        if not _is_post_booking_recovery(group, unit):
+            _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
+        return None
     if is_same_day_unit(unit=unit):
         return _create_offer(group=group, unit=unit, offer_ttl_seconds=offer_ttl_seconds)
     return directly_assign(unit=unit)
@@ -489,6 +499,7 @@ def directly_assign(*, unit: FulfilmentUnit) -> Reservation | None:
             recipient_id=candidate.user_id,
             purpose="partner.job_assigned",
             channel="PUSH",
+            audience="PARTNER",
             template_code="partner_job_assigned",
             context={
                 "fulfilment_unit_id": str(unit.id),
@@ -571,14 +582,17 @@ def accept_unit_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffe
     except IntegrityError as exc:
         # A distinct refusal: the capacity was taken, the offer did not expire.
         raise OfferReservationConflictApiError from exc
+    # Accepting is final (owner decision, 5 November 2026). The two-minute undo window cost the
+    # Partner a second tap and kept the Customer waiting for no one; a Partner who cannot make
+    # it hands the job back from the job screen instead. The offer passes through
+    # `ACCEPTED_PENDING_UNDO` only inside this transaction, so the commit path stays the one
+    # place that turns an accepted offer into a held job.
     offer.status = PartnerOffer.Status.ACCEPTED_PENDING_UNDO
     offer.reservation = reservation
-    offer.undo_deadline = reservation.expires_at
+    offer.undo_deadline = now
     offer.responded_at = now
     offer.save(update_fields=("status", "reservation", "undo_deadline", "responded_at"))
-    _set_unit_status(unit, FulfilmentUnit.Status.HELD)
-    _sync_group_state(group)
-    return offer
+    return _commit_locked_unit_offer(group, unit, offer)
 
 
 def _commit_locked_unit_offer(
@@ -637,6 +651,10 @@ def commit_unit_offer(*, offer_id: UUID, partner: PartnerProfile | None = None) 
     group, unit, offer = _locked_offer_context(offer_id)
     if partner is not None and offer.partner_id != partner.id:
         raise PermissionError("This offer belongs to another Partner.")
+    # Accepting commits, so an app version that still sends "Commit now" after accepting is
+    # asking for what already happened. Answer with the committed offer instead of a refusal.
+    if offer.status == PartnerOffer.Status.COMMITTED:
+        return offer
     if offer.undo_deadline is None:
         raise ValueError("This Fulfilment Unit offer cannot be committed.")
     if partner is None and offer.undo_deadline > timezone.now():
@@ -704,6 +722,13 @@ def reconcile_group_dispatch(*, group_id: UUID) -> BookingGroup:
             offer.status = PartnerOffer.Status.EXPIRED
             offer.responded_at = now
             offer.save(update_fields=("status", "responded_at"))
+            # A Partner online in the background who lets offers lapse stops being offered
+            # work, before the next candidate is chosen.
+            from apps.partners.services.presence import (  # noqa: PLC0415
+                end_presence_after_missed_offers,
+            )
+
+            end_presence_after_missed_offers(partner_id=offer.partner_id)
             _create_offer(group=group, unit=unit)
         elif (
             offer is not None

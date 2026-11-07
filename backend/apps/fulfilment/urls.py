@@ -32,12 +32,15 @@ from apps.fulfilment.views import (
     CustomerQualityDisputeView,
     CustomerStartOtpView,
     OperationsAssistedStartView,
+    OperationsBookingCollectionView,
     OperationsBookingDetailView,
+    OperationsCancelBookingView,
     OperationsRecoverBookingView,
     PartnerAbortView,
     PartnerArrivedView,
     PartnerBookingCollectionView,
     PartnerBookingDetailView,
+    PartnerBookingRouteView,
     PartnerContactAttemptView,
     PartnerCustomerUnavailableView,
     PartnerEnRouteView,
@@ -124,6 +127,11 @@ urlpatterns = [
         name="partner-booking-detail",
     ),
     path(
+        "partner/bookings/<uuid:booking_id>/route/",
+        PartnerBookingRouteView.as_view(),
+        name="partner-booking-route",
+    ),
+    path(
         "partner/bookings/<uuid:booking_id>/en-route/",
         PartnerEnRouteView.as_view(),
         name="partner-booking-en-route",
@@ -180,6 +188,11 @@ urlpatterns = [
     ),
     # Operations
     path(
+        "operations/bookings/",
+        OperationsBookingCollectionView.as_view(),
+        name="operations-bookings",
+    ),
+    path(
         "operations/bookings/<uuid:booking_id>/",
         OperationsBookingDetailView.as_view(),
         name="operations-booking-detail",
@@ -188,6 +201,11 @@ urlpatterns = [
         "operations/bookings/<uuid:booking_id>/assisted-start/",
         OperationsAssistedStartView.as_view(),
         name="operations-booking-assisted-start",
+    ),
+    path(
+        "operations/bookings/<uuid:booking_id>/cancel/",
+        OperationsCancelBookingView.as_view(),
+        name="operations-booking-cancel",
     ),
     path(
         "operations/bookings/<uuid:booking_id>/recover/",

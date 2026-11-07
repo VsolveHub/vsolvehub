@@ -38,7 +38,6 @@ urlpatterns = [
         DispatchOfferDeclineView.as_view(),
         name="dispatch-offer-decline",
     ),
-
     path("operations/checkouts/<uuid:checkout_id>/offers/", ManualOfferView.as_view()),
     path(
         "operations/fulfilment-units/<uuid:unit_id>/offers/",

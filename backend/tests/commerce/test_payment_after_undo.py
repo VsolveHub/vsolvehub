@@ -1,20 +1,29 @@
-"""P0-5: a Customer must be able to pay after the first Partner undoes and a second accepts.
+"""P0-5: a Customer can pay when a unit still carries an earlier Partner's released hold.
 
-An undo releases the first Partner's reservation but leaves the row behind — reservations are
+An undo released the first Partner's reservation but left the row behind — reservations are
 history, never deleted. Payment start and capture both counted *every* reservation on the group,
 so one released row plus the second Partner's live hold read as "two holds for one unit" and
 payment was refused with "Every Fulfilment Unit must have a live Partner hold".
+
+Accepting has been final since 5 November 2026, so a new undo cannot make that shape; groups
+written before then still carry it, so the test lays the released row down directly.
 """
 
+from datetime import timedelta
+
 import pytest
+from django.conf import settings
 from django.core.management import call_command
+from django.db import transaction
+from django.utils import timezone
 from freezegun import freeze_time
+from psycopg.types.range import Range
 from rest_framework.test import APIClient
 
 from apps.assignments.group_services import (
+    _create_offer,
     accept_unit_offer,
     commit_unit_offer,
-    decline_or_undo_unit_offer,
 )
 from apps.assignments.models import PartnerOffer, Reservation
 from apps.carts.models import BookingGroup, CheckoutSession
@@ -35,8 +44,26 @@ def test_customer_can_pay_after_an_undo_and_a_second_acceptance() -> None:
     undoing_partner = offer.partner
     replacement = second if undoing_partner == first else first
 
-    accept_unit_offer(offer_id=offer.id, partner=undoing_partner)
-    successor = decline_or_undo_unit_offer(offer_id=offer.id, partner=undoing_partner, undo=True)
+    unit = offer.fulfilment_unit
+    with transaction.atomic():
+        released = Reservation.objects.create(
+            fulfilment_unit=unit,
+            partner=undoing_partner,
+            occupied_range=Range(
+                unit.requested_start,
+                unit.requested_start
+                + timedelta(
+                    minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES
+                ),
+                "[)",
+            ),
+            expires_at=timezone.now() + timedelta(minutes=2),
+        )
+        released.release()
+        PartnerOffer.objects.filter(id=offer.id).update(
+            status=PartnerOffer.Status.UNDONE, reservation=released
+        )
+        successor = _create_offer(group=group, unit=unit)
     assert successor is not None
     assert successor.partner == replacement
     accept_unit_offer(offer_id=successor.id, partner=replacement)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from typing import Sequence
 from xml.sax.saxutils import escape
 
 

@@ -80,6 +80,7 @@ def channels_due(*, purpose: str, time_remaining: timedelta) -> tuple[str, ...]:
 def escalate(
     *,
     recipient_id: UUID,
+    audience: str,
     purpose: str,
     template_code: str,
     time_remaining: timedelta,
@@ -99,6 +100,7 @@ def escalate(
                 recipient_id=recipient_id,
                 purpose=purpose,
                 channel=channel,
+                audience=audience,
                 template_code=template_code,
                 context=dict(context or {}),
                 idempotency_key=key,

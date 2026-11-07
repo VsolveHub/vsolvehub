@@ -315,7 +315,7 @@ class DispatchCommandAudit(models.Model):
 
 
 class DispatchOffer(models.Model):
-    """An instant dispatch offer made directly to an online partner for an instant / ASAP booking."""
+    """An instant dispatch offer made directly to an online partner for an instant/ASAP booking."""
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -377,4 +377,3 @@ class DispatchOffer(models.Model):
 
     def __str__(self) -> str:
         return f"{self.booking_id}:{self.partner_id}:{self.status}"
-

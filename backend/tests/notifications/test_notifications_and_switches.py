@@ -37,6 +37,7 @@ def _intent(
         recipient_id=recipient.id,
         purpose=purpose,
         channel=NotificationIntent.Channel.SMS,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="tpl.booking_confirmed",
         **kwargs,
     )
@@ -73,6 +74,7 @@ def test_the_context_carries_template_values_not_a_rendered_message() -> None:
         recipient_id=_user().id,
         purpose="booking.confirmed",
         channel=NotificationIntent.Channel.SMS,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="tpl.booking_confirmed",
         context={"booking_ref": "VSH-1234"},
     )
@@ -109,6 +111,7 @@ def test_an_sms_switch_suppresses_only_sms() -> None:
         recipient_id=recipient.id,
         purpose="booking.confirmed",
         channel=NotificationIntent.Channel.EMAIL,
+        audience=NotificationIntent.Audience.CUSTOMER,
         template_code="tpl.booking_confirmed",
     )
 

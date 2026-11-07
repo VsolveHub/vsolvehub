@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.90.0
+  version: 1.98.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -412,6 +412,119 @@ paths:
       responses:
         '204':
           description: The current session was revoked.
+  /api/v1/auth/mobile/firebase/verify/:
+    post:
+      operationId: auth_mobile_firebase_verify_create
+      description: |-
+        Firebase phone sign-in for the apps.
+
+        The web's Firebase check (`verify_firebase_login`), answered with a bearer token instead of
+        cookies, like `MobileOtpVerifyView`. The app sends the precheck to the shared
+        `POST /auth/firebase/precheck/` first, exactly as the web does.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileFirebaseVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MobileFirebaseVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MobileFirebaseVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAuthenticatedSession'
+              examples:
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      display_name: Gopal Rao
+                      full_name: ''
+                      email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Firebase auth is disabled or `intended_role` was set and this
+            number holds no such account.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Rate limit exceeded.
+  /api/v1/auth/mobile/otp/verify/:
+    post:
+      operationId: auth_mobile_otp_verify_create
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileOtpVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MobileOtpVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MobileOtpVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAuthenticatedSession'
+              examples:
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      display_name: Gopal Rao
+                      full_name: ''
+                      email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/auth/otp/request/:
     post:
       operationId: auth_otp_request_create
@@ -2505,16 +2618,35 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: User push notification preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
     patch:
       operationId: customer_notification_preferences_partial_update
       tags:
       - Notification preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
       security:
       - cookieAuth: []
       responses:
         '200':
-          description: Preferences updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
         '400':
           description: Invalid request or attempt to disable immutable category.
   /api/v1/customer/push-subscriptions/{subscription_id}/:
@@ -2782,13 +2914,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/WalletTransactionPage'
           description: ''
+  /api/v1/dev-storage/{bucket}/{object_key}:
+    get:
+      operationId: dev_storage_retrieve
+      description: |-
+        Local development storage endpoint for signed PUT uploads and GET downloads.
+
+        Enabled only in development/local mode when settings.DEBUG is True.
+      parameters:
+      - in: path
+        name: bucket
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: object_key
+        schema:
+          type: string
+        required: true
+      tags:
+      - dev-storage
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: dev_storage_update
+      description: |-
+        Local development storage endpoint for signed PUT uploads and GET downloads.
+
+        Enabled only in development/local mode when settings.DEBUG is True.
+      parameters:
+      - in: path
+        name: bucket
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: object_key
+        schema:
+          type: string
+        required: true
+      tags:
+      - dev-storage
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dev/mobile/test-push/:
+    post:
+      operationId: dev_mobile_test_push_create
+      description: 'Local development only: verify mobile Expo push delivery to a
+        user''s devices.'
+      tags:
+      - dev
+      responses:
+        '200':
+          description: No response body
   /api/v1/dev/onesignal/test-push/:
     post:
       operationId: dev_onesignal_test_push_create
-      description: Local development & testing endpoint to verify OneSignal push delivery
-        to an external_id.
+      description: |-
+        Local development only: send a test push to yourself.
+
+        Exists only while `DEBUG` is on — never by an environment label, which once defaulted it open
+        — and only to the signed-in caller, so it can never be used to push to someone else.
       tags:
       - dev
+      security:
+      - cookieAuth: []
       responses:
         '200':
           description: No response body
@@ -5176,6 +5374,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/geocoding/search/:
+    get:
+      operationId: geocoding_search_retrieve
+      description: |-
+        Places matching a typed address: the mobile apps' address search.
+
+        The web searches with Google's browser library; a native app cannot load it, so the same
+        lookup runs here with the server key. A result only places the pin: the address text then
+        comes from `POST /geocoding/reverse/` for that pin, exactly as on the web.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+          minLength: 3
+          maxLength: 200
+        required: true
+      tags:
+      - Locations
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaceSearchResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/health/live/:
     get:
       operationId: health_live_retrieve
@@ -5920,6 +6164,118 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayVisit'
           description: ''
+  /api/v1/mobile/app-config/:
+    get:
+      operationId: mobile_app_config_retrieve
+      parameters:
+      - in: query
+        name: app
+        schema:
+          enum:
+          - customer
+          - partner
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+        required: true
+      - in: query
+        name: platform
+        schema:
+          enum:
+          - ios
+          - android
+          type: string
+          minLength: 1
+        description: |-
+          * `ios` - ios
+          * `android` - android
+        required: true
+      - in: query
+        name: version
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 32
+        required: true
+      tags:
+      - Mobile
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/mobile/devices/:
+    post:
+      operationId: mobile_devices_create
+      tags:
+      - Mobile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRegisterRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/mobile/devices/unregister/:
+    post:
+      operationId: mobile_devices_unregister_create
+      tags:
+      - Mobile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushDeviceUnregisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PushDeviceUnregisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PushDeviceUnregisterRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/my/interviews/{interview_id}/{action}:
     post:
       operationId: my_interview_answer
@@ -6021,6 +6377,19 @@ paths:
         which is the same reasoning that keeps `partner_id` off the partner ledger.
       parameters:
       - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
+      - in: query
         name: cursor
         schema:
           type: string
@@ -6056,6 +6425,20 @@ paths:
 
         `ThrottledWriteMixin` exempts safe methods, so mounting a scope here costs the polled reads
         above nothing while still bounding a script hammering the write.
+      parameters:
+      - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
       tags:
       - Notifications
       requestBody:
@@ -6105,6 +6488,20 @@ paths:
         Its own endpoint rather than a field on the feed page, because the badge is polled on every
         authenticated screen and the feed is read only when somebody opens the panel. Making the cheap
         question carry the expensive answer is how a poll becomes a page fetch every few seconds.
+      parameters:
+      - in: query
+        name: audience
+        schema:
+          enum:
+          - customer
+          - partner
+          - operations
+          type: string
+          minLength: 1
+        description: |-
+          * `customer` - customer
+          * `partner` - partner
+          * `operations` - operations
       tags:
       - Notifications
       security:
@@ -6115,6 +6512,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnreadNotificationCount'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -6224,6 +6627,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/bookings/:
+    get:
+      operationId: operations_bookings_list
+      description: Every home-service visit, newest first, so Operations can find
+        one without its id.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: late
+        schema:
+          type: boolean
+        description: Only visits past their start time that have not started.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBookingPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/bookings/{booking_id}/:
     get:
       operationId: operations_booking_retrieve
@@ -6290,6 +6751,82 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/AssistedStartRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBooking'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/bookings/{booking_id}/cancel/:
+    post:
+      operationId: operations_booking_cancel
+      description: |-
+        Operations cancels a visit for the customer and refunds it, from the visit page.
+
+        Moves money, so it sits behind the same step-up as refunds. Refunding used to mean copying the
+        order id into the Refunds page and typing the visit's fulfilment-unit id by hand.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsCancelRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsCancelRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsCancelRequestRequest'
         required: true
       security:
       - cookieAuth: []
@@ -6432,10 +6969,21 @@ paths:
           type: string
         description: Filter by owning team.
       - in: query
+        name: q
+        schema:
+          type: string
+        description: The summary, a customer's or partner's name or phone, or a case,
+          booking or request id.
+      - in: query
+        name: severity
+        schema:
+          type: string
+        description: Filter by severity.
+      - in: query
         name: status
         schema:
           type: string
-        description: Filter by case status.
+        description: One case status, or several separated by commas.
       tags:
       - Operations
       security:
@@ -7776,6 +8324,123 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/customers/:
+    get:
+      operationId: operations_customers_list
+      description: Every customer, newest first. `?q=` a name, or a mobile number
+        however it was typed.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCustomerPage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/customers/{customer_id}/:
+    get:
+      operationId: operations_customer_retrieve
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCustomerRecord'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/customers/{customer_id}/block/:
+    post:
+      operationId: operations_customer_block
+      description: Block or unblock an account. Blocking signs the person out everywhere.
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsCustomerBlockRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsCustomerBlockRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsCustomerBlockRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCustomerRecord'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/engagements/{engagement_id}/project/:
     get:
       operationId: m2_operations_project_read
@@ -8647,6 +9312,11 @@ paths:
           type: string
         description: Opaque page cursor.
       - in: query
+        name: q
+        schema:
+          type: string
+        description: A name, or a mobile number typed any way (spaces, +91, dashes).
+      - in: query
         name: skill
         schema:
           type: array
@@ -8721,9 +9391,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/partners/{partner_id}/activity/:
+    get:
+      operationId: operations_partner_activity
+      description: A partner's recent work across services and what they are owed,
+        for the partner record.
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPartnerActivity'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/partners/{partner_id}/availability/:
+    get:
+      operationId: operations_partner_schedule_retrieve
+      description: |-
+        A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+
+        The read comes first so a change edits what is there instead of overwriting it blind.
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPartnerSchedule'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
     put:
       operationId: operations_partners_availability_update
+      description: |-
+        A Partner's working hours, for Operations to read and, when the Partner cannot, change.
+
+        The read comes first so a change edits what is there instead of overwriting it blind.
       parameters:
       - in: path
         name: partner_id
@@ -8825,20 +9570,67 @@ paths:
   /api/v1/operations/partners/import/:
     post:
       operationId: operations_partners_import_create
-      summary: Import partners via CSV
+      description: |-
+        Operations imports partners from a CSV (contract proposal 0029).
+
+        Each ready row becomes a partner with a DRAFT application, which the partner finishes and
+        submits themselves. `check` changes nothing; `import` is all-or-nothing and idempotent on
+        `Idempotency-Key`, so a double click or a retry imports once.
+      summary: Check or import a partner CSV
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Required when `mode` is `import`. The frontend sends the file's
+          SHA-256, so re-sending the same file replays the first result.
       tags:
       - operations
       requestBody:
         content:
           multipart/form-data:
             schema:
-              type: object
-              additionalProperties: {}
+              $ref: '#/components/schemas/PartnerImportUploadRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerImportResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/payments/{payment_attempt_id}/chargeback/:
     post:
       operationId: m2_operations_record_chargeback
@@ -9697,6 +10489,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefundPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/:
+    get:
+      operationId: operations_requests_list
+      description: Every crew and project request, newest first.
+      parameters:
+      - in: query
+        name: archetype
+        schema:
+          type: string
+          enum:
+          - A3_TIME_BLOCK
+          - A5_CUSTOM_PROJECT
+        description: Crew hire (A3_TIME_BLOCK) or custom project (A5_CUSTOM_PROJECT).
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: open
+        schema:
+          type: boolean
+        description: Only requests that are not closed.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      - in: query
+        name: stuck
+        schema:
+          type: string
+          enum:
+          - cancellation_unanswered
+          - case_response_overdue
+          - inactive
+          - sla_breached
+          - unconfirmed
+          - under_quoted
+          - unmatched
+          - unreconciled
+        description: Only the requests in this stuck queue (see the stuck-queue summary).
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsRequestPage'
           description: ''
         '400':
           content:
@@ -10773,6 +11634,64 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/ops/home-services/money:
+    get:
+      operationId: ops_home_services_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/home-services/money/payments:
+    get:
+      operationId: ops_home_services_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
+          description: ''
   /api/v1/ops/listings:
     get:
       operationId: ops_listings_retrieve
@@ -10807,6 +11726,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsListingPage'
+          description: ''
+  /api/v1/ops/listings/{listing_id}/applications:
+    get:
+      operationId: ops_listing_applications_list
+      description: Who applied to one job, as the poster sees it, so Operations can
+        answer either side.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsListingApplicationPage'
           description: ''
   /api/v1/ops/listings/{listing_id}/moderate:
     post:
@@ -11522,6 +12474,8 @@ paths:
   /api/v1/ops/rentals/platform-fee:
     get:
       operationId: ops_rentals_platform_fee_retrieve
+      description: 'The rental platform fee, versioned: what is in force, what is
+        scheduled, and history.'
       tags:
       - ops
       security:
@@ -11531,24 +12485,54 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalPlatformFee'
+                $ref: '#/components/schemas/OpsRentalPlatformFee'
           description: ''
-    put:
-      operationId: ops_rentals_platform_fee_update
+    post:
+      operationId: ops_rentals_platform_fee_schedule
+      description: 'The rental platform fee, versioned: what is in force, what is
+        scheduled, and history.'
       tags:
       - ops
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RentalPlatformFeeRequest'
+              $ref: '#/components/schemas/RentalPlatformFeeScheduleRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/RentalPlatformFeeRequest'
+              $ref: '#/components/schemas/RentalPlatformFeeScheduleRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/RentalPlatformFeeRequest'
+              $ref: '#/components/schemas/RentalPlatformFeeScheduleRequest'
         required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsRentalPlatformFee'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/ops/rentals/platform-fee/{version_id}:
+    delete:
+      operationId: ops_rentals_platform_fee_withdraw
+      description: Withdraw a fee version that has not taken effect yet.
+      parameters:
+      - in: path
+        name: version_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
       security:
       - cookieAuth: []
       responses:
@@ -11556,7 +12540,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalPlatformFee'
+                $ref: '#/components/schemas/OpsRentalPlatformFee'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/ops/reports/:
     get:
@@ -12389,6 +13379,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpsWalletTopUpPolicy'
+          description: ''
+  /api/v1/ops/workforce/money:
+    get:
+      operationId: ops_workforce_money_retrieve
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+          description: ''
+  /api/v1/ops/workforce/money/payments:
+    get:
+      operationId: ops_workforce_money_payments_list
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+      - in: query
+        name: period
+        schema:
+          type: string
+          enum:
+          - all
+          - last_month
+          - this_month
+        description: Captured in this calendar month (default), last month, or ever.
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyPayment'
           description: ''
   /api/v1/orders/{order_id}/:
     get:
@@ -13404,6 +14452,69 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/route/:
+    post:
+      operationId: partner_booking_route
+      description: |-
+        The road route from where the Partner is to the visit, for the in-app map.
+
+        A read, sent as `POST` so the Partner's position travels in the body rather than in a URL
+        that proxies log. Under the same gate as the address: the route ends at the Customer's
+        door, so it is served exactly when the address is.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerRouteOriginRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerVisitRoute'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -15484,8 +16595,9 @@ paths:
       description: |-
         Changes what a Partner may change about themselves.
 
-        Deliberately narrow. The phone number is the login credential and is not
-        accepted here — see `PartnerProfileUpdateSerializer`.
+        Deliberately narrow. Neither the phone number (the login credential) nor the
+        name (checked against the Partner's ID) is accepted here — see
+        `PartnerProfileUpdateSerializer`.
       tags:
       - Partner
       requestBody:
@@ -15529,16 +16641,35 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: User push notification preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
     patch:
       operationId: partner_notification_preferences_partial_update
       tags:
       - Notification preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPushPreferenceUpdateRequest'
       security:
       - cookieAuth: []
       responses:
         '200':
-          description: Preferences updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushPreferences'
+          description: ''
         '400':
           description: Invalid request or attempt to disable immutable category.
   /api/v1/partner/offers/:
@@ -21265,6 +22396,10 @@ paths:
         name: sort
         schema:
           type: string
+      - in: query
+        name: tenant_preference
+        schema:
+          type: string
       tags:
       - stays
       security:
@@ -22064,6 +23199,22 @@ components:
       - message
       - request_id
       - retryable
+    AppConfig:
+      type: object
+      properties:
+        minimum_version:
+          type: string
+        latest_version:
+          type: string
+        update_required:
+          type: boolean
+        store_url:
+          type: string
+      required:
+      - latest_version
+      - minimum_version
+      - store_url
+      - update_required
     Application:
       type: object
       properties:
@@ -22268,6 +23419,24 @@ components:
           $ref: '#/components/schemas/StatusD32Enum'
       required:
       - status
+    ArchetypeEnum:
+      enum:
+      - LEGACY
+      - A1_TASK_VISIT
+      - A3_TIME_BLOCK
+      - A5_CUSTOM_PROJECT
+      - A7_RENTAL
+      - A9_STAY
+      - A10_LISTING
+      type: string
+      description: |-
+        * `LEGACY` - Legacy
+        * `A1_TASK_VISIT` - A1 task visit
+        * `A3_TIME_BLOCK` - A3 time block
+        * `A5_CUSTOM_PROJECT` - A5 custom project
+        * `A7_RENTAL` - A7 rental
+        * `A9_STAY` - A9 stay
+        * `A10_LISTING` - A10 listing
     AssignedProfessional:
       type: object
       description: |-
@@ -23656,6 +24825,19 @@ components:
       - expected_version
       - note
       - resolution
+    CasePerson:
+      type: object
+      properties:
+        role:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+      required:
+      - name
+      - phone
+      - role
     CaseQueueSummary:
       type: object
       description: |-
@@ -30048,6 +31230,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -30133,6 +31320,7 @@ components:
       - job_type
       - languages
       - listing_type_schema
+      - media
       - min_qualification
       - poster_name
       - preferred_skills
@@ -30161,6 +31349,56 @@ components:
             $ref: '#/components/schemas/ListingCategoryOption'
       required:
       - categories
+    ListingMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          $ref: '#/components/schemas/ListingMediaKindEnum'
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        alt_text:
+          type: string
+          maxLength: 200
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - id
+      - url
+    ListingMediaKindEnum:
+      enum:
+      - IMAGE
+      - ATTACHMENT
+      type: string
+      description: |-
+        * `IMAGE` - Image
+        * `ATTACHMENT` - Attachment
+    ListingMediaRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/ListingMediaKindEnum'
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
+        alt_text:
+          type: string
+          maxLength: 200
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - url
     ListingModerationStatusEnum:
       enum:
       - DRAFT
@@ -30276,6 +31514,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -30344,6 +31587,7 @@ components:
       - job_category
       - job_type
       - languages
+      - media
       - min_qualification
       - poster_name
       - preferred_skills
@@ -30479,6 +31723,95 @@ components:
       description: |-
         * `IMAGE` - Image
         * `VIDEO` - Video
+    MobileAuthenticatedSession:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        active_role:
+          type: string
+          readOnly: true
+        session_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        session_token:
+          type: string
+          readOnly: true
+      required:
+      - active_role
+      - session_expires_at
+      - session_token
+      - user
+    MobileFirebaseVerifyRequest:
+      type: object
+      description: The web Firebase verify body, with a required installation id.
+      properties:
+        id_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Firebase ID token issued after client-side Phone Auth.
+        intended_role:
+          writeOnly: true
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/IntendedRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        referral_code:
+          type: string
+          writeOnly: true
+          description: Applied only when this verification creates a new account.
+          maxLength: 32
+        device_identifier:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+        device_label:
+          type: string
+          writeOnly: true
+          maxLength: 100
+      required:
+      - device_identifier
+      - id_token
+    MobileOtpVerifyRequest:
+      type: object
+      description: Same OTP body as the web, with a required installation id.
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 32
+        code:
+          type: string
+          writeOnly: true
+          minLength: 6
+          maxLength: 6
+        device_identifier:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+        device_label:
+          type: string
+          writeOnly: true
+          maxLength: 100
+        referral_code:
+          type: string
+          writeOnly: true
+          description: Applied only when this verification creates a new account.
+          maxLength: 32
+      required:
+      - challenge_id
+      - code
+      - device_identifier
+      - phone_number
     Mode074Enum:
       enum:
       - IN_PERSON
@@ -31143,6 +32476,11 @@ components:
           format: uuid
           nullable: true
           readOnly: true
+        operations_cancellation:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCancellationPreview'
+          nullable: true
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -31161,6 +32499,7 @@ components:
       - fulfilment_unit_id
       - id
       - late_declared_at
+      - operations_cancellation
       - order_id
       - partner_display_name
       - partner_id
@@ -31174,6 +32513,141 @@ components:
       - status_history
       - version
       - work_tasks
+    OperationsBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBookingRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsBookingRow:
+      type: object
+      description: |-
+        One home-service visit in the Operations bookings list: enough to find it and see if it
+        needs a hand. The full record, with history and actions, is `OperationsBookingSerializer`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        partner_phone:
+          type: string
+          readOnly: true
+        services:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        is_late:
+          type: boolean
+          readOnly: true
+        payout_hold:
+          type: boolean
+          readOnly: true
+        needs_redispatch:
+          type: boolean
+          readOnly: true
+      required:
+      - area
+      - created_at
+      - customer_name
+      - customer_phone
+      - estimated_duration_minutes
+      - id
+      - is_late
+      - needs_redispatch
+      - partner_display_name
+      - partner_phone
+      - payout_hold
+      - scheduled_start
+      - services
+      - status
+      - total_paise
+    OperationsCancelRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+        full_refund:
+          type: boolean
+          description: '`true` waives the cancellation fee; `false` applies the customer''s
+            fee ladder.'
+      required:
+      - expected_version
+      - full_refund
+      - reason
+    OperationsCancellationPreview:
+      type: object
+      properties:
+        refundable_paise:
+          type: integer
+          description: What a full refund returns.
+        policy_fee_paise:
+          type: integer
+          description: The customer's cancellation fee if it is not waived.
+        policy_fee_waiver:
+          type: string
+          description: Set when the fee is already waived (partner released or late).
+        currency:
+          type: string
+      required:
+      - currency
+      - policy_fee_paise
+      - policy_fee_waiver
+      - refundable_paise
     OperationsCase:
       type: object
       description: |-
@@ -31335,6 +32809,15 @@ components:
           format: uuid
           nullable: true
           readOnly: true
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/CasePerson'
+          readOnly: true
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31363,8 +32846,10 @@ components:
       - listing_id
       - order_id
       - owner_id
+      - owner_name
       - owner_team
       - partner_id
+      - people
       - requirement_id
       - resolution
       - resolution_note
@@ -31567,6 +33052,10 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
         booking_id:
           type: string
           format: uuid
@@ -31593,6 +33082,11 @@ components:
         holds_payout:
           type: boolean
           readOnly: true
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/CasePerson'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31606,8 +33100,10 @@ components:
       - is_overdue
       - kind
       - owner_id
+      - owner_name
       - owner_team
       - partner_id
+      - people
       - severity
       - status
       - summary
@@ -31678,6 +33174,226 @@ components:
         * `QUALITY_SUPPORT` - Quality support
         * `SAFETY` - Restricted safety team
         * `FINANCE` - Finance Operations
+    OperationsCustomerBlock:
+      type: object
+      properties:
+        reason:
+          type: string
+        at:
+          type: string
+          format: date-time
+        by:
+          type: string
+      required:
+      - at
+      - by
+      - reason
+    OperationsCustomerBlockRequestRequest:
+      type: object
+      properties:
+        blocked:
+          type: boolean
+          description: '`true` blocks, `false` unblocks.'
+        reason:
+          type: string
+          minLength: 1
+          description: Kept in the account's history.
+          maxLength: 480
+      required:
+      - blocked
+      - reason
+    OperationsCustomerBooking:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/OperationsCustomerBookingKindEnum'
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        status_label:
+          type: string
+        when:
+          type: string
+          format: date-time
+          description: Visit time, start date, check-in or request date.
+        total_paise:
+          type: integer
+          nullable: true
+      required:
+      - id
+      - kind
+      - status
+      - status_label
+      - title
+      - total_paise
+      - when
+    OperationsCustomerBookingKindEnum:
+      enum:
+      - HOME_VISIT
+      - RENTAL
+      - STAY
+      - REQUEST
+      type: string
+      description: |-
+        * `HOME_VISIT` - Home-service visit
+        * `RENTAL` - Rental
+        * `STAY` - Stay
+        * `REQUEST` - Crew or project request
+    OperationsCustomerCase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        summary:
+          type: string
+        kind:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - kind
+      - status
+      - summary
+    OperationsCustomerPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCustomerRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsCustomerQuote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        total_paise:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - expires_at
+      - id
+      - title
+      - total_paise
+    OperationsCustomerRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        phone_number:
+          type: string
+        email:
+          type: string
+        date_joined:
+          type: string
+          format: date-time
+        is_blocked:
+          type: boolean
+        block:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCustomerBlock'
+          nullable: true
+          description: Why and by whom, while blocked.
+        partner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Set when this person is also a partner.
+        wallet_balance_paise:
+          type: integer
+        coins_spendable:
+          type: integer
+        bookings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCustomerBooking'
+          description: The 25 most recent, every kind.
+        open_quotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCustomerQuote'
+          description: Unpaid, unexpired quotes Operations can check out for them.
+        open_cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCustomerCase'
+      required:
+      - block
+      - bookings
+      - coins_spendable
+      - date_joined
+      - email
+      - full_name
+      - id
+      - is_blocked
+      - open_cases
+      - open_quotes
+      - partner_id
+      - phone_number
+      - wallet_balance_paise
+    OperationsCustomerRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        phone_number:
+          type: string
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+        is_blocked:
+          type: boolean
+          readOnly: true
+        is_partner:
+          type: boolean
+          readOnly: true
+      required:
+      - date_joined
+      - full_name
+      - id
+      - is_blocked
+      - is_partner
+      - phone_number
     OperationsDeadlineExtensionRequest:
       type: object
       description: Every safe Operations action takes a reason. `M2-AC-804` requires
@@ -31713,6 +33429,48 @@ components:
           maxLength: 2000
       required:
       - decision
+    OperationsPartnerActivity:
+      type: object
+      properties:
+        balance:
+          $ref: '#/components/schemas/OperationsPartnerBalance'
+        bookings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCustomerBooking'
+          description: The 25 most recent.
+      required:
+      - balance
+      - bookings
+    OperationsPartnerBalance:
+      type: object
+      properties:
+        available_paise:
+          type: integer
+          description: Payable now. Negative when refunds exceed it.
+        withdrawable_paise:
+          type: integer
+        clearing_paise:
+          type: integer
+          description: Earned, waiting out the dispute window.
+        held_paise:
+          type: integer
+          description: Frozen by a dispute or case.
+        pending_paise:
+          type: integer
+        reserved_paise:
+          type: integer
+          description: In a payout not yet settled.
+        paid_paise:
+          type: integer
+      required:
+      - available_paise
+      - clearing_paise
+      - held_paise
+      - paid_paise
+      - pending_paise
+      - reserved_paise
+      - withdrawable_paise
     OperationsPartnerDetail:
       type: object
       description: One Partner, for the management screen.
@@ -31722,6 +33480,9 @@ components:
           format: uuid
           readOnly: true
         display_name:
+          type: string
+          readOnly: true
+        phone_number:
           type: string
           readOnly: true
         biography:
@@ -31797,6 +33558,7 @@ components:
       - documents
       - experience_years
       - id
+      - phone_number
       - reviewed_at
       - service_areas
       - services
@@ -31817,6 +33579,9 @@ components:
           format: uuid
           readOnly: true
         display_name:
+          type: string
+          readOnly: true
+        phone_number:
           type: string
           readOnly: true
         experience_years:
@@ -31859,6 +33624,7 @@ components:
       - display_name
       - experience_years
       - id
+      - phone_number
       - reviewed_at
       - service_area_count
       - service_count
@@ -31922,6 +33688,37 @@ components:
       - reviewed_at
       - status
       - uploaded_at
+    OperationsPartnerSchedule:
+      type: object
+      description: |-
+        A Partner's current hours, with what an operator needs to change them without typing ids:
+        the areas the Partner serves and the consent receipts a change may be recorded against.
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityRule'
+          readOnly: true
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityException'
+          readOnly: true
+        service_areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsScheduleArea'
+          readOnly: true
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsScheduleConsent'
+          readOnly: true
+      required:
+      - consents
+      - exceptions
+      - rules
+      - service_areas
     OperationsPartnerScheduleUpdateRequest:
       type: object
       properties:
@@ -32084,6 +33881,135 @@ components:
       required:
       - decision
       - reason
+    OperationsRequestPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsRequestRow'
+      required:
+      - next
+      - previous
+      - results
+    OperationsRequestRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RequirementStatusEnum'
+          readOnly: true
+        archetype:
+          allOf:
+          - $ref: '#/components/schemas/ArchetypeEnum'
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        quotes_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        engagement_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        engagement_status:
+          type: string
+          nullable: true
+          readOnly: true
+        vendor_display_name:
+          type: string
+          nullable: true
+          readOnly: true
+        engagement_total_paise:
+          type: integer
+          nullable: true
+          readOnly: true
+      required:
+      - archetype
+      - area
+      - closed_at
+      - created_at
+      - customer_name
+      - customer_phone
+      - engagement_id
+      - engagement_status
+      - engagement_total_paise
+      - id
+      - quotes_due_at
+      - requested_start
+      - service_name
+      - status
+      - submitted_at
+      - vendor_display_name
+    OperationsScheduleArea:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    OperationsScheduleConsent:
+      type: object
+      properties:
+        purpose:
+          type: string
+        document_version:
+          type: string
+        accepted_at:
+          type: string
+          format: date-time
+      required:
+      - accepted_at
+      - document_version
+      - purpose
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -32506,6 +34432,25 @@ components:
         pinned_tiles:
           description: List of tile IDs pinned by the operator. e.g. ['open_cases',
             'overdue_bookings', 'captured_today', 'wallet_liability']
+    OpsListingApplicationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+      required:
+      - next
+      - previous
+      - results
     OpsListingPage:
       type: object
       properties:
@@ -32780,6 +34725,31 @@ components:
       - next
       - previous
       - results
+    OpsRentalPlatformFee:
+      type: object
+      properties:
+        percent:
+          type: integer
+          description: In force now. 0 when no version is.
+        current:
+          allOf:
+          - $ref: '#/components/schemas/RentalPlatformFeeVersion'
+          nullable: true
+        upcoming:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalPlatformFeeVersion'
+          description: Scheduled, not yet in force. Soonest first; can be withdrawn.
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalPlatformFeeVersion'
+          description: Earlier versions, newest first.
+      required:
+      - current
+      - history
+      - percent
+      - upcoming
     OpsReportCatalogItem:
       type: object
       properties:
@@ -33477,6 +35447,17 @@ components:
           items:
             $ref: '#/components/schemas/PartnerApplicationTransition'
           readOnly: true
+        can_edit:
+          type: boolean
+          readOnly: true
+        required_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        consents_complete:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -33487,14 +35468,17 @@ components:
           readOnly: true
       required:
       - biography
+      - can_edit
       - change_request_message
       - consents
+      - consents_complete
       - created_at
       - display_name
       - documents
       - experience_years
       - id
       - partner_id
+      - required_document_kinds
       - review_assigned_at
       - review_assigned_to_id
       - reviewed_at
@@ -34420,8 +36404,16 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        file_name:
+          type: string
+          readOnly: true
+        can_replace:
+          type: boolean
+          readOnly: true
       required:
+      - can_replace
       - content_type
+      - file_name
       - id
       - kind
       - review_reason
@@ -34657,6 +36649,121 @@ components:
       - latitude
       - longitude
       - service_area_id
+    PartnerImportCellError:
+      type: object
+      properties:
+        column:
+          type: string
+        message:
+          type: string
+      required:
+      - column
+      - message
+    PartnerImportModeEnum:
+      enum:
+      - check
+      - import
+      type: string
+      description: |-
+        * `check` - Check
+        * `import` - Import
+    PartnerImportResult:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/PartnerImportModeEnum'
+        file_sha256:
+          type: string
+        summary:
+          $ref: '#/components/schemas/PartnerImportSummary'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerImportRow'
+      required:
+      - file_sha256
+      - mode
+      - rows
+      - summary
+    PartnerImportRow:
+      type: object
+      properties:
+        row:
+          type: integer
+          description: The line in the file, counting the header as 1.
+        status:
+          $ref: '#/components/schemas/PartnerImportRowStatusEnum'
+        phone:
+          type: string
+        full_name:
+          type: string
+        track:
+          type: string
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerImportCellError'
+        message:
+          type: string
+        partner_id:
+          type: string
+          format: uuid
+      required:
+      - full_name
+      - phone
+      - problems
+      - row
+      - status
+      - track
+    PartnerImportRowStatusEnum:
+      enum:
+      - ready
+      - created
+      - skipped
+      - error
+      type: string
+      description: |-
+        * `ready` - Ready
+        * `created` - Created
+        * `skipped` - Skipped
+        * `error` - Error
+    PartnerImportSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        ready:
+          type: integer
+          description: On `check`.
+        created:
+          type: integer
+          description: On `import`.
+        skipped:
+          type: integer
+        problems:
+          type: integer
+          description: Rows with at least one problem.
+      required:
+      - problems
+      - skipped
+      - total
+    PartnerImportUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        mode:
+          allOf:
+          - $ref: '#/components/schemas/PartnerImportModeEnum'
+          description: |-
+            `check` validates and changes nothing; `import` creates every ready row.
+
+            * `check` - Check
+            * `import` - Import
+      required:
+      - file
+      - mode
     PartnerInsurance:
       type: object
       properties:
@@ -34915,6 +37022,11 @@ components:
         application_count:
           type: integer
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingMedia'
+          readOnly: true
         role_template:
           type: string
           format: uuid
@@ -35035,6 +37147,7 @@ components:
       - job_type
       - languages
       - listing_type_schema
+      - media
       - min_qualification
       - moderation_reason
       - moderation_status
@@ -35758,6 +37871,21 @@ components:
           type: string
           default: ''
           maxLength: 200
+    PartnerRouteOriginRequest:
+      type: object
+      description: Where the Partner is now. Used for this one route and not stored.
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+      required:
+      - latitude
+      - longitude
     PartnerSchedule:
       type: object
       properties:
@@ -36205,6 +38333,34 @@ components:
       - nightly_rate_paise
       - rooms
       - upcoming_booking_count
+    PartnerVisitRoute:
+      type: object
+      description: |-
+        The road route to the visit, for the Partner's map.
+
+        There is no separate destination point: the line ends at the Customer's pin, which is all a
+        map needs, and the pin still never travels as bare coordinates (see
+        `PartnerSiteAddressSerializer`).
+      properties:
+        encoded_polyline:
+          type: string
+          description: Google encoded polyline from the Partner to the Customer's
+            pin.
+        distance_meters:
+          type: integer
+          minimum: 0
+        duration_seconds:
+          type: integer
+          minimum: 0
+          description: Two-wheeler travel time with live traffic.
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - distance_meters
+      - duration_seconds
+      - encoded_polyline
+      - server_now
     PartnerWithdrawal:
       type: object
       description: |-
@@ -36879,9 +39035,12 @@ components:
       description: |-
         What a Partner may change about themselves without a review.
 
-        `display_name` is the name Customers see. `default_location_text` is the
-        registered pickup / address used to prefill A7 rental ads (still editable
-        per asset).
+        `default_location_text` is the registered pickup / address used to prefill A7
+        rental ads (still editable per asset).
+
+        **Not** `display_name`. It is the name on the application Operations checked
+        against the Partner's ID, so it is fixed once the application is sent; before
+        that it is edited on the application itself.
 
         **Not** `phone_number`. That is the login credential: changing it moves who
         can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -36892,13 +39051,19 @@ components:
         Skills and service areas are absent for a different reason: Operations
         reviewed them, and a field here would silently reopen a reviewed decision.
       properties:
-        display_name:
-          type: string
-          minLength: 1
-          maxLength: 120
         default_location_text:
           type: string
           maxLength: 240
+    PatchedPushPreferenceUpdateRequest:
+      type: object
+      description: 'Switch one category. The endpoint also takes a list of these,
+        or `{preferences: ...}`.'
+      properties:
+        category:
+          type: string
+          minLength: 1
+        is_enabled:
+          type: boolean
     PatchedRequirementUpdateRequest:
       type: object
       description: |-
@@ -37762,6 +39927,36 @@ components:
           maxItems: 366
       required:
       - days
+    PlaceSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaceSuggestion'
+          readOnly: true
+      required:
+      - results
+    PlaceSuggestion:
+      type: object
+      properties:
+        label:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+      required:
+      - label
+      - latitude
+      - longitude
     PlanQuoteCreateRequest:
       type: object
       properties:
@@ -40548,6 +42743,135 @@ components:
         * `A9_STAY_RESERVATION` - A9 stay reservation
         * `A7_RENTAL_BOOKING` - A7 rental booking
         * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+    PushDevice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        app:
+          allOf:
+          - $ref: '#/components/schemas/PushDeviceAppEnum'
+          readOnly: true
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PushDevicePlatformEnum'
+          readOnly: true
+        app_version:
+          type: string
+          readOnly: true
+        last_registered_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - app
+      - app_version
+      - id
+      - last_registered_at
+      - platform
+    PushDeviceAppEnum:
+      enum:
+      - customer
+      - partner
+      type: string
+      description: |-
+        * `customer` - Customer
+        * `partner` - Partner
+    PushDevicePlatformEnum:
+      enum:
+      - ios
+      - android
+      type: string
+      description: |-
+        * `ios` - iOS
+        * `android` - Android
+    PushDeviceRegisterAppEnum:
+      enum:
+      - customer
+      - partner
+      type: string
+      description: |-
+        * `customer` - customer
+        * `partner` - partner
+    PushDeviceRegisterPlatformEnum:
+      enum:
+      - ios
+      - android
+      type: string
+      description: |-
+        * `ios` - ios
+        * `android` - android
+    PushDeviceRegisterRequest:
+      type: object
+      properties:
+        expo_push_token:
+          type: string
+          minLength: 1
+          maxLength: 200
+        app:
+          $ref: '#/components/schemas/PushDeviceRegisterAppEnum'
+        platform:
+          $ref: '#/components/schemas/PushDeviceRegisterPlatformEnum'
+        app_version:
+          type: string
+          minLength: 1
+          maxLength: 32
+      required:
+      - app
+      - app_version
+      - expo_push_token
+      - platform
+    PushDeviceUnregisterRequest:
+      type: object
+      properties:
+        expo_push_token:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - expo_push_token
+    PushPreferenceItem:
+      type: object
+      description: One push category the signed-in person can see, and whether it
+        is on.
+      properties:
+        category:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        is_enabled:
+          type: boolean
+          readOnly: true
+        is_mutable:
+          type: boolean
+          readOnly: true
+      required:
+      - category
+      - description
+      - is_enabled
+      - is_mutable
+      - label
+    PushPreferences:
+      type: object
+      properties:
+        role:
+          type: string
+          readOnly: true
+        preferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushPreferenceItem'
+          readOnly: true
+      required:
+      - preferences
+      - role
     QuestionAnswerRequest:
       type: object
       properties:
@@ -42160,6 +44484,13 @@ components:
           items:
             $ref: '#/components/schemas/RentalAssetMedia'
           readOnly: true
+        reserved_ranges:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+          readOnly: true
         pickup_address_line:
           type: string
           readOnly: true
@@ -42225,6 +44556,7 @@ components:
       - pickup_pincode
       - public_state
       - quantity_available
+      - reserved_ranges
       - slug
       - structured_fields
       - title
@@ -42294,6 +44626,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
+        reserved_ranges:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
           readOnly: true
         pickup_address_line:
           type: string
@@ -42365,6 +44704,7 @@ components:
       - pickup_pincode
       - public_state
       - quantity_available
+      - reserved_ranges
       - slug
       - structured_fields
       - title
@@ -42666,15 +45006,53 @@ components:
       required:
       - percent
       - transport_fee_percent
-    RentalPlatformFeeRequest:
+    RentalPlatformFeeScheduleRequest:
       type: object
       properties:
         percent:
           type: integer
           maximum: 100
           minimum: 0
+        approval_reference:
+          type: string
+          minLength: 1
+          maxLength: 120
+        effective_from:
+          type: string
+          format: date-time
+          description: When it takes effect. Leave out to take effect now.
       required:
+      - approval_reference
       - percent
+    RentalPlatformFeeVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        percent:
+          type: integer
+        effective_from:
+          type: string
+          format: date-time
+        approval_reference:
+          type: string
+        created_by_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - approval_reference
+      - created_at
+      - created_by_name
+      - effective_from
+      - id
+      - percent
+      - version
     RentalTaxonomyService:
       type: object
       properties:

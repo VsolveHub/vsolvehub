@@ -5,7 +5,7 @@ import {
   canSubmit,
   isEditable,
   outstandingRequirements,
-  rejectedDocuments,
+  replaceableRejectedDocuments,
   requirements,
 } from "./readiness";
 
@@ -26,12 +26,18 @@ function document(overrides: Partial<Document> = {}): Document {
     review_reason: "",
     uploaded_at: "2026-07-30T09:00:00Z",
     reviewed_at: null,
+    file_name: "government_id_v1.jpg",
+    can_replace: false,
     ...overrides,
   };
 }
 
 function application(overrides: Partial<Application> = {}): Application {
+  const status = overrides.status ?? "DRAFT";
   return {
+    can_edit: status === "DRAFT" || status === "CHANGES_REQUIRED",
+    required_document_kinds: ["GOVERNMENT_ID"],
+    consents_complete: false,
     id: "app-1",
     partner_id: "partner-1",
     status: "DRAFT",
@@ -62,11 +68,8 @@ function completeApplication(overrides: Partial<Application> = {}): Application 
     skill_codes: ["electrical"],
     service_variant_ids: ["variant-1"],
     service_area_ids: ["area-1"],
-    documents: [
-      document({ id: "doc-id", kind: "GOVERNMENT_ID" }),
-      document({ id: "doc-addr", kind: "ADDRESS_PROOF" }),
-    ],
-    consents: [{ code: "terms", granted_at: "2026-07-30T09:00:00Z" }] as never,
+    documents: [document({ id: "doc-id", kind: "GOVERNMENT_ID" })],
+    consents_complete: true,
     ...overrides,
   });
 }
@@ -97,7 +100,23 @@ describe("requirements", () => {
       "SERVICE_AREAS",
       "WORKING_HOURS",
       "GOVERNMENT_ID",
+      "CONSENTS",
+    ]);
+  });
+
+  it("requires exactly the documents the server lists", () => {
+    // A copy of the list here once demanded proof of address Django does not require.
+    const both = application({ required_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF"] });
+    const codes = outstandingRequirements(both).map((item) => item.code);
+    expect(codes).toContain("ADDRESS_PROOF");
+    expect(outstandingRequirements(application()).map((item) => item.code)).not.toContain(
       "ADDRESS_PROOF",
+    );
+  });
+
+  it("counts the agreements done only when the server says every current one is accepted", () => {
+    const stale = completeApplication({ consents_complete: false });
+    expect(outstandingRequirements(stale, completeSchedule).map((item) => item.code)).toEqual([
       "CONSENTS",
     ]);
   });
@@ -126,7 +145,6 @@ describe("requirements", () => {
     const withPending = completeApplication({
       documents: [
         document({ kind: "GOVERNMENT_ID", status: "PENDING" }),
-        document({ id: "d2", kind: "ADDRESS_PROOF", status: "APPROVED" }),
       ],
     });
     expect(outstandingRequirements(withPending, completeSchedule)).toHaveLength(0);
@@ -136,7 +154,6 @@ describe("requirements", () => {
     const withRejected = completeApplication({
       documents: [
         document({ kind: "GOVERNMENT_ID", status: "REJECTED", review_reason: "Blurred" }),
-        document({ id: "d2", kind: "ADDRESS_PROOF", status: "APPROVED" }),
       ],
     });
     expect(outstandingRequirements(withRejected, completeSchedule).map((item) => item.code)).toEqual([
@@ -148,7 +165,6 @@ describe("requirements", () => {
     const superseded = completeApplication({
       documents: [
         document({ kind: "GOVERNMENT_ID", status: "SUPERSEDED" }),
-        document({ id: "d2", kind: "ADDRESS_PROOF", status: "APPROVED" }),
       ],
     });
     expect(outstandingRequirements(superseded, completeSchedule).map((item) => item.code)).toEqual([
@@ -156,16 +172,22 @@ describe("requirements", () => {
     ]);
   });
 
-  it("surfaces rejected documents with their reason", () => {
-    const rejected = rejectedDocuments(
+  it("offers only the rejected documents the server lets the Partner replace", () => {
+    const replaceable = replaceableRejectedDocuments(
       completeApplication({
-        documents: [
-          document({ status: "REJECTED", review_reason: "Photo is cut off" }),
-        ],
+        status: "UNDER_REVIEW",
+        documents: [document({ status: "REJECTED", review_reason: "Photo is cut off", can_replace: true })],
       }),
     );
-    expect(rejected).toHaveLength(1);
-    expect(rejected[0]?.review_reason).toBe("Photo is cut off");
+    expect(replaceable.map((item) => item.review_reason)).toEqual(["Photo is cut off"]);
+
+    const declined = replaceableRejectedDocuments(
+      completeApplication({
+        status: "DECLINED",
+        documents: [document({ status: "REJECTED", review_reason: "Expired", can_replace: false })],
+      }),
+    );
+    expect(declined).toEqual([]);
   });
 
   it("gives every outstanding requirement somewhere to go", () => {

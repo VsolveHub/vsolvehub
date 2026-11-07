@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ProgressiveImage } from "@vsolve/ui";
 
 import type { StayProperty } from "../model";
@@ -18,9 +18,11 @@ interface StayImageGalleryProps {
   media: StayMedia[];
   title: string;
   className?: string;
+  /** `contain` shows the whole photo on white, for a product; rooms fill the frame. */
+  fit?: "cover" | "contain";
 }
 
-export function StayImageGallery({ media, title, className }: StayImageGalleryProps) {
+export function StayImageGallery({ media, title, className, fit = "cover" }: StayImageGalleryProps) {
   const slides = orderedMedia(media);
   const [index, setIndex] = useState(0);
 
@@ -36,28 +38,8 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
     [slides.length],
   );
 
-  if (slides.length === 0) {
-    return (
-      <div
-        className={`grid aspect-[16/10] place-items-center overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface-sunken ${className ?? ""}`}
-        role="img"
-        aria-label={`${title} — no photos yet`}
-      >
-        <div className="flex flex-col items-center gap-2 px-6 text-center">
-          <span className="grid size-12 place-items-center rounded-full border border-line bg-surface text-text-muted">
-            <ImageOff className="size-5" aria-hidden />
-          </span>
-          <p className="text-sm font-semibold text-text-secondary">Photos coming soon</p>
-          <p className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Building className="size-3.5" aria-hidden />
-            Verified stay listing
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const current = slides[Math.min(index, slides.length - 1)]!;
+  const current = slides[Math.min(index, slides.length - 1)];
+  if (!current) return null;
   const caption = current.caption?.trim() || title;
 
   return (
@@ -82,7 +64,7 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
           src={current.url}
           alt={caption}
           containerClassName="size-full"
-          className="size-full object-cover"
+          className={fit === "contain" ? "size-full bg-white object-contain p-3" : "size-full object-cover"}
         />
 
         {slides.length > 1 ? (
@@ -103,7 +85,7 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
             >
               <ChevronRight className="size-4" aria-hidden />
             </button>
-            <div className="absolute bottom-3 right-3 rounded-control border border-line bg-surface/90 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-text-secondary backdrop-blur-sm">
+            <div className="absolute bottom-3 right-3 rounded-full bg-navy-900/80 px-2.5 py-1 text-xs font-semibold text-white shadow-xs backdrop-blur-sm">
               {index + 1} / {slides.length}
             </div>
           </>
@@ -111,28 +93,27 @@ export function StayImageGallery({ media, title, className }: StayImageGalleryPr
       </div>
 
       {slides.length > 1 ? (
-        <div className="flex gap-2 overflow-x-auto pb-0.5" role="tablist" aria-label="Photo thumbnails">
-          {slides.map((item, i) => {
-            const selected = i === index;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-label={`Show photo ${i + 1}`}
-                onClick={() => setIndex(i)}
-                className={`relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-control border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring ${
-                  selected
-                    ? "border-action ring-2 ring-action/30"
-                    : "border-line opacity-80 hover:opacity-100"
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.url} alt="" className="h-full w-full object-cover" />
-              </button>
-            );
-          })}
+        <div className="flex gap-2 overflow-x-auto py-1">
+          {slides.map((item, idx) => (
+            <button
+              key={item.id ?? idx}
+              type="button"
+              onClick={() => setIndex(idx)}
+              aria-label={`Show photo ${idx + 1}`}
+              className={`relative aspect-[16/10] w-16 shrink-0 overflow-hidden rounded-control border transition ${
+                idx === index
+                  ? "border-action ring-2 ring-action/40"
+                  : "border-line opacity-70 hover:opacity-100"
+              }`}
+            >
+              <ProgressiveImage
+                src={item.url}
+                alt=""
+                containerClassName="size-full"
+                className={fit === "contain" ? "size-full bg-white object-contain" : "size-full object-cover"}
+              />
+            </button>
+          ))}
         </div>
       ) : null}
     </div>

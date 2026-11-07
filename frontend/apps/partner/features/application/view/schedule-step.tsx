@@ -11,6 +11,8 @@ import {
   useUpdateAvailability,
 } from "../queries";
 import { useApplicationReference } from "../reference-queries";
+import { previousStep } from "../model/progress";
+import { nextStep } from "../model/steps";
 import { AvailabilityEditor, type ServiceAreaOption } from "./availability-editor";
 
 /**
@@ -95,6 +97,8 @@ export function ScheduleStep() {
       // Re-seeds the editor from the server after every successful save, so a
       // rule Django normalised is shown as Django stored it.
       key={availability.dataUpdatedAt}
+      backHref={previousStep("/apply/schedule", application.data?.track)?.href ?? "/apply"}
+      nextHref={nextStep("/apply/schedule", application.data?.track)?.href ?? "/apply/review"}
       areas={areas}
       initialPeriods={initialPeriods}
       isSaving={save.isPending}

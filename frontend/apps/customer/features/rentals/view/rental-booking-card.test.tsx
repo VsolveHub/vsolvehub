@@ -67,6 +67,7 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
       public_state: "PUBLISHED",
       structured_fields: {},
       media: [],
+      reserved_ranges: [],
       pickup_address_line: "Shop 4, Main Road",
       pickup_area: "Koramangala",
       pickup_city: "Bengaluru",

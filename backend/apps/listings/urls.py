@@ -155,6 +155,11 @@ urlpatterns = [
         name="ops-listings-money-payments",
     ),
     path(
+        "ops/listings/<uuid:listing_id>/applications",
+        views.OpsListingApplicationsView.as_view(),
+        name="ops-listing-applications",
+    ),
+    path(
         "ops/listings/<uuid:listing_id>/moderate",
         views.OpsListingModerateView.as_view(),
         name="ops-listing-moderate",

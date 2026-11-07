@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
-  ExternalLink,
   Eye,
   FileCheck2,
   FileSpreadsheet,
@@ -26,6 +25,8 @@ import {
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import { trackLabelKey } from "@/features/application/model/status";
+import { formatBytes } from "@/features/application/model/upload";
 import { usePartnerApplication } from "@/features/application/queries";
 import { usePartnerDocumentAccess } from "@/features/application/upload-queries";
 import {
@@ -41,28 +42,6 @@ function Page({ children }: { children: ReactNode }) {
       <div className="flex flex-col gap-5 sm:gap-6">{children}</div>
     </main>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return "1 KB";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function trackLabel(track: string): string {
-  switch (track) {
-    case "SERVICES":
-      return "Services & Skilled Trades";
-    case "RENTAL_OWNER":
-      return "Equipment & Tool Rentals";
-    case "STAY_HOST":
-      return "Accommodation & Stay Host";
-    case "EMPLOYER":
-      return "Employer & Job Listings";
-    default:
-      return "Partner Registration";
-  }
 }
 
 function documentKindMeta(kind: string): {
@@ -135,6 +114,34 @@ function purposeLabel(purpose: string): string {
   }
 }
 
+type StatusTone = "good" | "waiting" | "bad" | "neutral";
+
+/** What each application status means to the partner, in their words. Exported for tests. */
+export const APPLICATION_STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  DRAFT: { label: "Not submitted yet", tone: "neutral" },
+  SUBMITTED: { label: "Submitted, waiting for review", tone: "waiting" },
+  UNDER_REVIEW: { label: "Being reviewed", tone: "waiting" },
+  CHANGES_REQUIRED: { label: "Changes needed", tone: "bad" },
+  APPROVED: { label: "Approved", tone: "good" },
+  DECLINED: { label: "Not approved", tone: "bad" },
+  SUSPENDED: { label: "Suspended", tone: "bad" },
+  OFFBOARDED: { label: "Closed", tone: "neutral" },
+};
+
+const STATUS_PILL: Record<StatusTone, string> = {
+  good: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  waiting: "border-amber-200 bg-amber-50 text-amber-800",
+  bad: "border-red-200 bg-red-50 text-red-800",
+  neutral: "border-line bg-surface-sunken text-text-secondary",
+};
+
+const STATUS_TEXT: Record<StatusTone, string> = {
+  good: "text-emerald-700",
+  waiting: "text-amber-700",
+  bad: "text-red-700",
+  neutral: "text-text-secondary",
+};
+
 export function PartnerDocumentsView() {
   const t = useT();
   const applicationQuery = usePartnerApplication();
@@ -201,6 +208,10 @@ export function PartnerDocumentsView() {
   const profile = profileQuery.data;
   const isApproved = app.status === "APPROVED";
   const activeDocuments = app.documents.filter((d) => d.status !== "SUPERSEDED");
+  // "Verified" only when there is something verified: an approval with no documents on file
+  // must not read as a completed KYC.
+  const isVerified = isApproved && activeDocuments.some((d) => d.status === "APPROVED");
+  const status = APPLICATION_STATUS[app.status] ?? { label: app.status, tone: "neutral" as const };
 
   return (
     <Page>
@@ -216,7 +227,7 @@ export function PartnerDocumentsView() {
           <span>Back to Profile</span>
         </Link>
 
-        {isApproved && (
+        {isVerified && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 shadow-2xs">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
             Verified & Compliant
@@ -246,23 +257,27 @@ export function PartnerDocumentsView() {
                 <h2 className="text-lg font-bold text-navy-900 leading-tight">
                   {app.display_name || profile?.display_name || "Partner Application"}
                 </h2>
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                  {app.status}
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${STATUS_PILL[status.tone]}`}
+                >
+                  {status.tone === "good" ? <CheckCircle2 className="h-3 w-3" /> : null}
+                  {status.label}
                 </span>
               </div>
               <p className="text-xs text-text-secondary mt-1">
-                {trackLabel(app.track)} • Reference #{app.id.slice(0, 8).toUpperCase()}
+                {t(trackLabelKey(app.track))} • Reference #{app.id.slice(0, 8).toUpperCase()}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
-            <span className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-sunken px-3 py-1.5 text-xs font-medium text-navy-900">
-              <Lock className="h-3.5 w-3.5 text-text-muted" />
-              Locked for Compliance
-            </span>
-          </div>
+          {isApproved ? (
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-sunken px-3 py-1.5 text-xs font-medium text-navy-900">
+                <Lock className="h-3.5 w-3.5 text-text-muted" />
+                Locked after approval
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Timeline Grid */}
@@ -271,7 +286,7 @@ export function PartnerDocumentsView() {
             <p className="font-semibold uppercase tracking-wider text-text-muted text-[10px]">
               Track
             </p>
-            <p className="font-bold text-navy-900 mt-0.5">{trackLabel(app.track)}</p>
+            <p className="font-bold text-navy-900 mt-0.5">{t(trackLabelKey(app.track))}</p>
           </div>
           <div>
             <p className="font-semibold uppercase tracking-wider text-text-muted text-[10px]">
@@ -291,7 +306,7 @@ export function PartnerDocumentsView() {
             <p className="font-semibold uppercase tracking-wider text-text-muted text-[10px]">
               Status
             </p>
-            <p className="font-bold text-emerald-700 mt-0.5">Approved & Active</p>
+            <p className={`font-bold mt-0.5 ${STATUS_TEXT[status.tone]}`}>{status.label}</p>
           </div>
         </div>
       </Card>
@@ -305,10 +320,10 @@ export function PartnerDocumentsView() {
             </div>
             <div>
               <h2 className="text-base font-bold text-navy-900 leading-tight">
-                Verified Documents ({activeDocuments.length})
+                Documents ({activeDocuments.length})
               </h2>
               <p className="text-xs text-text-secondary">
-                Securely encrypted and verified by Operations
+                Stored securely and checked by Operations
               </p>
             </div>
           </div>

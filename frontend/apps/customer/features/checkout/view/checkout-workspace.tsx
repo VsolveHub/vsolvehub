@@ -69,6 +69,7 @@ import { CheckoutMobileBottomBar } from "./checkout-mobile-bottom-bar";
 import { QuoteStatusNotice } from "./quote-status-notice";
 import { SlotsModal } from "./slots-modal";
 import { BookingModeToggle, type BookingMode } from "./booking-mode-toggle";
+import { AREA_PAUSED, AREA_PAUSED_MESSAGE } from "../reasons";
 
 /**
  * Checkout: where, when, what it costs, and one Confirm.
@@ -537,7 +538,9 @@ export function CheckoutWorkspace() {
                     </span>
                     {serviceabilityQuery.data && !serviceabilityQuery.data.is_serviceable ? (
                       <span className="mt-1.5 block text-xs font-semibold text-critical">
-                        ⚠️ Service not available in this pincode ({selectedAddress.postal_code})
+                        {serviceabilityQuery.data.reason_code === AREA_PAUSED
+                          ? AREA_PAUSED_MESSAGE
+                          : `⚠️ Service not available in this pincode (${selectedAddress.postal_code})`}
                       </span>
                     ) : null}
                   </div>

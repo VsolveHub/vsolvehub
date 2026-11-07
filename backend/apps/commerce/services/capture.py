@@ -191,6 +191,11 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
         total_paise=attempt.amount_paise,
         currency=attempt.currency,
     )
+    # Imported here: `fulfilment` builds on `commerce`, so a module-level import would cycle.
+    from apps.fulfilment.visit_notices import (  # noqa: PLC0415
+        notify_partner_booking_confirmed,
+    )
+
     reservations = {
         reservation.fulfilment_unit_id: reservation
         for reservation in Reservation.objects.filter(
@@ -202,7 +207,7 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
         reservation = reservations.get(unit.id)
         if reservation is None:
             raise ValueError("A confirmed Fulfilment Unit reservation is missing.")
-        Booking.objects.create(
+        booking = Booking.objects.create(
             order=order,
             fulfilment_unit=unit,
             reservation=reservation,
@@ -211,6 +216,8 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
             scheduled_start=unit.requested_start,
             estimated_duration_minutes=unit.estimated_duration_minutes,
         )
+        # Paid is when the job becomes real for the Partner; until now nothing told them.
+        notify_partner_booking_confirmed(booking=booking)
         unit.status = FulfilmentUnit.Status.BOOKED
         unit.version += 1
         unit.save(update_fields=("status", "version", "updated_at"))

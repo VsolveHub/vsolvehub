@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
@@ -184,7 +184,9 @@ def test_push_subscription_deactivate_action(auth_client: APIClient, partner_use
     assert sub.opted_in is False
 
 
-def test_push_subscription_denied_permission_deactivates(auth_client: APIClient, partner_user: User):
+def test_push_subscription_denied_permission_deactivates(
+    auth_client: APIClient, partner_user: User
+):
     sub_id = str(uuid.uuid4())
     sub = PartnerPushSubscription.objects.create(
         partner=partner_user.partner_profile,
@@ -247,18 +249,20 @@ def test_push_subscription_replaces_older_active_web_subscription(
     assert sub_new.is_active is True
 
 
-def test_push_subscription_cross_user_denied(
+def test_push_subscription_moves_to_the_partner_now_signed_in_on_the_device(
     partner_user: User,
     other_partner_user: User,
 ):
+    """A subscription is the device's. When another Partner signs in on it, it is theirs now."""
     sub_id = str(uuid.uuid4())
     PartnerPushSubscription.objects.create(
         partner=partner_user.partner_profile,
         user=partner_user,
         onesignal_subscription_id=sub_id,
-        onesignal_external_id=str(partner_user.partner_profile.id),
-        platform=PartnerPushSubscription.Platform.WEB,
-        is_active=True,
+        onesignal_external_id=str(partner_user.id),
+        platform=PartnerPushSubscription.Platform.ANDROID,
+        is_active=False,
+        opted_in=False,
     )
 
     other_client = APIClient()
@@ -268,12 +272,19 @@ def test_push_subscription_cross_user_denied(
         "/api/v1/partner/push-subscriptions/sync/",
         {
             "onesignal_subscription_id": sub_id,
+            "platform": "ANDROID",
             "is_active": True,
+            "opted_in": True,
+            "permission_state": "granted",
         },
         format="json",
     )
-    assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json()["error"]["code"] == "partner_access_denied"
+    assert response.status_code == status.HTTP_200_OK
+    moved = PartnerPushSubscription.objects.get(onesignal_subscription_id=sub_id)
+    assert moved.user_id == other_partner_user.id
+    assert moved.partner_id == other_partner_user.partner_profile.id
+    assert moved.onesignal_external_id == str(other_partner_user.id)
+    assert moved.is_active is True
 
 
 def test_push_subscription_validation_empty_id(auth_client: APIClient):

@@ -1,4 +1,4 @@
-import { ApiRequestError } from "@vsolve/api-client";
+import { isApiRequestError, ApiRequestError } from "@vsolve/api-client";
 
 /**
  * The server refusals the group booking flow has to act on differently.
@@ -17,9 +17,10 @@ import { ApiRequestError } from "@vsolve/api-client";
  */
 
 function detailsOf(error: unknown, code: string): Record<string, unknown> | null {
-  if (!(error instanceof ApiRequestError)) return null;
-  if (error.code !== code) return null;
-  const { details } = error;
+  if (!error || typeof error !== "object") return null;
+  const errCode = (error as any).code;
+  if (errCode !== code) return null;
+  const { details } = error as Record<string, unknown>;
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
   return details as Record<string, unknown>;
 }
@@ -65,7 +66,7 @@ export function cartVersionConflict(error: unknown): CartVersionConflict | null 
  * gone. Never style this as a hard failure the customer can "fix".
  */
 export function isCartItemNotFound(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === "cart_item_not_found";
+  return isApiRequestError(error) && error.code === "cart_item_not_found";
 }
 
 /** The item that already expresses this exact request. */
@@ -207,7 +208,7 @@ export function planUnavailable(error: unknown): PlanItemFailure[] | null {
 
 /** `fulfilment_plan_stale` — the plan's cart or policy inputs have moved on. */
 export function isPlanStale(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === "fulfilment_plan_stale";
+  return isApiRequestError(error) && error.code === "fulfilment_plan_stale";
 }
 
 /**
@@ -220,12 +221,12 @@ export function isPlanStale(error: unknown): boolean {
  * nobody agreed to.
  */
 export function isSchedulingGroupsChanged(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === "scheduling_groups_changed";
+  return isApiRequestError(error) && error.code === "scheduling_groups_changed";
 }
 
 /** `quote_expired` — the quote aged out before it was used. */
 export function isQuoteExpired(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === "quote_expired";
+  return isApiRequestError(error) && error.code === "quote_expired";
 }
 
 /**
@@ -235,7 +236,7 @@ export function isQuoteExpired(error: unknown): boolean {
  * the command again under a new key.
  */
 export function isCommandInFlight(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === "idempotency_in_progress";
+  return isApiRequestError(error) && error.code === "idempotency_in_progress";
 }
 
 /**
@@ -246,5 +247,5 @@ export function isCommandInFlight(error: unknown): boolean {
  * convert a caught mistake into a duplicated command.
  */
 export function isIdempotencyKeyReused(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === "idempotency_key_reused";
+  return isApiRequestError(error) && error.code === "idempotency_key_reused";
 }

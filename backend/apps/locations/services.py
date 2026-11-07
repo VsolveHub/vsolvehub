@@ -18,6 +18,7 @@ from apps.locations.models import (
     ServiceArea,
     ServiceAreaOperatingException,
 )
+from apps.locations.pauses import SERVICE_AREA_PAUSED, paused_area_slugs
 
 INDIA_POSTAL_CODE_PATTERN = re.compile(r"^\d{6}$")
 
@@ -95,7 +96,7 @@ class ServiceabilityDecision:
     service_area: ServiceArea | None
 
 
-def check_serviceability(
+def check_serviceability(  # noqa: PLR0911 - one reason code per exit
     *,
     postal_code: str,
     variant_id: uuid.UUID | None = None,
@@ -110,6 +111,13 @@ def check_serviceability(
     ).distinct()
     if not areas.exists():
         return ServiceabilityDecision(False, "OUTSIDE_SERVICE_AREA", None)
+
+    # A paused area (the SERVICE_AREA kill switch) takes no new work until it is turned back on.
+    paused_slugs, everything_paused = paused_area_slugs()
+    open_areas = areas.none() if everything_paused else areas.exclude(slug__in=paused_slugs)
+    if not open_areas.exists():
+        return ServiceabilityDecision(False, SERVICE_AREA_PAUSED, areas.order_by("name").first())
+    areas = open_areas
 
     if variant_id is not None:
         variant_exists = ServiceVariant.objects.filter(

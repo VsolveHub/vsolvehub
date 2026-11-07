@@ -1,41 +1,37 @@
 import datetime
 import uuid
-from datetime import time, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from django.test import override_settings
 from django.utils import timezone
+from psycopg.types.range import Range
 from rest_framework.test import APIClient
 
-from apps.identity.models import Role, User, UserRole
-from apps.locations.models import Address, ServiceArea
-from apps.partners.models import (
-    PartnerApplication,
-    PartnerAvailabilityRule,
-    PartnerLocation,
-    PartnerOnlineSession,
-    PartnerProfile,
-    PartnerPushSubscription,
-    PartnerServiceArea,
-    PartnerShift,
-)
 from apps.assignments.models import DispatchOffer, Reservation
-from apps.assignments.ranking import evaluate_unit_candidates
 from apps.assignments.tasks import (
-    dispatch_instant_booking_task,
-    expire_dispatch_offer_task,
-    reassign_or_downgrade_booking_task,
     reconcile_expired_dispatch_offers,
     send_dispatch_offer_push_task,
 )
 from apps.carts.availability import AvailabilitySnapshot, compute_instant_availability
-from apps.carts.models import BookingGroup, Cart, CartItem, CheckoutSession, FulfilmentUnit, Quote
+from apps.carts.models import BookingGroup, CheckoutSession, Quote
 from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
 from apps.commerce.models import Booking, Order
-from psycopg.types.range import Range
+from apps.identity.models import Role, User, UserRole
+from apps.locations.models import Address, ServiceArea, ServiceAreaOperatingWindow
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerAvailabilityRule,
+    PartnerLocation,
+    PartnerProfile,
+    PartnerPushSubscription,
+    PartnerService,
+    PartnerServiceArea,
+    PartnerShift,
+)
+from apps.pricing.models import PricingPolicy
 
 
 @pytest.fixture
@@ -55,8 +51,7 @@ def test_setup():
         name="Madhapur",
         timezone="Asia/Kolkata",
     )
-    from apps.locations.models import ServiceAreaOperatingWindow
-    import datetime
+
     for d in range(7):
         ServiceAreaOperatingWindow.objects.create(
             service_area=area,
@@ -83,7 +78,7 @@ def test_setup():
         )
         PartnerApplication.objects.create(partner=p, status=PartnerApplication.Status.APPROVED)
         PartnerServiceArea.objects.create(partner=p, service_area=area, is_active=True)
-        from apps.partners.models import PartnerService
+
         PartnerService.objects.create(partner=p, variant=variant, is_active=True)
         return p
 
@@ -103,7 +98,7 @@ def test_setup():
         longitude=Decimal("78.391485"),
         confirmed_at=timezone.now(),
     )
-    from apps.pricing.models import PricingPolicy
+
     policy, _ = PricingPolicy.objects.get_or_create(
         code="m1-technician",
         version=1,
@@ -191,13 +186,13 @@ def test_instant_availability_push_gated_flag_on_vs_off(test_setup):
     now = timezone.now()
 
     # Active shift + active push + fresh location for Partner 1
-    shift = PartnerShift.objects.create(
+    PartnerShift.objects.create(
         partner=p1,
         service_area=area,
         started_at=now - timedelta(hours=1),
         scheduled_end_at=now + timedelta(hours=7),
     )
-    push_sub = PartnerPushSubscription.objects.create(
+    PartnerPushSubscription.objects.create(
         partner=p1,
         user=p1.user,
         onesignal_subscription_id="sub-p1",
@@ -276,7 +271,6 @@ def test_instant_availability_push_gated_flag_on_vs_off(test_setup):
 @pytest.mark.django_db
 def test_dispatch_offer_accept_decline_and_security(test_setup):
     p1 = test_setup["partner1"]
-    p2 = test_setup["partner2"]
     user1 = test_setup["user1"]
     user2 = test_setup["user2"]
     booking = test_setup["booking"]
@@ -371,3 +365,102 @@ def test_celery_dispatch_flow_and_reconciliation(mock_push, test_setup):
     assert reconciled >= 1
     offer.refresh_from_db()
     assert offer.status == DispatchOffer.Status.EXPIRED
+
+
+@pytest.mark.django_db
+def test_mobile_push_device_dispatch_flow(test_setup):
+    from apps.identity.models import UserSession
+    from apps.mobile.models import PushDevice
+    from apps.notifications.models import NotificationIntent
+
+    p2 = test_setup["partner2"]
+    user2 = test_setup["user2"]
+    area = test_setup["area"]
+    booking = test_setup["booking"]
+    now = timezone.now()
+
+    PartnerShift.objects.create(
+        partner=p2,
+        service_area=area,
+        started_at=now - timedelta(hours=1),
+        scheduled_end_at=now + timedelta(hours=7),
+    )
+    PartnerLocation.objects.create(
+        partner=p2,
+        service_area=area,
+        latitude=Decimal("17.440000"),
+        longitude=Decimal("78.380000"),
+        accuracy_m=10,
+        captured_at=now,
+        purpose=PartnerLocation.Purpose.INSTANT_MATCHING,
+        consent_version="v1",
+    )
+
+    # 1. Without PushDevice or web sub, partner is NOT push-capable
+    web_push_ids = frozenset(
+        PartnerPushSubscription.objects.filter(
+            partner_id__in=[p2.id],
+            is_active=True,
+        ).values_list("partner_id", flat=True)
+    )
+    mobile_push_ids = frozenset(
+        PushDevice.objects.filter(
+            user__partner_profile__id__in=[p2.id],
+            disabled_at__isnull=True,
+            session__revoked_at__isnull=True,
+            session__expires_at__gt=now,
+        ).values_list("user__partner_profile__id", flat=True)
+    )
+    assert p2.id not in (web_push_ids | mobile_push_ids)
+
+    # 2. Register mobile PushDevice with active UserSession
+    session = UserSession.objects.create(
+        user=user2,
+        session_key_hash="hash-user2",
+        expires_at=now + timedelta(days=7),
+    )
+    PushDevice.objects.create(
+        user=user2,
+        session=session,
+        app="partner",
+        platform="android",
+        expo_push_token="ExponentPushToken[user2_test_token]",
+        app_version="1.0.0",
+    )
+
+    # Now partner 2 is recognized as push-capable!
+    mobile_push_ids_after = frozenset(
+        PushDevice.objects.filter(
+            user__partner_profile__id__in=[p2.id],
+            disabled_at__isnull=True,
+            session__revoked_at__isnull=True,
+            session__expires_at__gt=now,
+        ).values_list("user__partner_profile__id", flat=True)
+    )
+    assert p2.id in mobile_push_ids_after
+
+    # 3. Test send_dispatch_offer_push_task with mobile device
+    offer = DispatchOffer.objects.create(
+        booking=booking,
+        partner=p2,
+        status=DispatchOffer.Status.PENDING,
+        attempt_number=1,
+        offered_at=now,
+        expires_at=now + timedelta(seconds=60),
+    )
+
+    result = send_dispatch_offer_push_task(str(offer.id))
+    assert result["success"] is True
+    assert result["mobile_devices"] == 1
+    assert "mobile_intent_id" in result
+
+    # Check notification intent was created
+    intent = NotificationIntent.objects.get(id=result["mobile_intent_id"])
+    assert intent.recipient == user2
+    assert intent.channel == "PUSH"
+    assert intent.template_code == "partner_dispatch_offer"
+    assert intent.context["offer_id"] == str(offer.id)
+
+    # The phone took the offer, so it is sent rather than failed or expired
+    offer.refresh_from_db()
+    assert offer.status == DispatchOffer.Status.SENT

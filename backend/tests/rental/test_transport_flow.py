@@ -17,7 +17,7 @@ from apps.rental import transport
 from apps.rental.models import (
     AssetReservation,
     RentalBooking,
-    RentalPlatformFee,
+    RentalPlatformFeeVersion,
     RentalTransportRequest,
 )
 from apps.rental.services import (
@@ -246,7 +246,12 @@ def test_rejected_quote_goes_back_to_the_owner_up_to_three_times(rental_world):
 
 
 def test_accept_starts_one_payment_for_rent_fee_deposit_and_transport(rental_world):
-    RentalPlatformFee.objects.update_or_create(pk=1, defaults={"percent": 10})
+    RentalPlatformFeeVersion.objects.create(
+        version=1,
+        percent=10,
+        effective_from=timezone.now() - timedelta(minutes=1),
+        approval_reference="TEST",
+    )
     booking = _request(rental_world, days=2)
     _quote(rental_world, booking)
     booking = transport.accept_quote(booking=booking, customer=rental_world["customer"])
@@ -331,7 +336,12 @@ def test_handover_with_pin_marks_delivered(rental_world):
 
 
 def test_earning_includes_transport_at_zero_commission(rental_world):
-    RentalPlatformFee.objects.update_or_create(pk=1, defaults={"percent": 10})
+    RentalPlatformFeeVersion.objects.create(
+        version=1,
+        percent=10,
+        effective_from=timezone.now() - timedelta(minutes=1),
+        approval_reference="TEST",
+    )
     booking = _request(rental_world, days=2)
     _quote(rental_world, booking)
     booking = _paid(rental_world, booking)

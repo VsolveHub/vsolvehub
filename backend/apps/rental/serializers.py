@@ -1,12 +1,14 @@
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.locations.nearby import DISTANCE_KM, distance_of
 from apps.locations.pins import combine_pin, directions_url, latitude_field, longitude_field
 from apps.rental.models import (
+    AssetReservation,
     RentalAsset,
     RentalAssetMedia,
     RentalBooking,
@@ -114,6 +116,7 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
     partner_id = serializers.UUIDField(source="partner.id", read_only=True)
     partner_phone = serializers.CharField(source="partner.user.phone_number", read_only=True)
     media = RentalAssetMediaSerializer(many=True, read_only=True)
+    reserved_ranges = serializers.SerializerMethodField()
     pickup_address = serializers.SerializerMethodField()
     distance_km = serializers.SerializerMethodField()
 
@@ -124,6 +127,19 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
     @extend_schema_field(PickupAddressSerializer)
     def get_pickup_address(self, asset: RentalAsset) -> dict[str, Any]:
         return pickup_address_payload(asset)
+
+    def get_reserved_ranges(self, asset: RentalAsset) -> list[dict[str, str]]:
+        today = timezone.localdate()
+        return [
+            {
+                "start_date": r.start_date.isoformat(),
+                "end_date": r.end_date.isoformat(),
+            }
+            for r in asset.reservations.filter(
+                status__in=[AssetReservation.Status.CONFIRMED, AssetReservation.Status.TENTATIVE],
+                end_date__gte=today,
+            )
+        ]
 
     class Meta:
         model = RentalAsset
@@ -146,6 +162,7 @@ class RentalAssetSerializer(serializers.ModelSerializer[RentalAsset]):
             "variant",
             "structured_fields",
             "media",
+            "reserved_ranges",
             "pickup_address_line",
             "pickup_area",
             "pickup_city",
@@ -501,6 +518,38 @@ class RentalPlatformFeeSerializer(serializers.Serializer[dict[str, Any]]):
     transport_fee_percent = serializers.IntegerField(
         read_only=True,
         help_text="Commission on an owner's transport price. 0 means the owner keeps all of it.",
+    )
+
+
+class RentalPlatformFeeVersionSerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    version = serializers.IntegerField()
+    percent = serializers.IntegerField()
+    effective_from = serializers.DateTimeField()
+    approval_reference = serializers.CharField()
+    created_by_name = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField()
+
+    def get_created_by_name(self, version: Any) -> str:
+        return version.created_by.full_name if version.created_by else ""
+
+
+class OpsRentalPlatformFeeSerializer(serializers.Serializer[Any]):
+    percent = serializers.IntegerField(help_text="In force now. 0 when no version is.")
+    current = RentalPlatformFeeVersionSerializer(allow_null=True)
+    upcoming = RentalPlatformFeeVersionSerializer(
+        many=True, help_text="Scheduled, not yet in force. Soonest first; can be withdrawn."
+    )
+    history = RentalPlatformFeeVersionSerializer(
+        many=True, help_text="Earlier versions, newest first."
+    )
+
+
+class RentalPlatformFeeScheduleSerializer(serializers.Serializer[Any]):
+    percent = serializers.IntegerField(min_value=0, max_value=100)
+    approval_reference = serializers.CharField(max_length=120)
+    effective_from = serializers.DateTimeField(
+        required=False, help_text="When it takes effect. Leave out to take effect now."
     )
 
 

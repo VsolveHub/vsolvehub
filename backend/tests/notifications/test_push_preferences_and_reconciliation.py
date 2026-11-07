@@ -1,10 +1,11 @@
-"""Tests for PushNotificationPreference, OneSignal transport suppression, and subscription reconciliation."""
+"""Tests for PushNotificationPreference, OneSignal transport suppression, and subscription
+reconciliation.
+"""
 
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.conf import settings
 from django.core.management import call_command
 from django.utils import timezone
 from rest_framework import status
@@ -13,7 +14,6 @@ from rest_framework.test import APIClient
 from apps.identity.models import User
 from apps.notifications.models import (
     CustomerPushSubscription,
-    KillSwitch,
     NotificationDelivery,
     NotificationIntent,
     PushNotificationPreference,

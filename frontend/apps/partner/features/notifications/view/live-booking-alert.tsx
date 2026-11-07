@@ -8,6 +8,7 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isUnread } from "@/features/notifications/model/feed";
+import { NOTIFICATION_AUDIENCE } from "@/features/notifications/queries";
 import {
   createIdDeduper,
   createOfferDeduper,
@@ -705,7 +706,12 @@ export function PartnerLiveDelivery({
 
   const unreadQuery = useQuery({
     queryKey: m2QueryKeys.notifications.unreadCount(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/unread-count/")),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/notifications/unread-count/", {
+          params: { query: NOTIFICATION_AUDIENCE },
+        }),
+      ),
     enabled: invitationsEnabled,
     refetchInterval: invitationsEnabled ? LIVE_BOOKING_POLL_MS : false,
     refetchIntervalInBackground: false,
@@ -721,7 +727,12 @@ export function PartnerLiveDelivery({
     const fetchFeed = () =>
       queryClient.fetchQuery({
         queryKey: m2QueryKeys.notifications.feed(),
-        queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/")),
+        queryFn: () =>
+          request(() =>
+            getApiClient().GET("/api/v1/notifications/", {
+              params: { query: NOTIFICATION_AUDIENCE },
+            }),
+          ),
       });
 
     const inspectFeed = () => {

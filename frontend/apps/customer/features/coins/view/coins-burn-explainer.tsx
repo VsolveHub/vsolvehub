@@ -70,7 +70,7 @@ export function CoinsBurnExplainer({ summary }: CoinsBurnExplainerProps) {
             </span>
             <span>
               <strong className="text-navy-900">Redeem at checkout:</strong>{" "}
-              {typeof policy.coin_value_paise === "number" && typeof policy.max_burn_percent === "number"
+              {typeof policy?.coin_value_paise === "number" && typeof policy?.max_burn_percent === "number"
                 ? `1 V Coin = ₹${(policy.coin_value_paise / 100).toFixed(2)}. Apply coins for up to ${policy.max_burn_percent}% off a booking total.`
                 : "The published burn policy sets the coin value and the maximum share of a bill you can pay with coins."}
             </span>

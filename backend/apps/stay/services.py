@@ -1125,6 +1125,11 @@ def _notify_enquiry(
             recipient_id=recipient_id,
             purpose=purpose,
             channel=NotificationIntent.Channel.IN_APP,
+            audience=(
+                NotificationIntent.Audience.PARTNER
+                if to_host
+                else NotificationIntent.Audience.CUSTOMER
+            ),
             template_code=template_code,
             context={
                 "property_title": prop.title,
@@ -1490,6 +1495,7 @@ def respond_enquiry(
             resp_time = enquiry.responded_at.isoformat() if enquiry.responded_at else "1"
             request_notification(
                 recipient_id=enquiry.customer_id,
+                audience=NotificationIntent.Audience.CUSTOMER,
                 purpose="stay.enquiry.responded",
                 channel=NotificationIntent.Channel.IN_APP,
                 template_code="stay_enquiry_responded",
@@ -1516,6 +1522,7 @@ def public_properties(  # noqa: PLR0912
     min_price_paise: int | None = None,
     max_price_paise: int | None = None,
     variant_code: str = "",
+    tenant_preference: str = "",
     sort: str = "newest",
     near: Point | None = None,
     limit: int | None = None,
@@ -1616,6 +1623,16 @@ def public_properties(  # noqa: PLR0912
         qs = qs.filter(
             models.Q(structured_fields__food__in=_FOOD_YES)
             | models.Exists(rooms.filter(attributes__food__in=_FOOD_YES))
+        )
+    if tenant_preference and tenant_preference.strip().upper() not in ("", "ANY", "ALL"):
+        pref = tenant_preference.strip().upper()
+        qs = qs.filter(
+            models.Q(structured_fields__tenant_preference=pref)
+            | models.Q(structured_fields__tenant_preference__iexact=pref)
+            | models.Q(structured_fields__tenant_preference="ANY")
+            | models.Q(structured_fields__tenant_preference__iexact="ANY")
+            | models.Q(structured_fields__tenant_preference__isnull=True)
+            | ~models.Q(structured_fields__has_key="tenant_preference")
         )
     if sort in ("price_asc", "price_desc"):
         cheapest = (

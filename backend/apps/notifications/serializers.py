@@ -131,6 +131,18 @@ class UnreadNotificationCountSerializer(serializers.Serializer[dict[str, Any]]):
     unread = serializers.IntegerField()
 
 
+class NotificationAudienceQuerySerializer(serializers.Serializer[dict[str, Any]]):
+    """Which side's notices to read: the app asking says which app it is.
+
+    One person can be a Customer and a Partner, and each app shows only its own side. Left out,
+    the session's active role decides, which is what app builds from before this parameter get.
+    """
+
+    audience = serializers.ChoiceField(
+        choices=("customer", "partner", "operations"), required=False
+    )
+
+
 class MarkNotificationReadRequestSerializer(serializers.Serializer[dict[str, Any]]):
     """Mark one notice read, or all of them.
 
@@ -148,6 +160,7 @@ class MarkNotificationReadRequestSerializer(serializers.Serializer[dict[str, Any
                 "Send either notification_id or all, not both and not neither."
             )
         return attrs
+
 
 class CustomerPushSubscriptionSyncSerializer(serializers.Serializer[dict[str, Any]]):
     onesignal_subscription_id = serializers.CharField(max_length=64, min_length=1)
@@ -189,7 +202,9 @@ class CustomerPushSubscriptionUpdateSerializer(serializers.Serializer[dict[str, 
     user_agent = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
 
-class CustomerPushSubscriptionResponseSerializer(serializers.ModelSerializer[CustomerPushSubscription]):
+class CustomerPushSubscriptionResponseSerializer(
+    serializers.ModelSerializer[CustomerPushSubscription]
+):
     class Meta:
         model = CustomerPushSubscription
         fields = (
@@ -207,3 +222,25 @@ class CustomerPushSubscriptionResponseSerializer(serializers.ModelSerializer[Cus
         )
         read_only_fields = fields
 
+
+class PushPreferenceItemSerializer(serializers.Serializer[dict[str, Any]]):
+    """One push category the signed-in person can see, and whether it is on."""
+
+    category = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)  # type: ignore[assignment]
+    description = serializers.CharField(read_only=True)
+    is_enabled = serializers.BooleanField(read_only=True)
+    #: False for a category the person cannot switch off (Account).
+    is_mutable = serializers.BooleanField(read_only=True)
+
+
+class PushPreferencesSerializer(serializers.Serializer[dict[str, Any]]):
+    role = serializers.CharField(read_only=True)
+    preferences = PushPreferenceItemSerializer(many=True, read_only=True)
+
+
+class PushPreferenceUpdateSerializer(serializers.Serializer[dict[str, Any]]):
+    """Switch one category. The endpoint also takes a list of these, or `{preferences: ...}`."""
+
+    category = serializers.CharField()
+    is_enabled = serializers.BooleanField()

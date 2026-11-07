@@ -6,17 +6,21 @@ inspect a Partner application row. It is the bottom of the dependency arrow — 
 from a sibling submodule of this package.
 """
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, time
 from decimal import Decimal
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from django.conf import settings
-from django.utils import timezone
+from django.db import transaction
 
 from apps.identity.models import User
+from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
+from apps.notifications.tasks import send_partner_push_for_notice
 from apps.partners.exceptions import (
     PartnerApplicationNotFoundError,
     PartnerVersionConflictError,
@@ -24,16 +28,21 @@ from apps.partners.exceptions import (
 from apps.partners.models import (
     PartnerApplication,
     PartnerApplicationTransition,
-    PartnerConsent,
-    PartnerConsentDocument,
     PartnerDocument,
     PartnerDocumentUpload,
-    PartnerProfile,
     PartnerService,
     PartnerServiceArea,
     PartnerSkill,
 )
+from apps.partners.selectors import partner_has_required_consents
 from apps.partners.storage import SignedUpload
+
+logger = logging.getLogger(__name__)
+
+#: Notices about the application's progress (sent, review started) and about decisions on it.
+#: Both are transactional: a Partner cannot mute being told where their application stands.
+PARTNER_APPLICATION_PROGRESS_PURPOSE = "partner_application_progress"
+PARTNER_APPLICATION_DECISION_PURPOSE = "partner_application_decision"
 
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COORDINATE_QUANTUM = Decimal("0.001")
@@ -119,27 +128,6 @@ def _latest_required_documents_are_approved(application: PartnerApplication) -> 
     return True
 
 
-def _required_consents_exist(partner: PartnerProfile) -> bool:
-    required_document_ids = set(
-        PartnerConsentDocument.objects.filter(
-            is_current=True,
-            is_required_for_submission=True,
-            published_at__lte=timezone.now(),
-            retired_at__isnull=True,
-        ).values_list("id", flat=True),
-    )
-    if not required_document_ids:
-        return False
-    accepted_document_ids = set(
-        PartnerConsent.objects.filter(
-            partner=partner,
-            document_id__in=required_document_ids,
-            withdrawn_at__isnull=True,
-        ).values_list("document_id", flat=True),
-    )
-    return required_document_ids.issubset(accepted_document_ids)
-
-
 def _base_application_is_complete(application: PartnerApplication) -> bool:
     partner = application.partner
     if application.track in (
@@ -149,13 +137,71 @@ def _base_application_is_complete(application: PartnerApplication) -> bool:
     ):
         # A stay host or rental owner: who they are and the agreements are enough.
         # Trades, services and areas describe travelling to a customer and are not asked.
-        return bool(partner.display_name.strip()) and _required_consents_exist(partner)
+        return bool(partner.display_name.strip()) and partner_has_required_consents(partner)
     return all(
         (
             bool(partner.display_name.strip()),
             PartnerSkill.objects.filter(partner=partner, is_active=True).exists(),
             PartnerService.objects.filter(partner=partner, is_active=True).exists(),
             PartnerServiceArea.objects.filter(partner=partner, is_active=True).exists(),
-            _required_consents_exist(partner),
+            partner_has_required_consents(partner),
         ),
     )
+
+
+def _notify_application_event(
+    *,
+    application: PartnerApplication,
+    template_code: str,
+    purpose: str,
+    idempotency_key: str,
+    context: dict[str, Any] | None = None,
+    push: bool = True,
+) -> None:
+    """Tell the Partner something happened to their application: in the app, then by push.
+
+    The one place every application event notifies from — submitted, review started, a
+    document rejected, and every Operations decision — so web and mobile clients read the same
+    notice. The in-app row is written inside the caller's transaction; the push is sent only
+    after it commits, so a rolled-back decision can never reach a phone.
+
+    Never blocks or undoes the event: a notice that cannot be written or sent is logged with ids
+    only, never the reason or the Partner's name.
+    """
+    try:
+        with transaction.atomic():
+            intent = request_notification(
+                recipient_id=application.partner.user_id,
+                purpose=purpose,
+                channel=NotificationIntent.Channel.IN_APP,
+                audience=NotificationIntent.Audience.PARTNER,
+                template_code=template_code,
+                context=context or {},
+                idempotency_key=idempotency_key,
+            )
+    except Exception:
+        logger.exception(
+            "partner_application_notice_failed",
+            extra={"application_id": str(application.id), "template": template_code},
+        )
+        return
+    if not push or intent.status != NotificationIntent.Status.SENT:
+        return
+    # With OneSignal as the phone channel, every in-app notice is already copied to the
+    # Partner's devices (website included) by `apps.mobile`; a second send here would be a
+    # second banner for the same notice.
+    if getattr(settings, "MOBILE_PUSH_PROVIDER", "") == "onesignal":
+        return
+
+    intent_id = str(intent.id)
+    deep_link = f"{settings.PARTNER_PORTAL_BASE_URL.rstrip('/')}/apply"
+
+    def _queue_push() -> None:
+        try:
+            send_partner_push_for_notice.delay(intent_id, deep_link)
+        except Exception:
+            # The notice is already in the app; a broker outage must not fail the request
+            # that made the decision.
+            logger.exception("partner_application_push_not_queued", extra={"intent_id": intent_id})
+
+    transaction.on_commit(_queue_push)

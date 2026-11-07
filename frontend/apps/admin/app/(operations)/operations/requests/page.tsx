@@ -1,19 +1,14 @@
-import type { Metadata } from "next";
+"use client";
 
-import { QueueBoard } from "@/features/m2-requests/view/queue-board";
+import { Suspense } from "react";
 
+import { WorkforceWorkspace } from "@/features/workforce/view/workforce-workspace";
 
-export const metadata: Metadata = {
-  title: "Requests",
-  robots: { index: false, follow: false },
-};
-
+/** Crew & projects. Kept at `/operations/requests` so request pages and old links still land here. */
 export default function RequestsPage() {
   return (
-    <>
-      <div className="mt-6">
-        <QueueBoard />
-      </div>
-    </>
+    <Suspense fallback={null}>
+      <WorkforceWorkspace />
+    </Suspense>
   );
 }

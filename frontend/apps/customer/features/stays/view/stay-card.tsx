@@ -33,10 +33,9 @@ export function StayCard({ property }: StayCardProps) {
   // Only what the host said yes to, labelled by the server; the card has room for three.
   const amenities = (property.amenities ?? []).slice(0, 3);
   const hero =
-    Array.isArray((property as { media?: { url?: string }[] }).media) &&
-    (property as { media: { url?: string }[] }).media[0]?.url
-      ? (property as { media: { url: string }[] }).media[0].url
-      : null;
+    (Array.isArray((property as { media?: { url?: string }[] }).media) &&
+      (property as { media: { url?: string }[] }).media[0]?.url) ||
+    (Array.isArray(property.units) && property.units[0]?.media?.[0]?.url);
 
   const detailHref = stayHref(property.slug);
   const averageRating = (property as StayPropertySummary).average_rating;
@@ -69,7 +68,11 @@ export function StayCard({ property }: StayCardProps) {
       {hero ? (
         <div className="pointer-events-none -mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={hero} alt="" className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]" />
+          <img
+            src={hero}
+            alt={property.title}
+            className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]"
+          />
         </div>
       ) : null}
       <div className="relative z-[1] pointer-events-none flex flex-col gap-3">

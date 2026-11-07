@@ -41,6 +41,8 @@ class OperationsPartnerDirectoryQuerySerializer(serializers.Serializer[dict[str,
     skill = serializers.ListField(
         child=serializers.SlugField(max_length=100), required=False, default=list
     )
+    #: A name, or a mobile number in any format ("98765 43210", "+91 98765-43210").
+    q = serializers.CharField(required=False, allow_blank=True, max_length=80)
     cursor = serializers.CharField(required=False, write_only=True)
 
 
@@ -59,12 +61,15 @@ class OperationsPartnerDirectoryItemSerializer(serializers.ModelSerializer[Partn
     skills = serializers.SerializerMethodField()
     service_count = serializers.IntegerField(read_only=True)
     service_area_count = serializers.IntegerField(read_only=True)
+    #: The number they sign in with, so Operations can find and call them from the list.
+    phone_number = serializers.CharField(source="user.phone_number", read_only=True)
 
     class Meta:
         model = PartnerProfile
         fields = (
             "id",
             "display_name",
+            "phone_number",
             "experience_years",
             "application_id",
             "application_status",
@@ -107,6 +112,8 @@ class OperationsPartnerDocumentStateSerializer(serializers.ModelSerializer[Partn
 class OperationsPartnerDetailSerializer(serializers.ModelSerializer[PartnerProfile]):
     """One Partner, for the management screen."""
 
+    #: The number they sign in with, so Operations can call them from the record.
+    phone_number = serializers.CharField(source="user.phone_number", read_only=True)
     application_id = serializers.UUIDField(source="application.id", read_only=True)
     application_status = serializers.CharField(source="application.status", read_only=True)
     application_version = serializers.IntegerField(source="application.version", read_only=True)
@@ -127,6 +134,7 @@ class OperationsPartnerDetailSerializer(serializers.ModelSerializer[PartnerProfi
         fields = (
             "id",
             "display_name",
+            "phone_number",
             "biography",
             "experience_years",
             "application_id",
@@ -194,3 +202,55 @@ class OperationsPartnerDetailSerializer(serializers.ModelSerializer[PartnerProfi
             return []
         ordered = sorted(application.transitions.all(), key=lambda row: row.occurred_at)
         return list(PartnerApplicationTransitionSerializer(ordered, many=True).data)
+
+
+# --- Partner import (proposal 0029) ------------------------------------------------------------
+
+#: Named in `ENUM_NAME_OVERRIDES`, so they do not collide with other `mode` and `status` enums.
+PARTNER_IMPORT_MODES = (("check", "Check"), ("import", "Import"))
+PARTNER_IMPORT_ROW_STATUSES = (
+    ("ready", "Ready"),
+    ("created", "Created"),
+    ("skipped", "Skipped"),
+    ("error", "Error"),
+)
+
+
+class PartnerImportUploadSerializer(serializers.Serializer[dict[str, object]]):
+    file = serializers.FileField()
+    mode = serializers.ChoiceField(
+        choices=PARTNER_IMPORT_MODES,
+        help_text="`check` validates and changes nothing; `import` creates every ready row.",
+    )
+
+
+class PartnerImportCellErrorSerializer(serializers.Serializer[dict[str, object]]):
+    column = serializers.CharField()
+    message = serializers.CharField()
+
+
+class PartnerImportRowSerializer(serializers.Serializer[dict[str, object]]):
+    row = serializers.IntegerField(help_text="The line in the file, counting the header as 1.")
+    status = serializers.ChoiceField(choices=PARTNER_IMPORT_ROW_STATUSES)
+    phone = serializers.CharField()
+    full_name = serializers.CharField(allow_blank=True)
+    track = serializers.CharField(allow_blank=True)
+    #: `problems`, not `errors`: a field named `errors` shadows DRF's own `Serializer.errors`.
+    problems = PartnerImportCellErrorSerializer(many=True)
+    message = serializers.CharField(required=False)
+    partner_id = serializers.UUIDField(required=False)
+
+
+class PartnerImportSummarySerializer(serializers.Serializer[dict[str, object]]):
+    total = serializers.IntegerField()
+    ready = serializers.IntegerField(required=False, help_text="On `check`.")
+    created = serializers.IntegerField(required=False, help_text="On `import`.")
+    skipped = serializers.IntegerField()
+    problems = serializers.IntegerField(help_text="Rows with at least one problem.")
+
+
+class PartnerImportResultSerializer(serializers.Serializer[dict[str, object]]):
+    mode = serializers.ChoiceField(choices=PARTNER_IMPORT_MODES)
+    file_sha256 = serializers.CharField()
+    summary = PartnerImportSummarySerializer()
+    rows = PartnerImportRowSerializer(many=True)

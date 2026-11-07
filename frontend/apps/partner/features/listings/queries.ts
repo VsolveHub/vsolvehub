@@ -145,6 +145,21 @@ export function fetchListingApplicationsPage(
   );
 }
 
+export async function fetchListingApplications(listingId: string) {
+  try {
+    return await request(() =>
+      getApiClient().GET("/api/v1/partner/listings/{listing_id}/applications", {
+        params: { path: { listing_id: listingId } },
+      }),
+    );
+  } catch (err: any) {
+    if (err?.status === 404 || err?.statusCode === 404 || err?.message?.includes("404")) {
+      return [];
+    }
+    throw err;
+  }
+}
+
 export function revealApplicationContact(applicationId: string) {
   // OpenAPI marks ApplicationStatusRequest as required on this path; reveal-contact ignores body.
   return request(() =>
@@ -169,11 +184,15 @@ export function fetchSubscriptionPlans() {
 }
 
 export function purchaseSubscription(planId: string) {
+  const key = createIdempotencyKey();
   return request(() =>
     getApiClient().POST("/api/v1/partner/listing-subscription-plans/{plan_id}/purchase", {
       params: {
         path: { plan_id: planId },
-        header: { "Idempotency-Key": createIdempotencyKey() } as never,
+        header: { "Idempotency-Key": key } as never,
+      },
+      headers: {
+        "Idempotency-Key": key,
       },
     }),
   );

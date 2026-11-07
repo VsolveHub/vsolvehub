@@ -3013,7 +3013,7 @@ class Command(BaseCommand):
         """Mirrors `seed_trade_partners._accept_current_consents`.
 
         The receipt points at the document row rather than repeating its version, because
-        `_required_consents_exist` compares document ids. `request_ip_hash` and `device_hash` stay
+        `partner_has_required_consents` compares document ids. `request_ip_hash` and `device_hash` stay
         blank on purpose: those record where a real acceptance came from, and inventing them would
         forge the provenance of a legal receipt.
         """

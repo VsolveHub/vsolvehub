@@ -103,3 +103,21 @@ class OtpInvalidApiError(APIException):
     error_code = "otp_invalid"
     safe_message = "That code is incorrect, expired or locked."
     retryable = False
+
+
+class SiteDetailsLockedApiError(APIException):
+    """The visit's address and pin are not the Partner's to see yet, or any more."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "site_details_locked"
+    error_code = "site_details_locked"
+    safe_message = "The address and route unlock closer to the visit."
+    retryable = False
+
+
+class RoutingUnavailableApiError(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_code = "routing_unavailable"
+    error_code = "routing_unavailable"
+    safe_message = "The route is not available right now. Open Google Maps instead."
+    retryable = True

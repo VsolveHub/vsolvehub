@@ -81,7 +81,9 @@ from .customer import (
 )
 from .operations import (
     OperationsAssistedStartView,
+    OperationsBookingCollectionView,
     OperationsBookingDetailView,
+    OperationsCancelBookingView,
     OperationsRecoverBookingView,
 )
 from .partner import (
@@ -94,6 +96,7 @@ from .partner import (
     PartnerBookingCollectionView,
     PartnerBookingCursorPagination,
     PartnerBookingDetailView,
+    PartnerBookingRouteView,
     PartnerContactAttemptView,
     PartnerCustomerUnavailableView,
     PartnerEnRouteView,
@@ -126,7 +129,9 @@ __all__ = [
     "CustomerQualityDisputeView",
     "CustomerStartOtpView",
     "OperationsAssistedStartView",
+    "OperationsBookingCollectionView",
     "OperationsBookingDetailView",
+    "OperationsCancelBookingView",
     "OperationsRecoverBookingView",
     "PartnerAbortView",
     "PartnerActiveBookingCursorPagination",
@@ -134,6 +139,7 @@ __all__ = [
     "PartnerBookingCollectionView",
     "PartnerBookingCursorPagination",
     "PartnerBookingDetailView",
+    "PartnerBookingRouteView",
     "PartnerContactAttemptView",
     "PartnerCustomerUnavailableView",
     "PartnerEnRouteView",

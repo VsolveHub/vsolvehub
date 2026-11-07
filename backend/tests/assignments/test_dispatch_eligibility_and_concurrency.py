@@ -1,25 +1,21 @@
-from datetime import timedelta
-from unittest.mock import MagicMock, patch
 import uuid
+from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from django.utils import timezone
 
-from apps.assignments.models import DispatchOffer
-from apps.assignments.ranking import ExclusionReason, evaluate_unit_candidates as rank_unit_candidates
+from apps.assignments.models import AssignmentAttempt, DispatchOffer
+from apps.assignments.ranking import ExclusionReason
+from apps.assignments.ranking import evaluate_unit_candidates as rank_unit_candidates
 from apps.assignments.tasks import (
     reconcile_stuck_dispatch_offers_task,
     send_dispatch_offer_push_task,
 )
-from apps.carts.models import BookingGroup, FulfilmentUnit
-from apps.commerce.models import Booking
-from apps.locations.models import ServiceArea
+from apps.carts.models import BookingGroup
 from apps.partners.models import (
-    PartnerApplication,
     PartnerLocation,
     PartnerOnlineSession,
-    PartnerProfile,
     PartnerPushSubscription,
     PartnerShift,
 )
@@ -34,14 +30,18 @@ pytestmark = [
 # ============================================================================
 # 1. Eligibility Tests
 
+
 def _prepare_instant_unit(booked):
     booked.group.booking_mode = BookingGroup.BookingMode.INSTANT
     booked.group.save(update_fields=["booking_mode"])
     booked.unit.booking_group.booking_mode = BookingGroup.BookingMode.INSTANT
-    from apps.assignments.models import AssignmentAttempt
+
     AssignmentAttempt.objects.filter(fulfilment_unit=booked.unit).delete()
     return booked.partner, booked.unit
+
+
 # ============================================================================
+
 
 def test_eligibility_fresh_active_opted_in(settings):
     settings.FEATURE_PUSH_GATED_INSTANT = True
@@ -254,6 +254,7 @@ def test_eligibility_feature_push_gated_false_preserves_presence_behavior(settin
 # 2. Concurrency Tests
 # ============================================================================
 
+
 def test_atomic_claim_concurrency_race() -> None:
     booked = create_booked_group(key_prefix="concur-race")
     booking = booked.booking
@@ -317,6 +318,7 @@ def test_worker_exits_when_already_in_sending() -> None:
 # 3. OneSignal Outcomes Tests
 # ============================================================================
 
+
 def test_onesignal_200_without_id_is_marked_failed() -> None:
     booked = create_booked_group(key_prefix="os-noid")
     booking = booked.booking
@@ -332,7 +334,8 @@ def test_onesignal_200_without_id_is_marked_failed() -> None:
     )
 
     with patch("apps.notifications.onesignal.send_push_to_external_ids") as mock_send:
-        # OneSignal returns HTTP 200 but notification_id is None (e.g. no valid subscribed recipients)
+        # OneSignal returns HTTP 200 but notification_id is None (e.g. no valid subscribed
+        # recipients)
         mock_send.return_value = {
             "success": False,
             "notification_id": None,
@@ -524,7 +527,8 @@ def test_reconcile_stuck_sending_offers() -> None:
     )
     DispatchOffer.objects.filter(id=offer1.id).update(updated_at=now - timedelta(minutes=6))
 
-    # Offer 2: Stuck in SENDING > 5 mins without ID, retry_count < 5, expires_at in future -> returned PENDING
+    # Offer 2: Stuck in SENDING > 5 mins without ID, retry_count < 5, expires_at in future ->
+    # returned PENDING
     offer2 = DispatchOffer.objects.create(
         booking=booking,
         partner=partner,

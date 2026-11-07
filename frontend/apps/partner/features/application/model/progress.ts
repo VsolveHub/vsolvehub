@@ -30,16 +30,11 @@ import { applicationSteps, type ApplicationStep } from "./steps";
  *
  * ## Steps that collect nothing required
  *
- * `/apply/schedule` has no entry in `requirements` — hours are genuinely
- * optional at review time, and Django does not refuse a submission without them.
- * Grouping alone would therefore report it complete (zero requirements, zero
- * unmet), which would be a lie of the most annoying kind: a tick against
- * something the applicant has not done.
- *
- * So a step with no requirements is `optional`, a third state, rendered as
- * neither done nor outstanding. `/apply` and `/apply/review` are `waypoint` for
- * the same reason in reverse — they collect nothing because they are the way in
- * and the way out, not stops on the path.
+ * A step with no requirements would group to "complete" (zero requirements, zero
+ * unmet) — a tick against something nobody did. So it is `optional`, a third
+ * state, neither done nor outstanding. `/apply` is a `waypoint`: the way in, not
+ * a stop on the path. The last step, `/apply/review`, is a real step: the
+ * agreements are accepted there.
  */
 
 type Application = Schemas["PartnerApplication"];
@@ -51,19 +46,19 @@ export type StepState =
   | "todo"
   /** Collects nothing required. Worth doing, never blocking. */
   | "optional"
-  /** The overview and the review screen: not stops on the path. */
+  /** The overview: the way in, not a stop on the path. */
   | "waypoint";
 
 export interface StepProgress extends ApplicationStep {
   readonly state: StepState;
-  /** The requirements this step is responsible for. Empty for the two waypoints. */
+  /** The requirements this step is responsible for. Empty for the overview. */
   readonly requirements: readonly Requirement[];
   /** How many of them are still missing. */
   readonly outstanding: number;
 }
 
-/** Steps that bracket the path rather than sitting on it. */
-const WAYPOINTS: readonly string[] = ["/apply", "/apply/review"];
+/** The step that brackets the path rather than sitting on it. */
+const WAYPOINTS: readonly string[] = ["/apply"];
 
 type Schedule = Schemas["PartnerSchedule"];
 

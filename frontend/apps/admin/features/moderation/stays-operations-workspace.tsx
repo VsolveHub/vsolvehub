@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePagedList } from "@vsolve/query";
@@ -37,9 +38,15 @@ import {
 } from "./queries";
 import { PartnerProfileDrawer } from "./partner-profile-drawer";
 import { useDebounced } from "@/features/shared/use-debounced";
-import { MoneyTab, useListingCounts } from "@/features/money/money-tab";
+import { useListingCounts } from "@/features/money/money-tab";
+import { TabLoading } from "@/features/money/service-workspace";
 import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
-import { StayPlans } from "./stay-plans";
+
+// Money and Plans are fetched only when opened.
+const MoneyTab = dynamic(() => import("@/features/money/money-tab").then((m) => m.MoneyTab), {
+  loading: TabLoading,
+});
+const StayPlans = dynamic(() => import("./stay-plans").then((m) => m.StayPlans), { loading: TabLoading });
 
 const TABS = [
   { key: "properties", label: "Properties" },
@@ -127,14 +134,18 @@ export function StaysOperationsWorkspace() {
     fetchOpsStaysPage(cursor, filter === "PENDING" ? "PENDING" : undefined),
   );
 
+  // Fetched only for the tabs that show them (Properties shows the reservation count), so
+  // opening Stays doesn't download every enquiry and reservation up front.
   const enquiries = useQuery({
     queryKey: ["ops-stays-enquiries"],
     queryFn: fetchOpsStayEnquiries,
+    enabled: activeTab === "enquiries",
   });
 
   const reservations = useQuery({
     queryKey: ["ops-stays-reservations"],
     queryFn: fetchOpsStayReservations,
+    enabled: activeTab === "reservations" || activeTab === "properties",
   });
 
   // Moderation Mutation

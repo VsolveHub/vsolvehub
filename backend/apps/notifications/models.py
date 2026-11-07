@@ -116,6 +116,19 @@ class NotificationIntent(models.Model):
         #: A kill switch was engaged, or the recipient opted out of this purpose.
         SUPPRESSED = "SUPPRESSED", "Suppressed"
 
+    class Audience(models.TextChoices):
+        """Which side of the platform the notice speaks to.
+
+        One person can be both a Customer and a Partner. Their customer notices belong in the
+        customer app and site, their partner notices in the partner app and site, and the recipient
+        alone cannot tell the two apart. Recorded when the notice is created, by the code that
+        knows which side the recipient is on in that moment.
+        """
+
+        CUSTOMER = "CUSTOMER", "Customer"
+        PARTNER = "PARTNER", "Partner"
+        OPERATIONS = "OPERATIONS", "Operations"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="notification_intents"
@@ -124,6 +137,8 @@ class NotificationIntent(models.Model):
     #: so a Partner who muted marketing still gets told their job was cancelled.
     purpose = models.CharField(max_length=64)
     channel = models.CharField(max_length=8, choices=Channel.choices)
+    #: Blank only on rows written before audiences were recorded; every new row has one.
+    audience = models.CharField(max_length=10, choices=Audience.choices, blank=True, default="")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     template_code = models.CharField(max_length=80)
     #: The values a template needs. Never the rendered message — a rendered body would freeze
@@ -213,6 +228,7 @@ class NotificationDelivery(models.Model):
             raise ValueError("Notification delivery attempts are immutable.")
         super().save(*args, **kwargs)
 
+
 class CustomerPushSubscription(models.Model):
     """Stores the verified OneSignal Web Push subscription state for customers."""
 
@@ -281,7 +297,6 @@ class CustomerPushSubscription(models.Model):
         return f"{self.user_id}:{self.onesignal_subscription_id}:{state}"
 
 
-
 class PushNotificationPreference(models.Model):
     """User preference per push notification category.
 
@@ -297,33 +312,46 @@ class PushNotificationPreference(models.Model):
     class Category(models.TextChoices):
         # Customer categories
         BOOKING_UPDATES = "BOOKING_UPDATES", "Booking Updates"
-        DISPATCH_AND_ASSIGNMENT_UPDATES = "DISPATCH_AND_ASSIGNMENT_UPDATES", "Dispatch & Assignment Updates"
+        DISPATCH_AND_ASSIGNMENT_UPDATES = (
+            "DISPATCH_AND_ASSIGNMENT_UPDATES",
+            "Dispatch & Assignment Updates",
+        )
         ARRIVAL_AND_OTP_ALERTS = "ARRIVAL_AND_OTP_ALERTS", "Arrival & OTP Alerts"
         ACCOUNT_SECURITY = "ACCOUNT_SECURITY", "Account Security"
         OFFERS_AND_PROMOTIONS = "OFFERS_AND_PROMOTIONS", "Offers & Promotions"
 
         # Partner categories
         JOB_AND_DISPATCH_ALERTS = "JOB_AND_DISPATCH_ALERTS", "Job & Dispatch Alerts"
-        SHIFT_AND_AVAILABILITY_REMINDERS = "SHIFT_AND_AVAILABILITY_REMINDERS", "Shift & Availability Reminders"
+        SHIFT_AND_AVAILABILITY_REMINDERS = (
+            "SHIFT_AND_AVAILABILITY_REMINDERS",
+            "Shift & Availability Reminders",
+        )
         PRODUCT_UPDATES = "PRODUCT_UPDATES", "Product Updates"
 
     CATEGORY_METADATA = {
         "CUSTOMER": {
             "BOOKING_UPDATES": {
                 "label": "Booking Updates",
-                "description": "Confirmations, rescheduling, and status changes for your active bookings.",
+                "description": (
+                    "Confirmations, rescheduling, and status changes for your active bookings."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
             "DISPATCH_AND_ASSIGNMENT_UPDATES": {
                 "label": "Dispatch & Assignment Updates",
-                "description": "Real-time alerts when a professional accepts and is assigned to your job.",
+                "description": (
+                    "Real-time alerts when a professional accepts and is assigned to your job."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
             "ARRIVAL_AND_OTP_ALERTS": {
                 "label": "Arrival & OTP Alerts",
-                "description": "Immediate notifications when your professional arrives with the start-work code.",
+                "description": (
+                    "Immediate notifications when your professional arrives with the start-work "
+                    "code."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
@@ -343,7 +371,10 @@ class PushNotificationPreference(models.Model):
         "PARTNER": {
             "JOB_AND_DISPATCH_ALERTS": {
                 "label": "Job & Dispatch Alerts",
-                "description": "Instant booking dispatch offers nearby. Disabling may make you ineligible for Instant dispatch.",
+                "description": (
+                    "Instant booking dispatch offers nearby. Disabling may make you ineligible "
+                    "for Instant dispatch."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
@@ -355,13 +386,17 @@ class PushNotificationPreference(models.Model):
             },
             "ACCOUNT_SECURITY": {
                 "label": "Account Security",
-                "description": "Critical login alerts, bank detail updates, and account verification notices.",
+                "description": (
+                    "Critical login alerts, bank detail updates, and account verification notices."
+                ),
                 "is_mutable": False,
                 "default_enabled": True,
             },
             "PRODUCT_UPDATES": {
                 "label": "Product Updates",
-                "description": "New partner features, app improvements, and operational guidelines.",
+                "description": (
+                    "New partner features, app improvements, and operational guidelines."
+                ),
                 "is_mutable": True,
                 "default_enabled": True,
             },
@@ -396,9 +431,9 @@ class PushNotificationPreference(models.Model):
         return f"{self.user_id}:{self.role}:{self.category}:{state}"
 
     @classmethod
-    def is_category_enabled(cls, user, role: str, category: str) -> bool:
+    def is_category_enabled(cls, user: Any, role: str, category: str) -> bool:
         """Return whether a category is enabled for a user and role.
-        
+
         ACCOUNT_SECURITY cannot be disabled.
         If a record does not exist, return the default for that category.
         """
@@ -407,10 +442,9 @@ class PushNotificationPreference(models.Model):
 
         role_meta = cls.CATEGORY_METADATA.get(role, {})
         cat_meta = role_meta.get(category, {})
-        default_val = cat_meta.get("default_enabled", True)
+        default_val = bool(cat_meta.get("default_enabled", True))
 
         pref = cls.objects.filter(user=user, role=role, category=category).first()
         if pref is not None:
             return pref.is_enabled
         return default_val
-

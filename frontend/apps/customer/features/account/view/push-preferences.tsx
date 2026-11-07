@@ -10,7 +10,6 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
-  Bell,
   CheckCircle,
   ShieldAlert,
 } from "lucide-react";
@@ -22,10 +21,8 @@ import {
   type PushPreferenceItem,
 } from "../queries";
 
-const ONESIGNAL_APP_ID =
-  process.env.NEXT_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID ||
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
-  "";
+// This site's own OneSignal app only; there is no shared App ID to fall back to.
+const CUSTOMER_ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID ?? "";
 
 function PushPreferenceRow({
   preference,
@@ -99,7 +96,7 @@ export function CustomerPushPreferencesSection() {
     userId,
     triggerEvent: "manual_settings",
     apiBaseUrl: PUBLIC_API_BASE_URL,
-    appId: ONESIGNAL_APP_ID,
+    appId: CUSTOMER_ONESIGNAL_APP_ID,
   });
 
   const handleManualEnable = async () => {
@@ -109,7 +106,7 @@ export function CustomerPushPreferencesSection() {
       platform: "web",
       permission_state: permissionState,
       trigger_event: "manual_settings",
-      app_id_present: Boolean(ONESIGNAL_APP_ID),
+      app_id_present: Boolean(CUSTOMER_ONESIGNAL_APP_ID),
     });
 
     setIsRequesting(true);
