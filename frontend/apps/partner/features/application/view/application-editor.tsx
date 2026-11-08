@@ -12,7 +12,9 @@ import {
   useId,
   useMemo,
   useState,
+  useTransition,
   type ReactNode,
+  type TransitionStartFunction,
 } from "react";
 
 import {
@@ -169,6 +171,14 @@ export interface ApplicationEditorProps {
 export function ApplicationEditor(props: ApplicationEditorProps) {
   const t = useT();
   const query = usePartnerApplication();
+  // Owned here, above the `key={version}` below, on purpose. A successful save
+  // moves the version, which remounts `Editor`; a mutation living inside it
+  // would die with it — taking the spinner and the `mutate` onSuccess (the
+  // navigation to the next step) with it. Here it survives the remount.
+  const save = useUpdateApplication();
+  // Keeps the button busy until the next step has actually rendered, not just
+  // until the PATCH answered.
+  const [isNavigating, startNavigation] = useTransition();
 
   // A 404 is "you have not started yet", which is a state, not a failure.
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
@@ -219,6 +229,9 @@ export function ApplicationEditor(props: ApplicationEditorProps) {
       // and after a reviewer's change is picked up by a conflict refetch.
       key={application?.version ?? "new"}
       application={application}
+      save={save}
+      isNavigating={isNavigating}
+      startNavigation={startNavigation}
       {...props}
     />
   );
@@ -226,6 +239,9 @@ export function ApplicationEditor(props: ApplicationEditorProps) {
 
 function Editor({
   application,
+  save,
+  isNavigating,
+  startNavigation,
   title,
   description,
   // Deliberately no default: an explicit `saveLabel` is a step saying the
@@ -235,7 +251,12 @@ function Editor({
   continueOnSave = true,
   proceedDisabled = false,
   children,
-}: ApplicationEditorProps & { application: Application | null }) {
+}: ApplicationEditorProps & {
+  application: Application | null;
+  save: ReturnType<typeof useUpdateApplication>;
+  isNavigating: boolean;
+  startNavigation: TransitionStartFunction;
+}) {
   const t = useT();
   const [draft, setDraft] = useState(() => draftFromApplication(application));
   const [blockers, setBlockers] = useState<ReadonlySet<string>>(() => new Set());
@@ -248,7 +269,6 @@ function Editor({
       return next;
     });
   }, []);
-  const save = useUpdateApplication();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -304,17 +324,19 @@ function Editor({
   */
   const primaryLabel = saveLabel ? t(saveLabel) : t("apply.editor.saveAndContinue");
 
+  function goNext() {
+    if (following === null) return;
+    const href = following.href;
+    startNavigation(() => router.push(href));
+  }
+
   function commit() {
     if (!dirty) {
-      if (following !== null) router.push(following.href);
+      goNext();
       return;
     }
 
-    save.mutate(changedFields(draft, application), {
-      onSuccess: () => {
-        if (following !== null) router.push(following.href);
-      },
-    });
+    save.mutate(changedFields(draft, application), { onSuccess: goNext });
   }
 
   const previous = previousStep(pathname, application?.track);
@@ -342,9 +364,11 @@ function Editor({
           label={primaryLabel}
           backHref={backHref}
           onCommit={commit}
-          isSaving={save.isPending}
+          isSaving={save.isPending || isNavigating}
           proceedDisabled={proceedDisabled || blockers.size > 0}
-          saved={save.isSuccess && !dirty}
+          // Only for a step that stays put. When a save moves you on, the next step is the
+          // confirmation, and this would just flash in front of the spinner.
+          saved={save.isSuccess && !dirty && following === null}
           conflict={isVersionConflict(save.error)}
           refusal={refusal}
           failed={

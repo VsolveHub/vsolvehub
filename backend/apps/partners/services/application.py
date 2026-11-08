@@ -9,7 +9,7 @@ the draft. Reviewer-side decisions on the same row live in `review`; document ha
 import uuid
 from collections.abc import Iterable, Sequence
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.catalog.models import Service, ServiceVariant
@@ -53,17 +53,37 @@ def _ensure_partner_role(user: User) -> None:
     UserRole.objects.get_or_create(user=user, role=role, revoked_at=None)
 
 
+def _set_active_links(
+    *,
+    model: type[models.Model],
+    partner: PartnerProfile,
+    field: str,
+    targets: Iterable[Skill | ServiceVariant | ServiceArea],
+) -> None:
+    """Make exactly `targets` the partner's active links, in four queries however many there are.
+
+    This used to be `update_or_create` per row (a handful of queries each), so ticking every job
+    type took ~27 seconds. The caller holds the partner row locked (`select_for_update`), so two
+    saves cannot race between the read and the insert.
+    """
+    selected = list(targets)
+    key = f"{field}_id"
+    links = model._default_manager.filter(partner=partner)
+    links.exclude(**{f"{key}__in": [target.id for target in selected]}).update(is_active=False)
+    existing = set(
+        links.filter(**{f"{key}__in": [target.id for target in selected]}).values_list(
+            key, flat=True
+        ),
+    )
+    links.filter(**{f"{key}__in": existing}, is_active=False).update(is_active=True)
+    missing = [target for target in selected if target.id not in existing]
+    model._default_manager.bulk_create(
+        [model(partner=partner, **{field: target}) for target in missing],
+    )
+
+
 def _set_active_skills(*, partner: PartnerProfile, skills: Iterable[Skill]) -> None:
-    selected = list(skills)
-    PartnerSkill.objects.filter(partner=partner).exclude(
-        skill_id__in=[skill.id for skill in selected],
-    ).update(is_active=False)
-    for skill in selected:
-        PartnerSkill.objects.update_or_create(
-            partner=partner,
-            skill=skill,
-            defaults={"is_active": True},
-        )
+    _set_active_links(model=PartnerSkill, partner=partner, field="skill", targets=skills)
 
 
 def _set_active_services(
@@ -71,16 +91,7 @@ def _set_active_services(
     partner: PartnerProfile,
     variants: Iterable[ServiceVariant],
 ) -> None:
-    selected = list(variants)
-    PartnerService.objects.filter(partner=partner).exclude(
-        variant_id__in=[variant.id for variant in selected],
-    ).update(is_active=False)
-    for variant in selected:
-        PartnerService.objects.update_or_create(
-            partner=partner,
-            variant=variant,
-            defaults={"is_active": True},
-        )
+    _set_active_links(model=PartnerService, partner=partner, field="variant", targets=variants)
 
 
 def _set_active_service_areas(
@@ -88,16 +99,12 @@ def _set_active_service_areas(
     partner: PartnerProfile,
     service_areas: Iterable[ServiceArea],
 ) -> None:
-    selected = list(service_areas)
-    PartnerServiceArea.objects.filter(partner=partner).exclude(
-        service_area_id__in=[area.id for area in selected],
-    ).update(is_active=False)
-    for area in selected:
-        PartnerServiceArea.objects.update_or_create(
-            partner=partner,
-            service_area=area,
-            defaults={"is_active": True},
-        )
+    _set_active_links(
+        model=PartnerServiceArea,
+        partner=partner,
+        field="service_area",
+        targets=service_areas,
+    )
 
 
 def _validate_service_configuration(
@@ -131,17 +138,21 @@ def _validate_service_configuration(
             f"Select the required skills for: {', '.join(missing_skills)}.",
         )
 
-    area_ids = {area.id for area in service_areas}
-    for variant in variants if service_areas or require_complete else ():
-        if not ServiceAreaService.objects.filter(
-            variant=variant,
-            service_area_id__in=area_ids,
-            is_active=True,
-            service_area__is_active=True,
-        ).exists():
-            raise PartnerApplicationIncompleteError(
-                f"{variant.name} is not enabled in any selected service area.",
-            )
+    if variants and (service_areas or require_complete):
+        # One query for every variant, not one per variant.
+        covered = set(
+            ServiceAreaService.objects.filter(
+                variant__in=variants,
+                service_area_id__in={area.id for area in service_areas},
+                is_active=True,
+                service_area__is_active=True,
+            ).values_list("variant_id", flat=True),
+        )
+        for variant in variants:
+            if variant.id not in covered:
+                raise PartnerApplicationIncompleteError(
+                    f"{variant.name} is not enabled in any selected service area.",
+                )
 
 
 def _draft_application_for_update(

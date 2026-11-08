@@ -13459,6 +13459,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Order'
           description: ''
+  /api/v1/partner-work-variants/:
+    get:
+      operationId: catalog_partner_work_variants
+      description: Everything a Partner can offer, in one response (replaces a request
+        per service).
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerWorkVariant'
+          description: ''
   /api/v1/partner/application/:
     get:
       operationId: partner_application_retrieve
@@ -38658,6 +38676,39 @@ components:
         * `SENT` - SENT
         * `PAID` - PAID
         * `FAILED` - FAILED
+    PartnerWorkVariant:
+      type: object
+      description: 'One offerable job type on Partner onboarding: just what the checklist
+        shows and saves.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        required_skill_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        service_name:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+      required:
+      - category_name
+      - code
+      - id
+      - name
+      - required_skill_code
+      - service_name
     PartyCase:
       type: object
       description: |-

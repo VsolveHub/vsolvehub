@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: ba0e57062231d71d
+ * Checksum: bf97f0410484203a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5558,6 +5558,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["orders_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner-work-variants/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Everything a Partner can offer, in one response (replaces a request per service). */
+        get: operations["catalog_partner_work_variants"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15535,6 +15552,16 @@ export interface components {
          * @enum {string}
          */
         PartnerWithdrawalStatusEnum: "REQUESTED" | "SENT" | "PAID" | "FAILED";
+        /** @description One offerable job type on Partner onboarding: just what the checklist shows and saves. */
+        PartnerWorkVariant: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly name: string;
+            readonly required_skill_code: string;
+            readonly service_name: string;
+            readonly category_name: string;
+        };
         /**
          * @description A case as one of its two parties may read it.
          *
@@ -33242,6 +33269,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Order"];
+                };
+            };
+        };
+    };
+    catalog_partner_work_variants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkVariant"][];
                 };
             };
         };
