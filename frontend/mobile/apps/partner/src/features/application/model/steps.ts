@@ -53,6 +53,14 @@ export function isUnchosenDraft(
 /** The four ways to join offered on the first screen. */
 export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "RIDE_CAPTAIN";
 
+/**
+ * Whether this device offers a way of joining. Captains are Android only in V1 (Rides brief,
+ * Revision 2), so iOS never shows the rides track; every other track shows everywhere.
+ */
+export function isTrackOffered(track: StartTrack, os: string): boolean {
+  return track !== "RIDE_CAPTAIN" || os !== "ios";
+}
+
 const AFTER_APPROVAL: Record<StartTrack, string> = {
   SERVICES: "After approval, job offers come to you in the V Solve Hub partner app.",
   STAY_HOST: "After approval, you add your property and rooms, and guests can book.",

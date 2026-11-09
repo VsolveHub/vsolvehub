@@ -4,6 +4,7 @@ import {
   SERVICE_APPLICATION_STEPS,
   applicationSteps,
   isLastStep,
+  isTrackOffered,
   isUnchosenDraft,
   nextStep,
   stepIndexOf,
@@ -99,5 +100,15 @@ describe("what the first screen shows before starting", () => {
     expect(trackPreview("RENTAL_OWNER").after).toMatch(/add your items/);
     expect(trackPreview("RIDE_CAPTAIN").time).toBe("About 3 minutes");
     expect(trackPreview("RIDE_CAPTAIN").after).toMatch(/ride requests/);
+  });
+});
+
+describe("which ways of joining a device offers", () => {
+  it("hides the rides track on iOS only: captains are Android only in V1", () => {
+    expect(isTrackOffered("RIDE_CAPTAIN", "ios")).toBe(false);
+    expect(isTrackOffered("RIDE_CAPTAIN", "android")).toBe(true);
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"] as const) {
+      expect(isTrackOffered(track, "ios")).toBe(true);
+    }
   });
 });

@@ -25,7 +25,13 @@ import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "reac
 
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { canSubmit, isEditable, rejectedDocuments } from "../model/readiness";
-import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import {
+  isListingTrack,
+  isTrackOffered,
+  isUnchosenDraft,
+  trackPreview,
+  type StartTrack,
+} from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { ApplicationStatusBanner } from "./status-banner";
 
@@ -167,7 +173,7 @@ function NotStarted() {
 
       {/* 3. The four ways to join, then what happens next for the one picked */}
       <View accessibilityRole="radiogroup" style={{ gap: 12, width: "100%" }}>
-        {TRACK_CHOICES.map(({ track, title, description, Icon }) => (
+        {OFFERED_TRACKS.map(({ track, title, description, Icon }) => (
           <TrackCard
             key={track}
             icon={<Icon size={22} color="#ea580c" />}
@@ -225,6 +231,9 @@ const TRACK_CHOICES = [
     Icon: Bike,
   },
 ] as const;
+
+/** The ways of joining this device offers: no rides track on iOS (captains are Android only). */
+const OFFERED_TRACKS = TRACK_CHOICES.filter((choice) => isTrackOffered(choice.track, Platform.OS));
 
 /** What a chosen way of joining asks for, before the applicant commits to it. */
 function TrackPreview({
@@ -367,7 +376,7 @@ function TrackCard({
 function SwitchTrack({ current }: { current: string }) {
   const router = useRouter();
   const update = useUpdateApplication();
-  const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
+  const others = OFFERED_TRACKS.filter((choice) => choice.track !== current);
 
   return (
     <View
