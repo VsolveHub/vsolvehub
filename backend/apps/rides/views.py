@@ -8,8 +8,9 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.foundation.services import execute_idempotent
@@ -19,6 +20,8 @@ from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rides import engine, selectors, services
 from apps.rides.models import CaptainPass, CaptainPassPlan, Ride, RideRateCard
 from apps.rides.serializers import (
+    AvailabilityQuerySerializer,
+    AvailabilitySerializer,
     BuyPassSerializer,
     CaptainPassPlanOpsSerializer,
     CaptainPassPlanSerializer,
@@ -42,6 +45,7 @@ from common.schema import IDEMPOTENCY_KEY_HEADER
 from common.throttling import ThrottledWriteMixin
 
 __all__ = [
+    "AvailabilityView",
     "CaptainLocationView",
     "CaptainMeView",
     "CaptainPassPlansView",
@@ -443,6 +447,27 @@ class OfferDeclineView(APIView):
     def post(self, request: Any, offer_id: Any) -> Response:
         engine.decline_offer(partner=_partner(request.user), offer_id=offer_id)
         return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class AvailabilityView(APIView):
+    """Which vehicle types can be booked at a place. Drives the Rides entry on Home."""
+
+    # Home is open to signed-out visitors too. Each new place costs a geocoding call, so it shares
+    # the serviceability check's per-caller limit.
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "serviceability"
+
+    @extend_schema(
+        operation_id="rides_availability_retrieve",
+        parameters=[AvailabilityQuerySerializer],
+        responses=AvailabilitySerializer,
+    )
+    def get(self, request: Any) -> Response:
+        query = AvailabilityQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        types = services.available_vehicle_types(**query.validated_data)
+        return Response(AvailabilitySerializer({"vehicle_types": types}).data)
 
 
 class FareQuotesView(ThrottledWriteMixin, APIView):

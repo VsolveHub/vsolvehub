@@ -22176,6 +22176,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/Ride'
           description: ''
+  /api/v1/rides/availability/:
+    get:
+      operationId: rides_availability_retrieve
+      description: Which vehicle types can be booked at a place. Drives the Rides
+        entry on Home.
+      parameters:
+      - in: query
+        name: latitude
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        required: true
+      - in: query
+        name: longitude
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        required: true
+      tags:
+      - rides
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+          description: ''
   /api/v1/rides/quotes/:
     post:
       operationId: rides_quotes_create
@@ -24156,6 +24188,16 @@ components:
       - active_role
       - session_expires_at
       - user
+    Availability:
+      type: object
+      properties:
+        vehicle_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/VehicleTypesEnum'
+          description: 'Bookable here, cheapest first. Empty: hide the Rides entry.'
+      required:
+      - vehicle_types
     AvailableFromEnum:
       enum:
       - IMMEDIATE
@@ -50991,6 +51033,16 @@ components:
       - is_current
       - last_seen_at
     VehicleTypeEnum:
+      enum:
+      - BIKE
+      - AUTO
+      - CAB
+      type: string
+      description: |-
+        * `BIKE` - Bike
+        * `AUTO` - Auto
+        * `CAB` - Cab
+    VehicleTypesEnum:
       enum:
       - BIKE
       - AUTO

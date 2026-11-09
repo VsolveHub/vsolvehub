@@ -73,6 +73,11 @@ added to this entry.
   starts the moment that one ends. `POST /partner/rides/passes/` answers
   `409 pass_purchase_pending` for any other plan while a paid purchase (under 30 minutes old)
   is still going through.
+- **Added** `GET /rides/availability/?latitude=&longitude=` (`Availability`): `vehicle_types`,
+  the types bookable at that place, cheapest first; empty when Rides does not run there. Open to
+  signed-out callers, with the serviceability rate limit. `400` for a missing or out-of-range
+  place; `503 routing_unavailable` (retryable) when the place cannot be looked up. It drives the
+  Rides entry on the customer Home screen; there is no Rides catalogue category.
 - **Added** `POST /rides/` (`RideCreateRequest` → `201 Ride`), with a required `Idempotency-Key`:
   books a ride from one of the rider's own quotes (`quote_id`). The ride starts `SEARCHING` and
   the server offers it to nearby captains in rounds; it ends `NO_CAPTAIN_FOUND` if nobody

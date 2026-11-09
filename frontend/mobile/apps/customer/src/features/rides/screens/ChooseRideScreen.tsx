@@ -3,24 +3,15 @@ import { useAuthStore } from "@vsolve/mobile-core";
 import { Button, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { CarTaxiFront, Motorbike } from "lucide-react-native";
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 
-import { AutoRickshawIcon } from "../auto-rickshaw-icon";
 import { decodePolyline } from "../polyline";
-import { useFareQuotes, type FareQuote, type Trip } from "../queries";
-
-type VehicleIcon = ComponentType<{ size?: number; color?: string }>;
-
-const VEHICLES: Record<FareQuote["vehicle_type"], { name: string; icon: VehicleIcon }> = {
-  BIKE: { name: "Bike", icon: Motorbike },
-  AUTO: { name: "Auto", icon: AutoRickshawIcon },
-  CAB: { name: "Cab", icon: CarTaxiFront },
-};
+import { useFareQuotes, type Trip } from "../queries";
+import { VEHICLES } from "../vehicles";
 
 const ROUTE_BLUE = "#2563EB";
 

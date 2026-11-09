@@ -3,6 +3,11 @@ from typing import Any
 
 import pytest
 import redis
+
+# Imported before any test freezes the clock: DRF's throttle keeps `time.time` as a class attribute,
+# and if this module were first imported under freezegun it would keep the fake clock for the rest
+# of the run (every later throttled request then fails with a TypeError).
+import rest_framework.throttling  # noqa: F401
 from pytest_django.fixtures import SettingsWrapper
 
 from tests.rides.ride_world import TEST_REDIS

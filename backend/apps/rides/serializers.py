@@ -23,6 +23,8 @@ from apps.rides.models import (
 from apps.rides.selectors import CaptainStatus
 
 __all__ = [
+    "AvailabilityQuerySerializer",
+    "AvailabilitySerializer",
     "BuyPassSerializer",
     "CaptainPassPlanOpsSerializer",
     "CaptainPassPlanSerializer",
@@ -181,6 +183,22 @@ class TripPointSerializer(serializers.Serializer[Any]):
     )
     # Not `label`: that name is the serializer field's own display label in DRF.
     address = serializers.CharField(max_length=255, help_text="The address the rider sees.")
+
+
+class AvailabilityQuerySerializer(serializers.Serializer[Any]):
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal(-90), max_value=Decimal(90)
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal(-180), max_value=Decimal(180)
+    )
+
+
+class AvailabilitySerializer(serializers.Serializer[Any]):
+    vehicle_types = serializers.ListField(
+        child=serializers.ChoiceField(choices=VehicleType.choices),
+        help_text="Bookable here, cheapest first. Empty: hide the Rides entry.",
+    )
 
 
 class FareQuoteRequestSerializer(serializers.Serializer[Any]):

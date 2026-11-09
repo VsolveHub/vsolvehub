@@ -53,6 +53,7 @@ __all__ = [
     "VEHICLE_EDITABLE_STATUSES",
     "LocationPing",
     "TripPoint",
+    "available_vehicle_types",
     "buy_pass",
     "complete_pass_payment",
     "create_quotes",
@@ -167,6 +168,22 @@ def _pickup_area(pickup: TripPoint) -> ServiceArea:
     if not decision.is_serviceable or decision.service_area is None:
         raise AreaNotServedError
     return decision.service_area
+
+
+def available_vehicle_types(*, latitude: Decimal, longitude: Decimal) -> list[str]:
+    """Which vehicle types can be booked from here, cheapest first. Empty when none can.
+
+    Drives the Rides entry on the customer Home screen (brief §5.11), so "not served here" is an
+    empty answer, not an error. A geocoder failure still raises: the app hides the entry then.
+    """
+    try:
+        area = _pickup_area(TripPoint(latitude, longitude, ""))
+    except AreaNotServedError:
+        return []
+    types = RideRateCard.objects.filter(service_area=area, is_active=True).values_list(
+        "vehicle_type", flat=True
+    )
+    return sorted(types, key=lambda vehicle: _VEHICLE_ORDER[VehicleType(vehicle)])
 
 
 def create_quotes(*, rider: Any, pickup: TripPoint, drop: TripPoint) -> list[FareQuote]:

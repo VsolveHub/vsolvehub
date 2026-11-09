@@ -13,6 +13,7 @@ import { CategoryArtwork } from "@/features/catalog/category-artwork";
 import { useCategories, usePromoBanners, type Category } from "@/features/catalog/client-queries";
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
+import { RidesEntry } from "@/features/rides/rides-entry";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useIsDesktop } from "@/lib/responsive";
@@ -44,9 +45,7 @@ function DesktopHomeScreen() {
   };
 
   const handleCategoryPress = (category: Category) => {
-    if (category.slug === "rides") {
-      router.push("/rides" as never);
-    } else if (category.slug === "rental-services") {
+    if (category.slug === "rental-services") {
       router.push("/rentals" as never);
     } else if (category.slug === "rooms-pg-hostel-hotels") {
       router.push("/stays" as never);
@@ -322,6 +321,8 @@ function MobileHomeScreen() {
       {/* Safety Stories Tray */}
       <SafetyStoriesTray />
 
+      <RidesEntry />
+
       <View className="gap-3.5">
         <View className="flex-row items-center justify-between">
           <Text className="text-xl font-extrabold text-[#00112e]">Our Services</Text>
@@ -361,9 +362,7 @@ function MobileHomeScreen() {
                 key={category.id}
                 category={category}
                 onPress={() => {
-                  if (category.slug === "rides") {
-                    router.push("/rides" as never);
-                  } else if (category.slug === "rental-services") {
+                  if (category.slug === "rental-services") {
                     router.push("/rentals" as never);
                   } else if (category.slug === "rooms-pg-hostel-hotels") {
                     router.push("/stays" as never);

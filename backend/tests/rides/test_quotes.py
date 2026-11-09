@@ -298,3 +298,63 @@ def test_price_checks_are_limited_to_20_a_minute() -> None:
 
     assert answers[:20] == [400] * 20
     assert answers[20] == 429
+
+
+# --- availability: the Rides entry on Home (Revision 2, R1) -----------------------------------
+
+AVAILABILITY = "/api/v1/rides/availability/?latitude=17.440000&longitude=78.348900"
+
+
+def test_availability_lists_bookable_vehicles_cheapest_first(
+    area: ServiceArea, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pickup_pin(monkeypatch, SERVED_PIN)
+    all_cards(area)
+
+    response = APIClient().get(AVAILABILITY)  # Home is open to signed-out visitors
+
+    assert response.status_code == 200
+    assert response.json() == {"vehicle_types": ["BIKE", "AUTO", "CAB"]}
+
+
+def test_availability_leaves_out_a_vehicle_switched_off(
+    area: ServiceArea, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pickup_pin(monkeypatch, SERVED_PIN)
+    make_card(area, VehicleType.BIKE)
+    make_card(area, VehicleType.CAB, is_active=False)
+
+    assert APIClient().get(AVAILABILITY).json() == {"vehicle_types": ["BIKE"]}
+
+
+def test_availability_is_empty_outside_every_area(
+    area: ServiceArea, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pickup_pin(monkeypatch, "110001")
+    all_cards(area)
+
+    assert APIClient().get(AVAILABILITY).json() == {"vehicle_types": []}
+
+
+def test_availability_is_503_when_the_place_cannot_be_looked_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken(**_: Any) -> GeocodedAddress:
+        raise GeocodingError("down")
+
+    monkeypatch.setattr(services, "reverse_geocode", broken)
+
+    response = APIClient().get(AVAILABILITY)
+
+    assert (response.status_code, error_code(response)) == (503, "routing_unavailable")
+
+
+def test_availability_needs_a_valid_place() -> None:
+    assert APIClient().get("/api/v1/rides/availability/?latitude=91&longitude=0").status_code == 400
+    assert APIClient().get("/api/v1/rides/availability/").status_code == 400
+
+
+def test_no_migration_creates_a_rides_catalogue_category() -> None:
+    from apps.catalog.models import Category  # noqa: PLC0415
+
+    assert not Category.objects.filter(slug="rides").exists()

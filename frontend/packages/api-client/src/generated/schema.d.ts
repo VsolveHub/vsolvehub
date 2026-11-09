@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 496541e8a1240cf4
+ * Checksum: b4ecfb2749254ecf
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -9081,6 +9081,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rides/availability/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Which vehicle types can be booked at a place. Drives the Rides entry on Home. */
+        get: operations["rides_availability_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rides/quotes/": {
         parameters: {
             query?: never;
@@ -9955,6 +9972,10 @@ export interface components {
             readonly active_role: string;
             /** Format: date-time */
             readonly session_expires_at: string;
+        };
+        Availability: {
+            /** @description Bookable here, cheapest first. Empty: hide the Rides entry. */
+            vehicle_types: components["schemas"]["VehicleTypesEnum"][];
         };
         /**
          * @description * `IMMEDIATE` - Immediately
@@ -20624,6 +20645,13 @@ export interface components {
          * @enum {string}
          */
         VehicleTypeEnum: "BIKE" | "AUTO" | "CAB";
+        /**
+         * @description * `BIKE` - Bike
+         *     * `AUTO` - Auto
+         *     * `CAB` - Cab
+         * @enum {string}
+         */
+        VehicleTypesEnum: "BIKE" | "AUTO" | "CAB";
         /**
          * @description A responding vendor, as much of one as the Customer has paid to see.
          *
@@ -41902,6 +41930,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ride"];
+                };
+            };
+        };
+    };
+    rides_availability_retrieve: {
+        parameters: {
+            query: {
+                latitude: string;
+                longitude: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Availability"];
                 };
             };
         };

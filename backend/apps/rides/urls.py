@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.rides.views import (
+    AvailabilityView,
     CaptainLocationView,
     CaptainMeView,
     CaptainPassesView,
@@ -24,6 +25,7 @@ app_name = "rides"
 
 urlpatterns = [
     path("rides/", RidesView.as_view(), name="rides"),
+    path("rides/availability/", AvailabilityView.as_view(), name="availability"),
     path("rides/quotes/", FareQuotesView.as_view(), name="quotes"),
     path("rides/<uuid:ride_id>/", RideDetailView.as_view(), name="ride"),
     path("partner/rides/me/", CaptainMeView.as_view(), name="captain-me"),
