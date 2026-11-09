@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: bf97f0410484203a
+ * Checksum: 09cb3c2c38f1844b
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -8840,6 +8840,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rides/quotes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Upfront fares for a trip: one per vehicle type that can be booked at the pickup. */
+        post: operations["rides_quotes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety-stories/": {
         parameters: {
             query?: never;
@@ -12126,6 +12143,25 @@ export interface components {
         };
         ExpectedVersionRequest: {
             expected_version: number;
+        };
+        FareQuote: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly fare_paise: number;
+            readonly distance_m: number;
+            readonly duration_s: number;
+            readonly route_polyline: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        FareQuoteList: {
+            /** @description Bike, then auto, then cab; only the bookable ones. */
+            quotes: components["schemas"]["FareQuote"][];
+        };
+        FareQuoteRequestRequest: {
+            pickup: components["schemas"]["TripPointRequest"];
+            drop: components["schemas"]["TripPointRequest"];
         };
         FirebasePrecheckRequest: {
             phone_number: string;
@@ -19966,6 +20002,14 @@ export interface components {
             trip: components["schemas"]["RentalTransportTripEnum"];
             /** @default  */
             note: string;
+        };
+        TripPointRequest: {
+            /** Format: decimal */
+            latitude: string;
+            /** Format: decimal */
+            longitude: string;
+            /** @description The address the rider sees. */
+            address: string;
         };
         /**
          * @description * `PAST` - PAST
@@ -40976,6 +41020,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    rides_quotes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FareQuoteRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["FareQuoteRequestRequest"];
+                "multipart/form-data": components["schemas"]["FareQuoteRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FareQuoteList"];
                 };
             };
         };

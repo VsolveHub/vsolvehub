@@ -21759,6 +21759,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/rides/quotes/:
+    post:
+      operationId: rides_quotes_create
+      description: 'Upfront fares for a trip: one per vehicle type that can be booked
+        at the pickup.'
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FareQuoteRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FareQuoteRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FareQuoteRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FareQuoteList'
+          description: ''
   /api/v1/safety-stories/:
     get:
       operationId: safety_stories_list
@@ -29764,6 +29792,61 @@ components:
           minimum: 1
       required:
       - expected_version
+    FareQuote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        distance_m:
+          type: integer
+          readOnly: true
+        duration_s:
+          type: integer
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - distance_m
+      - duration_s
+      - expires_at
+      - fare_paise
+      - id
+      - route_polyline
+      - vehicle_type
+    FareQuoteList:
+      type: object
+      properties:
+        quotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FareQuote'
+          description: Bike, then auto, then cab; only the bookable ones.
+      required:
+      - quotes
+    FareQuoteRequestRequest:
+      type: object
+      properties:
+        pickup:
+          $ref: '#/components/schemas/TripPointRequest'
+        drop:
+          $ref: '#/components/schemas/TripPointRequest'
+      required:
+      - drop
+      - pickup
     FirebasePrecheckRequest:
       type: object
       properties:
@@ -49511,6 +49594,26 @@ components:
       required:
       - amount_paise
       - trip
+    TripPointRequest:
+      type: object
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        address:
+          type: string
+          minLength: 1
+          description: The address the rider sees.
+          maxLength: 255
+      required:
+      - address
+      - latitude
+      - longitude
     UnavailableReasonEnum:
       enum:
       - PAST

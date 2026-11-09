@@ -28,6 +28,24 @@ class CaptainNotApprovedError(RidesApiError):
         )
 
 
+class AreaNotServedError(RidesApiError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(code="area_not_served", message="Rides aren't available here yet.")
+
+
+class RoutingUnavailableApiError(RidesApiError):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    retryable = True
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="routing_unavailable",
+            message="We couldn't work out this trip right now. Please try again.",
+        )
+
+
 class RegistrationAlreadyUsedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

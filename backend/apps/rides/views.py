@@ -2,6 +2,8 @@ from typing import Any
 
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
+from rest_framework import status as http_status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,9 +14,11 @@ from apps.rides.serializers import (
     CaptainStatusSerializer,
     CaptainVehicleSerializer,
     CaptainVehicleWriteSerializer,
+    FareQuoteListSerializer,
+    FareQuoteRequestSerializer,
 )
 
-__all__ = ["CaptainMeView", "CaptainVehicleView"]
+__all__ = ["CaptainMeView", "CaptainVehicleView", "FareQuotesView"]
 
 
 def _partner(user: Any) -> PartnerProfile:
@@ -54,3 +58,28 @@ class CaptainVehicleView(APIView):
             colour=data["colour"],
         )
         return Response(CaptainVehicleSerializer(vehicle).data)
+
+
+class FareQuotesView(APIView):
+    """Upfront fares for a trip: one per vehicle type that can be booked at the pickup."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="rides_quotes_create",
+        request=FareQuoteRequestSerializer,
+        responses={201: FareQuoteListSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = FareQuoteRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        pickup, drop = data["pickup"], data["drop"]
+        quotes = services.create_quotes(
+            rider=request.user,
+            pickup=services.TripPoint(pickup["latitude"], pickup["longitude"], pickup["address"]),
+            drop=services.TripPoint(drop["latitude"], drop["longitude"], drop["address"]),
+        )
+        return Response(
+            FareQuoteListSerializer({"quotes": quotes}).data, status=http_status.HTTP_201_CREATED
+        )

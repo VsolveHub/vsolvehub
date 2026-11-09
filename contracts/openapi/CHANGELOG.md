@@ -19,6 +19,15 @@ added to this entry.
   Allowed only while the captain application is `DRAFT` or `CHANGES_REQUIRED`:
   `403 captain_not_approved` otherwise, or with no captain application.
   `409 registration_already_used` when another captain holds the plate.
+- **Added** `POST /rides/quotes/` (`FareQuoteRequest` → `201 FareQuoteList`): `pickup` and `drop`,
+  each `latitude`, `longitude` and `address`. Returns `quotes`, one per vehicle type with an
+  active rate card in the pickup's service area, ordered bike, auto, cab: `id`, `vehicle_type`,
+  `fare_paise` (upfront, rounded to the rupee), `distance_m`, `duration_s`, `route_polyline`
+  (Google encoded polyline) and `expires_at` (five minutes; a quote books at most one ride).
+  Only the pickup must be in a service area. Signed-in callers only.
+  `422 area_not_served` when the pickup is outside every active area or the area has no active
+  rate card. `503 routing_unavailable` (retryable) when the route or the pickup's area cannot be
+  worked out; no quote is saved and no fare is guessed. `400` when pickup and drop are the same.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 

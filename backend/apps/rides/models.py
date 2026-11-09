@@ -11,7 +11,13 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
-__all__ = ["CaptainVehicle", "RideRateCard", "VehicleType", "normalise_registration_number"]
+__all__ = [
+    "CaptainVehicle",
+    "FareQuote",
+    "RideRateCard",
+    "VehicleType",
+    "normalise_registration_number",
+]
 
 
 def normalise_registration_number(value: str) -> str:
@@ -120,3 +126,67 @@ class RideRateCard(models.Model):
 
     def __str__(self) -> str:
         return f"{self.service_area_id}:{self.vehicle_type}:v{self.version}"
+
+
+class FareQuote(models.Model):
+    """One upfront price for one vehicle type on one route, shown to a rider.
+
+    It keeps its own copy of the route and the rate-card version, so a later price change never
+    alters a fare the rider has already seen. It lives for `RIDES_QUOTE_TTL_SECONDS` and books at
+    most one ride: `consumed_at` is set when it does.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ride_quotes",
+    )
+    service_area = models.ForeignKey(
+        "locations.ServiceArea",
+        on_delete=models.PROTECT,
+        related_name="ride_quotes",
+    )
+    vehicle_type = models.CharField(max_length=8, choices=VehicleType.choices)
+    rate_card = models.ForeignKey(RideRateCard, on_delete=models.PROTECT, related_name="quotes")
+    rate_card_version = models.PositiveIntegerField()
+
+    pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    pickup_label = models.CharField(max_length=255)
+    drop_latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    drop_longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    drop_label = models.CharField(max_length=255)
+
+    distance_m = models.PositiveIntegerField()
+    duration_s = models.PositiveIntegerField()
+    route_polyline = models.TextField()
+    fare_paise = models.PositiveBigIntegerField()
+
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(rate_card_version__gte=1),
+                name="rides_quote_rate_card_version_from_one",
+            ),
+            models.CheckConstraint(
+                condition=Q(expires_at__gt=models.F("created_at")),
+                name="rides_quote_expires_after_creation",
+            ),
+            models.CheckConstraint(
+                condition=Q(pickup_latitude__gte=-90, pickup_latitude__lte=90)
+                & Q(drop_latitude__gte=-90, drop_latitude__lte=90)
+                & Q(pickup_longitude__gte=-180, pickup_longitude__lte=180)
+                & Q(drop_longitude__gte=-180, drop_longitude__lte=180),
+                name="rides_quote_coordinates_in_range",
+            ),
+        ]
+        indexes = [models.Index(fields=("rider", "-created_at"), name="rides_quote_rider_recent")]
+
+    def __str__(self) -> str:
+        return f"{self.vehicle_type}:{self.fare_paise}p"
