@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 09cb3c2c38f1844b
+ * Checksum: 29b31d22d1b665f9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7230,6 +7230,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/duty/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Go on duty. Refused with the first reason the captain cannot drive. */
+        post: operations["partner_rides_duty_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/duty/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Go off duty. Already off: nothing changes. */
+        post: operations["partner_rides_duty_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/me/": {
         parameters: {
             query?: never;
@@ -7241,6 +7275,41 @@ export interface paths {
         get: operations["partner_rides_me_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/pass-plans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The passes on sale. */
+        get: operations["partner_rides_pass_plans_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/passes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Buy a pass, and the captain's pass history. */
+        get: operations["partner_rides_passes_list"];
+        put?: never;
+        /** @description Buy a pass, and the captain's pass history. */
+        post: operations["partner_rides_passes_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9900,6 +9969,10 @@ export interface components {
             readonly label: string;
             readonly consequence: string;
         };
+        BuyPassRequest: {
+            /** Format: uuid */
+            plan_id: string;
+        };
         CancellationBand: {
             readonly code: string;
             readonly condition_text: string;
@@ -10020,11 +10093,42 @@ export interface components {
             /** Format: date-time */
             readonly occurred_at: string;
         };
+        CaptainPass: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly plan: components["schemas"]["CaptainPassPlan"];
+            /** @description PENDING_ACTIVATION, ACTIVE, EXPIRED or CANCELLED. */
+            readonly status: string;
+            /** Format: date-time */
+            readonly starts_at: string | null;
+            /** Format: date-time */
+            readonly ends_at: string | null;
+            /**
+             * Format: uuid
+             * @description For a paid plan: read GET /payment-attempts/{id}/ for the Razorpay order and pay it. Null for a free plan, which is active at once.
+             */
+            readonly payment_attempt_id: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        CaptainPassPlan: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly name: string;
+            readonly price_paise: number;
+            readonly duration_hours: number;
+        };
         CaptainStatus: {
             /** @description The application status, or NOT_STARTED before a captain application exists. */
             approval: string;
             is_approved: boolean;
             readonly vehicle: components["schemas"]["CaptainVehicle"] | null;
+            readonly active_pass: components["schemas"]["CaptainPass"] | null;
+            on_duty: boolean;
+            /** Format: date-time */
+            duty_started_at: string | null;
+            /** @description Why duty cannot start, in display order: suspended or not_approved, vehicle_missing, pass_required. Empty when the captain can go on duty. */
             blocked_reasons: string[];
         };
         CaptainVehicle: {
@@ -11704,6 +11808,11 @@ export interface components {
             was_present: boolean;
             /** @default  */
             note: string;
+        };
+        DutyStatus: {
+            on_duty: boolean;
+            /** Format: date-time */
+            started_at: string | null;
         };
         /**
          * @description * `FLAT` - Flat
@@ -17296,9 +17405,10 @@ export interface components {
          *     * `A9_STAY_RESERVATION` - A9 stay reservation
          *     * `A7_RENTAL_BOOKING` - A7 rental booking
          *     * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+         *     * `RIDE_CAPTAIN_PASS` - Ride captain pass
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING" | "A9_STAY_SUBSCRIPTION";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING" | "A9_STAY_SUBSCRIPTION" | "RIDE_CAPTAIN_PASS";
         PushDevice: {
             /** Format: uuid */
             readonly id: string;
@@ -37317,6 +37427,44 @@ export interface operations {
             };
         };
     };
+    partner_rides_duty_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyStatus"];
+                };
+            };
+        };
+    };
+    partner_rides_duty_stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyStatus"];
+                };
+            };
+        };
+    };
     partner_rides_me_retrieve: {
         parameters: {
             query?: never;
@@ -37332,6 +37480,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptainStatus"];
+                };
+            };
+        };
+    };
+    partner_rides_pass_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainPassPlan"][];
+                };
+            };
+        };
+    };
+    partner_rides_passes_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainPass"][];
+                };
+            };
+        };
+    };
+    partner_rides_passes_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuyPassRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BuyPassRequest"];
+                "multipart/form-data": components["schemas"]["BuyPassRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainPass"];
                 };
             };
         };

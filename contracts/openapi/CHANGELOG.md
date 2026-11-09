@@ -28,6 +28,28 @@ added to this entry.
   `422 area_not_served` when the pickup is outside every active area or the area has no active
   rate card. `503 routing_unavailable` (retryable) when the route or the pickup's area cannot be
   worked out; no quote is saved and no fare is guessed. `400` when pickup and drop are the same.
+- **Added** `RIDE_CAPTAIN_PASS` to the payment-attempt `purpose`: a captain's Daily Pass, charged
+  without a checkout. The captain who bought the pass may read and pay the attempt.
+- **Added** `GET /partner/rides/pass-plans/` (`CaptainPassPlan[]`): active plans, cheapest first:
+  `id`, `code`, `name`, `price_paise`, `duration_hours`.
+- **Added** `POST /partner/rides/passes/` (`BuyPassRequest` → `201 CaptainPass`), with a required
+  `Idempotency-Key`; a retry with the same key replays the first answer. A `price_paise` of `0`
+  plan is `ACTIVE` at once with `payment_attempt_id: null`. A paid plan is `PENDING_ACTIVATION`
+  with a `payment_attempt_id` to pay; it becomes `ACTIVE` for `duration_hours` when the payment is
+  captured. Buying the same plan again while its payment can still succeed returns that pass.
+  `409 pass_already_active` while the captain has an active pass. `404` for an inactive plan.
+  `GET` lists the captain's passes. `status` is a string: `PENDING_ACTIVATION`, `ACTIVE`,
+  `EXPIRED` or `CANCELLED`.
+- **Added** `POST /partner/rides/duty/start/` and `POST /partner/rides/duty/stop/` (`DutyStatus`:
+  `on_duty`, `started_at`). Start is refused with `403 captain_not_approved` (not approved,
+  suspended, or no vehicle; the message says which) or `403 pass_required`. Starting while on
+  duty, or stopping while off duty, changes nothing. Stopping during a ride is allowed: the ride
+  continues and no new requests arrive.
+- **Changed** `CaptainStatus` (`GET /partner/rides/me/`), additive: `active_pass` (or `null`),
+  `on_duty`, `duty_started_at`, and `blocked_reasons` may now include `suspended` (instead of
+  `not_approved`) and `pass_required`.
+- A pass past its `ends_at` expires within a minute; a captain on duty without a pass goes off
+  duty then, unless they are on a ride, in which case they go off duty after it.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 

@@ -3,22 +3,38 @@ from typing import Any
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status as http_status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.foundation.services import execute_idempotent
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsPartnerUser
 from apps.rides import selectors, services
+from apps.rides.models import CaptainPass, CaptainPassPlan
 from apps.rides.serializers import (
+    BuyPassSerializer,
+    CaptainPassPlanSerializer,
+    CaptainPassSerializer,
     CaptainStatusSerializer,
     CaptainVehicleSerializer,
     CaptainVehicleWriteSerializer,
+    DutyStatusSerializer,
     FareQuoteListSerializer,
     FareQuoteRequestSerializer,
 )
+from common.schema import IDEMPOTENCY_KEY_HEADER
 
-__all__ = ["CaptainMeView", "CaptainVehicleView", "FareQuotesView"]
+__all__ = [
+    "CaptainMeView",
+    "CaptainPassPlansView",
+    "CaptainPassesView",
+    "CaptainVehicleView",
+    "DutyStartView",
+    "DutyStopView",
+    "FareQuotesView",
+]
 
 
 def _partner(user: Any) -> PartnerProfile:
@@ -58,6 +74,100 @@ class CaptainVehicleView(APIView):
             colour=data["colour"],
         )
         return Response(CaptainVehicleSerializer(vehicle).data)
+
+
+def _required_idempotency_key(request: Any) -> str:
+    key = str(request.headers.get("Idempotency-Key", "")).strip()
+    if not key:
+        raise ValidationError(
+            {"Idempotency-Key": "This header is required."}, code="idempotency_key_required"
+        )
+    return key
+
+
+class CaptainPassPlansView(APIView):
+    """The passes on sale."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_pass_plans_list",
+        responses=CaptainPassPlanSerializer(many=True),
+    )
+    def get(self, request: Any) -> Response:
+        del request
+        plans = CaptainPassPlan.objects.filter(is_active=True).order_by("price_paise", "code")
+        return Response(CaptainPassPlanSerializer(plans, many=True).data)
+
+
+class CaptainPassesView(APIView):
+    """Buy a pass, and the captain's pass history."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_passes_list", responses=CaptainPassSerializer(many=True)
+    )
+    def get(self, request: Any) -> Response:
+        passes = CaptainPass.objects.filter(partner=_partner(request.user)).select_related("plan")
+        return Response(CaptainPassSerializer(passes, many=True).data)
+
+    @extend_schema(
+        operation_id="partner_rides_passes_create",
+        request=BuyPassSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses={201: CaptainPassSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = BuyPassSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        key = _required_idempotency_key(request)
+        partner = _partner(request.user)
+        plan = get_object_or_404(
+            CaptainPassPlan, id=serializer.validated_data["plan_id"], is_active=True
+        )
+
+        def command() -> tuple[int, dict[str, Any]]:
+            captain_pass = services.buy_pass(partner=partner, plan=plan, idempotency_key=key)
+            return http_status.HTTP_201_CREATED, dict(CaptainPassSerializer(captain_pass).data)
+
+        result = execute_idempotent(
+            actor=request.user,
+            operation="rides.pass.buy",
+            key=key,
+            request_payload=serializer.validated_data,
+            command=command,
+        )
+        response = Response(result.body, status=result.status_code)
+        if result.replayed:
+            response["Idempotent-Replay"] = "true"
+        return response
+
+
+class DutyStartView(APIView):
+    """Go on duty. Refused with the first reason the captain cannot drive."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_duty_start", request=None, responses=DutyStatusSerializer
+    )
+    def post(self, request: Any) -> Response:
+        session = services.start_duty(partner=_partner(request.user))
+        return Response(DutyStatusSerializer(DutyStatusSerializer.of(session)).data)
+
+
+class DutyStopView(APIView):
+    """Go off duty. Already off: nothing changes."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_duty_stop", request=None, responses=DutyStatusSerializer
+    )
+    def post(self, request: Any) -> Response:
+        services.stop_duty(partner=_partner(request.user))
+        return Response(DutyStatusSerializer(DutyStatusSerializer.of(None)).data)
 
 
 class FareQuotesView(APIView):

@@ -21,10 +21,26 @@ class RidesApiError(APIException):
 class CaptainNotApprovedError(RidesApiError):
     status_code = status.HTTP_403_FORBIDDEN
 
+    def __init__(
+        self, message: str = "Your captain application can't be changed right now."
+    ) -> None:
+        super().__init__(code="captain_not_approved", message=message)
+
+
+class PassRequiredError(RidesApiError):
+    status_code = status.HTTP_403_FORBIDDEN
+
+    def __init__(self) -> None:
+        super().__init__(code="pass_required", message="Buy a pass to go on duty.")
+
+
+class PassAlreadyActiveError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
     def __init__(self) -> None:
         super().__init__(
-            code="captain_not_approved",
-            message="Your captain application can't be changed right now.",
+            code="pass_already_active",
+            message="You already have an active pass. Buy the next one when it ends.",
         )
 
 

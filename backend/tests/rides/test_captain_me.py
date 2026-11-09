@@ -30,7 +30,10 @@ def test_a_partner_who_has_not_applied_as_a_captain() -> None:
         "approval": "NOT_STARTED",
         "is_approved": False,
         "vehicle": None,
-        "blocked_reasons": ["not_approved", "vehicle_missing"],
+        "active_pass": None,
+        "on_duty": False,
+        "duty_started_at": None,
+        "blocked_reasons": ["not_approved", "vehicle_missing", "pass_required"],
     }
 
 
@@ -42,7 +45,7 @@ def test_a_draft_captain_without_a_vehicle_is_blocked_on_both_counts() -> None:
 
     assert body["approval"] == "DRAFT"
     assert body["is_approved"] is False
-    assert body["blocked_reasons"] == ["not_approved", "vehicle_missing"]
+    assert body["blocked_reasons"] == ["not_approved", "vehicle_missing", "pass_required"]
 
 
 def test_the_saved_vehicle_is_read_back() -> None:
@@ -59,10 +62,10 @@ def test_the_saved_vehicle_is_read_back() -> None:
         "make_model": "Honda Shine",
         "colour": "Black",
     }
-    assert body["blocked_reasons"] == ["not_approved"]
+    assert body["blocked_reasons"] == ["not_approved", "pass_required"]
 
 
-def test_an_approved_captain_with_a_vehicle_is_not_blocked() -> None:
+def test_an_approved_captain_with_a_vehicle_only_needs_a_pass() -> None:
     user = make_user()
     application = start_application(user)
     client = partner_client(user)
@@ -73,7 +76,7 @@ def test_an_approved_captain_with_a_vehicle_is_not_blocked() -> None:
 
     assert body["approval"] == "APPROVED"
     assert body["is_approved"] is True
-    assert body["blocked_reasons"] == []
+    assert body["blocked_reasons"] == ["pass_required"]
 
 
 def test_an_approved_captain_who_has_no_vehicle_yet_is_still_blocked() -> None:
@@ -84,7 +87,7 @@ def test_an_approved_captain_who_has_no_vehicle_yet_is_still_blocked() -> None:
     body = partner_client(user).get(URL).json()
 
     assert body["is_approved"] is True
-    assert body["blocked_reasons"] == ["vehicle_missing"]
+    assert body["blocked_reasons"] == ["vehicle_missing", "pass_required"]
 
 
 def test_a_captain_never_sees_another_captains_vehicle() -> None:

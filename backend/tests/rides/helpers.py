@@ -85,6 +85,23 @@ def set_status(application: PartnerApplication, status: str) -> None:
     application.save(update_fields=("status",))
 
 
+def ready_captain(name: str = "Ravi Captain") -> tuple[User, APIClient]:
+    """An approved captain with a vehicle: everything but a pass, which each test decides."""
+    from apps.rides.models import CaptainVehicle  # noqa: PLC0415
+
+    user = make_user(name)
+    application = start_application(user)
+    set_status(application, PartnerApplication.Status.APPROVED)
+    CaptainVehicle.objects.create(
+        partner=application.partner,
+        vehicle_type="BIKE",
+        registration_number=f"TS09AB{next(_phone):04d}",
+        make_model="Honda Shine",
+        colour="Black",
+    )
+    return user, partner_client(user)
+
+
 def partner_client(user: User) -> APIClient:
     return force_role_client(user=user, role_code="partner")
 

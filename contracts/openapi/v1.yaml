@@ -17584,6 +17584,36 @@ paths:
                 items:
                   $ref: '#/components/schemas/PartnerConsentDocument'
           description: ''
+  /api/v1/partner/rides/duty/start/:
+    post:
+      operationId: partner_rides_duty_start
+      description: Go on duty. Refused with the first reason the captain cannot drive.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DutyStatus'
+          description: ''
+  /api/v1/partner/rides/duty/stop/:
+    post:
+      operationId: partner_rides_duty_stop
+      description: 'Go off duty. Already off: nothing changes.'
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DutyStatus'
+          description: ''
   /api/v1/partner/rides/me/:
     get:
       operationId: partner_rides_me_retrieve
@@ -17598,6 +17628,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CaptainStatus'
+          description: ''
+  /api/v1/partner/rides/pass-plans/:
+    get:
+      operationId: partner_rides_pass_plans_list
+      description: The passes on sale.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaptainPassPlan'
+          description: ''
+  /api/v1/partner/rides/passes/:
+    get:
+      operationId: partner_rides_passes_list
+      description: Buy a pass, and the captain's pass history.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaptainPass'
+          description: ''
+    post:
+      operationId: partner_rides_passes_create
+      description: Buy a pass, and the captain's pass history.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyPassRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BuyPassRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BuyPassRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainPass'
           description: ''
   /api/v1/partner/rides/vehicle/:
     put:
@@ -24212,6 +24311,14 @@ components:
       - consequence
       - label
       - value
+    BuyPassRequest:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+      required:
+      - plan_id
     CancellationBand:
       type: object
       properties:
@@ -24508,6 +24615,76 @@ components:
       - reason
       - reason_code
       - to_status
+    CaptainPass:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPassPlan'
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+          description: PENDING_ACTIVATION, ACTIVE, EXPIRED or CANCELLED.
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        payment_attempt_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: 'For a paid plan: read GET /payment-attempts/{id}/ for the
+            Razorpay order and pay it. Null for a free plan, which is active at once.'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - ends_at
+      - id
+      - payment_attempt_id
+      - plan
+      - starts_at
+      - status
+    CaptainPassPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        price_paise:
+          type: integer
+          readOnly: true
+        duration_hours:
+          type: integer
+          readOnly: true
+      required:
+      - code
+      - duration_hours
+      - id
+      - name
+      - price_paise
     CaptainStatus:
       type: object
       properties:
@@ -24522,14 +24699,30 @@ components:
           - $ref: '#/components/schemas/CaptainVehicle'
           nullable: true
           readOnly: true
+        active_pass:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPass'
+          nullable: true
+          readOnly: true
+        on_duty:
+          type: boolean
+        duty_started_at:
+          type: string
+          format: date-time
+          nullable: true
         blocked_reasons:
           type: array
           items:
             type: string
+          description: 'Why duty cannot start, in display order: suspended or not_approved,
+            vehicle_missing, pass_required. Empty when the captain can go on duty.'
       required:
+      - active_pass
       - approval
       - blocked_reasons
+      - duty_started_at
       - is_approved
+      - on_duty
       - vehicle
     CaptainVehicle:
       type: object
@@ -28635,6 +28828,18 @@ components:
           type: string
           default: ''
           maxLength: 400
+    DutyStatus:
+      type: object
+      properties:
+        on_duty:
+          type: boolean
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - on_duty
+      - started_at
     EarnModeEnum:
       enum:
       - FLAT
@@ -42974,6 +43179,7 @@ components:
       - A9_STAY_RESERVATION
       - A7_RENTAL_BOOKING
       - A9_STAY_SUBSCRIPTION
+      - RIDE_CAPTAIN_PASS
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -42992,6 +43198,7 @@ components:
         * `A9_STAY_RESERVATION` - A9 stay reservation
         * `A7_RENTAL_BOOKING` - A7 rental booking
         * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+        * `RIDE_CAPTAIN_PASS` - Ride captain pass
     PushDevice:
       type: object
       properties:

@@ -1034,6 +1034,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.assignments.tasks.reconcile_booking_group_dispatch",
         "schedule": 10.0,
     },
+    "rides-expire-captain-passes": {
+        "task": "apps.rides.tasks.expire_captain_passes",
+        "schedule": 60.0,
+    },
     "cleanup-partner-document-uploads": {
         "task": "apps.partners.tasks.cleanup_partner_document_uploads",
         "schedule": 60.0 * 60,

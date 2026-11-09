@@ -9,7 +9,7 @@ from pytest_django.fixtures import SettingsWrapper
 
 from apps.locations.models import ServiceArea
 from apps.rides.management.commands.seed_rides_demo import AREA_SLUG
-from apps.rides.models import RideRateCard, VehicleType
+from apps.rides.models import CaptainPassPlan, RideRateCard, VehicleType
 
 pytestmark = pytest.mark.django_db
 
@@ -105,3 +105,23 @@ def test_other_areas_are_untouched(settings: SettingsWrapper) -> None:
     )
     seed()
     assert not RideRateCard.objects.filter(service_area=other).exists()
+
+
+def test_creates_a_free_and_a_paid_pass_plan(settings: SettingsWrapper, area: ServiceArea) -> None:
+    del area
+    settings.DEBUG = True
+    seed()
+    prices = dict(CaptainPassPlan.objects.values_list("code", "price_paise"))
+    assert prices == {"launch-pass": 0, "day-pass": 4900}
+
+
+def test_an_edited_pass_plan_is_never_overwritten(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    del area
+    settings.DEBUG = True
+    CaptainPassPlan.objects.create(
+        code="day-pass", name="Day pass", price_paise=5900, duration_hours=24
+    )
+    seed()
+    assert CaptainPassPlan.objects.get(code="day-pass").price_paise == 5900

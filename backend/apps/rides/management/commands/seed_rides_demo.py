@@ -11,7 +11,8 @@ through `operations/rides/rate-cards/`. They are not anyone's decision.
 An area and vehicle type that already has an active card is left alone, so running this again,
 or after Operations has set a price, never overwrites a real one.
 
-Pass plans and test captains are added here when those parts of Rides exist.
+It also writes two PLACEHOLDER pass plans (a ₹0 launch pass and a ₹49 day pass). Test captains
+are added here with the location work.
 """
 
 from typing import Any
@@ -21,9 +22,15 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
 
 from apps.locations.models import ServiceArea
-from apps.rides.models import RideRateCard, VehicleType
+from apps.rides.models import CaptainPassPlan, RideRateCard, VehicleType
 
 AREA_SLUG = "hyderabad-500032"
+
+#: PLACEHOLDER pass plans: the brief's "two pass plans (one ₹0)". Operations sets real ones.
+PLACEHOLDER_PASS_PLANS: tuple[dict[str, object], ...] = (
+    {"code": "launch-pass", "name": "Launch pass", "price_paise": 0, "duration_hours": 24},
+    {"code": "day-pass", "name": "Day pass", "price_paise": 4900, "duration_hours": 24},
+)
 
 #: PLACEHOLDER rates in paise. Base, included metres, per km, per minute, minimum,
 #: free waiting minutes, waiting per minute.
@@ -60,8 +67,8 @@ PLACEHOLDER_RATES: dict[str, dict[str, int]] = {
 
 class Command(BaseCommand):
     help = (
-        "Load PLACEHOLDER Rides rate cards (bike, auto, cab) for hyderabad-500032. "
-        "Development only."
+        "Load PLACEHOLDER Rides rate cards (bike, auto, cab) for hyderabad-500032 and two "
+        "pass plans. Development only."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -110,4 +117,12 @@ class Command(BaseCommand):
                 )
                 self.stdout.write(f"{vehicle_type}: PLACEHOLDER rate card created.")
 
-        self.stdout.write(self.style.SUCCESS("Rides placeholder rate cards are ready."))
+            for plan in PLACEHOLDER_PASS_PLANS:
+                code = str(plan["code"])
+                _, created = CaptainPassPlan.objects.get_or_create(
+                    code=code, defaults={k: v for k, v in plan.items() if k != "code"}
+                )
+                state = "PLACEHOLDER pass plan created" if created else "already exists, left alone"
+                self.stdout.write(f"{code}: {state}.")
+
+        self.stdout.write(self.style.SUCCESS("Rides placeholder data is ready."))
