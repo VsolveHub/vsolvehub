@@ -77,7 +77,13 @@ def test_version_starts_at_one() -> None:
 
 @pytest.mark.parametrize(
     "field",
-    ["base_fare_paise", "per_km_paise", "per_minute_paise", "minimum_fare_paise", "waiting_per_minute_paise"],
+    [
+        "base_fare_paise",
+        "per_km_paise",
+        "per_minute_paise",
+        "minimum_fare_paise",
+        "waiting_per_minute_paise",
+    ],
 )
 def test_money_is_never_negative(field: str) -> None:
     with pytest.raises(IntegrityError), transaction.atomic():

@@ -819,6 +819,12 @@ GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 2
 # 60: the Partner app re-asks for the road route as the Partner moves; a minute per rounded
 # origin keeps a still Partner, or a re-rendering screen, at one Routes API call a minute.
 ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
+
+# VSolve Rides. Routing provider (ADR-0004): "google", "fake" (laptops and tests only; refused
+# without DEBUG) or "unconfigured", which refuses every call.
+RIDES_ROUTING_PROVIDER = env("RIDES_ROUTING_PROVIDER", default="unconfigured")
+# A fare quote can be booked for this long, once.
+RIDES_QUOTE_TTL_SECONDS = env.int("RIDES_QUOTE_TTL_SECONDS", default=300)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
