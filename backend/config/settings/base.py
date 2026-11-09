@@ -293,6 +293,8 @@ REST_FRAMEWORK = {
         "payout_account": "10/hour",
         # Withdraw taps. The daily limit is the real rule; this only stops a loop hammering it.
         "payout_withdrawal": "20/hour",
+        # Rides price checks: each costs a Geocoding call and up to two Routes calls.
+        "rides_quotes": "20/min",
     },
 }
 

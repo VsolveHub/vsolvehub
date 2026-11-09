@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import Any
 
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -79,7 +80,11 @@ class CaptainPassSerializer(serializers.ModelSerializer[CaptainPass]):
     # A plain string on purpose: these four values are exactly the vendor subscription's, and an
     # enum here makes the schema generator merge and rename that existing enum.
     status = serializers.CharField(
-        read_only=True, help_text="PENDING_ACTIVATION, ACTIVE, EXPIRED or CANCELLED."
+        read_only=True,
+        help_text=(
+            "PENDING_ACTIVATION, QUEUED (paid; starts when the active pass ends), ACTIVE, "
+            "EXPIRED or CANCELLED."
+        ),
     )
     payment_attempt_id = serializers.UUIDField(
         read_only=True,
@@ -108,15 +113,23 @@ class BuyPassSerializer(serializers.Serializer[Any]):
     plan_id = serializers.UUIDField()
 
 
+SERVER_NOW_HELP = (
+    "The server's clock. The app keeps its offset from the phone's clock and sends location "
+    "captured_at in server time (brief §5.6)."
+)
+
+
 class DutyStatusSerializer(serializers.Serializer[Any]):
     on_duty = serializers.BooleanField()
     started_at = serializers.DateTimeField(allow_null=True)
+    server_now = serializers.DateTimeField(help_text=SERVER_NOW_HELP)
 
     @staticmethod
     def of(session: CaptainDutySession | None) -> dict[str, Any]:
         return {
             "on_duty": session is not None,
             "started_at": session.started_at if session else None,
+            "server_now": timezone.now(),
         }
 
 
@@ -143,11 +156,20 @@ class CaptainStatusSerializer(serializers.Serializer[CaptainStatus]):
             return None
         return dict(CaptainVehicleSerializer(obj.vehicle).data)
 
+    queued_pass = serializers.SerializerMethodField()
+    server_now = serializers.DateTimeField(help_text=SERVER_NOW_HELP)
+
     @extend_schema_field(CaptainPassSerializer(allow_null=True))
     def get_active_pass(self, obj: CaptainStatus) -> dict[str, Any] | None:
         if obj.active_pass is None:
             return None
         return dict(CaptainPassSerializer(obj.active_pass).data)
+
+    @extend_schema_field(CaptainPassSerializer(allow_null=True))
+    def get_queued_pass(self, obj: CaptainStatus) -> dict[str, Any] | None:
+        if obj.queued_pass is None:
+            return None
+        return dict(CaptainPassSerializer(obj.queued_pass).data)
 
 
 class TripPointSerializer(serializers.Serializer[Any]):

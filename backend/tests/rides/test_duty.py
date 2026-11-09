@@ -1,6 +1,6 @@
 """Duty on and off, with every gate (brief §5.6, §5.8)."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -75,7 +75,8 @@ def test_starting_twice_keeps_one_session() -> None:
     first = client.post(START).json()
     second = client.post(START).json()
 
-    assert first == second
+    assert first["started_at"] == second["started_at"]
+    assert first["server_now"] and second["server_now"]
     assert CaptainDutySession.objects.filter(partner__user=user).count() == 1
 
 
@@ -137,7 +138,8 @@ def test_stopping_closes_the_session_and_twice_is_harmless() -> None:
     give_pass(user)
     client.post(START)
 
-    assert client.post(STOP).json() == {"on_duty": False, "started_at": None}
+    stopped = client.post(STOP).json()
+    assert (stopped["on_duty"], stopped["started_at"]) == (False, None)
     assert client.post(STOP).status_code == 200
     session = CaptainDutySession.objects.get(partner__user=user)
     assert session.end_reason == CaptainDutySession.EndReason.CAPTAIN_OFF
@@ -249,3 +251,12 @@ def test_me_explains_a_missing_pass() -> None:
     assert body["active_pass"] is None
     assert body["on_duty"] is False
     assert body["blocked_reasons"] == ["pass_required"]
+
+
+def test_duty_answers_carry_the_server_clock() -> None:
+    user, client = ready_captain()
+    give_pass(user)
+
+    for body in (client.post(START).json(), client.get("/api/v1/partner/rides/me/").json()):
+        server_now = datetime.fromisoformat(body["server_now"])
+        assert abs((server_now - timezone.now()).total_seconds()) < 5

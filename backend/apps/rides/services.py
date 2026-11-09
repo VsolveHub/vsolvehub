@@ -24,6 +24,7 @@ from apps.rides.exceptions import (
     LocationUnavailableError,
     NotOnDutyError,
     PassAlreadyActiveError,
+    PassPurchasePendingError,
     PassRequiredError,
     RateCardExistsError,
     RateCardInactiveError,
@@ -233,6 +234,8 @@ _LIVE_PAYMENT_STATUSES = (
     PaymentAttempt.Status.PROVIDER_PENDING,
     PaymentAttempt.Status.AUTHORIZED,
 )
+#: A pending purchase older than this stops blocking a new one (brief §5.8, Revision 2).
+PENDING_PURCHASE_WINDOW = timedelta(minutes=30)
 
 
 def _lock_partner(partner: PartnerProfile) -> None:
@@ -240,16 +243,16 @@ def _lock_partner(partner: PartnerProfile) -> None:
     PartnerProfile.objects.select_for_update().filter(pk=partner.pk).first()
 
 
-def _expire_lapsed_passes(*, partner: PartnerProfile, now: Any) -> None:
+def _expire_lapsed_passes(*, partner_id: Any, now: Any) -> None:
     CaptainPass.objects.filter(
-        partner=partner, status=CaptainPass.Status.ACTIVE, ends_at__lte=now
+        partner_id=partner_id, status=CaptainPass.Status.ACTIVE, ends_at__lte=now
     ).update(status=CaptainPass.Status.EXPIRED, updated_at=now)
 
 
-def _activate(captain_pass: CaptainPass, *, now: Any) -> None:
+def _activate(captain_pass: CaptainPass, *, starts_at: Any) -> None:
     captain_pass.status = CaptainPass.Status.ACTIVE
-    captain_pass.starts_at = now
-    captain_pass.ends_at = now + timedelta(hours=captain_pass.plan.duration_hours)
+    captain_pass.starts_at = starts_at
+    captain_pass.ends_at = starts_at + timedelta(hours=captain_pass.plan.duration_hours)
     captain_pass.save(update_fields=("status", "starts_at", "ends_at", "updated_at"))
 
 
@@ -259,32 +262,36 @@ def buy_pass(
 ) -> CaptainPass:
     """Start buying a pass. A ₹0 plan is active at once; a paid plan waits for its payment.
 
-    Refused while the captain already has an active pass. A pending purchase of the same plan
-    whose payment can still succeed is returned instead of starting a second charge.
+    Refused while the captain has an active pass. Only one purchase is in flight at a time:
+    buying the same plan again returns the pending purchase, and any other plan is refused until
+    that payment settles or is 30 minutes old.
     """
     _lock_partner(partner)
     now = timezone.now()
-    _expire_lapsed_passes(partner=partner, now=now)
+    _expire_lapsed_passes(partner_id=partner.id, now=now)
     if selectors.active_pass(partner, now=now) is not None:
         raise PassAlreadyActiveError
 
+    in_flight = CaptainPass.objects.filter(
+        partner=partner,
+        status=CaptainPass.Status.PENDING_ACTIVATION,
+        payment_attempt__status__in=_LIVE_PAYMENT_STATUSES,
+        created_at__gt=now - PENDING_PURCHASE_WINDOW,
+    )
+    same_plan = in_flight.filter(plan=plan).first()
+    if same_plan is not None:
+        return same_plan
+    if in_flight.exists():
+        raise PassPurchasePendingError
+
     if plan.price_paise == 0:
         captain_pass = CaptainPass.objects.create(partner=partner, plan=plan)
-        _activate(captain_pass, now=now)
+        _activate(captain_pass, starts_at=now)
         logger.info(
             "ride_pass_activated",
             extra={"partner_id": str(partner.id), "plan": plan.code, "paid": False},
         )
         return captain_pass
-
-    pending = CaptainPass.objects.filter(
-        partner=partner,
-        plan=plan,
-        status=CaptainPass.Status.PENDING_ACTIVATION,
-        payment_attempt__status__in=_LIVE_PAYMENT_STATUSES,
-    ).first()
-    if pending is not None:
-        return pending
 
     attempt = initiate_standalone_payment_attempt(
         purpose=PaymentAttempt.Purpose.RIDE_CAPTAIN_PASS,
@@ -298,8 +305,9 @@ def buy_pass(
 def complete_pass_payment(*, payment_attempt_id: Any) -> None:
     """Commerce calls this when a pass payment is captured. Running it twice changes nothing.
 
-    As in Stay: if the captain somehow has another active pass (a free one taken while this
-    payment was pending), that one ends and the paid pass starts now.
+    A paid pass never shortens one that is running: if the captain already has an active pass
+    (a free one taken while this payment was slow), the new one is QUEUED and starts the moment
+    the active one ends.
     """
     captain_pass = (
         CaptainPass.objects.select_for_update()
@@ -309,32 +317,57 @@ def complete_pass_payment(*, payment_attempt_id: Any) -> None:
     )
     if captain_pass is None or captain_pass.status != CaptainPass.Status.PENDING_ACTIVATION:
         return
+    PartnerProfile.objects.select_for_update().filter(pk=captain_pass.partner_id).first()
     now = timezone.now()
-    CaptainPass.objects.filter(
-        partner_id=captain_pass.partner_id, status=CaptainPass.Status.ACTIVE
-    ).update(status=CaptainPass.Status.EXPIRED, updated_at=now)
-    _activate(captain_pass, now=now)
-    logger.info(
-        "ride_pass_activated",
-        extra={
-            "partner_id": str(captain_pass.partner_id),
-            "plan": captain_pass.plan.code,
-            "paid": True,
-        },
-    )
+    _expire_lapsed_passes(partner_id=captain_pass.partner_id, now=now)
+    log = {"partner_id": str(captain_pass.partner_id), "plan": captain_pass.plan.code}
+
+    holding = CaptainPass.objects.filter(
+        partner_id=captain_pass.partner_id,
+        status__in=(CaptainPass.Status.ACTIVE, CaptainPass.Status.QUEUED),
+    ).values_list("status", flat=True)
+    if CaptainPass.Status.QUEUED in holding:
+        # Two late payments for one captain: only one pass can wait in line. The money is
+        # captured, so Operations must settle it by hand; never drop it silently.
+        logger.error("ride_pass_payment_needs_review", extra=log)
+        return
+    if CaptainPass.Status.ACTIVE in holding:
+        captain_pass.status = CaptainPass.Status.QUEUED
+        captain_pass.save(update_fields=("status", "updated_at"))
+        logger.info("ride_pass_queued", extra=log)
+        return
+    _activate(captain_pass, starts_at=now)
+    logger.info("ride_pass_activated", extra={**log, "paid": True})
 
 
 @transaction.atomic
 def expire_passes() -> int:
-    """Run every minute. Ends lapsed passes, then takes their captains off duty.
+    """Run every minute. Ends lapsed passes, starts queued ones, then ends duty without a pass.
 
-    A captain on an open ride stays on duty until the ride ends; the next run after that takes
-    them off (brief §5.8: a ride already in progress finishes).
+    A queued pass starts exactly when the one before it ended, so no paid time is lost even if
+    this task runs late. A captain on an open ride stays on duty until the ride ends; the next run
+    after that takes them off (brief §5.8: a ride already in progress finishes).
     """
     now = timezone.now()
-    expired = CaptainPass.objects.filter(status=CaptainPass.Status.ACTIVE, ends_at__lte=now).update(
-        status=CaptainPass.Status.EXPIRED, updated_at=now
+    lapsed = CaptainPass.objects.select_for_update().filter(
+        status=CaptainPass.Status.ACTIVE, ends_at__lte=now
     )
+    ended_at = dict(lapsed.values_list("partner_id", "ends_at"))
+    expired = lapsed.update(status=CaptainPass.Status.EXPIRED, updated_at=now)
+
+    still_active = CaptainPass.objects.filter(
+        partner_id=models.OuterRef("partner_id"), status=CaptainPass.Status.ACTIVE
+    )
+    waiting = (
+        CaptainPass.objects.select_for_update()
+        .select_related("plan")
+        .filter(status=CaptainPass.Status.QUEUED)
+        .exclude(models.Exists(still_active))
+    )
+    started = 0
+    for queued in waiting:
+        _activate(queued, starts_at=ended_at.get(queued.partner_id, now))
+        started += 1
 
     has_pass = CaptainPass.objects.filter(
         partner_id=models.OuterRef("partner_id"),
@@ -351,8 +384,11 @@ def expire_passes() -> int:
         reason=CaptainDutySession.EndReason.PASS_EXPIRED,
         now=now,
     )
-    if expired or ended:
-        logger.info("ride_passes_expired", extra={"passes_expired": expired, "duty_ended": ended})
+    if expired or started or ended:
+        logger.info(
+            "ride_passes_expired",
+            extra={"passes_expired": expired, "queued_started": started, "duty_ended": ended},
+        )
     return expired
 
 

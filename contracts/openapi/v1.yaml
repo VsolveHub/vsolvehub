@@ -24947,7 +24947,8 @@ components:
         status:
           type: string
           readOnly: true
-          description: PENDING_ACTIVATION, ACTIVE, EXPIRED or CANCELLED.
+          description: PENDING_ACTIVATION, QUEUED (paid; starts when the active pass
+            ends), ACTIVE, EXPIRED or CANCELLED.
         starts_at:
           type: string
           format: date-time
@@ -25167,6 +25168,16 @@ components:
             type: string
           description: 'Why duty cannot start, in display order: suspended or not_approved,
             vehicle_missing, pass_required. Empty when the captain can go on duty.'
+        queued_pass:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPass'
+          nullable: true
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          description: The server's clock. The app keeps its offset from the phone's
+            clock and sends location captured_at in server time (brief §5.6).
       required:
       - active_pass
       - approval
@@ -25174,6 +25185,8 @@ components:
       - duty_started_at
       - is_approved
       - on_duty
+      - queued_pass
+      - server_now
       - vehicle
     CaptainVehicle:
       type: object
@@ -29303,8 +29316,14 @@ components:
           type: string
           format: date-time
           nullable: true
+        server_now:
+          type: string
+          format: date-time
+          description: The server's clock. The app keeps its offset from the phone's
+            clock and sends location captured_at in server time (brief §5.6).
       required:
       - on_duty
+      - server_now
       - started_at
     EarnModeEnum:
       enum:

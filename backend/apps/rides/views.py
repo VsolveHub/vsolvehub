@@ -39,6 +39,7 @@ from apps.rides.serializers import (
     RideSerializer,
 )
 from common.schema import IDEMPOTENCY_KEY_HEADER
+from common.throttling import ThrottledWriteMixin
 
 __all__ = [
     "CaptainLocationView",
@@ -444,10 +445,12 @@ class OfferDeclineView(APIView):
         return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 
-class FareQuotesView(APIView):
+class FareQuotesView(ThrottledWriteMixin, APIView):
     """Upfront fares for a trip: one per vehicle type that can be booked at the pickup."""
 
     permission_classes = (IsAuthenticated,)
+    # Each call costs Google money: 20 a minute per user (brief §5.5), then 429.
+    throttle_scope = "rides_quotes"
 
     @extend_schema(
         operation_id="rides_quotes_create",

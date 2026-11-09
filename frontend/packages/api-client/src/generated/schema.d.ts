@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 29337f27f8086a5e
+ * Checksum: 496541e8a1240cf4
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -10269,7 +10269,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly plan: components["schemas"]["CaptainPassPlan"];
-            /** @description PENDING_ACTIVATION, ACTIVE, EXPIRED or CANCELLED. */
+            /** @description PENDING_ACTIVATION, QUEUED (paid; starts when the active pass ends), ACTIVE, EXPIRED or CANCELLED. */
             readonly status: string;
             /** Format: date-time */
             readonly starts_at: string | null;
@@ -10342,6 +10342,12 @@ export interface components {
             duty_started_at: string | null;
             /** @description Why duty cannot start, in display order: suspended or not_approved, vehicle_missing, pass_required. Empty when the captain can go on duty. */
             blocked_reasons: string[];
+            readonly queued_pass: components["schemas"]["CaptainPass"] | null;
+            /**
+             * Format: date-time
+             * @description The server's clock. The app keeps its offset from the phone's clock and sends location captured_at in server time (brief §5.6).
+             */
+            server_now: string;
         };
         CaptainVehicle: {
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
@@ -12033,6 +12039,11 @@ export interface components {
             on_duty: boolean;
             /** Format: date-time */
             started_at: string | null;
+            /**
+             * Format: date-time
+             * @description The server's clock. The app keeps its offset from the phone's clock and sends location captured_at in server time (brief §5.6).
+             */
+            server_now: string;
         };
         /**
          * @description * `FLAT` - Flat

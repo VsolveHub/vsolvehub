@@ -44,6 +44,15 @@ class PassAlreadyActiveError(RidesApiError):
         )
 
 
+class PassPurchasePendingError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="pass_purchase_pending", message="Your last pass payment is still going through."
+        )
+
+
 class AreaNotServedError(RidesApiError):
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 

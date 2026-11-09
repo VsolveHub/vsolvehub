@@ -26,11 +26,13 @@ def test_a_partner_who_has_not_applied_as_a_captain() -> None:
 
     body = partner_client(user).get(URL).json()
 
+    assert body.pop("server_now")  # the server's clock, for the app's clock offset
     assert body == {
         "approval": "NOT_STARTED",
         "is_approved": False,
         "vehicle": None,
         "active_pass": None,
+        "queued_pass": None,
         "on_duty": False,
         "duty_started_at": None,
         "blocked_reasons": ["not_approved", "vehicle_missing", "pass_required"],

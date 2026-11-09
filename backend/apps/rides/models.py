@@ -250,6 +250,8 @@ class CaptainPass(models.Model):
 
     class Status(models.TextChoices):
         PENDING_ACTIVATION = "PENDING_ACTIVATION", "Pending activation"
+        #: Paid while another pass was running; starts the moment that one ends.
+        QUEUED = "QUEUED", "Queued"
         ACTIVE = "ACTIVE", "Active"
         EXPIRED = "EXPIRED", "Expired"
         CANCELLED = "CANCELLED", "Cancelled"
@@ -282,6 +284,11 @@ class CaptainPass(models.Model):
                 fields=("partner",),
                 condition=Q(status="ACTIVE"),
                 name="rides_one_active_pass_per_captain",
+            ),
+            models.UniqueConstraint(
+                fields=("partner",),
+                condition=Q(status="QUEUED"),
+                name="rides_one_queued_pass_per_captain",
             ),
             # An active pass always knows exactly when it ends.
             models.CheckConstraint(

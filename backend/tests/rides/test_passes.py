@@ -8,6 +8,7 @@ from django.utils import timezone
 from freezegun import freeze_time
 
 from apps.commerce.models import PaymentAttempt
+from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.commerce.services.simulation import attempt_belongs_to
 from apps.rides.models import CaptainDutySession, CaptainPass, CaptainPassPlan
 from apps.rides.services import complete_pass_payment, expire_passes
@@ -200,3 +201,89 @@ def test_expiry_leaves_valid_passes_alone() -> None:
     with freeze_time("2026-11-10 09:59:59"):
         assert expire_passes() == 0
     assert CaptainPass.objects.get().status == CaptainPass.Status.ACTIVE
+
+
+# --- one purchase in flight, and queued passes (Revision 2, R4) -------------------------------
+
+
+def test_another_plan_is_refused_while_a_payment_is_going_through() -> None:
+    _, client = ready_captain()
+    buy(client, plan("day", 4900).id, "k-1")
+
+    paid = buy(client, plan("week", 24900, duration_hours=168).id, "k-2")
+    free = buy(client, plan("launch", 0).id, "k-3")
+
+    assert (paid.status_code, error_code(paid)) == (409, "pass_purchase_pending")
+    assert (free.status_code, error_code(free)) == (409, "pass_purchase_pending")
+    assert PaymentAttempt.objects.count() == 1
+
+
+def test_a_pending_purchase_stops_blocking_after_30_minutes() -> None:
+    _, client = ready_captain()
+    buy(client, plan("day", 4900).id, "k-1")
+
+    with freeze_time(timezone.now() + timedelta(minutes=31)):
+        response = buy(client, plan("launch", 0).id, "k-2")
+
+    assert response.json()["status"] == "ACTIVE"
+
+
+def _paid_pass_captured_during_a_free_one(client: Any) -> tuple[Any, Any]:
+    """A paid purchase that hangs, a free pass taken after 30 minutes, then the late capture."""
+    paid = buy(client, plan("day", 4900).id, "k-1").json()
+    with freeze_time(timezone.now() + timedelta(minutes=31)):
+        free = buy(client, plan("launch", 0).id, "k-2").json()
+        complete_pass_payment(payment_attempt_id=paid["payment_attempt_id"])
+    return CaptainPass.objects.get(id=paid["id"]), CaptainPass.objects.get(id=free["id"])
+
+
+def test_a_payment_captured_during_an_active_pass_is_queued_not_lost() -> None:
+    _, client = ready_captain()
+
+    paid, free = _paid_pass_captured_during_a_free_one(client)
+
+    assert (paid.status, paid.starts_at) == (CaptainPass.Status.QUEUED, None)
+    assert free.status == CaptainPass.Status.ACTIVE  # the running pass is not shortened
+    me = client.get("/api/v1/partner/rides/me/").json()
+    assert me["queued_pass"]["id"] == str(paid.id)
+    assert me["active_pass"]["id"] == str(free.id)
+
+
+def test_the_queued_pass_starts_exactly_when_the_active_one_ends() -> None:
+    user, client = ready_captain()
+    paid, free = _paid_pass_captured_during_a_free_one(client)
+    CaptainDutySession.objects.create(partner=paid.partner)
+
+    # The expiry task runs a few minutes late; the queued pass still starts at the old end.
+    with freeze_time(free.ends_at + timedelta(minutes=3)):
+        expire_passes()
+
+    paid.refresh_from_db()
+    free.refresh_from_db()
+    assert free.status == CaptainPass.Status.EXPIRED
+    assert paid.status == CaptainPass.Status.ACTIVE
+    assert paid.starts_at == free.ends_at
+    assert paid.ends_at == free.ends_at + timedelta(hours=24)
+    # The captain had a pass the whole time, so duty did not end.
+    assert CaptainDutySession.objects.filter(partner__user=user, ended_at__isnull=True).exists()
+
+
+def test_a_second_late_payment_is_left_for_operations_not_dropped() -> None:
+    _, client = ready_captain()
+    queued, _ = _paid_pass_captured_during_a_free_one(client)
+    # Another hung payment for a third plan, captured while one pass is active and one queued.
+    late = CaptainPass.objects.create(
+        partner=queued.partner,
+        plan=plan("week", 24900, duration_hours=168),
+        payment_attempt=initiate_standalone_payment_attempt(
+            purpose=PaymentAttempt.Purpose.RIDE_CAPTAIN_PASS,
+            amount_paise=24900,
+            idempotency_key="late-week",
+        ),
+    )
+
+    complete_pass_payment(payment_attempt_id=late.payment_attempt_id)
+
+    late.refresh_from_db()
+    assert late.status == CaptainPass.Status.PENDING_ACTIVATION
+    assert CaptainPass.objects.filter(status=CaptainPass.Status.QUEUED).count() == 1

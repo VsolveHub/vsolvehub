@@ -288,3 +288,13 @@ def test_the_log_never_carries_the_riders_whereabouts(
     logged = str(record.__dict__)
     assert "17.44" not in logged
     assert "Gachibowli Stadium" not in logged
+
+
+def test_price_checks_are_limited_to_20_a_minute() -> None:
+    client = customer_client(make_user("Busy Rider"))
+
+    # The limit counts every call, so empty bodies (400) are enough to reach it cheaply.
+    answers = [client.post(URL, {}, format="json").status_code for _ in range(21)]
+
+    assert answers[:20] == [400] * 20
+    assert answers[20] == 429

@@ -13,6 +13,7 @@ __all__ = [
     "active_pass",
     "captain_status",
     "open_duty_session",
+    "queued_pass",
 ]
 
 #: What `approval` says when the partner has not started a captain application.
@@ -25,10 +26,21 @@ class CaptainStatus:
     is_approved: bool
     vehicle: CaptainVehicle | None
     active_pass: CaptainPass | None
+    #: A paid pass waiting for the active one to end (brief §5.8).
+    queued_pass: CaptainPass | None
     on_duty: bool
     duty_started_at: datetime | None
     #: Why the captain cannot go on duty, in the order the app should explain them.
     blocked_reasons: list[str]
+    server_now: datetime
+
+
+def queued_pass(partner: PartnerProfile) -> CaptainPass | None:
+    return (
+        CaptainPass.objects.select_related("plan")
+        .filter(partner=partner, status=CaptainPass.Status.QUEUED)
+        .first()
+    )
 
 
 def active_pass(partner: PartnerProfile, *, now: datetime | None = None) -> CaptainPass | None:
@@ -77,7 +89,9 @@ def captain_status(partner: PartnerProfile) -> CaptainStatus:
         is_approved=is_approved,
         vehicle=vehicle,
         active_pass=current_pass,
+        queued_pass=queued_pass(partner),
         on_duty=session is not None,
         duty_started_at=session.started_at if session else None,
         blocked_reasons=blocked,
+        server_now=timezone.now(),
     )

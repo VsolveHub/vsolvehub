@@ -65,6 +65,14 @@ added to this entry.
 - **Added** `GET/POST /operations/rides/pass-plans/` and `PATCH /operations/rides/pass-plans/{id}/`
   (`CaptainPassPlanOps`), Operations only. `code` is unique and cannot change; `duration_hours`
   is at least 1. Switching a plan off removes it from the captains' list.
+- **Changed** (Revision 2), additive: `POST /rides/quotes/` is limited to 20 calls a minute per
+  user and answers `429 throttled` beyond it. `GET /partner/rides/me/` adds `queued_pass` (or
+  `null`) and `server_now`; the duty start and stop answers add `server_now`. The app keeps the
+  offset between `server_now` and the phone clock and sends location `captured_at` in server
+  time. A pass `status` may be `QUEUED`: a paid pass captured while another is active waits and
+  starts the moment that one ends. `POST /partner/rides/passes/` answers
+  `409 pass_purchase_pending` for any other plan while a paid purchase (under 30 minutes old)
+  is still going through.
 - **Added** `POST /rides/` (`RideCreateRequest` → `201 Ride`), with a required `Idempotency-Key`:
   books a ride from one of the rider's own quotes (`quote_id`). The ride starts `SEARCHING` and
   the server offers it to nearby captains in rounds; it ends `NO_CAPTAIN_FOUND` if nobody
