@@ -136,8 +136,10 @@ backend and frontend, on branch `rapido/v1` only — never `main`. The complete 
 list, registration points, mobile exceptions and test authorization are in
 `docs/rapido/README.md`. Any agent working on Rides reads it before its first edit; for Rides
 work it overrides the conflicting lines in this file and in `frontend/mobile/AGENTS.md`
-(screens with no web original, background location in the Captain app only, and the Rides test
-commands the developer is authorized to run). Outside Rides, this file is unchanged.
+(screens with no web original, background location in the Partner app for approved captains on
+duty only, and the Rides test commands the developer is authorized to run). There is no
+separate Captain app: captains use the Partner app's Rides workspace. Outside Rides, this file
+is unchanged.
 
 ## Python environment
 

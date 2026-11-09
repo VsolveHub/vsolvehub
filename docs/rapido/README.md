@@ -5,20 +5,74 @@
 | **You own** | VSolve Rides: bike, auto and cab rides, end to end |
 | **Branch** | `rapido/v1` only. Never `main`. |
 | **Start** | Friday 6 November 2026 |
-| **Deadline** | Thursday 12 November 2026 (7 days, build **and** testing) |
+| **Deadline** | **Saturday 14 November 2026** (9 days, build **and** testing). Revision 2 moved it from Thursday 12 November. |
 | **Written** | 5 November 2026, by the owner |
+| **Revised** | 9 November 2026, by the owner (revision 2: [what changed](#revision-2-9-november-2026-read-this-first)) |
 | **Daily demo** | 6:30 pm, 15 minutes, with the owner |
 
-You build all of Rides: the Django backend, the API contract, the new **VSolve Captain** app for
-drivers, the **Rides** screens inside the existing Customer app, the Operations console pages,
-and every test. This file is your spec. Where it decides something, follow it. Where it is
+You build all of Rides: the Django backend, the API contract, the **Rides workspace inside the
+existing VSolve Partner app** for drivers (captains), the **Rides** screens inside the existing
+Customer app, the Operations console pages, and every test. There is **no separate Captain app**.
+This file is your spec. Where it decides something, follow it. Where it is
 silent, **you decide**. Write the decision in your ADR (§4.3) and tell the owner at the 6:30
 demo. You own the result, not your AI assistant: read every diff before you commit it.
 
 ---
 
+## Revision 2 (9 November 2026): read this first
+
+The owner reviewed the branch at `47eb3be2` and changed five decisions. Where any older line in
+this file, your ADR or your proposal disagrees with this section, **this section wins**.
+
+### Owner decisions
+
+1. **No Captain app. Captains use the existing VSolve Partner app.** Rides is a workspace inside
+   it, next to Work, Stays and Rentals: its own tabs, shown only to a captain. Everything below
+   that used to say "Captain app" now means "the partner app's Rides workspace". You already put
+   captain sign-up there on Day 2 (`e0fd0419`). Keep it.
+2. **One account, one track.** `PartnerApplication` is one-to-one with the partner, so a captain
+   account is only a captain. An existing electrician who also wants to drive signs up again with
+   a different phone number. Do not make the application multi-track.
+3. **Captains are Android only in V1.** The partner app also ships on iOS. On iOS it hides the
+   "I give rides" track card and the Rides workspace. Riders use Android and iOS as before.
+4. **Background location comes to the partner app, for captains only** (§5.12). The app asks
+   for it only when an approved captain goes on duty. No other partner ever sees that prompt.
+   Google Play's background-location declaration now covers the whole partner app, so the
+   disclosure screen and the review video must show the captain flow clearly.
+5. **The deadline moves to Saturday 14 November.** Day 3 (the rides engine) was not built, so
+   §6 now plans the work from Monday 9 November.
+
+### Where the branch stands (owner review, 9 November)
+
+| Area | Status |
+|---|---|
+| Day 1: brief pointer, ADR-0013, proposal 0030, models and migrations | ✅ done. The Captain app scaffold was correctly never made. |
+| Day 2: routing adapter, fare engine, quotes, rate-card and pass-plan APIs, captain `me` and vehicle, passes, duty, location, sweeps, seed command | ✅ done, with the rework below. `rides/availability/` is **missing**. |
+| Day 2: captain sign-up in the partner app (track card, short steps, three driving documents) | ✅ done. It still needs the vehicle step and hiding on iOS. |
+| Rider: where-to and choose-ride screens with live quotes | ✅ done. There is no **Book** yet. |
+| Day 3: rides engine (book, dispatch, offers, trip steps, cancels, ratings, SOS, Operations rides API) | ❌ only the tables exist |
+| Captain screens, rider live-ride screens, Operations console | ❌ not started |
+
+### Rework from the review: do it on Day 4, before the engine
+
+| # | What to change | Why |
+|---|---|---|
+| R1 | Make `rides/0003_rides_catalogue_category` a no-op. Keep the file, because `0004` depends on it. Delete the `rides` category row from your local database. Remove the two `slug === "rides"` branches from `home-screen.tsx`. Build `GET rides/availability/` and the `<RidesEntry />` card (§2, §5.11). | A catalogue row goes live on the first deploy. Every customer would see a Rides tile that leads nowhere, and the website would show an empty category. |
+| R2 | Throttle `POST rides/quotes/` (§5.5). | Each call costs one Google Geocoding call and up to two Routes calls. Without a limit, a script can run up the bill. |
+| R3 | Make ping timing use server time (§5.6). | A phone whose clock runs 40 s slow fails every ping today, and the sweep takes it off duty after 2 minutes. |
+| R4 | Add a `QUEUED` pass status and allow one purchase in flight (§5.8). | Today a late payment capture ends a pass that is still running, which throws away time the captain paid for. Two different plans can also both be charged. |
+| R5 | Hide the "I give rides" track card on iOS (§5.12). | Owner decision 3. |
+| R6 | Update ADR-0013 (§14 and every other "Captain app" line) and proposal 0030 to match this revision. | Your design documents must match the brief. |
+
+Two commits on this branch are not Rides work: `d35cd004` (faster partner onboarding) and
+`cba401cc` (login phone prefill). They are outside §2. Leave them; the owner moves them to their
+own pull request. Do not add more work like them.
+
+---
+
 ## Contents
 
+- [Revision 2 (9 November 2026): read this first](#revision-2-9-november-2026-read-this-first)
 0. [The ten rules](#0-the-ten-rules)
 1. [What V1 is, and is not](#1-what-v1-is-and-is-not)
 2. [Where you may write](#2-where-you-may-write)
@@ -58,13 +112,13 @@ demo. You own the result, not your AI assistant: read every diff before you comm
 
 ## 1. What V1 is, and is not
 
-### In V1 (all of it ships by Day 7)
+### In V1 (all of it ships by Day 9, Saturday 14 November)
 
 | Area | What ships |
 |---|---|
 | Vehicle types | Bike, Auto, Cab |
 | Rider (Customer app, Android + iOS) | pickup and drop search, map, fare per vehicle, book, searching, captain card with the captain moving live on the map, start OTP, in trip, pay cash/UPI to the captain, rating, cancel, ride history, SOS, share trip |
-| Captain (new Captain app, Android) | sign-in, onboarding and KYC (driving licence, RC, insurance, vehicle), Daily Pass purchase, go on duty with background GPS, ride alert with sound, accept or decline, navigate, arrived, OTP start, end trip, payment received, rate the rider, wallet (pass and earnings), ride history, cancel |
+| Captain (Partner app, Rides workspace, Android) | onboarding and KYC in the partner app's apply flow (driving licence, RC, insurance, vehicle), Daily Pass purchase, go on duty with background GPS, ride alert with sound, accept or decline, navigate, arrived, OTP start, end trip, payment received, rate the rider, wallet (pass and earnings), ride history, cancel. Sign-in already exists in the partner app. |
 | Backend | rate cards and fare engine, live location (Redis GEO), matching and offers, ride state machine, Daily Pass, ratings, SOS, notifications, Operations APIs |
 | Operations console (web) | live rides and force cancel, SOS queue, rate cards, pass plans, captains list. Captain approval uses the **existing** partner review. |
 | Testing | backend tests, app tests, a device test checklist on three phones, five real road rides, a written test report |
@@ -77,7 +131,10 @@ demo. You own the result, not your AI assistant: read every diff before you comm
 - Online payment for rides, surge pricing, scheduled rides, shared rides.
 - Phone-number masking, a live-tracking web link, captain wallet top-up or stored balance,
   captain withdrawals.
-- An iOS Captain app, and WebSockets.
+- A separate Captain app. Captains use the Partner app (Revision 2).
+- Captains on iOS. The partner app hides the Rides track and workspace on iOS in V1.
+- One account on two tracks (for example an electrician who also drives).
+- WebSockets.
 
 ---
 
@@ -89,25 +146,34 @@ demo. You own the result, not your AI assistant: read every diff before you comm
 |---|---|
 | `backend/apps/rides/**` | the Django app |
 | `backend/tests/rides/**` | its tests |
-| `frontend/mobile/apps/captain/**` | the Captain app. Package `captain-mobile`, Android id `com.vsolvehub.captain`, store name **VSolve Captain** |
+| `frontend/mobile/apps/partner/src/features/rides/**` | captain screens, models, queries and the background location task (partner app, package `partner-mobile`) |
+| `frontend/mobile/apps/partner/app/(app)/(tabs)/rides/**` | captain tab routes: Home (duty), Rides, Wallet |
+| `frontend/mobile/apps/partner/app/(app)/rides/**` | full-screen captain routes: ride offer, to pickup, OTP, in trip, collect |
 | `frontend/mobile/apps/customer/app/(tabs)/rides/**` | rider routes |
 | `frontend/mobile/apps/customer/src/features/rides/**` | rider screens, models, queries |
 | `frontend/apps/admin/app/(operations)/operations/rides/**` | Operations routes |
 | `frontend/apps/admin/features/rides/**` | Operations screens |
-| `docs/adr/0013-rides-v1.md`, `contracts/proposals/0029-rides-v1.md`, `docs/rapido/**` | your design documents |
+| `docs/adr/0013-rides-v1.md`, `contracts/proposals/0030-rides-v1.md`, `docs/rapido/**` | your design documents |
 
 ### Registration points: these exact lines, nothing else in these files
 
 | File | Allowed change | Copy the pattern of |
 |---|---|---|
-| `backend/config/settings/base.py` | `"apps.rides"` in `INSTALLED_APPS`; one `RIDES_*` settings block; rides entries in `CELERY_BEAT_SCHEDULE`; one minor bump of `SPECTACULAR_SETTINGS["VERSION"]` | the `apps.mobile` lines |
+| `backend/config/settings/base.py` | `"apps.rides"` in `INSTALLED_APPS`; one `RIDES_*` settings block; rides entries in `CELERY_BEAT_SCHEDULE`; one `rides_quotes` rate in `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]`; one minor bump of `SPECTACULAR_SETTINGS["VERSION"]` | the `apps.mobile` lines; the existing throttle rates |
 | `backend/config/urls.py` | one `path("api/v1/", include("apps.rides.urls"))` line | the `apps.mobile` line |
 | `backend/apps/partners/models/onboarding.py` + one new partners migration (and the partner onboarding services that branch on track) | `PartnerApplication.Track.RIDE_CAPTAIN`; `PartnerDocument.Kind` values `DRIVING_LICENCE`, `VEHICLE_RC`, `VEHICLE_INSURANCE` | the `EMPLOYER` track. Run `git log -S "EMPLOYER" --oneline -- backend/apps/partners` and copy only the partners-side changes |
 | `backend/apps/commerce/models.py`, `backend/apps/commerce/services/capture.py`, `backend/apps/commerce/services/simulation.py` + one commerce migration, `backend/apps/ops_reports/reports.py` | `PaymentAttempt.Purpose.RIDE_CAPTAIN_PASS`, plus its capture, simulation and report-label lines | `A9_STAY_SUBSCRIPTION`. Grep it and add one sibling line at every hit |
 | `backend/apps/notifications/templates_registry.py` | the rides notification templates | the existing entries |
 | `contracts/openapi/v1.yaml`, `frontend/packages/api-client/src/generated/schema.d.ts` | regenerate only | `pnpm contract:generate` |
 | `contracts/openapi/CHANGELOG.md` | one entry for Rides | the 1.95.0 entry |
-| `frontend/mobile/apps/customer/src/features/catalog/view/home-screen.tsx` | one import and one `<RidesEntry />` line | — |
+| `frontend/mobile/apps/customer/src/features/catalog/view/home-screen.tsx` | one import and one `<RidesEntry />` line. **No catalogue category, and no `slug === "rides"` branch** (Revision 2, R1). | — |
+| `frontend/mobile/apps/customer/src/features/session/app-chrome-layout.ts` | one `/rides` line (already done) | the `/book/` line |
+| `frontend/mobile/apps/partner/src/features/application/model/{steps,draft,readiness}.ts`, `…/view/{application-overview,documents-step}.tsx` | the `RIDE_CAPTAIN` track card (hidden on iOS), its short step list with a **Vehicle** step, and the three driving documents. Mostly done on Day 2. | the `STAY_HOST` and `RENTAL_OWNER` lines |
+| `frontend/mobile/apps/partner/src/features/workspace/registry.ts` and `app/(app)/(tabs)/_layout.tsx` | one `RIDES_TAP_FIRST_NAV` (Home, Rides, Wallet, Alerts, Me), and one branch that picks it when `GET partner/rides/me/` says the partner has a captain application. This needs no backend capability or grant change, because a captain holds no catalogue workspace. | `STAY_TAP_FIRST_NAV` and `specialtyShellHome` |
+| `frontend/mobile/apps/partner/src/features/session/chrome.ts` | the full or focused chrome for the rides routes | the existing route entries |
+| `frontend/mobile/apps/partner/app/_layout.tsx` | one side-effect import of the rides background location task module, so the task is defined at start-up | — |
+| `frontend/mobile/apps/partner/app.config.ts` | Android only: remove `ACCESS_BACKGROUND_LOCATION` from `blockedPermissions`; add `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION`; the `expo-location` plugin's Android background options. **No iOS background mode.** | — |
+| `frontend/mobile/apps/partner/package.json` | `expo-task-manager` and `expo-intent-launcher`, only through `npx expo install` | — |
 | `frontend/apps/admin/features/session/nav-groups.ts` | one **Rides** navigation entry | the other entries |
 | `frontend/pnpm-lock.yaml` | only as changed by `pnpm install` or `npx expo install` | — |
 | root `AGENTS.md` | the pointer section in Appendix A, added once on Day 1 | — |
@@ -137,11 +203,12 @@ git switch rapido/v1          # this file is the branch's first commit
 - **Migrations:** if `main` gains a new partners or commerce migration after you made yours,
   delete yours and run `makemigrations` again so it comes after theirs. Never edit someone
   else's migration.
-- **Contract version:** take the next free minor version when you regenerate (today that is
-  `1.96.0`). If `main` takes it first, take the next one when you merge `main`.
+- **Contract version:** take the next free minor version when you regenerate. On 9 November
+  Rides is on `1.99.0` and `main` is on `1.98.0`. If `main` takes your number first, take the
+  next one when you merge `main`.
 - **Day 1: open a Draft pull request** `rapido/v1 → main` titled **Rides V1**. Paste Appendix B
   into it and tick it every day. You never merge it. You move it to **Ready for review** only
-  on Day 7, after the definition of done (§8) is met. The owner reviews and merges.
+  on Day 9, after the definition of done (§8) is met. The owner reviews and merges.
 
 ---
 
@@ -170,7 +237,7 @@ must too.
 | `backend/apps/locations/geocoding.py`, `backend/apps/locations/urls.py` | the adapter pattern, and the address search and reverse geocoding you must **reuse** |
 | `backend/apps/notifications/services.py`: `request_notification` | how to send a notification (the `audience` argument is required) |
 | `frontend/apps/admin/features/m2-rate-cards/`, `frontend/apps/admin/features/vendor-plans/` | the Operations page patterns |
-| `frontend/mobile/apps/partner/` | the app shell, login and apply flow that the Captain app copies |
+| `frontend/mobile/apps/partner/` | **the app you extend.** Its shell and workspace registry (`src/features/workspace/registry.ts`), login, apply flow (`src/features/application/`), offer ringtone (`src/features/notifications/use-offer-ringtone.ts`), full-screen offer (`app/(app)/dispatch/[offerId].tsx`, `src/features/dispatch/`) and the `server_now` countdown pattern |
 
 ### 4.2 House rules in practice
 
@@ -207,11 +274,14 @@ must too.
    decision in §5, every decision you make yourself, a **Dependencies** section (each new
    package and why), and a **References** section (what you used from §10). Set it to
    `Status: Proposed`. The owner changes it to Accepted.
-2. **`contracts/proposals/0029-rides-v1.md`.** Use the format in `contracts/proposals/README.md`.
+2. **`contracts/proposals/0030-rides-v1.md`.** Number 0029 was already taken, so this is the
+   number you used. Use the format in `contracts/proposals/README.md`.
    Cover every endpoint in §5.10: an example request and response, every error code with the
    message the user sees, and the idempotency and retry behaviour.
 
 The owner reviews both at the Day 1 demo. Keep both up to date whenever you change something.
+The parked AI-assistant branch also drafted an ADR 0013. Rides keeps 0013, and that branch takes
+the next free number when it merges.
 
 ---
 
@@ -220,8 +290,8 @@ The owner reviews both at the Day 1 demo. Keep both up to date whenever you chan
 ### 5.1 The pieces
 
 ```
- Customer app (Android + iOS)      Captain app (Android)              Operations console (web)
- app/(tabs)/rides/*                frontend/mobile/apps/captain       /operations/rides/*
+ Customer app (Android + iOS)      Partner app (Android)              Operations console (web)
+ app/(tabs)/rides/*                Rides workspace, captains only     /operations/rides/*
    poll every 3 s on a live ride     GPS ping every 5 s on duty
           │                                │                                  │
           └──────────────── REST  /api/v1/ ┴──────────────────────────────────┘
@@ -239,10 +309,16 @@ A captain is a `PartnerProfile` whose application track is **`RIDE_CAPTAIN`**. T
 sign-in, the partner role, document upload and virus scanning, the existing Operations review
 queue at `/operations/partners`, and suspension. There is no second KYC system.
 
-- **Onboarding** is short, like `EMPLOYER`: about you → agreements → identity documents
-  (existing kinds) → driving licence, vehicle RC and insurance (the new kinds) → vehicle
-  details (`CaptainVehicle` in the rides app) → submit. Operations approves in the existing
-  review screen.
+- **One app.** The captain uses the VSolve Partner app. Sign-in, the apply flow, documents,
+  push and the Me tab are the partner app's own. Rides adds only its workspace (§5.11).
+- **One account, one track.** `PartnerApplication` is one-to-one with the partner. A captain
+  account is only a captain, and its partner app shows only the Rides workspace. Home-services
+  presence, job alerts and the Work and Money tabs never appear for it. An existing partner who
+  wants to drive signs up with a different phone number.
+- **Onboarding** is short, like `EMPLOYER`, in the partner app's existing apply flow: about you →
+  agreements → identity documents (existing kinds) → driving licence, vehicle RC and insurance
+  (the new kinds) → vehicle details (`CaptainVehicle` in the rides app) → submit. Operations
+  approves in the existing review screen. The track card is shown on Android only.
 - **Duty is not `PartnerOnlineSession`.** That table drives home-service dispatch. Rides keeps
   its own `CaptainDutySession`.
 - **Location is not `PartnerLocation`.** That table is rounded to about 100 m on purpose, for
@@ -255,7 +331,7 @@ queue at `/operations/partners`, and suspension. There is no second KYC system.
 | `RideRateCard` | `service_area` (FK `locations.ServiceArea`), `vehicle_type` (`BIKE` / `AUTO` / `CAB`), `base_fare_paise`, `included_distance_m`, `per_km_paise`, `per_minute_paise`, `minimum_fare_paise`, `free_waiting_minutes`, `waiting_per_minute_paise`, `is_active`, `version`, `created_by`, timestamps | one active card per (area, vehicle type), as a partial unique constraint; every paise value ≥ 0. **A vehicle type is bookable in an area only when it has an active card. That is the only on/off switch.** |
 | `CaptainVehicle` | `partner` (one-to-one), `vehicle_type`, `registration_number` (stored upper-case, no spaces), `make_model`, `colour` | `registration_number` unique |
 | `CaptainPassPlan` | `code` (slug), `name`, `price_paise`, `duration_hours`, `is_active` | `code` unique; price ≥ 0 |
-| `CaptainPass` | `partner`, `plan`, `payment_attempt` (FK `commerce.PaymentAttempt`, null for ₹0 plans), `status` (`PENDING_ACTIVATION`, `ACTIVE`, `EXPIRED`, `CANCELLED`), `starts_at`, `ends_at` | one `ACTIVE` pass per partner. Copy `StaySubscription`. |
+| `CaptainPass` | `partner`, `plan`, `payment_attempt` (FK `commerce.PaymentAttempt`, null for ₹0 plans), `status` (`PENDING_ACTIVATION`, `QUEUED`, `ACTIVE`, `EXPIRED`, `CANCELLED`), `starts_at`, `ends_at` | one `ACTIVE` pass per partner; at most one `QUEUED` pass per partner. Copy `StaySubscription`. `QUEUED` is new in Revision 2 (§5.8). |
 | `CaptainDutySession` | `partner`, `started_at`, `ended_at`, `end_reason` (`CAPTAIN_OFF`, `LOCATION_STALE`, `PASS_EXPIRED`, `SUSPENDED`, `OPERATIONS`) | one open session per partner |
 | `FareQuote` | `rider`, `service_area`, `vehicle_type`, `rate_card`, `rate_card_version`, pickup and drop (latitude, longitude, label), `distance_m`, `duration_s`, `route_polyline`, `fare_paise`, `expires_at`, `consumed_at` | used at most once |
 | `Ride` | `rider`, `quote` (one-to-one), `service_area`, `vehicle_type`, pickup and drop (copied from the quote), `state`, `captain` (FK partner, null), `fare_paise`, `waiting_paise`, `final_fare_paise`, `payment_method` (`CASH_OR_UPI`), `payment_status` (`DUE`, `COLLECTED`), `otp_attempts`, `dispatch_round`, a timestamp per state, `cancelled_by` (`RIDER`, `CAPTAIN`, `OPERATIONS`, `SYSTEM`), `cancel_reason` | one open ride per rider; one open ride per captain (both partial unique) |
@@ -320,12 +396,23 @@ final_fare   = fare + waiting
   `rate_card_version`.
 - Operations sets the numbers. Your seed command writes placeholder values and marks them as
   placeholders, the way `seed_m2_demo` does.
+- **`POST rides/quotes/` is throttled** (Revision 2, R2). Each call costs one Google Geocoding
+  call and up to two Routes calls. Use `ThrottledWriteMixin` from `common/throttling.py` with
+  `throttle_scope = "rides_quotes"` and a rate of `20/min` per user. As with the other rates there,
+  it is a ceiling on abuse, not a pacing limit. A throttled call answers `429` and the rider app
+  says "Too many price checks. Try again in a minute."
 
 ### 5.6 Live location and matching
 
 **Location**
-- The Captain app sends `POST /partner/rides/location/` every 5 seconds while on duty, including
-  during a ride.
+- The partner app's background task sends `POST /partner/rides/location/` every 5 seconds while
+  on duty, including during a ride.
+- **`captured_at` is in server time, not phone time** (Revision 2, R3). `GET partner/rides/me/`
+  and `POST partner/rides/duty/start/` return `server_now` (ADR-0005, the same field the partner
+  app's offer countdown already uses). The task keeps the offset between `server_now` and the
+  phone clock, refreshes it on every duty start and app open, and sends `captured_at` corrected
+  by it. A phone with a wrong clock then still stays on duty. A backlog of old pings sent after a
+  network gap is still refused, so it is never shown as live.
 - The server validates each ping: latitude and longitude in range, `accuracy_m` > 0,
   `captured_at` no more than 30 s old and no more than 5 s in the future. Matching ignores
   positions with accuracy worse than 100 m.
@@ -383,11 +470,20 @@ the outbox event id.
   `initiate_standalone_payment_attempt(purpose=RIDE_CAPTAIN_PASS, …)`. This is the stay
   subscription pattern, line for line.
 - A **₹0 plan** (for launch) activates at once, with no payment attempt. Test both paths.
+- **One purchase in flight** (Revision 2, R4). While a paid purchase can still succeed, buying
+  the same plan returns that pending purchase (as today). Buying any other plan, paid or ₹0,
+  answers `409 pass_purchase_pending` ("Your last pass payment is still going through."). A
+  pending purchase older than 30 minutes stops blocking.
+- **A paid pass never shortens one that is running** (Revision 2, R4). If a payment is captured
+  while the captain already has an active pass, the new pass becomes `QUEUED`. The every-minute
+  expiry task activates it the moment the active one ends, with `starts_at` set to that moment.
+  The Day 2 code ends the running pass instead, and that must change.
 - With no active pass, the captain cannot go on duty (`403 pass_required`). If the pass expires
   during a ride, the ride continues and the captain goes off duty when it ends.
-- **The Captain wallet in V1** shows the pass status (time left), the pass history and receipts,
-  and earnings for today and this week (rides and cash collected). There is no stored balance
-  and no withdrawal in V1.
+- **The Rides Wallet tab in V1** (partner app, captains only) shows the pass status (time
+  left), any queued pass, the pass history and receipts, and earnings for today and this week
+  (rides and cash collected). There is no stored balance and no withdrawal in V1. It is not the
+  home-services Money tab.
 
 ### 5.9 Safety
 
@@ -409,7 +505,7 @@ existing `partner/offers/` and `operations/cases/`.
 
 | Method and path | Purpose |
 |---|---|
-| `GET rides/availability/?latitude=&longitude=` | which vehicle types can be booked here (drives the home entry) |
+| `GET rides/availability/?latitude=&longitude=` | which vehicle types can be booked here (drives the home entry). **Not built yet** (Revision 2, R1). |
 | `POST rides/quotes/` | pickup and drop in, one quote per available vehicle type out |
 | `POST rides/` (Idempotency-Key) | book with a `quote_id` |
 | `GET rides/` | my ride history (paginated) |
@@ -422,7 +518,7 @@ existing `partner/offers/` and `operations/cases/`.
 
 | Method and path | Purpose |
 |---|---|
-| `GET partner/rides/me/` | approval state, vehicle, pass, duty, open ride, and the reasons anything is blocked |
+| `GET partner/rides/me/` | approval state, vehicle, pass (and any queued pass), duty, open ride, the reasons anything is blocked, and `server_now`. The partner app also uses it to decide whether to show the Rides workspace. |
 | `PUT partner/rides/vehicle/` | vehicle details |
 | `GET partner/rides/pass-plans/` | the plans on sale |
 | `POST partner/rides/passes/` (Idempotency-Key) | buy a pass, returning the payment handoff |
@@ -446,11 +542,11 @@ existing `partner/offers/` and `operations/cases/`.
 | `GET operations/rides/captains/` | captains, with vehicle, pass, duty, rating and cancel count |
 | `GET operations/rides/sos/`, `POST operations/rides/sos/{sos_id}/resolve/` | the SOS queue |
 
-**Stable error codes** (each one needs a user message in proposal 0029): `area_not_served`,
+**Stable error codes** (each one needs a user message in proposal 0030): `area_not_served`,
 `vehicle_unavailable`, `quote_expired`, `quote_used`, `ride_already_open`,
 `ride_no_longer_available`, `invalid_transition`, `not_at_pickup`, `otp_invalid`,
-`otp_locked`, `pass_required`, `captain_not_approved`, `location_stale`,
-`routing_unavailable`.
+`otp_locked`, `pass_required`, `pass_purchase_pending`, `captain_not_approved`,
+`location_stale`, `routing_unavailable`.
 
 ### 5.11 Screens
 
@@ -459,31 +555,38 @@ ride app: map on top, bottom sheet below. Look at Rapido, Uber and Namma Yatri f
 ideas, never for colours or artwork. Use only `@vsolve/mobile-ui` and our tokens. Keep the copy
 short and plain, for example "Finding your captain…".
 
-**Captain app (Android).** Tabs: Home, Rides, Wallet, Me.
+**Captain: the Rides workspace in the Partner app (Android).** Tabs: Home, Rides, Wallet,
+Alerts, Me (`RIDES_TAP_FIRST_NAV`, §2). The shell shows it only when `GET partner/rides/me/` says
+the partner has a captain application, and never on iOS.
 
-1. **Sign in.** Port it from partner-mobile.
-2. **Onboarding:** about you → agreements → identity documents → licence, RC, insurance →
-   vehicle → submitted, changes required or approved. Port the shared steps from partner-mobile
-   `src/features/application/`, with the `// Ported from …` header line on each file.
+1. **Sign in.** Already exists in the partner app. Nothing to build.
+2. **Onboarding:** the partner app's existing apply flow on the `RIDE_CAPTAIN` track: about
+   you → agreements → identity documents → licence, RC, insurance → **vehicle** → submitted,
+   changes required or approved. Everything except the vehicle step was built on Day 2. Until
+   approval, the captain sees the existing application status screen.
 3. **Location disclosure.** Google Play requires a prominent in-app disclosure before you ask.
    Then the permission requests: while using the app, then "Allow all the time". Then help on
-   turning off battery optimisation.
+   turning off battery optimisation. This appears **only** for an approved captain going on
+   duty, never for any other partner.
 4. **Home:** duty switch, pass status, today's earnings. When duty is blocked, say why: not
    approved, no pass, or permission missing.
 5. **Ride request:** full screen, with sound and a 15-second countdown from the server. Shows
-   the pickup distance, pickup area, drop area and fare. Accept or Decline.
+   the pickup distance, pickup area, drop area and fare. Accept or Decline. Reuse the partner
+   app's offer ringtone and the pattern of `app/(app)/dispatch/[offerId].tsx`; do not change
+   that home-services screen.
 6. **To pickup:** map, the rider's first name, Call, Navigate (opens Google Maps with
    `google.navigation:q=lat,lng`), Arrived, Cancel (with a reason).
 7. **Enter OTP**, then **In trip:** the drop, Navigate, End trip.
 8. **Collect:** the final fare, **Payment received**, then rate the rider.
 9. **Wallet:** pass status, buy a pass (Razorpay in a WebView, as in customer checkout), pass
    history, earnings for today and this week.
-10. **Rides history. Me:** profile, vehicle, document status, support, sign out.
+10. **Rides history. Me:** the partner app's existing Me (profile, documents, support, sign
+    out), plus the vehicle.
 
 **Customer app: Rides**
 
-1. **Home entry card**, shown only when `rides/availability/` returns vehicle types for the
-   chosen location.
+1. **Home entry card** (`<RidesEntry />`), shown only when `rides/availability/` returns vehicle
+   types for the chosen location. Never a catalogue category (Revision 2, R1).
 2. **Where to:** the current location as pickup (editable), drop search (existing
    `geocoding/search/`), and a pin on the map (existing `geocoding/reverse/`).
 3. **Choose ride:** the route on the map, and one row per vehicle with its fare and trip time,
@@ -505,21 +608,32 @@ Pass plans, Captains.
 These override `frontend/mobile/AGENTS.md` for Rides work, and nothing else.
 
 - **No web original.** Rides screens are not ports. This brief is their spec.
-- **Background location in the Captain app only.** Use `expo-location` with `expo-task-manager`,
-  on Android only, only while on duty, with a foreground-service notification "You're on duty".
-  Permissions: `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE`,
-  `FOREGROUND_SERVICE_LOCATION`. Define the task at module top level. Stop updates on duty stop
+- **Background location in the Partner app, for captains on duty only.** Today the partner
+  app blocks it (`blockedPermissions` in `app.config.ts`). Unblock it on Android only (§2). Use
+  `expo-location` with `expo-task-manager`, only while an approved captain is on duty, with a
+  foreground-service notification "You're on duty". Permissions: `ACCESS_FINE_LOCATION`,
+  `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`. Define the
+  task at module top level and import it once from `app/_layout.tsx`. Stop updates on duty stop
   and on sign out. It needs a development build; it does not work in Expo Go.
+- **Every other partner is untouched.** A partner who is not a captain never sees the
+  disclosure, never gets the "Allow all the time" request, and never runs the task. Test it
+  (§7.3, scenario 33).
+- **Google Play:** the background-location declaration now covers the whole partner app
+  (`com.vsolvehub.partner`). The disclosure screen and the review video (Day 9) show the captain
+  flow. If Play rejects the declaration, every partner app update waits, so get the disclosure
+  right the first time.
+- **iOS:** no background location and no iOS background mode in the partner app. The
+  `RIDE_CAPTAIN` track card and the Rides workspace are hidden when `Platform.OS === "ios"`.
 - **Customer app rides use foreground location only.** Its permissions do not change.
-- **New packages allowed:** `react-native-maps` (Customer and Captain apps; Google provider on
-  Android, Apple Maps on iOS), `expo-task-manager` (Captain), `expo-intent-launcher` (Captain,
-  to open the battery-optimisation settings). Install them with `npx expo install`. If you need
-  anything else, add it and justify it in the ADR's Dependencies section; the owner reviews it
-  in the PR.
-- **Push:** the Captain app uses the **partner** OneSignal app id, because captains are
-  partners. Ride offers use the Android channel **Ride requests**, with sound. The owner creates
-  the channel and gives you its id.
-- **Platforms:** the Captain app V1 is Android only. Customer rides work on Android and iOS.
+- **New packages allowed:** `react-native-maps` is already in the partner app; add it to the
+  Customer app if it is not there (Google provider on Android, Apple Maps on iOS).
+  `expo-task-manager` and `expo-intent-launcher` (to open the battery-optimisation settings) go
+  into the partner app. Install them with `npx expo install`. If you need anything else, add it
+  and justify it in the ADR's Dependencies section; the owner reviews it in the PR.
+- **Push:** the partner app already has OneSignal (partner app id) and the offer ringtone. Ride
+  offers use the Android channel **Ride requests**, with sound. The owner creates the channel and
+  gives you its id.
+- **Platforms:** captains V1 are Android only. Customer rides work on Android and iOS.
 
 ---
 
@@ -528,23 +642,33 @@ These override `frontend/mobile/AGENTS.md` for Rides work, and nothing else.
 Every day runs **Build → Test → Gate → Push → 6:30 pm demo**. A day is not done until its gate
 is green. If you fall behind, cut polish, never tests, and tell the owner the same day.
 
-### Day 1: Friday 6 November. Setup, design, skeleton
+Revision 2 re-plans from Monday 9 November: the deadline is now Day 9, Saturday 14 November.
+Days 1 and 2 are done; Day 3 was not built and its work now sits in Days 4 and 5.
+
+| Day | Date | Focus | Status |
+|---|---|---|---|
+| 1 | Fri 6 Nov | Setup, design, skeleton | ✅ done |
+| 2 | Sat 7 Nov | Backend: pricing and supply | ✅ done (rework R1–R5 on Day 4) |
+| 3 | Sun 8 Nov | Backend: the rides engine | ❌ not built, moved to Days 4–5 |
+| 4 | Mon 9 Nov | Rework R1–R5, partner build queued, engine part 1 (book, dispatch, offers) | today |
+| 5 | Tue 10 Nov | Engine part 2 (trip steps, cancels, ratings, SOS), Operations API | |
+| 6 | Wed 11 Nov | Partner app Rides workspace part 1 (duty, background GPS, pass, offers) | |
+| 7 | Thu 12 Nov | Partner app part 2 (trip screens, wallet), Rider part 1 (book, searching); first two-phone ride | |
+| 8 | Fri 13 Nov | Rider part 2 (live ride), Operations console; scenarios 1–20 | |
+| 9 | Sat 14 Nov | Full checklist, 5 road rides, Play video, fixes, test report | |
+
+### Day 1: Friday 6 November. Setup, design, skeleton ✅ done
 
 **Build**
 - Set up your machine with `CONTRIBUTING.md` and `frontend/mobile/guide/01-machine-setup.md`:
   Docker, backend, seed data, and customer-mobile running on your phone.
 - `git switch rapido/v1`. Add the Appendix A pointer to `AGENTS.md`. Open the Draft PR.
-- Write ADR-0013 and proposal 0029 (§4.3).
+- Write ADR-0013 and proposal 0030 (§4.3).
 - Create the `apps/rides` skeleton (`apps.py`, `models.py`, `admin.py`, `urls.py`, `services.py`,
   `selectors.py`), every model with its constraints, and the migrations. Add the partners
   `Track` and `Kind` values with their migration, and the commerce `Purpose` with its migration.
-- Scaffold `frontend/mobile/apps/captain`: copy partner-mobile's `app.config.ts`, `eas.json`,
-  `metro.config.js`, `babel.config.js`, `tailwind.config.js`, `jest.config.js`, `tsconfig.json`
-  and `global.css`, with the new name and id. Add `react-native-maps`, `expo-task-manager` and
-  `expo-intent-launcher`. Add `react-native-maps` to customer-mobile.
-- **Queue the Android development builds for both apps today**
-  (`eas build --profile development --platform android --no-wait`). Builds take hours in the
-  queue.
+- ~~Scaffold `frontend/mobile/apps/captain`~~. Cancelled in Revision 2: captains use the
+  partner app. The development builds are now queued on Day 4.
 
 **Test:** model constraint tests (one active rate card per area and type, one open ride per
 rider and per captain, one active pass, stars 1–5, unique registration number).
@@ -552,7 +676,7 @@ rider and per captain, one active pass, stars 1–5, unique registration number)
 **Gate:** `quality-static.cmd` green · `pytest tests/rides` green · ADR and proposal sent to the
 owner.
 
-### Day 2: Saturday 7 November. Backend: pricing and supply
+### Day 2: Saturday 7 November. Backend: pricing and supply ✅ done (rework R1–R5 on Day 4)
 
 **Build**
 - Routing adapter (Google and fake) and the fare engine.
@@ -580,62 +704,97 @@ owner.
 green · contract regenerated, CHANGELOG entry written, `pnpm contract:generate` and
 `pnpm contract:check` green.
 
-### Day 3: Sunday 8 November. Backend: the rides engine
+### Day 3: Sunday 8 November. Backend: the rides engine ❌ not built
+
+Revision 2 moves its work to Day 4 (book, dispatch, offers) and Day 5 (trip steps, cancels,
+ratings, SOS, Operations). Its tests and gate now sit on Days 4 and 5.
+
+### Day 4: Monday 9 November. Rework, then the engine part 1
 
 **Build**
-- Create ride, the outbox handler, dispatch rounds, offer expiry and the recovery sweep.
-- Current offer, accept and decline.
-- Arrived, start, complete, payment received.
-- Cancellations and re-dispatch, and `NO_CAPTAIN_FOUND`.
+- The Revision 2 rework, R1 to R5 (top of this file), each with its test.
+- Partner app setup: the `app.config.ts` permission change, and
+  `npx expo install expo-task-manager expo-intent-launcher` in partner-mobile (§2, §5.12).
+- **Queue the Android development builds for the partner and customer apps today**
+  (`eas build --profile development --platform android --no-wait`). Builds take hours in the
+  queue, and the background task needs the partner build on Day 6.
+- Create ride (`POST rides/` with Idempotency-Key: the quote is valid, unexpired and unused),
+  the outbox event `rides.ride_requested` and its handler, dispatch rounds (§5.6), offer expiry,
+  the 30-second recovery sweep, and `NO_CAPTAIN_FOUND`.
+- Current offer, accept (Idempotency-Key, the first accept wins) and decline.
+
+**Test**
+- Rework: no catalogue row; availability; the quote throttle answers 429; a ping from a phone
+  with a slow clock is accepted once corrected by `server_now`; a pass captured during an active
+  one is `QUEUED` and starts when it ends; `409 pass_purchase_pending`.
+- Dispatch eligibility, one test per exclusion rule; radius widening; a round with no
+  candidates; `NO_CAPTAIN_FOUND` after the last round.
+- The accept race: two captains accept at once in a `TransactionTestCase`, one wins and the
+  other gets `409 ride_no_longer_available`.
+- Idempotent create, accept and buy.
+
+**Gate:** `pytest tests/rides -q` green · `quality-static.cmd` green · both development builds
+queued.
+
+### Day 5: Tuesday 10 November. Backend: the engine part 2 and Operations
+
+**Build**
+- Arrived (geofence), start (OTP), complete (waiting charge), payment received.
+- Cancellations by the rider, the captain (re-dispatch without that captain) and Operations.
 - Ratings, SOS, history and earnings.
-- Notifications (templates and audience) and every Operations endpoint.
+- Notifications (templates and audience).
+- Every Operations endpoint: rides list and detail, force cancel, captains, the SOS queue and
+  resolve.
 
 **Test**
 - The state-machine matrix: every allowed transition, and every forbidden one returning
   `409 invalid_transition`.
-- Dispatch eligibility, one test per exclusion rule; radius widening; a round with no
-  candidates.
-- The accept race: two captains accept at once in a `TransactionTestCase`, one wins and the
-  other gets a 409.
-- Idempotent create, accept and buy.
 - The authorization matrix: anonymous, another rider, another captain, a customer on a captain
-  URL, a captain on an Operations URL.
+  URL, a captain on an Operations URL, a non-captain partner on a captain URL.
 - OTP: five wrong tries locks it. Arrival geofence. Waiting charge.
 - Notifications are queued once per event, with the right audience.
 
 **Gate:** all rides backend tests green · `apps/rides` branch coverage ≥ 85% · focused
 `tests/partners tests/commerce tests/notifications` green · `quality-static.cmd` green ·
-contract and client regenerated.
+contract and client regenerated, CHANGELOG entry updated.
 
-### Day 4: Monday 9 November. Captain app, part 1
+### Day 6: Wednesday 11 November. Partner app: Rides workspace, part 1
 
 **Build**
-- Shell and tabs, sign-in.
-- Onboarding with KYC uploads, and the waiting, approved and changes-required states.
-- Location disclosure, permissions, and battery-optimisation help.
-- Duty switch with the background task and its foreground notification.
-- Pass purchase (Razorpay WebView).
+- The Rides workspace: `RIDES_TAP_FIRST_NAV`, the shell branch on `partner/rides/me/`, the
+  chrome entries. It is hidden for every partner who is not a captain, and on iOS.
+- The **Vehicle** step in the apply flow, and the waiting, approved and changes-required states
+  (the existing application status screen).
+- Location disclosure, permissions, and battery-optimisation help (§5.11, §5.12).
+- Duty switch with the background task (pings in server time, §5.6) and its foreground
+  notification.
+- Pass purchase (Razorpay WebView), with a queued pass shown.
 - Ride request screen with sound and the server countdown; accept and decline.
-- OneSignal wiring with the partner app id and the Ride requests channel.
+- The **Ride requests** OneSignal channel.
 
-**Test:** Jest model tests (the reasons duty is blocked, the offer countdown, the permission
-states) · a component test per screen (loading, error, main) · a unit test for the background
-task (it posts the ping, and handles 401 and 409).
+**Test:** Jest model tests (the reasons duty is blocked, which shell a partner gets, the offer
+countdown, the permission states, the clock offset) · a component test per screen (loading,
+error, main) · a unit test for the background task (it posts the ping in server time, and
+handles 401 and 409) · a test that a partner who is not a captain never gets the Rides tabs and
+never asks for background location.
 
-**On the phone:** install the Captain development build on phone A and go on duty. Turn the
-screen off for 10 minutes and confirm the pings keep arriving (Operations captains page or
-Redis). Create a ride from Swagger and receive the alert.
+**On the phones:** install the partner development build on phone A, sign in as a test captain
+and go on duty. Turn the screen off for 10 minutes and confirm the pings keep arriving
+(Operations captains page or Redis). Create a ride from Swagger and receive the alert. On phone
+B, sign in as an electrician partner: no Rides tab, no background-location prompt, and
+home-services offers still ring.
 
-**Gate:** `pnpm --filter captain-mobile lint`, `typecheck` and `test` green · the phone checks
+**Gate:** `pnpm --filter partner-mobile lint`, `typecheck` and `test` green · the phone checks
 above pass.
 
-### Day 5: Tuesday 10 November. Captain app part 2, Rider part 1
+### Day 7: Thursday 12 November. Partner app part 2, Rider part 1
 
-**Build, Captain:** to pickup, navigate, arrived, OTP, in trip, end trip, payment received, rate
-the rider, cancel with a reason, wallet (pass and earnings), history, Me.
+**Build, Captain (partner app):** to pickup, navigate, arrived, OTP, in trip, end trip, payment
+received, rate the rider, cancel with a reason, Wallet (pass, queued pass and earnings),
+history, the vehicle on Me.
 
-**Build, Rider:** home entry, where to (search, pin, current location), choose ride (route and
-fares), book, searching with cancel.
+**Build, Rider:** **Book** on choose ride, then searching with cancel. Where to and choose ride
+exist since Day 2; the home entry was rebuilt in R1.
 
 **Test:** Jest tests for every new screen and model file. The fare shown is always the API
 value. The idempotency key stays the same across retries.
@@ -643,10 +802,10 @@ value. The idempotency key stays the same across retries.
 **On the phones:** the first full ride on two phones on the same Wi-Fi: book → accept → arrive
 → OTP → end → payment received. Record a screen video.
 
-**Gate:** lint, typecheck and test green for `captain-mobile` and `customer-mobile` · the first
+**Gate:** lint, typecheck and test green for `partner-mobile` and `customer-mobile` · the first
 full ride is recorded.
 
-### Day 6: Wednesday 11 November. Rider part 2, Operations console
+### Day 8: Friday 13 November. Rider part 2, Operations console
 
 **Build, Rider:** captain card, the captain moving on the map (3 s), ETA, OTP, Call, Share, SOS,
 in trip, done with the pay prompt and rating, "finding another captain", "no captain nearby",
@@ -658,17 +817,18 @@ and resolve, rate cards, pass plans, captains, and the navigation entry.
 **Test:** Jest tests for the rider screens · Vitest tests for `features/rides` in the admin app ·
 device scenarios 1–20 from §7.3.
 
-**Gate:** lint, typecheck and test green for `captain-mobile`, `customer-mobile` and `admin` ·
+**Gate:** lint, typecheck and test green for `partner-mobile`, `customer-mobile` and `admin` ·
 scenarios 1–20 pass.
 
-### Day 7: Thursday 12 November. Test, fix, hand over
+### Day 9: Saturday 14 November. Test, fix, hand over
 
 - Run the **whole** device checklist (§7.3) with three phones.
 - **Road test:** five real rides around the 500032 area, covering bike, auto and cab, through
   the tunnel or staging URL the owner gives you (§7.4).
 - Fix every bug you find, each with a regression test.
-- Record the Google Play background-location video: disclosure → permission → on duty → an
-  offer arriving. The owner needs it for the Play declaration.
+- Record the Google Play background-location video **in the partner app**: disclosure →
+  permission → on duty → an offer arriving. The owner needs it for the partner app's Play
+  declaration.
 - Merge `origin/main`, regenerate the contract if needed, and run every gate again.
 - Write the test report (§7.5) into the PR, then move the PR from Draft to **Ready for review**.
   **Do not merge.**
@@ -696,7 +856,7 @@ From `backend/`:
 From `frontend/`:
 
 ```powershell
-pnpm --filter captain-mobile lint;  pnpm --filter captain-mobile typecheck;  pnpm --filter captain-mobile test
+pnpm --filter partner-mobile lint;  pnpm --filter partner-mobile typecheck;  pnpm --filter partner-mobile test
 pnpm --filter customer-mobile lint; pnpm --filter customer-mobile typecheck; pnpm --filter customer-mobile test
 pnpm --filter admin lint;           pnpm --filter admin typecheck;           pnpm --filter admin test
 pnpm contract:check
@@ -725,9 +885,11 @@ force a cold run when a gate decides something: `pnpm exec turbo run typecheck -
 
 **Apps:** every `model/` file has unit tests. Every screen has a component test (loading, error
 and main states, with mocked query data). The background location task has a unit test. The
+partner app has a test that a partner who is not a captain gets the normal shell, and never the
+Rides workspace or the background-location request. The
 Operations `features/rides` model files have Vitest tests.
 
-### 7.3 Device checklist (phones: A and B are captains, C is the rider; an iPhone is optional for the rider)
+### 7.3 Device checklist (phones: A and B run the partner app signed in as captains, C is the rider; an iPhone is optional for the rider)
 
 | # | Scenario | Expected |
 |---|---|---|
@@ -747,7 +909,7 @@ Operations `features/rides` model files have Vitest tests.
 | 14 | Wrong OTP five times | locked; the rider can cancel; Operations can cancel |
 | 15 | Arrived tapped 1 km from the pickup | refused: "You are not at the pickup yet" |
 | 16 | Captain screen off for 10 minutes on duty | pings continue; an offer still arrives as a push with sound |
-| 17 | Captain app swiped away | after 2 minutes without pings, duty ends; reopening shows "You went off duty" |
+| 17 | Partner app swiped away while on duty | after 2 minutes without pings, duty ends; reopening shows "You went off duty" |
 | 18 | Airplane mode for 60 s during a trip | both apps recover to the correct state |
 | 19 | Rider app killed during a trip | reopening lands on the live ride |
 | 20 | Location permission denied | an honest blocking screen, with a way to open settings |
@@ -763,8 +925,12 @@ Operations `features/rides` model files have Vitest tests.
 | 30 | Both sides rate | each can rate once only |
 | 31 | History | both apps show the same fares as Operations |
 | 32 | A low-end Android phone (2 GB RAM) | the whole flow works without crashes |
+| 33 | An electrician partner signs in to the partner app on phone B | no Rides workspace, no background-location prompt, and home-services offers still ring |
+| 34 | The partner app on an iPhone, signed out, on the first apply screen | no "I give rides" track card |
+| 35 | Captain phone clock set 2 minutes slow, on duty for 10 minutes | the captain stays on duty and keeps receiving offers |
+| 36 | A pass payment is captured while another pass is still active | the new pass shows as queued and starts when the active one ends; no paid time is lost |
 
-### 7.4 Road test (Day 7)
+### 7.4 Road test (Day 9)
 
 Do five real rides in the 500032 area. For each ride, record the vehicle type, quoted fare,
 distance, trip time, the pickup ETA shown against the real one, any GPS gap longer than 15 s,
@@ -782,7 +948,7 @@ the captain phone's battery use per hour, and any problem.
 | pytest tests/rides --cov=apps/rides --cov-branch | coverage: __% |
 | pytest tests/partners tests/commerce tests/notifications -q | |
 | quality-static.cmd | |
-| captain-mobile lint / typecheck / test | |
+| partner-mobile lint / typecheck / test | |
 | customer-mobile lint / typecheck / test | |
 | admin lint / typecheck / test | |
 | pnpm contract:check | |
@@ -804,13 +970,17 @@ the captain phone's battery use per hour, and any problem.
 ## 8. Definition of done
 
 - [ ] Every item in the §1 "In V1" table works on real phones.
-- [ ] ADR-0013 and proposal 0029 are written, current and reviewed.
+- [ ] ADR-0013 and proposal 0030 are written, current (including Revision 2) and reviewed.
 - [ ] The contract is regenerated, with a CHANGELOG entry, and `pnpm contract:check` is green.
 - [ ] `quality-static.cmd` is green.
 - [ ] Every rides backend test is green, and `apps/rides` branch coverage is ≥ 85%.
 - [ ] The focused partners, commerce and notifications suites are green.
-- [ ] Lint, typecheck and test are green for `captain-mobile`, `customer-mobile` and `admin`.
-- [ ] All 32 device scenarios pass, with evidence.
+- [ ] Lint, typecheck and test are green for `partner-mobile`, `customer-mobile` and `admin`.
+- [ ] All 36 device scenarios pass, with evidence.
+- [ ] No migration writes catalogue rows; the Rides home entry comes only from
+      `rides/availability/`.
+- [ ] A partner who is not a captain sees no change in the partner app, and the app asks for
+      background location only from a captain going on duty.
 - [ ] Five road rides are done and recorded.
 - [ ] The Play background-location video is recorded.
 - [ ] No file outside §2 changed (check with `git diff --stat origin/main...rapido/v1`).
@@ -824,9 +994,9 @@ the captain phone's battery use per hour, and any problem.
 | Item | Why |
 |---|---|
 | GitHub write access (push to `rapido/v1`; `main` is protected) | your branch |
-| Expo / EAS access, and a new EAS project for the Captain app | development builds |
-| Google Cloud: an Android Maps SDK key restricted to `com.vsolvehub.captain` and `com.vsolvehub.customer`; Routes API enabled for the server key | maps and fares |
-| The partner OneSignal app id and the **Ride requests** Android channel id | ride alerts |
+| Expo / EAS access to the existing partner and customer projects (no new project) | development builds |
+| Google Cloud: the existing Android Maps SDK keys for `com.vsolvehub.partner` and `com.vsolvehub.customer`; Routes API enabled for the server key | maps and fares |
+| The **Ride requests** Android channel id (the partner app already has its OneSignal app id) | ride alerts |
 | Razorpay test keys (local `.env` only, never committed) | pass purchase |
 | Three Android phones, one of them low-end | the device checklist |
 | A tunnel or staging backend URL the phones can reach on the road | the road test |
@@ -899,25 +1069,31 @@ backend and frontend, on branch `rapido/v1` only — never `main`. The complete 
 list, registration points, mobile exceptions and test authorization are in
 `docs/rapido/README.md`. Any agent working on Rides reads it before its first edit; for Rides
 work it overrides the conflicting lines in this file and in `frontend/mobile/AGENTS.md`
-(screens with no web original, background location in the Captain app only, and the Rides test
-commands the developer is authorized to run). Outside Rides, this file is unchanged.
+(screens with no web original, background location in the Partner app for approved captains on
+duty only, and the Rides test commands the developer is authorized to run). There is no
+separate Captain app: captains use the Partner app's Rides workspace. Outside Rides, this file
+is unchanged.
 ```
+
+Revision 2 changed this text. Update the copy already in `AGENTS.md` to match.
 
 ## Appendix B: PR description template
 
 ```markdown
 # Rides V1
 
-Brief: docs/rapido/README.md · ADR: docs/adr/0013-rides-v1.md · Contract: contracts/proposals/0029-rides-v1.md
+Brief: docs/rapido/README.md · ADR: docs/adr/0013-rides-v1.md · Contract: contracts/proposals/0030-rides-v1.md
 
 ## Daily progress
-- [ ] Day 1: setup, ADR + proposal, models + migrations, Captain scaffold, dev builds queued
-- [ ] Day 2: fares, quotes, rate cards, passes, duty, location, seed command
-- [ ] Day 3: rides engine, dispatch, offers, lifecycle, cancels, ratings, SOS, Operations API
-- [ ] Day 4: Captain app part 1 (sign-in, onboarding, duty + background GPS, pass, offers)
-- [ ] Day 5: Captain app part 2 + Rider part 1; first two-phone ride
-- [ ] Day 6: Rider part 2 + Operations console; scenarios 1–20
-- [ ] Day 7: full checklist, 5 road rides, fixes, Play video, test report
+- [x] Day 1 (Fri 6): setup, ADR + proposal, models + migrations
+- [x] Day 2 (Sat 7): fares, quotes, rate cards, passes, duty, location, seed command, captain sign-up in the partner app
+- [ ] Day 3 (Sun 8): not built; moved to Days 4–5
+- [ ] Day 4 (Mon 9): Revision 2 rework R1–R5, partner + customer dev builds queued, book, dispatch, offers
+- [ ] Day 5 (Tue 10): trip steps, cancels, ratings, SOS, notifications, Operations API
+- [ ] Day 6 (Wed 11): partner app Rides workspace part 1 (shell, vehicle step, duty + background GPS, pass, offers)
+- [ ] Day 7 (Thu 12): partner app part 2 + Rider part 1; first two-phone ride
+- [ ] Day 8 (Fri 13): Rider part 2 + Operations console; scenarios 1–20
+- [ ] Day 9 (Sat 14): full checklist (36), 5 road rides, fixes, Play video, test report
 
 ## Definition of done
 (paste §8 here and tick it)
@@ -926,5 +1102,5 @@ Brief: docs/rapido/README.md · ADR: docs/adr/0013-rides-v1.md · Contract: cont
 -
 
 ## Test report
-(paste §7.5 here on Day 7)
+(paste §7.5 here on Day 9)
 ```
