@@ -62,6 +62,53 @@ class RoutingUnavailableApiError(RidesApiError):
         )
 
 
+class NotOnDutyError(RidesApiError):
+    """A ping from a captain the server has taken off duty: the app stops and says so."""
+
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(code="not_on_duty", message="You're off duty. Go on duty to get rides.")
+
+
+class LocationStaleError(RidesApiError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self, message: str = "This location is too old to use.") -> None:
+        super().__init__(code="location_stale", message=message)
+
+
+class LocationUnavailableError(RidesApiError):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    retryable = True
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="location_unavailable",
+            message="We couldn't save your location right now. It will retry.",
+        )
+
+
+class RateCardExistsError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="rate_card_exists",
+            message="This area already has an active card for this vehicle. Edit that card.",
+        )
+
+
+class RateCardInactiveError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="rate_card_inactive",
+            message="Only the active card can be changed. Create a new card instead.",
+        )
+
+
 class RegistrationAlreadyUsedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

@@ -825,6 +825,10 @@ ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
 RIDES_ROUTING_PROVIDER = env("RIDES_ROUTING_PROVIDER", default="unconfigured")
 # A fare quote can be booked for this long, once.
 RIDES_QUOTE_TTL_SECONDS = env.int("RIDES_QUOTE_TTL_SECONDS", default=300)
+# Live captain positions ("who is near?"). Ephemeral; PostgreSQL stays the truth for duty.
+RIDES_REDIS_URL = env(
+    "RIDES_REDIS_URL", default=env("REDIS_URL", default="redis://127.0.0.1:56379/0")
+)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -1036,6 +1040,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "rides-expire-captain-passes": {
         "task": "apps.rides.tasks.expire_captain_passes",
+        "schedule": 60.0,
+    },
+    "rides-sweep-captain-locations": {
+        "task": "apps.rides.tasks.sweep_captain_locations",
         "schedule": 60.0,
     },
     "cleanup-partner-document-uploads": {

@@ -50,6 +50,21 @@ added to this entry.
   `not_approved`) and `pass_required`.
 - A pass past its `ends_at` expires within a minute; a captain on duty without a pass goes off
   duty then, unless they are on a ride, in which case they go off duty after it.
+- **Added** `POST /partner/rides/location/` (`LocationPingRequest` → `204`): `latitude`,
+  `longitude`, `accuracy_m` (above 0), optional `heading` (0–360) and `captured_at`. Send every
+  5 s while on duty, including during a ride. `409 not_on_duty` when the server has ended duty
+  (the app stops pinging and says so); `422 location_stale` when `captured_at` is more than 30 s
+  old or more than 5 s ahead (a wrong phone clock); `503 location_unavailable` (retryable). A
+  captain on duty goes off duty (`LOCATION_STALE`) after 2 minutes without a ping.
+- **Added** `GET/POST /operations/rides/rate-cards/` and `PATCH /operations/rides/rate-cards/{id}/`
+  (`RideRateCard`), Operations only. `GET` filters by `service_area_id`, `vehicle_type` and
+  `active`. `POST` creates a card; `409 rate_card_exists` while one is active for that area and
+  vehicle. `PATCH` with prices makes a new version and retires the old one (quotes keep the old
+  price); `PATCH {"is_active": false}` alone switches that vehicle off in that area;
+  `409 rate_card_inactive` for a retired card. Every amount is a whole number, never negative.
+- **Added** `GET/POST /operations/rides/pass-plans/` and `PATCH /operations/rides/pass-plans/{id}/`
+  (`CaptainPassPlanOps`), Operations only. `code` is unique and cannot change; `duration_hours`
+  is at least 1. Switching a plan off removes it from the captains' list.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 

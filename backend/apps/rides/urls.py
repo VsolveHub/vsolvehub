@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.rides.views import (
+    CaptainLocationView,
     CaptainMeView,
     CaptainPassesView,
     CaptainPassPlansView,
@@ -8,6 +9,10 @@ from apps.rides.views import (
     DutyStartView,
     DutyStopView,
     FareQuotesView,
+    OpsPassPlanDetailView,
+    OpsPassPlansView,
+    OpsRateCardDetailView,
+    OpsRateCardsView,
 )
 
 app_name = "rides"
@@ -20,4 +25,17 @@ urlpatterns = [
     path("partner/rides/passes/", CaptainPassesView.as_view(), name="passes"),
     path("partner/rides/duty/start/", DutyStartView.as_view(), name="duty-start"),
     path("partner/rides/duty/stop/", DutyStopView.as_view(), name="duty-stop"),
+    path("partner/rides/location/", CaptainLocationView.as_view(), name="location"),
+    path("operations/rides/rate-cards/", OpsRateCardsView.as_view(), name="ops-rate-cards"),
+    path(
+        "operations/rides/rate-cards/<uuid:card_id>/",
+        OpsRateCardDetailView.as_view(),
+        name="ops-rate-card",
+    ),
+    path("operations/rides/pass-plans/", OpsPassPlansView.as_view(), name="ops-pass-plans"),
+    path(
+        "operations/rides/pass-plans/<uuid:plan_id>/",
+        OpsPassPlanDetailView.as_view(),
+        name="ops-pass-plan",
+    ),
 ]

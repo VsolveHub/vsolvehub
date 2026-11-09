@@ -5,17 +5,20 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.rides.models import (
+    RATE_FIELDS,
     CaptainDutySession,
     CaptainPass,
     CaptainPassPlan,
     CaptainVehicle,
     FareQuote,
+    RideRateCard,
     VehicleType,
 )
 from apps.rides.selectors import CaptainStatus
 
 __all__ = [
     "BuyPassSerializer",
+    "CaptainPassPlanOpsSerializer",
     "CaptainPassPlanSerializer",
     "CaptainPassSerializer",
     "CaptainStatusSerializer",
@@ -25,6 +28,10 @@ __all__ = [
     "FareQuoteListSerializer",
     "FareQuoteRequestSerializer",
     "FareQuoteSerializer",
+    "LocationPingSerializer",
+    "RateCardCreateSerializer",
+    "RateCardUpdateSerializer",
+    "RideRateCardSerializer",
 ]
 
 
@@ -165,6 +172,108 @@ class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
             "expires_at",
         )
         read_only_fields = fields
+
+
+def _six_places(value: float) -> Decimal:
+    return Decimal(str(round(value, 6)))
+
+
+class LocationPingSerializer(serializers.Serializer[Any]):
+    """One GPS reading. Phones send plain numbers; they are kept to 6 decimal places (~0.1 m)."""
+
+    latitude = serializers.FloatField(min_value=-90, max_value=90)
+    longitude = serializers.FloatField(min_value=-180, max_value=180)
+    accuracy_m = serializers.FloatField(help_text="Metres; must be above 0.")
+    heading = serializers.FloatField(
+        min_value=0, max_value=360, required=False, allow_null=True, default=None
+    )
+    captured_at = serializers.DateTimeField(help_text="When the phone took the reading.")
+
+    def validate_accuracy_m(self, value: float) -> int:
+        if value <= 0:
+            raise serializers.ValidationError("Accuracy must be above 0.")
+        return max(1, round(value))
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs["latitude"] = _six_places(attrs["latitude"])
+        attrs["longitude"] = _six_places(attrs["longitude"])
+        return attrs
+
+
+class RideRateCardSerializer(serializers.ModelSerializer[RideRateCard]):
+    service_area_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = RideRateCard
+        fields = (
+            "id",
+            "service_area_id",
+            "vehicle_type",
+            *RATE_FIELDS,
+            "is_active",
+            "version",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+def _amount(*, required: bool) -> serializers.IntegerField:
+    """Paise, metres or minutes: a whole number, never negative."""
+    return serializers.IntegerField(min_value=0, required=required)
+
+
+class RateCardCreateSerializer(serializers.Serializer[Any]):
+    service_area_id = serializers.UUIDField()
+    vehicle_type = serializers.ChoiceField(choices=VehicleType.choices)
+    base_fare_paise = _amount(required=True)
+    included_distance_m = _amount(required=True)
+    per_km_paise = _amount(required=True)
+    per_minute_paise = _amount(required=True)
+    minimum_fare_paise = _amount(required=True)
+    free_waiting_minutes = _amount(required=True)
+    waiting_per_minute_paise = _amount(required=True)
+
+
+class RateCardUpdateSerializer(serializers.Serializer[Any]):
+    """Change prices (a new version), or send only `is_active: false` to switch the vehicle off."""
+
+    is_active = serializers.BooleanField(required=False)
+    base_fare_paise = _amount(required=False)
+    included_distance_m = _amount(required=False)
+    per_km_paise = _amount(required=False)
+    per_minute_paise = _amount(required=False)
+    minimum_fare_paise = _amount(required=False)
+    free_waiting_minutes = _amount(required=False)
+    waiting_per_minute_paise = _amount(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        rates = {k: v for k, v in attrs.items() if k in RATE_FIELDS}
+        if attrs.get("is_active") is False and rates:
+            raise serializers.ValidationError(
+                "Switch the card off on its own, without price changes."
+            )
+        if attrs.get("is_active") is not False and not rates:
+            raise serializers.ValidationError("Send at least one price to change.")
+        return attrs
+
+
+class CaptainPassPlanOpsSerializer(serializers.ModelSerializer[CaptainPassPlan]):
+    """Operations' view of a plan. `code` is fixed once created."""
+
+    class Meta:
+        model = CaptainPassPlan
+        fields = ("id", "code", "name", "price_paise", "duration_hours", "is_active", "created_at")
+        read_only_fields = ("id", "created_at")
+
+    def validate_duration_hours(self, value: int) -> int:
+        if value < 1:
+            raise serializers.ValidationError("A pass lasts at least an hour.")
+        return value
+
+    def validate_code(self, value: str) -> str:
+        if self.instance is not None and value != self.instance.code:
+            raise serializers.ValidationError("A plan's code can't change.")
+        return value
 
 
 class FareQuoteListSerializer(serializers.Serializer[Any]):

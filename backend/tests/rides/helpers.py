@@ -106,6 +106,12 @@ def partner_client(user: User) -> APIClient:
     return force_role_client(user=user, role_code="partner")
 
 
+def operations_client(user: User) -> APIClient:
+    role, _ = Role.objects.get_or_create(code="operations", defaults={"name": "Operations"})
+    UserRole.objects.get_or_create(user=user, role=role, revoked_at=None)
+    return force_role_client(user=user, role_code="operations")
+
+
 def customer_client(user: User) -> APIClient:
     role, _ = Role.objects.get_or_create(code="customer", defaults={"name": "Customer"})
     UserRole.objects.get_or_create(user=user, role=role, revoked_at=None)

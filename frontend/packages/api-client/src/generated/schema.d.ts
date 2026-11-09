@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 29b31d22d1b665f9
+ * Checksum: c26859c40227ea94
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4434,6 +4434,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/rides/pass-plans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every pass plan, and a new one. */
+        get: operations["operations_rides_pass_plans_list"];
+        put?: never;
+        /** @description Every pass plan, and a new one. */
+        post: operations["operations_rides_pass_plans_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/rides/pass-plans/{plan_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Edit a plan. Passes already bought keep their own dates; only new purchases change. */
+        patch: operations["operations_rides_pass_plans_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/operations/rides/rate-cards/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every rate card version, newest first; and a new card for an area and vehicle. */
+        get: operations["operations_rides_rate_cards_list"];
+        put?: never;
+        /** @description Every rate card version, newest first; and a new card for an area and vehicle. */
+        post: operations["operations_rides_rate_cards_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/rides/rate-cards/{card_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Edit the active card (a new version) or switch it off. */
+        patch: operations["operations_rides_rate_cards_partial_update"];
+        trace?: never;
+    };
     "/api/v1/operations/safety-incidents/{safety_incident_id}/decision/": {
         parameters: {
             query?: never;
@@ -7258,6 +7328,23 @@ export interface paths {
         put?: never;
         /** @description Go off duty. Already off: nothing changes. */
         post: operations["partner_rides_duty_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/location/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A GPS ping, every 5 seconds while on duty (also during a ride). */
+        post: operations["partner_rides_location_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10118,6 +10205,28 @@ export interface components {
             readonly name: string;
             readonly price_paise: number;
             readonly duration_hours: number;
+        };
+        /** @description Operations' view of a plan. `code` is fixed once created. */
+        CaptainPassPlanOps: {
+            /** Format: uuid */
+            readonly id: string;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            price_paise: number;
+            duration_hours: number;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /** @description Operations' view of a plan. `code` is fixed once created. */
+        CaptainPassPlanOpsRequest: {
+            code: string;
+            name: string;
+            /** Format: int64 */
+            price_paise: number;
+            duration_hours: number;
+            is_active?: boolean;
         };
         CaptainStatus: {
             /** @description The application status, or NOT_STARTED before a captain application exists. */
@@ -13032,6 +13141,25 @@ export interface components {
             readonly city: string;
             readonly area: string;
         };
+        /** @description One GPS reading. Phones send plain numbers; they are kept to 6 decimal places (~0.1 m). */
+        LocationPingRequest: {
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            longitude: number;
+            /**
+             * Format: double
+             * @description Metres; must be above 0.
+             */
+            accuracy_m: number;
+            /** Format: double */
+            heading?: number | null;
+            /**
+             * Format: date-time
+             * @description When the phone took the reading.
+             */
+            captured_at: string;
+        };
         LoyaltySettings: {
             reward_hold_days?: number;
             referral_monthly_cap?: number;
@@ -15757,6 +15885,15 @@ export interface components {
             source?: components["schemas"]["SourceEnum"];
             is_default?: boolean;
         };
+        /** @description Operations' view of a plan. `code` is fixed once created. */
+        PatchedCaptainPassPlanOpsRequest: {
+            code?: string;
+            name?: string;
+            /** Format: int64 */
+            price_paise?: number;
+            duration_hours?: number;
+            is_active?: boolean;
+        };
         PatchedCartItemUpdateRequest: {
             expected_cart_version?: number;
             expected_item_version?: number;
@@ -15929,6 +16066,17 @@ export interface components {
         PatchedPushPreferenceUpdateRequest: {
             category?: string;
             is_enabled?: boolean;
+        };
+        /** @description Change prices (a new version), or send only `is_active: false` to switch the vehicle off. */
+        PatchedRateCardUpdateRequest: {
+            is_active?: boolean;
+            base_fare_paise?: number;
+            included_distance_m?: number;
+            per_km_paise?: number;
+            per_minute_paise?: number;
+            minimum_fare_paise?: number;
+            free_waiting_minutes?: number;
+            waiting_per_minute_paise?: number;
         };
         /**
          * @description Partial update, one screen at a time, for save-and-resume.
@@ -17691,6 +17839,18 @@ export interface components {
          * @enum {string}
          */
         RateCardBookingStatusEnum: "MATCHING" | "OFFER_HELD" | "CONFIRMED" | "EXHAUSTED" | "FELL_BACK" | "CANCELLED";
+        RateCardCreateRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            base_fare_paise: number;
+            included_distance_m: number;
+            per_km_paise: number;
+            per_minute_paise: number;
+            minimum_fare_paise: number;
+            free_waiting_minutes: number;
+            waiting_per_minute_paise: number;
+        };
         /**
          * @description One card's decline-rate reading, and whether an alarm can fire on it at all.
          *
@@ -18752,6 +18912,24 @@ export interface components {
          * @enum {string}
          */
         RewardSidesEnum: "REFERRER_ONLY" | "REFEREE_ONLY" | "BOTH";
+        RideRateCard: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly service_area_id: string;
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly base_fare_paise: number;
+            readonly included_distance_m: number;
+            readonly per_km_paise: number;
+            readonly per_minute_paise: number;
+            readonly minimum_fare_paise: number;
+            readonly free_waiting_minutes: number;
+            readonly waiting_per_minute_paise: number;
+            readonly is_active: boolean;
+            readonly version: number;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         /**
          * @description One role, as booked against as named.
          *
@@ -31113,6 +31291,152 @@ export interface operations {
             };
         };
     };
+    operations_rides_pass_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainPassPlanOps"][];
+                };
+            };
+        };
+    };
+    operations_rides_pass_plans_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptainPassPlanOpsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaptainPassPlanOpsRequest"];
+                "multipart/form-data": components["schemas"]["CaptainPassPlanOpsRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainPassPlanOps"];
+                };
+            };
+        };
+    };
+    operations_rides_pass_plans_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCaptainPassPlanOpsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCaptainPassPlanOpsRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCaptainPassPlanOpsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainPassPlanOps"];
+                };
+            };
+        };
+    };
+    operations_rides_rate_cards_list: {
+        parameters: {
+            query?: {
+                active?: boolean;
+                service_area_id?: string;
+                vehicle_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RideRateCard"][];
+                };
+            };
+        };
+    };
+    operations_rides_rate_cards_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RateCardCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RateCardCreateRequest"];
+                "multipart/form-data": components["schemas"]["RateCardCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RideRateCard"];
+                };
+            };
+        };
+    };
+    operations_rides_rate_cards_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                card_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedRateCardUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedRateCardUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedRateCardUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RideRateCard"];
+                };
+            };
+        };
+    };
     m2_safety_incident_decide: {
         parameters: {
             query?: never;
@@ -37462,6 +37786,30 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DutyStatus"];
                 };
+            };
+        };
+    };
+    partner_rides_location_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationPingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LocationPingRequest"];
+                "multipart/form-data": components["schemas"]["LocationPingRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

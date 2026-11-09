@@ -16,18 +16,24 @@ from apps.locations.geocoding import GeocodingError, reverse_geocode
 from apps.locations.models import ServiceArea
 from apps.locations.services import check_serviceability
 from apps.partners.models import PartnerApplication, PartnerProfile
-from apps.rides import selectors
+from apps.rides import location, selectors
 from apps.rides.exceptions import (
     AreaNotServedError,
     CaptainNotApprovedError,
+    LocationStaleError,
+    LocationUnavailableError,
+    NotOnDutyError,
     PassAlreadyActiveError,
     PassRequiredError,
+    RateCardExistsError,
+    RateCardInactiveError,
     RegistrationAlreadyUsedError,
     RoutingUnavailableApiError,
 )
 from apps.rides.fares import trip_fare_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
+    RATE_FIELDS,
     CaptainDutySession,
     CaptainPass,
     CaptainPassPlan,
@@ -35,6 +41,8 @@ from apps.rides.models import (
     FareQuote,
     Ride,
     RideRateCard,
+    RideState,
+    RideTrackPoint,
     VehicleType,
     normalise_registration_number,
 )
@@ -42,14 +50,19 @@ from apps.rides.routing import RoutingUnavailableError, get_route
 
 __all__ = [
     "VEHICLE_EDITABLE_STATUSES",
+    "LocationPing",
     "TripPoint",
     "buy_pass",
     "complete_pass_payment",
     "create_quotes",
+    "create_rate_card",
     "expire_passes",
+    "record_location",
     "save_captain_vehicle",
     "start_duty",
     "stop_duty",
+    "sweep_stale_captains",
+    "update_rate_card",
 ]
 
 logger = logging.getLogger(__name__)
@@ -331,11 +344,12 @@ def expire_passes() -> int:
     on_a_ride = Ride.objects.filter(
         captain_id=models.OuterRef("partner_id"), state__in=OPEN_RIDE_STATES
     )
-    ended = (
+    ended = _end_duty(
         CaptainDutySession.objects.filter(ended_at__isnull=True)
         .exclude(models.Exists(has_pass))
-        .exclude(models.Exists(on_a_ride))
-        .update(ended_at=now, end_reason=CaptainDutySession.EndReason.PASS_EXPIRED)
+        .exclude(models.Exists(on_a_ride)),
+        reason=CaptainDutySession.EndReason.PASS_EXPIRED,
+        now=now,
     )
     if expired or ended:
         logger.info("ride_passes_expired", extra={"passes_expired": expired, "duty_ended": ended})
@@ -343,6 +357,31 @@ def expire_passes() -> int:
 
 
 # --- Duty -------------------------------------------------------------------------------------
+
+
+def _end_duty(sessions: Any, *, reason: str, now: Any) -> int:
+    """Close these open sessions, then take those captains off the live map once committed.
+
+    The map is only a cache: if Redis is down the cleanup is logged and skipped, and the
+    captain's position expires there on its own within 30 seconds.
+    """
+    partner_ids = list(sessions.values_list("partner_id", flat=True))
+    if not partner_ids:
+        return 0
+    closed = CaptainDutySession.objects.filter(
+        partner_id__in=partner_ids, ended_at__isnull=True
+    ).update(ended_at=now, end_reason=reason)
+
+    def clear_map() -> None:
+        for partner_id in partner_ids:
+            try:
+                location.forget(partner_id)
+            except location.LocationStoreError:
+                logger.warning("ride_location_forget_failed", extra={"partner_id": str(partner_id)})
+
+    transaction.on_commit(clear_map)
+    return int(closed)
+
 
 _NOT_APPROVED_MESSAGES = {
     "suspended": "Your captain account is suspended. Contact support.",
@@ -373,8 +412,196 @@ def start_duty(*, partner: PartnerProfile) -> CaptainDutySession:
 def stop_duty(*, partner: PartnerProfile) -> None:
     """Go off duty. Allowed during a ride: the ride goes on, only new requests stop."""
     _lock_partner(partner)
-    closed = CaptainDutySession.objects.filter(partner=partner, ended_at__isnull=True).update(
-        ended_at=timezone.now(), end_reason=CaptainDutySession.EndReason.CAPTAIN_OFF
+    closed = _end_duty(
+        CaptainDutySession.objects.filter(partner=partner, ended_at__isnull=True),
+        reason=CaptainDutySession.EndReason.CAPTAIN_OFF,
+        now=timezone.now(),
     )
     if closed:
         logger.info("ride_duty_stopped", extra={"partner_id": str(partner.id)})
+
+
+# --- Live location (brief §5.6) ---------------------------------------------------------------
+
+#: A ping older than this is refused; one this far in the future means a wrong phone clock.
+PING_MAX_AGE = timedelta(seconds=30)
+PING_MAX_AHEAD = timedelta(seconds=5)
+
+#: Ride states in which each ping also becomes a point on the ride's GPS trail.
+_TRACKED_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED, RideState.IN_TRIP)
+
+
+@dataclass(frozen=True, slots=True)
+class LocationPing:
+    latitude: Decimal
+    longitude: Decimal
+    accuracy_m: int
+    heading: float | None
+    captured_at: Any
+
+
+def _captain_area_id(partner: PartnerProfile, ping: LocationPing) -> str | None:
+    """The served area the captain is in, re-checked from the pincode every 10 minutes.
+
+    If the geocoder fails, the last known membership is kept rather than guessed, and nothing is
+    cached, so the next ping tries again.
+    """
+    known, area_id = location.cached_area(partner.id)
+    if known:
+        return area_id
+    try:
+        address = reverse_geocode(latitude=ping.latitude, longitude=ping.longitude)
+    except GeocodingError:
+        logger.warning("ride_captain_area_unknown", extra={"partner_id": str(partner.id)})
+        return None
+    decision = (
+        check_serviceability(postal_code=address.postal_code) if address.postal_code else None
+    )
+    area = decision.service_area if decision and decision.is_serviceable else None
+    location.remember_area(partner.id, area.id if area else None)
+    return str(area.id) if area else None
+
+
+def record_location(*, partner: PartnerProfile, ping: LocationPing) -> None:
+    """Take one GPS ping from a captain on duty.
+
+    The captain is listed for matching only while they could take a ride now: approved, with a
+    vehicle and an active pass, in a served area and not on a ride. During a ride the ping is
+    written to the ride's track instead.
+    """
+    now = timezone.now()
+    if ping.captured_at < now - PING_MAX_AGE:
+        raise LocationStaleError
+    if ping.captured_at > now + PING_MAX_AHEAD:
+        raise LocationStaleError("Your phone's clock looks wrong. Set it to automatic time.")
+    if selectors.open_duty_session(partner) is None:
+        raise NotOnDutyError
+
+    ride = Ride.objects.filter(captain=partner, state__in=OPEN_RIDE_STATES).first()
+    listed_in: str | None = None
+    if ride is not None and ride.state in _TRACKED_STATES:
+        RideTrackPoint.objects.create(
+            ride=ride,
+            latitude=ping.latitude,
+            longitude=ping.longitude,
+            accuracy_m=ping.accuracy_m,
+            captured_at=ping.captured_at,
+        )
+    # Every Redis touch below (the cached area, then the position) fails the same honest way.
+    try:
+        if ride is None and not selectors.captain_status(partner).blocked_reasons:
+            vehicle = CaptainVehicle.objects.get(partner=partner)
+            area_id = _captain_area_id(partner, ping)
+            if area_id is not None:
+                listed_in = location.geo_key(area_id, vehicle.vehicle_type)
+        location.record_position(
+            partner_id=partner.id,
+            latitude=float(ping.latitude),
+            longitude=float(ping.longitude),
+            accuracy_m=ping.accuracy_m,
+            heading=ping.heading,
+            captured_at=ping.captured_at.isoformat(),
+            listed_in=listed_in,
+        )
+    except location.LocationStoreError as exc:
+        raise LocationUnavailableError from exc
+
+
+def sweep_stale_captains() -> int:
+    """Run every minute. Ends duty after 2 minutes without a ping, and tidies the live map.
+
+    If Redis cannot be read, nobody is taken off duty: a missing ping record would then mean
+    "Redis is down", not "the phone went quiet".
+    """
+    try:
+        location.sweep_stale_members()
+        cutoff = timezone.now() - timedelta(seconds=location.STALE_AFTER_SECONDS)
+        candidates = CaptainDutySession.objects.filter(
+            ended_at__isnull=True, started_at__lte=cutoff
+        )
+        silent = [s.partner_id for s in candidates if not location.has_recent_ping(s.partner_id)]
+    except location.LocationStoreError:
+        logger.warning("ride_location_sweep_skipped")
+        return 0
+    with transaction.atomic():
+        ended = _end_duty(
+            CaptainDutySession.objects.filter(partner_id__in=silent, ended_at__isnull=True),
+            reason=CaptainDutySession.EndReason.LOCATION_STALE,
+            now=timezone.now(),
+        )
+    if ended:
+        logger.info("ride_duty_ended_stale", extra={"duty_ended": ended})
+    return ended
+
+
+# --- Operations: rate cards and pass plans ----------------------------------------------------
+
+
+@transaction.atomic
+def create_rate_card(
+    *, created_by: Any, service_area: ServiceArea, vehicle_type: str, rates: dict[str, int]
+) -> RideRateCard:
+    """A first (or renewed) price for a vehicle in an area. Refused while one is active."""
+    if RideRateCard.objects.filter(
+        service_area=service_area, vehicle_type=vehicle_type, is_active=True
+    ).exists():
+        raise RateCardExistsError
+    last = (
+        RideRateCard.objects.filter(service_area=service_area, vehicle_type=vehicle_type)
+        .order_by("-version")
+        .first()
+    )
+    try:
+        with transaction.atomic():
+            card = RideRateCard.objects.create(
+                service_area=service_area,
+                vehicle_type=vehicle_type,
+                version=(last.version + 1) if last else 1,
+                created_by=created_by,
+                **rates,
+            )
+    except IntegrityError as exc:
+        # Two people created the same card at once; the database let exactly one through.
+        raise RateCardExistsError from exc
+    logger.info("ride_rate_card_created", extra=_card_log(card, created_by))
+    return card
+
+
+@transaction.atomic
+def update_rate_card(
+    *, card: RideRateCard, updated_by: Any, rates: dict[str, int], deactivate: bool
+) -> RideRateCard:
+    """Edit the active card. A price edit is a new version; old quotes keep the old one.
+
+    `deactivate` switches that vehicle off in that area (the only on/off switch).
+    """
+    card = RideRateCard.objects.select_for_update().get(pk=card.pk)
+    if not card.is_active:
+        raise RateCardInactiveError
+    card.is_active = False
+    card.save(update_fields=("is_active", "updated_at"))
+    if deactivate:
+        logger.info("ride_rate_card_deactivated", extra=_card_log(card, updated_by))
+        return card
+
+    fields = {name: getattr(card, name) for name in RATE_FIELDS}
+    fields.update(rates)
+    new_card = RideRateCard.objects.create(
+        service_area_id=card.service_area_id,
+        vehicle_type=card.vehicle_type,
+        version=card.version + 1,
+        created_by=updated_by,
+        **fields,
+    )
+    logger.info("ride_rate_card_versioned", extra=_card_log(new_card, updated_by))
+    return new_card
+
+
+def _card_log(card: RideRateCard, user: Any) -> dict[str, str]:
+    return {
+        "rate_card_id": str(card.id),
+        "service_area_id": str(card.service_area_id),
+        "vehicle_type": card.vehicle_type,
+        "version": str(card.version),
+        "actor_id": str(getattr(user, "pk", "")),
+    }

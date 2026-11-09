@@ -14,6 +14,7 @@ from django.utils import timezone
 
 __all__ = [
     "OPEN_RIDE_STATES",
+    "RATE_FIELDS",
     "ActorKind",
     "CaptainDutySession",
     "CaptainPass",
@@ -75,6 +76,18 @@ class CaptainVehicle(models.Model):
     def save(self, *args: Any, **kwargs: Any) -> None:
         self.registration_number = normalise_registration_number(self.registration_number)
         super().save(*args, **kwargs)
+
+
+#: A rate card's price fields: what Operations sets and what a new version copies.
+RATE_FIELDS = (
+    "base_fare_paise",
+    "included_distance_m",
+    "per_km_paise",
+    "per_minute_paise",
+    "minimum_fare_paise",
+    "free_waiting_minutes",
+    "waiting_per_minute_paise",
+)
 
 
 class RideRateCard(models.Model):

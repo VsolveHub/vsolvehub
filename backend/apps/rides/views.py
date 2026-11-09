@@ -1,7 +1,10 @@
+import logging
+import uuid
 from typing import Any
 
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -9,12 +12,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.foundation.services import execute_idempotent
+from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
-from apps.partners.permissions import IsPartnerUser
+from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rides import selectors, services
-from apps.rides.models import CaptainPass, CaptainPassPlan
+from apps.rides.models import CaptainPass, CaptainPassPlan, RideRateCard
 from apps.rides.serializers import (
     BuyPassSerializer,
+    CaptainPassPlanOpsSerializer,
     CaptainPassPlanSerializer,
     CaptainPassSerializer,
     CaptainStatusSerializer,
@@ -23,10 +28,15 @@ from apps.rides.serializers import (
     DutyStatusSerializer,
     FareQuoteListSerializer,
     FareQuoteRequestSerializer,
+    LocationPingSerializer,
+    RateCardCreateSerializer,
+    RateCardUpdateSerializer,
+    RideRateCardSerializer,
 )
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
 __all__ = [
+    "CaptainLocationView",
     "CaptainMeView",
     "CaptainPassPlansView",
     "CaptainPassesView",
@@ -34,7 +44,14 @@ __all__ = [
     "DutyStartView",
     "DutyStopView",
     "FareQuotesView",
+    "OpsPassPlanDetailView",
+    "OpsPassPlansView",
+    "OpsRateCardDetailView",
+    "OpsRateCardsView",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 def _partner(user: Any) -> PartnerProfile:
@@ -168,6 +185,147 @@ class DutyStopView(APIView):
     def post(self, request: Any) -> Response:
         services.stop_duty(partner=_partner(request.user))
         return Response(DutyStatusSerializer(DutyStatusSerializer.of(None)).data)
+
+
+class CaptainLocationView(APIView):
+    """A GPS ping, every 5 seconds while on duty (also during a ride)."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_location_create",
+        request=LocationPingSerializer,
+        responses={204: None},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = LocationPingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.record_location(
+            partner=_partner(request.user), ping=services.LocationPing(**serializer.validated_data)
+        )
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class OpsRateCardsView(APIView):
+    """Every rate card version, newest first; and a new card for an area and vehicle."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_rate_cards_list",
+        parameters=[
+            OpenApiParameter("service_area_id", OpenApiTypes.UUID, required=False),
+            OpenApiParameter("vehicle_type", OpenApiTypes.STR, required=False),
+            OpenApiParameter("active", OpenApiTypes.BOOL, required=False),
+        ],
+        responses=RideRateCardSerializer(many=True),
+    )
+    def get(self, request: Any) -> Response:
+        cards = RideRateCard.objects.order_by("service_area_id", "vehicle_type", "-version")
+        params = request.query_params
+        if params.get("service_area_id"):
+            try:
+                area_id = uuid.UUID(params["service_area_id"])
+            except ValueError as exc:
+                raise ValidationError({"service_area_id": "Not a valid id."}) from exc
+            cards = cards.filter(service_area_id=area_id)
+        if params.get("vehicle_type"):
+            cards = cards.filter(vehicle_type=params["vehicle_type"])
+        if params.get("active") in ("true", "false"):
+            cards = cards.filter(is_active=params["active"] == "true")
+        return Response(RideRateCardSerializer(cards, many=True).data)
+
+    @extend_schema(
+        operation_id="operations_rides_rate_cards_create",
+        request=RateCardCreateSerializer,
+        responses={201: RideRateCardSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = RateCardCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        area = get_object_or_404(ServiceArea, id=data.pop("service_area_id"))
+        card = services.create_rate_card(
+            created_by=request.user,
+            service_area=area,
+            vehicle_type=data.pop("vehicle_type"),
+            rates=data,
+        )
+        return Response(RideRateCardSerializer(card).data, status=http_status.HTTP_201_CREATED)
+
+
+class OpsRateCardDetailView(APIView):
+    """Edit the active card (a new version) or switch it off."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_rate_cards_partial_update",
+        request=RateCardUpdateSerializer,
+        responses=RideRateCardSerializer,
+    )
+    def patch(self, request: Any, card_id: Any) -> Response:
+        card = get_object_or_404(RideRateCard, id=card_id)
+        serializer = RateCardUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        deactivate = data.pop("is_active", None) is False
+        updated = services.update_rate_card(
+            card=card, updated_by=request.user, rates=data, deactivate=deactivate
+        )
+        return Response(RideRateCardSerializer(updated).data)
+
+
+class OpsPassPlansView(APIView):
+    """Every pass plan, and a new one."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_pass_plans_list",
+        responses=CaptainPassPlanOpsSerializer(many=True),
+    )
+    def get(self, request: Any) -> Response:
+        del request
+        plans = CaptainPassPlan.objects.order_by("-is_active", "price_paise", "code")
+        return Response(CaptainPassPlanOpsSerializer(plans, many=True).data)
+
+    @extend_schema(
+        operation_id="operations_rides_pass_plans_create",
+        request=CaptainPassPlanOpsSerializer,
+        responses={201: CaptainPassPlanOpsSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = CaptainPassPlanOpsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        plan = serializer.save()
+        logger.info(
+            "ride_pass_plan_created", extra={"plan": plan.code, "actor_id": str(request.user.pk)}
+        )
+        return Response(
+            CaptainPassPlanOpsSerializer(plan).data, status=http_status.HTTP_201_CREATED
+        )
+
+
+class OpsPassPlanDetailView(APIView):
+    """Edit a plan. Passes already bought keep their own dates; only new purchases change."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_pass_plans_partial_update",
+        request=CaptainPassPlanOpsSerializer,
+        responses=CaptainPassPlanOpsSerializer,
+    )
+    def patch(self, request: Any, plan_id: Any) -> Response:
+        plan = get_object_or_404(CaptainPassPlan, id=plan_id)
+        serializer = CaptainPassPlanOpsSerializer(plan, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        plan = serializer.save()
+        logger.info(
+            "ride_pass_plan_updated", extra={"plan": plan.code, "actor_id": str(request.user.pk)}
+        )
+        return Response(CaptainPassPlanOpsSerializer(plan).data)
 
 
 class FareQuotesView(APIView):

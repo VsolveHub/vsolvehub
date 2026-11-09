@@ -7,9 +7,18 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from pytest_django.fixtures import SettingsWrapper
 
+from apps.identity.models import UserRole
 from apps.locations.models import ServiceArea
-from apps.rides.management.commands.seed_rides_demo import AREA_SLUG
-from apps.rides.models import CaptainPassPlan, RideRateCard, VehicleType
+from apps.partners.models import PartnerProfile
+from apps.rides.management.commands.seed_rides_demo import AREA_SLUG, TEST_CAPTAINS
+from apps.rides.models import (
+    CaptainPass,
+    CaptainPassPlan,
+    CaptainVehicle,
+    RideRateCard,
+    VehicleType,
+)
+from apps.rides.selectors import captain_status
 
 pytestmark = pytest.mark.django_db
 
@@ -125,3 +134,19 @@ def test_an_edited_pass_plan_is_never_overwritten(
     )
     seed()
     assert CaptainPassPlan.objects.get(code="day-pass").price_paise == 5900
+
+
+def test_three_approved_test_captains_ready_for_duty(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    del area
+    settings.DEBUG = True
+    seed()
+    seed()  # twice: still one captain, one vehicle and one active pass each
+
+    for phone, _, vehicle_type, _ in TEST_CAPTAINS:
+        partner = PartnerProfile.objects.get(user__phone_number=phone)
+        assert captain_status(partner).blocked_reasons == []
+        assert CaptainVehicle.objects.get(partner=partner).vehicle_type == vehicle_type
+        assert CaptainPass.objects.filter(partner=partner, status="ACTIVE").count() == 1
+        assert UserRole.objects.filter(user=partner.user, role__code="partner").exists()

@@ -10976,6 +10976,175 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/rides/pass-plans/:
+    get:
+      operationId: operations_rides_pass_plans_list
+      description: Every pass plan, and a new one.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaptainPassPlanOps'
+          description: ''
+    post:
+      operationId: operations_rides_pass_plans_create
+      description: Every pass plan, and a new one.
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptainPassPlanOpsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaptainPassPlanOpsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaptainPassPlanOpsRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainPassPlanOps'
+          description: ''
+  /api/v1/operations/rides/pass-plans/{plan_id}/:
+    patch:
+      operationId: operations_rides_pass_plans_partial_update
+      description: Edit a plan. Passes already bought keep their own dates; only new
+        purchases change.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCaptainPassPlanOpsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCaptainPassPlanOpsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCaptainPassPlanOpsRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainPassPlanOps'
+          description: ''
+  /api/v1/operations/rides/rate-cards/:
+    get:
+      operationId: operations_rides_rate_cards_list
+      description: Every rate card version, newest first; and a new card for an area
+        and vehicle.
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - in: query
+        name: service_area_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: vehicle_type
+        schema:
+          type: string
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RideRateCard'
+          description: ''
+    post:
+      operationId: operations_rides_rate_cards_create
+      description: Every rate card version, newest first; and a new card for an area
+        and vehicle.
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateCardCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RateCardCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RateCardCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRateCard'
+          description: ''
+  /api/v1/operations/rides/rate-cards/{card_id}/:
+    patch:
+      operationId: operations_rides_rate_cards_partial_update
+      description: Edit the active card (a new version) or switch it off.
+      parameters:
+      - in: path
+        name: card_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRateCardUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRateCardUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRateCardUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRateCard'
+          description: ''
   /api/v1/operations/safety-incidents/{safety_incident_id}/decision/:
     post:
       operationId: m2_safety_incident_decide
@@ -17614,6 +17783,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/DutyStatus'
           description: ''
+  /api/v1/partner/rides/location/:
+    post:
+      operationId: partner_rides_location_create
+      description: A GPS ping, every 5 seconds while on duty (also during a ride).
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationPingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LocationPingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LocationPingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/partner/rides/me/:
     get:
       operationId: partner_rides_me_retrieve
@@ -24683,6 +24875,72 @@ components:
       - code
       - duration_hours
       - id
+      - name
+      - price_paise
+    CaptainPassPlanOps:
+      type: object
+      description: Operations' view of a plan. `code` is fixed once created.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - duration_hours
+      - id
+      - name
+      - price_paise
+    CaptainPassPlanOpsRequest:
+      type: object
+      description: Operations' view of a plan. `code` is fixed once created.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
+      required:
+      - code
+      - duration_hours
       - name
       - price_paise
     CaptainStatus:
@@ -32022,6 +32280,40 @@ components:
       - variant_name
       - weekly_off
       - work_mode
+    LocationPingRequest:
+      type: object
+      description: One GPS reading. Phones send plain numbers; they are kept to 6
+        decimal places (~0.1 m).
+      properties:
+        latitude:
+          type: number
+          format: double
+          maximum: 90
+          minimum: -90
+        longitude:
+          type: number
+          format: double
+          maximum: 180
+          minimum: -180
+        accuracy_m:
+          type: number
+          format: double
+          description: Metres; must be above 0.
+        heading:
+          type: number
+          format: double
+          maximum: 360
+          minimum: 0
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+          description: When the phone took the reading.
+      required:
+      - accuracy_m
+      - captured_at
+      - latitude
+      - longitude
     LoyaltySettings:
       type: object
       properties:
@@ -39115,6 +39407,30 @@ components:
           $ref: '#/components/schemas/SourceEnum'
         is_default:
           type: boolean
+    PatchedCaptainPassPlanOpsRequest:
+      type: object
+      description: Operations' view of a plan. `code` is fixed once created.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
     PatchedCartItemUpdateRequest:
       type: object
       properties:
@@ -39518,6 +39834,34 @@ components:
           minLength: 1
         is_enabled:
           type: boolean
+    PatchedRateCardUpdateRequest:
+      type: object
+      description: 'Change prices (a new version), or send only `is_active: false`
+        to switch the vehicle off.'
+      properties:
+        is_active:
+          type: boolean
+        base_fare_paise:
+          type: integer
+          minimum: 0
+        included_distance_m:
+          type: integer
+          minimum: 0
+        per_km_paise:
+          type: integer
+          minimum: 0
+        per_minute_paise:
+          type: integer
+          minimum: 0
+        minimum_fare_paise:
+          type: integer
+          minimum: 0
+        free_waiting_minutes:
+          type: integer
+          minimum: 0
+        waiting_per_minute_paise:
+          type: integer
+          minimum: 0
     PatchedRequirementUpdateRequest:
       type: object
       description: |-
@@ -43950,6 +44294,45 @@ components:
         * `EXHAUSTED` - No crew accepted
         * `FELL_BACK` - Fell back to the quote flow
         * `CANCELLED` - Cancelled
+    RateCardCreateRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleTypeEnum'
+        base_fare_paise:
+          type: integer
+          minimum: 0
+        included_distance_m:
+          type: integer
+          minimum: 0
+        per_km_paise:
+          type: integer
+          minimum: 0
+        per_minute_paise:
+          type: integer
+          minimum: 0
+        minimum_fare_paise:
+          type: integer
+          minimum: 0
+        free_waiting_minutes:
+          type: integer
+          minimum: 0
+        waiting_per_minute_paise:
+          type: integer
+          minimum: 0
+      required:
+      - base_fare_paise
+      - free_waiting_minutes
+      - included_distance_m
+      - minimum_fare_paise
+      - per_km_paise
+      - per_minute_paise
+      - service_area_id
+      - vehicle_type
+      - waiting_per_minute_paise
     RateCardDeclineAlarm:
       type: object
       description: |-
@@ -46568,6 +46951,66 @@ components:
         * `REFERRER_ONLY` - Referrer only
         * `REFEREE_ONLY` - Referee only
         * `BOTH` - Both referrer and referee
+    RideRateCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        base_fare_paise:
+          type: integer
+          readOnly: true
+        included_distance_m:
+          type: integer
+          readOnly: true
+        per_km_paise:
+          type: integer
+          readOnly: true
+        per_minute_paise:
+          type: integer
+          readOnly: true
+        minimum_fare_paise:
+          type: integer
+          readOnly: true
+        free_waiting_minutes:
+          type: integer
+          readOnly: true
+        waiting_per_minute_paise:
+          type: integer
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_fare_paise
+      - created_at
+      - free_waiting_minutes
+      - id
+      - included_distance_m
+      - is_active
+      - minimum_fare_paise
+      - per_km_paise
+      - per_minute_paise
+      - service_area_id
+      - vehicle_type
+      - version
+      - waiting_per_minute_paise
     RoleFulfilment:
       type: object
       description: |-
