@@ -1,0 +1,25 @@
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
+import redis
+from pytest_django.fixtures import SettingsWrapper
+
+from tests.rides.ride_world import TEST_REDIS
+
+
+@pytest.fixture
+def ride_redis(settings: SettingsWrapper) -> Iterator[Any]:
+    """The local Docker Redis (database 15), empty, with the brief's dispatch numbers."""
+    settings.RIDES_REDIS_URL = TEST_REDIS
+    settings.RIDES_DISPATCH_RADII_M = [2000, 4000, 6000]
+    settings.RIDES_OFFERS_PER_ROUND = 3
+    settings.RIDES_OFFER_SECONDS = 15
+    r = redis.Redis.from_url(TEST_REDIS, decode_responses=True, socket_connect_timeout=1)
+    try:
+        r.ping()
+    except redis.RedisError:
+        pytest.fail("These tests need the local Redis. Start Docker (start-dev.cmd) and retry.")
+    r.flushdb()
+    yield r
+    r.flushdb()

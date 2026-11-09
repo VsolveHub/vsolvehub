@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: bbe8629a3b628eee
+ * Checksum: 29337f27f8086a5e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7368,6 +7368,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/offers/{offer_id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Take the ride. The first captain to accept gets it; the others get 409. */
+        post: operations["partner_rides_offers_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/offers/{offer_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Say no to a ride request. Saying no twice, or after it expired, changes nothing. */
+        post: operations["partner_rides_offers_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/offers/current/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The ride request to show the captain now, or none. The app polls this every 2 s. */
+        get: operations["partner_rides_offers_current_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/pass-plans/": {
         parameters: {
             query?: never;
@@ -10262,6 +10313,24 @@ export interface components {
             duration_hours: number;
             is_active?: boolean;
         };
+        /** @description The captain's view of the ride they are doing. */
+        CaptainRide: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly state: components["schemas"]["StateEnum"];
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly pickup: components["schemas"]["RidePlace"];
+            readonly drop: components["schemas"]["RidePlace"];
+            readonly route_polyline: string;
+            readonly fare_paise: number;
+            readonly waiting_paise: number;
+            readonly final_fare_paise: number | null;
+            readonly payment_method: components["schemas"]["PaymentMethodEnum"];
+            readonly payment_status: components["schemas"]["PaymentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly rider: components["schemas"]["RideRider"];
+        };
         CaptainStatus: {
             /** @description The application status, or NOT_STARTED before a captain application exists. */
             approval: string;
@@ -11467,6 +11536,14 @@ export interface components {
         };
         CsrfToken: {
             readonly csrf_token: string;
+        };
+        CurrentOffer: {
+            offer: components["schemas"]["RideOffer"] | null;
+            /**
+             * Format: date-time
+             * @description The server's clock, so the countdown is right even if the phone's clock is off.
+             */
+            server_now: string;
         };
         /**
          * @description * `ACTIVE` - Active
@@ -18973,6 +19050,15 @@ export interface components {
             readonly payment_status: components["schemas"]["PaymentStatusEnum"];
             /** Format: date-time */
             readonly created_at: string;
+            readonly captain: components["schemas"]["RideCaptain"] | null;
+        };
+        /** @description Who is coming: what the rider sees once a captain accepts. */
+        RideCaptain: {
+            name: string;
+            readonly photo_url: string | null;
+            /** @description Only while the captain is on the way, at the pickup or in the trip. */
+            readonly phone_number: string | null;
+            vehicle: components["schemas"]["CaptainVehicle"];
         };
         RideCreateRequest: {
             /**
@@ -18980,6 +19066,24 @@ export interface components {
              * @description One of the rider's quotes from POST rides/quotes/.
              */
             quote_id: string;
+        };
+        /** @description A ride request on the captain's screen, with the server's deadline. */
+        RideOffer: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly ride_id: string;
+            readonly vehicle_type: string;
+            readonly pickup: components["schemas"]["RidePlace"];
+            readonly drop: components["schemas"]["RidePlace"];
+            readonly pickup_distance_m: number;
+            readonly fare_paise: number;
+            readonly trip_distance_m: number;
+            readonly trip_duration_s: number;
+            /** Format: date-time */
+            readonly offered_at: string;
+            /** Format: date-time */
+            readonly expires_at: string;
         };
         RidePlace: {
             /** Format: decimal */
@@ -19005,6 +19109,12 @@ export interface components {
             readonly version: number;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /** @description Who to pick up: what the captain sees once they accept. */
+        RideRider: {
+            name: string;
+            /** @description Only while the captain is on the way, at the pickup or in the trip. */
+            readonly phone_number: string | null;
         };
         /**
          * @description One role, as booked against as named.
@@ -37915,6 +38025,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptainStatus"];
+                };
+            };
+        };
+    };
+    partner_rides_offers_accept: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_offers_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_rides_offers_current_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentOffer"];
                 };
             };
         };

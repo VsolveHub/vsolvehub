@@ -17,11 +17,13 @@ from rest_framework.exceptions import NotFound
 
 from apps.foundation.services import enqueue_outbox_event
 from apps.partners.models import PartnerApplication, PartnerProfile
-from apps.rides import location
+from apps.rides import location, selectors
 from apps.rides.exceptions import (
+    NotOnDutyError,
     QuoteExpiredError,
     QuoteUsedError,
     RideAlreadyOpenError,
+    RideNoLongerAvailableError,
     VehicleUnavailableError,
 )
 from apps.rides.models import (
@@ -40,7 +42,10 @@ from apps.rides.models import (
 
 __all__ = [
     "RIDE_REQUESTED",
+    "accept_offer",
     "create_ride",
+    "current_offer",
+    "decline_offer",
     "redrive_dispatch",
     "run_dispatch_round",
 ]
@@ -220,14 +225,15 @@ def _offer_round(ride: Ride, *, round_no: int, now: datetime) -> list[RideOffer]
     )
 
 
-def _schedule_round(ride_id: UUID, round_no: int) -> None:
+def _schedule_round(ride_id: UUID, round_no: int, *, countdown: int | None = None) -> None:
+    """Run round `round_no` once this transaction commits: when the offers expire, or sooner."""
     from apps.rides.tasks import dispatch_round  # noqa: PLC0415 - tasks imports this module
+
+    wait = settings.RIDES_OFFER_SECONDS if countdown is None else countdown
 
     def send() -> None:
         try:
-            dispatch_round.apply_async(
-                args=[str(ride_id), round_no], countdown=settings.RIDES_OFFER_SECONDS
-            )
+            dispatch_round.apply_async(args=[str(ride_id), round_no], countdown=wait)
         except Exception:
             # The broker is down. The ride stays SEARCHING and the 30 s sweep moves it on.
             logger.exception("ride_dispatch_schedule_failed", extra={"ride_id": str(ride_id)})
@@ -304,3 +310,106 @@ def redrive_dispatch() -> int:
     if stuck:
         logger.info("ride_dispatch_redriven", extra={"rides": len(stuck)})
     return len(stuck)
+
+
+# --- Offers -----------------------------------------------------------------------------------
+
+
+def current_offer(partner: PartnerProfile) -> RideOffer | None:
+    """The offer to show the captain now: unanswered, in time, on a ride still searching."""
+    return (
+        RideOffer.objects.select_related("ride__quote")
+        .filter(
+            captain=partner,
+            status=RideOffer.Status.PENDING,
+            expires_at__gt=timezone.now(),
+            ride__state=RideState.SEARCHING,
+        )
+        .order_by("-offered_at")
+        .first()
+    )
+
+
+@transaction.atomic
+def accept_offer(*, partner: PartnerProfile, offer_id: UUID) -> Ride:
+    """The captain takes the ride. The first accept wins; every other offer is withdrawn.
+
+    The ride row is locked first, so two captains accepting at once are served one after the
+    other, and the second finds the ride already taken. Accepting the same offer again returns
+    the ride.
+    """
+    ride_id = (
+        RideOffer.objects.filter(id=offer_id, captain=partner).values_list("ride_id", flat=True)
+    ).first()
+    if ride_id is None:
+        raise NotFound("We couldn't find this ride request.")
+    ride = Ride.objects.select_for_update().get(pk=ride_id)
+    offer = RideOffer.objects.select_for_update().get(pk=offer_id)
+    if offer.status == RideOffer.Status.ACCEPTED and ride.captain_id == partner.id:
+        return ride
+
+    now = timezone.now()
+    live = offer.status == RideOffer.Status.PENDING and offer.expires_at > now
+    if ride.state != RideState.SEARCHING or not live:
+        raise RideNoLongerAvailableError
+    if selectors.open_duty_session(partner) is None:
+        raise NotOnDutyError
+
+    offer.status = RideOffer.Status.ACCEPTED
+    offer.responded_at = now
+    offer.save(update_fields=("status", "responded_at"))
+    ride.offers.filter(status=RideOffer.Status.PENDING).update(
+        status=RideOffer.Status.WITHDRAWN, responded_at=now
+    )
+    ride.captain = partner
+    ride.captain_assigned_at = now
+    _transition(
+        ride,
+        RideState.CAPTAIN_ASSIGNED,
+        actor=partner.user,
+        actor_kind=ActorKind.CAPTAIN,
+        now=now,
+    )
+    try:
+        with transaction.atomic():
+            ride.save(update_fields=("state", "captain", "captain_assigned_at", "updated_at"))
+    except IntegrityError as exc:
+        # The captain already has another open ride; the database refused a second one.
+        raise RideNoLongerAvailableError from exc
+    logger.info(
+        "ride_offer_accepted",
+        extra={"ride_id": str(ride.id), "partner_id": str(partner.id), "round": offer.round},
+    )
+    return ride
+
+
+def decline_offer(*, partner: PartnerProfile, offer_id: UUID) -> None:
+    """The captain says no. Saying no twice, or too late, changes nothing.
+
+    When nobody in the round is still deciding, the next round starts now instead of waiting for
+    the timer.
+    """
+    with transaction.atomic():
+        offer = (
+            RideOffer.objects.select_for_update()
+            .select_related("ride")
+            .filter(id=offer_id, captain=partner)
+            .first()
+        )
+        if offer is None:
+            raise NotFound("We couldn't find this ride request.")
+        now = timezone.now()
+        if offer.status != RideOffer.Status.PENDING or offer.expires_at <= now:
+            return
+        offer.status = RideOffer.Status.DECLINED
+        offer.responded_at = now
+        offer.save(update_fields=("status", "responded_at"))
+        ride = offer.ride
+        still_deciding = RideOffer.objects.filter(
+            ride=ride, status=RideOffer.Status.PENDING, expires_at__gt=now
+        ).exists()
+        if ride.state == RideState.SEARCHING and not still_deciding:
+            _schedule_round(ride.id, ride.dispatch_round + 1, countdown=0)
+    logger.info(
+        "ride_offer_declined", extra={"ride_id": str(offer.ride_id), "partner_id": str(partner.id)}
+    )

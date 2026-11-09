@@ -75,6 +75,22 @@ added to this entry.
   `state`, `vehicle_type`, `pickup` and `drop` (`latitude`, `longitude`, `address`),
   `route_polyline`, `fare_paise`, `waiting_paise`, `final_fare_paise` (`null` until complete),
   `payment_method`, `payment_status`, `created_at`. The app polls it every 3 s during a ride.
+  `captain` is `null` until a captain accepts, then `name`, `photo_url` (or `null`),
+  `phone_number` (only while `CAPTAIN_ASSIGNED`, `CAPTAIN_ARRIVED` or `IN_TRIP`, else `null`) and
+  `vehicle`.
+- **Added** `GET /partner/rides/offers/current/` (`CurrentOffer`): `offer` (or `null`) and
+  `server_now`. An offer has `id`, `ride_id`, `vehicle_type`, `pickup`, `drop`,
+  `pickup_distance_m`, `fare_paise`, `trip_distance_m`, `trip_duration_s`, `offered_at` and
+  `expires_at` (15 s). The captain app polls it every 2 s while on duty.
+- **Added** `POST /partner/rides/offers/{offer_id}/accept/` (→ `CaptainRide`), with a required
+  `Idempotency-Key`. The first captain to accept gets the ride (`CAPTAIN_ASSIGNED`); the other
+  offers are withdrawn. Accepting the same offer again returns the ride.
+  `409 ride_no_longer_available` when another captain took it, the offer expired or the ride
+  ended; `409 not_on_duty`; `404` for someone else's offer. `CaptainRide` is the ride plus
+  `rider` (`name`, `phone_number`, with the same visibility rule as the captain's number).
+- **Added** `POST /partner/rides/offers/{offer_id}/decline/` (→ `204`). When nobody else in the
+  round is still deciding, the ride goes to the next captains at once. Declining twice or after
+  the deadline changes nothing.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 

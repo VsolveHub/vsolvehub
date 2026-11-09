@@ -17821,6 +17821,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/CaptainStatus'
           description: ''
+  /api/v1/partner/rides/offers/{offer_id}/accept/:
+    post:
+      operationId: partner_rides_offers_accept
+      description: Take the ride. The first captain to accept gets it; the others
+        get 409.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/offers/{offer_id}/decline/:
+    post:
+      operationId: partner_rides_offers_decline
+      description: Say no to a ride request. Saying no twice, or after it expired,
+        changes nothing.
+      parameters:
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/rides/offers/current/:
+    get:
+      operationId: partner_rides_offers_current_retrieve
+      description: The ride request to show the captain now, or none. The app polls
+        this every 2 s.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentOffer'
+          description: ''
   /api/v1/partner/rides/pass-plans/:
     get:
       operationId: partner_rides_pass_plans_list
@@ -25003,6 +25069,73 @@ components:
       - duration_hours
       - name
       - price_paise
+    CaptainRide:
+      type: object
+      description: The captain's view of the ride they are doing.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        waiting_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        rider:
+          allOf:
+          - $ref: '#/components/schemas/RideRider'
+          readOnly: true
+      required:
+      - created_at
+      - drop
+      - fare_paise
+      - final_fare_paise
+      - id
+      - payment_method
+      - payment_status
+      - pickup
+      - rider
+      - route_polyline
+      - state
+      - vehicle_type
+      - waiting_paise
     CaptainStatus:
       type: object
       properties:
@@ -27915,6 +28048,21 @@ components:
           readOnly: true
       required:
       - csrf_token
+    CurrentOffer:
+      type: object
+      properties:
+        offer:
+          allOf:
+          - $ref: '#/components/schemas/RideOffer'
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          description: The server's clock, so the countdown is right even if the phone's
+            clock is off.
+      required:
+      - offer
+      - server_now
     CurrentStatusEnum:
       enum:
       - ACTIVE
@@ -47073,7 +47221,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+        captain:
+          allOf:
+          - $ref: '#/components/schemas/RideCaptain'
+          nullable: true
+          readOnly: true
       required:
+      - captain
       - created_at
       - drop
       - fare_paise
@@ -47086,6 +47240,29 @@ components:
       - state
       - vehicle_type
       - waiting_paise
+    RideCaptain:
+      type: object
+      description: 'Who is coming: what the rider sees once a captain accepts.'
+      properties:
+        name:
+          type: string
+        photo_url:
+          type: string
+          nullable: true
+          readOnly: true
+        phone_number:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Only while the captain is on the way, at the pickup or in the
+            trip.
+        vehicle:
+          $ref: '#/components/schemas/CaptainVehicle'
+      required:
+      - name
+      - phone_number
+      - photo_url
+      - vehicle
     RideCreateRequest:
       type: object
       properties:
@@ -47095,6 +47272,61 @@ components:
           description: One of the rider's quotes from POST rides/quotes/.
       required:
       - quote_id
+    RideOffer:
+      type: object
+      description: A ride request on the captain's screen, with the server's deadline.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        ride_id:
+          type: string
+          format: uuid
+          readOnly: true
+        vehicle_type:
+          type: string
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        pickup_distance_m:
+          type: integer
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        trip_distance_m:
+          type: integer
+          readOnly: true
+        trip_duration_s:
+          type: integer
+          readOnly: true
+        offered_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - drop
+      - expires_at
+      - fare_paise
+      - id
+      - offered_at
+      - pickup
+      - pickup_distance_m
+      - ride_id
+      - trip_distance_m
+      - trip_duration_s
+      - vehicle_type
     RidePlace:
       type: object
       properties:
@@ -47172,6 +47404,21 @@ components:
       - vehicle_type
       - version
       - waiting_per_minute_paise
+    RideRider:
+      type: object
+      description: 'Who to pick up: what the captain sees once they accept.'
+      properties:
+        name:
+          type: string
+        phone_number:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Only while the captain is on the way, at the pickup or in the
+            trip.
+      required:
+      - name
+      - phone_number
     RoleFulfilment:
       type: object
       description: |-

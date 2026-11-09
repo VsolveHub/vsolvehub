@@ -144,6 +144,15 @@ class RideAlreadyOpenError(RidesApiError):
         super().__init__(code="ride_already_open", message="You already have a ride in progress.")
 
 
+class RideNoLongerAvailableError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="ride_no_longer_available", message="This ride is no longer available."
+        )
+
+
 class RegistrationAlreadyUsedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

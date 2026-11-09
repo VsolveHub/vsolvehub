@@ -3,6 +3,7 @@ import uuid
 from typing import Any
 
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
@@ -22,9 +23,11 @@ from apps.rides.serializers import (
     CaptainPassPlanOpsSerializer,
     CaptainPassPlanSerializer,
     CaptainPassSerializer,
+    CaptainRideSerializer,
     CaptainStatusSerializer,
     CaptainVehicleSerializer,
     CaptainVehicleWriteSerializer,
+    CurrentOfferSerializer,
     DutyStatusSerializer,
     FareQuoteListSerializer,
     FareQuoteRequestSerializer,
@@ -43,9 +46,12 @@ __all__ = [
     "CaptainPassPlansView",
     "CaptainPassesView",
     "CaptainVehicleView",
+    "CurrentOfferView",
     "DutyStartView",
     "DutyStopView",
     "FareQuotesView",
+    "OfferAcceptView",
+    "OfferDeclineView",
     "OpsPassPlanDetailView",
     "OpsPassPlansView",
     "OpsRateCardDetailView",
@@ -375,9 +381,67 @@ class RideDetailView(APIView):
     @extend_schema(operation_id="rides_retrieve", responses=RideSerializer)
     def get(self, request: Any, ride_id: Any) -> Response:
         ride = get_object_or_404(
-            Ride.objects.select_related("quote"), id=ride_id, rider=request.user
+            Ride.objects.select_related("quote", "captain__user", "captain__ride_vehicle"),
+            id=ride_id,
+            rider=request.user,
         )
         return Response(RideSerializer(ride).data)
+
+
+class CurrentOfferView(APIView):
+    """The ride request to show the captain now, or none. The app polls this every 2 s."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_offers_current_retrieve", responses=CurrentOfferSerializer
+    )
+    def get(self, request: Any) -> Response:
+        offer = engine.current_offer(_partner(request.user))
+        return Response(CurrentOfferSerializer({"offer": offer, "server_now": timezone.now()}).data)
+
+
+class OfferAcceptView(APIView):
+    """Take the ride. The first captain to accept gets it; the others get 409."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_offers_accept",
+        request=None,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses=CaptainRideSerializer,
+    )
+    def post(self, request: Any, offer_id: Any) -> Response:
+        key = _required_idempotency_key(request)
+        partner = _partner(request.user)
+
+        def command() -> tuple[int, dict[str, Any]]:
+            ride = engine.accept_offer(partner=partner, offer_id=offer_id)
+            return http_status.HTTP_200_OK, dict(CaptainRideSerializer(ride).data)
+
+        result = execute_idempotent(
+            actor=request.user,
+            operation="rides.offer.accept",
+            key=key,
+            request_payload={"offer_id": str(offer_id)},
+            command=command,
+        )
+        response = Response(result.body, status=result.status_code)
+        if result.replayed:
+            response["Idempotent-Replay"] = "true"
+        return response
+
+
+class OfferDeclineView(APIView):
+    """Say no to a ride request. Saying no twice, or after it expired, changes nothing."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(operation_id="partner_rides_offers_decline", request=None, responses={204: None})
+    def post(self, request: Any, offer_id: Any) -> Response:
+        engine.decline_offer(partner=_partner(request.user), offer_id=offer_id)
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 
 class FareQuotesView(APIView):

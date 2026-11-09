@@ -4,6 +4,8 @@ from typing import Any
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.partners.models import PartnerProfile
+from apps.partners.photos import partner_photo_url
 from apps.rides.models import (
     RATE_FIELDS,
     CaptainDutySession,
@@ -12,7 +14,9 @@ from apps.rides.models import (
     CaptainVehicle,
     FareQuote,
     Ride,
+    RideOffer,
     RideRateCard,
+    RideState,
     VehicleType,
 )
 from apps.rides.selectors import CaptainStatus
@@ -22,9 +26,11 @@ __all__ = [
     "CaptainPassPlanOpsSerializer",
     "CaptainPassPlanSerializer",
     "CaptainPassSerializer",
+    "CaptainRideSerializer",
     "CaptainStatusSerializer",
     "CaptainVehicleSerializer",
     "CaptainVehicleWriteSerializer",
+    "CurrentOfferSerializer",
     "DutyStatusSerializer",
     "FareQuoteListSerializer",
     "FareQuoteRequestSerializer",
@@ -32,9 +38,12 @@ __all__ = [
     "LocationPingSerializer",
     "RateCardCreateSerializer",
     "RateCardUpdateSerializer",
+    "RideCaptainSerializer",
     "RideCreateSerializer",
+    "RideOfferSerializer",
     "RidePlaceSerializer",
     "RideRateCardSerializer",
+    "RideRiderSerializer",
     "RideSerializer",
 ]
 
@@ -188,16 +197,69 @@ class RidePlaceSerializer(serializers.Serializer[Any]):
     address = serializers.CharField()
 
 
-class RideSerializer(serializers.ModelSerializer[Ride]):
-    """The rider's view of one ride."""
+#: While the ride is in these states each side sees the other's phone number (brief §5.4).
+PHONE_VISIBLE_STATES = (
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.IN_TRIP,
+)
 
+
+def _pickup(ride: Ride) -> dict[str, Any]:
+    return {
+        "latitude": ride.pickup_latitude,
+        "longitude": ride.pickup_longitude,
+        "address": ride.pickup_label,
+    }
+
+
+def _drop(ride: Ride) -> dict[str, Any]:
+    return {
+        "latitude": ride.drop_latitude,
+        "longitude": ride.drop_longitude,
+        "address": ride.drop_label,
+    }
+
+
+class RideCaptainSerializer(serializers.Serializer[Any]):
+    """Who is coming: what the rider sees once a captain accepts."""
+
+    name = serializers.CharField(source="display_name")
+    photo_url = serializers.SerializerMethodField()
+    phone_number = serializers.SerializerMethodField(
+        help_text="Only while the captain is on the way, at the pickup or in the trip."
+    )
+    vehicle = CaptainVehicleSerializer(source="ride_vehicle")
+
+    def get_photo_url(self, obj: PartnerProfile) -> str | None:
+        return partner_photo_url(obj)
+
+    def get_phone_number(self, obj: PartnerProfile) -> str | None:
+        ride: Ride = self.context["ride"]
+        return str(obj.user.phone_number) if ride.state in PHONE_VISIBLE_STATES else None
+
+
+class RideRiderSerializer(serializers.Serializer[Any]):
+    """Who to pick up: what the captain sees once they accept."""
+
+    name = serializers.CharField(source="full_name")
+    phone_number = serializers.SerializerMethodField(
+        help_text="Only while the captain is on the way, at the pickup or in the trip."
+    )
+
+    def get_phone_number(self, obj: Any) -> str | None:
+        ride: Ride = self.context["ride"]
+        return str(obj.phone_number) if ride.state in PHONE_VISIBLE_STATES else None
+
+
+class _RideBaseSerializer(serializers.ModelSerializer[Ride]):
     pickup = serializers.SerializerMethodField()
     drop = serializers.SerializerMethodField()
     route_polyline = serializers.CharField(source="quote.route_polyline", read_only=True)
 
     class Meta:
         model = Ride
-        fields = (
+        fields: tuple[str, ...] = (
             "id",
             "state",
             "vehicle_type",
@@ -215,19 +277,85 @@ class RideSerializer(serializers.ModelSerializer[Ride]):
 
     @extend_schema_field(RidePlaceSerializer)
     def get_pickup(self, obj: Ride) -> dict[str, Any]:
-        return {
-            "latitude": obj.pickup_latitude,
-            "longitude": obj.pickup_longitude,
-            "address": obj.pickup_label,
-        }
+        return _pickup(obj)
 
     @extend_schema_field(RidePlaceSerializer)
     def get_drop(self, obj: Ride) -> dict[str, Any]:
-        return {
-            "latitude": obj.drop_latitude,
-            "longitude": obj.drop_longitude,
-            "address": obj.drop_label,
-        }
+        return _drop(obj)
+
+
+class RideSerializer(_RideBaseSerializer):
+    """The rider's view of one ride."""
+
+    captain = serializers.SerializerMethodField()
+
+    class Meta(_RideBaseSerializer.Meta):
+        fields = (*_RideBaseSerializer.Meta.fields, "captain")
+        read_only_fields = fields
+
+    @extend_schema_field(RideCaptainSerializer(allow_null=True))
+    def get_captain(self, obj: Ride) -> dict[str, Any] | None:
+        if obj.captain is None:
+            return None
+        return dict(RideCaptainSerializer(obj.captain, context={"ride": obj}).data)
+
+
+class CaptainRideSerializer(_RideBaseSerializer):
+    """The captain's view of the ride they are doing."""
+
+    rider = serializers.SerializerMethodField()
+
+    class Meta(_RideBaseSerializer.Meta):
+        fields = (*_RideBaseSerializer.Meta.fields, "rider")
+        read_only_fields = fields
+
+    @extend_schema_field(RideRiderSerializer)
+    def get_rider(self, obj: Ride) -> dict[str, Any]:
+        return dict(RideRiderSerializer(obj.rider, context={"ride": obj}).data)
+
+
+class RideOfferSerializer(serializers.ModelSerializer[RideOffer]):
+    """A ride request on the captain's screen, with the server's deadline."""
+
+    ride_id = serializers.UUIDField(read_only=True)
+    vehicle_type = serializers.CharField(source="ride.vehicle_type", read_only=True)
+    pickup = serializers.SerializerMethodField()
+    drop = serializers.SerializerMethodField()
+    fare_paise = serializers.IntegerField(source="ride.fare_paise", read_only=True)
+    trip_distance_m = serializers.IntegerField(source="ride.quote.distance_m", read_only=True)
+    trip_duration_s = serializers.IntegerField(source="ride.quote.duration_s", read_only=True)
+
+    class Meta:
+        model = RideOffer
+        fields = (
+            "id",
+            "ride_id",
+            "vehicle_type",
+            "pickup",
+            "drop",
+            "pickup_distance_m",
+            "fare_paise",
+            "trip_distance_m",
+            "trip_duration_s",
+            "offered_at",
+            "expires_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(RidePlaceSerializer)
+    def get_pickup(self, obj: RideOffer) -> dict[str, Any]:
+        return _pickup(obj.ride)
+
+    @extend_schema_field(RidePlaceSerializer)
+    def get_drop(self, obj: RideOffer) -> dict[str, Any]:
+        return _drop(obj.ride)
+
+
+class CurrentOfferSerializer(serializers.Serializer[Any]):
+    offer = RideOfferSerializer(allow_null=True)
+    server_now = serializers.DateTimeField(
+        help_text="The server's clock, so the countdown is right even if the phone's clock is off."
+    )
 
 
 def _six_places(value: float) -> Decimal:
