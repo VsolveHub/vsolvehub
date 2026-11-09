@@ -53,7 +53,7 @@ describe("the services path", () => {
 
 describe("the stays and rentals path", () => {
   it("is the short form: About you, Documents, Agree & send", () => {
-    for (const track of ["STAY_HOST", "RENTAL_OWNER"]) {
+    for (const track of ["STAY_HOST", "RENTAL_OWNER", "RIDE_CAPTAIN"]) {
       expect(applicationSteps(track).map((step) => step.href)).toEqual([
         "/apply/about",
         "/apply/documents",
@@ -97,5 +97,7 @@ describe("what the first screen shows before starting", () => {
     expect(trackPreview("RENTAL_OWNER").time).toBe("About 3 minutes");
     expect(trackPreview("STAY_HOST").after).toMatch(/property and rooms/);
     expect(trackPreview("RENTAL_OWNER").after).toMatch(/add your items/);
+    expect(trackPreview("RIDE_CAPTAIN").time).toBe("About 3 minutes");
+    expect(trackPreview("RIDE_CAPTAIN").after).toMatch(/ride requests/);
   });
 });

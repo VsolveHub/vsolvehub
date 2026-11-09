@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BedDouble,
+  Bike,
   Check,
   ChevronRight,
   Clock,
@@ -164,7 +165,7 @@ function NotStarted() {
         </Text>
       </View>
 
-      {/* 3. The three ways to join, then what happens next for the one picked */}
+      {/* 3. The four ways to join, then what happens next for the one picked */}
       <View accessibilityRole="radiogroup" style={{ gap: 12, width: "100%" }}>
         {TRACK_CHOICES.map(({ track, title, description, Icon }) => (
           <TrackCard
@@ -216,6 +217,12 @@ const TRACK_CHOICES = [
     title: "I rent out tools or equipment",
     description: "Tools, machinery, event or home items.",
     Icon: Package,
+  },
+  {
+    track: "RIDE_CAPTAIN",
+    title: "I give rides (bike, auto, cab)",
+    description: "Driving licence, vehicle RC and insurance needed.",
+    Icon: Bike,
   },
 ] as const;
 

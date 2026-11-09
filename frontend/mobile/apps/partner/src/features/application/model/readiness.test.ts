@@ -3,6 +3,7 @@ import type { Schemas } from "@vsolve/api-client";
 import {
   canSubmit,
   isEditable,
+  offeredDocuments,
   outstandingRequirements,
   rejectedDocuments,
   requirements,
@@ -150,6 +151,23 @@ describe("requirements in 4-step flow", () => {
     const codes = requirements(application({ required_document_kinds: ["GOVERNMENT_ID"] })).map((item) => item.code);
     expect(codes).toContain("GOVERNMENT_ID");
     expect(codes).not.toContain("ADDRESS_PROOF");
+  });
+
+  it("offers the identity documents to every partner", () => {
+    expect(offeredDocuments(application()).map((item) => item.kind)).toEqual(["GOVERNMENT_ID", "ADDRESS_PROOF"]);
+  });
+
+  it("also offers a ride captain's licence, RC and insurance", () => {
+    const rides = application({
+      required_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF", "DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE"],
+    });
+    expect(offeredDocuments(rides).map((item) => item.label)).toEqual([
+      "Government photo ID",
+      "Proof of address",
+      "Driving licence",
+      "Vehicle RC",
+      "Vehicle insurance",
+    ]);
   });
 
   it("gives every outstanding requirement somewhere to go", () => {
