@@ -15,8 +15,8 @@ from apps.foundation.services import execute_idempotent
 from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
-from apps.rides import selectors, services
-from apps.rides.models import CaptainPass, CaptainPassPlan, RideRateCard
+from apps.rides import engine, selectors, services
+from apps.rides.models import CaptainPass, CaptainPassPlan, Ride, RideRateCard
 from apps.rides.serializers import (
     BuyPassSerializer,
     CaptainPassPlanOpsSerializer,
@@ -31,7 +31,9 @@ from apps.rides.serializers import (
     LocationPingSerializer,
     RateCardCreateSerializer,
     RateCardUpdateSerializer,
+    RideCreateSerializer,
     RideRateCardSerializer,
+    RideSerializer,
 )
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
@@ -48,6 +50,8 @@ __all__ = [
     "OpsPassPlansView",
     "OpsRateCardDetailView",
     "OpsRateCardsView",
+    "RideDetailView",
+    "RidesView",
 ]
 
 
@@ -326,6 +330,54 @@ class OpsPassPlanDetailView(APIView):
             "ride_pass_plan_updated", extra={"plan": plan.code, "actor_id": str(request.user.pk)}
         )
         return Response(CaptainPassPlanOpsSerializer(plan).data)
+
+
+class RidesView(APIView):
+    """Book a ride from a quote. The server then looks for a captain in the background."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="rides_create",
+        request=RideCreateSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses={201: RideSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        serializer = RideCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        key = _required_idempotency_key(request)
+
+        def command() -> tuple[int, dict[str, Any]]:
+            ride = engine.create_ride(
+                rider=request.user, quote_id=serializer.validated_data["quote_id"]
+            )
+            return http_status.HTTP_201_CREATED, dict(RideSerializer(ride).data)
+
+        result = execute_idempotent(
+            actor=request.user,
+            operation="rides.ride.create",
+            key=key,
+            request_payload=serializer.validated_data,
+            command=command,
+        )
+        response = Response(result.body, status=result.status_code)
+        if result.replayed:
+            response["Idempotent-Replay"] = "true"
+        return response
+
+
+class RideDetailView(APIView):
+    """One of the rider's own rides. The app polls this while the ride is live."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(operation_id="rides_retrieve", responses=RideSerializer)
+    def get(self, request: Any, ride_id: Any) -> Response:
+        ride = get_object_or_404(
+            Ride.objects.select_related("quote"), id=ride_id, rider=request.user
+        )
+        return Response(RideSerializer(ride).data)
 
 
 class FareQuotesView(APIView):

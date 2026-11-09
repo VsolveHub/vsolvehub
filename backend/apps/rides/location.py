@@ -29,6 +29,7 @@ __all__ = [
     "forget",
     "geo_key",
     "has_recent_ping",
+    "nearby",
     "record_position",
     "remember_area",
     "sweep_stale_members",
@@ -162,6 +163,45 @@ def cached_area(partner_id: Any) -> tuple[bool, str | None]:
 def remember_area(partner_id: Any, area_id: Any) -> None:
     value = NO_AREA if area_id is None else str(area_id)
     _run(lambda r: r.set(_area(partner_id), value, ex=AREA_RECHECK_SECONDS))
+
+
+#: How many GEO members one search reads before the stale and inaccurate ones are dropped.
+_SEARCH_LIMIT = 50
+
+
+def nearby(*, key: str, latitude: float, longitude: float, radius_m: int) -> list[tuple[str, int]]:
+    """Captains in this GEO set within `radius_m`, nearest first, as (partner_id, metres).
+
+    A member whose position has expired, or whose last fix was worse than 100 m, is left out.
+    """
+
+    def search(r: redis.Redis) -> list[tuple[str, int]]:
+        found = cast(
+            list[list[Any]],
+            r.geosearch(
+                key,
+                longitude=longitude,
+                latitude=latitude,
+                radius=radius_m,
+                unit="m",
+                sort="ASC",
+                count=_SEARCH_LIMIT,
+                withdist=True,
+            ),
+        )
+        if not found:
+            return []
+        pipe = r.pipeline()
+        for member, _distance in found:
+            pipe.hget(_pos(member), "accuracy_m")
+        accuracies = cast(list[str | None], pipe.execute())
+        return [
+            (str(member), round(float(distance)))
+            for (member, distance), accuracy in zip(found, accuracies, strict=True)
+            if accuracy is not None and int(accuracy) <= MATCHING_MAX_ACCURACY_M
+        ]
+
+    return _run(search)
 
 
 def sweep_stale_members() -> int:

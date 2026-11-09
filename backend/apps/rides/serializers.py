@@ -11,6 +11,7 @@ from apps.rides.models import (
     CaptainPassPlan,
     CaptainVehicle,
     FareQuote,
+    Ride,
     RideRateCard,
     VehicleType,
 )
@@ -31,7 +32,10 @@ __all__ = [
     "LocationPingSerializer",
     "RateCardCreateSerializer",
     "RateCardUpdateSerializer",
+    "RideCreateSerializer",
+    "RidePlaceSerializer",
     "RideRateCardSerializer",
+    "RideSerializer",
 ]
 
 
@@ -172,6 +176,58 @@ class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
             "expires_at",
         )
         read_only_fields = fields
+
+
+class RideCreateSerializer(serializers.Serializer[Any]):
+    quote_id = serializers.UUIDField(help_text="One of the rider's quotes from POST rides/quotes/.")
+
+
+class RidePlaceSerializer(serializers.Serializer[Any]):
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    address = serializers.CharField()
+
+
+class RideSerializer(serializers.ModelSerializer[Ride]):
+    """The rider's view of one ride."""
+
+    pickup = serializers.SerializerMethodField()
+    drop = serializers.SerializerMethodField()
+    route_polyline = serializers.CharField(source="quote.route_polyline", read_only=True)
+
+    class Meta:
+        model = Ride
+        fields = (
+            "id",
+            "state",
+            "vehicle_type",
+            "pickup",
+            "drop",
+            "route_polyline",
+            "fare_paise",
+            "waiting_paise",
+            "final_fare_paise",
+            "payment_method",
+            "payment_status",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(RidePlaceSerializer)
+    def get_pickup(self, obj: Ride) -> dict[str, Any]:
+        return {
+            "latitude": obj.pickup_latitude,
+            "longitude": obj.pickup_longitude,
+            "address": obj.pickup_label,
+        }
+
+    @extend_schema_field(RidePlaceSerializer)
+    def get_drop(self, obj: Ride) -> dict[str, Any]:
+        return {
+            "latitude": obj.drop_latitude,
+            "longitude": obj.drop_longitude,
+            "address": obj.drop_label,
+        }
 
 
 def _six_places(value: float) -> Decimal:

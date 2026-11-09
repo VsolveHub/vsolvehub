@@ -22050,6 +22050,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/rides/:
+    post:
+      operationId: rides_create
+      description: Book a ride from a quote. The server then looks for a captain in
+        the background.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RideCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RideCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+          description: ''
+  /api/v1/rides/{ride_id}/:
+    get:
+      operationId: rides_retrieve
+      description: One of the rider's own rides. The app polls this while the ride
+        is live.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rides
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+          description: ''
   /api/v1/rides/quotes/:
     post:
       operationId: rides_quotes_create
@@ -40234,6 +40294,19 @@ components:
         * `EXPIRED` - Expired
         * `PARTIALLY_REFUNDED` - Partially refunded
         * `REFUNDED` - Refunded
+    PaymentMethodEnum:
+      enum:
+      - CASH_OR_UPI
+      type: string
+      description: '* `CASH_OR_UPI` - Cash or UPI to the captain'
+    PaymentStatusEnum:
+      enum:
+      - DUE
+      - COLLECTED
+      type: string
+      description: |-
+        * `DUE` - Due
+        * `COLLECTED` - Collected
     PayoutAccountStatusEnum:
       enum:
       - PENDING
@@ -46951,6 +47024,94 @@ components:
         * `REFERRER_ONLY` - Referrer only
         * `REFEREE_ONLY` - Referee only
         * `BOTH` - Both referrer and referee
+    Ride:
+      type: object
+      description: The rider's view of one ride.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        waiting_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - drop
+      - fare_paise
+      - final_fare_paise
+      - id
+      - payment_method
+      - payment_status
+      - pickup
+      - route_polyline
+      - state
+      - vehicle_type
+      - waiting_paise
+    RideCreateRequest:
+      type: object
+      properties:
+        quote_id:
+          type: string
+          format: uuid
+          description: One of the rider's quotes from POST rides/quotes/.
+      required:
+      - quote_id
+    RidePlace:
+      type: object
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        address:
+          type: string
+      required:
+      - address
+      - latitude
+      - longitude
     RideRateCard:
       type: object
       properties:
@@ -49021,6 +49182,24 @@ components:
           format: uuid
       required:
       - plan_id
+    StateEnum:
+      enum:
+      - SEARCHING
+      - CAPTAIN_ASSIGNED
+      - CAPTAIN_ARRIVED
+      - IN_TRIP
+      - COMPLETED
+      - NO_CAPTAIN_FOUND
+      - CANCELLED
+      type: string
+      description: |-
+        * `SEARCHING` - Searching
+        * `CAPTAIN_ASSIGNED` - Captain assigned
+        * `CAPTAIN_ARRIVED` - Captain arrived
+        * `IN_TRIP` - In trip
+        * `COMPLETED` - Completed
+        * `NO_CAPTAIN_FOUND` - No captain found
+        * `CANCELLED` - Cancelled
     Status0a1Enum:
       enum:
       - REQUESTED

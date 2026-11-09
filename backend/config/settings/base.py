@@ -829,6 +829,12 @@ RIDES_QUOTE_TTL_SECONDS = env.int("RIDES_QUOTE_TTL_SECONDS", default=300)
 RIDES_REDIS_URL = env(
     "RIDES_REDIS_URL", default=env("REDIS_URL", default="redis://127.0.0.1:56379/0")
 )
+# Dispatch (brief §5.6): one search radius per round, nearest captains first.
+RIDES_DISPATCH_RADII_M = [
+    int(radius) for radius in env.list("RIDES_DISPATCH_RADII_M", default=["2000", "4000", "6000"])
+]
+RIDES_OFFERS_PER_ROUND = env.int("RIDES_OFFERS_PER_ROUND", default=3)
+RIDES_OFFER_SECONDS = env.int("RIDES_OFFER_SECONDS", default=15)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -1045,6 +1051,10 @@ CELERY_BEAT_SCHEDULE = {
     "rides-sweep-captain-locations": {
         "task": "apps.rides.tasks.sweep_captain_locations",
         "schedule": 60.0,
+    },
+    "rides-redrive-dispatch": {
+        "task": "apps.rides.tasks.redrive_dispatch",
+        "schedule": 30.0,
     },
     "cleanup-partner-document-uploads": {
         "task": "apps.partners.tasks.cleanup_partner_document_uploads",

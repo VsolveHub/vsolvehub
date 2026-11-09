@@ -109,6 +109,41 @@ class RateCardInactiveError(RidesApiError):
         )
 
 
+class QuoteExpiredError(RidesApiError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="quote_expired", message="This price has expired. Check the fares again."
+        )
+
+
+class QuoteUsedError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="quote_used", message="This price was already used. Check the fares again."
+        )
+
+
+class VehicleUnavailableError(RidesApiError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="vehicle_unavailable",
+            message="This vehicle type can't be booked here right now.",
+        )
+
+
+class RideAlreadyOpenError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(code="ride_already_open", message="You already have a ride in progress.")
+
+
 class RegistrationAlreadyUsedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

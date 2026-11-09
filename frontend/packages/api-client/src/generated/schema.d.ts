@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: c26859c40227ea94
+ * Checksum: bbe8629a3b628eee
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -8996,6 +8996,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rides/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Book a ride from a quote. The server then looks for a captain in the background. */
+        post: operations["rides_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rides/{ride_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One of the rider's own rides. The app polls this while the ride is live. */
+        get: operations["rides_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rides/quotes/": {
         parameters: {
             query?: never;
@@ -16227,6 +16261,17 @@ export interface components {
          */
         PaymentAttemptStatusEnum: "PROVIDER_PENDING" | "CREATED" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "EXPIRED" | "PARTIALLY_REFUNDED" | "REFUNDED";
         /**
+         * @description * `CASH_OR_UPI` - Cash or UPI to the captain
+         * @enum {string}
+         */
+        PaymentMethodEnum: "CASH_OR_UPI";
+        /**
+         * @description * `DUE` - Due
+         *     * `COLLECTED` - Collected
+         * @enum {string}
+         */
+        PaymentStatusEnum: "DUE" | "COLLECTED";
+        /**
          * @description * `PENDING` - Pending verification
          *     * `VERIFIED` - Verified
          *     * `REJECTED` - Rejected
@@ -18912,6 +18957,37 @@ export interface components {
          * @enum {string}
          */
         RewardSidesEnum: "REFERRER_ONLY" | "REFEREE_ONLY" | "BOTH";
+        /** @description The rider's view of one ride. */
+        Ride: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly state: components["schemas"]["StateEnum"];
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly pickup: components["schemas"]["RidePlace"];
+            readonly drop: components["schemas"]["RidePlace"];
+            readonly route_polyline: string;
+            readonly fare_paise: number;
+            readonly waiting_paise: number;
+            readonly final_fare_paise: number | null;
+            readonly payment_method: components["schemas"]["PaymentMethodEnum"];
+            readonly payment_status: components["schemas"]["PaymentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        RideCreateRequest: {
+            /**
+             * Format: uuid
+             * @description One of the rider's quotes from POST rides/quotes/.
+             */
+            quote_id: string;
+        };
+        RidePlace: {
+            /** Format: decimal */
+            latitude: string;
+            /** Format: decimal */
+            longitude: string;
+            address: string;
+        };
         RideRateCard: {
             /** Format: uuid */
             readonly id: string;
@@ -19744,6 +19820,17 @@ export interface components {
             /** Format: uuid */
             plan_id: string;
         };
+        /**
+         * @description * `SEARCHING` - Searching
+         *     * `CAPTAIN_ASSIGNED` - Captain assigned
+         *     * `CAPTAIN_ARRIVED` - Captain arrived
+         *     * `IN_TRIP` - In trip
+         *     * `COMPLETED` - Completed
+         *     * `NO_CAPTAIN_FOUND` - No captain found
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        StateEnum: "SEARCHING" | "CAPTAIN_ASSIGNED" | "CAPTAIN_ARRIVED" | "IN_TRIP" | "COMPLETED" | "NO_CAPTAIN_FOUND" | "CANCELLED";
         /**
          * @description * `REQUESTED` - Requested
          *     * `ACCEPTED` - Accepted
@@ -41582,6 +41669,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    rides_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RideCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RideCreateRequest"];
+                "multipart/form-data": components["schemas"]["RideCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ride"];
+                };
+            };
+        };
+    };
+    rides_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ride"];
                 };
             };
         };

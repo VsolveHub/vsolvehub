@@ -65,6 +65,16 @@ added to this entry.
 - **Added** `GET/POST /operations/rides/pass-plans/` and `PATCH /operations/rides/pass-plans/{id}/`
   (`CaptainPassPlanOps`), Operations only. `code` is unique and cannot change; `duration_hours`
   is at least 1. Switching a plan off removes it from the captains' list.
+- **Added** `POST /rides/` (`RideCreateRequest` → `201 Ride`), with a required `Idempotency-Key`:
+  books a ride from one of the rider's own quotes (`quote_id`). The ride starts `SEARCHING` and
+  the server offers it to nearby captains in rounds; it ends `NO_CAPTAIN_FOUND` if nobody
+  accepts. `404` for an unknown quote or someone else's; `422 quote_expired`; `409 quote_used`;
+  `422 vehicle_unavailable` when that vehicle was switched off in the area since the quote;
+  `409 ride_already_open` while the rider has another open ride.
+- **Added** `GET /rides/{ride_id}/` (`Ride`): the rider's own ride only (`404` otherwise): `id`,
+  `state`, `vehicle_type`, `pickup` and `drop` (`latitude`, `longitude`, `address`),
+  `route_polyline`, `fare_paise`, `waiting_paise`, `final_fare_paise` (`null` until complete),
+  `payment_method`, `payment_status`, `created_at`. The app polls it every 3 s during a ride.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 

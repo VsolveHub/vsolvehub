@@ -13,12 +13,16 @@ from apps.rides.views import (
     OpsPassPlansView,
     OpsRateCardDetailView,
     OpsRateCardsView,
+    RideDetailView,
+    RidesView,
 )
 
 app_name = "rides"
 
 urlpatterns = [
+    path("rides/", RidesView.as_view(), name="rides"),
     path("rides/quotes/", FareQuotesView.as_view(), name="quotes"),
+    path("rides/<uuid:ride_id>/", RideDetailView.as_view(), name="ride"),
     path("partner/rides/me/", CaptainMeView.as_view(), name="captain-me"),
     path("partner/rides/vehicle/", CaptainVehicleView.as_view(), name="captain-vehicle"),
     path("partner/rides/pass-plans/", CaptainPassPlansView.as_view(), name="pass-plans"),
