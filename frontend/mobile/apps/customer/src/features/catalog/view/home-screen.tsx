@@ -44,7 +44,9 @@ function DesktopHomeScreen() {
   };
 
   const handleCategoryPress = (category: Category) => {
-    if (category.slug === "rental-services") {
+    if (category.slug === "rides") {
+      router.push("/rides" as never);
+    } else if (category.slug === "rental-services") {
       router.push("/rentals" as never);
     } else if (category.slug === "rooms-pg-hostel-hotels") {
       router.push("/stays" as never);
@@ -359,7 +361,9 @@ function MobileHomeScreen() {
                 key={category.id}
                 category={category}
                 onPress={() => {
-                  if (category.slug === "rental-services") {
+                  if (category.slug === "rides") {
+                    router.push("/rides" as never);
+                  } else if (category.slug === "rental-services") {
                     router.push("/rentals" as never);
                   } else if (category.slug === "rooms-pg-hostel-hotels") {
                     router.push("/stays" as never);
