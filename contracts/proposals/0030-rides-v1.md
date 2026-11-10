@@ -636,11 +636,11 @@ refused.
    SHA-256 of `{"otp": code}` for every code, and changes when `RIDES_OTP_SECRET` changes.
 
 Notifications queued once per event with the right audience, and the Operations APIs, are in
-`test_notifications_and_ops.py`. **Still to write (Phase 7):** one state-machine matrix (every
-allowed transition, and every forbidden one answering `409 invalid_transition`) and one
-authorization matrix (anonymous, another rider, another captain, a customer on a captain URL, a
-captain on an Operations URL, a partner who is not a captain on a captain URL), gathering what the
-per-endpoint tests already check. The trip steps, the arrival geofence and the waiting charge are in `test_trip_steps.py`;
+`test_notifications_and_ops.py`. `test_matrices.py` holds the two matrices: every ride step
+from every state (each allowed move, and every other answering `409 invalid_transition`, or `404`
+where the captain is not on the ride), and who may call what (anonymous, another rider, another
+captain, a customer on a captain or Operations URL, a captain on an Operations URL, a partner who
+is not a captain on a captain URL). `apps/rides` branch coverage: 98%. The trip steps, the arrival geofence and the waiting charge are in `test_trip_steps.py`;
 cancellations and re-dispatch in `test_cancellations.py`; ratings, SOS, history and earnings in
 `test_after_ride.py`.
 
