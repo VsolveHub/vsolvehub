@@ -15,6 +15,7 @@ from apps.partners.services import (
     _latest_required_documents_are_approved,
     submit_partner_application,
 )
+from apps.rides.models import CaptainVehicle
 from tests.rides.helpers import (
     CAPTAIN_KINDS,
     IDENTITY_KINDS,
@@ -53,16 +54,36 @@ class TestRequiredDocuments:
         assert listed == [*IDENTITY_KINDS, *CAPTAIN_KINDS]
 
 
+def add_vehicle(application: PartnerApplication) -> None:
+    CaptainVehicle.objects.create(
+        partner=application.partner,
+        vehicle_type="BIKE",
+        registration_number=f"TS09ZZ{str(application.pk)[:4]}",
+        make_model="Honda Shine",
+        colour="Black",
+    )
+
+
 class TestSubmitting:
     def test_a_captain_submits_without_trades_areas_or_hours(self) -> None:
         user = make_user()
         application = start_application(user)
         upload_documents(application, (*IDENTITY_KINDS, *CAPTAIN_KINDS))
+        add_vehicle(application)
 
         submitted = submit_partner_application(user=user, expected_version=application.version)
 
         assert submitted.status == PartnerApplication.Status.SUBMITTED
         assert submitted.track == CAPTAIN
+
+    def test_a_captain_cannot_submit_without_a_vehicle(self) -> None:
+        """The vehicle locks once sent, so an application without one could never get one."""
+        user = make_user()
+        application = start_application(user)
+        upload_documents(application, (*IDENTITY_KINDS, *CAPTAIN_KINDS))
+
+        with pytest.raises(PartnerApplicationIncompleteError, match="vehicle"):
+            submit_partner_application(user=user, expected_version=application.version)
 
     def test_identity_documents_alone_are_not_enough(self) -> None:
         user = make_user()

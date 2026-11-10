@@ -440,6 +440,13 @@ def submit_partner_application(
         raise PartnerApplicationIncompleteError(
             "Upload every required document before submitting.",
         )
+    if application.track == PartnerApplication.Track.RIDE_CAPTAIN:
+        # The vehicle locks once the application is sent (the reviewer checks its documents), so
+        # an application without one would be approved with no way to add it.
+        from apps.rides.models import CaptainVehicle  # noqa: PLC0415
+
+        if not CaptainVehicle.objects.filter(partner=partner).exists():
+            raise PartnerApplicationIncompleteError("Add your vehicle details before submitting.")
 
     previous_status = application.status
     application.status = PartnerApplication.Status.SUBMITTED

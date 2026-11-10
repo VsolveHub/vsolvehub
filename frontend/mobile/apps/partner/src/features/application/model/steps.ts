@@ -16,6 +16,14 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
+/** Ride captains add their vehicle before agreeing: it locks once the application is sent. */
+export const CAPTAIN_APPLICATION_STEPS: readonly ApplicationStep[] = [
+  { href: "/apply/about", label: "About you" },
+  { href: "/apply/documents", label: "Documents" },
+  { href: "/rides/vehicle", label: "Your vehicle" },
+  { href: "/apply/review", label: "Agree & send" },
+] as const;
+
 /**
  * People who travel to a customer also say what they do, where and when. The server refuses a
  * services application without trades, areas and hours, so these cannot be skipped.
@@ -36,6 +44,7 @@ export function isListingTrack(track?: string | null): boolean {
 
 /** The step sequence for this partner. Services is the server's default track, as on the web. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
+  if (track === "RIDE_CAPTAIN") return CAPTAIN_APPLICATION_STEPS;
   return isListingTrack(track) ? APPLICATION_STEPS : SERVICE_APPLICATION_STEPS;
 }
 

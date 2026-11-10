@@ -4,7 +4,7 @@ import { Logo, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter, usePathname, Slot } from "expo-router";
 import { ArrowLeft, Home, type LucideIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationPanel } from "@/features/notifications/view/notification-panel";
@@ -16,12 +16,15 @@ import { focusedHeaderTitle, getPartnerChromeMode } from "@/features/session/chr
 import { handleFocusedBack } from "@/features/session/focused-back";
 import {
   primaryShellNavFor,
+  RIDES_TAP_FIRST_NAV,
   dockNavFor,
   resolveWorkspaces,
   specialtyShellHome,
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
+import { isCaptainShell } from "@/features/rides/model/shell";
+import { useCaptainStatus } from "@/features/rides/queries";
 
 export default function TabsLayout() {
   const pathname = usePathname();
@@ -39,6 +42,14 @@ export default function TabsLayout() {
   const isDarkHero = (pathname === "/home" && (specialty as string) === "work") || pathname.startsWith("/work");
 
   useEffect(() => subscribeOpenAlerts(() => setAlertsOpen(true)), []);
+
+  // Rides (brief Revision 2): a captain gets the Rides tabs and the Rides home; everyone else, and
+  // every iPhone, keeps the shell below unchanged.
+  const isCaptain = isCaptainShell(useCaptainStatus().data, Platform.OS);
+  const homeHref = isCaptain ? "/rides" : "/home";
+  useEffect(() => {
+    if (isCaptain && pathname === "/home") router.replace("/rides");
+  }, [isCaptain, pathname, router]);
 
   if (chrome === "focused") {
     return (
@@ -72,7 +83,7 @@ export default function TabsLayout() {
     );
   }
 
-  const rawNav = primaryShellNavFor(grants.grants ?? []);
+  const rawNav = isCaptain ? RIDES_TAP_FIRST_NAV : primaryShellNavFor(grants.grants ?? []);
   const activeNav = dockNavFor(rawNav);
   const homeItem = activeNav.find((item) => item.href === "/home" || item.label === "Home");
   const sideItems = activeNav.filter((item) => item.href !== "/home" && item.label !== "Home");
@@ -85,7 +96,7 @@ export default function TabsLayout() {
   const leftItems = sideItems.filter((item) => !isUtilityTab(item));
   const rightItems = sideItems.filter(isUtilityTab);
 
-  const isHomeActive = pathname === "/home";
+  const isHomeActive = pathname === homeHref;
 
   return (
     <View className={cn("flex-1", pathname === "/home" ? "bg-[#00112e]" : "bg-canvas")}>
@@ -153,7 +164,7 @@ export default function TabsLayout() {
                   accessibilityRole="tab"
                   accessibilityLabel="Home"
                   accessibilityState={{ selected: isHomeActive }}
-                  onPress={() => router.push("/home")}
+                  onPress={() => router.push(homeHref)}
                   className={cn(
                     "size-[4.25rem] items-center justify-center rounded-full bg-[#f87000] shadow-2xl active:scale-95",
                     isHomeActive ? "ring-4 ring-[#f87000]/40" : ""

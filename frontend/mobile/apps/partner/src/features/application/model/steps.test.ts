@@ -54,7 +54,7 @@ describe("the services path", () => {
 
 describe("the stays and rentals path", () => {
   it("is the short form: About you, Documents, Agree & send", () => {
-    for (const track of ["STAY_HOST", "RENTAL_OWNER", "RIDE_CAPTAIN"]) {
+    for (const track of ["STAY_HOST", "RENTAL_OWNER"]) {
       expect(applicationSteps(track).map((step) => step.href)).toEqual([
         "/apply/about",
         "/apply/documents",
@@ -62,6 +62,19 @@ describe("the stays and rentals path", () => {
       ]);
     }
     expect(nextStep("/apply/about", "RENTAL_OWNER")?.href).toBe("/apply/documents");
+  });
+});
+
+describe("the ride captain path", () => {
+  it("adds the vehicle after the documents, before the agreements", () => {
+    expect(applicationSteps("RIDE_CAPTAIN").map((step) => step.href)).toEqual([
+      "/apply/about",
+      "/apply/documents",
+      "/rides/vehicle",
+      "/apply/review",
+    ]);
+    expect(nextStep("/apply/documents", "RIDE_CAPTAIN")?.href).toBe("/rides/vehicle");
+    expect(nextStep("/rides/vehicle", "RIDE_CAPTAIN")?.href).toBe("/apply/review");
   });
 });
 

@@ -13,6 +13,10 @@ added to this entry.
 - **Added** `GET /partner/rides/me/` (`CaptainStatus`): `approval` (the application status, or
   `NOT_STARTED`), `is_approved`, `vehicle` (or `null`) and `blocked_reasons` (`not_approved`,
   `vehicle_missing`). Pass, duty and ride state are added later.
+- **Changed** (Revision 2 build): submitting a `RIDE_CAPTAIN` application now also needs a saved
+  vehicle, refused otherwise with `409 partner_application_incomplete` and the message "Add your
+  vehicle details before submitting." The vehicle locks once sent, so an application without one
+  could never get one.
 - **Added** `PUT /partner/rides/vehicle/` (`CaptainVehicleWriteRequest` → `CaptainVehicle`):
   `vehicle_type` (`BIKE`, `AUTO`, `CAB`), `registration_number` (stored upper-case without
   spaces), `make_model`, `colour`. Creates or replaces the vehicle; repeating it changes nothing.

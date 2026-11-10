@@ -45,16 +45,18 @@ export function DocumentsStep() {
   });
   const anyUploaded = offered.some((item) => application !== null && currentDocument(application, item.kind) !== null);
 
+  // Ride captains go on to their vehicle; everyone else to the agreements.
+  const isCaptain = application?.track === "RIDE_CAPTAIN";
   const onCommit = useCallback(() => {
-    router.push("/apply/review");
-  }, [router]);
+    router.push(isCaptain ? "/rides/vehicle" : "/apply/review");
+  }, [router, isCaptain]);
 
   useEffect(() => {
     registerDock({
       label: anyUploaded ? "Continue" : "Continue →",
       // The step before Documents: your hours for services, About you for stays and rentals.
       backHref: isListingTrack(application?.track) ? "/apply/about" : "/apply/schedule",
-      nextStepName: "Agree & send",
+      nextStepName: isCaptain ? "Your vehicle" : "Agree & send",
       onCommit,
       isSaving: false,
       proceedDisabled: !allUploaded,
@@ -65,7 +67,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, allUploaded, anyUploaded, application?.track]);
+  }, [registerDock, onCommit, allUploaded, anyUploaded, application?.track, isCaptain]);
 
   useEffect(() => {
     return () => {
