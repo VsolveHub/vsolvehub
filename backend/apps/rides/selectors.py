@@ -1,11 +1,12 @@
 """Rides reads. No writes here."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from apps.partners.models import PartnerApplication, PartnerProfile
@@ -20,9 +21,12 @@ from apps.rides.models import (
 from apps.rides.routing import RoutingUnavailableError, get_route
 
 __all__ = [
+    "EARNINGS_PERIODS",
     "CaptainLive",
     "CaptainStatus",
+    "Earnings",
     "active_pass",
+    "captain_earnings",
     "captain_live",
     "captain_status",
     "open_duty_session",
@@ -163,3 +167,42 @@ def _pickup_eta_s(ride: Ride, position: dict[str, Any]) -> int | None:
         return None
     cache.set(key, route.duration_s, ETA_CACHE_SECONDS)
     return route.duration_s
+
+
+# --- Captain earnings (brief §5.8: computed, never stored) ------------------------------------
+
+EARNINGS_PERIODS = ("today", "week")
+
+
+@dataclass(frozen=True, slots=True)
+class Earnings:
+    period: str
+    since: datetime
+    rides: int
+    earned_paise: int
+    cash_collected_paise: int
+
+
+def captain_earnings(partner: PartnerProfile, *, period: str) -> Earnings:
+    """Completed rides since local midnight (`today`) or since Monday (`week`), in India time.
+
+    `earned_paise` is what riders owed for those rides; `cash_collected_paise` is the part the
+    captain marked as received.
+    """
+    local_now = timezone.localtime()
+    since = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "week":
+        since -= timedelta(days=local_now.weekday())
+    rides = Ride.objects.filter(captain=partner, state=RideState.COMPLETED, completed_at__gte=since)
+    totals = rides.aggregate(
+        count=Count("id"),
+        earned=Sum("final_fare_paise"),
+        collected=Sum("final_fare_paise", filter=Q(payment_status=Ride.PaymentStatus.COLLECTED)),
+    )
+    return Earnings(
+        period=period,
+        since=since,
+        rides=int(totals["count"]),
+        earned_paise=int(totals["earned"] or 0),
+        cash_collected_paise=int(totals["collected"] or 0),
+    )

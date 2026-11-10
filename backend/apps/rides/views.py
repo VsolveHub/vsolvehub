@@ -18,7 +18,7 @@ from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rides import engine, selectors, services
-from apps.rides.models import CaptainPass, CaptainPassPlan, Ride, RideRateCard
+from apps.rides.models import ActorKind, CaptainPass, CaptainPassPlan, Ride, RideRateCard
 from apps.rides.serializers import (
     AvailabilityQuerySerializer,
     AvailabilitySerializer,
@@ -34,19 +34,26 @@ from apps.rides.serializers import (
     CaptainVehicleWriteSerializer,
     CurrentOfferSerializer,
     DutyStatusSerializer,
+    EarningsQuerySerializer,
+    EarningsSerializer,
     FareQuoteListSerializer,
     FareQuoteRequestSerializer,
     LocationPingSerializer,
     OperationsCancelSerializer,
     RateCardCreateSerializer,
     RateCardUpdateSerializer,
+    RatingSerializer,
     RideCreateSerializer,
+    RideHistorySerializer,
     RideRateCardSerializer,
     RiderCancelSerializer,
     RideSerializer,
+    SosRequestSerializer,
+    SosSerializer,
     StartTripSerializer,
 )
 from common.observability.context import get_request_id
+from common.pagination import CURSOR_PARAMETER, page_serializer, paginated
 from common.schema import IDEMPOTENCY_KEY_HEADER
 from common.throttling import ThrottledWriteMixin
 
@@ -55,10 +62,14 @@ __all__ = [
     "AvailabilityView",
     "CaptainCancelView",
     "CaptainCurrentRideView",
+    "CaptainEarningsView",
+    "CaptainHistoryView",
     "CaptainLocationView",
     "CaptainMeView",
     "CaptainPassPlansView",
     "CaptainPassesView",
+    "CaptainRatingView",
+    "CaptainSosView",
     "CaptainVehicleView",
     "CompleteTripView",
     "CurrentOfferView",
@@ -75,6 +86,8 @@ __all__ = [
     "PaymentReceivedView",
     "RideDetailView",
     "RiderCancelView",
+    "RiderRatingView",
+    "RiderSosView",
     "RidesView",
     "StartTripView",
 ]
@@ -358,9 +371,19 @@ class OpsPassPlanDetailView(APIView):
 
 
 class RidesView(APIView):
-    """Book a ride from a quote. The server then looks for a captain in the background."""
+    """The rider's rides, newest first; and booking a ride from a quote."""
 
     permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="rides_list",
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(RideHistorySerializer, "PaginatedRiderRideHistory"),
+    )
+    def get(self, request: Any) -> Response:
+        return paginated(
+            request, self, Ride.objects.filter(rider=request.user), RideHistorySerializer
+        )
 
     @extend_schema(
         operation_id="rides_create",
@@ -400,7 +423,9 @@ class RideDetailView(APIView):
     @extend_schema(operation_id="rides_retrieve", responses=RideSerializer)
     def get(self, request: Any, ride_id: Any) -> Response:
         ride = get_object_or_404(
-            Ride.objects.select_related("quote", "captain__user", "captain__ride_vehicle"),
+            Ride.objects.select_related(
+                "quote", "captain__user", "captain__ride_vehicle"
+            ).prefetch_related("ratings"),
             id=ride_id,
             rider=request.user,
         )
@@ -669,6 +694,123 @@ class OpsRideCancelView(APIView):
             operator=request.user, ride_id=ride_id, reason=serializer.validated_data["reason"]
         )
         return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+def _rate(request: Any, ride_id: Any, rides: Any, rater_kind: str) -> Response:
+    serializer = RatingSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    rating = engine.rate_ride(
+        ride_id=ride_id,
+        rides=rides,
+        rater_kind=rater_kind,
+        stars=serializer.validated_data["stars"],
+    )
+    return Response(RatingSerializer(rating).data, status=http_status.HTTP_201_CREATED)
+
+
+def _sos(request: Any, ride_id: Any, rides: Any, fallback_partner_id: Any = None) -> Response:
+    serializer = SosRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    sos = engine.raise_sos(
+        ride_id=ride_id,
+        rides=rides,
+        raised_by=request.user,
+        fallback_partner_id=fallback_partner_id,
+        **serializer.validated_data,
+    )
+    return Response(SosSerializer(sos).data, status=http_status.HTTP_201_CREATED)
+
+
+class RiderRatingView(APIView):
+    """The rider rates the captain, 1-5 stars, once, after a completed ride."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="rides_rating_create",
+        request=RatingSerializer,
+        responses={201: RatingSerializer},
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return _rate(request, ride_id, Ride.objects.filter(rider=request.user), ActorKind.RIDER)
+
+
+class CaptainRatingView(APIView):
+    """The captain rates the rider, 1-5 stars, once, after a completed ride."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_rating_create",
+        request=RatingSerializer,
+        responses={201: RatingSerializer},
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        rides = Ride.objects.filter(captain=_partner(request.user))
+        return _rate(request, ride_id, rides, ActorKind.CAPTAIN)
+
+
+class RiderSosView(APIView):
+    """SOS from the rider on a live ride. Operations is alerted at once."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="rides_sos_create",
+        request=SosRequestSerializer,
+        responses={201: SosSerializer},
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return _sos(request, ride_id, Ride.objects.filter(rider=request.user))
+
+
+class CaptainSosView(APIView):
+    """SOS from the captain on a live ride. Uses their last ping if the phone sends no place."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_sos_create",
+        request=SosRequestSerializer,
+        responses={201: SosSerializer},
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        partner = _partner(request.user)
+        return _sos(request, ride_id, Ride.objects.filter(captain=partner), partner.id)
+
+
+class CaptainHistoryView(APIView):
+    """The captain's rides, newest first."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_history_list",
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(RideHistorySerializer, "PaginatedCaptainRideHistory"),
+    )
+    def get(self, request: Any) -> Response:
+        rides = Ride.objects.filter(captain=_partner(request.user))
+        return paginated(request, self, rides, RideHistorySerializer)
+
+
+class CaptainEarningsView(APIView):
+    """Today's or this week's completed rides and money, computed from the rides themselves."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_earnings_retrieve",
+        parameters=[EarningsQuerySerializer],
+        responses=EarningsSerializer,
+    )
+    def get(self, request: Any) -> Response:
+        query = EarningsQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        earnings = selectors.captain_earnings(
+            _partner(request.user), period=query.validated_data["period"]
+        )
+        return Response(EarningsSerializer(earnings).data)
 
 
 class FareQuotesView(ThrottledWriteMixin, APIView):

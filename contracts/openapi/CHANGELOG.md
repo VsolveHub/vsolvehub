@@ -88,6 +88,22 @@ added to this entry.
   Starting fixes `waiting_paise`. `POST /partner/rides/{ride_id}/complete/`: `final_fare_paise` is
   the fare plus waiting, `payment_status` `DUE`. `POST /partner/rides/{ride_id}/payment-received/`:
   `COLLECTED`. `404` for another captain's ride.
+- **Added** ratings: `POST /rides/{ride_id}/rating/` and `POST /partner/rides/{ride_id}/rating/`
+  (`RatingRequest`: `stars`, 1-5) answer `201 { "stars" }`, once per side, only on a `COMPLETED`
+  ride; a second rating or an unfinished ride is `409 invalid_transition`. `Ride` and
+  `CaptainRide` add `my_rating` (`null` until that side rates).
+- **Added** SOS: `POST /rides/{ride_id}/sos/` and `POST /partner/rides/{ride_id}/sos/`
+  (`SosRequest`: optional `latitude` and `longitude`, together) answer
+  `201 { "sos_id", "emergency_number" }` on an open ride, `409 invalid_transition` otherwise. Never
+  refused for lack of a place (a captain's last ping is used when the phone sends none); a second
+  press while it is open returns the same SOS.
+- **Added** history: `GET /rides/` (the rider's) and `GET /partner/rides/history/` (the captain's),
+  newest first, cursor-paged: `id`, `state`, `vehicle_type`, `pickup_address`, `drop_address`,
+  `fare_paise`, `final_fare_paise`, `payment_status`, `created_at`, `completed_at`,
+  `cancelled_by`.
+- **Added** `GET /partner/rides/earnings/?period=today|week` (`Earnings`): `period`, `since`
+  (local midnight, or Monday), `rides`, `earned_paise`, `cash_collected_paise`, computed from
+  completed rides; `400` for any other period.
 - **Added** cancellations. `POST /rides/{ride_id}/cancel/` (`RiderCancelRequest`: `reason`, one of
   `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`) answers the ride `CANCELLED`, from
   `SEARCHING`, `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`; free. `POST

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: a01a4bc749959ca3
+ * Checksum: b595ff42e2c6b583
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7385,6 +7385,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/{ride_id}/rating/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The captain rates the rider, 1-5 stars, once, after a completed ride. */
+        post: operations["partner_rides_rating_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/sos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description SOS from the captain on a live ride. Uses their last ping if the phone sends no place. */
+        post: operations["partner_rides_sos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/{ride_id}/start/": {
         parameters: {
             query?: never;
@@ -7447,6 +7481,40 @@ export interface paths {
         put?: never;
         /** @description Go off duty. Already off: nothing changes. */
         post: operations["partner_rides_duty_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/earnings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Today's or this week's completed rides and money, computed from the rides themselves. */
+        get: operations["partner_rides_earnings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/history/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The captain's rides, newest first. */
+        get: operations["partner_rides_history_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9173,9 +9241,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** @description The rider's rides, newest first; and booking a ride from a quote. */
+        get: operations["rides_list"];
         put?: never;
-        /** @description Book a ride from a quote. The server then looks for a captain in the background. */
+        /** @description The rider's rides, newest first; and booking a ride from a quote. */
         post: operations["rides_create"];
         delete?: never;
         options?: never;
@@ -9211,6 +9280,40 @@ export interface paths {
         put?: never;
         /** @description The rider cancels, free, until the trip starts. Cancelling twice changes nothing. */
         post: operations["rides_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rides/{ride_id}/rating/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The rider rates the captain, 1-5 stars, once, after a completed ride. */
+        post: operations["rides_rating_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rides/{ride_id}/sos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description SOS from the rider on a live ride. Operations is alerted at once. */
+        post: operations["rides_sos_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10525,6 +10628,8 @@ export interface components {
             /** @description The number the SOS Call button dials. From the server; never hard-coded. */
             readonly emergency_number: string;
             readonly rider: components["schemas"]["RideRider"];
+            /** @description The stars the captain gave the rider, or null. */
+            readonly my_rating: number | null;
         };
         CaptainStatus: {
             /** @description The application status, or NOT_STARTED before a captain application exists. */
@@ -12247,6 +12352,20 @@ export interface components {
          * @enum {string}
          */
         EarnModeEnum: "FLAT" | "TIERED_ORDER_VALUE" | "TIERED_BOOKING_SEQUENCE";
+        Earnings: {
+            period: string;
+            /**
+             * Format: date-time
+             * @description Local midnight today, or Monday for week.
+             */
+            since: string;
+            /** @description Completed rides in the period. */
+            rides: number;
+            /** @description What riders owed for those rides. */
+            earned_paise: number;
+            /** @description The part the captain marked as received. */
+            cash_collected_paise: number;
+        };
         EngageKillSwitchRequestRequest: {
             scope: components["schemas"]["KillSwitchScopeEnum"];
             /** @default  */
@@ -14928,6 +15047,20 @@ export interface components {
             quantity: number;
             /** @default  */
             reason: string;
+        };
+        PaginatedCaptainRideHistory: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["RideHistory"][];
+        };
+        PaginatedRiderRideHistory: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["RideHistory"][];
         };
         PartnerApplication: {
             /** Format: uuid */
@@ -18321,10 +18454,16 @@ export interface components {
          * @enum {string}
          */
         RaterRoleEnum: "CUSTOMER" | "PARTNER";
+        Rating: {
+            stars: number;
+        };
         RatingCreateRequest: {
             score: number;
             /** @default  */
             comment: string;
+        };
+        RatingRequest: {
+            stars: number;
         };
         /**
          * @description Whether this participant may rate, and what they themselves said.
@@ -19277,6 +19416,8 @@ export interface components {
             readonly otp: string | null;
             /** @description A captain cancelled and another is being found: say "Finding another captain". */
             readonly searching_again: boolean;
+            /** @description The stars the rider gave, or null: ask for a rating while it is null. */
+            readonly my_rating: number | null;
         };
         /** @description Who is coming: what the rider sees once a captain accepts. */
         RideCaptain: {
@@ -19296,6 +19437,23 @@ export interface components {
              * @description One of the rider's quotes from POST rides/quotes/.
              */
             quote_id: string;
+        };
+        /** @description One past or current ride in a list, for the rider or the captain. */
+        RideHistory: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly state: components["schemas"]["StateEnum"];
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            pickup_address: string;
+            drop_address: string;
+            readonly fare_paise: number;
+            readonly final_fare_paise: number | null;
+            readonly payment_status: components["schemas"]["PaymentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            readonly cancelled_by: components["schemas"]["CancelledByEnum"];
         };
         /** @description A ride request on the captain's screen, with the server's deadline. */
         RideOffer: {
@@ -20016,6 +20174,19 @@ export interface components {
             role: string;
             skills: string[];
             added_at: string;
+        };
+        Sos: {
+            /** Format: uuid */
+            sos_id: string;
+            /** @description Show a Call button for this number. From the server; never hard-coded. */
+            readonly emergency_number: string;
+        };
+        /** @description Where the phone is, if it knows. Both or neither: an SOS is never refused for lack of it. */
+        SosRequestRequest: {
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
         };
         /**
          * @description * `MANUAL` - Manual
@@ -38308,6 +38479,60 @@ export interface operations {
             };
         };
     };
+    partner_rides_rating_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RatingRequest"];
+                "multipart/form-data": components["schemas"]["RatingRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rating"];
+                };
+            };
+        };
+    };
+    partner_rides_sos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SosRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SosRequestRequest"];
+                "multipart/form-data": components["schemas"]["SosRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sos"];
+                };
+            };
+        };
+    };
     partner_rides_start: {
         parameters: {
             query?: never;
@@ -38391,6 +38616,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DutyStatus"];
+                };
+            };
+        };
+    };
+    partner_rides_earnings_retrieve: {
+        parameters: {
+            query: {
+                /** @description today or week. */
+                period: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Earnings"];
+                };
+            };
+        };
+    };
+    partner_rides_history_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedCaptainRideHistory"];
                 };
             };
         };
@@ -42255,6 +42524,28 @@ export interface operations {
             };
         };
     };
+    rides_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRiderRideHistory"];
+                };
+            };
+        };
+    };
     rides_create: {
         parameters: {
             query?: never;
@@ -42327,6 +42618,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ride"];
+                };
+            };
+        };
+    };
+    rides_rating_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RatingRequest"];
+                "multipart/form-data": components["schemas"]["RatingRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rating"];
+                };
+            };
+        };
+    };
+    rides_sos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SosRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SosRequestRequest"];
+                "multipart/form-data": components["schemas"]["SosRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sos"];
                 };
             };
         };

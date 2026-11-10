@@ -187,6 +187,12 @@ the Partner app Rides workspace and the Operations console are the agreed design
     `RideTransition` rows; their `ACCEPTED` offer becomes `WITHDRAWN` so the ride's single accepted
     slot is free for the next captain. The rider's view says `searching_again` meanwhile.
 
+31. **After the ride.** A rating is once per side, enforced by the database (`409
+    invalid_transition` on a repeat). An SOS is never refused for lack of a place: a captain's own
+    SOS uses their last ping when the phone sends none, and a second press while one is open
+    returns it, so a panicked double tap is one alert. Earnings are computed in India time:
+    `today` from local midnight, `week` from Monday.
+
 ## Consequences
 
 - Rides reuses the partner review queue, so Operations needs no new approval screen. The cost is that

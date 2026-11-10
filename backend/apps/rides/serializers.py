@@ -17,6 +17,7 @@ from apps.rides.engine import (
 )
 from apps.rides.models import (
     RATE_FIELDS,
+    ActorKind,
     CaptainDutySession,
     CaptainPass,
     CaptainPassPlan,
@@ -28,7 +29,7 @@ from apps.rides.models import (
     RideState,
     VehicleType,
 )
-from apps.rides.selectors import CaptainLive, CaptainStatus, captain_live
+from apps.rides.selectors import EARNINGS_PERIODS, CaptainLive, CaptainStatus, captain_live
 
 __all__ = [
     "AvailabilityQuerySerializer",
@@ -46,6 +47,8 @@ __all__ = [
     "CaptainVehicleWriteSerializer",
     "CurrentOfferSerializer",
     "DutyStatusSerializer",
+    "EarningsQuerySerializer",
+    "EarningsSerializer",
     "FareQuoteListSerializer",
     "FareQuoteRequestSerializer",
     "FareQuoteSerializer",
@@ -53,14 +56,18 @@ __all__ = [
     "OperationsCancelSerializer",
     "RateCardCreateSerializer",
     "RateCardUpdateSerializer",
+    "RatingSerializer",
     "RideCaptainSerializer",
     "RideCreateSerializer",
+    "RideHistorySerializer",
     "RideOfferSerializer",
     "RidePlaceSerializer",
     "RideRateCardSerializer",
     "RideRiderSerializer",
     "RideSerializer",
     "RiderCancelSerializer",
+    "SosRequestSerializer",
+    "SosSerializer",
     "StartTripSerializer",
 ]
 
@@ -386,9 +393,18 @@ class RideSerializer(_RideBaseSerializer):
     searching_again = serializers.SerializerMethodField(
         help_text='A captain cancelled and another is being found: say "Finding another captain".'
     )
+    my_rating = serializers.SerializerMethodField(
+        help_text="The stars the rider gave, or null: ask for a rating while it is null."
+    )
 
     class Meta(_RideBaseSerializer.Meta):
-        fields = (*_RideBaseSerializer.Meta.fields, "captain", "otp", "searching_again")
+        fields = (
+            *_RideBaseSerializer.Meta.fields,
+            "captain",
+            "otp",
+            "searching_again",
+            "my_rating",
+        )
         read_only_fields = fields
 
     @extend_schema_field(RideCaptainSerializer(allow_null=True))
@@ -397,6 +413,9 @@ class RideSerializer(_RideBaseSerializer):
             return None
         context = {"ride": obj, "live": captain_live(obj)}
         return dict(RideCaptainSerializer(obj.captain, context=context).data)
+
+    def get_my_rating(self, obj: Ride) -> int | None:
+        return _my_rating(obj, ActorKind.RIDER)
 
     def get_searching_again(self, obj: Ride) -> bool:
         return searching_again(obj)
@@ -409,10 +428,16 @@ class CaptainRideSerializer(_RideBaseSerializer):
     """The captain's view of the ride they are doing."""
 
     rider = serializers.SerializerMethodField()
+    my_rating = serializers.SerializerMethodField(
+        help_text="The stars the captain gave the rider, or null."
+    )
 
     class Meta(_RideBaseSerializer.Meta):
-        fields = (*_RideBaseSerializer.Meta.fields, "rider")
+        fields = (*_RideBaseSerializer.Meta.fields, "rider", "my_rating")
         read_only_fields = fields
+
+    def get_my_rating(self, obj: Ride) -> int | None:
+        return _my_rating(obj, ActorKind.CAPTAIN)
 
     @extend_schema_field(RideRiderSerializer)
     def get_rider(self, obj: Ride) -> dict[str, Any]:
@@ -454,6 +479,97 @@ class CaptainCancelSerializer(serializers.Serializer[Any]):
 
 class OperationsCancelSerializer(serializers.Serializer[Any]):
     reason = serializers.CharField(max_length=64, help_text="Why Operations closed the ride.")
+
+
+class RatingSerializer(serializers.Serializer[Any]):
+    stars = serializers.IntegerField(min_value=1, max_value=5)
+
+
+class SosRequestSerializer(serializers.Serializer[Any]):
+    """Where the phone is, if it knows. Both or neither: an SOS is never refused for lack of it."""
+
+    latitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        min_value=Decimal(-90),
+        max_value=Decimal(90),
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        min_value=Decimal(-180),
+        max_value=Decimal(180),
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if (attrs["latitude"] is None) != (attrs["longitude"] is None):
+            raise serializers.ValidationError("Send latitude and longitude together.")
+        return attrs
+
+
+class SosSerializer(serializers.Serializer[Any]):
+    sos_id = serializers.UUIDField(source="id")
+    emergency_number = serializers.SerializerMethodField(
+        help_text="Show a Call button for this number. From the server; never hard-coded."
+    )
+
+    def get_emergency_number(self, obj: Any) -> str:
+        del obj
+        return str(settings.RIDES_EMERGENCY_NUMBER)
+
+
+class RideHistorySerializer(serializers.ModelSerializer[Ride]):
+    """One past or current ride in a list, for the rider or the captain."""
+
+    pickup_address = serializers.CharField(source="pickup_label")
+    drop_address = serializers.CharField(source="drop_label")
+
+    class Meta:
+        model = Ride
+        fields = (
+            "id",
+            "state",
+            "vehicle_type",
+            "pickup_address",
+            "drop_address",
+            "fare_paise",
+            "final_fare_paise",
+            "payment_status",
+            "created_at",
+            "completed_at",
+            "cancelled_by",
+        )
+        read_only_fields = fields
+
+
+class EarningsQuerySerializer(serializers.Serializer[Any]):
+    period = serializers.CharField(help_text="today or week.")
+
+    def validate_period(self, value: str) -> str:
+        if value not in EARNINGS_PERIODS:
+            raise serializers.ValidationError("Choose today or week.")
+        return value
+
+
+class EarningsSerializer(serializers.Serializer[Any]):
+    period = serializers.CharField()
+    since = serializers.DateTimeField(help_text="Local midnight today, or Monday for week.")
+    rides = serializers.IntegerField(help_text="Completed rides in the period.")
+    earned_paise = serializers.IntegerField(help_text="What riders owed for those rides.")
+    cash_collected_paise = serializers.IntegerField(
+        help_text="The part the captain marked as received."
+    )
+
+
+def _my_rating(ride: Ride, rater_kind: str) -> int | None:
+    rating = next((r for r in ride.ratings.all() if r.rater_kind == rater_kind), None)
+    return rating.stars if rating else None
 
 
 class StartTripSerializer(serializers.Serializer[Any]):

@@ -10,6 +10,7 @@ import hmac
 import logging
 import math
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -44,6 +45,8 @@ from apps.rides.models import (
     Ride,
     RideOffer,
     RideRateCard,
+    RideRating,
+    RideSosEvent,
     RideState,
     RideTransition,
 )
@@ -67,6 +70,8 @@ __all__ = [
     "mark_payment_received",
     "operations_cancel",
     "otp_fingerprint",
+    "raise_sos",
+    "rate_ride",
     "redrive_dispatch",
     "ride_otp",
     "rider_cancel",
@@ -761,3 +766,70 @@ def searching_again(ride: Ride) -> bool:
             ride=ride, actor_kind=ActorKind.CAPTAIN, to_state=RideState.SEARCHING
         ).exists()
     )
+
+
+# --- After the ride: ratings and SOS (brief §5.9) ---------------------------------------------
+
+
+@transaction.atomic
+def rate_ride(*, ride_id: UUID, rides: Any, rater_kind: str, stars: int) -> RideRating:
+    """One side rates the other, once, after a completed ride. `rides` is the caller's own rides,
+    so anyone else's ride is a 404."""
+    ride = rides.select_for_update().filter(id=ride_id).first()
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    if ride.state != RideState.COMPLETED:
+        raise InvalidTransitionError
+    try:
+        with transaction.atomic():
+            rating = RideRating.objects.create(ride=ride, rater_kind=rater_kind, stars=stars)
+    except IntegrityError as exc:
+        # One rating per side: the database refuses the second.
+        raise InvalidTransitionError from exc
+    logger.info("ride_rated", extra={"ride_id": str(ride.id), "rater": rater_kind, "stars": stars})
+    return rating
+
+
+@transaction.atomic
+def raise_sos(
+    *,
+    ride_id: UUID,
+    rides: Any,
+    raised_by: Any,
+    latitude: Any | None,
+    longitude: Any | None,
+    fallback_partner_id: UUID | None = None,
+) -> RideSosEvent:
+    """An SOS on a live ride. Never refused for lack of a location. Pressing it again while one is
+    open returns that one, so a panicked double tap is one alert, not two.
+
+    Where the phone sent no position, a captain's last ping is used if there is one.
+    """
+    ride = rides.select_for_update().filter(id=ride_id).first()
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    if ride.state not in OPEN_RIDE_STATES:
+        raise InvalidTransitionError
+    open_sos = RideSosEvent.objects.filter(
+        ride=ride, raised_by=raised_by, status=RideSosEvent.Status.OPEN
+    ).first()
+    if open_sos is not None:
+        return open_sos
+
+    if latitude is None and fallback_partner_id is not None:
+        try:
+            ping = location.last_position(fallback_partner_id)
+        except location.LocationStoreError:
+            ping = None
+        if ping is not None:
+            latitude = Decimal(ping["latitude"]).quantize(Decimal("0.000001"))
+            longitude = Decimal(ping["longitude"]).quantize(Decimal("0.000001"))
+    sos = RideSosEvent.objects.create(
+        ride=ride, raised_by=raised_by, latitude=latitude, longitude=longitude
+    )
+    # No coordinates in the log: they are someone's exact whereabouts.
+    logger.warning(
+        "ride_sos_raised",
+        extra={"ride_id": str(ride.id), "sos_id": str(sos.id), "raised_by": str(raised_by.pk)},
+    )
+    return sos

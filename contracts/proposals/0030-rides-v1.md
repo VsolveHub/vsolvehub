@@ -361,8 +361,7 @@ carries `captain_assigned_at`, `captain_arrived_at`, `started_at`, `completed_at
 
 All take no body unless shown, return `200` with the ride as in `partner/rides/current/`, and refuse
 with `409 invalid_transition` from the wrong state. A step already done returns the ride unchanged.
-Another captain's ride is `404`. ✅ Built: arrived, start, complete, payment-received, cancel.
-📝 Proposed: rating, sos.
+Another captain's ride is `404`. ✅ All built.
 
 | Method and path | Body | Moves | Extra errors |
 | --- | --- | --- | --- |
@@ -371,8 +370,8 @@ Another captain's ride is `404`. ✅ Built: arrived, start, complete, payment-re
 | `POST partner/rides/{ride_id}/complete/` | — | `IN_TRIP` → `COMPLETED`, with `final_fare_paise` = fare + `waiting_paise` (fixed at start) and `payment_status: "DUE"` | — |
 | `POST partner/rides/{ride_id}/payment-received/` | — | `payment_status` `DUE` → `COLLECTED` | — |
 | `POST partner/rides/{ride_id}/cancel/` | `{ "reason": "RIDER_NOT_REACHABLE" }` | `CAPTAIN_ASSIGNED` / `CAPTAIN_ARRIVED` → `SEARCHING` from round 1, never offered back to this captain (other captains may be offered it again); response `204` | `400 validation_error` without a listed reason; `409 invalid_transition` from `IN_TRIP` (the captain ends the trip instead) |
-| `POST partner/rides/{ride_id}/rating/` | `{ "stars": 5 }` | rates the rider, once; response `201` | `409 invalid_transition` if already rated or not `COMPLETED` |
-| `POST partner/rides/{ride_id}/sos/` | `{ "latitude": 17.39, "longitude": 78.49 }` | raises an SOS; response `201 { "sos_id": "…", "emergency_number": "112" }`. See *Emergency number* below. | — |
+| `POST partner/rides/{ride_id}/rating/` | `{ "stars": 5 }` | rates the rider, once; response `201 { "stars": 5 }`. `my_rating` on the ride shows it. | `409 invalid_transition` if already rated or not `COMPLETED`; `400` outside 1–5 |
+| `POST partner/rides/{ride_id}/sos/` | `{ "latitude": 17.39, "longitude": 78.49 }`, optional | raises an SOS on an open ride; response `201 { "sos_id": "…", "emergency_number": "112" }`. Without a place, the captain's last ping is used. A second press while it is open returns the same SOS. See *Emergency number* below. | `409 invalid_transition` on a closed ride |
 
 Captain cancel reasons: `RIDER_NOT_REACHABLE`, `VEHICLE_ISSUE`, `PICKUP_TOO_FAR`, `OTHER`. A captain
 cancel counts against the captain in Operations.
@@ -429,16 +428,18 @@ number. The value also appears on the live ride (`GET rides/{ride_id}/` and
 if that request fails. A change to the setting reaches every app on its next poll, with no app
 release.
 
-### 📝 `GET partner/rides/history/` and `GET partner/rides/earnings/?period=today|week`
+### ✅ `GET partner/rides/history/` and `GET partner/rides/earnings/?period=today|week`
 
-History is the captain's rides, newest first, paginated. Earnings are computed from completed rides,
-not stored:
+History is the captain's rides, newest first, cursor-paged, with the same rows as `GET rides/`.
+Earnings are computed from completed rides, not stored, in India time (`today` from local
+midnight, `week` from Monday):
 
 ```json
-{ "period": "today", "rides": 7, "earned_paise": 154000, "cash_collected_paise": 154000 }
+{ "period": "today", "since": "2026-11-10T00:00:00+05:30", "rides": 7, "earned_paise": 154000, "cash_collected_paise": 120000 }
 ```
 
-`400 validation_error` for any other `period`.
+`earned_paise` is what riders owed for those rides; `cash_collected_paise` is the part marked
+received. `400 validation_error` for any other `period`.
 
 ---
 
@@ -512,10 +513,11 @@ Also ✅: `otp` (while `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`, else `null`), `c
 30 s per ride; `null` if Routes or Redis is down, and the app says the ETA is unavailable), the
 step times, `cancelled_by`, `cancel_reason` and `emergency_number`.
 
-### 📝 `GET rides/`
+### ✅ `GET rides/`
 
-The rider's rides, newest first, paginated with the standard `cursor`. Each row: `id`, `state`,
-`vehicle_type`, pickup and drop addresses, `final_fare_paise` (or `fare_paise`), `created_at`.
+The rider's rides, newest first, paginated with the standard `cursor` (`next`, `previous`,
+`results`). Each row: `id`, `state`, `vehicle_type`, `pickup_address`, `drop_address`,
+`fare_paise`, `final_fare_paise`, `payment_status`, `created_at`, `completed_at`, `cancelled_by`.
 
 ### ✅ `POST rides/{ride_id}/cancel/`
 
@@ -530,17 +532,18 @@ a cancelled ride returns it unchanged. Errors: `409 invalid_transition` (for exa
 captain's cancel has the ride searching again, `GET rides/{ride_id}/` says `searching_again: true`.
 Reasons: `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`.
 
-### 📝 `POST rides/{ride_id}/rating/`
+### ✅ `POST rides/{ride_id}/rating/`
 
-`{ "stars": 5 }`, 1–5. Response `201`. Only on a `COMPLETED` ride, once; a repeat is
-`409 invalid_transition`.
+`{ "stars": 5 }`, 1–5. Response `201 { "stars": 5 }`. Only on a `COMPLETED` ride, once; a repeat
+is `409 invalid_transition`. `my_rating` on `GET rides/{ride_id}/` is `null` until the rider rates.
 
-### 📝 `POST rides/{ride_id}/sos/`
+### ✅ `POST rides/{ride_id}/sos/`
 
-`{ "latitude": 17.39, "longitude": 78.49 }`, both optional but sent together. Response
-`201 { "sos_id": "…", "emergency_number": "112" }`, where `emergency_number` is
-`RIDES_EMERGENCY_NUMBER` (see *Emergency number* under the captain trip steps). Notifies Operations
-immediately. Works in any open state.
+`{ "latitude": 17.39, "longitude": 78.49 }`, both optional but sent together (`400` for one
+without the other). Response `201 { "sos_id": "…", "emergency_number": "112" }`, where
+`emergency_number` is `RIDES_EMERGENCY_NUMBER` (see *Emergency number* under the captain trip
+steps). Works in any open state (`409 invalid_transition` otherwise); a second press while it is
+open returns the same SOS. Notifies Operations immediately.
 
 ---
 
@@ -637,7 +640,8 @@ and every forbidden one answering `409 invalid_transition`); the authorization m
 another rider, another captain, a customer on a captain URL, a captain on an Operations URL, a
 partner who is not a captain on a captain URL); notifications queued once per event with the
 right audience. The trip steps, the arrival geofence and the waiting charge are in `test_trip_steps.py`;
-cancellations and re-dispatch in `test_cancellations.py`.
+cancellations and re-dispatch in `test_cancellations.py`; ratings, SOS, history and earnings in
+`test_after_ride.py`.
 
 ## What the user sees when things go wrong
 
