@@ -23,6 +23,7 @@ from apps.rides.serializers import (
     AvailabilityQuerySerializer,
     AvailabilitySerializer,
     BuyPassSerializer,
+    CaptainCancelSerializer,
     CaptainCurrentRideSerializer,
     CaptainPassPlanOpsSerializer,
     CaptainPassPlanSerializer,
@@ -36,10 +37,12 @@ from apps.rides.serializers import (
     FareQuoteListSerializer,
     FareQuoteRequestSerializer,
     LocationPingSerializer,
+    OperationsCancelSerializer,
     RateCardCreateSerializer,
     RateCardUpdateSerializer,
     RideCreateSerializer,
     RideRateCardSerializer,
+    RiderCancelSerializer,
     RideSerializer,
     StartTripSerializer,
 )
@@ -50,6 +53,7 @@ from common.throttling import ThrottledWriteMixin
 __all__ = [
     "ArrivedView",
     "AvailabilityView",
+    "CaptainCancelView",
     "CaptainCurrentRideView",
     "CaptainLocationView",
     "CaptainMeView",
@@ -67,8 +71,10 @@ __all__ = [
     "OpsPassPlansView",
     "OpsRateCardDetailView",
     "OpsRateCardsView",
+    "OpsRideCancelView",
     "PaymentReceivedView",
     "RideDetailView",
+    "RiderCancelView",
     "RidesView",
     "StartTripView",
 ]
@@ -608,6 +614,61 @@ class StartTripView(APIView):
         if result.replayed:
             response["Idempotent-Replay"] = "true"
         return response
+
+
+class RiderCancelView(APIView):
+    """The rider cancels, free, until the trip starts. Cancelling twice changes nothing."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="rides_cancel", request=RiderCancelSerializer, responses=RideSerializer
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        serializer = RiderCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ride = engine.rider_cancel(
+            rider=request.user, ride_id=ride_id, reason=serializer.validated_data["reason"]
+        )
+        return Response(RideSerializer(ride).data)
+
+
+class CaptainCancelView(APIView):
+    """The captain gives the ride up before the trip; the ride looks for another captain."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_cancel", request=CaptainCancelSerializer, responses={204: None}
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        serializer = CaptainCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        engine.captain_cancel(
+            partner=_partner(request.user),
+            ride_id=ride_id,
+            reason=serializer.validated_data["reason"],
+        )
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class OpsRideCancelView(APIView):
+    """Operations closes any open ride, including one in trip."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_cancel",
+        request=OperationsCancelSerializer,
+        responses={204: None},
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        serializer = OperationsCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        engine.operations_cancel(
+            operator=request.user, ride_id=ride_id, reason=serializer.validated_data["reason"]
+        )
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 
 class FareQuotesView(ThrottledWriteMixin, APIView):

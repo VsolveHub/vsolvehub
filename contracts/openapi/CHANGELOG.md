@@ -88,6 +88,17 @@ added to this entry.
   Starting fixes `waiting_paise`. `POST /partner/rides/{ride_id}/complete/`: `final_fare_paise` is
   the fare plus waiting, `payment_status` `DUE`. `POST /partner/rides/{ride_id}/payment-received/`:
   `COLLECTED`. `404` for another captain's ride.
+- **Added** cancellations. `POST /rides/{ride_id}/cancel/` (`RiderCancelRequest`: `reason`, one of
+  `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`) answers the ride `CANCELLED`, from
+  `SEARCHING`, `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`; free. `POST
+  /partner/rides/{ride_id}/cancel/` (`CaptainCancelRequest`: `reason`, one of
+  `RIDER_NOT_REACHABLE`, `VEHICLE_ISSUE`, `PICKUP_TOO_FAR`, `OTHER`) answers `204`, from
+  `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`: the ride is `SEARCHING` again from round 1 and is never
+  offered back to that captain. `POST /operations/rides/{ride_id}/cancel/`
+  (`OperationsCancelRequest`: `reason`, free text up to 64 characters) answers `204` from any open
+  state, including `IN_TRIP`. Each refuses a closed ride with `409 invalid_transition`; cancelling
+  a cancelled ride changes nothing. Pending offers are withdrawn. `Ride` adds `searching_again`:
+  `true` while a captain's cancel has the ride looking for another captain.
 - **Added** `GET /partner/rides/current/` (`CaptainCurrentRide`): `ride`, the open ride or a
   completed one not yet marked paid, else `null`. Polled every 5 s on a ride.
 - **Changed**, additive: `Ride` and `CaptainRide` add `captain_assigned_at`, `captain_arrived_at`,

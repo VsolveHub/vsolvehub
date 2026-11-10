@@ -179,11 +179,13 @@ the Partner app Rides workspace and the Operations console are the agreed design
     Operations cancels with free text. The rider's pickup ETA uses the same routing adapter, cached
     30 seconds per ride. Notifications are queued through `request_notification` with the right
     audience.
-30. **Re-dispatch and the unique offer (to confirm when captain cancel is built).** The brief makes
-    (`ride`, `captain`) unique on `RideOffer`. After a captain cancels, dispatch restarts at round 1
-    without that captain. Other captains whose earlier offers expired would be re-offered by resetting
-    their existing row to `PENDING` for the new round, not by inserting a second row. The cancelling
-    captain keeps their row and so stays excluded.
+30. **Re-dispatch and the unique offer.** The brief makes (`ride`, `captain`) unique on `RideOffer`.
+    After a captain cancels, dispatch restarts at round 1. A captain is offered a ride once per
+    *search* (a search starts at booking and at each captain cancel), so other captains from an
+    earlier search are offered it again by resetting their existing row to `PENDING`, never by
+    inserting a second row. A captain who cancelled is excluded for good, read from the ride's
+    `RideTransition` rows; their `ACCEPTED` offer becomes `WITHDRAWN` so the ride's single accepted
+    slot is free for the next captain. The rider's view says `searching_again` meanwhile.
 
 ## Consequences
 

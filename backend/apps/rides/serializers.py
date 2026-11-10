@@ -8,7 +8,13 @@ from rest_framework import serializers
 
 from apps.partners.models import PartnerProfile
 from apps.partners.photos import partner_photo_url
-from apps.rides.engine import OTP_VISIBLE_STATES, ride_otp
+from apps.rides.engine import (
+    CAPTAIN_CANCEL_REASONS,
+    OTP_VISIBLE_STATES,
+    RIDER_CANCEL_REASONS,
+    ride_otp,
+    searching_again,
+)
 from apps.rides.models import (
     RATE_FIELDS,
     CaptainDutySession,
@@ -28,6 +34,7 @@ __all__ = [
     "AvailabilityQuerySerializer",
     "AvailabilitySerializer",
     "BuyPassSerializer",
+    "CaptainCancelSerializer",
     "CaptainCurrentRideSerializer",
     "CaptainPassPlanOpsSerializer",
     "CaptainPassPlanSerializer",
@@ -43,6 +50,7 @@ __all__ = [
     "FareQuoteRequestSerializer",
     "FareQuoteSerializer",
     "LocationPingSerializer",
+    "OperationsCancelSerializer",
     "RateCardCreateSerializer",
     "RateCardUpdateSerializer",
     "RideCaptainSerializer",
@@ -52,6 +60,7 @@ __all__ = [
     "RideRateCardSerializer",
     "RideRiderSerializer",
     "RideSerializer",
+    "RiderCancelSerializer",
     "StartTripSerializer",
 ]
 
@@ -374,9 +383,12 @@ class RideSerializer(_RideBaseSerializer):
     otp = serializers.SerializerMethodField(
         help_text="The 4-digit start code the rider tells the captain. Only before the trip starts."
     )
+    searching_again = serializers.SerializerMethodField(
+        help_text='A captain cancelled and another is being found: say "Finding another captain".'
+    )
 
     class Meta(_RideBaseSerializer.Meta):
-        fields = (*_RideBaseSerializer.Meta.fields, "captain", "otp")
+        fields = (*_RideBaseSerializer.Meta.fields, "captain", "otp", "searching_again")
         read_only_fields = fields
 
     @extend_schema_field(RideCaptainSerializer(allow_null=True))
@@ -385,6 +397,9 @@ class RideSerializer(_RideBaseSerializer):
             return None
         context = {"ride": obj, "live": captain_live(obj)}
         return dict(RideCaptainSerializer(obj.captain, context=context).data)
+
+    def get_searching_again(self, obj: Ride) -> bool:
+        return searching_again(obj)
 
     def get_otp(self, obj: Ride) -> str | None:
         return ride_otp(obj.id) if obj.state in OTP_VISIBLE_STATES else None
@@ -409,6 +424,36 @@ class CaptainCurrentRideSerializer(serializers.Serializer[Any]):
         allow_null=True,
         help_text="The open ride, else a finished one not yet marked paid; null when neither.",
     )
+
+
+def _reason_field(choices: tuple[str, ...]) -> serializers.CharField:
+    # A plain string checked against the list: a choice field named "reason" would merge with the
+    # other "reason" enums in the contract and rename them.
+    return serializers.CharField(help_text="One of: " + ", ".join(choices) + ".")
+
+
+def _check_reason(value: str, choices: tuple[str, ...]) -> str:
+    if value not in choices:
+        raise serializers.ValidationError("Choose one of: " + ", ".join(choices) + ".")
+    return value
+
+
+class RiderCancelSerializer(serializers.Serializer[Any]):
+    reason = _reason_field(RIDER_CANCEL_REASONS)
+
+    def validate_reason(self, value: str) -> str:
+        return _check_reason(value, RIDER_CANCEL_REASONS)
+
+
+class CaptainCancelSerializer(serializers.Serializer[Any]):
+    reason = _reason_field(CAPTAIN_CANCEL_REASONS)
+
+    def validate_reason(self, value: str) -> str:
+        return _check_reason(value, CAPTAIN_CANCEL_REASONS)
+
+
+class OperationsCancelSerializer(serializers.Serializer[Any]):
+    reason = serializers.CharField(max_length=64, help_text="Why Operations closed the ride.")
 
 
 class StartTripSerializer(serializers.Serializer[Any]):

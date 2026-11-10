@@ -3,6 +3,7 @@ from django.urls import path
 from apps.rides.views import (
     ArrivedView,
     AvailabilityView,
+    CaptainCancelView,
     CaptainCurrentRideView,
     CaptainLocationView,
     CaptainMeView,
@@ -20,8 +21,10 @@ from apps.rides.views import (
     OpsPassPlansView,
     OpsRateCardDetailView,
     OpsRateCardsView,
+    OpsRideCancelView,
     PaymentReceivedView,
     RideDetailView,
+    RiderCancelView,
     RidesView,
     StartTripView,
 )
@@ -33,6 +36,7 @@ urlpatterns = [
     path("rides/availability/", AvailabilityView.as_view(), name="availability"),
     path("rides/quotes/", FareQuotesView.as_view(), name="quotes"),
     path("rides/<uuid:ride_id>/", RideDetailView.as_view(), name="ride"),
+    path("rides/<uuid:ride_id>/cancel/", RiderCancelView.as_view(), name="ride-cancel"),
     path("partner/rides/me/", CaptainMeView.as_view(), name="captain-me"),
     path("partner/rides/vehicle/", CaptainVehicleView.as_view(), name="captain-vehicle"),
     path("partner/rides/pass-plans/", CaptainPassPlansView.as_view(), name="pass-plans"),
@@ -51,6 +55,7 @@ urlpatterns = [
         PaymentReceivedView.as_view(),
         name="trip-payment-received",
     ),
+    path("partner/rides/<uuid:ride_id>/cancel/", CaptainCancelView.as_view(), name="trip-cancel"),
     path("partner/rides/offers/current/", CurrentOfferView.as_view(), name="offer-current"),
     path(
         "partner/rides/offers/<uuid:offer_id>/accept/",
@@ -61,6 +66,11 @@ urlpatterns = [
         "partner/rides/offers/<uuid:offer_id>/decline/",
         OfferDeclineView.as_view(),
         name="offer-decline",
+    ),
+    path(
+        "operations/rides/<uuid:ride_id>/cancel/",
+        OpsRideCancelView.as_view(),
+        name="ops-ride-cancel",
     ),
     path("operations/rides/rate-cards/", OpsRateCardsView.as_view(), name="ops-rate-cards"),
     path(

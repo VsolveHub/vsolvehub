@@ -361,8 +361,8 @@ carries `captain_assigned_at`, `captain_arrived_at`, `started_at`, `completed_at
 
 All take no body unless shown, return `200` with the ride as in `partner/rides/current/`, and refuse
 with `409 invalid_transition` from the wrong state. A step already done returns the ride unchanged.
-Another captain's ride is `404`. ✅ Built: arrived, start, complete, payment-received.
-📝 Proposed: cancel, rating, sos.
+Another captain's ride is `404`. ✅ Built: arrived, start, complete, payment-received, cancel.
+📝 Proposed: rating, sos.
 
 | Method and path | Body | Moves | Extra errors |
 | --- | --- | --- | --- |
@@ -370,7 +370,7 @@ Another captain's ride is `404`. ✅ Built: arrived, start, complete, payment-re
 | `POST partner/rides/{ride_id}/start/` (Idempotency-Key) | `{ "otp": "4821" }` | `CAPTAIN_ARRIVED` → `IN_TRIP` | `400 otp_invalid`; `423 otp_locked` after 5 wrong tries. See *Start OTP* below. |
 | `POST partner/rides/{ride_id}/complete/` | — | `IN_TRIP` → `COMPLETED`, with `final_fare_paise` = fare + `waiting_paise` (fixed at start) and `payment_status: "DUE"` | — |
 | `POST partner/rides/{ride_id}/payment-received/` | — | `payment_status` `DUE` → `COLLECTED` | — |
-| `POST partner/rides/{ride_id}/cancel/` | `{ "reason": "RIDER_NOT_REACHABLE" }` | `CAPTAIN_ASSIGNED` / `CAPTAIN_ARRIVED` → `SEARCHING` without this captain; response `204` | `400 validation_error` without a reason |
+| `POST partner/rides/{ride_id}/cancel/` | `{ "reason": "RIDER_NOT_REACHABLE" }` | `CAPTAIN_ASSIGNED` / `CAPTAIN_ARRIVED` → `SEARCHING` from round 1, never offered back to this captain (other captains may be offered it again); response `204` | `400 validation_error` without a listed reason; `409 invalid_transition` from `IN_TRIP` (the captain ends the trip instead) |
 | `POST partner/rides/{ride_id}/rating/` | `{ "stars": 5 }` | rates the rider, once; response `201` | `409 invalid_transition` if already rated or not `COMPLETED` |
 | `POST partner/rides/{ride_id}/sos/` | `{ "latitude": 17.39, "longitude": 78.49 }` | raises an SOS; response `201 { "sos_id": "…", "emergency_number": "112" }`. See *Emergency number* below. | — |
 
@@ -517,15 +517,17 @@ step times, `cancelled_by`, `cancel_reason` and `emergency_number`.
 The rider's rides, newest first, paginated with the standard `cursor`. Each row: `id`, `state`,
 `vehicle_type`, pickup and drop addresses, `final_fare_paise` (or `fare_paise`), `created_at`.
 
-### 📝 `POST rides/{ride_id}/cancel/`
+### ✅ `POST rides/{ride_id}/cancel/`
 
 ```json
 { "reason": "CHANGED_MIND" }
 ```
 
 Response `200` with the ride `CANCELLED`. From `SEARCHING`, `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`;
-free in V1. Idempotent: cancelling a cancelled ride returns it unchanged. Errors:
-`409 invalid_transition` (for example from `IN_TRIP`), `400 validation_error` without a reason.
+free in V1. Pending offers are withdrawn and an assigned captain is freed. Idempotent: cancelling
+a cancelled ride returns it unchanged. Errors: `409 invalid_transition` (for example from
+`IN_TRIP`), `400 validation_error` without a listed reason, `404` for someone else's ride. While a
+captain's cancel has the ride searching again, `GET rides/{ride_id}/` says `searching_again: true`.
 Reasons: `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`.
 
 ### 📝 `POST rides/{ride_id}/rating/`
@@ -554,7 +556,7 @@ immediately. Works in any open state.
 | ✅ | `PATCH operations/rides/pass-plans/{id}/` | `name`, `price_paise`, `duration_hours`, `is_active` | `200`. `code` cannot change (`400`). A change never alters a pass already bought; a switched-off plan leaves the captains' list. |
 | 📝 | `GET operations/rides/?state=` | — | Rides, newest first; `state` filters (repeatable) |
 | 📝 | `GET operations/rides/{ride_id}/` | — | The ride with its `transitions` (who, from, to, when, why) and `offers` |
-| 📝 | `POST operations/rides/{ride_id}/cancel/` | `{ "reason": "Rider reported safety issue" }` | `200`, ride `CANCELLED` with `cancelled_by: "OPERATIONS"`. The only way to cancel an `IN_TRIP` ride. `400` without a reason; `409 invalid_transition` on a closed ride. |
+| ✅ | `POST operations/rides/{ride_id}/cancel/` | `{ "reason": "Rider reported safety issue" }` | `204`, ride `CANCELLED` with `cancelled_by: "OPERATIONS"`, from any open state. The only way to cancel an `IN_TRIP` ride. `400` without a reason or over 64 characters; `409 invalid_transition` on a closed ride; a cancelled ride is left as it is. |
 | 📝 | `GET operations/rides/captains/` | — | Captains with vehicle, approval, pass, duty, rating and cancel count |
 | 📝 | `GET operations/rides/sos/?status=OPEN` | — | The SOS queue, oldest open first |
 | 📝 | `POST operations/rides/sos/{sos_id}/resolve/` | `{ "resolution_note": "Called rider, all fine" }` | `200`; idempotent. A note is required. |
@@ -634,8 +636,8 @@ refused.
 and every forbidden one answering `409 invalid_transition`); the authorization matrix (anonymous,
 another rider, another captain, a customer on a captain URL, a captain on an Operations URL, a
 partner who is not a captain on a captain URL); notifications queued once per event with the
-right audience. The trip steps so far, the arrival geofence and the waiting charge are in
-`test_trip_steps.py`.
+right audience. The trip steps, the arrival geofence and the waiting charge are in `test_trip_steps.py`;
+cancellations and re-dispatch in `test_cancellations.py`.
 
 ## What the user sees when things go wrong
 

@@ -49,12 +49,15 @@ from apps.rides.models import (
 )
 
 __all__ = [
+    "CAPTAIN_CANCEL_REASONS",
     "OTP_INVALID",
     "OTP_LOCKED",
     "OTP_MAX_ATTEMPTS",
     "OTP_VISIBLE_STATES",
+    "RIDER_CANCEL_REASONS",
     "RIDE_REQUESTED",
     "accept_offer",
+    "captain_cancel",
     "captain_current_ride",
     "complete_trip",
     "create_ride",
@@ -62,10 +65,13 @@ __all__ = [
     "decline_offer",
     "mark_arrived",
     "mark_payment_received",
+    "operations_cancel",
     "otp_fingerprint",
     "redrive_dispatch",
     "ride_otp",
+    "rider_cancel",
     "run_dispatch_round",
+    "searching_again",
     "start_trip",
 ]
 
@@ -175,11 +181,27 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
 # --- Dispatch ---------------------------------------------------------------------------------
 
 
+def _search_started_at(ride: Ride) -> datetime:
+    """When the current search began: booking, or the last time a captain cancelled."""
+    started = (
+        RideTransition.objects.filter(ride=ride, to_state=RideState.SEARCHING)
+        .order_by("-at")
+        .values_list("at", flat=True)
+        .first()
+    )
+    return started or ride.created_at
+
+
 def _eligible_captains(ride: Ride, *, candidate_ids: list[str], now: datetime) -> set[UUID]:
     """Which of these nearby captains may get this ride now, locked so no other round takes them.
 
     Locked rows another dispatch is holding are skipped: that captain is about to get an offer.
+    A captain is offered a ride once per search; after a captain cancels, a new search may offer
+    it again to the others, but never to a captain who cancelled it.
     """
+    cancelled_by = RideTransition.objects.filter(
+        ride=ride, actor_kind=ActorKind.CAPTAIN, to_state=RideState.SEARCHING
+    ).values("actor_id")
     partner = models.OuterRef("pk")
     eligible = (
         PartnerProfile.objects.select_for_update(skip_locked=True)
@@ -213,7 +235,14 @@ def _eligible_captains(ride: Ride, *, candidate_ids: list[str], now: datetime) -
                 )
             )
         )
-        .exclude(models.Exists(RideOffer.objects.filter(captain=partner, ride=ride)))
+        .exclude(
+            models.Exists(
+                RideOffer.objects.filter(
+                    captain=partner, ride=ride, offered_at__gte=_search_started_at(ride)
+                )
+            )
+        )
+        .exclude(user_id__in=cancelled_by)
     )
     return set(eligible.values_list("id", flat=True))
 
@@ -230,18 +259,24 @@ def _offer_round(ride: Ride, *, round_no: int, now: datetime) -> list[RideOffer]
         return []
     eligible = _eligible_captains(ride, candidate_ids=[pid for pid, _ in nearby], now=now)
     chosen = [(UUID(pid), metres) for pid, metres in nearby if UUID(pid) in eligible]
+    chosen = chosen[: settings.RIDES_OFFERS_PER_ROUND]
     expires_at = now + timedelta(seconds=settings.RIDES_OFFER_SECONDS)
-    return RideOffer.objects.bulk_create(
-        RideOffer(
-            ride=ride,
-            captain_id=captain_id,
-            round=round_no,
-            pickup_distance_m=metres,
-            offered_at=now,
-            expires_at=expires_at,
-        )
-        for captain_id, metres in chosen[: settings.RIDES_OFFERS_PER_ROUND]
-    )
+    earlier = {
+        offer.captain_id: offer
+        for offer in RideOffer.objects.filter(ride=ride, captain_id__in=[c for c, _ in chosen])
+    }
+    offers: list[RideOffer] = []
+    for captain_id, metres in chosen:
+        offer = earlier.get(captain_id) or RideOffer(ride=ride, captain_id=captain_id)
+        offer.round = round_no
+        offer.status = RideOffer.Status.PENDING
+        offer.pickup_distance_m = metres
+        offer.offered_at = now
+        offer.expires_at = expires_at
+        offer.responded_at = None
+        offer.save()
+        offers.append(offer)
+    return offers
 
 
 def _schedule_round(ride_id: UUID, round_no: int, *, countdown: int | None = None) -> None:
@@ -608,4 +643,121 @@ def captain_current_ride(partner: PartnerProfile) -> Ride | None:
         or rides.filter(state=RideState.COMPLETED, payment_status=Ride.PaymentStatus.DUE)
         .order_by("-completed_at")
         .first()
+    )
+
+
+# --- Cancellations (brief §5.4) ---------------------------------------------------------------
+
+RIDER_CANCEL_REASONS = ("CHANGED_MIND", "CAPTAIN_DELAYED", "WRONG_PICKUP", "OTHER")
+CAPTAIN_CANCEL_REASONS = ("RIDER_NOT_REACHABLE", "VEHICLE_ISSUE", "PICKUP_TOO_FAR", "OTHER")
+#: The rider may cancel until the trip starts; after that only Operations can.
+_RIDER_CANCELLABLE = (
+    RideState.SEARCHING,
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+)
+_CAPTAIN_CANCELLABLE = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED)
+
+
+def _cancel(ride: Ride, *, actor: Any, actor_kind: str, reason: str, now: datetime) -> None:
+    """Close the ride as cancelled and withdraw any offer still on a captain's screen."""
+    ride.offers.filter(status=RideOffer.Status.PENDING).update(
+        status=RideOffer.Status.WITHDRAWN, responded_at=now
+    )
+    ride.cancelled_at = now
+    ride.cancelled_by = actor_kind
+    ride.cancel_reason = reason
+    _transition(
+        ride, RideState.CANCELLED, actor=actor, actor_kind=actor_kind, now=now, reason=reason
+    )
+    ride.save(
+        update_fields=("state", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at")
+    )
+    logger.info(
+        "ride_cancelled",
+        extra={"ride_id": str(ride.id), "cancelled_by": actor_kind, "reason": reason},
+    )
+
+
+@transaction.atomic
+def rider_cancel(*, rider: Any, ride_id: UUID, reason: str) -> Ride:
+    """The rider cancels, free in V1, until the trip starts. Cancelling twice changes nothing."""
+    ride = Ride.objects.select_for_update().filter(id=ride_id, rider=rider).first()
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    if ride.state == RideState.CANCELLED:
+        return ride
+    if ride.state not in _RIDER_CANCELLABLE:
+        raise InvalidTransitionError
+    _cancel(ride, actor=rider, actor_kind=ActorKind.RIDER, reason=reason, now=timezone.now())
+    return ride
+
+
+@transaction.atomic
+def captain_cancel(*, partner: PartnerProfile, ride_id: UUID, reason: str) -> None:
+    """The captain gives the ride up before the trip. The ride searches again from round 1,
+    never offering it back to this captain, and the cancel counts against them in Operations."""
+    ride = _captain_ride(partner, ride_id)
+    if ride.state not in _CAPTAIN_CANCELLABLE:
+        raise InvalidTransitionError
+    now = timezone.now()
+    # Frees the ride's single ACCEPTED slot for whoever takes it next.
+    ride.offers.filter(captain=partner, status=RideOffer.Status.ACCEPTED).update(
+        status=RideOffer.Status.WITHDRAWN, responded_at=now
+    )
+    ride.captain = None
+    ride.captain_assigned_at = None
+    ride.captain_arrived_at = None
+    ride.otp_attempts = 0
+    ride.dispatch_round = 0
+    _transition(
+        ride,
+        RideState.SEARCHING,
+        actor=partner.user,
+        actor_kind=ActorKind.CAPTAIN,
+        now=now,
+        reason=reason,
+    )
+    ride.save(
+        update_fields=(
+            "state",
+            "captain",
+            "captain_assigned_at",
+            "captain_arrived_at",
+            "otp_attempts",
+            "dispatch_round",
+            "updated_at",
+        )
+    )
+    _schedule_round(ride.id, 1, countdown=0)
+    logger.info(
+        "ride_captain_cancelled",
+        extra={"ride_id": str(ride.id), "partner_id": str(partner.id), "reason": reason},
+    )
+
+
+@transaction.atomic
+def operations_cancel(*, operator: Any, ride_id: UUID, reason: str) -> Ride:
+    """Operations closes any open ride, including one in trip. Cancelling twice changes nothing."""
+    ride = Ride.objects.select_for_update().filter(id=ride_id).first()
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    if ride.state == RideState.CANCELLED:
+        return ride
+    if ride.state not in OPEN_RIDE_STATES:
+        raise InvalidTransitionError
+    _cancel(
+        ride, actor=operator, actor_kind=ActorKind.OPERATIONS, reason=reason, now=timezone.now()
+    )
+    return ride
+
+
+def searching_again(ride: Ride) -> bool:
+    """A captain cancelled and the ride is looking for another: the rider sees
+    "Finding another captain" instead of "Finding your captain"."""
+    return (
+        ride.state == RideState.SEARCHING
+        and RideTransition.objects.filter(
+            ride=ride, actor_kind=ActorKind.CAPTAIN, to_state=RideState.SEARCHING
+        ).exists()
     )

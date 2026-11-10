@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 52b1acd6bfd18106
+ * Checksum: a01a4bc749959ca3
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4434,6 +4434,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/rides/{ride_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Operations closes any open ride, including one in trip. */
+        post: operations["operations_rides_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/rides/pass-plans/": {
         parameters: {
             query?: never;
@@ -7317,6 +7334,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/{ride_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The captain gives the ride up before the trip; the ride looks for another captain. */
+        post: operations["partner_rides_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/{ride_id}/complete/": {
         parameters: {
             query?: never;
@@ -9166,6 +9200,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rides/{ride_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The rider cancels, free, until the trip starts. Cancelling twice changes nothing. */
+        post: operations["rides_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rides/availability/": {
         parameters: {
             query?: never;
@@ -10378,6 +10429,10 @@ export interface components {
             readonly reason: string;
             /** Format: date-time */
             readonly occurred_at: string;
+        };
+        CaptainCancelRequest: {
+            /** @description One of: RIDER_NOT_REACHABLE, VEHICLE_ISSUE, PICKUP_TOO_FAR, OTHER. */
+            reason: string;
         };
         CaptainCurrentRide: {
             /** @description The open ride, else a finished one not yet marked paid; null when neither. */
@@ -13822,6 +13877,10 @@ export interface components {
             readonly is_late: boolean;
             readonly payout_hold: boolean;
             readonly needs_redispatch: boolean;
+        };
+        OperationsCancelRequest: {
+            /** @description Why Operations closed the ride. */
+            reason: string;
         };
         /**
          * @description The floor every state-changing fulfilment command sits on.
@@ -19216,6 +19275,8 @@ export interface components {
             readonly captain: components["schemas"]["RideCaptain"] | null;
             /** @description The 4-digit start code the rider tells the captain. Only before the trip starts. */
             readonly otp: string | null;
+            /** @description A captain cancelled and another is being found: say "Finding another captain". */
+            readonly searching_again: boolean;
         };
         /** @description Who is coming: what the rider sees once a captain accepts. */
         RideCaptain: {
@@ -19284,6 +19345,10 @@ export interface components {
             name: string;
             /** @description Only while the captain is on the way, at the pickup or in the trip. */
             readonly phone_number: string | null;
+        };
+        RiderCancelRequest: {
+            /** @description One of: CHANGED_MIND, CAPTAIN_DELAYED, WRONG_PICKUP, OTHER. */
+            reason: string;
         };
         /**
          * @description One role, as booked against as named.
@@ -31668,6 +31733,32 @@ export interface operations {
             };
         };
     };
+    operations_rides_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsCancelRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsCancelRequest"];
+                "multipart/form-data": components["schemas"]["OperationsCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     operations_rides_pass_plans_list: {
         parameters: {
             query?: never;
@@ -38149,6 +38240,32 @@ export interface operations {
             };
         };
     };
+    partner_rides_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptainCancelRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaptainCancelRequest"];
+                "multipart/form-data": components["schemas"]["CaptainCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     partner_rides_complete: {
         parameters: {
             query?: never;
@@ -42176,6 +42293,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ride"];
+                };
+            };
+        };
+    };
+    rides_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiderCancelRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RiderCancelRequest"];
+                "multipart/form-data": components["schemas"]["RiderCancelRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
