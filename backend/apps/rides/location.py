@@ -29,6 +29,7 @@ __all__ = [
     "forget",
     "geo_key",
     "has_recent_ping",
+    "last_position",
     "nearby",
     "record_position",
     "remember_area",
@@ -146,6 +147,13 @@ def forget(partner_id: Any) -> None:
         pipe.execute()
 
     _run(clear)
+
+
+def last_position(partner_id: Any) -> dict[str, str] | None:
+    """The captain's last ping (latitude, longitude, accuracy_m, heading, captured_at), or None
+    once it is more than 30 s old."""
+    value = _run(lambda r: cast(dict[str, str], r.hgetall(_pos(partner_id))))
+    return value or None
 
 
 def has_recent_ping(partner_id: Any) -> bool:

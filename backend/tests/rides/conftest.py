@@ -13,6 +13,12 @@ from pytest_django.fixtures import SettingsWrapper
 from tests.rides.ride_world import TEST_REDIS
 
 
+@pytest.fixture(autouse=True)
+def _ride_otp_secret(settings: SettingsWrapper) -> None:
+    """Every rides test has an OTP secret, as every real server must (there is no default)."""
+    settings.RIDES_OTP_SECRET = "test-only-otp-secret"  # noqa: S105 - a test value, not a secret
+
+
 @pytest.fixture
 def ride_redis(settings: SettingsWrapper) -> Iterator[Any]:
     """The local Docker Redis (database 15), empty, with the brief's dispatch numbers."""

@@ -78,6 +78,24 @@ added to this entry.
   signed-out callers, with the serviceability rate limit. `400` for a missing or out-of-range
   place; `503 routing_unavailable` (retryable) when the place cannot be looked up. It drives the
   Rides entry on the customer Home screen; there is no Rides catalogue category.
+- **Added** the captain trip steps, each answering the ride (`CaptainRide`) and refusing from the
+  wrong state with `409 invalid_transition`; repeating a step that is done returns the ride.
+  `POST /partner/rides/{ride_id}/arrived/`: `409 not_at_pickup` unless the last ping is under 30 s
+  old and within 200 m of the pickup, `503 location_unavailable` when Redis is down.
+  `POST /partner/rides/{ride_id}/start/` (`StartTripRequest`: `otp`, 4 digits; required
+  `Idempotency-Key`): a wrong code answers `400 otp_invalid` with `details.attempts_left`, the
+  fifth `423 otp_locked`; a retry with the same key replays the answer without counting again.
+  Starting fixes `waiting_paise`. `POST /partner/rides/{ride_id}/complete/`: `final_fare_paise` is
+  the fare plus waiting, `payment_status` `DUE`. `POST /partner/rides/{ride_id}/payment-received/`:
+  `COLLECTED`. `404` for another captain's ride.
+- **Added** `GET /partner/rides/current/` (`CaptainCurrentRide`): `ride`, the open ride or a
+  completed one not yet marked paid, else `null`. Polled every 5 s on a ride.
+- **Changed**, additive: `Ride` and `CaptainRide` add `captain_assigned_at`, `captain_arrived_at`,
+  `started_at`, `completed_at`, `cancelled_by`, `cancel_reason` and `emergency_number`. `Ride` adds
+  `otp` (only while `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`) and the captain's `position` and
+  `eta_s` (seconds to the pickup, while on the way), each `null` when the server does not know.
+- **Changed**: `POST /partner/rides/passes/` answers `403 captain_not_approved` unless the partner
+  is an approved captain.
 - **Added** `POST /rides/` (`RideCreateRequest` → `201 Ride`), with a required `Idempotency-Key`:
   books a ride from one of the rider's own quotes (`quote_id`). The ride starts `SEARCHING` and
   the server offers it to nearby captains in rounds; it ends `NO_CAPTAIN_FOUND` if nobody

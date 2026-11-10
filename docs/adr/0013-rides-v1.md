@@ -173,7 +173,8 @@ the Partner app Rides workspace and the Operations console are the agreed design
     `CAPTAIN_ASSIGNED`, `CAPTAIN_ARRIVED` or `IN_TRIP`. The captain's photo uses the existing
     `partner_photo_url`, which publishes only a reviewed photo and is otherwise `null`.
 29. **Agreed for the remaining engine work (Day 5).** `RIDES_OTP_SECRET` is required, with no
-    default. Rider cancel reasons: `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`.
+    default: without it no start code can be derived, so no ride can start (fail-closed at use;
+    a startup check would also stop every test run and laptop that lacks it). Rider cancel reasons: `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`.
     Captain cancel reasons: `RIDER_NOT_REACHABLE`, `VEHICLE_ISSUE`, `PICKUP_TOO_FAR`, `OTHER`.
     Operations cancels with free text. The rider's pickup ETA uses the same routing adapter, cached
     30 seconds per ride. Notifications are queued through `request_notification` with the right

@@ -10,9 +10,16 @@ from freezegun import freeze_time
 from apps.commerce.models import PaymentAttempt
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.commerce.services.simulation import attempt_belongs_to
+from apps.partners.models import PartnerApplication
 from apps.rides.models import CaptainDutySession, CaptainPass, CaptainPassPlan
 from apps.rides.services import complete_pass_payment, expire_passes
-from tests.rides.helpers import customer_client, make_user, ready_captain
+from tests.rides.helpers import (
+    customer_client,
+    make_user,
+    partner_client,
+    ready_captain,
+    start_application,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -287,3 +294,25 @@ def test_a_second_late_payment_is_left_for_operations_not_dropped() -> None:
     late.refresh_from_db()
     assert late.status == CaptainPass.Status.PENDING_ACTIVATION
     assert CaptainPass.objects.filter(status=CaptainPass.Status.QUEUED).count() == 1
+
+
+@pytest.mark.parametrize("status", ["DRAFT", "SUBMITTED", "SUSPENDED"])
+def test_only_an_approved_captain_can_buy_a_pass(status: str) -> None:
+    user, client = ready_captain()
+    application = PartnerApplication.objects.get(partner__user=user)
+    application.status = status
+    application.save(update_fields=("status",))
+
+    response = buy(client, plan("launch", 0).id)
+
+    assert (response.status_code, error_code(response)) == (403, "captain_not_approved")
+    assert not CaptainPass.objects.exists()
+
+
+def test_a_partner_on_another_track_cannot_buy_a_pass() -> None:
+    electrician = make_user("Suresh Electrician")
+    start_application(electrician, track=PartnerApplication.Track.SERVICES)
+
+    response = buy(partner_client(electrician), plan("launch", 0).id)
+
+    assert (response.status_code, error_code(response)) == (403, "captain_not_approved")

@@ -2,15 +2,28 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
+from typing import Any
 
+from django.core.cache import cache
 from django.utils import timezone
 
 from apps.partners.models import PartnerApplication, PartnerProfile
-from apps.rides.models import CaptainDutySession, CaptainPass, CaptainVehicle
+from apps.rides import location
+from apps.rides.models import (
+    CaptainDutySession,
+    CaptainPass,
+    CaptainVehicle,
+    Ride,
+    RideState,
+)
+from apps.rides.routing import RoutingUnavailableError, get_route
 
 __all__ = [
+    "CaptainLive",
     "CaptainStatus",
     "active_pass",
+    "captain_live",
     "captain_status",
     "open_duty_session",
     "queued_pass",
@@ -95,3 +108,58 @@ def captain_status(partner: PartnerProfile) -> CaptainStatus:
         blocked_reasons=blocked,
         server_now=timezone.now(),
     )
+
+
+# --- The rider's live ride (brief §5.7) -------------------------------------------------------
+
+#: While the ride is in these states, the rider sees where the captain is.
+_TRACKED_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED, RideState.IN_TRIP)
+#: The pickup ETA is a Routes call, so it is worked out at most this often per ride.
+ETA_CACHE_SECONDS = 30
+
+
+@dataclass(frozen=True, slots=True)
+class CaptainLive:
+    position: dict[str, Any] | None
+    eta_s: int | None
+
+
+def captain_live(ride: Ride) -> CaptainLive:
+    """Where the captain is, and how long to the pickup, if the server honestly knows.
+
+    Either is None rather than guessed: no fresh ping, Redis down, or Routes down. The ETA is
+    only for a captain still on the way.
+    """
+    if ride.captain_id is None or ride.state not in _TRACKED_STATES:
+        return CaptainLive(position=None, eta_s=None)
+    try:
+        ping = location.last_position(ride.captain_id)
+    except location.LocationStoreError:
+        ping = None
+    if ping is None:
+        return CaptainLive(position=None, eta_s=None)
+    position = {
+        "latitude": float(ping["latitude"]),
+        "longitude": float(ping["longitude"]),
+        "heading": float(ping["heading"]) if ping.get("heading") else None,
+        "captured_at": ping["captured_at"],
+    }
+    eta = _pickup_eta_s(ride, position) if ride.state == RideState.CAPTAIN_ASSIGNED else None
+    return CaptainLive(position=position, eta_s=eta)
+
+
+def _pickup_eta_s(ride: Ride, position: dict[str, Any]) -> int | None:
+    key = f"rides:eta:{ride.id}"
+    cached = cache.get(key)
+    if isinstance(cached, int):
+        return cached
+    try:
+        route = get_route(
+            pickup=(Decimal(str(position["latitude"])), Decimal(str(position["longitude"]))),
+            drop=(ride.pickup_latitude, ride.pickup_longitude),
+            vehicle_type=ride.vehicle_type,
+        )
+    except RoutingUnavailableError:
+        return None
+    cache.set(key, route.duration_s, ETA_CACHE_SECONDS)
+    return route.duration_s

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: b4ecfb2749254ecf
+ * Checksum: 52b1acd6bfd18106
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7300,6 +7300,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/{ride_id}/arrived/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description At the pickup: the last ping is under 30 s old and within 200 m. */
+        post: operations["partner_rides_arrived"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description End the trip: the final fare is the upfront fare plus waiting. */
+        post: operations["partner_rides_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/payment-received/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The rider paid the captain in cash or by UPI. */
+        post: operations["partner_rides_payment_received"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Start the trip with the rider's code. A network retry never costs an attempt. */
+        post: operations["partner_rides_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/current/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The ride the captain's app shows. Polled every 5 s while on a ride. */
+        get: operations["partner_rides_current_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/duty/start/": {
         parameters: {
             query?: never;
@@ -10207,6 +10292,14 @@ export interface components {
             }[];
         };
         /**
+         * @description * `RIDER` - Rider
+         *     * `CAPTAIN` - Captain
+         *     * `OPERATIONS` - Operations
+         *     * `SYSTEM` - System
+         * @enum {string}
+         */
+        CancelledByEnum: "RIDER" | "CAPTAIN" | "OPERATIONS" | "SYSTEM";
+        /**
          * @description A candidate for one job, as the employer sees them. No phone number here: that comes
          *     with an application, or after an accepted interview.
          */
@@ -10286,6 +10379,10 @@ export interface components {
             /** Format: date-time */
             readonly occurred_at: string;
         };
+        CaptainCurrentRide: {
+            /** @description The open ride, else a finished one not yet marked paid; null when neither. */
+            ride: components["schemas"]["CaptainRide"] | null;
+        };
         CaptainPass: {
             /** Format: uuid */
             readonly id: string;
@@ -10334,6 +10431,16 @@ export interface components {
             duration_hours: number;
             is_active?: boolean;
         };
+        CaptainPosition: {
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            heading: number | null;
+            /** Format: date-time */
+            captured_at: string;
+        };
         /** @description The captain's view of the ride they are doing. */
         CaptainRide: {
             /** Format: uuid */
@@ -10350,6 +10457,18 @@ export interface components {
             readonly payment_status: components["schemas"]["PaymentStatusEnum"];
             /** Format: date-time */
             readonly created_at: string;
+            /** Format: date-time */
+            readonly captain_assigned_at: string | null;
+            /** Format: date-time */
+            readonly captain_arrived_at: string | null;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            readonly cancelled_by: components["schemas"]["CancelledByEnum"];
+            readonly cancel_reason: string;
+            /** @description The number the SOS Call button dials. From the server; never hard-coded. */
+            readonly emergency_number: string;
             readonly rider: components["schemas"]["RideRider"];
         };
         CaptainStatus: {
@@ -19082,7 +19201,21 @@ export interface components {
             readonly payment_status: components["schemas"]["PaymentStatusEnum"];
             /** Format: date-time */
             readonly created_at: string;
+            /** Format: date-time */
+            readonly captain_assigned_at: string | null;
+            /** Format: date-time */
+            readonly captain_arrived_at: string | null;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            readonly cancelled_by: components["schemas"]["CancelledByEnum"];
+            readonly cancel_reason: string;
+            /** @description The number the SOS Call button dials. From the server; never hard-coded. */
+            readonly emergency_number: string;
             readonly captain: components["schemas"]["RideCaptain"] | null;
+            /** @description The 4-digit start code the rider tells the captain. Only before the trip starts. */
+            readonly otp: string | null;
         };
         /** @description Who is coming: what the rider sees once a captain accepts. */
         RideCaptain: {
@@ -19091,6 +19224,10 @@ export interface components {
             /** @description Only while the captain is on the way, at the pickup or in the trip. */
             readonly phone_number: string | null;
             vehicle: components["schemas"]["CaptainVehicle"];
+            /** @description The captain's last ping while it is fresh; null when the server doesn't know. */
+            readonly position: components["schemas"]["CaptainPosition"] | null;
+            /** @description Seconds to the pickup, while the captain is on the way; null if unknown. */
+            readonly eta_s: number | null;
         };
         RideCreateRequest: {
             /**
@@ -19961,6 +20098,10 @@ export interface components {
         StartStaySubscriptionPurchaseRequest: {
             /** Format: uuid */
             plan_id: string;
+        };
+        StartTripRequest: {
+            /** @description The rider's 4-digit start code. */
+            otp: string;
         };
         /**
          * @description * `SEARCHING` - Searching
@@ -37983,6 +38124,118 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerConsentDocument"][];
+                };
+            };
+        };
+    };
+    partner_rides_arrived: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_payment_received: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_start: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartTripRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StartTripRequest"];
+                "multipart/form-data": components["schemas"]["StartTripRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_current_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainCurrentRide"];
                 };
             };
         };

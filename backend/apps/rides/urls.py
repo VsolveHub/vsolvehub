@@ -1,12 +1,15 @@
 from django.urls import path
 
 from apps.rides.views import (
+    ArrivedView,
     AvailabilityView,
+    CaptainCurrentRideView,
     CaptainLocationView,
     CaptainMeView,
     CaptainPassesView,
     CaptainPassPlansView,
     CaptainVehicleView,
+    CompleteTripView,
     CurrentOfferView,
     DutyStartView,
     DutyStopView,
@@ -17,8 +20,10 @@ from apps.rides.views import (
     OpsPassPlansView,
     OpsRateCardDetailView,
     OpsRateCardsView,
+    PaymentReceivedView,
     RideDetailView,
     RidesView,
+    StartTripView,
 )
 
 app_name = "rides"
@@ -35,6 +40,17 @@ urlpatterns = [
     path("partner/rides/duty/start/", DutyStartView.as_view(), name="duty-start"),
     path("partner/rides/duty/stop/", DutyStopView.as_view(), name="duty-stop"),
     path("partner/rides/location/", CaptainLocationView.as_view(), name="location"),
+    path("partner/rides/current/", CaptainCurrentRideView.as_view(), name="captain-current"),
+    path("partner/rides/<uuid:ride_id>/arrived/", ArrivedView.as_view(), name="trip-arrived"),
+    path("partner/rides/<uuid:ride_id>/start/", StartTripView.as_view(), name="trip-start"),
+    path(
+        "partner/rides/<uuid:ride_id>/complete/", CompleteTripView.as_view(), name="trip-complete"
+    ),
+    path(
+        "partner/rides/<uuid:ride_id>/payment-received/",
+        PaymentReceivedView.as_view(),
+        name="trip-payment-received",
+    ),
     path("partner/rides/offers/current/", CurrentOfferView.as_view(), name="offer-current"),
     path(
         "partner/rides/offers/<uuid:offer_id>/accept/",

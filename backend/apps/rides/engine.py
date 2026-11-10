@@ -1,16 +1,20 @@
-"""The ride engine (brief §5.4, §5.6): booking a ride and finding it a captain.
+"""The ride engine (brief §5.4, §5.6): booking, finding a captain, and the trip steps.
 
 Every state change happens here, inside a transaction that locks the ride, and writes one
 `RideTransition`. Dispatch runs in Celery and is delivered at least once, so every step re-reads
 the ride first and does nothing if someone else already moved it on.
 """
 
+import hashlib
+import hmac
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound
@@ -19,6 +23,9 @@ from apps.foundation.services import enqueue_outbox_event
 from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.rides import location, selectors
 from apps.rides.exceptions import (
+    InvalidTransitionError,
+    LocationUnavailableError,
+    NotAtPickupError,
     NotOnDutyError,
     QuoteExpiredError,
     QuoteUsedError,
@@ -26,6 +33,7 @@ from apps.rides.exceptions import (
     RideNoLongerAvailableError,
     VehicleUnavailableError,
 )
+from apps.rides.fares import waiting_charge_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
     ActorKind,
@@ -41,13 +49,24 @@ from apps.rides.models import (
 )
 
 __all__ = [
+    "OTP_INVALID",
+    "OTP_LOCKED",
+    "OTP_MAX_ATTEMPTS",
+    "OTP_VISIBLE_STATES",
     "RIDE_REQUESTED",
     "accept_offer",
+    "captain_current_ride",
+    "complete_trip",
     "create_ride",
     "current_offer",
     "decline_offer",
+    "mark_arrived",
+    "mark_payment_received",
+    "otp_fingerprint",
     "redrive_dispatch",
+    "ride_otp",
     "run_dispatch_round",
+    "start_trip",
 ]
 
 logger = logging.getLogger(__name__)
@@ -412,4 +431,181 @@ def decline_offer(*, partner: PartnerProfile, offer_id: UUID) -> None:
             _schedule_round(ride.id, ride.dispatch_round + 1, countdown=0)
     logger.info(
         "ride_offer_declined", extra={"ride_id": str(offer.ride_id), "partner_id": str(partner.id)}
+    )
+
+
+# --- Trip steps (brief §5.4) ------------------------------------------------------------------
+
+#: Wrong start codes allowed before the ride is locked (also a database constraint).
+OTP_MAX_ATTEMPTS = 5
+#: The rider sees the start code only while the captain is on the way or at the pickup.
+OTP_VISIBLE_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED)
+#: Refusals `start_trip` returns instead of raising, so the counted attempt is kept.
+OTP_INVALID = "otp_invalid"
+OTP_LOCKED = "otp_locked"
+
+
+def _otp_secret() -> bytes:
+    secret = str(settings.RIDES_OTP_SECRET)
+    if not secret:
+        raise ImproperlyConfigured("RIDES_OTP_SECRET is not set, so no ride can start.")
+    return secret.encode()
+
+
+def ride_otp(ride_id: UUID) -> str:
+    """The ride's 4-digit start code: derived from its id, never stored, never logged."""
+    digest = hmac.new(_otp_secret(), str(ride_id).encode(), hashlib.sha256).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 10_000:04d}"
+
+
+def otp_fingerprint(ride_id: UUID, otp: str) -> str:
+    """What the idempotency record stores for a typed code: an HMAC, so the table cannot be
+    searched for the 10,000 possible codes."""
+    message = f"rides.start-otp.v1:{ride_id}:{otp}".encode()
+    return hmac.new(_otp_secret(), message, hashlib.sha256).hexdigest()
+
+
+def _captain_ride(partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The captain's own ride, locked. Anyone else's ride is a 404, so ids cannot be probed."""
+    ride = Ride.objects.select_for_update().filter(id=ride_id, captain=partner).first()
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    return ride
+
+
+def _metres_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance (haversine); plenty precise for a 200 m check."""
+    earth_m = 6_371_000
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * earth_m * math.asin(math.sqrt(a))
+
+
+def _at_pickup(ride: Ride, position: dict[str, str] | None, now: datetime) -> bool:
+    if position is None:
+        return False
+    captured_at = datetime.fromisoformat(position["captured_at"])
+    if now - captured_at > timedelta(seconds=30):
+        return False
+    distance = _metres_between(
+        float(position["latitude"]),
+        float(position["longitude"]),
+        float(ride.pickup_latitude),
+        float(ride.pickup_longitude),
+    )
+    return distance <= int(settings.RIDES_ARRIVAL_RADIUS_M)
+
+
+def _log_step(event: str, ride: Ride) -> None:
+    logger.info(event, extra={"ride_id": str(ride.id), "partner_id": str(ride.captain_id)})
+
+
+@transaction.atomic
+def mark_arrived(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The captain is at the pickup: their last ping is under 30 s old and within 200 m."""
+    ride = _captain_ride(partner, ride_id)
+    if ride.state == RideState.CAPTAIN_ARRIVED:
+        return ride
+    if ride.state != RideState.CAPTAIN_ASSIGNED:
+        raise InvalidTransitionError
+    try:
+        position = location.last_position(partner.id)
+    except location.LocationStoreError as exc:
+        raise LocationUnavailableError from exc
+    now = timezone.now()
+    if not _at_pickup(ride, position, now):
+        raise NotAtPickupError
+
+    ride.captain_arrived_at = now
+    _transition(
+        ride, RideState.CAPTAIN_ARRIVED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
+    )
+    ride.save(update_fields=("state", "captain_arrived_at", "updated_at"))
+    _log_step("ride_captain_arrived", ride)
+    return ride
+
+
+@transaction.atomic
+def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Ride, str | None]:
+    """Start the trip with the rider's code. Returns (ride, refusal).
+
+    A wrong code is counted and *returned* as `otp_invalid` (or `otp_locked` on the fifth),
+    never raised: raising would roll the count back. The waiting charge is fixed here, from the
+    time between arriving and starting.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.state == RideState.IN_TRIP:
+        return ride, None
+    if ride.state != RideState.CAPTAIN_ARRIVED:
+        raise InvalidTransitionError
+    if ride.otp_attempts >= OTP_MAX_ATTEMPTS:
+        return ride, OTP_LOCKED
+    if not hmac.compare_digest(otp, ride_otp(ride.id)):
+        ride.otp_attempts += 1
+        ride.save(update_fields=("otp_attempts", "updated_at"))
+        logger.info(
+            "ride_otp_wrong", extra={"ride_id": str(ride.id), "attempts": ride.otp_attempts}
+        )
+        return ride, OTP_LOCKED if ride.otp_attempts >= OTP_MAX_ATTEMPTS else OTP_INVALID
+
+    now = timezone.now()
+    card = FareQuote.objects.select_related("rate_card").get(pk=ride.quote_id).rate_card
+    arrived_at = ride.captain_arrived_at or now
+    ride.waiting_paise = waiting_charge_paise(
+        card, waited_s=int((now - arrived_at).total_seconds())
+    )
+    ride.started_at = now
+    _transition(ride, RideState.IN_TRIP, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now)
+    ride.save(update_fields=("state", "started_at", "waiting_paise", "updated_at"))
+    _log_step("ride_started", ride)
+    return ride, None
+
+
+@transaction.atomic
+def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """End the trip. The rider pays the upfront fare plus waiting; GPS never re-prices it."""
+    ride = _captain_ride(partner, ride_id)
+    if ride.state == RideState.COMPLETED:
+        return ride
+    if ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    now = timezone.now()
+    ride.completed_at = now
+    ride.final_fare_paise = ride.fare_paise + ride.waiting_paise
+    ride.payment_status = Ride.PaymentStatus.DUE
+    _transition(
+        ride, RideState.COMPLETED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
+    )
+    ride.save(
+        update_fields=("state", "completed_at", "final_fare_paise", "payment_status", "updated_at")
+    )
+    _log_step("ride_completed", ride)
+    return ride
+
+
+@transaction.atomic
+def mark_payment_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The captain got the cash or UPI. Saying so twice changes nothing."""
+    ride = _captain_ride(partner, ride_id)
+    if ride.state != RideState.COMPLETED:
+        raise InvalidTransitionError
+    if ride.payment_status == Ride.PaymentStatus.COLLECTED:
+        return ride
+    ride.payment_status = Ride.PaymentStatus.COLLECTED
+    ride.payment_collected_at = timezone.now()
+    ride.save(update_fields=("payment_status", "payment_collected_at", "updated_at"))
+    _log_step("ride_payment_collected", ride)
+    return ride
+
+
+def captain_current_ride(partner: PartnerProfile) -> Ride | None:
+    """The ride the captain's app should show: the open one, else a finished one still unpaid
+    (so the Collect screen survives an app restart)."""
+    rides = Ride.objects.select_related("quote", "rider").filter(captain=partner)
+    return (
+        rides.filter(state__in=OPEN_RIDE_STATES).first()
+        or rides.filter(state=RideState.COMPLETED, payment_status=Ride.PaymentStatus.DUE)
+        .order_by("-completed_at")
+        .first()
     )

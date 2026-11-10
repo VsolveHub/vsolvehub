@@ -162,6 +162,22 @@ class RideNoLongerAvailableError(RidesApiError):
         )
 
 
+class InvalidTransitionError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_transition", message="That isn't possible at this stage of the ride."
+        )
+
+
+class NotAtPickupError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(code="not_at_pickup", message="You are not at the pickup yet.")
+
+
 class RegistrationAlreadyUsedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

@@ -146,10 +146,10 @@ Codes are stable; the apps branch on them. Messages are the server's, shown to t
 | `ride_no_longer_available` | 409 | no | ✅ | "This ride is no longer available." |
 | `rate_card_exists` | 409 | no | ✅ | Operations: "This area already has an active card for this vehicle. Edit that card." |
 | `rate_card_inactive` | 409 | no | ✅ | Operations: "Only the active card can be changed. Create a new card instead." |
-| `invalid_transition` | 409 | no | 📝 | "That isn't possible at this stage of the ride." |
-| `not_at_pickup` | 409 | no | 📝 | "You are not at the pickup yet." |
-| `otp_invalid` | 400 | no | 📝 | "That code is wrong. Ask the rider for the 4-digit code." |
-| `otp_locked` | 423 | no | 📝 | "Too many wrong codes. The rider can cancel, or contact support." |
+| `invalid_transition` | 409 | no | ✅ | "That isn't possible at this stage of the ride." |
+| `not_at_pickup` | 409 | no | ✅ | "You are not at the pickup yet." |
+| `otp_invalid` | 400 | no | ✅ | "That code is wrong. Ask the rider for the 4-digit code." |
+| `otp_locked` | 423 | no | ✅ | "Too many wrong codes. The rider can cancel, or contact support." |
 
 **`retryable` means "safe to send the same request again, unchanged".** That matches the shared
 handler: it is `true` for 408, 425, 429, 502, 503 and 504, and for an exception that says so (such as
@@ -283,6 +283,7 @@ Request `{ "plan_id": "…" }`. Response `201` (`CaptainPass`, the shape in `me`
 | --- | --- |
 | An active pass | `409 pass_already_active` |
 | A paid purchase still going through (under 30 minutes old) | The same plan returns that pending pass, never a second charge; any other plan, paid or ₹0, is `409 pass_purchase_pending` |
+| Not an approved captain | `403 captain_not_approved` |
 | Unknown or switched-off plan | `404` |
 | Retry | The same key replays the same pass and payment attempt |
 
@@ -349,21 +350,25 @@ No body. Response `204`. When nobody else in the round is still deciding, the ri
 captains at once. Declining twice, or after the deadline, changes nothing. `404` for someone else's
 offer.
 
-### 📝 `GET partner/rides/current/`
+### ✅ `GET partner/rides/current/`
 
-The captain's open ride (`CaptainRide`, as above), or `{ "ride": null }`. Adds `captain_arrived_at`,
-`started_at` and `emergency_number`.
+`{ "ride": … }`: the captain's open ride (`CaptainRide`, as above), else a completed ride not yet
+marked paid (so the Collect screen survives an app restart), else `null`. Every ride view also
+carries `captain_assigned_at`, `captain_arrived_at`, `started_at`, `completed_at`, `cancelled_by`,
+`cancel_reason` and `emergency_number`.
 
-### 📝 Trip steps
+### Trip steps
 
 All take no body unless shown, return `200` with the ride as in `partner/rides/current/`, and refuse
 with `409 invalid_transition` from the wrong state. A step already done returns the ride unchanged.
+Another captain's ride is `404`. ✅ Built: arrived, start, complete, payment-received.
+📝 Proposed: cancel, rating, sos.
 
 | Method and path | Body | Moves | Extra errors |
 | --- | --- | --- | --- |
-| `POST partner/rides/{ride_id}/arrived/` | — | `CAPTAIN_ASSIGNED` → `CAPTAIN_ARRIVED` | `409 not_at_pickup` unless the last ping is at most 30 s old and within 200 m of the pickup |
+| `POST partner/rides/{ride_id}/arrived/` | — | `CAPTAIN_ASSIGNED` → `CAPTAIN_ARRIVED` | `409 not_at_pickup` unless the last ping is at most 30 s old and within 200 m of the pickup; `503 location_unavailable` when Redis is down |
 | `POST partner/rides/{ride_id}/start/` (Idempotency-Key) | `{ "otp": "4821" }` | `CAPTAIN_ARRIVED` → `IN_TRIP` | `400 otp_invalid`; `423 otp_locked` after 5 wrong tries. See *Start OTP* below. |
-| `POST partner/rides/{ride_id}/complete/` | — | `IN_TRIP` → `COMPLETED`, with `waiting_paise`, `final_fare_paise` and `payment_status: "DUE"` | — |
+| `POST partner/rides/{ride_id}/complete/` | — | `IN_TRIP` → `COMPLETED`, with `final_fare_paise` = fare + `waiting_paise` (fixed at start) and `payment_status: "DUE"` | — |
 | `POST partner/rides/{ride_id}/payment-received/` | — | `payment_status` `DUE` → `COLLECTED` | — |
 | `POST partner/rides/{ride_id}/cancel/` | `{ "reason": "RIDER_NOT_REACHABLE" }` | `CAPTAIN_ASSIGNED` / `CAPTAIN_ARRIVED` → `SEARCHING` without this captain; response `204` | `400 validation_error` without a reason |
 | `POST partner/rides/{ride_id}/rating/` | `{ "stars": 5 }` | rates the rider, once; response `201` | `409 invalid_transition` if already rated or not `COMPLETED` |
@@ -410,8 +415,8 @@ read the idempotency table. The `start` view therefore never passes the code. It
 - Different codes give different MACs, so reusing a key with another code is still caught as
   `409 idempotency_key_reused`. The same code gives the same MAC, so a network retry still replays.
 - The MAC is compared only by `execute_idempotent`, never shown.
-- `RIDES_OTP_SECRET` has no default. The server refuses to start without it, as with the other
-  fail-closed settings (ADR-0004); tests set their own.
+- `RIDES_OTP_SECRET` has no default. Without it no code can be derived, so no ride can start
+  (fail-closed at use, ADR-0004); every deployment must set it, and tests set their own.
 - The code is never logged and never stored as text. The stored response for a wrong code holds
   `otp_invalid` and `attempts_left`, never the code.
 
@@ -501,9 +506,11 @@ The rider's own ride only. Built today:
 | `captain.phone_number` | `CAPTAIN_ASSIGNED`, `CAPTAIN_ARRIVED`, `IN_TRIP` only; `null` otherwise |
 | `captain.photo_url` | A reviewed photo only; `null` otherwise |
 
-📝 Proposed additions (added when built, additively): `otp` (before `IN_TRIP` only),
-`captain.position` (while fresh, else `null`), `captain.eta_s` (`null` if Routes is down; the app
-says the ETA is unavailable), `cancelled_by`, `cancel_reason` and `emergency_number`.
+Also ✅: `otp` (while `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`, else `null`), `captain.position`
+(`latitude`, `longitude`, `heading`, `captured_at`; the last ping while fresh, else `null`),
+`captain.eta_s` (seconds to the pickup while `CAPTAIN_ASSIGNED`, from the routing adapter cached
+30 s per ride; `null` if Routes or Redis is down, and the app says the ETA is unavailable), the
+step times, `cancelled_by`, `cancel_reason` and `emergency_number`.
 
 ### 📝 `GET rides/`
 
@@ -609,7 +616,7 @@ which *returns* a refusal keeps its write and replays it without running again, 
 *raises* rolls its write back and stores nothing, and a reused key with a different payload is
 refused.
 
-**Start OTP** (`test_otp.py`, with `POST partner/rides/{ride_id}/start/`):
+**Start OTP** (`test_otp.py`, passing):
 
 1. A wrong code adds exactly 1 to `otp_attempts`.
 2. The `400 otp_invalid` response and the new `otp_attempts` are committed together: after the call,
@@ -626,8 +633,9 @@ refused.
 **Still to write with the remaining endpoints:** the state-machine matrix (every allowed transition,
 and every forbidden one answering `409 invalid_transition`); the authorization matrix (anonymous,
 another rider, another captain, a customer on a captain URL, a captain on an Operations URL, a
-partner who is not a captain on a captain URL); the arrival geofence; the waiting charge;
-notifications queued once per event with the right audience.
+partner who is not a captain on a captain URL); notifications queued once per event with the
+right audience. The trip steps so far, the arrival geofence and the waiting charge are in
+`test_trip_steps.py`.
 
 ## What the user sees when things go wrong
 

@@ -284,6 +284,15 @@ def buy_pass(
     that payment settles or is 30 minutes old.
     """
     _lock_partner(partner)
+    # A pass is only worth buying to drive: never take money from a partner who cannot.
+    if not PartnerApplication.objects.filter(
+        partner=partner,
+        track=PartnerApplication.Track.RIDE_CAPTAIN,
+        status=PartnerApplication.Status.APPROVED,
+    ).exists():
+        raise CaptainNotApprovedError(
+            "You can buy a pass once your captain application is approved."
+        )
     now = timezone.now()
     _expire_lapsed_passes(partner_id=partner.id, now=now)
     if selectors.active_pass(partner, now=now) is not None:

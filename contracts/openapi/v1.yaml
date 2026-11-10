@@ -17753,6 +17753,131 @@ paths:
                 items:
                   $ref: '#/components/schemas/PartnerConsentDocument'
           description: ''
+  /api/v1/partner/rides/{ride_id}/arrived/:
+    post:
+      operationId: partner_rides_arrived
+      description: 'At the pickup: the last ping is under 30 s old and within 200
+        m.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/complete/:
+    post:
+      operationId: partner_rides_complete
+      description: 'End the trip: the final fare is the upfront fare plus waiting.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/payment-received/:
+    post:
+      operationId: partner_rides_payment_received
+      description: The rider paid the captain in cash or by UPI.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/start/:
+    post:
+      operationId: partner_rides_start
+      description: Start the trip with the rider's code. A network retry never costs
+        an attempt.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/current/:
+    get:
+      operationId: partner_rides_current_retrieve
+      description: The ride the captain's app shows. Polled every 5 s while on a ride.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainCurrentRide'
+          description: ''
   /api/v1/partner/rides/duty/start/:
     post:
       operationId: partner_rides_duty_start
@@ -24776,6 +24901,18 @@ components:
           maxItems: 20
       required:
       - reason_code
+    CancelledByEnum:
+      enum:
+      - RIDER
+      - CAPTAIN
+      - OPERATIONS
+      - SYSTEM
+      type: string
+      description: |-
+        * `RIDER` - Rider
+        * `CAPTAIN` - Captain
+        * `OPERATIONS` - Operations
+        * `SYSTEM` - System
     CandidateMatch:
       type: object
       description: |-
@@ -24975,6 +25112,17 @@ components:
       - reason
       - reason_code
       - to_status
+    CaptainCurrentRide:
+      type: object
+      properties:
+        ride:
+          allOf:
+          - $ref: '#/components/schemas/CaptainRide'
+          nullable: true
+          description: The open ride, else a finished one not yet marked paid; null
+            when neither.
+      required:
+      - ride
     CaptainPass:
       type: object
       properties:
@@ -25112,6 +25260,27 @@ components:
       - duration_hours
       - name
       - price_paise
+    CaptainPosition:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        heading:
+          type: number
+          format: double
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+      required:
+      - captured_at
+      - heading
+      - latitude
+      - longitude
     CaptainRide:
       type: object
       description: The captain's view of the ride they are doing.
@@ -25161,13 +25330,51 @@ components:
           type: string
           format: date-time
           readOnly: true
+        captain_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        captain_arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        emergency_number:
+          type: string
+          readOnly: true
+          description: The number the SOS Call button dials. From the server; never
+            hard-coded.
         rider:
           allOf:
           - $ref: '#/components/schemas/RideRider'
           readOnly: true
       required:
+      - cancel_reason
+      - cancelled_by
+      - captain_arrived_at
+      - captain_assigned_at
+      - completed_at
       - created_at
       - drop
+      - emergency_number
       - fare_paise
       - final_fare_paise
       - id
@@ -25176,6 +25383,7 @@ components:
       - pickup
       - rider
       - route_polyline
+      - started_at
       - state
       - vehicle_type
       - waiting_paise
@@ -47282,22 +47490,68 @@ components:
           type: string
           format: date-time
           readOnly: true
+        captain_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        captain_arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        emergency_number:
+          type: string
+          readOnly: true
+          description: The number the SOS Call button dials. From the server; never
+            hard-coded.
         captain:
           allOf:
           - $ref: '#/components/schemas/RideCaptain'
           nullable: true
           readOnly: true
+        otp:
+          type: string
+          nullable: true
+          readOnly: true
+          description: The 4-digit start code the rider tells the captain. Only before
+            the trip starts.
       required:
+      - cancel_reason
+      - cancelled_by
       - captain
+      - captain_arrived_at
+      - captain_assigned_at
+      - completed_at
       - created_at
       - drop
+      - emergency_number
       - fare_paise
       - final_fare_paise
       - id
+      - otp
       - payment_method
       - payment_status
       - pickup
       - route_polyline
+      - started_at
       - state
       - vehicle_type
       - waiting_paise
@@ -47319,10 +47573,25 @@ components:
             trip.
         vehicle:
           $ref: '#/components/schemas/CaptainVehicle'
+        position:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPosition'
+          nullable: true
+          readOnly: true
+          description: The captain's last ping while it is fresh; null when the server
+            doesn't know.
+        eta_s:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: Seconds to the pickup, while the captain is on the way; null
+            if unknown.
       required:
+      - eta_s
       - name
       - phone_number
       - photo_url
+      - position
       - vehicle
     RideCreateRequest:
       type: object
@@ -49490,6 +49759,16 @@ components:
           format: uuid
       required:
       - plan_id
+    StartTripRequest:
+      type: object
+      properties:
+        otp:
+          type: string
+          minLength: 1
+          description: The rider's 4-digit start code.
+          pattern: ^\d{4}$
+      required:
+      - otp
     StateEnum:
       enum:
       - SEARCHING

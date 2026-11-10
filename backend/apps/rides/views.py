@@ -23,6 +23,7 @@ from apps.rides.serializers import (
     AvailabilityQuerySerializer,
     AvailabilitySerializer,
     BuyPassSerializer,
+    CaptainCurrentRideSerializer,
     CaptainPassPlanOpsSerializer,
     CaptainPassPlanSerializer,
     CaptainPassSerializer,
@@ -40,17 +41,22 @@ from apps.rides.serializers import (
     RideCreateSerializer,
     RideRateCardSerializer,
     RideSerializer,
+    StartTripSerializer,
 )
+from common.observability.context import get_request_id
 from common.schema import IDEMPOTENCY_KEY_HEADER
 from common.throttling import ThrottledWriteMixin
 
 __all__ = [
+    "ArrivedView",
     "AvailabilityView",
+    "CaptainCurrentRideView",
     "CaptainLocationView",
     "CaptainMeView",
     "CaptainPassPlansView",
     "CaptainPassesView",
     "CaptainVehicleView",
+    "CompleteTripView",
     "CurrentOfferView",
     "DutyStartView",
     "DutyStopView",
@@ -61,8 +67,10 @@ __all__ = [
     "OpsPassPlansView",
     "OpsRateCardDetailView",
     "OpsRateCardsView",
+    "PaymentReceivedView",
     "RideDetailView",
     "RidesView",
+    "StartTripView",
 ]
 
 
@@ -468,6 +476,138 @@ class AvailabilityView(APIView):
         query.is_valid(raise_exception=True)
         types = services.available_vehicle_types(**query.validated_data)
         return Response(AvailabilitySerializer({"vehicle_types": types}).data)
+
+
+class CaptainCurrentRideView(APIView):
+    """The ride the captain's app shows. Polled every 5 s while on a ride."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_current_retrieve", responses=CaptainCurrentRideSerializer
+    )
+    def get(self, request: Any) -> Response:
+        ride = engine.captain_current_ride(_partner(request.user))
+        return Response(CaptainCurrentRideSerializer({"ride": ride}).data)
+
+
+class _TripStepView(APIView):
+    """One captain trip step with no body. Repeating a step that is done returns the ride."""
+
+    permission_classes = (IsPartnerUser,)
+    step: Any
+
+    def post(self, request: Any, ride_id: Any) -> Response:
+        ride = type(self).step(partner=_partner(request.user), ride_id=ride_id)
+        return Response(CaptainRideSerializer(ride).data)
+
+
+class ArrivedView(_TripStepView):
+    """At the pickup: the last ping is under 30 s old and within 200 m."""
+
+    step = staticmethod(engine.mark_arrived)
+
+    @extend_schema(
+        operation_id="partner_rides_arrived", request=None, responses=CaptainRideSerializer
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return super().post(request, ride_id)
+
+
+class CompleteTripView(_TripStepView):
+    """End the trip: the final fare is the upfront fare plus waiting."""
+
+    step = staticmethod(engine.complete_trip)
+
+    @extend_schema(
+        operation_id="partner_rides_complete", request=None, responses=CaptainRideSerializer
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return super().post(request, ride_id)
+
+
+class PaymentReceivedView(_TripStepView):
+    """The rider paid the captain in cash or by UPI."""
+
+    step = staticmethod(engine.mark_payment_received)
+
+    @extend_schema(
+        operation_id="partner_rides_payment_received", request=None, responses=CaptainRideSerializer
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return super().post(request, ride_id)
+
+
+_OTP_REFUSALS = {
+    engine.OTP_INVALID: (
+        http_status.HTTP_400_BAD_REQUEST,
+        "That code is wrong. Ask the rider for the 4-digit code.",
+    ),
+    engine.OTP_LOCKED: (
+        http_status.HTTP_423_LOCKED,
+        "Too many wrong codes. The rider can cancel, or contact support.",
+    ),
+}
+
+
+def _otp_refusal(code: str, ride: Any) -> tuple[int, dict[str, Any]]:
+    """A refusal in the shared error envelope, returned (not raised) so it is stored with the
+    counted attempt and a retry with the same key replays it."""
+    status, message = _OTP_REFUSALS[code]
+    details = (
+        {"attempts_left": engine.OTP_MAX_ATTEMPTS - ride.otp_attempts}
+        if code == engine.OTP_INVALID
+        else None
+    )
+    error = {
+        "code": code,
+        "message": message,
+        "details": details,
+        "retryable": False,
+        "request_id": get_request_id(),
+    }
+    return status, {"error": error}
+
+
+class StartTripView(APIView):
+    """Start the trip with the rider's code. A network retry never costs an attempt."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_start",
+        request=StartTripSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses=CaptainRideSerializer,
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        serializer = StartTripSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        otp = serializer.validated_data["otp"]
+        key = _required_idempotency_key(request)
+        partner = _partner(request.user)
+
+        def command() -> tuple[int, dict[str, Any]]:
+            ride, refusal = engine.start_trip(partner=partner, ride_id=ride_id, otp=otp)
+            if refusal is not None:
+                return _otp_refusal(refusal, ride)
+            return http_status.HTTP_200_OK, dict(CaptainRideSerializer(ride).data)
+
+        result = execute_idempotent(
+            actor=request.user,
+            operation="rides.trip.start",
+            key=key,
+            # Never the code itself: an HMAC, so the stored fingerprint cannot be searched.
+            request_payload={
+                "ride_id": str(ride_id),
+                "otp_mac": engine.otp_fingerprint(ride_id, otp),
+            },
+            command=command,
+        )
+        response = Response(result.body, status=result.status_code)
+        if result.replayed:
+            response["Idempotent-Replay"] = "true"
+        return response
 
 
 class FareQuotesView(ThrottledWriteMixin, APIView):

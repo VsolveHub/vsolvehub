@@ -1,12 +1,14 @@
 from decimal import Decimal
 from typing import Any
 
+from django.conf import settings
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.partners.models import PartnerProfile
 from apps.partners.photos import partner_photo_url
+from apps.rides.engine import OTP_VISIBLE_STATES, ride_otp
 from apps.rides.models import (
     RATE_FIELDS,
     CaptainDutySession,
@@ -20,15 +22,17 @@ from apps.rides.models import (
     RideState,
     VehicleType,
 )
-from apps.rides.selectors import CaptainStatus
+from apps.rides.selectors import CaptainLive, CaptainStatus, captain_live
 
 __all__ = [
     "AvailabilityQuerySerializer",
     "AvailabilitySerializer",
     "BuyPassSerializer",
+    "CaptainCurrentRideSerializer",
     "CaptainPassPlanOpsSerializer",
     "CaptainPassPlanSerializer",
     "CaptainPassSerializer",
+    "CaptainPositionSerializer",
     "CaptainRideSerializer",
     "CaptainStatusSerializer",
     "CaptainVehicleSerializer",
@@ -48,6 +52,7 @@ __all__ = [
     "RideRateCardSerializer",
     "RideRiderSerializer",
     "RideSerializer",
+    "StartTripSerializer",
 ]
 
 
@@ -261,6 +266,13 @@ def _drop(ride: Ride) -> dict[str, Any]:
     }
 
 
+class CaptainPositionSerializer(serializers.Serializer[Any]):
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+    heading = serializers.FloatField(allow_null=True)
+    captured_at = serializers.DateTimeField()
+
+
 class RideCaptainSerializer(serializers.Serializer[Any]):
     """Who is coming: what the rider sees once a captain accepts."""
 
@@ -270,9 +282,26 @@ class RideCaptainSerializer(serializers.Serializer[Any]):
         help_text="Only while the captain is on the way, at the pickup or in the trip."
     )
     vehicle = CaptainVehicleSerializer(source="ride_vehicle")
+    position = serializers.SerializerMethodField(
+        help_text="The captain's last ping while it is fresh; null when the server doesn't know."
+    )
+    eta_s = serializers.SerializerMethodField(
+        help_text="Seconds to the pickup, while the captain is on the way; null if unknown."
+    )
 
     def get_photo_url(self, obj: PartnerProfile) -> str | None:
         return partner_photo_url(obj)
+
+    @extend_schema_field(CaptainPositionSerializer(allow_null=True))
+    def get_position(self, obj: PartnerProfile) -> dict[str, Any] | None:
+        del obj  # the live position comes from the ride, in the context
+        live: CaptainLive = self.context["live"]
+        return live.position
+
+    def get_eta_s(self, obj: PartnerProfile) -> int | None:
+        del obj
+        live: CaptainLive = self.context["live"]
+        return live.eta_s
 
     def get_phone_number(self, obj: PartnerProfile) -> str | None:
         ride: Ride = self.context["ride"]
@@ -296,6 +325,9 @@ class _RideBaseSerializer(serializers.ModelSerializer[Ride]):
     pickup = serializers.SerializerMethodField()
     drop = serializers.SerializerMethodField()
     route_polyline = serializers.CharField(source="quote.route_polyline", read_only=True)
+    emergency_number = serializers.SerializerMethodField(
+        help_text="The number the SOS Call button dials. From the server; never hard-coded."
+    )
 
     class Meta:
         model = Ride
@@ -312,8 +344,19 @@ class _RideBaseSerializer(serializers.ModelSerializer[Ride]):
             "payment_method",
             "payment_status",
             "created_at",
+            "captain_assigned_at",
+            "captain_arrived_at",
+            "started_at",
+            "completed_at",
+            "cancelled_by",
+            "cancel_reason",
+            "emergency_number",
         )
         read_only_fields = fields
+
+    def get_emergency_number(self, obj: Ride) -> str:
+        del obj
+        return str(settings.RIDES_EMERGENCY_NUMBER)
 
     @extend_schema_field(RidePlaceSerializer)
     def get_pickup(self, obj: Ride) -> dict[str, Any]:
@@ -328,16 +371,23 @@ class RideSerializer(_RideBaseSerializer):
     """The rider's view of one ride."""
 
     captain = serializers.SerializerMethodField()
+    otp = serializers.SerializerMethodField(
+        help_text="The 4-digit start code the rider tells the captain. Only before the trip starts."
+    )
 
     class Meta(_RideBaseSerializer.Meta):
-        fields = (*_RideBaseSerializer.Meta.fields, "captain")
+        fields = (*_RideBaseSerializer.Meta.fields, "captain", "otp")
         read_only_fields = fields
 
     @extend_schema_field(RideCaptainSerializer(allow_null=True))
     def get_captain(self, obj: Ride) -> dict[str, Any] | None:
         if obj.captain is None:
             return None
-        return dict(RideCaptainSerializer(obj.captain, context={"ride": obj}).data)
+        context = {"ride": obj, "live": captain_live(obj)}
+        return dict(RideCaptainSerializer(obj.captain, context=context).data)
+
+    def get_otp(self, obj: Ride) -> str | None:
+        return ride_otp(obj.id) if obj.state in OTP_VISIBLE_STATES else None
 
 
 class CaptainRideSerializer(_RideBaseSerializer):
@@ -352,6 +402,17 @@ class CaptainRideSerializer(_RideBaseSerializer):
     @extend_schema_field(RideRiderSerializer)
     def get_rider(self, obj: Ride) -> dict[str, Any]:
         return dict(RideRiderSerializer(obj.rider, context={"ride": obj}).data)
+
+
+class CaptainCurrentRideSerializer(serializers.Serializer[Any]):
+    ride = CaptainRideSerializer(
+        allow_null=True,
+        help_text="The open ride, else a finished one not yet marked paid; null when neither.",
+    )
+
+
+class StartTripSerializer(serializers.Serializer[Any]):
+    otp = serializers.RegexField(r"^\d{4}$", help_text="The rider's 4-digit start code.")
 
 
 class RideOfferSerializer(serializers.ModelSerializer[RideOffer]):

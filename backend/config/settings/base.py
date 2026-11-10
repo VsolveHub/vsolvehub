@@ -837,6 +837,12 @@ RIDES_DISPATCH_RADII_M = [
 ]
 RIDES_OFFERS_PER_ROUND = env.int("RIDES_OFFERS_PER_ROUND", default=3)
 RIDES_OFFER_SECONDS = env.int("RIDES_OFFER_SECONDS", default=15)
+# The start OTP is HMAC(secret, ride id). No default on purpose: without it a ride cannot start.
+RIDES_OTP_SECRET = env("RIDES_OTP_SECRET", default="")
+# "Arrived" is accepted only this close to the pickup, from a ping at most 30 s old.
+RIDES_ARRIVAL_RADIUS_M = env.int("RIDES_ARRIVAL_RADIUS_M", default=200)
+# Shown on every live ride and after an SOS.
+RIDES_EMERGENCY_NUMBER = env("RIDES_EMERGENCY_NUMBER", default="112")
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
