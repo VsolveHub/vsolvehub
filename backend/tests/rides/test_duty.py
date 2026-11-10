@@ -260,3 +260,16 @@ def test_duty_answers_carry_the_server_clock() -> None:
     for body in (client.post(START).json(), client.get("/api/v1/partner/rides/me/").json()):
         server_now = datetime.fromisoformat(body["server_now"])
         assert abs((server_now - timezone.now()).total_seconds()) < 5
+
+
+def test_me_says_why_the_last_duty_ended_while_off_duty() -> None:
+    user, client = ready_captain()
+    give_pass(user)
+    client.post(START)
+    assert client.get("/api/v1/partner/rides/me/").json()["last_duty_end"] is None  # on duty
+
+    client.post(STOP)
+
+    ended = client.get("/api/v1/partner/rides/me/").json()["last_duty_end"]
+    assert ended["reason"] == "CAPTAIN_OFF"
+    assert ended["ended_at"]

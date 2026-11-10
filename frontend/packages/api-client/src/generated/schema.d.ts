@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 860c80f2fa0c8529
+ * Checksum: 3922b0a551292a14
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -10733,6 +10733,8 @@ export interface components {
              * @description The server's clock. The app keeps its offset from the phone's clock and sends location captured_at in server time (brief §5.6).
              */
             server_now: string;
+            /** @description While off duty: why and when the last duty ended, so the app can explain it. */
+            last_duty_end: components["schemas"]["LastDutyEnd"] | null;
         };
         CaptainVehicle: {
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
@@ -13456,6 +13458,12 @@ export interface components {
          * @enum {string}
          */
         Kind1c9Enum: "EARN_PROMISE" | "UNLOCK" | "RESERVE" | "BURN" | "RELEASE" | "EXPIRE" | "CANCEL" | "REVERSE" | "ADJUSTMENT";
+        LastDutyEnd: {
+            /** @description CAPTAIN_OFF, LOCATION_STALE, PASS_EXPIRED, SUSPENDED or OPERATIONS. */
+            reason: string;
+            /** Format: date-time */
+            ended_at: string;
+        };
         /**
          * @description A correction, which is always a new entry rather than an edit.
          *

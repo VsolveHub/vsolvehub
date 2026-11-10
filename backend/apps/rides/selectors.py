@@ -53,6 +53,8 @@ class CaptainStatus:
     #: Why the captain cannot go on duty, in the order the app should explain them.
     blocked_reasons: list[str]
     server_now: datetime
+    #: The last duty session, while off duty: why and when it ended, so the app can say so.
+    last_duty_end: CaptainDutySession | None = None
 
 
 def queued_pass(partner: PartnerProfile) -> CaptainPass | None:
@@ -114,6 +116,11 @@ def captain_status(partner: PartnerProfile) -> CaptainStatus:
         duty_started_at=session.started_at if session else None,
         blocked_reasons=blocked,
         server_now=timezone.now(),
+        last_duty_end=None
+        if session is not None
+        else CaptainDutySession.objects.filter(partner=partner, ended_at__isnull=False)
+        .order_by("-ended_at")
+        .first(),
     )
 
 

@@ -33,6 +33,7 @@ def test_a_partner_who_has_not_applied_as_a_captain() -> None:
         "vehicle": None,
         "active_pass": None,
         "queued_pass": None,
+        "last_duty_end": None,
         "on_duty": False,
         "duty_started_at": None,
         "blocked_reasons": ["not_approved", "vehicle_missing", "pass_required"],

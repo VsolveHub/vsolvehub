@@ -25874,12 +25874,19 @@ components:
           format: date-time
           description: The server's clock. The app keeps its offset from the phone's
             clock and sends location captured_at in server time (brief §5.6).
+        last_duty_end:
+          allOf:
+          - $ref: '#/components/schemas/LastDutyEnd'
+          nullable: true
+          description: 'While off duty: why and when the last duty ended, so the app
+            can explain it.'
       required:
       - active_pass
       - approval
       - blocked_reasons
       - duty_started_at
       - is_approved
+      - last_duty_end
       - on_duty
       - queued_pass
       - server_now
@@ -32701,6 +32708,18 @@ components:
         * `CANCEL` - Cancel
         * `REVERSE` - Reverse
         * `ADJUSTMENT` - Adjustment
+    LastDutyEnd:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: CAPTAIN_OFF, LOCATION_STALE, PASS_EXPIRED, SUSPENDED or OPERATIONS.
+        ended_at:
+          type: string
+          format: date-time
+      required:
+      - ended_at
+      - reason
     LedgerAdjustmentRequestRequest:
       type: object
       description: |-

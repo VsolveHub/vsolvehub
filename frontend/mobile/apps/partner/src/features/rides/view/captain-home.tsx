@@ -1,12 +1,19 @@
 import { request } from "@vsolve/api-client";
-import { getApiClient } from "@vsolve/mobile-core";
-import { ErrorState, Text, formatMoney } from "@vsolve/mobile-ui";
+import { getApiClient, pushPermission } from "@vsolve/mobile-core";
+import { Button, ErrorState, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
-import { useQuery } from "@tanstack/react-query";
-import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
+import { goOffDuty } from "../duty";
+import { offDutyMessage } from "../model/duty-setup";
 import { blockedReasonTexts, vehicleTypeName, type CaptainStatus } from "../model/shell";
-import { useCaptainStatus } from "../queries";
+import { captainStatusKey, useCaptainStatus } from "../queries";
+
+function useAlertsOff() {
+  return useQuery({ queryKey: ["rides", "push-permission"], queryFn: pushPermission }).data === "denied";
+}
 
 function useTodayEarnings() {
   return useQuery({
@@ -34,6 +41,13 @@ function PassLine({ status }: { status: CaptainStatus }) {
 export function CaptainHome() {
   const status = useCaptainStatus();
   const earnings = useTodayEarnings();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const alertsOff = useAlertsOff();
+  const offDuty = useMutation({
+    mutationFn: goOffDuty,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: captainStatusKey }),
+  });
 
   if (status.isPending) {
     return (
@@ -81,11 +95,34 @@ export function CaptainHome() {
       <View className="rounded-2xl bg-surface p-4 gap-2">
         <Text className="text-xs font-semibold uppercase text-text-muted">Duty</Text>
         <Text className="text-base font-bold text-text">{data.on_duty ? "You're on duty" : "You're off duty"}</Text>
+        {!data.on_duty && offDutyMessage(data.last_duty_end?.reason) ? (
+          <Text className="text-sm text-text">{offDutyMessage(data.last_duty_end?.reason)}</Text>
+        ) : null}
         {blocked.map((line) => (
           <Text key={line} className="text-sm text-danger">
             {line}
           </Text>
         ))}
+        {data.on_duty ? (
+          <Button size="lg" block variant="outline" loading={offDuty.isPending} onPress={() => offDuty.mutate()}>
+            Go off duty
+          </Button>
+        ) : (
+          <Button size="lg" block disabled={blocked.length > 0} onPress={() => router.push("/rides/duty-setup")}>
+            Go on duty
+          </Button>
+        )}
+        {offDuty.isError ? (
+          <Text className="text-sm text-danger">{describeError(offDuty.error, "mutation").message}</Text>
+        ) : null}
+        {alertsOff ? (
+          <Text className="text-sm text-text-muted">
+            {"Ride alerts won't ring when the app is closed. Turn on notifications for VSolve in Settings."}
+          </Text>
+        ) : null}
+        <Pressable accessibilityRole="link" onPress={() => router.push("/rides/battery")}>
+          <Text className="text-sm font-semibold text-[#c25600]">Battery help</Text>
+        </Pressable>
       </View>
 
       <View className="rounded-2xl bg-surface p-4 gap-2">

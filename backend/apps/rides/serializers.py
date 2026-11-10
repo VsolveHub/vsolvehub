@@ -53,6 +53,7 @@ __all__ = [
     "FareQuoteListSerializer",
     "FareQuoteRequestSerializer",
     "FareQuoteSerializer",
+    "LastDutyEndSerializer",
     "LocationPingSerializer",
     "OperationsCancelSerializer",
     "OpsCaptainSerializer",
@@ -165,6 +166,14 @@ class DutyStatusSerializer(serializers.Serializer[Any]):
         }
 
 
+class LastDutyEndSerializer(serializers.Serializer[Any]):
+    reason = serializers.CharField(
+        source="end_reason",
+        help_text="CAPTAIN_OFF, LOCATION_STALE, PASS_EXPIRED, SUSPENDED or OPERATIONS.",
+    )
+    ended_at = serializers.DateTimeField()
+
+
 class CaptainStatusSerializer(serializers.Serializer[CaptainStatus]):
     approval = serializers.CharField(
         help_text="The application status, or NOT_STARTED before a captain application exists."
@@ -190,6 +199,10 @@ class CaptainStatusSerializer(serializers.Serializer[CaptainStatus]):
 
     queued_pass = serializers.SerializerMethodField()
     server_now = serializers.DateTimeField(help_text=SERVER_NOW_HELP)
+    last_duty_end = LastDutyEndSerializer(
+        allow_null=True,
+        help_text="While off duty: why and when the last duty ended, so the app can explain it.",
+    )
 
     @extend_schema_field(CaptainPassSerializer(allow_null=True))
     def get_active_pass(self, obj: CaptainStatus) -> dict[str, Any] | None:

@@ -7,6 +7,7 @@ import { VehicleScreen } from "./vehicle-screen";
 
 const mockPush = jest.fn();
 const mockSave = jest.fn();
+const mockOffDuty = jest.fn();
 let mockStatus: Record<string, unknown>;
 let mockHistory: Record<string, unknown>;
 
@@ -17,7 +18,10 @@ jest.mock("react-native-safe-area-context", () => ({
 jest.mock("@tanstack/react-query", () => ({
   ...jest.requireActual("@tanstack/react-query"),
   useQuery: () => ({ data: { rides: 2, earned_paise: 10200 }, isError: false }),
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useMutation: () => ({ mutate: mockOffDuty, isPending: false, isError: false }),
 }));
+jest.mock("../duty", () => ({ goOffDuty: jest.fn() }));
 jest.mock("../queries", () => ({
   useCaptainStatus: () => mockStatus,
   useSaveVehicle: () => ({ mutate: mockSave, isPending: false, isError: false }),
@@ -34,9 +38,11 @@ const APPROVED = {
   duty_started_at: null,
   blocked_reasons: ["pass_required"],
   server_now: "2026-11-11T10:00:00+05:30",
+  last_duty_end: null,
 };
 
 beforeEach(() => {
+  mockOffDuty.mockClear();
   mockPush.mockClear();
   mockSave.mockClear();
   mockStatus = { isPending: false, isError: false, data: APPROVED, refetch: jest.fn() };
@@ -112,6 +118,36 @@ describe("CaptainHome", () => {
   it("shows an error with a retry", async () => {
     mockStatus = { isPending: false, isError: true, error: new Error("down"), refetch: jest.fn() };
     expect((await render(<CaptainHome />)).getByText("We couldn't load your captain details")).toBeTruthy();
+  });
+
+  it("opens the duty steps when nothing blocks duty", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, blocked_reasons: [] } };
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Go on duty"));
+
+    expect(mockPush).toHaveBeenCalledWith("/rides/duty-setup");
+  });
+
+  it("offers Go off duty while on duty", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, on_duty: true, blocked_reasons: [] } };
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Go off duty"));
+
+    expect(view.getByText("You're on duty")).toBeTruthy();
+    expect(mockOffDuty).toHaveBeenCalled();
+  });
+
+  it("says why the server ended duty", async () => {
+    mockStatus = {
+      isPending: false,
+      isError: false,
+      data: { ...APPROVED, last_duty_end: { reason: "LOCATION_STALE", ended_at: "2026-11-11T09:00:00Z" } },
+    };
+    const view = await render(<CaptainHome />);
+
+    expect(view.getByText("You went off duty: we lost your location for 2 minutes.")).toBeTruthy();
   });
 });
 

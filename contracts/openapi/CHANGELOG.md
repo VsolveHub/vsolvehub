@@ -13,6 +13,9 @@ added to this entry.
 - **Added** `GET /partner/rides/me/` (`CaptainStatus`): `approval` (the application status, or
   `NOT_STARTED`), `is_approved`, `vehicle` (or `null`) and `blocked_reasons` (`not_approved`,
   `vehicle_missing`). Pass, duty and ride state are added later.
+- **Changed**, additive: `CaptainStatus` (`GET /partner/rides/me/`) adds `last_duty_end`
+  (`reason`, `ended_at`; `null` while on duty or before the first duty), so the app can say why
+  the server ended duty (`PASS_EXPIRED`, `LOCATION_STALE`, `OPERATIONS`, ...).
 - **Changed** (Revision 2 build): submitting a `RIDE_CAPTAIN` application now also needs a saved
   vehicle, refused otherwise with `409 partner_application_incomplete` and the message "Add your
   vehicle details before submitting." The vehicle locks once sent, so an application without one
