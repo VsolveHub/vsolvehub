@@ -22,7 +22,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.foundation.services import enqueue_outbox_event
 from apps.partners.models import PartnerApplication, PartnerProfile
-from apps.rides import location, selectors
+from apps.rides import location, notify, selectors
 from apps.rides.exceptions import (
     InvalidTransitionError,
     LocationUnavailableError,
@@ -73,6 +73,7 @@ __all__ = [
     "raise_sos",
     "rate_ride",
     "redrive_dispatch",
+    "resolve_sos",
     "ride_otp",
     "rider_cancel",
     "run_dispatch_round",
@@ -280,6 +281,7 @@ def _offer_round(ride: Ride, *, round_no: int, now: datetime) -> list[RideOffer]
         offer.expires_at = expires_at
         offer.responded_at = None
         offer.save()
+        notify.new_offer(offer, ride)
         offers.append(offer)
     return offers
 
@@ -342,6 +344,7 @@ def run_dispatch_round(*, ride_id: UUID, round_no: int) -> None:
             ride, RideState.NO_CAPTAIN_FOUND, actor=None, actor_kind=ActorKind.SYSTEM, now=now
         )
         ride.save(update_fields=("state", "dispatch_round", "no_captain_found_at", "updated_at"))
+        notify.no_captain_found(ride)
         logger.info("ride_no_captain_found", extra={"ride_id": str(ride.id)})
 
 
@@ -435,6 +438,7 @@ def accept_offer(*, partner: PartnerProfile, offer_id: UUID) -> Ride:
     except IntegrityError as exc:
         # The captain already has another open ride; the database refused a second one.
         raise RideNoLongerAvailableError from exc
+    notify.captain_assigned(ride)
     logger.info(
         "ride_offer_accepted",
         extra={"ride_id": str(ride.id), "partner_id": str(partner.id), "round": offer.round},
@@ -562,6 +566,7 @@ def mark_arrived(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
         ride, RideState.CAPTAIN_ARRIVED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
     )
     ride.save(update_fields=("state", "captain_arrived_at", "updated_at"))
+    notify.captain_arrived(ride)
     _log_step("ride_captain_arrived", ride)
     return ride
 
@@ -678,6 +683,12 @@ def _cancel(ride: Ride, *, actor: Any, actor_kind: str, reason: str, now: dateti
     ride.save(
         update_fields=("state", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at")
     )
+    captain_user_id = (
+        PartnerProfile.objects.filter(pk=ride.captain_id).values_list("user_id", flat=True).first()
+        if ride.captain_id is not None
+        else None
+    )
+    notify.ride_cancelled(ride, captain_user_id=captain_user_id)
     logger.info(
         "ride_cancelled",
         extra={"ride_id": str(ride.id), "cancelled_by": actor_kind, "reason": reason},
@@ -735,6 +746,7 @@ def captain_cancel(*, partner: PartnerProfile, ride_id: UUID, reason: str) -> No
         )
     )
     _schedule_round(ride.id, 1, countdown=0)
+    notify.captain_cancelled(ride, now)
     logger.info(
         "ride_captain_cancelled",
         extra={"ride_id": str(ride.id), "partner_id": str(partner.id), "reason": reason},
@@ -827,9 +839,27 @@ def raise_sos(
     sos = RideSosEvent.objects.create(
         ride=ride, raised_by=raised_by, latitude=latitude, longitude=longitude
     )
+    notify.sos_raised(sos, raised_by_kind="rider" if raised_by.pk == ride.rider_id else "captain")
     # No coordinates in the log: they are someone's exact whereabouts.
     logger.warning(
         "ride_sos_raised",
         extra={"ride_id": str(ride.id), "sos_id": str(sos.id), "raised_by": str(raised_by.pk)},
     )
+    return sos
+
+
+@transaction.atomic
+def resolve_sos(*, operator: Any, sos_id: UUID, note: str) -> RideSosEvent:
+    """Operations closes an SOS with what they did. Resolving it again changes nothing."""
+    sos = RideSosEvent.objects.select_for_update().filter(id=sos_id).first()
+    if sos is None:
+        raise NotFound("We couldn't find this SOS.")
+    if sos.status == RideSosEvent.Status.RESOLVED:
+        return sos
+    sos.status = RideSosEvent.Status.RESOLVED
+    sos.resolved_by = operator
+    sos.resolved_at = timezone.now()
+    sos.resolution_note = note
+    sos.save(update_fields=("status", "resolved_by", "resolved_at", "resolution_note"))
+    logger.info("ride_sos_resolved", extra={"sos_id": str(sos.id), "actor_id": str(operator.pk)})
     return sos

@@ -193,6 +193,16 @@ the Partner app Rides workspace and the Operations console are the agreed design
     returns it, so a panicked double tap is one alert. Earnings are computed in India time:
     `today` from local midnight, `week` from Monday.
 
+32. **Notifications are queued with the event, in its transaction.** `apps/rides/notify.py` calls
+    `request_notification` next to each change, keyed by the event, so a notice exists exactly
+    when its change committed and a repeated step never notifies twice; the platform's delivery
+    sweep sends it. No extra outbox event is needed for that. Pushes go to the captain (new offer,
+    rider or Operations cancel) and the rider (assigned, arrived, no captain, finding another,
+    Operations cancel); an SOS goes to every Operations user in the console feed. Contexts hold
+    names, amounts and ids only: never an address, a position or a start code. Template context
+    keys reuse the shared names the notifications feed test documents (`amount`,
+    `partner_name`).
+
 ## Consequences
 
 - Rides reuses the partner review queue, so Operations needs no new approval screen. The cost is that

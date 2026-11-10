@@ -10976,6 +10976,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/rides/:
+    get:
+      operationId: operations_rides_list
+      description: Live and past rides, newest first.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: One or more, comma-separated.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationsRides'
+          description: ''
+  /api/v1/operations/rides/{ride_id}/:
+    get:
+      operationId: operations_rides_retrieve
+      description: One ride with both people, every transition, every offer and the
+        ratings.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsRideDetail'
+          description: ''
   /api/v1/operations/rides/{ride_id}/cancel/:
     post:
       operationId: operations_rides_cancel
@@ -11006,6 +11055,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/operations/rides/captains/:
+    get:
+      operationId: operations_rides_captains_list
+      description: Captains with vehicle, approval, pass, duty, rating and cancel
+        count, newest first.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationsCaptains'
+          description: ''
   /api/v1/operations/rides/pass-plans/:
     get:
       operationId: operations_rides_pass_plans_list
@@ -11174,6 +11245,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RideRateCard'
+          description: ''
+  /api/v1/operations/rides/sos/:
+    get:
+      operationId: operations_rides_sos_list
+      description: The SOS queue, oldest first. `?status=OPEN` shows only what still
+        needs someone.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationsRideSos'
+          description: ''
+  /api/v1/operations/rides/sos/{sos_id}/resolve/:
+    post:
+      operationId: operations_rides_sos_resolve
+      description: Close an SOS with what Operations did. Resolving it again changes
+        nothing.
+      parameters:
+      - in: path
+        name: sos_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SosResolveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SosResolveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SosResolveRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSos'
           description: ''
   /api/v1/operations/safety-incidents/{safety_incident_id}/decision/:
     post:
@@ -35776,6 +35909,53 @@ components:
           type: string
           default: ''
           maxLength: 240
+    OpsCaptain:
+      type: object
+      description: One captain in the Operations list.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone_number:
+          type: string
+        approval:
+          type: string
+          description: The captain application's status.
+        vehicle:
+          allOf:
+          - $ref: '#/components/schemas/CaptainVehicle'
+          nullable: true
+        pass_ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the active pass ends; null without one.
+        on_duty:
+          type: boolean
+        rides_completed:
+          type: integer
+          nullable: true
+          default: 0
+        rating:
+          type: number
+          format: double
+          nullable: true
+          description: Average stars from riders; null before any rating.
+        cancels:
+          type: integer
+          nullable: true
+          default: 0
+          description: Rides this captain accepted and then cancelled.
+      required:
+      - approval
+      - name
+      - on_duty
+      - partner_id
+      - pass_ends_at
+      - phone_number
+      - rating
     OpsCoinTransaction:
       type: object
       properties:
@@ -36001,6 +36181,50 @@ components:
       - next
       - previous
       - results
+    OpsOffer:
+      type: object
+      properties:
+        captain_id:
+          type: string
+          format: uuid
+        captain_name:
+          type: string
+        round:
+          type: integer
+        status:
+          type: string
+          description: PENDING, ACCEPTED, DECLINED, EXPIRED or WITHDRAWN.
+        pickup_distance_m:
+          type: integer
+        offered_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - captain_id
+      - captain_name
+      - expires_at
+      - offered_at
+      - pickup_distance_m
+      - responded_at
+      - round
+      - status
+    OpsPerson:
+      type: object
+      properties:
+        name:
+          type: string
+        phone_number:
+          type: string
+      required:
+      - name
+      - phone_number
     OpsReferralAttribution:
       type: object
       description: 'Operations view: full phone numbers, program version, terms and
@@ -36488,6 +36712,220 @@ components:
       description: |-
         * `money` - money
         * `number` - number
+    OpsRideDetail:
+      type: object
+      description: 'Everything Operations needs to understand one ride: both people,
+        the history and offers.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        waiting_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        captain_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        captain_arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        emergency_number:
+          type: string
+          readOnly: true
+          description: The number the SOS Call button dials. From the server; never
+            hard-coded.
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        rider:
+          allOf:
+          - $ref: '#/components/schemas/OpsPerson'
+          readOnly: true
+        captain:
+          allOf:
+          - $ref: '#/components/schemas/OpsPerson'
+          nullable: true
+          readOnly: true
+        vehicle:
+          allOf:
+          - $ref: '#/components/schemas/CaptainVehicle'
+          nullable: true
+          readOnly: true
+        otp_attempts:
+          type: integer
+          readOnly: true
+        dispatch_round:
+          type: integer
+          readOnly: true
+        no_captain_found_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ratings:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsTransition'
+          readOnly: true
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsOffer'
+          readOnly: true
+      required:
+      - cancel_reason
+      - cancelled_by
+      - captain
+      - captain_arrived_at
+      - captain_assigned_at
+      - completed_at
+      - created_at
+      - dispatch_round
+      - drop
+      - emergency_number
+      - fare_paise
+      - final_fare_paise
+      - id
+      - no_captain_found_at
+      - offers
+      - otp_attempts
+      - payment_method
+      - payment_status
+      - pickup
+      - ratings
+      - rider
+      - route_polyline
+      - service_area_id
+      - started_at
+      - state
+      - transitions
+      - vehicle
+      - vehicle_type
+      - waiting_paise
+    OpsRideRow:
+      type: object
+      description: One ride in the Operations list.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        rider_name:
+          type: string
+          readOnly: true
+        captain_name:
+          type: string
+          readOnly: true
+          nullable: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+      required:
+      - cancelled_by
+      - captain_name
+      - created_at
+      - fare_paise
+      - final_fare_paise
+      - id
+      - payment_status
+      - rider_name
+      - service_area_id
+      - state
+      - vehicle_type
     OpsSafetyStory:
       type: object
       properties:
@@ -36586,6 +37024,77 @@ components:
           default: true
       required:
       - file
+    OpsSos:
+      type: object
+      description: One SOS in the Operations queue.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        ride_id:
+          type: string
+          format: uuid
+          readOnly: true
+        ride_state:
+          type: string
+          readOnly: true
+        raised_by_name:
+          type: string
+          readOnly: true
+        raised_by_phone:
+          type: string
+          readOnly: true
+        raised_by_kind:
+          type: string
+          readOnly: true
+          description: rider or captain.
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        status:
+          type: string
+          readOnly: true
+          description: OPEN or RESOLVED.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        resolved_by_name:
+          type: string
+          readOnly: true
+          nullable: true
+        resolution_note:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - latitude
+      - longitude
+      - raised_by_kind
+      - raised_by_name
+      - raised_by_phone
+      - resolution_note
+      - resolved_at
+      - resolved_by_name
+      - ride_id
+      - ride_state
+      - status
     OpsStayEnquiryPage:
       type: object
       properties:
@@ -36624,6 +37133,31 @@ components:
       - next
       - previous
       - results
+    OpsTransition:
+      type: object
+      properties:
+        from_state:
+          type: string
+          description: Blank for the ride's first row.
+        to_state:
+          type: string
+        actor_kind:
+          type: string
+          description: RIDER, CAPTAIN, OPERATIONS or SYSTEM.
+        actor_name:
+          type: string
+          nullable: true
+        reason:
+          type: string
+        at:
+          type: string
+          format: date-time
+      required:
+      - actor_kind
+      - at
+      - from_state
+      - reason
+      - to_state
     OpsVendorPlanServiceOption:
       type: object
       properties:
@@ -36909,6 +37443,63 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RideHistory'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedOperationsCaptains:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsCaptain'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedOperationsRideSos:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsSos'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedOperationsRides:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsRideRow'
       required:
       - next
       - previous
@@ -49946,6 +50537,16 @@ components:
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
           nullable: true
+    SosResolveRequest:
+      type: object
+      properties:
+        resolution_note:
+          type: string
+          minLength: 1
+          description: What Operations did.
+          maxLength: 2000
+      required:
+      - resolution_note
     SourceEnum:
       enum:
       - MANUAL

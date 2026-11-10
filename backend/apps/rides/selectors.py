@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
-from django.db.models import Count, Q, Sum
+from django.db.models import Avg, Count, Exists, F, OuterRef, Q, Subquery, Sum
 from django.utils import timezone
 
 from apps.partners.models import PartnerApplication, PartnerProfile
@@ -16,7 +16,9 @@ from apps.rides.models import (
     CaptainPass,
     CaptainVehicle,
     Ride,
+    RideRating,
     RideState,
+    RideTransition,
 )
 from apps.rides.routing import RoutingUnavailableError, get_route
 
@@ -29,6 +31,7 @@ __all__ = [
     "captain_earnings",
     "captain_live",
     "captain_status",
+    "captains_for_operations",
     "open_duty_session",
     "queued_pass",
 ]
@@ -205,4 +208,50 @@ def captain_earnings(partner: PartnerProfile, *, period: str) -> Earnings:
         rides=int(totals["count"]),
         earned_paise=int(totals["earned"] or 0),
         cash_collected_paise=int(totals["collected"] or 0),
+    )
+
+
+# --- Operations: the captains list ------------------------------------------------------------
+
+
+def _scalar(queryset: Any, value: Any) -> Subquery:
+    """One aggregate per captain as a subquery, so the list is one query however long it is."""
+    return Subquery(queryset.order_by().annotate(value=value).values("value")[:1])
+
+
+def captains_for_operations() -> Any:
+    """Every partner on the captain track, with what Operations checks first."""
+    partner = OuterRef("pk")
+    return (
+        PartnerProfile.objects.filter(application__track=PartnerApplication.Track.RIDE_CAPTAIN)
+        .select_related("user", "ride_vehicle")
+        .annotate(
+            approval=F("application__status"),
+            pass_ends_at=Subquery(
+                CaptainPass.objects.filter(
+                    partner=partner, status=CaptainPass.Status.ACTIVE, ends_at__gt=timezone.now()
+                ).values("ends_at")[:1]
+            ),
+            on_duty=Exists(
+                CaptainDutySession.objects.filter(partner=partner, ended_at__isnull=True)
+            ),
+            rides_completed=_scalar(
+                Ride.objects.filter(captain=partner, state=RideState.COMPLETED).values("captain"),
+                Count("id"),
+            ),
+            rating=_scalar(
+                RideRating.objects.filter(ride__captain=partner, rater_kind="RIDER").values(
+                    "ride__captain"
+                ),
+                Avg("stars"),
+            ),
+            cancels=_scalar(
+                RideTransition.objects.filter(
+                    actor=OuterRef("user_id"),
+                    actor_kind="CAPTAIN",
+                    to_state=RideState.SEARCHING,
+                ).values("actor"),
+                Count("id"),
+            ),
+        )
     )

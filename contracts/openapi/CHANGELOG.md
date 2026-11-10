@@ -88,6 +88,20 @@ added to this entry.
   Starting fixes `waiting_paise`. `POST /partner/rides/{ride_id}/complete/`: `final_fare_paise` is
   the fare plus waiting, `payment_status` `DUE`. `POST /partner/rides/{ride_id}/payment-received/`:
   `COLLECTED`. `404` for another captain's ride.
+- **Added** Operations rides APIs, Operations only. `GET /operations/rides/?state=A,B`
+  (cursor-paged, newest first: `id`, `state`, `vehicle_type`, `service_area_id`, `rider_name`,
+  `captain_name`, fares, `payment_status`, `created_at`, `cancelled_by`; `400` for an unknown
+  state). `GET /operations/rides/{ride_id}/` (`OpsRideDetail`: the ride with `rider` and `captain`
+  name and phone, `vehicle`, `otp_attempts`, `dispatch_round`, `ratings` by side, every
+  `transition` and every `offer`). `GET /operations/rides/captains/` (cursor-paged: `approval`,
+  `vehicle`, `pass_ends_at`, `on_duty`, `rides_completed`, `rating`, `cancels`).
+  `GET /operations/rides/sos/?status=OPEN` (oldest first) and
+  `POST /operations/rides/sos/{sos_id}/resolve/` (`resolution_note` required; resolving again
+  changes nothing).
+- Rides notifications are queued with each event, once, to the right audience: a new offer to the
+  captain; captain assigned and arrived, no captain found, finding another captain and an
+  Operations cancel to the rider; a rider or Operations cancel to the assigned captain; an SOS to
+  every Operations user in the console feed.
 - **Added** ratings: `POST /rides/{ride_id}/rating/` and `POST /partner/rides/{ride_id}/rating/`
   (`RatingRequest`: `stars`, 1-5) answer `201 { "stars" }`, once per side, only on a `COMPLETED`
   ride; a second rating or an unfinished ride is `409 invalid_transition`. `Ride` and

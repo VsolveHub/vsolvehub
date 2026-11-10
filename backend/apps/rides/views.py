@@ -18,7 +18,15 @@ from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rides import engine, selectors, services
-from apps.rides.models import ActorKind, CaptainPass, CaptainPassPlan, Ride, RideRateCard
+from apps.rides.models import (
+    ActorKind,
+    CaptainPass,
+    CaptainPassPlan,
+    Ride,
+    RideRateCard,
+    RideSosEvent,
+    RideState,
+)
 from apps.rides.serializers import (
     AvailabilityQuerySerializer,
     AvailabilitySerializer,
@@ -40,6 +48,10 @@ from apps.rides.serializers import (
     FareQuoteRequestSerializer,
     LocationPingSerializer,
     OperationsCancelSerializer,
+    OpsCaptainSerializer,
+    OpsRideDetailSerializer,
+    OpsRideRowSerializer,
+    OpsSosSerializer,
     RateCardCreateSerializer,
     RateCardUpdateSerializer,
     RatingSerializer,
@@ -49,11 +61,19 @@ from apps.rides.serializers import (
     RiderCancelSerializer,
     RideSerializer,
     SosRequestSerializer,
+    SosResolveSerializer,
     SosSerializer,
     StartTripSerializer,
 )
 from common.observability.context import get_request_id
-from common.pagination import CURSOR_PARAMETER, page_serializer, paginated
+from common.pagination import (
+    CURSOR_PARAMETER,
+    STATUS_PARAMETER,
+    OperationsNewestFirstPagination,
+    filter_statuses,
+    page_serializer,
+    paginated,
+)
 from common.schema import IDEMPOTENCY_KEY_HEADER
 from common.throttling import ThrottledWriteMixin
 
@@ -78,11 +98,16 @@ __all__ = [
     "FareQuotesView",
     "OfferAcceptView",
     "OfferDeclineView",
+    "OpsCaptainsView",
     "OpsPassPlanDetailView",
     "OpsPassPlansView",
     "OpsRateCardDetailView",
     "OpsRateCardsView",
     "OpsRideCancelView",
+    "OpsRideDetailView",
+    "OpsRidesView",
+    "OpsSosResolveView",
+    "OpsSosView",
     "PaymentReceivedView",
     "RideDetailView",
     "RiderCancelView",
@@ -811,6 +836,126 @@ class CaptainEarningsView(APIView):
             _partner(request.user), period=query.validated_data["period"]
         )
         return Response(EarningsSerializer(earnings).data)
+
+
+class OldestFirstPagination(OperationsNewestFirstPagination):
+    """The SOS queue: the oldest unanswered alert first."""
+
+    ordering = ("created_at", "id")
+
+
+def _state_filter(queryset: Any, request: Any) -> Any:
+    """`?state=SEARCHING,IN_TRIP`. An unknown state is refused, never silently ignored."""
+    raw = (request.query_params.get("state") or "").strip()
+    if not raw:
+        return queryset
+    wanted = [part.strip().upper() for part in raw.split(",") if part.strip()]
+    unknown = sorted(set(wanted) - set(RideState.values))
+    if unknown:
+        raise ValidationError({"state": [f"Unknown state: {', '.join(unknown)}."]})
+    return queryset.filter(state__in=wanted)
+
+
+class OpsRidesView(APIView):
+    """Live and past rides, newest first."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_list",
+        parameters=[
+            CURSOR_PARAMETER,
+            OpenApiParameter(
+                "state",
+                OpenApiTypes.STR,
+                required=False,
+                description="One or more, comma-separated.",
+            ),
+        ],
+        responses=page_serializer(OpsRideRowSerializer, "PaginatedOperationsRides"),
+    )
+    def get(self, request: Any) -> Response:
+        rides = _state_filter(Ride.objects.select_related("rider", "captain"), request)
+        return paginated(
+            request, self, rides, OpsRideRowSerializer, pagination=OperationsNewestFirstPagination
+        )
+
+
+class OpsRideDetailView(APIView):
+    """One ride with both people, every transition, every offer and the ratings."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(operation_id="operations_rides_retrieve", responses=OpsRideDetailSerializer)
+    def get(self, request: Any, ride_id: Any) -> Response:
+        del request
+        ride = get_object_or_404(
+            Ride.objects.select_related(
+                "quote", "rider", "captain__user", "captain__ride_vehicle"
+            ).prefetch_related("transitions__actor", "offers__captain", "ratings"),
+            id=ride_id,
+        )
+        return Response(OpsRideDetailSerializer(ride).data)
+
+
+class OpsCaptainsView(APIView):
+    """Captains with vehicle, approval, pass, duty, rating and cancel count, newest first."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_captains_list",
+        parameters=[CURSOR_PARAMETER],
+        responses=page_serializer(OpsCaptainSerializer, "PaginatedOperationsCaptains"),
+    )
+    def get(self, request: Any) -> Response:
+        return paginated(
+            request,
+            self,
+            selectors.captains_for_operations(),
+            OpsCaptainSerializer,
+            pagination=OperationsNewestFirstPagination,
+        )
+
+
+class OpsSosView(APIView):
+    """The SOS queue, oldest first. `?status=OPEN` shows only what still needs someone."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_sos_list",
+        parameters=[CURSOR_PARAMETER, STATUS_PARAMETER],
+        responses=page_serializer(OpsSosSerializer, "PaginatedOperationsRideSos"),
+    )
+    def get(self, request: Any) -> Response:
+        events = filter_statuses(
+            RideSosEvent.objects.select_related("ride", "raised_by", "resolved_by"),
+            request,
+            RideSosEvent.Status.values,
+        )
+        return paginated(request, self, events, OpsSosSerializer, pagination=OldestFirstPagination)
+
+
+class OpsSosResolveView(APIView):
+    """Close an SOS with what Operations did. Resolving it again changes nothing."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="operations_rides_sos_resolve",
+        request=SosResolveSerializer,
+        responses=OpsSosSerializer,
+    )
+    def post(self, request: Any, sos_id: Any) -> Response:
+        serializer = SosResolveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sos = engine.resolve_sos(
+            operator=request.user,
+            sos_id=sos_id,
+            note=serializer.validated_data["resolution_note"],
+        )
+        return Response(OpsSosSerializer(sos).data)
 
 
 class FareQuotesView(ThrottledWriteMixin, APIView):

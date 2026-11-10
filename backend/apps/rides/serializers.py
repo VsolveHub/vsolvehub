@@ -26,6 +26,7 @@ from apps.rides.models import (
     Ride,
     RideOffer,
     RideRateCard,
+    RideSosEvent,
     RideState,
     VehicleType,
 )
@@ -54,6 +55,13 @@ __all__ = [
     "FareQuoteSerializer",
     "LocationPingSerializer",
     "OperationsCancelSerializer",
+    "OpsCaptainSerializer",
+    "OpsOfferSerializer",
+    "OpsPersonSerializer",
+    "OpsRideDetailSerializer",
+    "OpsRideRowSerializer",
+    "OpsSosSerializer",
+    "OpsTransitionSerializer",
     "RateCardCreateSerializer",
     "RateCardUpdateSerializer",
     "RatingSerializer",
@@ -67,6 +75,7 @@ __all__ = [
     "RideSerializer",
     "RiderCancelSerializer",
     "SosRequestSerializer",
+    "SosResolveSerializer",
     "SosSerializer",
     "StartTripSerializer",
 ]
@@ -570,6 +579,178 @@ class EarningsSerializer(serializers.Serializer[Any]):
 def _my_rating(ride: Ride, rater_kind: str) -> int | None:
     rating = next((r for r in ride.ratings.all() if r.rater_kind == rater_kind), None)
     return rating.stars if rating else None
+
+
+class OpsRideRowSerializer(serializers.ModelSerializer[Ride]):
+    """One ride in the Operations list."""
+
+    service_area_id = serializers.UUIDField(read_only=True)
+    rider_name = serializers.CharField(source="rider.full_name", read_only=True)
+    captain_name = serializers.CharField(
+        source="captain.display_name", read_only=True, allow_null=True, default=None
+    )
+
+    class Meta:
+        model = Ride
+        fields = (
+            "id",
+            "state",
+            "vehicle_type",
+            "service_area_id",
+            "rider_name",
+            "captain_name",
+            "fare_paise",
+            "final_fare_paise",
+            "payment_status",
+            "created_at",
+            "cancelled_by",
+        )
+        read_only_fields = fields
+
+
+class OpsTransitionSerializer(serializers.Serializer[Any]):
+    from_state = serializers.CharField(help_text="Blank for the ride's first row.")
+    to_state = serializers.CharField()
+    actor_kind = serializers.CharField(help_text="RIDER, CAPTAIN, OPERATIONS or SYSTEM.")
+    actor_name = serializers.CharField(source="actor.full_name", allow_null=True, default=None)
+    reason = serializers.CharField()
+    at = serializers.DateTimeField()
+
+
+class OpsOfferSerializer(serializers.Serializer[Any]):
+    captain_id = serializers.UUIDField()
+    captain_name = serializers.CharField(source="captain.display_name")
+    round = serializers.IntegerField()
+    status = serializers.CharField(help_text="PENDING, ACCEPTED, DECLINED, EXPIRED or WITHDRAWN.")
+    pickup_distance_m = serializers.IntegerField()
+    offered_at = serializers.DateTimeField()
+    expires_at = serializers.DateTimeField()
+    responded_at = serializers.DateTimeField(allow_null=True)
+
+
+class OpsPersonSerializer(serializers.Serializer[Any]):
+    name = serializers.CharField()
+    phone_number = serializers.CharField()
+
+
+class OpsRideDetailSerializer(_RideBaseSerializer):
+    """Everything Operations needs to understand one ride: both people, the history and offers."""
+
+    service_area_id = serializers.UUIDField(read_only=True)
+    rider = serializers.SerializerMethodField()
+    captain = serializers.SerializerMethodField()
+    vehicle = serializers.SerializerMethodField()
+    transitions = OpsTransitionSerializer(many=True, read_only=True)
+    offers = OpsOfferSerializer(many=True, read_only=True)
+    ratings = serializers.SerializerMethodField()
+
+    class Meta(_RideBaseSerializer.Meta):
+        fields = (
+            *_RideBaseSerializer.Meta.fields,
+            "service_area_id",
+            "rider",
+            "captain",
+            "vehicle",
+            "otp_attempts",
+            "dispatch_round",
+            "no_captain_found_at",
+            "ratings",
+            "transitions",
+            "offers",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(OpsPersonSerializer)
+    def get_rider(self, obj: Ride) -> dict[str, str]:
+        return {"name": obj.rider.full_name, "phone_number": str(obj.rider.phone_number)}
+
+    @extend_schema_field(OpsPersonSerializer(allow_null=True))
+    def get_captain(self, obj: Ride) -> dict[str, str] | None:
+        if obj.captain is None:
+            return None
+        return {
+            "name": obj.captain.display_name,
+            "phone_number": str(obj.captain.user.phone_number),
+        }
+
+    @extend_schema_field(CaptainVehicleSerializer(allow_null=True))
+    def get_vehicle(self, obj: Ride) -> dict[str, Any] | None:
+        vehicle = getattr(obj.captain, "ride_vehicle", None) if obj.captain else None
+        return dict(CaptainVehicleSerializer(vehicle).data) if vehicle else None
+
+    @extend_schema_field(serializers.DictField(child=serializers.IntegerField()))
+    def get_ratings(self, obj: Ride) -> dict[str, int]:
+        """Stars by who gave them: `RIDER` (for the captain) and `CAPTAIN` (for the rider)."""
+        return {rating.rater_kind: rating.stars for rating in obj.ratings.all()}
+
+
+class OpsCaptainSerializer(serializers.Serializer[Any]):
+    """One captain in the Operations list."""
+
+    partner_id = serializers.UUIDField(source="id")
+    name = serializers.CharField(source="display_name")
+    phone_number = serializers.CharField(source="user.phone_number")
+    approval = serializers.CharField(help_text="The captain application's status.")
+    vehicle = CaptainVehicleSerializer(source="ride_vehicle", allow_null=True, default=None)
+    pass_ends_at = serializers.DateTimeField(
+        allow_null=True, help_text="When the active pass ends; null without one."
+    )
+    on_duty = serializers.BooleanField()
+    rides_completed = serializers.IntegerField(allow_null=True, default=0)
+    rating = serializers.FloatField(
+        allow_null=True, help_text="Average stars from riders; null before any rating."
+    )
+    cancels = serializers.IntegerField(
+        allow_null=True, default=0, help_text="Rides this captain accepted and then cancelled."
+    )
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        data = dict(super().to_representation(instance))
+        data["rides_completed"] = data["rides_completed"] or 0
+        data["cancels"] = data["cancels"] or 0
+        if data["rating"] is not None:
+            data["rating"] = round(float(data["rating"]), 2)
+        return data
+
+
+class OpsSosSerializer(serializers.ModelSerializer[RideSosEvent]):
+    """One SOS in the Operations queue."""
+
+    ride_id = serializers.UUIDField(read_only=True)
+    ride_state = serializers.CharField(source="ride.state", read_only=True)
+    raised_by_name = serializers.CharField(source="raised_by.full_name", read_only=True)
+    raised_by_phone = serializers.CharField(source="raised_by.phone_number", read_only=True)
+    raised_by_kind = serializers.SerializerMethodField(help_text="rider or captain.")
+    status = serializers.CharField(read_only=True, help_text="OPEN or RESOLVED.")
+    resolved_by_name = serializers.CharField(
+        source="resolved_by.full_name", read_only=True, allow_null=True, default=None
+    )
+
+    class Meta:
+        model = RideSosEvent
+        fields = (
+            "id",
+            "ride_id",
+            "ride_state",
+            "raised_by_name",
+            "raised_by_phone",
+            "raised_by_kind",
+            "latitude",
+            "longitude",
+            "status",
+            "created_at",
+            "resolved_at",
+            "resolved_by_name",
+            "resolution_note",
+        )
+        read_only_fields = fields
+
+    def get_raised_by_kind(self, obj: RideSosEvent) -> str:
+        return "rider" if obj.raised_by_id == obj.ride.rider_id else "captain"
+
+
+class SosResolveSerializer(serializers.Serializer[Any]):
+    resolution_note = serializers.CharField(max_length=2000, help_text="What Operations did.")
 
 
 class StartTripSerializer(serializers.Serializer[Any]):

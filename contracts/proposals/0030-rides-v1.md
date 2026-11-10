@@ -557,12 +557,12 @@ open returns the same SOS. Notifies Operations immediately.
 | ✅ | `GET operations/rides/pass-plans/` | — | All plans, active first |
 | ✅ | `POST operations/rides/pass-plans/` | `{ "code": "week-pass", "name": "Week pass", "price_paise": 24900, "duration_hours": 168 }` | `201`. `code` a unique slug; `duration_hours` ≥ 1; `price_paise` ≥ 0. |
 | ✅ | `PATCH operations/rides/pass-plans/{id}/` | `name`, `price_paise`, `duration_hours`, `is_active` | `200`. `code` cannot change (`400`). A change never alters a pass already bought; a switched-off plan leaves the captains' list. |
-| 📝 | `GET operations/rides/?state=` | — | Rides, newest first; `state` filters (repeatable) |
-| 📝 | `GET operations/rides/{ride_id}/` | — | The ride with its `transitions` (who, from, to, when, why) and `offers` |
+| ✅ | `GET operations/rides/?state=` | — | Rides, newest first, cursor-paged; `state` is one or more states, comma-separated; `400` for an unknown one |
+| ✅ | `GET operations/rides/{ride_id}/` | — | The ride with `rider` and `captain` (name, phone), `vehicle`, `otp_attempts`, `dispatch_round`, `ratings` by side, its `transitions` (who, from, to, when, why) and `offers` |
 | ✅ | `POST operations/rides/{ride_id}/cancel/` | `{ "reason": "Rider reported safety issue" }` | `204`, ride `CANCELLED` with `cancelled_by: "OPERATIONS"`, from any open state. The only way to cancel an `IN_TRIP` ride. `400` without a reason or over 64 characters; `409 invalid_transition` on a closed ride; a cancelled ride is left as it is. |
-| 📝 | `GET operations/rides/captains/` | — | Captains with vehicle, approval, pass, duty, rating and cancel count |
-| 📝 | `GET operations/rides/sos/?status=OPEN` | — | The SOS queue, oldest open first |
-| 📝 | `POST operations/rides/sos/{sos_id}/resolve/` | `{ "resolution_note": "Called rider, all fine" }` | `200`; idempotent. A note is required. |
+| ✅ | `GET operations/rides/captains/` | — | Captains, newest first: `approval`, `vehicle`, `pass_ends_at`, `on_duty`, `rides_completed`, `rating` (average from riders, `null` before any), `cancels` (rides accepted then cancelled) |
+| ✅ | `GET operations/rides/sos/?status=OPEN` | — | The SOS queue, oldest open first |
+| ✅ | `POST operations/rides/sos/{sos_id}/resolve/` | `{ "resolution_note": "Called rider, all fine" }` | `200`; idempotent. A note is required. |
 
 Captain approval is not here: it uses the existing partner review at `/operations/partners`.
 
@@ -635,11 +635,12 @@ refused.
 7. The idempotency record holds an HMAC, not the code: the stored fingerprint differs from a plain
    SHA-256 of `{"otp": code}` for every code, and changes when `RIDES_OTP_SECRET` changes.
 
-**Still to write with the remaining endpoints:** the state-machine matrix (every allowed transition,
-and every forbidden one answering `409 invalid_transition`); the authorization matrix (anonymous,
-another rider, another captain, a customer on a captain URL, a captain on an Operations URL, a
-partner who is not a captain on a captain URL); notifications queued once per event with the
-right audience. The trip steps, the arrival geofence and the waiting charge are in `test_trip_steps.py`;
+Notifications queued once per event with the right audience, and the Operations APIs, are in
+`test_notifications_and_ops.py`. **Still to write (Phase 7):** one state-machine matrix (every
+allowed transition, and every forbidden one answering `409 invalid_transition`) and one
+authorization matrix (anonymous, another rider, another captain, a customer on a captain URL, a
+captain on an Operations URL, a partner who is not a captain on a captain URL), gathering what the
+per-endpoint tests already check. The trip steps, the arrival geofence and the waiting charge are in `test_trip_steps.py`;
 cancellations and re-dispatch in `test_cancellations.py`; ratings, SOS, history and earnings in
 `test_after_ride.py`.
 

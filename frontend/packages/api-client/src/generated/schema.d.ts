@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: b595ff42e2c6b583
+ * Checksum: 860c80f2fa0c8529
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4434,6 +4434,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/rides/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Live and past rides, newest first. */
+        get: operations["operations_rides_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/rides/{ride_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One ride with both people, every transition, every offer and the ratings. */
+        get: operations["operations_rides_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/rides/{ride_id}/cancel/": {
         parameters: {
             query?: never;
@@ -4445,6 +4479,23 @@ export interface paths {
         put?: never;
         /** @description Operations closes any open ride, including one in trip. */
         post: operations["operations_rides_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/rides/captains/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Captains with vehicle, approval, pass, duty, rating and cancel count, newest first. */
+        get: operations["operations_rides_captains_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4519,6 +4570,40 @@ export interface paths {
         head?: never;
         /** @description Edit the active card (a new version) or switch it off. */
         patch: operations["operations_rides_rate_cards_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/operations/rides/sos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The SOS queue, oldest first. `?status=OPEN` shows only what still needs someone. */
+        get: operations["operations_rides_sos_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/rides/sos/{sos_id}/resolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Close an SOS with what Operations did. Resolving it again changes nothing. */
+        post: operations["operations_rides_sos_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/operations/safety-incidents/{safety_incident_id}/decision/": {
@@ -14632,6 +14717,34 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        /** @description One captain in the Operations list. */
+        OpsCaptain: {
+            /** Format: uuid */
+            partner_id: string;
+            name: string;
+            phone_number: string;
+            /** @description The captain application's status. */
+            approval: string;
+            vehicle?: components["schemas"]["CaptainVehicle"] | null;
+            /**
+             * Format: date-time
+             * @description When the active pass ends; null without one.
+             */
+            pass_ends_at: string | null;
+            on_duty: boolean;
+            /** @default 0 */
+            rides_completed: number | null;
+            /**
+             * Format: double
+             * @description Average stars from riders; null before any rating.
+             */
+            rating: number | null;
+            /**
+             * @description Rides this captain accepted and then cancelled.
+             * @default 0
+             */
+            cancels: number | null;
+        };
         OpsCoinTransaction: {
             /** Format: uuid */
             readonly id: string;
@@ -14714,6 +14827,25 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["PartnerListing"][];
+        };
+        OpsOffer: {
+            /** Format: uuid */
+            captain_id: string;
+            captain_name: string;
+            round: number;
+            /** @description PENDING, ACCEPTED, DECLINED, EXPIRED or WITHDRAWN. */
+            status: string;
+            pickup_distance_m: number;
+            /** Format: date-time */
+            offered_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            responded_at: string | null;
+        };
+        OpsPerson: {
+            name: string;
+            phone_number: string;
         };
         /** @description Operations view: full phone numbers, program version, terms and review trail. */
         OpsReferralAttribution: {
@@ -14898,6 +15030,66 @@ export interface components {
          * @enum {string}
          */
         OpsReportTotalKindEnum: "money" | "number";
+        /** @description Everything Operations needs to understand one ride: both people, the history and offers. */
+        OpsRideDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly state: components["schemas"]["StateEnum"];
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly pickup: components["schemas"]["RidePlace"];
+            readonly drop: components["schemas"]["RidePlace"];
+            readonly route_polyline: string;
+            readonly fare_paise: number;
+            readonly waiting_paise: number;
+            readonly final_fare_paise: number | null;
+            readonly payment_method: components["schemas"]["PaymentMethodEnum"];
+            readonly payment_status: components["schemas"]["PaymentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly captain_assigned_at: string | null;
+            /** Format: date-time */
+            readonly captain_arrived_at: string | null;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            readonly cancelled_by: components["schemas"]["CancelledByEnum"];
+            readonly cancel_reason: string;
+            /** @description The number the SOS Call button dials. From the server; never hard-coded. */
+            readonly emergency_number: string;
+            /** Format: uuid */
+            readonly service_area_id: string;
+            readonly rider: components["schemas"]["OpsPerson"];
+            readonly captain: components["schemas"]["OpsPerson"] | null;
+            readonly vehicle: components["schemas"]["CaptainVehicle"] | null;
+            readonly otp_attempts: number;
+            readonly dispatch_round: number;
+            /** Format: date-time */
+            readonly no_captain_found_at: string | null;
+            readonly ratings: {
+                [key: string]: number;
+            };
+            readonly transitions: components["schemas"]["OpsTransition"][];
+            readonly offers: components["schemas"]["OpsOffer"][];
+        };
+        /** @description One ride in the Operations list. */
+        OpsRideRow: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly state: components["schemas"]["StateEnum"];
+            readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            /** Format: uuid */
+            readonly service_area_id: string;
+            readonly rider_name: string;
+            readonly captain_name: string | null;
+            readonly fare_paise: number;
+            readonly final_fare_paise: number | null;
+            readonly payment_status: components["schemas"]["PaymentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly cancelled_by: components["schemas"]["CancelledByEnum"];
+        };
         OpsSafetyStory: {
             /** Format: uuid */
             readonly id: string;
@@ -14934,6 +15126,30 @@ export interface components {
             /** @default true */
             is_published: boolean;
         };
+        /** @description One SOS in the Operations queue. */
+        OpsSos: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly ride_id: string;
+            readonly ride_state: string;
+            readonly raised_by_name: string;
+            readonly raised_by_phone: string;
+            /** @description rider or captain. */
+            readonly raised_by_kind: string;
+            /** Format: decimal */
+            readonly latitude: string | null;
+            /** Format: decimal */
+            readonly longitude: string | null;
+            /** @description OPEN or RESOLVED. */
+            readonly status: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+            readonly resolved_by_name: string | null;
+            readonly resolution_note: string;
+        };
         OpsStayEnquiryPage: {
             /** Format: uri */
             next: string | null;
@@ -14947,6 +15163,17 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["StayReservation"][];
+        };
+        OpsTransition: {
+            /** @description Blank for the ride's first row. */
+            from_state: string;
+            to_state: string;
+            /** @description RIDER, CAPTAIN, OPERATIONS or SYSTEM. */
+            actor_kind: string;
+            actor_name?: string | null;
+            reason: string;
+            /** Format: date-time */
+            at: string;
         };
         OpsVendorPlanServiceOption: {
             /** Format: uuid */
@@ -15054,6 +15281,27 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["RideHistory"][];
+        };
+        PaginatedOperationsCaptains: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OpsCaptain"][];
+        };
+        PaginatedOperationsRideSos: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OpsSos"][];
+        };
+        PaginatedOperationsRides: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OpsRideRow"][];
         };
         PaginatedRiderRideHistory: {
             /** Format: uri */
@@ -20187,6 +20435,10 @@ export interface components {
             latitude?: string | null;
             /** Format: decimal */
             longitude?: string | null;
+        };
+        SosResolveRequest: {
+            /** @description What Operations did. */
+            resolution_note: string;
         };
         /**
          * @description * `MANUAL` - Manual
@@ -31904,6 +32156,51 @@ export interface operations {
             };
         };
     };
+    operations_rides_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One or more, comma-separated. */
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedOperationsRides"];
+                };
+            };
+        };
+    };
+    operations_rides_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsRideDetail"];
+                };
+            };
+        };
+    };
     operations_rides_cancel: {
         parameters: {
             query?: never;
@@ -31927,6 +32224,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    operations_rides_captains_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedOperationsCaptains"];
+                };
             };
         };
     };
@@ -32072,6 +32391,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RideRateCard"];
+                };
+            };
+        };
+    };
+    operations_rides_sos_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor from `next`. */
+                cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedOperationsRideSos"];
+                };
+            };
+        };
+    };
+    operations_rides_sos_resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sos_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SosResolveRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SosResolveRequest"];
+                "multipart/form-data": components["schemas"]["SosResolveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSos"];
                 };
             };
         };
