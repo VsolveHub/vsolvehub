@@ -507,7 +507,9 @@ The rider's own ride only. Built today:
 | `captain.phone_number` | `CAPTAIN_ASSIGNED`, `CAPTAIN_ARRIVED`, `IN_TRIP` only; `null` otherwise |
 | `captain.photo_url` | A reviewed photo only; `null` otherwise |
 
-Also ✅: `otp` (while `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`, else `null`), `captain.position`
+Also ✅: `captain.rating` (average stars from riders to one decimal, `null` for a new captain),
+`my_rating` (the rider's stars, `null` until rated), `otp` (while `CAPTAIN_ASSIGNED` or
+`CAPTAIN_ARRIVED`, else `null`), `captain.position`
 (`latitude`, `longitude`, `heading`, `captured_at`; the last ping while fresh, else `null`),
 `captain.eta_s` (seconds to the pickup while `CAPTAIN_ASSIGNED`, from the routing adapter cached
 30 s per ride; `null` if Routes or Redis is down, and the app says the ETA is unavailable), the
@@ -551,7 +553,7 @@ open returns the same SOS. Notifies Operations immediately.
 
 | Status | Method and path | Request | Response and rules |
 | --- | --- | --- | --- |
-| ✅ | `GET operations/rides/rate-cards/` | `?service_area_id=&vehicle_type=&active=true` (all optional) | Every card version, by area, vehicle type and newest version: the seven price fields, `version`, `is_active`, `created_at`. `400` for a malformed `service_area_id`. |
+| ✅ | `GET operations/rides/rate-cards/` | `?service_area_id=&vehicle_type=&active=true` (all optional) | Every card version, by area, vehicle type and newest version: `service_area_id`, `service_area_name`, the seven price fields, `version`, `is_active`, `created_at`. `400` for a malformed `service_area_id`. |
 | ✅ | `POST operations/rides/rate-cards/` | `{ "service_area_id": "…", "vehicle_type": "BIKE", "base_fare_paise": 1500, "included_distance_m": 1000, "per_km_paise": 600, "per_minute_paise": 100, "minimum_fare_paise": 2500, "free_waiting_minutes": 3, "waiting_per_minute_paise": 100 }` | `201`, the next version, active. Every value a whole number ≥ 0, all required. `404` unknown area; `409 rate_card_exists` while the area has an active card for that vehicle. |
 | ✅ | `PATCH operations/rides/rate-cards/{id}/` | any of the seven price fields; or `{ "is_active": false }` alone | Prices: `200` with a **new version**, unchanged fields copied, the old version inactive. `is_active: false` switches the vehicle off with no new version. `409 rate_card_inactive` for a retired card; `400` for an empty body or prices mixed with `is_active: false`. See *Rate-card versions*. |
 | ✅ | `GET operations/rides/pass-plans/` | — | All plans, active first |

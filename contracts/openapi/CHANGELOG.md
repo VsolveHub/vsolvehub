@@ -170,6 +170,11 @@ added to this entry.
 - **Added** `POST /partner/rides/offers/{offer_id}/decline/` (→ `204`). When nobody else in the
   round is still deciding, the ride goes to the next captains at once. Declining twice or after
   the deadline changes nothing.
+- **Changed**, additive: the `Ride` captain card (`RideCaptain`) adds `rating`, the captain's
+  average stars from riders to one decimal, `null` before the first rating.
+- **Changed**, additive: `RideRateCard` (Operations rate cards) adds `service_area_name`, so the
+  console can name the area without another call.
+- Removed: none. Renamed: none.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 

@@ -203,11 +203,30 @@ the Partner app Rides workspace and the Operations console are the agreed design
     keys reuse the shared names the notifications feed test documents (`amount`,
     `partner_name`).
 
+### Decided while building the rider screens and the Operations console
+
+33. **Reopening the app lands on the open ride from Home's Rides card.** The customer app opens on
+    Home, and `RidesEntry` is the one Rides line Home may hold (§2), so it asks `GET rides/` once
+    per launch and opens the ride still going. The app's root layout stays untouched. A failed
+    check is tried again on the next visit to Home, never retried in a loop.
+34. **One ride screen for live and past rides.** History opens the same screen as the live ride; it
+    already shows the cancelled and "pay your captain" states, and the rating for a ride not yet
+    rated. No second detail screen to keep in step.
+35. **The captain's rating is worked out on read.** `rating` on the rider's captain card is one
+    indexed aggregate over `RideRating`, the same number the Operations captains list shows. No
+    stored average to drift or migrate.
+36. **The console is one Rides page with tabs** (rides, SOS, captains, rate cards, pass plans),
+    the pattern Rentals and Stays use, plus a ride detail page. Live rides and the SOS queue ask
+    again every 10 seconds, so an SOS shows within the 10 s the device checklist asks for. Rate
+    cards can be added only for areas that already have one: areas come from the seed command in
+    V1, so there is no area-list endpoint.
+
 ## Consequences
 
 - Rides reuses the partner review queue, so Operations needs no new approval screen. The cost is that
-  a `RIDE_CAPTAIN` application shares the queue with every other track, and the review screen must
-  show the three new document types. That has not been checked yet.
+  a `RIDE_CAPTAIN` application shares the queue with every other track. The review screen names the
+  three new document types (`partner-review/view/document-reveal.tsx`, a three-line change outside
+  §2 that the admin type check required).
 - Licence and insurance expire, but the existing expiry tracking
   (`capabilities/eligibility.py`) reads only the global identity-document list, so captain documents
   are not covered by it yet.
