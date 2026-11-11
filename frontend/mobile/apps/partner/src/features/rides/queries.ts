@@ -154,3 +154,65 @@ export async function declineOffer(offerId: string): Promise<void> {
     }),
   );
 }
+
+export type SosAnswer = Schemas["Sos"];
+
+function ridePath(rideId: string) {
+  return { path: { ride_id: rideId } };
+}
+
+/** At the pickup. Refused with `not_at_pickup` until the last ping is within 200 m. */
+export function markArrived(rideId: string): Promise<CaptainRide> {
+  return request(() => getApiClient().POST("/api/v1/partner/rides/{ride_id}/arrived/", { params: ridePath(rideId) }));
+}
+
+/**
+ * Start the trip with the rider's code. Each typed code gets its own idempotency key and keeps
+ * it across network retries, so a timeout never costs a try; once the server answers, the key
+ * goes, so typing the same code again is a new try.
+ */
+export async function startTrip(rideId: string, otp: string): Promise<CaptainRide> {
+  const scope = `rides.start.${rideId}.${otp}`;
+  try {
+    const ride = await request(() =>
+      getApiClient().POST("/api/v1/partner/rides/{ride_id}/start/", {
+        body: { otp },
+        params: { path: { ride_id: rideId }, header: { "Idempotency-Key": getStableIdempotencyKey(scope) } },
+      }),
+    );
+    clearIdempotencyKey(scope);
+    return ride;
+  } catch (error) {
+    if (isApiRequestError(error)) clearIdempotencyKey(scope);
+    throw error;
+  }
+}
+
+export function completeTrip(rideId: string): Promise<CaptainRide> {
+  return request(() => getApiClient().POST("/api/v1/partner/rides/{ride_id}/complete/", { params: ridePath(rideId) }));
+}
+
+export function markPaymentReceived(rideId: string): Promise<CaptainRide> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/payment-received/", { params: ridePath(rideId) }),
+  );
+}
+
+export async function cancelAsCaptain(rideId: string, reason: string): Promise<void> {
+  await request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/cancel/", { params: ridePath(rideId), body: { reason } }),
+  );
+}
+
+export async function rateRider(rideId: string, stars: number): Promise<void> {
+  await request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/rating/", { params: ridePath(rideId), body: { stars } }),
+  );
+}
+
+/** SOS: the server uses the captain's last ping as the place. */
+export function raiseCaptainSos(rideId: string): Promise<SosAnswer> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/sos/", { params: ridePath(rideId), body: {} }),
+  );
+}

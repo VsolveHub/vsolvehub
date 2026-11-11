@@ -4,6 +4,7 @@ import { Button, ErrorState, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { goOffDuty } from "../duty";
@@ -44,9 +45,19 @@ const RIDE_STATE: Record<string, string> = {
   COMPLETED: "Collect the payment",
 };
 
-/** The ride the captain accepted. The trip steps arrive with the trip screens (Day 7). */
+/** Rides already opened full screen this session, so going back to Home never loops. */
+const openedRides = new Set<string>();
+
+/** The ride the captain is on, with the way back into the trip screen. */
 function YourRide({ ride }: { ride: CaptainRide }) {
+  const router = useRouter();
   const phone = ride.rider.phone_number;
+  // Reopening the app mid-ride lands on the ride (brief §7.3, scenario 19).
+  useEffect(() => {
+    if (openedRides.has(ride.id)) return;
+    openedRides.add(ride.id);
+    router.push("/rides/trip");
+  }, [ride.id, router]);
   return (
     <View className="rounded-2xl bg-[#00112e] p-4 gap-2">
       <Text className="text-xs font-semibold uppercase text-[#f87000]">Your ride</Text>
@@ -56,6 +67,7 @@ function YourRide({ ride }: { ride: CaptainRide }) {
       <Text className="text-sm text-white">
         {ride.rider.name} · {formatMoney(ride.fare_paise)}
       </Text>
+      <Button onPress={() => router.push("/rides/trip")}>Open ride</Button>
       {phone ? (
         <Button variant="outline" onPress={() => void Linking.openURL(`tel:${phone}`)}>
           Call rider

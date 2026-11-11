@@ -155,6 +155,7 @@ describe("CaptainHome", () => {
     expect(view.getByText("Go to the pickup")).toBeTruthy();
     expect(view.getByText("Pickup: Gachibowli Stadium")).toBeTruthy();
     expect(view.getByText("Call rider")).toBeTruthy();
+    expect(mockPush).toHaveBeenCalledWith("/rides/trip"); // reopening mid-ride lands on the ride
   });
 
   it("says why the server ended duty", async () => {

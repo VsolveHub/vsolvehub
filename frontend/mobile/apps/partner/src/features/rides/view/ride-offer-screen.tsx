@@ -45,16 +45,16 @@ export function RideOfferScreen({ offerId }: { offerId: string }) {
   useOfferRingtone(offer !== null && shouldRing("PENDING", seconds));
 
   // Forget the request before leaving, so the screen behind cannot open it again.
-  const leave = async () => {
+  const leave = async (to: "/rides" | "/rides/trip" = "/rides") => {
     queryClient.setQueryData(currentOfferKey, (data: unknown) =>
       data && typeof data === "object" ? { ...data, offer: null } : data,
     );
     await queryClient.invalidateQueries({ queryKey: captainStatusKey });
     await queryClient.invalidateQueries({ queryKey: currentRideKey });
-    router.replace("/rides");
+    router.replace(to);
   };
-  const accept = useMutation({ mutationFn: () => acceptOffer(offerId), onSuccess: leave });
-  const decline = useMutation({ mutationFn: () => declineOffer(offerId), onSettled: leave });
+  const accept = useMutation({ mutationFn: () => acceptOffer(offerId), onSuccess: () => leave("/rides/trip") });
+  const decline = useMutation({ mutationFn: () => declineOffer(offerId), onSettled: () => leave() });
   const busy = accept.isPending || decline.isPending || accept.isSuccess;
 
   const ended = !busy && !current.isPending && (offer === null || seconds <= 0);

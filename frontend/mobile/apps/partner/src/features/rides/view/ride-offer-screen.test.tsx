@@ -79,13 +79,13 @@ test("shows the countdown, fare and places, and rings", async () => {
   expect(mockRing).toHaveBeenLastCalledWith(true);
 });
 
-test("accepting takes the ride and returns to Home", async () => {
+test("accepting takes the ride and opens the trip", async () => {
   mockAccept.mockResolvedValue({ id: "ride-1" });
   const view = await renderOffer();
 
   await fireEvent.press(view.getByText("Accept"));
 
-  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/rides"));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/rides/trip"));
   expect(mockAccept).toHaveBeenCalledWith("offer-1");
 });
 
