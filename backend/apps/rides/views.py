@@ -735,14 +735,13 @@ def _rate(request: Any, ride_id: Any, rides: Any, rater_kind: str) -> Response:
     return Response(RatingSerializer(rating).data, status=http_status.HTTP_201_CREATED)
 
 
-def _sos(request: Any, ride_id: Any, rides: Any, fallback_partner_id: Any = None) -> Response:
+def _sos(request: Any, ride_id: Any, rides: Any) -> Response:
     serializer = SosRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     sos = engine.raise_sos(
         ride_id=ride_id,
         rides=rides,
         raised_by=request.user,
-        fallback_partner_id=fallback_partner_id,
         **serializer.validated_data,
     )
     return Response(SosSerializer(sos).data, status=http_status.HTTP_201_CREATED)
@@ -803,7 +802,7 @@ class CaptainSosView(APIView):
     )
     def post(self, request: Any, ride_id: Any) -> Response:
         partner = _partner(request.user)
-        return _sos(request, ride_id, Ride.objects.filter(captain=partner), partner.id)
+        return _sos(request, ride_id, Ride.objects.filter(captain=partner))
 
 
 class CaptainHistoryView(APIView):

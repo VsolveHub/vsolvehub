@@ -50907,7 +50907,7 @@ components:
           type: string
           minLength: 1
           description: The rider's 4-digit start code.
-          pattern: ^\d{4}$
+          pattern: ^[0-9]{4}$
       required:
       - otp
     StateEnum:

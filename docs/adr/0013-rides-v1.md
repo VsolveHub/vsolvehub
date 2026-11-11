@@ -188,8 +188,8 @@ the Partner app Rides workspace and the Operations console are the agreed design
     slot is free for the next captain. The rider's view says `searching_again` meanwhile.
 
 31. **After the ride.** A rating is once per side, enforced by the database (`409
-    invalid_transition` on a repeat). An SOS is never refused for lack of a place: a captain's own
-    SOS uses their last ping when the phone sends none, and a second press while one is open
+    invalid_transition` on a repeat). An SOS is never refused for lack of a place: either side's
+    SOS uses the captain's last ping when the phone sends none, and a second press while one is open
     returns it, so a panicked double tap is one alert. Earnings are computed in India time:
     `today` from local midnight, `week` from Monday.
 
@@ -220,6 +220,14 @@ the Partner app Rides workspace and the Operations console are the agreed design
     again every 10 seconds, so an SOS shows within the 10 s the device checklist asks for. Rate
     cards can be added only for areas that already have one: areas come from the seed command in
     V1, so there is no area-list endpoint.
+
+37. **Fixes from the full-feature code review (11 Nov).** A ride keeps its captain tracked to the
+    end: pings are accepted off duty while a ride is open, the 2-minute sweep skips a captain on a
+    ride, and the app hides Go off duty during one. A failed area lookup keeps the captain's last
+    listing. Accept re-checks approval and pass. No pass is sold while one is queued. Wrong start
+    codes stay counted on the ride across a captain cancel. A re-sent offer rings again (the app
+    keys it by id and `offered_at`). The tunable limits moved to `RIDES_*` settings, and the sweep
+    checks all captains in one Redis round trip.
 
 ## Consequences
 

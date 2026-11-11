@@ -174,6 +174,13 @@ added to this entry.
   average stars from riders to one decimal, `null` before the first rating.
 - **Changed**, additive: `RideRateCard` (Operations rate cards) adds `service_area_name`, so the
   console can name the area without another call.
+- **Changed**: `StartTripRequest.otp` pattern is `^[0-9]{4}$` (ASCII digits only; other scripts'
+  digits are `400`, not a server error). Wrong start codes stay counted across a captain cancel.
+- **Changed**: `POST /partner/rides/offers/{offer_id}/accept/` also answers `403
+  captain_not_approved` or `403 pass_required` when the captain was suspended or their pass ended
+  while the offer was open. `POST /partner/rides/passes/` answers `409 pass_already_active` while
+  a paid pass is queued. `POST /partner/rides/location/` accepts pings off duty while the captain
+  has an open ride. A rider's SOS without a place uses the captain's last ping.
 - Removed: none. Renamed: none.
 
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import

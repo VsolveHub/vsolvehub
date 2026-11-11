@@ -251,8 +251,11 @@ _LIVE_PAYMENT_STATUSES = (
     PaymentAttempt.Status.PROVIDER_PENDING,
     PaymentAttempt.Status.AUTHORIZED,
 )
-#: A pending purchase older than this stops blocking a new one (brief §5.8, Revision 2).
-PENDING_PURCHASE_WINDOW = timedelta(minutes=30)
+
+
+def _purchase_window() -> timedelta:
+    """A pending purchase older than this stops blocking a new one (brief §5.8, Revision 2)."""
+    return timedelta(minutes=int(settings.RIDES_PASS_PURCHASE_WINDOW_MINUTES))
 
 
 def _lock_partner(partner: PartnerProfile) -> None:
@@ -295,14 +298,19 @@ def buy_pass(
         )
     now = timezone.now()
     _expire_lapsed_passes(partner_id=partner.id, now=now)
-    if selectors.active_pass(partner, now=now) is not None:
+    # A queued pass is a paid pass waiting its turn. One in line is the most we can hold, so a
+    # second paid one would be captured with nowhere to go.
+    if (
+        selectors.active_pass(partner, now=now) is not None
+        or selectors.queued_pass(partner) is not None
+    ):
         raise PassAlreadyActiveError
 
     in_flight = CaptainPass.objects.filter(
         partner=partner,
         status=CaptainPass.Status.PENDING_ACTIVATION,
         payment_attempt__status__in=_LIVE_PAYMENT_STATUSES,
-        created_at__gt=now - PENDING_PURCHASE_WINDOW,
+        created_at__gt=now - _purchase_window(),
     )
     same_plan = in_flight.filter(plan=plan).first()
     if same_plan is not None:
@@ -452,6 +460,14 @@ _NOT_APPROVED_MESSAGES = {
 }
 
 
+def require_can_drive(partner: PartnerProfile) -> None:
+    """Approved, not suspended, with a vehicle and an active pass; else the honest refusal."""
+    for reason in selectors.captain_status(partner).blocked_reasons:
+        if reason == "pass_required":
+            raise PassRequiredError
+        raise CaptainNotApprovedError(_NOT_APPROVED_MESSAGES[reason])
+
+
 @transaction.atomic
 def start_duty(*, partner: PartnerProfile) -> CaptainDutySession:
     """Go on duty, if every gate passes. Already on duty: the open session is returned."""
@@ -460,10 +476,7 @@ def start_duty(*, partner: PartnerProfile) -> CaptainDutySession:
     if existing is not None:
         return existing
 
-    for reason in selectors.captain_status(partner).blocked_reasons:
-        if reason == "pass_required":
-            raise PassRequiredError
-        raise CaptainNotApprovedError(_NOT_APPROVED_MESSAGES[reason])
+    require_can_drive(partner)
 
     session = CaptainDutySession.objects.create(partner=partner)
     logger.info("ride_duty_started", extra={"partner_id": str(partner.id)})
@@ -485,8 +498,7 @@ def stop_duty(*, partner: PartnerProfile) -> None:
 
 # --- Live location (brief §5.6) ---------------------------------------------------------------
 
-#: A ping older than this is refused; one this far in the future means a wrong phone clock.
-PING_MAX_AGE = timedelta(seconds=30)
+#: A ping this far in the future means a wrong phone clock (too old: RIDES_PING_MAX_AGE_SECONDS).
 PING_MAX_AHEAD = timedelta(seconds=5)
 
 #: Ride states in which each ping also becomes a point on the ride's GPS trail.
@@ -502,11 +514,15 @@ class LocationPing:
     captured_at: Any
 
 
+#: Returned when the geocoder fails: keep whatever listing the captain already has.
+AREA_UNKNOWN = "?"
+
+
 def _captain_area_id(partner: PartnerProfile, ping: LocationPing) -> str | None:
     """The served area the captain is in, re-checked from the pincode every 10 minutes.
 
-    If the geocoder fails, the last known membership is kept rather than guessed, and nothing is
-    cached, so the next ping tries again.
+    If the geocoder fails, AREA_UNKNOWN says to keep the last known membership rather than
+    guess, and nothing is cached, so the next ping tries again.
     """
     known, area_id = location.cached_area(partner.id)
     if known:
@@ -515,7 +531,7 @@ def _captain_area_id(partner: PartnerProfile, ping: LocationPing) -> str | None:
         address = reverse_geocode(latitude=ping.latitude, longitude=ping.longitude)
     except GeocodingError:
         logger.warning("ride_captain_area_unknown", extra={"partner_id": str(partner.id)})
-        return None
+        return AREA_UNKNOWN
     decision = (
         check_serviceability(postal_code=address.postal_code) if address.postal_code else None
     )
@@ -532,15 +548,17 @@ def record_location(*, partner: PartnerProfile, ping: LocationPing) -> None:
     written to the ride's track instead.
     """
     now = timezone.now()
-    if ping.captured_at < now - PING_MAX_AGE:
+    if ping.captured_at < now - timedelta(seconds=int(settings.RIDES_PING_MAX_AGE_SECONDS)):
         raise LocationStaleError
     if ping.captured_at > now + PING_MAX_AHEAD:
         raise LocationStaleError("Your phone's clock looks wrong. Set it to automatic time.")
-    if selectors.open_duty_session(partner) is None:
-        raise NotOnDutyError
-
     ride = Ride.objects.filter(captain=partner, state__in=OPEN_RIDE_STATES).first()
+    # A ride in progress keeps its captain tracked even off duty: the pickup check and the
+    # rider's map need the position. Off duty with no ride, the phone should stop sending.
+    if ride is None and selectors.open_duty_session(partner) is None:
+        raise NotOnDutyError
     listed_in: str | None = None
+    keep_listing = False
     if ride is not None and ride.state in _TRACKED_STATES:
         RideTrackPoint.objects.create(
             ride=ride,
@@ -554,7 +572,9 @@ def record_location(*, partner: PartnerProfile, ping: LocationPing) -> None:
         if ride is None and not selectors.captain_status(partner).blocked_reasons:
             vehicle = CaptainVehicle.objects.get(partner=partner)
             area_id = _captain_area_id(partner, ping)
-            if area_id is not None:
+            if area_id == AREA_UNKNOWN:
+                keep_listing = True
+            elif area_id is not None:
                 listed_in = location.geo_key(area_id, vehicle.vehicle_type)
         location.record_position(
             partner_id=partner.id,
@@ -564,6 +584,7 @@ def record_location(*, partner: PartnerProfile, ping: LocationPing) -> None:
             heading=ping.heading,
             captured_at=ping.captured_at.isoformat(),
             listed_in=listed_in,
+            keep_listing=keep_listing,
         )
     except location.LocationStoreError as exc:
         raise LocationUnavailableError from exc
@@ -578,10 +599,17 @@ def sweep_stale_captains() -> int:
     try:
         location.sweep_stale_members()
         cutoff = timezone.now() - timedelta(seconds=location.STALE_AFTER_SECONDS)
-        candidates = CaptainDutySession.objects.filter(
-            ended_at__isnull=True, started_at__lte=cutoff
+        on_a_ride = Ride.objects.filter(
+            captain_id=models.OuterRef("partner_id"), state__in=OPEN_RIDE_STATES
         )
-        silent = [s.partner_id for s in candidates if not location.has_recent_ping(s.partner_id)]
+        # A captain on a ride stays on duty until it ends, as with an expired pass (brief §5.8).
+        candidates = list(
+            CaptainDutySession.objects.filter(ended_at__isnull=True, started_at__lte=cutoff)
+            .exclude(models.Exists(on_a_ride))
+            .values_list("partner_id", flat=True)
+        )
+        recent = location.have_recent_pings(candidates)
+        silent = [pid for pid, pinged in zip(candidates, recent, strict=True) if not pinged]
     except location.LocationStoreError:
         logger.warning("ride_location_sweep_skipped")
         return 0

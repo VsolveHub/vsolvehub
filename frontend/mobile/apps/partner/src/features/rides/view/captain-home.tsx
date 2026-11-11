@@ -146,7 +146,10 @@ export function CaptainHome() {
             {line}
           </Text>
         ))}
-        {data.on_duty ? (
+        {data.on_duty && currentRide.data?.ride ? (
+          // Going off duty stops the GPS, and the ride needs it until the end.
+          <Text className="text-sm text-text-muted">Finish your ride before going off duty.</Text>
+        ) : data.on_duty ? (
           <Button size="lg" block variant="outline" loading={offDuty.isPending} onPress={() => offDuty.mutate()}>
             Go off duty
           </Button>

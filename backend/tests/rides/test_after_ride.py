@@ -194,10 +194,10 @@ def test_an_sos_is_never_refused_for_lack_of_a_place(
     captain_sos = sos(partner_client(ravi.user), f"{CAPTAIN}/{ride.id}/sos/")
 
     assert rider_sos.status_code == captain_sos.status_code == 201
-    assert RideSosEvent.objects.get(id=rider_sos.json()["sos_id"]).latitude is None
-    # The captain's own SOS falls back to their last ping.
-    captain_event = RideSosEvent.objects.get(id=captain_sos.json()["sos_id"])
-    assert float(captain_event.latitude or 0) == pytest.approx(float(PICKUP[0]))
+    # Either side's SOS without a place falls back to the captain's last ping: same vehicle.
+    for response in (rider_sos, captain_sos):
+        event = RideSosEvent.objects.get(id=response.json()["sos_id"])
+        assert float(event.latitude or 0) == pytest.approx(float(PICKUP[0]))
 
 
 def test_latitude_and_longitude_come_together(

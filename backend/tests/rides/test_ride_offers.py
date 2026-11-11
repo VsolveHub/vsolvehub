@@ -10,9 +10,10 @@ from rest_framework.test import APIClient
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
-from apps.partners.models import PartnerProfile
+from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.rides.models import (
     CaptainDutySession,
+    CaptainPass,
     Ride,
     RideOffer,
     RideRating,
@@ -167,6 +168,31 @@ def test_the_second_captain_to_accept_is_told_it_is_gone(rider: User, area: Serv
     response = accept(late, offer_of(ride, late))
 
     assert (response.status_code, error_code(response)) == (409, "ride_no_longer_available")
+
+
+def test_a_captain_suspended_while_the_offer_is_open_cannot_accept(
+    rider: User, area: ServiceArea
+) -> None:
+    ravi = captain(area, km=0.5)
+    ride = dispatch(new_ride(rider, area))
+    PartnerApplication.objects.filter(partner=ravi).update(
+        status=PartnerApplication.Status.SUSPENDED
+    )
+
+    response = accept(ravi, offer_of(ride, ravi))
+
+    assert (response.status_code, error_code(response)) == (403, "captain_not_approved")
+    assert Ride.objects.get(pk=ride.pk).state == RideState.SEARCHING
+
+
+def test_a_captain_whose_pass_ran_out_cannot_accept(rider: User, area: ServiceArea) -> None:
+    ravi = captain(area, km=0.5)
+    ride = dispatch(new_ride(rider, area))
+    CaptainPass.objects.filter(partner=ravi).update(ends_at=timezone.now())
+
+    response = accept(ravi, offer_of(ride, ravi))
+
+    assert (response.status_code, error_code(response)) == (403, "pass_required")
 
 
 def test_an_expired_offer_cannot_be_accepted(rider: User, area: ServiceArea) -> None:

@@ -149,6 +149,27 @@ def test_the_stored_fingerprint_is_an_hmac_not_a_hash_of_the_code(
 
 def test_the_code_must_be_four_digits(arrived: tuple[Ride, PartnerProfile]) -> None:
     ride, ravi = arrived
-    for bad in ("123", "12345", "abcd", ""):
+    # Other scripts' digits pass a plain \d and used to break the comparison (a 500).
+    for bad in (
+        "123",
+        "12345",
+        "abcd",
+        "",
+        "\u0661\u0662\u0663\u0664",
+        "\u0967\u0968\u0969\u096a",
+    ):
         assert start(ravi, ride, bad, f"k-{bad}").status_code == 400
     assert attempts(ride) == 0
+
+
+def test_a_new_captain_does_not_get_fresh_guesses_at_the_same_code(
+    arrived: tuple[Ride, PartnerProfile],
+) -> None:
+    ride, ravi = arrived
+    for n in range(4):
+        start(ravi, ride, wrong_code(ride), f"w-{n}")
+
+    engine.captain_cancel(partner=ravi, ride_id=ride.id, reason="VEHICLE_ISSUE")
+
+    # The code is the ride's, so the count stays with the ride for whoever comes next.
+    assert attempts(ride) == 4

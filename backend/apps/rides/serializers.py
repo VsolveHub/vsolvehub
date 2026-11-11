@@ -779,7 +779,7 @@ class SosResolveSerializer(serializers.Serializer[Any]):
 
 
 class StartTripSerializer(serializers.Serializer[Any]):
-    otp = serializers.RegexField(r"^\d{4}$", help_text="The rider's 4-digit start code.")
+    otp = serializers.RegexField(r"\A[0-9]{4}\Z", help_text="The rider's 4-digit start code.")
 
 
 class RideOfferSerializer(serializers.ModelSerializer[RideOffer]):

@@ -142,6 +142,22 @@ describe("CaptainHome", () => {
     expect(mockOffDuty).toHaveBeenCalled();
   });
 
+  it("keeps the captain on duty until the ride ends, so the GPS keeps going", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, on_duty: true, blocked_reasons: [] } };
+    mockRide = {
+      id: "ride-in-trip",
+      state: "IN_TRIP",
+      pickup: { address: "Gachibowli Stadium" },
+      drop: { address: "Hitec City" },
+      fare_paise: 5100,
+      rider: { name: "Priya", phone_number: null },
+    };
+    const view = await render(<CaptainHome />);
+
+    expect(view.queryByText("Go off duty")).toBeNull();
+    expect(view.getByText("Finish your ride before going off duty.")).toBeTruthy();
+  });
+
   it("shows the accepted ride with the rider to call", async () => {
     mockRide = {
       state: "CAPTAIN_ASSIGNED",

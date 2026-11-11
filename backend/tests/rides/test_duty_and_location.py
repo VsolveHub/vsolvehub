@@ -188,6 +188,33 @@ def test_a_geocoder_failure_lists_nobody_and_tries_again_next_ping(
     assert not live_redis.exists(f"rides:area:{user.partner_profile.id}")
 
 
+def test_a_geocoder_failure_keeps_a_listed_captain_listed(
+    live_redis: Any,
+    area: ServiceArea,
+    geocoder: Callable[[str], list[int]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    geocoder(PIN)
+    user, client = on_duty_captain()
+    ping(client)
+    partner_id = str(user.partner_profile.id)
+    assert geo_members(live_redis, area) == [partner_id]
+
+    # Ten minutes on, the area is checked again, and Google is down just then.
+    def broken(**_: Any) -> GeocodedAddress:
+        raise GeocodingError("down")
+
+    monkeypatch.setattr(services, "reverse_geocode", broken)
+    live_redis.delete(f"rides:area:{partner_id}")
+
+    assert ping(client, latitude=17.4402).status_code == 204
+
+    assert geo_members(live_redis, area) == [partner_id]
+    lat = live_redis.geopos(f"rides:geo:{area.id}:BIKE", partner_id)[0][1]
+    assert lat == pytest.approx(17.4402, abs=1e-4)  # the point moved with the captain
+    assert not live_redis.exists(f"rides:area:{partner_id}")  # and the next ping asks again
+
+
 def test_a_captain_suspended_mid_duty_drops_off_the_map(
     live_redis: Any, area: ServiceArea, geocoder: Callable[[str], list[int]]
 ) -> None:
@@ -226,6 +253,13 @@ def test_ping_age_limits(
     assert response.status_code == expected
     if expected == 422:
         assert error_code(response) == "location_stale"
+
+
+def test_the_ping_age_limit_is_a_setting(settings: SettingsWrapper) -> None:
+    settings.RIDES_PING_MAX_AGE_SECONDS = 60
+    _, client = on_duty_captain()
+    old = (timezone.now() - timedelta(seconds=45)).isoformat()
+    assert ping(client, captured_at=old).status_code == 204
 
 
 @pytest.mark.parametrize(
@@ -330,6 +364,22 @@ def test_on_a_ride_the_ping_feeds_the_track_and_leaves_the_map(
     assert point.accuracy_m == 8
 
 
+def test_off_duty_mid_ride_the_pings_still_feed_the_ride(
+    live_redis: Any, area: ServiceArea, geocoder: Callable[[str], list[int]]
+) -> None:
+    geocoder(PIN)
+    user, client = on_duty_captain()
+    ride = give_ride(user, area)
+    client.post("/api/v1/partner/rides/duty/stop/")
+
+    assert ping(client).status_code == 204
+
+    # The pickup check and the rider's map still know where the captain is.
+    assert RideTrackPoint.objects.filter(ride=ride).count() == 1
+    assert live_redis.exists(f"rides:pos:{user.partner_profile.id}")
+    assert geo_members(live_redis, area) == []
+
+
 # --- leaving the map --------------------------------------------------------------------------
 
 
@@ -400,6 +450,36 @@ def test_the_sweeper_keeps_a_captain_who_is_pinging(
 
     assert sweep_stale_captains() == 0
     assert CaptainDutySession.objects.get().ended_at is None
+
+
+def test_the_sweeper_leaves_a_captain_on_a_ride_on_duty(
+    live_redis: Any, area: ServiceArea, geocoder: Callable[[str], list[int]]
+) -> None:
+    geocoder(PIN)
+    user, client = on_duty_captain()
+    ping(client)
+    give_ride(user, area, state=RideState.IN_TRIP)
+    live_redis.delete(f"rides:lastping:{user.partner_profile.id}")  # a tunnel, say
+    CaptainDutySession.objects.update(started_at=timezone.now() - timedelta(minutes=3))
+
+    assert sweep_stale_captains() == 0
+    assert CaptainDutySession.objects.get().ended_at is None
+
+
+def test_the_sweeper_judges_many_captains_in_one_pass(
+    live_redis: Any, area: ServiceArea, geocoder: Callable[[str], list[int]]
+) -> None:
+    del area
+    geocoder(PIN)
+    quiet, quiet_client = on_duty_captain()
+    _, talking_client = on_duty_captain()
+    ping(quiet_client)
+    ping(talking_client)
+    live_redis.delete(f"rides:lastping:{quiet.partner_profile.id}")
+    CaptainDutySession.objects.update(started_at=timezone.now() - timedelta(minutes=3))
+
+    assert sweep_stale_captains() == 1
+    assert CaptainDutySession.objects.get(partner__user=quiet).ended_at is not None
 
 
 def test_the_sweeper_gives_a_new_session_two_minutes_before_judging(

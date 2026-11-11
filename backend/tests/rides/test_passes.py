@@ -275,6 +275,19 @@ def test_the_queued_pass_starts_exactly_when_the_active_one_ends() -> None:
     assert CaptainDutySession.objects.filter(partner__user=user, ended_at__isnull=True).exists()
 
 
+def test_no_new_pass_while_one_is_queued() -> None:
+    user, client = ready_captain()
+    _queued, active = _paid_pass_captured_during_a_free_one(client)
+    week = plan("week", 24900, duration_hours=168)
+
+    # The active pass has just lapsed, before the minute task starts the queued one.
+    with freeze_time(active.ends_at + timedelta(seconds=10)):
+        response = buy(client, week.id, "k-3")
+
+    assert (response.status_code, error_code(response)) == (409, "pass_already_active")
+    assert not CaptainPass.objects.filter(partner__user=user, plan=week).exists()
+
+
 def test_a_second_late_payment_is_left_for_operations_not_dropped() -> None:
     _, client = ready_captain()
     queued, _ = _paid_pass_captured_during_a_free_one(client)

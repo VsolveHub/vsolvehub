@@ -22,13 +22,13 @@ from django.conf import settings
 
 __all__ = [
     "AREA_RECHECK_SECONDS",
-    "MATCHING_MAX_ACCURACY_M",
     "STALE_AFTER_SECONDS",
     "LocationStoreError",
     "cached_area",
     "forget",
     "geo_key",
     "has_recent_ping",
+    "have_recent_pings",
     "last_position",
     "nearby",
     "record_position",
@@ -39,8 +39,6 @@ __all__ = [
 POSITION_TTL_SECONDS = 30
 STALE_AFTER_SECONDS = 120
 AREA_RECHECK_SECONDS = 600
-#: Matching ignores positions less accurate than this (brief §5.6).
-MATCHING_MAX_ACCURACY_M = 100
 #: Cached in place of an area id when the captain is outside every served area.
 NO_AREA = "-"
 
@@ -102,12 +100,18 @@ def record_position(
     heading: float | None,
     captured_at: str,
     listed_in: str | None,
+    keep_listing: bool = False,
 ) -> None:
-    """Store a ping. `listed_in` is the GEO set the captain belongs in now, or None for none."""
+    """Store a ping. `listed_in` is the GEO set the captain belongs in now, or None for none.
+
+    `keep_listing` leaves the captain in the set they are already in (their area is unknown
+    just now) and moves their point there.
+    """
     member = str(partner_id)
 
     def write(r: redis.Redis) -> None:
         previous = _get(r, _member(partner_id))
+        target = previous if keep_listing else listed_in
         pipe = r.pipeline()
         pipe.hset(
             _pos(partner_id),
@@ -121,11 +125,11 @@ def record_position(
         )
         pipe.expire(_pos(partner_id), POSITION_TTL_SECONDS)
         pipe.set(_last_ping(partner_id), captured_at, ex=STALE_AFTER_SECONDS)
-        if previous and previous != listed_in:
+        if previous and previous != target:
             pipe.zrem(previous, member)
-        if listed_in:
-            pipe.geoadd(listed_in, (longitude, latitude, member))
-            pipe.set(_member(partner_id), listed_in)
+        if target:
+            pipe.geoadd(target, (longitude, latitude, member))
+            pipe.set(_member(partner_id), target)
         else:
             pipe.delete(_member(partner_id))
         pipe.execute()
@@ -160,6 +164,20 @@ def has_recent_ping(partner_id: Any) -> bool:
     return bool(_run(lambda r: r.exists(_last_ping(partner_id))))
 
 
+def have_recent_pings(partner_ids: list[Any]) -> list[bool]:
+    """has_recent_ping for many captains, in one round trip."""
+    if not partner_ids:
+        return []
+
+    def check(r: redis.Redis) -> list[bool]:
+        pipe = r.pipeline()
+        for partner_id in partner_ids:
+            pipe.exists(_last_ping(partner_id))
+        return [bool(found) for found in pipe.execute()]
+
+    return _run(check)
+
+
 def cached_area(partner_id: Any) -> tuple[bool, str | None]:
     """(known, area_id). Known with None means "outside every served area"."""
     value = _run(lambda r: _get(r, _area(partner_id)))
@@ -180,8 +198,10 @@ _SEARCH_LIMIT = 50
 def nearby(*, key: str, latitude: float, longitude: float, radius_m: int) -> list[tuple[str, int]]:
     """Captains in this GEO set within `radius_m`, nearest first, as (partner_id, metres).
 
-    A member whose position has expired, or whose last fix was worse than 100 m, is left out.
+    A member whose position has expired, or whose last fix was worse than
+    RIDES_MATCHING_MAX_ACCURACY_M, is left out.
     """
+    max_accuracy_m = int(settings.RIDES_MATCHING_MAX_ACCURACY_M)
 
     def search(r: redis.Redis) -> list[tuple[str, int]]:
         found = cast(
@@ -206,7 +226,7 @@ def nearby(*, key: str, latitude: float, longitude: float, radius_m: int) -> lis
         return [
             (str(member), round(float(distance)))
             for (member, distance), accuracy in zip(found, accuracies, strict=True)
-            if accuracy is not None and int(accuracy) <= MATCHING_MAX_ACCURACY_M
+            if accuracy is not None and int(accuracy) <= max_accuracy_m
         ]
 
     return _run(search)

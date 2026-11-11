@@ -281,7 +281,7 @@ Request `{ "plan_id": "…" }`. Response `201` (`CaptainPass`, the shape in `me`
 
 | Rule | Behaviour |
 | --- | --- |
-| An active pass | `409 pass_already_active` |
+| An active pass, or a paid pass queued behind one | `409 pass_already_active` (only one pass can wait in line) |
 | A paid purchase still going through (under 30 minutes old) | The same plan returns that pending pass, never a second charge; any other plan, paid or ₹0, is `409 pass_purchase_pending` |
 | Not an approved captain | `403 captain_not_approved` |
 | Unknown or switched-off plan | `404` |
@@ -309,9 +309,14 @@ and stopping while off duty changes nothing.
 Response `204`. `latitude` and `longitude` in range, `accuracy_m` above 0, `heading` optional (0–360),
 otherwise `400 validation_error`. `captured_at` (in server time, see *Conventions*) at most 30 s old
 and at most 5 s ahead, otherwise `422 location_stale`. `409 not_on_duty` once the server has ended
-duty; `503 location_unavailable` when Redis is down. A ping with accuracy worse than 100 m is stored
-but ignored for matching. From `CAPTAIN_ASSIGNED` to `IN_TRIP` each ping also writes a track point.
-After 2 minutes without a ping, duty ends (`LOCATION_STALE`). Positions are never logged.
+duty and the captain has no open ride: a ride in progress keeps its captain's pings coming even off
+duty, for the pickup check and the rider's map. `503 location_unavailable` when Redis is down. A
+ping with accuracy worse than 100 m is stored but ignored for matching. If the area lookup fails,
+the captain keeps the listing they had. From `CAPTAIN_ASSIGNED` to `IN_TRIP` each ping also writes a
+track point. After 2 minutes without a ping, duty ends (`LOCATION_STALE`), except for a captain on
+an open ride, who stays on duty until it ends. Positions are never logged. The 30 s, 100 m and
+30-minute limits are the settings `RIDES_PING_MAX_AGE_SECONDS`, `RIDES_MATCHING_MAX_ACCURACY_M` and
+`RIDES_PASS_PURCHASE_WINDOW_MINUTES`.
 
 ### ✅ `GET partner/rides/offers/current/`
 
@@ -332,7 +337,9 @@ deadline, on a ride still searching.
 No body. Response `200` (`CaptainRide`): the ride as below, now `CAPTAIN_ASSIGNED`. The first accept
 wins; the other offers become `WITHDRAWN`. Accepting an offer this captain already won returns the
 ride. Errors: `409 ride_no_longer_available` (another captain won, the offer expired, or the ride
-ended); `409 not_on_duty`; `404` for someone else's offer.
+ended); `409 not_on_duty`; `403 captain_not_approved` or `403 pass_required` when the captain was
+suspended or their pass ended while the offer was open (the same gate as going on duty); `404` for
+someone else's offer.
 
 ```json
 { "id": "…", "state": "CAPTAIN_ASSIGNED", "vehicle_type": "BIKE",
@@ -383,6 +390,8 @@ cancel counts against the captain in Operations.
 1. The view runs the command through `execute_idempotent`, keyed on the captain and the ride.
 2. Inside that transaction the command locks the ride (`select_for_update`), then:
    - **locked** (`otp_attempts` is already 5): returns `423 otp_locked`. Nothing is counted.
+     The count belongs to the ride, like the code: a captain cancel does not reset it, so a new
+     captain never gets five fresh guesses at the same code. The code is ASCII digits `0-9` only.
    - **right code**: moves the ride to `IN_TRIP`, writes the `RideTransition`, and returns `200`.
    - **wrong code**: adds 1 to `otp_attempts` and returns `400 otp_invalid`, or `423 otp_locked`
      when that was the fifth wrong try. It **returns** the refusal rather than raising it, so the
@@ -545,7 +554,9 @@ is `409 invalid_transition`. `my_rating` on `GET rides/{ride_id}/` is `null` unt
 without the other). Response `201 { "sos_id": "…", "emergency_number": "112" }`, where
 `emergency_number` is `RIDES_EMERGENCY_NUMBER` (see *Emergency number* under the captain trip
 steps). Works in any open state (`409 invalid_transition` otherwise); a second press while it is
-open returns the same SOS. Notifies Operations immediately.
+open returns the same SOS. Without a place, the captain's last ping is used: rider and captain are
+together from pickup on, and a rider with location off still gives Operations somewhere to look.
+Notifies Operations immediately.
 
 ---
 

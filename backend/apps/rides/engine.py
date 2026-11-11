@@ -50,6 +50,7 @@ from apps.rides.models import (
     RideState,
     RideTransition,
 )
+from apps.rides.services import require_can_drive
 
 __all__ = [
     "CAPTAIN_CANCEL_REASONS",
@@ -416,6 +417,8 @@ def accept_offer(*, partner: PartnerProfile, offer_id: UUID) -> Ride:
         raise RideNoLongerAvailableError
     if selectors.open_duty_session(partner) is None:
         raise NotOnDutyError
+    # Suspended, or the pass ran out, while the offer was on screen: the same gate as duty.
+    require_can_drive(partner)
 
     offer.status = RideOffer.Status.ACCEPTED
     offer.responded_at = now
@@ -530,7 +533,7 @@ def _at_pickup(ride: Ride, position: dict[str, str] | None, now: datetime) -> bo
     if position is None:
         return False
     captured_at = datetime.fromisoformat(position["captured_at"])
-    if now - captured_at > timedelta(seconds=30):
+    if now - captured_at > timedelta(seconds=int(settings.RIDES_PING_MAX_AGE_SECONDS)):
         return False
     distance = _metres_between(
         float(position["latitude"]),
@@ -724,7 +727,8 @@ def captain_cancel(*, partner: PartnerProfile, ride_id: UUID, reason: str) -> No
     ride.captain = None
     ride.captain_assigned_at = None
     ride.captain_arrived_at = None
-    ride.otp_attempts = 0
+    # otp_attempts stays: the start code belongs to the ride, so a new captain must not get
+    # five fresh guesses at the same code.
     ride.dispatch_round = 0
     _transition(
         ride,
@@ -740,7 +744,6 @@ def captain_cancel(*, partner: PartnerProfile, ride_id: UUID, reason: str) -> No
             "captain",
             "captain_assigned_at",
             "captain_arrived_at",
-            "otp_attempts",
             "dispatch_round",
             "updated_at",
         )
@@ -810,12 +813,12 @@ def raise_sos(
     raised_by: Any,
     latitude: Any | None,
     longitude: Any | None,
-    fallback_partner_id: UUID | None = None,
 ) -> RideSosEvent:
     """An SOS on a live ride. Never refused for lack of a location. Pressing it again while one is
     open returns that one, so a panicked double tap is one alert, not two.
 
-    Where the phone sent no position, a captain's last ping is used if there is one.
+    Where the phone sent no position, the ride's captain's last ping is used if there is one:
+    rider and captain are in the same place from pickup on.
     """
     ride = rides.select_for_update().filter(id=ride_id).first()
     if ride is None:
@@ -828,9 +831,9 @@ def raise_sos(
     if open_sos is not None:
         return open_sos
 
-    if latitude is None and fallback_partner_id is not None:
+    if latitude is None and ride.captain_id is not None:
         try:
-            ping = location.last_position(fallback_partner_id)
+            ping = location.last_position(ride.captain_id)
         except location.LocationStoreError:
             ping = None
         if ping is not None:

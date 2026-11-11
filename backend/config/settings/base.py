@@ -839,10 +839,16 @@ RIDES_OFFERS_PER_ROUND = env.int("RIDES_OFFERS_PER_ROUND", default=3)
 RIDES_OFFER_SECONDS = env.int("RIDES_OFFER_SECONDS", default=15)
 # The start OTP is HMAC(secret, ride id). No default on purpose: without it a ride cannot start.
 RIDES_OTP_SECRET = env("RIDES_OTP_SECRET", default="")
-# "Arrived" is accepted only this close to the pickup, from a ping at most 30 s old.
+# "Arrived" is accepted only this close to the pickup, from a fresh ping (see below).
 RIDES_ARRIVAL_RADIUS_M = env.int("RIDES_ARRIVAL_RADIUS_M", default=200)
 # Shown on every live ride and after an SOS.
 RIDES_EMERGENCY_NUMBER = env("RIDES_EMERGENCY_NUMBER", default="112")
+# A captain's GPS ping older than this is refused, and too old to prove "arrived".
+RIDES_PING_MAX_AGE_SECONDS = env.int("RIDES_PING_MAX_AGE_SECONDS", default=30)
+# Matching ignores positions less accurate than this (brief §5.6).
+RIDES_MATCHING_MAX_ACCURACY_M = env.int("RIDES_MATCHING_MAX_ACCURACY_M", default=100)
+# A pass purchase still waiting for payment blocks another one for this long (Revision 2).
+RIDES_PASS_PURCHASE_WINDOW_MINUTES = env.int("RIDES_PASS_PURCHASE_WINDOW_MINUTES", default=30)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
