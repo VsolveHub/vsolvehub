@@ -86,16 +86,22 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
 
   return (
     <article className="group relative flex flex-col md:flex-row w-full min-h-[220px] md:h-[230px] rounded-[24px] border border-[#E8E3DE] bg-[#FFFFFF] shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.07)] hover:border-[#ded8d2] transition-all duration-300 overflow-hidden">
+      {/* Stretched link: the whole card opens the listing. Heart and Apply sit above it (z-10). */}
+      <Link
+        href={listingHref(listing.slug)}
+        aria-label={`View ${listing.title}`}
+        className="absolute inset-0 z-[1] rounded-[24px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF7900]"
+      />
       {/* Left Section: Image (~20-21% width, 100% card height, rounded top-left and bottom-left) */}
       <div className="relative w-full md:w-[21%] md:min-w-[200px] md:max-w-[240px] h-52 md:h-auto self-stretch shrink-0 overflow-hidden bg-slate-100">
-        <Link href={listingHref(listing.slug)} className="block size-full" tabIndex={-1}>
+        <div className="block size-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {heroImage ? (<img
             src={heroImage}
             alt={listing.title}
             className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
           />) : null}
-        </Link>
+        </div>
       </div>
 
       {/* Right Section: Job Information (~79-80% width) */}
@@ -104,11 +110,11 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
           {/* Top Row: Job Title & Heart Icon */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <Link href={listingHref(listing.slug)} className="block focus-visible:outline-none">
+              <div className="block">
                 <h2 className="text-[26px] md:text-[28px] font-bold text-[#15264D] tracking-tight leading-tight hover:text-[#FF7900] transition-colors truncate">
                   {listing.title}
                 </h2>
-              </Link>
+              </div>
 
               {/* Second Row: Company Name, Separator, Verified Badge, and Label */}
               <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -144,7 +150,7 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
                 e.stopPropagation();
                 saved.toggle(listing.id);
               }}
-              className="text-[#2D3748] hover:text-rose-500 focus-visible:outline-none transition-colors p-1 shrink-0"
+              className="relative z-10 text-[#2D3748] hover:text-rose-500 focus-visible:outline-none transition-colors p-1 shrink-0"
             >
               <Heart
                 className={`size-[26px] md:size-[28px] transition-colors ${
@@ -208,7 +214,7 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
         <div className="mt-2 flex items-center justify-end">
           <Link
             href={`${listingHref(listing.slug)}#apply-panel`}
-            className="inline-flex items-center justify-center w-[114px] h-[46px] rounded-xl bg-[#FF7900] hover:bg-[#e66d00] active:bg-[#cc6100] text-[16px] font-bold text-white shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7900] focus-visible:ring-offset-2"
+            className="relative z-10 inline-flex items-center justify-center w-[114px] h-[46px] rounded-xl bg-[#FF7900] hover:bg-[#e66d00] active:bg-[#cc6100] text-[16px] font-bold text-white shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7900] focus-visible:ring-offset-2"
           >
             Apply
           </Link>
