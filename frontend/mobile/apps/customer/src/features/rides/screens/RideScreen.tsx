@@ -6,39 +6,13 @@ import { useState } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 
 import { cancelRide, rideKey, useRide, type Ride } from "../queries";
-import { RIDER_CANCEL_REASONS, canRiderCancel, cancelledText, rideStage } from "../ride-stage";
-import { VEHICLES } from "../vehicles";
-
-function CaptainCard({ ride }: { ride: Ride }) {
-  const captain = ride.captain;
-  if (!captain) return null;
-  const vehicle = captain.vehicle;
-  return (
-    <View className="gap-1 rounded-2xl bg-slate-100 p-4">
-      <Text className="text-lg font-bold text-slate-900">{captain.name}</Text>
-      <Text className="text-base font-semibold text-slate-900">{vehicle.registration_number}</Text>
-      <Text className="text-sm text-slate-600">
-        {VEHICLES[vehicle.vehicle_type]?.name ?? vehicle.vehicle_type} · {vehicle.make_model}, {vehicle.colour}
-      </Text>
-    </View>
-  );
-}
-
-function StartCode({ code }: { code: string }) {
-  return (
-    <View className="items-center gap-1 rounded-2xl border-2 border-dashed border-blue-600 p-4">
-      <Text className="text-xs font-semibold uppercase text-blue-700">Your start code</Text>
-      <Text accessibilityLabel={`Start code ${code.split("").join(" ")}`} className="text-4xl font-extrabold tracking-[0.3em] text-slate-900">
-        {code}
-      </Text>
-      <Text className="text-xs text-slate-500">Tell it to your captain when you meet. Never share it before.</Text>
-    </View>
-  );
-}
+import { RIDER_CANCEL_REASONS, canRiderCancel, cancelledText, etaText, rideStage } from "../ride-stage";
+import { RideMap } from "./RideMap";
+import { CaptainCard, RateCaptain, SafetyRow, StartCode } from "./ride-parts";
 
 /**
- * The rider's live ride: searching, the captain and the start code, the trip, then what to pay.
- * The map, ETA, call, share, SOS and rating are added on Day 8.
+ * The rider's live ride (brief §5.11): searching, the captain moving on the map with the ETA and
+ * start code, the trip, then what to pay and the rating. Call, Share and SOS while it is live.
  */
 export function RideScreen() {
   const router = useRouter();
@@ -83,6 +57,10 @@ export function RideScreen() {
       },
     } as never);
 
+  const live = stage === "coming" || stage === "arrived" || stage === "in_trip";
+  const onRated = (stars: number) =>
+    queryClient.setQueryData<Ride>(rideKey(rideId), (old) => (old ? { ...old, my_rating: stars } : old));
+
   let headline: string;
   let detail: string | null = null;
   if (stage === "searching") {
@@ -93,6 +71,7 @@ export function RideScreen() {
     detail = "Every captain near you is busy right now.";
   } else if (stage === "coming") {
     headline = `${captainName} is on the way`;
+    detail = etaText(data.captain?.eta_s);
   } else if (stage === "arrived") {
     headline = `${captainName} has arrived`;
     detail = "Meet your captain at the pickup and share your start code.";
@@ -115,8 +94,18 @@ export function RideScreen() {
         {stage === "searching" ? <ActivityIndicator color="#2563EB" /> : null}
       </View>
 
-      {stage === "coming" || stage === "arrived" || stage === "in_trip" ? <CaptainCard ride={data} /> : null}
+      {live || stage === "searching" ? <RideMap ride={data} /> : null}
+      {live ? <CaptainCard ride={data} /> : null}
       {(stage === "coming" || stage === "arrived") && data.otp ? <StartCode code={data.otp} /> : null}
+      {live ? <SafetyRow ride={data} /> : null}
+
+      {stage === "pay" && data.captain ? (
+        data.my_rating == null ? (
+          <RateCaptain ride={data} onRated={onRated} />
+        ) : (
+          <Text className="text-center text-base text-slate-600">Thanks for rating your ride.</Text>
+        )
+      ) : null}
 
       <View className="gap-1 rounded-2xl border border-slate-200 p-4">
         <Text className="text-sm text-slate-900">From: {data.pickup.address}</Text>

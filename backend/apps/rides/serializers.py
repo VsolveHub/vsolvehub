@@ -30,7 +30,13 @@ from apps.rides.models import (
     RideState,
     VehicleType,
 )
-from apps.rides.selectors import EARNINGS_PERIODS, CaptainLive, CaptainStatus, captain_live
+from apps.rides.selectors import (
+    EARNINGS_PERIODS,
+    CaptainLive,
+    CaptainStatus,
+    captain_live,
+    captain_rating,
+)
 
 __all__ = [
     "AvailabilityQuerySerializer",
@@ -316,6 +322,9 @@ class RideCaptainSerializer(serializers.Serializer[Any]):
 
     name = serializers.CharField(source="display_name")
     photo_url = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField(
+        help_text="Average stars from riders, to one decimal; null for a new captain."
+    )
     phone_number = serializers.SerializerMethodField(
         help_text="Only while the captain is on the way, at the pickup or in the trip."
     )
@@ -329,6 +338,9 @@ class RideCaptainSerializer(serializers.Serializer[Any]):
 
     def get_photo_url(self, obj: PartnerProfile) -> str | None:
         return partner_photo_url(obj)
+
+    def get_rating(self, obj: PartnerProfile) -> float | None:
+        return captain_rating(obj.pk)
 
     @extend_schema_field(CaptainPositionSerializer(allow_null=True))
     def get_position(self, obj: PartnerProfile) -> dict[str, Any] | None:

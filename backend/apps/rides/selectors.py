@@ -162,6 +162,14 @@ def captain_live(ride: Ride) -> CaptainLive:
     return CaptainLive(position=position, eta_s=eta)
 
 
+def captain_rating(partner_id: Any) -> float | None:
+    """The captain's average stars from riders, to one decimal; None until the first rating."""
+    stars = RideRating.objects.filter(ride__captain_id=partner_id, rater_kind="RIDER").aggregate(
+        value=Avg("stars")
+    )["value"]
+    return None if stars is None else round(float(stars), 1)
+
+
 def _pickup_eta_s(ride: Ride, position: dict[str, Any]) -> int | None:
     key = f"rides:eta:{ride.id}"
     cached = cache.get(key)

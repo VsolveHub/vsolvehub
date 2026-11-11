@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 3922b0a551292a14
+ * Checksum: 6a293c8127befaa4
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -19679,6 +19679,11 @@ export interface components {
         RideCaptain: {
             name: string;
             readonly photo_url: string | null;
+            /**
+             * Format: double
+             * @description Average stars from riders, to one decimal; null for a new captain.
+             */
+            readonly rating: number | null;
             /** @description Only while the captain is on the way, at the pickup or in the trip. */
             readonly phone_number: string | null;
             vehicle: components["schemas"]["CaptainVehicle"];

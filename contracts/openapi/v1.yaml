@@ -48591,6 +48591,12 @@ components:
           type: string
           nullable: true
           readOnly: true
+        rating:
+          type: number
+          format: double
+          nullable: true
+          readOnly: true
+          description: Average stars from riders, to one decimal; null for a new captain.
         phone_number:
           type: string
           nullable: true
@@ -48618,6 +48624,7 @@ components:
       - phone_number
       - photo_url
       - position
+      - rating
       - vehicle
     RideCreateRequest:
       type: object

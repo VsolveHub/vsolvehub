@@ -11,7 +11,14 @@ from rest_framework.test import APIClient
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
-from apps.rides.models import CaptainDutySession, Ride, RideOffer, RideState, RideTransition
+from apps.rides.models import (
+    CaptainDutySession,
+    Ride,
+    RideOffer,
+    RideRating,
+    RideState,
+    RideTransition,
+)
 from tests.rides.helpers import customer_client, make_user, partner_client
 from tests.rides.ride_world import (
     RIDES,
@@ -137,6 +144,19 @@ def test_the_rider_then_sees_who_is_coming(rider: User, area: ServiceArea) -> No
     assert card["phone_number"] == str(ravi.user.phone_number)
     assert card["vehicle"]["registration_number"].startswith("TS09AB")
     assert card["photo_url"] is None  # no reviewed photo yet
+    assert card["rating"] is None  # a new captain has no stars yet
+
+
+def test_the_captain_card_shows_their_average_stars(rider: User, area: ServiceArea) -> None:
+    ravi = captain(area, km=0.5)
+    ride = dispatch(new_ride(rider, area))
+    accept(ravi, offer_of(ride, ravi))
+    RideRating.objects.create(ride=ride, rater_kind="RIDER", stars=4)
+    RideRating.objects.create(ride=ride, rater_kind="CAPTAIN", stars=1)  # not the captain's own
+
+    card = customer_client(rider).get(f"{RIDES}{ride.id}/").json()["captain"]
+
+    assert card["rating"] == 4.0
 
 
 def test_the_second_captain_to_accept_is_told_it_is_gone(rider: User, area: ServiceArea) -> None:

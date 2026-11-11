@@ -120,3 +120,21 @@ export async function findOpenRide(): Promise<string | null> {
   const page = await request(() => getApiClient().GET("/api/v1/rides/"));
   return page.results.find((ride) => isOpenRide(ride.state))?.id ?? null;
 }
+
+export async function rateCaptain(rideId: string, stars: number): Promise<void> {
+  await request(() =>
+    getApiClient().POST("/api/v1/rides/{ride_id}/rating/", { params: { path: { ride_id: rideId } }, body: { stars } }),
+  );
+}
+
+export type SosAnswer = Schemas["Sos"];
+
+/** SOS with the phone's last known place, if it has one; the server never refuses for lack of it. */
+export function raiseRiderSos(rideId: string, place: Place | null): Promise<SosAnswer> {
+  const body = place
+    ? { latitude: place.latitude.toFixed(6), longitude: place.longitude.toFixed(6) }
+    : {};
+  return request(() =>
+    getApiClient().POST("/api/v1/rides/{ride_id}/sos/", { params: { path: { ride_id: rideId } }, body }),
+  );
+}
