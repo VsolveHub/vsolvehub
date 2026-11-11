@@ -10,6 +10,7 @@ const mockSave = jest.fn();
 const mockOffDuty = jest.fn();
 let mockStatus: Record<string, unknown>;
 let mockHistory: Record<string, unknown>;
+let mockRide: Record<string, unknown> | null = null;
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush, back: jest.fn() }) }));
 jest.mock("react-native-safe-area-context", () => ({
@@ -26,6 +27,7 @@ jest.mock("../queries", () => ({
   useCaptainStatus: () => mockStatus,
   useSaveVehicle: () => ({ mutate: mockSave, isPending: false, isError: false }),
   useCaptainHistory: () => mockHistory,
+  useCurrentRide: () => ({ data: { ride: mockRide } }),
 }));
 
 const APPROVED = {
@@ -42,6 +44,7 @@ const APPROVED = {
 };
 
 beforeEach(() => {
+  mockRide = null;
   mockOffDuty.mockClear();
   mockPush.mockClear();
   mockSave.mockClear();
@@ -137,6 +140,21 @@ describe("CaptainHome", () => {
 
     expect(view.getByText("You're on duty")).toBeTruthy();
     expect(mockOffDuty).toHaveBeenCalled();
+  });
+
+  it("shows the accepted ride with the rider to call", async () => {
+    mockRide = {
+      state: "CAPTAIN_ASSIGNED",
+      pickup: { address: "Gachibowli Stadium" },
+      drop: { address: "Hitec City" },
+      fare_paise: 5100,
+      rider: { name: "Priya", phone_number: "+919999900000" },
+    };
+    const view = await render(<CaptainHome />);
+
+    expect(view.getByText("Go to the pickup")).toBeTruthy();
+    expect(view.getByText("Pickup: Gachibowli Stadium")).toBeTruthy();
+    expect(view.getByText("Call rider")).toBeTruthy();
   });
 
   it("says why the server ended duty", async () => {

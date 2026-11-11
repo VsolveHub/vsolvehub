@@ -1,4 +1,10 @@
-import { request, type Schemas } from "@vsolve/api-client";
+import {
+  clearIdempotencyKey,
+  getStableIdempotencyKey,
+  isApiRequestError,
+  request,
+  type Schemas,
+} from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Platform } from "react-native";
@@ -37,4 +43,114 @@ export function useCaptainHistory() {
     queryKey: ["rides", "history"],
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/rides/history/")),
   });
+}
+
+export type PassPlan = Schemas["CaptainPassPlan"];
+export type CaptainPass = Schemas["CaptainPass"];
+export type Earnings = Schemas["Earnings"];
+export type EarningsPeriod = "today" | "week";
+
+export const passesKey = ["rides", "passes"] as const;
+
+export function usePassPlans() {
+  return useQuery({
+    queryKey: ["rides", "pass-plans"],
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/rides/pass-plans/")),
+  });
+}
+
+export function useMyPasses() {
+  return useQuery({
+    queryKey: passesKey,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/rides/passes/")),
+  });
+}
+
+export function useEarnings(period: EarningsPeriod) {
+  return useQuery({
+    queryKey: ["rides", "earnings", period],
+    queryFn: () =>
+      request(() => getApiClient().GET("/api/v1/partner/rides/earnings/", { params: { query: { period } } })),
+  });
+}
+
+/** One idempotency key per plan until the purchase settles, so a retry or double tap pays once. */
+export function passPurchaseScope(planId: string): string {
+  return `rides.pass.${planId}`;
+}
+
+/** Start buying a pass: active at once for a ₹0 plan, else a payment attempt to pay. */
+export async function buyPass(planId: string): Promise<CaptainPass> {
+  const scope = passPurchaseScope(planId);
+  try {
+    const bought = await request(() =>
+      getApiClient().POST("/api/v1/partner/rides/passes/", {
+        body: { plan_id: planId },
+        params: { header: { "Idempotency-Key": getStableIdempotencyKey(scope) } },
+      }),
+    );
+    clearIdempotencyKey(scope);
+    return bought;
+  } catch (error) {
+    // A refusal is final (already active, another payment in flight, not approved): the next
+    // tap is a new purchase. A network failure keeps the key, so a retry is the same purchase.
+    if (isApiRequestError(error) && !error.retryable) clearIdempotencyKey(scope);
+    throw error;
+  }
+}
+
+export type RideOffer = Schemas["RideOffer"];
+export type CaptainRide = Schemas["CaptainRide"];
+
+export const currentOfferKey = ["rides", "offer", "current"] as const;
+export const currentRideKey = ["rides", "ride", "current"] as const;
+
+/**
+ * The ride request to show now, checked every 2 s while on duty and the app is open (brief
+ * §5.7). In the background React Query pauses it; the push alert covers that.
+ */
+export function useCurrentOffer(enabled: boolean) {
+  return useQuery({
+    queryKey: currentOfferKey,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/rides/offers/current/")),
+    enabled,
+    refetchInterval: enabled ? 2000 : false,
+    retry: false,
+  });
+}
+
+/** The captain's open ride, or one finished but not yet marked paid. */
+export function useCurrentRide(enabled = true) {
+  return useQuery({
+    queryKey: currentRideKey,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/rides/current/")),
+    enabled,
+    refetchInterval: enabled ? 5000 : false,
+  });
+}
+
+/** Take the ride. One key per offer, so a retry after a timeout returns the same ride. */
+export async function acceptOffer(offerId: string): Promise<CaptainRide> {
+  const scope = `rides.accept.${offerId}`;
+  try {
+    const ride = await request(() =>
+      getApiClient().POST("/api/v1/partner/rides/offers/{offer_id}/accept/", {
+        params: { path: { offer_id: offerId }, header: { "Idempotency-Key": getStableIdempotencyKey(scope) } },
+      }),
+    );
+    clearIdempotencyKey(scope);
+    return ride;
+  } catch (error) {
+    if (isApiRequestError(error) && !error.retryable) clearIdempotencyKey(scope);
+    throw error;
+  }
+}
+
+/** Say no. Saying no twice, or too late, changes nothing on the server. */
+export async function declineOffer(offerId: string): Promise<void> {
+  await request(() =>
+    getApiClient().POST("/api/v1/partner/rides/offers/{offer_id}/decline/", {
+      params: { path: { offer_id: offerId } },
+    }),
+  );
 }

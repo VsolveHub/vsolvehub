@@ -4,12 +4,12 @@ import { Button, ErrorState, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { goOffDuty } from "../duty";
 import { offDutyMessage } from "../model/duty-setup";
 import { blockedReasonTexts, vehicleTypeName, type CaptainStatus } from "../model/shell";
-import { captainStatusKey, useCaptainStatus } from "../queries";
+import { captainStatusKey, useCaptainStatus, useCurrentRide, type CaptainRide } from "../queries";
 
 function useAlertsOff() {
   return useQuery({ queryKey: ["rides", "push-permission"], queryFn: pushPermission }).data === "denied";
@@ -37,13 +37,42 @@ function PassLine({ status }: { status: CaptainStatus }) {
   return <Text className="text-sm text-text-muted">No active pass</Text>;
 }
 
-/** The captain's Home: where they stand, what blocks duty, and today's money. */
+const RIDE_STATE: Record<string, string> = {
+  CAPTAIN_ASSIGNED: "Go to the pickup",
+  CAPTAIN_ARRIVED: "At the pickup",
+  IN_TRIP: "In trip",
+  COMPLETED: "Collect the payment",
+};
+
+/** The ride the captain accepted. The trip steps arrive with the trip screens (Day 7). */
+function YourRide({ ride }: { ride: CaptainRide }) {
+  const phone = ride.rider.phone_number;
+  return (
+    <View className="rounded-2xl bg-[#00112e] p-4 gap-2">
+      <Text className="text-xs font-semibold uppercase text-[#f87000]">Your ride</Text>
+      <Text className="text-lg font-bold text-white">{RIDE_STATE[ride.state] ?? ride.state}</Text>
+      <Text className="text-sm text-white">Pickup: {ride.pickup.address}</Text>
+      <Text className="text-sm text-white/80">Drop: {ride.drop.address}</Text>
+      <Text className="text-sm text-white">
+        {ride.rider.name} · {formatMoney(ride.fare_paise)}
+      </Text>
+      {phone ? (
+        <Button variant="outline" onPress={() => void Linking.openURL(`tel:${phone}`)}>
+          Call rider
+        </Button>
+      ) : null}
+    </View>
+  );
+}
+
+/** The captain's Home: their ride, where they stand, what blocks duty, and today's money. */
 export function CaptainHome() {
   const status = useCaptainStatus();
   const earnings = useTodayEarnings();
   const router = useRouter();
   const queryClient = useQueryClient();
   const alertsOff = useAlertsOff();
+  const currentRide = useCurrentRide();
   const offDuty = useMutation({
     mutationFn: goOffDuty,
     onSettled: () => queryClient.invalidateQueries({ queryKey: captainStatusKey }),
@@ -82,6 +111,8 @@ export function CaptainHome() {
         />
       }
     >
+      {currentRide.data?.ride ? <YourRide ride={currentRide.data.ride} /> : null}
+
       <View className="rounded-2xl bg-surface p-4 gap-1">
         <Text className="text-xs font-semibold uppercase text-text-muted">Today</Text>
         <Text className="text-3xl font-extrabold text-text">
