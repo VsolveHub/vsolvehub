@@ -22,6 +22,14 @@ export default function RidesLayout() {
           headerBackTitle: "Back",
         }}
       />
+      <Stack.Screen
+        name="ride/[rideId]"
+        options={{
+          headerTitle: "Your ride",
+          headerBackVisible: false,
+          gestureEnabled: false,
+        }}
+      />
     </Stack>
   );
 }

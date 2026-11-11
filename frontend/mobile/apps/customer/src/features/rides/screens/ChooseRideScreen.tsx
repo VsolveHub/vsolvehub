@@ -1,3 +1,4 @@
+import { useMutation } from "@tanstack/react-query";
 import { isApiRequestError } from "@vsolve/api-client";
 import { useAuthStore } from "@vsolve/mobile-core";
 import { Button, Text, formatMoney } from "@vsolve/mobile-ui";
@@ -10,7 +11,7 @@ import MapView, { Marker, Polyline } from "react-native-maps";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 
 import { decodePolyline } from "../polyline";
-import { useFareQuotes, type Trip } from "../queries";
+import { bookRide, findOpenRide, useFareQuotes, type Trip } from "../queries";
 import { VEHICLES } from "../vehicles";
 
 const ROUTE_BLUE = "#2563EB";
@@ -53,6 +54,20 @@ export function ChooseRideScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = list.find((q) => q.id === selectedId) ?? list[0] ?? null;
   const route = useMemo(() => (selected ? decodePolyline(selected.route_polyline) : []), [selected]);
+
+  const book = useMutation({
+    mutationFn: (quoteId: string) => bookRide(quoteId),
+    onSuccess: (ride) => router.replace(`/rides/ride/${ride.id}` as never),
+    onError: async (error) => {
+      const code = isApiRequestError(error) ? error.code : null;
+      if (code === "quote_expired" || code === "quote_used") void quotes.refetch();
+      if (code === "ride_already_open") {
+        // A ride is already going: take the rider to it rather than refuse.
+        const openId = await findOpenRide().catch(() => null);
+        if (openId) router.replace(`/rides/ride/${openId}` as never);
+      }
+    },
+  });
 
   const mapRef = useRef<MapView>(null);
   const pickup = trip && { latitude: Number(trip.pickup.latitude), longitude: Number(trip.pickup.longitude) };
@@ -113,6 +128,7 @@ export function ChooseRideScreen() {
         ) : quotes.isError ? (
           <QuoteError error={quotes.error} onRetry={() => void refetch()} onChangePickup={() => router.back()} />
         ) : (
+          <>
           <ScrollView>
             {list.map((quote) => {
               const vehicle = VEHICLES[quote.vehicle_type];
@@ -142,12 +158,37 @@ export function ChooseRideScreen() {
               );
             })}
           </ScrollView>
+          {book.isError ? (
+            <Text accessibilityRole="alert" className="mt-1 text-center text-sm text-red-600">
+              {bookingErrorText(book.error)}
+            </Text>
+          ) : null}
+          {selected ? (
+            <Button
+              size="lg"
+              block
+              className="mt-2"
+              loading={book.isPending}
+              onPress={() => book.mutate(selected.id)}
+            >
+              {`Book ${VEHICLES[selected.vehicle_type].name} · ${formatMoney(selected.fare_paise)}`}
+            </Button>
+          ) : null}
+          </>
         )}
       </View>
 
       <CustomerLoginSheet open={loginOpen} onOpenChange={setLoginOpen} />
     </View>
   );
+}
+
+function bookingErrorText(error: unknown): string {
+  const code = isApiRequestError(error) ? error.code : null;
+  if (code === "quote_expired" || code === "quote_used") return "Prices changed. Check the new price and book again.";
+  if (code === "ride_already_open") return "You already have a ride going.";
+  if (code === "vehicle_unavailable") return "This vehicle can't be booked here right now. Choose another.";
+  return describeError(error, "mutation").message;
 }
 
 function Message({ text, children }: { text: string; children: React.ReactNode }) {
