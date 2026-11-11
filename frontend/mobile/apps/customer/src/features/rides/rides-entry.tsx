@@ -1,3 +1,4 @@
+import { useAuthStore } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -5,7 +6,7 @@ import { ChevronRight } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 
-import { useRidesAvailability, type Place } from "./queries";
+import { findOpenRide, useRidesAvailability, type Place } from "./queries";
 import { VEHICLES } from "./vehicles";
 
 /**
@@ -39,12 +40,46 @@ function useAllowedPlace(): Place | null {
   return place;
 }
 
+/** Once per app launch, so going back to Home from the ride screen doesn't bounce the rider. */
+let openRideChecked = false;
+
+/**
+ * Reopening the app lands on the ride still going (brief §5.11, item 9). Home is where the app
+ * opens, so the check lives in its Rides card. A failed check is tried again on the next visit.
+ */
+function useLandOnOpenRide() {
+  const router = useRouter();
+  const signedIn = useAuthStore((state) => state.status) === "signedIn";
+
+  useEffect(() => {
+    if (!signedIn || openRideChecked) return;
+    let cancelled = false;
+    findOpenRide()
+      .then((rideId) => {
+        openRideChecked = true;
+        if (rideId && !cancelled) router.push(`/rides/ride/${rideId}` as never);
+      })
+      .catch(() => {
+        // Offline or the server is down: Home stays as it is.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, router]);
+}
+
+/** For tests: forget that this launch already checked. */
+export function resetOpenRideCheck() {
+  openRideChecked = false;
+}
+
 /**
  * The Rides card on Home (brief §5.11). Shown only when `rides/availability/` lists vehicle types
  * here; while loading, on any error, or where Rides does not run, it renders nothing.
  */
 export function RidesEntry() {
   const router = useRouter();
+  useLandOnOpenRide();
   const availability = useRidesAvailability(useAllowedPlace());
   const types = availability.data?.vehicle_types ?? [];
   if (types.length === 0) return null;

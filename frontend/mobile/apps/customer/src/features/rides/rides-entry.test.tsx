@@ -1,12 +1,18 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
-import { RidesEntry } from "./rides-entry";
+import { RidesEntry, resetOpenRideCheck } from "./rides-entry";
 
 const mockAvailability = { data: undefined as { vehicle_types: string[] } | undefined };
 const mockPush = jest.fn();
+const mockFindOpenRide = jest.fn();
+let mockStatus = "signedIn";
 
 jest.mock("./queries", () => ({
   useRidesAvailability: () => mockAvailability,
+  findOpenRide: () => mockFindOpenRide(),
+}));
+jest.mock("@vsolve/mobile-core", () => ({
+  useAuthStore: (select: (state: { status: string }) => unknown) => select({ status: mockStatus }),
 }));
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock("expo-location", () => ({
@@ -18,6 +24,26 @@ jest.mock("expo-location", () => ({
 
 beforeEach(() => {
   mockAvailability.data = undefined;
+  mockPush.mockClear();
+  mockFindOpenRide.mockReset().mockResolvedValue(null);
+  mockStatus = "signedIn";
+  resetOpenRideCheck();
+});
+
+test("reopening the app lands on the ride still going, once per launch", async () => {
+  mockFindOpenRide.mockResolvedValue("ride-7");
+
+  await render(<RidesEntry />);
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/rides/ride/ride-7"));
+
+  await render(<RidesEntry />); // back on Home from the ride: no bounce
+  expect(mockFindOpenRide).toHaveBeenCalledTimes(1);
+});
+
+test("a signed-out customer is not checked for an open ride", async () => {
+  mockStatus = "signedOut";
+  await render(<RidesEntry />);
+  expect(mockFindOpenRide).not.toHaveBeenCalled();
 });
 
 test("shows nothing while mockAvailability is unknown or empty", async () => {

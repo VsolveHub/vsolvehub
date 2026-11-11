@@ -23,6 +23,12 @@ export default function RidesLayout() {
         }}
       />
       <Stack.Screen
+        name="history"
+        options={{
+          headerTitle: "Your rides",
+        }}
+      />
+      <Stack.Screen
         name="ride/[rideId]"
         options={{
           headerTitle: "Your ride",

@@ -153,7 +153,10 @@ export function WhereToScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => router.back()}>
             <ArrowLeft size={22} color="#111827" />
           </Pressable>
-          <Text className="text-lg font-bold text-slate-900">Find a trip</Text>
+          <Text className="flex-1 text-lg font-bold text-slate-900">Find a trip</Text>
+          <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push("/rides/history" as never)}>
+            <Text className="text-sm font-semibold text-blue-700">Your rides</Text>
+          </Pressable>
         </View>
 
         <View className="flex-row gap-3">

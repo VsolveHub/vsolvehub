@@ -17,7 +17,9 @@ import { CaptainCard, RateCaptain, SafetyRow, StartCode } from "./ride-parts";
 export function RideScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { rideId } = useLocalSearchParams<{ rideId: string }>();
+  const { rideId, from } = useLocalSearchParams<{ rideId: string; from?: string }>();
+  // Opened from Your rides: Done goes back to the list, not Home.
+  const done = () => (from === "history" ? router.back() : router.replace("/"));
   const ride = useRide(rideId);
   const [choosingReason, setChoosingReason] = useState(false);
   const cancel = useMutation({
@@ -142,7 +144,7 @@ export function RideScreen() {
         </Button>
       ) : null}
       {stage === "pay" || stage === "cancelled" || stage === "no_captain" ? (
-        <Button variant="ghost" block onPress={() => router.replace("/")}>
+        <Button variant="ghost" block onPress={done}>
           Done
         </Button>
       ) : null}

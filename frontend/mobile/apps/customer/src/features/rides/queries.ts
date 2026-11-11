@@ -138,3 +138,13 @@ export function raiseRiderSos(rideId: string, place: Place | null): Promise<SosA
     getApiClient().POST("/api/v1/rides/{ride_id}/sos/", { params: { path: { ride_id: rideId } }, body }),
   );
 }
+
+export type RideHistoryRow = Schemas["RideHistory"];
+
+/** The rider's rides, newest first (the first page). */
+export function useRideHistory() {
+  return useQuery({
+    queryKey: ["rides", "history"],
+    queryFn: () => request(() => getApiClient().GET("/api/v1/rides/")),
+  });
+}
