@@ -1355,6 +1355,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.rental.tasks.expire_rental_transport_requests",
         "schedule": 60.0 * 5,
     },
+    # Items not returned after their last day. Each reminder is sent once per booking, so the
+    # hourly sweep only decides how soon after midnight the first one goes out.
+    "send-rental-overdue-reminders": {
+        "task": "apps.rental.tasks.send_rental_overdue_reminders",
+        "schedule": 60.0 * 60,
+    },
 }
 
 SESSION_COOKIE_HTTPONLY = True

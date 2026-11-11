@@ -1,6 +1,12 @@
 import type { Schemas } from "@vsolve/api-client";
 
-import { bookingGroupHref, engagementHref, requestHref, requestQuotesHref } from "@/lib/routes";
+import {
+  bookingGroupHref,
+  engagementHref,
+  rentalBookingHref,
+  requestHref,
+  requestQuotesHref,
+} from "@/lib/routes";
 
 /**
  * What a notice is called, and where it leads — contract 1.34.0.
@@ -57,6 +63,8 @@ const HREF_BY_KIND: Record<string, (id: string) => string> = {
   REQUIREMENT_QUOTES: requestQuotesHref,
   // A booked visit moved (1.96.0): on the way, arrived, work reported done.
   BOOKING_GROUP: bookingGroupHref,
+  // Every rental notice: confirmed, handed over, returned, cancelled, a damage claim, overdue.
+  RENTAL_BOOKING: rentalBookingHref,
 };
 
 /**

@@ -5,7 +5,7 @@ import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
 import { Badge, Button, Card, Dialog, EmptyState, Field, Input, LoadMore, Textarea, formatDate, formatMoney, useT } from "@vsolve/ui";
 import { ChevronRight } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { BookingAction } from "@/features/rentals/booking-actions";
 import {
@@ -95,6 +95,12 @@ export function PartnerRentalBookingsWorkspace() {
   const [disputeModal, setDisputeModal] = useState<DisputeModal | null>(null);
   const [cancelModal, setCancelModal] = useState<CancelModal | null>(null);
   const [depositChoice, setDepositChoice] = useState<DepositChoice | null>(null);
+
+  // A rental notice links here with `?booking=<id>`: open that booking's panel.
+  const linkedBookingId = searchParams?.get("booking") ?? null;
+  useEffect(() => {
+    if (linkedBookingId) setSelectedId(linkedBookingId);
+  }, [linkedBookingId]);
 
   const queryStatus = searchParams?.get("status") ?? "";
   const bookingStatusFilter = BOOKING_STATUS_FILTERS.includes(queryStatus as BookingStatusFilter)

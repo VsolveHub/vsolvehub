@@ -30,6 +30,12 @@ describe("targetHref", () => {
     expect(targetHref(target({ kind: "REQUIREMENT", id: "req-9" }))).toBe("/requests/req-9");
   });
 
+  it("opens a rental notice on Your Bookings, filtered to rentals, at that booking", () => {
+    expect(targetHref(target({ kind: "RENTAL_BOOKING", id: "rb-9" }))).toBe(
+      "/activity?type=rentals&booking=rb-9",
+    );
+  });
+
   it("leads nowhere when the server says the notice is about no record", () => {
     // `null` is a real answer, not a missing field: an account-level notice is
     // about nothing that has a page. Inventing `/requests` here would be a guess

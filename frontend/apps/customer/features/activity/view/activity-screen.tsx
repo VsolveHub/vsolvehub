@@ -5,7 +5,7 @@ import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/
 import { Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { filterBookingsBySearch } from "@/features/activity/model/booking-search";
 import {
@@ -203,8 +203,10 @@ export function ActivityScreen() {
   const marketplaceLists = [rentalsList, enquiriesList, visitsList, reservationsList];
 
   const searchParams = useSearchParams();
-  const selectedTab = toBookingStatusTab(searchParams.get("status"));
+  const requestedTab = searchParams.get("status");
   const selectedType = toBookingType(searchParams.get("type"));
+  // A rental notice links here with `?booking=<id>` (rentalBookingHref).
+  const focusedBookingId = searchParams.get("booking");
   const [searchQuery, setSearchQuery] = useState("");
 
   const requirements = requirementsQuery.data ?? [];
@@ -221,6 +223,13 @@ export function ActivityScreen() {
       reservations: reservationsList.items,
     }),
   ].sort(byNewest);
+  const focusedItem = focusedBookingId
+    ? allItems.find((item) => item.kind === "rental" && item.booking.id === focusedBookingId)
+    : undefined;
+  // A notice about a cancelled or returned rental opens the tab that booking is in, unless the
+  // reader has picked a tab themselves.
+  const selectedTab =
+    requestedTab === null && focusedItem ? focusedItem.section : toBookingStatusTab(requestedTab);
   const typesPresent = BOOKING_TYPES.filter((type) => allItems.some((item) => item.type === type));
   const items = selectedType ? allItems.filter((item) => item.type === selectedType) : allItems;
   const counts = countByStatus(items);
@@ -350,7 +359,7 @@ export function ActivityScreen() {
         >
           <ul className="flex list-none flex-col gap-3.5 p-0">
             {visibleItems.map((item) => (
-              <BookingTimelineRow key={item.key} item={item} />
+              <BookingTimelineRow key={item.key} item={item} focused={item === focusedItem} />
             ))}
           </ul>
         </section>
@@ -390,7 +399,7 @@ const MARKETPLACE_LABEL: Partial<Record<BookingItem["kind"], string>> = {
   "stay-reservation": "Stay reservation",
 };
 
-function BookingTimelineRow({ item }: { item: BookingItem }) {
+function BookingTimelineRow({ item, focused = false }: { item: BookingItem; focused?: boolean }) {
   switch (item.kind) {
     case "group":
       return <BookingGroupRow group={item.group} />;
@@ -406,7 +415,7 @@ function BookingTimelineRow({ item }: { item: BookingItem }) {
       );
     default:
       return (
-        <li className="flex flex-col gap-1.5" data-testid={`booking-${item.kind}`}>
+        <MarketplaceRow focused={focused} kind={item.kind}>
           {/* Services rows say what they are already; these name their kind in a mixed list. */}
           <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
             {MARKETPLACE_LABEL[item.kind]}
@@ -417,7 +426,7 @@ function BookingTimelineRow({ item }: { item: BookingItem }) {
           {item.kind === "stay-reservation" ? (
             <StayReservationCard reservation={item.reservation} />
           ) : null}
-        </li>
+        </MarketplaceRow>
       );
   }
 }
@@ -459,3 +468,35 @@ function BookingTypeFilter({
     </nav>
   );
 }
+
+/**
+ * A rental or stay row. The one a notice pointed at is scrolled into view once, and ringed so
+ * the reader can see which booking the notice was about.
+ */
+function MarketplaceRow({
+  focused,
+  kind,
+  children,
+}: {
+  focused: boolean;
+  kind: BookingItem["kind"];
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focused]);
+  return (
+    <li
+      ref={ref}
+      className={`flex flex-col gap-1.5 ${
+        focused ? "rounded-card ring-2 ring-action ring-offset-4 ring-offset-canvas" : ""
+      }`}
+      data-testid={`booking-${kind}`}
+      aria-current={focused ? "true" : undefined}
+    >
+      {children}
+    </li>
+  );
+}
+

@@ -37,9 +37,11 @@ from apps.rental.models import (
 from apps.rental.pickup_address import PickupAddressError, clean_pincode
 from apps.rental.services import (
     RentalStateError,
+    _booking_context,
     _check_stock,
     _notify_rental,
     _require_rental_capability,
+    _rupees,
     initiate_rental_booking_payment,
 )
 
@@ -129,7 +131,8 @@ def _notify(
         audience=audience,
         purpose="rental.transport",
         template_code=template_code,
-        context={"asset_title": booking.asset.title, "booking_id": str(booking.id), **ctx},
+        # Same shape as every other booking notice, so both apps can open the booking from it.
+        context=_booking_context(booking, booking_id=str(booking.id), **ctx),
         idempotency_key=key,
     )
 
@@ -219,6 +222,7 @@ def quote_transport(
         booking=booking,
         key=f"rental-delivery-quoted:{request.id}:{request.quote_count}",
         quote_paise=request.quote_paise,
+        quote_amount=_rupees(request.quote_paise),
         trip=request.trip,
     )
     return request
@@ -327,6 +331,7 @@ def accept_quote(*, booking: RentalBooking, customer: Any) -> RentalBooking:
         booking=booking,
         key=f"rental-delivery-accepted:{request.id}:{request.quote_count}",
         quote_paise=quote,
+        quote_amount=_rupees(quote),
     )
     return booking
 

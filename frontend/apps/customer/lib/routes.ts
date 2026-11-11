@@ -126,6 +126,14 @@ export function rentalHref(slug?: string | null): string {
   return `${RENTALS_HREF}/${encodeURIComponent(slug || "")}`;
 }
 
+/**
+ * One rental booking: Your Bookings filtered to rentals, with that booking brought into view.
+ * Rental bookings have no page of their own, so this is where a rental notice lands.
+ */
+export function rentalBookingHref(bookingId: string): string {
+  return `/activity?type=rentals&booking=${encodeURIComponent(bookingId)}`;
+}
+
 export function listingHref(slug?: string | null): string {
   return `${LISTINGS_HREF}/${encodeURIComponent(slug || "")}`;
 }

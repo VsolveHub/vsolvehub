@@ -11,6 +11,7 @@ from uuid import UUID
 
 import jsonschema
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.db.models import F, IntegerField, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
@@ -70,6 +71,7 @@ from apps.rental.pickup_hours import (
 )
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class RentalStateError(ValueError):
@@ -579,20 +581,129 @@ def _notify_rental(
 ) -> None:
     """Fire an in-app rental notification. Best-effort: never breaks the caller.
 
-    `audience` is PARTNER for the owner and CUSTOMER for the renter."""
+    `audience` is PARTNER for the owner, CUSTOMER for the renter and OPERATIONS for staff.
+
+    The write runs in its own savepoint. Most callers are inside a booking transaction, and a
+    failed insert there would otherwise poison the whole transaction even though the error is
+    swallowed: the booking would fail with "current transaction is aborted" one statement later.
+    """
     try:
-        request_notification(
-            recipient_id=recipient_id,
-            purpose=purpose,
-            channel=NotificationIntent.Channel.IN_APP,
-            audience=audience,
-            template_code=template_code,
-            context=context,
-            idempotency_key=idempotency_key,
-        )
+        with transaction.atomic():
+            request_notification(
+                recipient_id=recipient_id,
+                purpose=purpose,
+                channel=NotificationIntent.Channel.IN_APP,
+                audience=audience,
+                template_code=template_code,
+                context=context,
+                idempotency_key=idempotency_key,
+            )
     except Exception:
         # Notification failure must never block a booking or return.
         logger.warning("Failed to dispatch rental notification %s", template_code, exc_info=True)
+
+
+#: The feed target for every booking notice: both apps open the booking from it.
+RENTAL_BOOKING_TARGET = "RENTAL_BOOKING"
+#: Operations hears about an unreturned item once it is this many days late.
+OVERDUE_ESCALATION_DAYS = 2
+
+
+def _rupees(paise: int | None) -> str:
+    """Paise as the number after a ₹ sign: 198000 -> "1,980", 12345 -> "123.45"."""
+    value = int(paise or 0)
+    if value % 100 == 0:
+        return f"{value // 100:,}"
+    return f"{value / 100:,.2f}"
+
+
+def _customer_name(user: Any) -> str:
+    return getattr(user, "display_name", "") or getattr(user, "full_name", "") or "A customer"
+
+
+def _booking_context(booking: RentalBooking, **extra: Any) -> dict[str, Any]:
+    return {
+        "asset_title": booking.asset.title,
+        "start_date": str(booking.start_date),
+        "end_date": str(booking.end_date),
+        "target_kind": RENTAL_BOOKING_TARGET,
+        "target_id": str(booking.id),
+        **extra,
+    }
+
+
+def _notify_owner(
+    booking: RentalBooking, template_code: str, key: str, *, purpose: str, **extra: Any
+) -> None:
+    _notify_rental(
+        recipient_id=booking.asset.partner.user_id,
+        audience=NotificationIntent.Audience.PARTNER,
+        purpose=purpose,
+        template_code=template_code,
+        context=_booking_context(booking, **extra),
+        idempotency_key=key,
+    )
+
+
+def _notify_customer(
+    booking: RentalBooking, template_code: str, key: str, *, purpose: str, **extra: Any
+) -> None:
+    _notify_rental(
+        recipient_id=booking.customer_id,
+        audience=NotificationIntent.Audience.CUSTOMER,
+        purpose=purpose,
+        template_code=template_code,
+        context=_booking_context(booking, **extra),
+        idempotency_key=key,
+    )
+
+
+def _operations_user_ids() -> list[Any]:
+    return list(
+        User.objects.filter(
+            userrole__role__code="operations",
+            userrole__revoked_at__isnull=True,
+            is_active=True,
+        )
+        .distinct()
+        .values_list("id", flat=True)
+    )
+
+
+def _notify_operations(
+    booking: RentalBooking, template_code: str, key: str, *, purpose: str, **extra: Any
+) -> None:
+    for user_id in _operations_user_ids():
+        _notify_rental(
+            recipient_id=user_id,
+            audience=NotificationIntent.Audience.OPERATIONS,
+            purpose=purpose,
+            template_code=template_code,
+            # Operations has its own booking screens; the target is still the booking.
+            context=_booking_context(booking, **extra),
+            idempotency_key=f"{key}:{user_id}",
+        )
+
+
+def _notify_booking_confirmed(booking: RentalBooking) -> None:
+    """The owner hears about a booking, and the customer gets their PIN, once it is paid for
+    (or straight away when there is nothing to pay). Never before: an unpaid checkout that
+    times out would leave the customer holding a "confirmed" notice for a booking that is gone.
+    """
+    _notify_owner(
+        booking,
+        "rental_new_booking",
+        f"rental-new-booking:{booking.id}",
+        purpose="rental.booking.confirmed",
+        customer_name=_customer_name(booking.customer),
+    )
+    _notify_customer(
+        booking,
+        "rental_booking_confirmed",
+        f"rental-booking-confirmed:{booking.id}",
+        purpose="rental.booking.confirmed",
+        pin=booking.handover_pin_hash,
+    )
 
 
 def attach_asset_media(
@@ -1000,36 +1111,9 @@ def create_booking(
         # gets their PIN once the booking is paid.
         return booking
 
-    # Notify the owner of the new booking (best-effort, outside the txn lock).
-    _notify_rental(
-        recipient_id=asset.partner.user_id,
-        audience=NotificationIntent.Audience.PARTNER,
-        purpose="rental.booking.confirmed",
-        template_code="rental_new_booking",
-        context={
-            "customer_name": (
-                getattr(customer, "display_name", "") or getattr(customer, "full_name", "Customer")
-            ),
-            "asset_title": asset.title,
-            "start_date": str(start_date),
-            "end_date": str(end_date),
-        },
-        idempotency_key=f"rental-new-booking:{booking.id}",
-    )
-    # Notify the customer with confirmation and their PIN.
-    _notify_rental(
-        recipient_id=customer.id,
-        audience=NotificationIntent.Audience.CUSTOMER,
-        purpose="rental.booking.confirmed",
-        template_code="rental_booking_confirmed",
-        context={
-            "asset_title": asset.title,
-            "pin": handover_pin,
-            "start_date": str(start_date),
-            "end_date": str(end_date),
-        },
-        idempotency_key=f"rental-booking-confirmed:{booking.id}",
-    )
+    if booking.status == RentalBooking.Status.CONFIRMED:
+        # Nothing to pay (a free item or a demo hold). A paid booking is announced on capture.
+        _notify_booking_confirmed(booking)
     return booking
 
 
@@ -1042,15 +1126,14 @@ def mark_deposit_held(*, payment_attempt_id: UUID) -> None:
     outer join — and PostgreSQL refuses `FOR UPDATE` on that nullable side.
     """
     deposit = RentalDeposit.objects.select_for_update().get(payment_attempt_id=payment_attempt_id)
-    if deposit.status == RentalDeposit.Status.HELD:
-        return
-    deposit.status = RentalDeposit.Status.HELD
-    deposit.provider_note = ""
-    deposit.save(update_fields=("status", "provider_note", "updated_at"))
     booking = RentalBooking.objects.select_for_update().get(deposit_id=deposit.id)
+    if _capture_already_applied(deposit, booking):
+        return
+    _hold_deposit(deposit)
     if booking.status == RentalBooking.Status.PENDING_PAYMENT:
         booking.status = RentalBooking.Status.CONFIRMED
         booking.save(update_fields=("status", "updated_at"))
+        _notify_booking_confirmed(booking)
 
 
 def handover_booking(*, booking: RentalBooking, partner: Any, pin: str = "") -> RentalBooking:
@@ -1079,6 +1162,12 @@ def handover_booking(*, booking: RentalBooking, partner: Any, pin: str = "") -> 
             delivered_at=timezone.now(),
             updated_at=timezone.now(),
         )
+    _notify_customer(
+        booking,
+        "rental_handed_over_customer",
+        f"rental-handed-over:{booking.id}",
+        purpose="rental.booking.handover",
+    )
     return booking
 
 
@@ -1191,6 +1280,20 @@ def dispute_deposit(
         source_id=str(booking.id),
         rental_booking_id=booking.id,
     )
+    _notify_customer(
+        booking,
+        "rental_claim_raised",
+        f"rental-claim-raised:{booking.id}",
+        purpose="rental.deposit.claim",
+        amount_asked=_rupees(consume),
+    )
+    _notify_operations(
+        booking,
+        "rental_new_claim",
+        f"rental-new-claim:{booking.id}",
+        purpose="rental.deposit.claim",
+        amount_asked=_rupees(consume),
+    )
     return booking
 
 
@@ -1268,7 +1371,39 @@ def decide_deposit_dispute(
         raise RentalStateError("Decision must approve or reject the dispute.")
 
     release_payout_hold(rental_booking_id=booking.id)
+    _notify_claim_decided(booking=booking, deposit=deposit)
     return booking
+
+
+def _notify_claim_decided(*, booking: RentalBooking, deposit: RentalDeposit) -> None:
+    kept = int(deposit.consumed_paise or 0)
+    key = f"rental-claim-decided:{booking.id}"
+    purpose = "rental.deposit.claim"
+    if kept <= 0:
+        _notify_customer(
+            booking,
+            "rental_claim_rejected_customer",
+            f"{key}:customer",
+            purpose=purpose,
+            deposit_amount=_rupees(deposit.amount_paise),
+        )
+        _notify_owner(booking, "rental_claim_rejected_owner", f"{key}:owner", purpose=purpose)
+        return
+    _notify_customer(
+        booking,
+        "rental_claim_decided_customer",
+        f"{key}:customer",
+        purpose=purpose,
+        refund_amount=_rupees(deposit.amount_paise - kept),
+        deducted_amount=_rupees(kept),
+    )
+    _notify_owner(
+        booking,
+        "rental_admin_claim_decision_owner",
+        f"{key}:owner",
+        purpose=purpose,
+        approved_amount=_rupees(kept),
+    )
 
 
 @transaction.atomic
@@ -1310,6 +1445,12 @@ def return_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
 
     settle_rental_earning(rental_booking_id=booking.id)
 
+    _notify_customer(
+        booking,
+        "rental_returned_customer",
+        f"rental-returned:{booking.id}",
+        purpose="rental.booking.returned",
+    )
     return booking
 
 
@@ -1343,6 +1484,14 @@ def release_deposit(*, booking: RentalBooking, partner: Any) -> RentalDeposit:
 
     deposit.status = RentalDeposit.Status.RELEASED
     deposit.save(update_fields=("status", "updated_at"))
+    if deposit.amount_paise > 0:
+        _notify_customer(
+            booking,
+            "rental_return_confirmed",
+            f"rental-deposit-released:{booking.id}",
+            purpose="rental.deposit.released",
+            deposit_amount=_rupees(deposit.amount_paise),
+        )
     return deposit
 
 
@@ -1400,6 +1549,7 @@ def cancel_booking(
         raise RentalStateError(
             "Booking cannot be cancelled after handover. Contact support for return."
         )
+    status_before = booking.status
 
     deposit = RentalDeposit.objects.select_for_update(of=("self",)).get(id=booking.deposit_id)
     attempt = deposit.payment_attempt
@@ -1432,7 +1582,37 @@ def cancel_booking(
         reservation.status = AssetReservation.Status.RELEASED
         reservation.save(update_fields=("status", "updated_at"))
 
+    cancelled_by = "operations" if is_ops else ("customer" if customer is not None else "partner")
+    _notify_cancelled(booking=booking, status_before=status_before, cancelled_by=cancelled_by)
     return booking
+
+
+#: Statuses in which the owner already knows about the booking: it was paid for, or it is a
+#: delivery request they were asked to price. An unpaid pickup checkout was never announced to
+#: them, so its cancellation is not either.
+_OWNER_KNOWS = (
+    RentalBooking.Status.CONFIRMED,
+    RentalBooking.Status.AWAITING_TRANSPORT_QUOTE,
+)
+
+
+def _notify_cancelled(*, booking: RentalBooking, status_before: str, cancelled_by: str) -> None:
+    """Tell whoever did not cancel. Operations cancelling tells both sides."""
+    key = f"rental-cancelled:{booking.id}"
+    if cancelled_by != "customer":
+        _notify_customer(
+            booking,
+            "rental_booking_cancelled_customer",
+            f"{key}:customer",
+            purpose="rental.booking.cancelled",
+        )
+    if cancelled_by != "partner" and status_before in _OWNER_KNOWS:
+        _notify_owner(
+            booking,
+            "rental_booking_cancelled_owner",
+            f"{key}:owner",
+            purpose="rental.booking.cancelled",
+        )
 
 
 def _close_transport(*, booking_id: UUID) -> None:
@@ -1640,17 +1820,52 @@ def release_booking_for_expired_payment(*, payment_attempt_id: UUID) -> None:
         reservation.status = AssetReservation.Status.RELEASED
         reservation.save(update_fields=("status", "updated_at"))
 
+    _notify_customer(
+        booking,
+        "rental_payment_expired",
+        f"rental-payment-expired:{booking.id}",
+        purpose="rental.booking.cancelled",
+    )
+    if booking.pickup_or_delivery_mode == RentalBooking.Mode.DELIVERY:
+        # The owner priced the delivery and was told to wait for payment; tell them it lapsed.
+        _notify_owner(
+            booking,
+            "rental_booking_cancelled_owner",
+            f"rental-cancelled:{booking.id}:owner",
+            purpose="rental.booking.cancelled",
+        )
 
-def complete_rental_booking_payment(*, payment_attempt_id: UUID) -> None:
-    deposit = RentalDeposit.objects.select_for_update().get(payment_attempt_id=payment_attempt_id)
+
+def _capture_already_applied(deposit: RentalDeposit, booking: RentalBooking) -> bool:
+    """A replayed capture changes nothing.
+
+    The deposit being HELD is not enough to say so on its own: an item with no deposit gets a
+    zero deposit that is HELD from the start, so its booking is still PENDING_PAYMENT when the
+    rent payment lands. Checking the deposit alone left those bookings unpaid-looking forever.
+    """
+    return (
+        deposit.status == RentalDeposit.Status.HELD
+        and booking.status != RentalBooking.Status.PENDING_PAYMENT
+    )
+
+
+def _hold_deposit(deposit: RentalDeposit) -> None:
     if deposit.status == RentalDeposit.Status.HELD:
         return
     deposit.status = RentalDeposit.Status.HELD
     deposit.provider_note = ""
     deposit.save(update_fields=("status", "provider_note", "updated_at"))
 
+
+def complete_rental_booking_payment(*, payment_attempt_id: UUID) -> None:
+    deposit = RentalDeposit.objects.select_for_update().get(payment_attempt_id=payment_attempt_id)
     booking = RentalBooking.objects.select_for_update().get(deposit_id=deposit.id)
-    if booking.status == RentalBooking.Status.PENDING_PAYMENT:
+    if _capture_already_applied(deposit, booking):
+        return
+    _hold_deposit(deposit)
+
+    confirmed_now = booking.status == RentalBooking.Status.PENDING_PAYMENT
+    if confirmed_now:
         booking.status = RentalBooking.Status.CONFIRMED
         booking.save(update_fields=("status", "updated_at"))
 
@@ -1658,6 +1873,8 @@ def complete_rental_booking_payment(*, payment_attempt_id: UUID) -> None:
     if reservation.status != AssetReservation.Status.CONFIRMED:
         reservation.status = AssetReservation.Status.CONFIRMED
         reservation.save(update_fields=("status", "updated_at"))
+    if confirmed_now:
+        _notify_booking_confirmed(booking)
 
 
 def cancel_booking_on_refund(*, payment_attempt_id: UUID) -> None:
@@ -1692,9 +1909,11 @@ def cancel_booking_on_refund(*, payment_attempt_id: UUID) -> None:
         )
         return
 
+    status_before = booking.status
     booking.status = RentalBooking.Status.CANCELLED
     booking.save(update_fields=("status", "updated_at"))
     _close_transport(booking_id=booking.id)
+    _notify_cancelled(booking=booking, status_before=status_before, cancelled_by="operations")
 
     deposit = RentalDeposit.objects.select_for_update(of=("self",)).get(id=booking.deposit_id)
     if deposit.status in (RentalDeposit.Status.HELD, RentalDeposit.Status.AUTHORIZED):
@@ -1705,3 +1924,31 @@ def cancel_booking_on_refund(*, payment_attempt_id: UUID) -> None:
     if reservation.status != AssetReservation.Status.RELEASED:
         reservation.status = AssetReservation.Status.RELEASED
         reservation.save(update_fields=("status", "updated_at"))
+
+
+def send_overdue_return_reminders(*, today: date | None = None) -> int:
+    """Remind both sides about an item still out after its last day, once per booking.
+
+    Overdue means handed over and not marked returned after ``end_date``. The owner is asked to
+    confirm the return, the customer to bring it back. Operations hears once the item is
+    ``OVERDUE_ESCALATION_DAYS`` late. Every notice carries a per-booking key, so the hourly sweep
+    sends each one once however many times it runs.
+    """
+    today = today or timezone.localdate()
+    overdue = RentalBooking.objects.filter(
+        status=RentalBooking.Status.HANDOVER, end_date__lt=today
+    ).select_related("asset", "asset__partner")
+    reminded = 0
+    for booking in overdue:
+        key = f"rental-overdue:{booking.id}"
+        purpose = "rental.booking.overdue"
+        _notify_owner(booking, "rental_overdue_return_owner", f"{key}:owner", purpose=purpose)
+        _notify_customer(
+            booking, "rental_overdue_return_customer", f"{key}:customer", purpose=purpose
+        )
+        if (today - booking.end_date).days >= OVERDUE_ESCALATION_DAYS:
+            _notify_operations(
+                booking, "rental_overdue_for_admin", f"{key}:operations", purpose=purpose
+            )
+        reminded += 1
+    return reminded
