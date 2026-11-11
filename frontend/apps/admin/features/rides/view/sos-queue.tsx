@@ -39,7 +39,7 @@ function ResolveDialog({ sos, onClose }: { sos: OpsSos; onClose: () => void }) {
         </>
       }
     >
-      <Field label="What you did" error={resolve.error ? friendlyErrorMessage(resolve.error) : undefined}>
+      <Field label="What you did" required error={resolve.error ? friendlyErrorMessage(resolve.error) : undefined}>
         <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={3} />
       </Field>
     </Dialog>

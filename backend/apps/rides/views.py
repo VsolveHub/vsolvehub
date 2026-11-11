@@ -288,7 +288,9 @@ class OpsRateCardsView(APIView):
         responses=RideRateCardSerializer(many=True),
     )
     def get(self, request: Any) -> Response:
-        cards = RideRateCard.objects.order_by("service_area_id", "vehicle_type", "-version")
+        cards = RideRateCard.objects.select_related("service_area").order_by(
+            "service_area_id", "vehicle_type", "-version"
+        )
         params = request.query_params
         if params.get("service_area_id"):
             try:

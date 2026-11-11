@@ -73,3 +73,58 @@ export function useResolveSos() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: sosKey }),
   });
 }
+
+export type RideRateCard = Schemas["RideRateCard"];
+export type RateCardCreate = Schemas["RateCardCreateRequest"];
+export type RateCardUpdate = Schemas["PatchedRateCardUpdateRequest"];
+export type PassPlan = Schemas["CaptainPassPlanOps"];
+export type PassPlanWrite = Schemas["CaptainPassPlanOpsRequest"];
+
+export const rateCardsKey = ["ops", "rides", "rate-cards"] as const;
+export const passPlansKey = ["ops", "rides", "pass-plans"] as const;
+
+export function useRateCards() {
+  return useQuery({
+    queryKey: rateCardsKey,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/operations/rides/rate-cards/")),
+  });
+}
+
+export function useSaveRateCard() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (save: { cardId: string; body: RateCardUpdate } | { body: RateCardCreate }) =>
+      "cardId" in save
+        ? request(() =>
+            getApiClient().PATCH("/api/v1/operations/rides/rate-cards/{card_id}/", {
+              params: { path: { card_id: save.cardId } },
+              body: save.body,
+            }),
+          )
+        : request(() => getApiClient().POST("/api/v1/operations/rides/rate-cards/", { body: save.body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: rateCardsKey }),
+  });
+}
+
+export function usePassPlans() {
+  return useQuery({
+    queryKey: passPlansKey,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/operations/rides/pass-plans/")),
+  });
+}
+
+export function useSavePassPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (save: { planId: string; body: Partial<PassPlanWrite> } | { body: PassPlanWrite }) =>
+      "planId" in save
+        ? request(() =>
+            getApiClient().PATCH("/api/v1/operations/rides/pass-plans/{plan_id}/", {
+              params: { path: { plan_id: save.planId } },
+              body: save.body,
+            }),
+          )
+        : request(() => getApiClient().POST("/api/v1/operations/rides/pass-plans/", { body: save.body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: passPlansKey }),
+  });
+}

@@ -854,12 +854,14 @@ class LocationPingSerializer(serializers.Serializer[Any]):
 
 class RideRateCardSerializer(serializers.ModelSerializer[RideRateCard]):
     service_area_id = serializers.UUIDField(read_only=True)
+    service_area_name = serializers.CharField(source="service_area.name", read_only=True)
 
     class Meta:
         model = RideRateCard
         fields = (
             "id",
             "service_area_id",
+            "service_area_name",
             "vehicle_type",
             *RATE_FIELDS,
             "is_active",

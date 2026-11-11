@@ -48774,6 +48774,9 @@ components:
           type: string
           format: uuid
           readOnly: true
+        service_area_name:
+          type: string
+          readOnly: true
         vehicle_type:
           allOf:
           - $ref: '#/components/schemas/VehicleTypeEnum'
@@ -48820,6 +48823,7 @@ components:
       - per_km_paise
       - per_minute_paise
       - service_area_id
+      - service_area_name
       - vehicle_type
       - version
       - waiting_per_minute_paise

@@ -73,6 +73,7 @@ function ForceCancel({ ride }: { ride: OpsRideDetail }) {
         >
           <Field
             label="Reason"
+            required
             description={`Required, up to ${CANCEL_REASON_MAX} characters.`}
             error={cancel.error ? friendlyErrorMessage(cancel.error) : touched ? (problem ?? undefined) : undefined}
           >

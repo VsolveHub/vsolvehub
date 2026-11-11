@@ -55,6 +55,7 @@ def test_create_a_card(ops: Any, area: ServiceArea) -> None:
     assert response.status_code == 201
     body = response.json()
     assert (body["version"], body["is_active"], body["base_fare_paise"]) == (1, True, 1500)
+    assert body["service_area_name"] == "Gachibowli"
     assert RideRateCard.objects.get().created_by is not None
 
 

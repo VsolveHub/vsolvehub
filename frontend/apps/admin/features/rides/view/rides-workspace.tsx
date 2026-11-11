@@ -5,6 +5,8 @@ import { Car } from "lucide-react";
 import { ServiceTabs, useServiceTab } from "@/features/money/service-tabs";
 
 import { CaptainsList } from "./captains-list";
+import { PassPlans } from "./pass-plans";
+import { RateCards } from "./rate-cards";
 import { RideList } from "./ride-list";
 import { SosQueue } from "./sos-queue";
 
@@ -12,6 +14,8 @@ const TABS = [
   { key: "rides", label: "Rides" },
   { key: "sos", label: "SOS" },
   { key: "captains", label: "Captains" },
+  { key: "rate-cards", label: "Rate cards" },
+  { key: "pass-plans", label: "Pass plans" },
 ] as const;
 
 /** Operations › Rides: live and past rides, the SOS queue and the captains (brief §5.11). */
@@ -26,7 +30,7 @@ export function RidesWorkspace() {
           <h1 className="text-2xl font-bold text-navy-900">Rides</h1>
         </div>
         <p className="mt-1 text-sm text-text-secondary">
-          Bike, auto and car rides: watch live rides, answer SOS alerts and check captains.
+          Bike, auto and car rides: watch live rides, answer SOS alerts, check captains, and set fares and pass plans.
         </p>
       </div>
 
@@ -35,6 +39,8 @@ export function RidesWorkspace() {
       {tab === "rides" ? <RideList /> : null}
       {tab === "sos" ? <SosQueue /> : null}
       {tab === "captains" ? <CaptainsList /> : null}
+      {tab === "rate-cards" ? <RateCards /> : null}
+      {tab === "pass-plans" ? <PassPlans /> : null}
     </div>
   );
 }

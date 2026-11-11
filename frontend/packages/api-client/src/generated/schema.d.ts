@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.99.0)
- * Checksum: 6a293c8127befaa4
+ * Checksum: 628e3161390bf6f2
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -19746,6 +19746,7 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly service_area_id: string;
+            readonly service_area_name: string;
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly base_fare_paise: number;
             readonly included_distance_m: number;
