@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { requestEstimateHref, requestQuotesHref } from "@/lib/routes";
+import { formatCoverageTerms } from "@/lib/guarantee-presentation";
 
 import { firstStageOf } from "../adapters";
 import { destinationAfterSelection } from "../model/selection-navigation";
@@ -109,7 +110,11 @@ export function ConfirmChoiceScreen({ requirementId, proposalId }: { requirement
             </Line>
           ) : null}
           {timeline !== null ? <Line ok>{timeline}</Line> : null}
-          {card.warrantyTerms !== null ? <Line ok>Warranty: {card.warrantyTerms}</Line> : <Line ok={false} warn>No warranty stated</Line>}
+          {card.warrantyTerms !== null ? (
+            <Line ok>Guarantee: {formatCoverageTerms(card.warrantyTerms)}</Line>
+          ) : (
+            <Line ok={false} warn>No guarantee specified</Line>
+          )}
           {card.exclusions.map((line) => (
             <Line key={line} ok={false}>
               {line} — you arrange this

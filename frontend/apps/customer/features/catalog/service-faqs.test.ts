@@ -81,13 +81,13 @@ describe("buildServiceFaqs", () => {
     );
   });
 
-  it("lists exclusions and warranty only from policies", () => {
+  it("lists exclusions and guarantee only from policies", () => {
     const faqs = buildServiceFaqs(fixedPrice);
     expect(faqs.find((faq) => faq.question === "What is not covered?")?.answer).toBe(
       "Spare parts, quoted separately.",
     );
-    expect(faqs.find((faq) => faq.question.includes("warranty"))?.answer).toBe(
-      "Yes. 30-day warranty on the workmanship.",
+    expect(faqs.find((faq) => faq.question.includes("guarantee"))?.answer).toBe(
+      "Yes. Your service includes a 30-day workmanship guarantee.",
     );
   });
 

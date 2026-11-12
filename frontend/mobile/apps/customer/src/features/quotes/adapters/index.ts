@@ -18,6 +18,7 @@ import {
   type RevisionRequest,
 } from "@vsolve/query/native";
 import { formatMoney } from "@vsolve/mobile-ui";
+import { formatCoverageTerms } from "@/lib/guarantee-presentation";
 
 /**
  * The only code in the quotes feature that knows what the wire looks like.
@@ -933,10 +934,11 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
       values: cards.map((card) => joinOrNull(card.exclusions)),
     },
     {
-      label: "Warranty",
+      label: "Guarantee",
       equivalent: false,
-      caveat: "Warranty terms are the vendor's own words, not a platform promise.",
-      values: cards.map((card) => card.warrantyTerms),
+      caveat:
+        "Coverage terms are provided by the selected professional. V Solve Hub separately provides the applicable payment protection during the defined guarantee period.",
+      values: cards.map((card) => (card.warrantyTerms ? formatCoverageTerms(card.warrantyTerms) : null)),
     },
     // "Commission treatment" was a row here until 1.44.0. It was vendor-authored
     // free text, and BE-5A took it off the proposal entirely: commission is
@@ -1084,7 +1086,7 @@ export function superlativeFor(
   if (own !== null) {
     const rivals = others.map((other) => warrantyMonths(other.warrantyTerms));
     if (rivals.every((other) => other === null || own > other)) {
-      return { kind: "LONGEST_WARRANTY", label: `Longest warranty — ${own} months` };
+      return { kind: "LONGEST_WARRANTY", label: `Longest guarantee — ${own} months` };
     }
   }
 

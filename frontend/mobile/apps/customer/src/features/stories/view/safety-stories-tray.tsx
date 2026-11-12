@@ -45,15 +45,15 @@ export function SafetyStoriesTray({
     <View className="w-full my-3">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-2.5 px-0.5">
-        <View className="flex-row items-center gap-2">
-          <View className="size-7 items-center justify-center rounded-full bg-[#fdf3ec] border border-[#ffc4a0]/40">
+        <View className="flex-1 min-w-0 flex-row items-center gap-2 mr-2">
+          <View className="size-7 shrink-0 items-center justify-center rounded-full bg-[#fdf3ec] border border-[#ffc4a0]/40">
             <ShieldCheck size={16} color="#f87000" />
           </View>
-          <Text className="text-base font-extrabold text-navy-900 tracking-tight">
+          <Text numberOfLines={1} ellipsizeMode="tail" className="shrink-1 text-base font-extrabold text-navy-900 tracking-tight">
             Safety Stories
           </Text>
-          <View className="rounded-full bg-[#fdf3ec] px-2 py-0.5 border border-[#ffc4a0]/50">
-            <Text className="text-[10px] font-extrabold uppercase tracking-wide text-[#a94900]">
+          <View className="shrink-0 rounded-full bg-[#fdf3ec] px-2 py-0.5 border border-[#ffc4a0]/50">
+            <Text maxFontSizeMultiplier={1.25} className="text-[10px] font-extrabold uppercase tracking-wide text-[#a94900]">
               24h Updates
             </Text>
           </View>
@@ -62,9 +62,10 @@ export function SafetyStoriesTray({
         <Pressable
           hitSlop={8}
           onPress={() => handleOpenStory(0)}
+          className="shrink-0"
         >
-          <Text className="text-xs font-bold text-[#f87000]">
-            Watch all â†’
+          <Text maxFontSizeMultiplier={1.25} className="text-xs font-bold text-[#f87000]">
+            Watch all →
           </Text>
         </Pressable>
       </View>

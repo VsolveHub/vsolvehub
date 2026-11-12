@@ -6,6 +6,8 @@ import { View } from "react-native";
 import { iconForService } from "./icon-catalogue/service-icon";
 import type { Category } from "./client-queries";
 
+const CLOUDFLARE_R2_BASE = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev";
+
 /**
  * Resolves any image URL (relative or localhost) to a fully qualified URL
  * reachable from mobile devices on LAN/production.
@@ -24,10 +26,9 @@ export function resolveImageUrl(url: string | null | undefined): string | null {
     return trimmed;
   }
 
-  // Relative catalog tiles -> resolve to web base URL
+  // Relative catalog tiles -> resolve directly to Cloudflare R2 CDN
   if (trimmed.startsWith("/catalog/")) {
-    const webBase = webBaseUrl();
-    return `${webBase}${trimmed}`;
+    return `${CLOUDFLARE_R2_BASE}${trimmed}`;
   }
 
   // Relative media / static -> resolve to API base URL
@@ -56,11 +57,10 @@ export function CategoryArtwork({
   const uri = resolveImageUrl(category.image_url);
 
   if (uri && !failed) {
-    const isTransparentTile = uri.includes("/catalog/tiles/") || uri.includes("/Service%20Cover/");
     return (
       <Image
         source={{ uri }}
-        contentFit={isTransparentTile ? "contain" : "cover"}
+        contentFit="cover"
         style={{ width: "100%", height: "100%" }}
         onError={() => setFailed(true)}
       />
@@ -69,7 +69,7 @@ export function CategoryArtwork({
 
   const Icon = iconForService(category.icon_key || "service");
   return (
-    <View className="items-center justify-center">
+    <View className="items-center justify-center p-3">
       <Icon size={iconSize} color="#00112e" strokeWidth={1.8} />
     </View>
   );

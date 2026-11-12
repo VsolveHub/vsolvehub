@@ -23,3 +23,4 @@ const AsyncStorage = {
 
 module.exports = AsyncStorage;
 module.exports.default = AsyncStorage;
+

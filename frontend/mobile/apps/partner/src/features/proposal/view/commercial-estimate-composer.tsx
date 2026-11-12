@@ -110,7 +110,6 @@ export function CommercialEstimateComposer({
     return () => {
       active = false;
     };
-    };
   }, [invitationId]);
   const [attempted, setAttempted] = useState(false);
   const [pendingMode, setPendingMode] = useState<EstimateMode | null>(null);
@@ -367,19 +366,19 @@ function ItemLines({ lines, errors, disabled, onChange, onAdd }: { lines: readon
         <View key={line.id} className={cn("rounded-card border bg-surface p-3", errors[`item-${index}`] ? "border-danger-line" : "border-line")}>
           <View className="flex-row items-start gap-2">
             <View className="min-w-0 flex-1 flex-row flex-wrap gap-2">
-              <View className="w-[48%]"><Field label="Category"><Input value={line.category} onChangeText={(value) => patch(index, { category: value })} editable={!disabled} /></Field></View>
-              <View className="w-[48%]"><Field label="Item or task"><Input value={line.title} onChangeText={(value) => patch(index, { title: value })} editable={!disabled} /></Field></View>
+              <View className="min-w-[45%] flex-1"><Field label="Category"><Input value={line.category} onChangeText={(value) => patch(index, { category: value })} editable={!disabled} /></Field></View>
+              <View className="min-w-[45%] flex-1"><Field label="Item or task"><Input value={line.title} onChangeText={(value) => patch(index, { title: value })} editable={!disabled} /></Field></View>
             </View>
             <RemoveButton label={`Remove ${line.title || `item ${index + 1}`}`} onClick={() => onChange(lines.filter((_, position) => position !== index))} />
           </View>
           <View className="mt-2 flex-row flex-wrap gap-2">
-            <View className="w-[31%]">
+            <View className="min-w-[28%] flex-1">
               <Field label="Unit">
                 <Select value={line.unit} options={ESTIMATE_UNITS.map((unit) => ({ value: unit.value, label: unit.label }))} onChange={(event) => patch(index, { unit: event.target.value as ItemLineDraft["unit"] })} disabled={disabled} />
               </Field>
             </View>
-            <View className="w-[31%]"><Field label="Quantity"><Input keyboardType="decimal-pad" value={line.quantity} onChangeText={(value) => patch(index, { quantity: value })} editable={!disabled} /></Field></View>
-            <View className="w-[31%]"><Field label="Rate ₹"><Input keyboardType="decimal-pad" value={paiseToRupeeInput(line.ratePaise)} onChangeText={(value) => patch(index, { ratePaise: rupeesToPaise(value) })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Quantity"><Input keyboardType="decimal-pad" value={line.quantity} onChangeText={(value) => patch(index, { quantity: value })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Rate ₹"><Input keyboardType="decimal-pad" value={paiseToRupeeInput(line.ratePaise)} onChangeText={(value) => patch(index, { ratePaise: rupeesToPaise(value) })} editable={!disabled} /></Field></View>
           </View>
           <LineAmount amount={itemLineAmount(line)} />
           {errors[`item-${index}`] ? <Text accessibilityRole="alert" className="mt-2 text-sm text-danger-text">{errors[`item-${index}`]}</Text> : null}
@@ -400,15 +399,15 @@ function LabourLines({ lines, errors, disabled, onChange, onAdd }: { lines: read
         <View key={line.id} className={cn("rounded-card border bg-surface p-3", errors[`labour-${index}`] ? "border-danger-line" : "border-line")}>
           <View className="flex-row items-start gap-2">
             <View className="min-w-0 flex-1 flex-row flex-wrap gap-2">
-              <View className="w-[48%]"><Field label="Role or trade"><Input value={line.role} onChangeText={(value) => patch(index, { role: value })} editable={!disabled} /></Field></View>
-              <View className="w-[48%]"><Field label="Team (optional)"><Input value={line.team} onChangeText={(value) => patch(index, { team: value })} editable={!disabled} /></Field></View>
+              <View className="min-w-[45%] flex-1"><Field label="Role or trade"><Input value={line.role} onChangeText={(value) => patch(index, { role: value })} editable={!disabled} /></Field></View>
+              <View className="min-w-[45%] flex-1"><Field label="Team (optional)"><Input value={line.team} onChangeText={(value) => patch(index, { team: value })} editable={!disabled} /></Field></View>
             </View>
             <RemoveButton label={`Remove ${line.role || `role ${index + 1}`}`} onClick={() => onChange(lines.filter((_, position) => position !== index))} />
           </View>
           <View className="mt-2 flex-row flex-wrap gap-2">
-            <View className="w-[31%]"><Field label="Members"><Input keyboardType="number-pad" value={String(line.memberCount)} onChangeText={(value) => patch(index, { memberCount: Number(value) })} editable={!disabled} /></Field></View>
-            <View className="w-[31%]"><Field label="Days"><Input keyboardType="number-pad" value={String(line.dayCount)} onChangeText={(value) => patch(index, { dayCount: Number(value) })} editable={!disabled} /></Field></View>
-            <View className="w-[31%]"><Field label="Rate/day ₹"><Input keyboardType="decimal-pad" value={paiseToRupeeInput(line.ratePaisePerDay)} onChangeText={(value) => patch(index, { ratePaisePerDay: rupeesToPaise(value) })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Members"><Input keyboardType="number-pad" value={String(line.memberCount)} onChangeText={(value) => patch(index, { memberCount: Number(value) })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Days"><Input keyboardType="number-pad" value={String(line.dayCount)} onChangeText={(value) => patch(index, { dayCount: Number(value) })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Rate/day ₹"><Input keyboardType="decimal-pad" value={paiseToRupeeInput(line.ratePaisePerDay)} onChangeText={(value) => patch(index, { ratePaisePerDay: rupeesToPaise(value) })} editable={!disabled} /></Field></View>
           </View>
           <LineAmount amount={labourLineAmount(line)} />
           {errors[`labour-${index}`] ? <Text accessibilityRole="alert" className="mt-2 text-sm text-danger-text">{errors[`labour-${index}`]}</Text> : null}
@@ -432,9 +431,9 @@ function MaterialLines({ lines, errors, disabled, onChange, onAdd }: { lines: re
             <RemoveButton label={`Remove ${line.title || `material ${index + 1}`}`} onClick={() => onChange(lines.filter((_, position) => position !== index))} />
           </View>
           <View className="mt-2 flex-row flex-wrap gap-2">
-            <View className="w-[31%]"><Field label="Quantity"><Input keyboardType="decimal-pad" value={line.quantity} onChangeText={(value) => patch(index, { quantity: value })} editable={!disabled} /></Field></View>
-            <View className="w-[31%]"><Field label="Unit"><Input value={line.unit} onChangeText={(value) => patch(index, { unit: value })} editable={!disabled} /></Field></View>
-            <View className="w-[31%]"><Field label="Rate ₹"><Input keyboardType="decimal-pad" value={paiseToRupeeInput(line.ratePaise)} onChangeText={(value) => patch(index, { ratePaise: rupeesToPaise(value) })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Quantity"><Input keyboardType="decimal-pad" value={line.quantity} onChangeText={(value) => patch(index, { quantity: value })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Unit"><Input value={line.unit} onChangeText={(value) => patch(index, { unit: value })} editable={!disabled} /></Field></View>
+            <View className="min-w-[28%] flex-1"><Field label="Rate ₹"><Input keyboardType="decimal-pad" value={paiseToRupeeInput(line.ratePaise)} onChangeText={(value) => patch(index, { ratePaise: rupeesToPaise(value) })} editable={!disabled} /></Field></View>
           </View>
           <LineAmount amount={materialLineAmount(line)} />
           {errors[`material-${index}`] ? <Text accessibilityRole="alert" className="mt-2 text-sm text-danger-text">{errors[`material-${index}`]}</Text> : null}

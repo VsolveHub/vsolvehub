@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -13,17 +13,8 @@ function renderDialog(ui: ReactElement) {
   return render(<SafeAreaProvider initialMetrics={initialMetrics}>{ui}</SafeAreaProvider>);
 }
 
-function tap(element: { props: { onClick?: (event: object) => void; onPress?: () => void } }) {
-  if (element.props.onClick) {
-    element.props.onClick({
-      nativeEvent: {},
-      currentTarget: 1,
-      target: 1,
-      stopPropagation() {},
-    });
-    return;
-  }
-  element.props.onPress?.();
+function tap(element: Parameters<typeof fireEvent.press>[0]) {
+  fireEvent.press(element);
 }
 
 test("decline dialog asks for a reason before it passes", async () => {

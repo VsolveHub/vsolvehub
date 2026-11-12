@@ -9,6 +9,7 @@ import { RemoteImage } from "@/components/remote-image";
 
 import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../client-queries";
 import { durationLabel, policyTexts, warrantyText } from "../service-facts";
+import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { ServicePhoto } from "./category-artwork";
 
@@ -261,7 +262,7 @@ export function TileServiceDetailPanel({
                     />
                   </svg>
                 </span>
-                <span className="leading-snug">{item}</span>
+                <span className="leading-snug">{formatGuaranteePolicy(item) ?? item}</span>
               </li>
             ))}
           </ul>
@@ -292,9 +293,9 @@ export function TileServiceDetailPanel({
               <div className="flex items-center justify-between gap-3 text-[13px]">
                 <dt className="flex items-center gap-2 font-medium text-text-secondary">
                   <ShieldCheck className="size-4 shrink-0" strokeWidth={1.8} />
-                  Warranty
+                  Service Guarantee
                 </dt>
-                <dd className="text-right font-semibold text-navy-900">{warranty}</dd>
+                <dd className="text-right font-semibold text-navy-900">{formatGuaranteePolicy(warranty)}</dd>
               </div>
             ) : null}
           </dl>

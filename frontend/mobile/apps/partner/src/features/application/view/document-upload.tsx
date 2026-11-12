@@ -150,7 +150,7 @@ export function DocumentUpload({
       {/* Dashed Upload Dropzone Box matching Mockup */}
       <Pressable cssInterop={false}
         accessibilityRole="button"
-        accessibilityLabel={`Upload ${label}`}
+        accessibilityLabel={replacing ? "Replace file" : "Choose a file"}
         accessibilityState={{ disabled: blocked }}
         disabled={blocked}
         onPress={() => setChooserOpen(true)}

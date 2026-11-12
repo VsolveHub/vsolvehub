@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { IntentLink } from "@/components/intent-link";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ import {
 } from "@/features/checkout/queries";
 import { cartMergeConflict, duplicateCartItemConflict } from "@/features/checkout/conflicts";
 import { RemoteImage } from "@/components/remote-image";
+import Image from "next/image";
 import { getApiClient } from "@/lib/api/browser";
 import { request } from "@vsolve/api-client";
 
@@ -307,138 +308,524 @@ function HomepageServiceRow({
  * So `image` living here while `HomepageServiceItem` has none is the intended
  * asymmetry, not an oversight to tidy up on the next pass.
  */
-interface PromoSlide {
+interface FeaturedServiceSlide {
+  id: string;
+  chipLabel: string;
+  categoryTag: string;
   title: string;
   subtitle: string;
+  highlights: [string, string];
+  price: string;
+  rating: string;
+  bookings: string;
+  guarantee: string;
   buttonText: string;
   link: string;
   image: string;
-  bgClass: string;
-  btnBg: string;
 }
 
-const CAROUSEL_SLIDES: PromoSlide[] = [
+const FEATURED_SERVICES: FeaturedServiceSlide[] = [
   {
-    title: "Electrical Safety",
-    subtitle: "Ensure your home wiring is safe. Book modular switchboard repairs and switch safety audits starting at ₹129.",
-    buttonText: "Know more",
+    id: "electrician",
+    chipLabel: "⚡ Electrical",
+    categoryTag: "Electrician",
+    title: "Electrical Safety & Repairs",
+    subtitle: "Modular switchboard fixing, wiring short-circuit fault diagnosis, and safety load checks.",
+    highlights: [
+      "Modular switchboard diagnostic & spark repair",
+      "Complete home wiring audit & load calculation",
+    ],
+    price: "₹129",
+    rating: "4.8",
+    bookings: "12k bookings",
+    guarantee: "Verified Certified Pros",
+    buttonText: "Book Electrician",
     link: "/catalog/electrician",
-    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&fit=crop",
-    bgClass: "bg-[#FFF9F5]",
-    btnBg: "bg-[#EA580C] hover:bg-[#C2410C] text-white",
+    image: "/catalog/featured/electrician.jpg",
   },
   {
-    title: "Plumbing Upgrades",
-    subtitle: "Trace hidden pipeline leaks and install premium, drip-free bathroom mixers starting at ₹199.",
-    buttonText: "Know more",
+    id: "plumber",
+    chipLabel: "💧 Plumbing",
+    categoryTag: "Plumber",
+    title: "Plumbing Upgrades & Leaks",
+    subtitle: "Drip-free tap installations, drain unclogging, and pipe pressure tests.",
+    highlights: [
+      "Precision leak tracing with pressure meters",
+      "Premium bathroom mixer & tap replacements",
+    ],
+    price: "₹199",
+    rating: "4.9",
+    bookings: "18k bookings",
+    guarantee: "No-Mess Guarantee",
+    buttonText: "Book Plumber",
     link: "/catalog/plumber",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&fit=crop",
-    bgClass: "bg-[#F0F7FF]",
-    btnBg: "bg-[#0284C7] hover:bg-[#0369a1] text-white",
+    image: "/catalog/featured/plumber.jpg",
   },
   {
-    title: "Carpentry Fitting",
-    subtitle: "Fix loose cabinet shutters, align squeaking door hinges, or mount floating wall shelves starting at ₹299.",
-    buttonText: "Know more",
+    id: "carpenter",
+    chipLabel: "🪚 Carpentry",
+    categoryTag: "Carpenter",
+    title: "Carpentry & Door Fittings",
+    subtitle: "Cabinet hinge alignment, lock repairs, and custom wall shelf mounting.",
+    highlights: [
+      "Squeak-free hinge & drawer slide alignment",
+      "Laser-level shelf and decor wall mounting",
+    ],
+    price: "₹299",
+    rating: "4.7",
+    bookings: "9k bookings",
+    guarantee: "Clean Drilling & Leveling",
+    buttonText: "Book Carpenter",
     link: "/catalog/technician",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&fit=crop",
-    bgClass: "bg-[#FEFDF0]",
-    btnBg: "bg-[#D97706] hover:bg-[#B45309] text-white",
+    image: "/catalog/featured/carpenter.jpg",
   },
 ];
 
 export function HeroSplitCarousel() {
-  const [currentIdx, setCurrentIdx] = useState(0);
   const router = useRouter();
+  const N = FEATURED_SERVICES.length;
+  const half = Math.floor(N / 2);
 
-  const handleNext = () => {
-    setCurrentIdx((prev) => (prev + 1) % CAROUSEL_SLIDES.length);
+  // Desktop Carousel State
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [isDHovered, setIsDHovered] = useState(false);
+  const [isDFocused, setIsDFocused] = useState(false);
+  const prevPcs = useRef<number[]>([]);
+  const isFirstRender = useRef(true);
+  const dragStartX = useRef<number | null>(null);
+
+  // Mobile Web Carousel State
+  const mobileScrollRef = useRef<HTMLDivElement | null>(null);
+  const [mobileActiveIdx, setMobileActiveIdx] = useState(0);
+  const [isMobileInteracting, setIsMobileInteracting] = useState(false);
+  const [isMobileHovered, setIsMobileHovered] = useState(false);
+
+  // Reduced motion preference
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const dgo = useCallback((targetIdx: number) => {
+    setActiveIdx((targetIdx % N + N) % N);
+  }, [N]);
+
+  // Desktop Autoplay (every 3.5s)
+  useEffect(() => {
+    if (reducedMotion || isDHovered || isDFocused) return;
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      setActiveIdx((prev) => (prev + 1) % N);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [reducedMotion, isDHovered, isDFocused, N]);
+
+  // Desktop Keyboard Arrow Navigation
+  const handleDesktopKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      dgo(activeIdx + 1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      dgo(activeIdx - 1);
+    }
   };
 
-  const handlePrev = () => {
-    setCurrentIdx((prev) => (prev - 1 + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length);
+  // Desktop Pointer Drag
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest(".featured-book-btn")) return;
+    dragStartX.current = e.clientX;
   };
 
-  const slide = CAROUSEL_SLIDES[currentIdx];
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (dragStartX.current === null) return;
+    const dx = e.clientX - dragStartX.current;
+    dragStartX.current = null;
+    if (dx < -50) {
+      dgo(activeIdx + 1);
+    } else if (dx > 50) {
+      dgo(activeIdx - 1);
+    } else if (Math.abs(dx) < 6) {
+      const cardEl = (e.target as HTMLElement).closest("[data-card-pc]");
+      if (cardEl && cardEl.getAttribute("data-card-pc") === "1") {
+        dgo(activeIdx + 1);
+      }
+    }
+  };
+
+  // Mobile step calculation (card width + 10px gap)
+  const getMobileStep = () => {
+    if (!mobileScrollRef.current) return 300;
+    const firstCard = mobileScrollRef.current.querySelector<HTMLElement>("[data-mobile-card]");
+    return firstCard ? firstCard.offsetWidth + 10 : mobileScrollRef.current.offsetWidth - 24;
+  };
+
+  const handleMobileScroll = () => {
+    if (!mobileScrollRef.current) return;
+    const step = getMobileStep();
+    if (step <= 0) return;
+    const newIdx = Math.max(0, Math.min(N - 1, Math.round(mobileScrollRef.current.scrollLeft / step)));
+    if (newIdx !== mobileActiveIdx) {
+      setMobileActiveIdx(newIdx);
+    }
+  };
+
+  const scrollToMobileSlide = (idx: number) => {
+    if (!mobileScrollRef.current) return;
+    const step = getMobileStep();
+    mobileScrollRef.current.scrollTo({
+      left: idx * step,
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+    setMobileActiveIdx(idx);
+  };
+
+  // Mobile Autoplay (every 3.5s)
+  useEffect(() => {
+    if (reducedMotion || isMobileInteracting || isMobileHovered) return;
+    const interval = setInterval(() => {
+      if (document.hidden || !mobileScrollRef.current) return;
+      setMobileActiveIdx((prev) => {
+        const next = (prev + 1) % N;
+        const step = getMobileStep();
+        mobileScrollRef.current?.scrollTo({
+          left: next * step,
+          behavior: "smooth",
+        });
+        return next;
+      });
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [reducedMotion, isMobileInteracting, isMobileHovered, N]);
+
+  // Track initial render for instant placement
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
 
   return (
-    <section className="relative w-full rounded-3xl overflow-hidden border border-[#e7e2da]/40 shadow-sm transition-all duration-300">
-      <div className={`flex flex-col md:flex-row min-h-[300px] md:h-[280px] transition-colors duration-500 ${slide.bgClass}`}>
-        
-        {/* Left Content column */}
-        <div className="flex-1 flex flex-col justify-between p-8 md:p-10 z-10">
-          <div className="flex flex-col gap-2">
-            <span className="text-[9px] uppercase tracking-widest font-black text-text-secondary/70">Featured Service</span>
-            <h2 className="text-3xl font-extrabold text-navy-900 leading-tight">
-              {slide.title}
-            </h2>
-            <p className="text-xs md:text-sm text-text-secondary max-w-sm font-medium leading-relaxed mt-1">
-              {slide.subtitle}
-            </p>
-          </div>
-          
-          <button
-            type="button"
-            onClick={() => router.push(slide.link)}
-            className={`self-start mt-6 px-6 py-2 rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all duration-300 cursor-pointer ${slide.btnBg}`}
-          >
-            {slide.buttonText}
-          </button>
+    <section className="w-full">
+      <style>{`
+        @keyframes featuredKb {
+          from { transform: scale(1); }
+          to { transform: scale(1.05); }
+        }
+        .featured-kb-active {
+          animation: featuredKb 3.5s ease-out forwards;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .featured-kb-active {
+            animation: none !important;
+          }
+          .featured-desktop-card {
+            transition: none !important;
+          }
+        }
+      `}</style>
+
+      {/* =======================================================
+          A) DESKTOP HERO CAROUSEL (768px and up: md:)
+          ======================================================= */}
+      <div
+        className="hidden md:block w-full select-none"
+        onMouseEnter={() => setIsDHovered(true)}
+        onMouseLeave={() => setIsDHovered(false)}
+        onFocus={() => setIsDFocused(true)}
+        onBlur={() => setIsDFocused(false)}
+      >
+        {/* Viewport */}
+        <div
+          tabIndex={0}
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Featured services"
+          onKeyDown={handleDesktopKeyDown}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={() => { dragStartX.current = null; }}
+          className="relative h-[460px] lg:h-[440px] w-full overflow-hidden touch-pan-y outline-none focus-visible:ring-2 focus-visible:ring-[#EA580C] focus-visible:ring-offset-2 rounded-[32px]"
+        >
+          {FEATURED_SERVICES.map((service, i) => {
+            const p = ((i - activeIdx + N + half) % N) - half;
+            const pc = Math.max(-1, Math.min(2, p));
+            const oldPc = prevPcs.current[i];
+            const isJump = isFirstRender.current || (oldPc !== undefined && Math.abs(pc - oldPc) > 1);
+            prevPcs.current[i] = pc;
+
+            const isCurrent = pc === 0;
+            const isPeeking = pc === 1;
+
+            return (
+              <article
+                key={service.id}
+                data-card-pc={pc}
+                aria-hidden={isCurrent ? "false" : "true"}
+                onClick={() => {
+                  if (isPeeking) {
+                    dgo(activeIdx + 1);
+                  }
+                }}
+                style={{
+                  transformOrigin: "left center",
+                  transform: `translateX(calc(${pc} * (100% + 16px))) scale(${isCurrent ? 1 : 0.965})`,
+                  opacity: isCurrent ? 1 : isPeeking ? 0.5 : 0,
+                  pointerEvents: isCurrent || isPeeking ? "auto" : "none",
+                  cursor: isPeeking ? "pointer" : "default",
+                  transition: isJump
+                    ? "none"
+                    : "transform 0.55s cubic-bezier(0.22, 0.8, 0.3, 1), opacity 0.45s ease",
+                }}
+                className="featured-desktop-card absolute left-0 top-0 w-[calc(100%-72px)] h-full bg-white border border-[#ECE7E1] rounded-[32px] px-6 py-6 lg:px-10 lg:py-8 shadow-xs hover:shadow-md transition-shadow overflow-hidden grid grid-cols-1 md:grid-cols-12 gap-6 lg:gap-10 items-stretch"
+              >
+                {/* Left Content (md:col-span-7) */}
+                <div className="md:col-span-7 flex flex-col justify-center min-w-0">
+                  {/* Eyebrow: Pill + Verified Guarantee */}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="px-3 py-1 text-xs font-black uppercase tracking-wider bg-[#FFF1E8] text-[#D9480F] rounded-full border border-[#F8C9A8]">
+                      Featured service
+                    </span>
+                    <span className="text-sm font-medium text-[#3C4658]">
+                      {service.guarantee}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="mt-2.5 lg:mt-3 text-2xl lg:text-[32px] xl:text-[34px] font-extrabold text-navy-900 leading-[1.15] tracking-tight">
+                    {service.title}
+                  </h3>
+
+                  {/* Description */}
+                  <p className="mt-1.5 lg:mt-2 text-sm lg:text-[15px] text-[#2D3748] leading-relaxed line-clamp-2">
+                    {service.subtitle}
+                  </p>
+
+                  {/* 2 Checkmark Highlights */}
+                  <div className="mt-3 lg:mt-3.5 border-y border-[#ECE7E1] py-2.5 lg:py-3 flex flex-col gap-2 lg:gap-2.5">
+                    {service.highlights.map((hl: string, hlIdx: number) => (
+                      <div key={hlIdx} className="flex items-center gap-2.5 text-[13px] lg:text-[14.5px] font-medium text-navy-900 min-w-0">
+                        <span className="size-5.5 rounded-full bg-[#E4F4EA] text-[#1E8E4E] flex items-center justify-center shrink-0">
+                          <svg className="w-3 h-3 stroke-[3] fill-none stroke-current" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m5 12.5 4.5 4.5L19 7.5" />
+                          </svg>
+                        </span>
+                        <span className="truncate">{hl}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Price & Rating Row */}
+                  <div className="mt-3 lg:mt-3.5 flex items-center justify-between">
+                    <div>
+                      <small className="text-xs uppercase tracking-wider font-bold text-[#3C4658] block leading-none">
+                        Starting from
+                      </small>
+                      <b className="text-2xl lg:text-[28px] font-extrabold text-navy-900 leading-tight block mt-0.5">
+                        {service.price}
+                      </b>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-[#FBF9F6] px-3.5 py-2 rounded-xl border border-[#ECE7E1] text-[13px] text-[#5B6270] whitespace-nowrap">
+                      <span className="text-[#F59E0B] font-black text-sm">★</span>
+                      <b className="font-extrabold text-navy-900 text-sm ml-0.5 mr-0.5">{service.rating}</b>
+                      <span>· {service.bookings}</span>
+                    </div>
+                  </div>
+
+                  {/* Book CTA Button */}
+                  <div className="mt-3.5 lg:mt-4">
+                    <button
+                      type="button"
+                      tabIndex={isCurrent ? 0 : -1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(service.link);
+                      }}
+                      className="featured-book-btn inline-flex items-center justify-center gap-2.5 px-7 h-[48px] lg:h-[50px] rounded-xl bg-[#EA580C] hover:bg-[#C94F03] text-white text-sm lg:text-base font-extrabold shadow-xs transition-all cursor-pointer self-start active:translate-y-[1px]"
+                    >
+                      <span>{service.buttonText}</span>
+                      <svg className="w-[18px] h-[18px] fill-none stroke-current stroke-2 shrink-0" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Photo Column (md:col-span-5) */}
+                <div className="md:col-span-5 h-full min-h-[300px] relative rounded-[20px] overflow-hidden bg-[#EDE7DF] shadow-xs">
+                  <Image
+                    src={service.image}
+                    alt={service.title}
+                    fill
+                    sizes="(min-width: 768px) 500px, 100vw"
+                    className={`object-cover object-center ${isCurrent && !reducedMotion ? "featured-kb-active" : ""}`}
+                  />
+                  <div className="absolute top-3.5 right-3.5 bg-white/95 backdrop-blur-xs px-3.5 py-1.5 rounded-full shadow-sm text-[13px] font-bold text-navy-900">
+                    {service.categoryTag}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
 
-        {/* Right Image column */}
-        <div className="relative w-full md:w-[50%] h-[180px] md:h-full shrink-0 overflow-hidden">
-          <RemoteImage
-            key={slide.image}
-            src={slide.image}
-            alt=""
-            fill
-            sizes="(min-width: 768px) 600px, 100vw"
-            className="object-cover object-center"
-          />
+        {/* Desktop Dots: 18px below card, inactive 8px circle, active 24px orange pill */}
+        <div
+          role="tablist"
+          aria-label="Choose service"
+          className="mt-[18px] flex items-center justify-center gap-1"
+        >
+          {FEATURED_SERVICES.map((s, idx) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-label={`Show ${s.categoryTag}`}
+              aria-current={idx === activeIdx ? "true" : "false"}
+              onClick={() => dgo(idx)}
+              className="p-1 cursor-pointer bg-transparent border-0 inline-flex items-center justify-center"
+            >
+              <span
+                className={`block h-2 rounded-full transition-all duration-300 ease-out ${
+                  idx === activeIdx
+                    ? "w-6 bg-[#EA580C]"
+                    : "w-2 bg-[#D6D0C8] hover:bg-[#BDB6AC]"
+                }`}
+              />
+            </button>
+          ))}
         </div>
-
       </div>
 
-      {/* Navigation Buttons */}
-      <button
-        onClick={handlePrev}
-        className="absolute bottom-3 right-16 size-10 md:bottom-auto md:right-auto md:left-4 md:top-1/2 md:-translate-y-1/2 md:size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
-        aria-label="Previous slide"
+      {/* =======================================================
+          B) MOBILE HERO CAROUSEL (below 768px: md:hidden)
+          ======================================================= */}
+      <div
+        className="md:hidden w-full select-none"
+        onMouseEnter={() => setIsMobileHovered(true)}
+        onMouseLeave={() => setIsMobileHovered(false)}
       >
-        <svg viewBox="0 0 20 20" fill="currentColor" className="size-4 rotate-180">
-          <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-        </svg>
-      </button>
-      <button
-        onClick={handleNext}
-        className="absolute bottom-3 right-4 size-10 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:size-8.5 rounded-full bg-white/90 hover:bg-white border border-[#e7e2da]/40 flex items-center justify-center text-navy-900 shadow-sm transition-all cursor-pointer z-20"
-        aria-label="Next slide"
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
-          <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-        </svg>
-      </button>
+        {/* Horizontal Native Snap Container */}
+        <div
+          ref={mobileScrollRef}
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Featured services"
+          onScroll={handleMobileScroll}
+          onTouchStart={() => setIsMobileInteracting(true)}
+          onTouchEnd={() => setIsMobileInteracting(false)}
+          onPointerDown={() => setIsMobileInteracting(true)}
+          onPointerUp={() => setIsMobileInteracting(false)}
+          className="flex gap-2.5 overflow-x-auto snap-x snap-mandatory overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing pb-1"
+        >
+          {FEATURED_SERVICES.map((service) => (
+            <article
+              key={service.id}
+              data-mobile-card
+              className="flex-none w-[calc(100vw-66px)] max-w-[calc(100%-34px)] snap-start bg-white border border-[#ECE7E1] rounded-[24px] p-3 flex flex-col justify-between shadow-xs"
+            >
+              {/* Inset Photo (150px height) */}
+              <div className="relative h-[150px] w-full rounded-2xl overflow-hidden bg-[#EDE7DF]">
+                <Image
+                  src={service.image}
+                  alt={service.title}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 400px"
+                  className="object-cover object-center"
+                />
+                <span className="absolute top-2 left-2 bg-white text-[#D9480F] text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full shadow-xs">
+                  Featured
+                </span>
+                <span className="absolute top-2 right-2 bg-black/80 text-white text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 shadow-xs">
+                  <span className="text-[#FBBF24]">★</span>
+                  <span>{service.rating}</span>
+                </span>
+              </div>
 
-      {/* Dot Indicators */}
-      {/* Each dot sits in a 44px-tall button: the dot alone was a 6px tap target. */}
-      <div className="absolute bottom-1 left-7 flex z-20">
-        {CAROUSEL_SLIDES.map((_, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => setCurrentIdx(idx)}
-            className="flex h-11 items-center px-[3px]"
-            aria-label={`Go to slide ${idx + 1}`}
-            aria-current={idx === currentIdx ? "true" : undefined}
-          >
-            <span
-              className={`block h-1.5 rounded-full transition-all duration-300 ${
-                idx === currentIdx ? "w-5 bg-navy-900" : "w-1.5 bg-navy-900/30"
-              }`}
-            />
-          </button>
-        ))}
+              {/* Title & 2-line clamped description with min-height */}
+              <div className="pt-2">
+                <h3 className="text-[19px] font-extrabold text-navy-900 leading-[1.2] tracking-tight mt-1 mb-1 line-clamp-1">
+                  {service.title}
+                </h3>
+                <p className="text-[12.5px] text-[#5B6270] leading-[1.45] mb-2 line-clamp-2 min-h-[2.9em]">
+                  {service.subtitle}
+                </p>
+              </div>
+
+              {/* 2 Checkmark Highlights */}
+              <div className="border-y border-[#ECE7E1] py-2 flex flex-col gap-1.5">
+                {service.highlights.map((hl, hlIdx) => (
+                  <div key={hlIdx} className="flex items-center gap-2 text-xs font-medium text-navy-900 min-w-0">
+                    <span className="size-4.5 rounded-full bg-[#E4F4EA] text-[#1E8E4E] flex items-center justify-center text-[10px] font-black shrink-0">
+                      ✓
+                    </span>
+                    <span className="truncate">{hl}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Starts at Price + Book CTA Button */}
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="shrink-0">
+                  <small className="text-[9.5px] font-bold uppercase tracking-wider text-[#3C4658] block leading-none">
+                    Starts at
+                  </small>
+                  <b className="text-[20px] font-extrabold text-navy-900 leading-tight block mt-0.5">
+                    {service.price}
+                  </b>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => router.push(service.link)}
+                  className="h-[34px] px-3.5 rounded-xl bg-[#EA580C] hover:bg-[#C94F03] text-white text-[12.5px] font-bold inline-flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95 transition-all whitespace-nowrap shrink-0"
+                >
+                  <span>{service.buttonText}</span>
+                  <svg
+                    className="w-3.5 h-3.5 fill-none stroke-current stroke-[2.5] shrink-0"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </article>
+          ))}
+
+          {/* 24px trailing spacer */}
+          <div className="w-6 flex-none" aria-hidden="true" />
+        </div>
+
+        {/* Mobile Dots: 8px below cards, >= 44px tap target, active 24px orange pill */}
+        <div
+          role="tablist"
+          aria-label="Choose service"
+          className="mt-2 flex items-center justify-center gap-1"
+        >
+          {FEATURED_SERVICES.map((s, idx) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-label={`Service ${idx + 1}`}
+              aria-current={idx === mobileActiveIdx ? "true" : "false"}
+              onClick={() => scrollToMobileSlide(idx)}
+              className="min-h-[44px] px-1.5 cursor-pointer bg-transparent border-0 inline-flex items-center justify-center"
+            >
+              <span
+                className={`block h-2 rounded-full transition-all duration-300 ease-out ${
+                  idx === mobileActiveIdx
+                    ? "w-6 bg-[#EA580C]"
+                    : "w-2 bg-[#D6D0C8]"
+                }`}
+              />
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   );

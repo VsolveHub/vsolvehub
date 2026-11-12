@@ -128,27 +128,45 @@ class Command(BaseCommand):
             taxonomy = _load_career_taxonomy(csv_path)
             self.stdout.write(f"Loaded {len(taxonomy)} subcategories from CSV.")
 
+        # Restrict to deployed portal services: Health Care Jobs, IT & Software Jobs, Retail & Shop Staff
+        DEPLOYED_CAREER_SUBCATS = {"Health Care Jobs", "IT & Software Jobs", "Retail & Shop Staff"}
+        taxonomy = {k: v for k, v in taxonomy.items() if k in DEPLOYED_CAREER_SUBCATS}
+
         category, _ = Category.objects.get_or_create(
             slug="career-jobs",
             defaults={
                 "name": "Career Opportunity or Job Opportunities",
                 "description": "Local job listings, professional roles, and career opportunities.",
+                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/career-jobs.png",
             },
         )
-        if category.name != "Career Opportunity or Job Opportunities":
+        if category.name != "Career Opportunity or Job Opportunities" or not category.image_url:
             category.name = "Career Opportunity or Job Opportunities"
-            category.save(update_fields=("name",))
+            category.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/career-jobs.png"
+            category.save(update_fields=("name", "image_url"))
 
         total_services_created = 0
         first_variant = None
 
         for subcat_name, service_names in taxonomy.items():
             subcat_slug = slugify(subcat_name)
+            sub_img = f"https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/{subcat_slug}.png"
             subcategory, _ = Subcategory.objects.get_or_create(
                 category=category,
                 slug=subcat_slug,
-                defaults={"name": subcat_name, "description": f"{subcat_name} roles and postings."},
+                defaults={
+                    "name": subcat_name,
+                    "description": f"{subcat_name} roles and postings.",
+                    "image_url": sub_img,
+                    "is_active": True,
+                },
             )
+            if not subcategory.image_url:
+                subcategory.image_url = sub_img
+                subcategory.save(update_fields=("image_url",))
+            if not subcategory.is_active:
+                subcategory.is_active = True
+                subcategory.save(update_fields=("is_active",))
 
             for svc_name in service_names:
                 svc_slug = slugify(f"{subcat_slug}-{svc_name}")[:80]
@@ -310,8 +328,20 @@ class Command(BaseCommand):
             defaults={
                 "name": "Hiring Partners",
                 "description": "Employer partners who post job openings on V Solve Hub.",
+                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/hiring-partners.png",
+                "is_active": True,
             },
         )
+        if not hiring_subcat.image_url:
+            hiring_subcat.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/hiring-partners.png"
+            hiring_subcat.save(update_fields=("image_url",))
+        if not hiring_subcat.is_active:
+            hiring_subcat.is_active = True
+            hiring_subcat.save(update_fields=("is_active",))
+
+        Subcategory.objects.filter(category=category).exclude(
+            slug__in=list(map(slugify, taxonomy.keys())) + ["hiring-partners"]
+        ).update(is_active=False)
         hiring_service, _ = Service.objects.get_or_create(
             subcategory=hiring_subcat,
             slug="hiring-partner-job-listings",

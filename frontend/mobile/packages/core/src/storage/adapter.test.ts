@@ -33,3 +33,4 @@ describe("storageAdapter", () => {
     removeItemSpy.mockRestore();
   });
 });
+

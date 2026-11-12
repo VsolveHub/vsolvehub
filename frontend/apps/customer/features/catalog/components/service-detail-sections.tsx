@@ -1,4 +1,5 @@
 import { RemoteImage } from "@/components/remote-image";
+import { formatGuaranteeBadge } from "@/lib/guarantee-presentation";
 
 import type { ServiceDetail } from "../queries";
 import { addsToServiceCopy, warrantyText } from "../service-facts";
@@ -71,17 +72,15 @@ function OptionDifference({ variant }: { variant: Variant }) {
 }
 
 /**
- * The assurance tiles. The warranty tile appears only when the service publishes one; the
+ * The assurance tiles. The guarantee tile appears only when the service publishes one; the
  * other two are how every booking works — the server prices before payment, and extra time
  * or parts need the customer's approval. No damage-cover amount: there is no such policy.
  */
 export function ServiceAssurance({ service }: { service: ServiceDetail }) {
-  const warranty = warrantyText(service.policies);
-  // "30-day warranty on the workmanship" → "30-day warranty" for a tile; the full line is
-  // still in "What's included". A warranty worded any other way is shown as written.
-  const warrantyLabel = warranty?.match(/^\d+[- ]day warranty/i)?.[0] ?? warranty;
+  const guaranteePolicy = warrantyText(service.policies);
+  const guaranteeLabel = formatGuaranteeBadge(guaranteePolicy);
   const tiles = [
-    warrantyLabel ? { title: warrantyLabel, icon: <WarrantyArt /> } : null,
+    guaranteeLabel ? { title: guaranteeLabel, icon: <GuaranteeArt /> } : null,
     { title: "Price shown before you pay", icon: <PriceArt /> },
     { title: "Extra work only with your approval", icon: <ApprovalArt /> },
   ].filter((tile): tile is { title: string; icon: React.JSX.Element } => tile !== null);
@@ -207,7 +206,7 @@ function ShieldIcon() {
  * marketplace "cover" row is drawn — a shield with a tick, a banknote, a receipt with a tick.
  * Drawn here rather than fetched: they are part of the page's furniture, not catalogue data.
  */
-function WarrantyArt() {
+function GuaranteeArt() {
   return (
     <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={2.2} className="size-10">
       <path

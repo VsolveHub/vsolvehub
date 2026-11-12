@@ -44,7 +44,7 @@ describe("Draft storage round-trips", () => {
       expect(loaded).not.toBeNull();
       expect(loaded?.mode).toBe("ITEM_WISE");
       expect(loaded?.itemLines).toHaveLength(1);
-      expect(loaded?.itemLines[0].title).toBe("Wiring work");
+      expect(loaded?.itemLines[0].title).toBe("Electrical");
       expect(loaded?.itemLines[0].ratePaise).toBe(4500);
 
       await clearCommercialEstimate(invitationId);

@@ -1,6 +1,7 @@
 // Ported from frontend/apps/customer/features/crew/view/crew-about-panel.tsx
 import { Text } from "@vsolve/mobile-ui";
 import { View } from "react-native";
+import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
 
 import type { RequirementService } from "@/features/requirement/adapters";
 
@@ -24,7 +25,9 @@ function PolicyLines({ title, items, mark }: { title: string; items: string[]; m
         {items.map((text) => (
           <View key={text} className="flex-row items-start gap-2.5">
             <Text className={mark === "check" ? "text-success-text" : "text-text-muted"}>{mark === "check" ? "✓" : "✗"}</Text>
-            <Text className="flex-1 text-sm leading-6 text-text-secondary">{text}</Text>
+            <Text className="flex-1 text-sm leading-6 text-text-secondary">
+              {formatGuaranteePolicy(text) ?? text}
+            </Text>
           </View>
         ))}
       </View>

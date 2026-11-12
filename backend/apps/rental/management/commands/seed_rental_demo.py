@@ -37,66 +37,23 @@ class Command(BaseCommand):
             defaults={
                 "name": "Rental Services",
                 "description": "Temporary possession of tools, appliances, and equipment.",
+                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/rental-services.png",
             },
         )
+        if not category.image_url:
+            category.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/rental-services.png"
+            category.save(update_fields=["image_url"])
+
         taxonomy = {
-            "Event Furniture Rental": [
-                "Plastic Chair",
-                "Cushion Chair",
-                "VIP Sofa Chair",
-                "Round Table",
-                "Dining Table",
-                "Cocktail Table",
-                "Stage Sofa Set",
-                "Bride/Groom Chair",
-                "Reception Table",
-                "VIP Lounge Sofa",
-                "Bar Counter",
-            ],
-            "Tent/Shamiana": [
-                "10x10 ft Tent (10-15 members)",
-                "20x20 ft Tent (30-50 members)",
-                "30x30 ft Tent (70-100 members)",
-                "40x40 ft Tent (120-150 members)",
-                "50x50 ft Tent (200-300 members)",
-                "60x40 ft Tent (250-400 members)",
-                "100x50 ft Tent (500+ members)",
-                "Dome Tent",
-                "Pagoda Tent",
-            ],
-            "Lighting Rental": [
-                "LED Lights",
-                "Focus Lights",
-                "Decorative Lights",
-                "Serial Lights",
-                "Flood Lights",
-                "Stage Lights",
-                "Moving Head Lights",
-                "Laser Lights",
-                "LED Wall",
-            ],
-            "Sound System Rental": [
-                "Small Speaker",
-                "Large Speaker",
-                "Line Array System",
-                "Subwoofer",
-                "Microphone",
-                "Cordless Microphone",
-                "Amplifier",
-                "DJ Setup",
-                "Mixer System",
-                "Audio Mixer Console",
-            ],
-            "Decor Items Rent": [
-                "Balloon Kit",
-                "Theme Props",
-                "Photo Booth Setup",
-                "Cutouts",
-                "Flower Panels",
-                "Entry Gate Setup",
-                "Selfie Point Setup",
-                "LED Name Board",
-                "Red Carpet",
+            "Camera & Media Equipment": [
+                "DSLR Camera",
+                "Lens",
+                "Video Camera",
+                "Tripod",
+                "Gimbal",
+                "Drone Camera",
+                "Action Camera",
+                "LED Video Light",
             ],
             "Catering Equipment": [
                 "Cooking Vessels",
@@ -118,14 +75,37 @@ class Command(BaseCommand):
                 "Power Trowel",
                 "Diesel Generator",
             ],
-            "Home Appliance Rental": [
-                "Refrigerator",
-                "Washing Machine",
-                "TV",
-                "AC",
+            "Cooling/Heating": [
                 "Air Cooler",
-                "Water Purifier",
-                "Microwave Oven",
+                "AC Rental",
+                "Industrial Fan",
+                "Heater",
+                "Air Blower",
+                "Mist Fan",
+            ],
+            "Decor Items Rent": [
+                "Balloon Kit",
+                "Theme Props",
+                "Photo Booth Setup",
+                "Cutouts",
+                "Flower Panels",
+                "Entry Gate Setup",
+                "Selfie Point Setup",
+                "LED Name Board",
+                "Red Carpet",
+            ],
+            "Event Furniture Rental": [
+                "Plastic Chair",
+                "Cushion Chair",
+                "VIP Sofa Chair",
+                "Round Table",
+                "Dining Table",
+                "Cocktail Table",
+                "Stage Sofa Set",
+                "Bride/Groom Chair",
+                "Reception Table",
+                "VIP Lounge Sofa",
+                "Bar Counter",
             ],
             "Furniture Rental (Home/Office)": [
                 "Sofa",
@@ -137,42 +117,27 @@ class Command(BaseCommand):
                 "Study Table",
                 "Workstation",
             ],
-            "Camera & Media Equipment": [
-                "DSLR Camera",
-                "Lens",
-                "Video Camera",
-                "Tripod",
-                "Gimbal",
-                "Drone Camera",
-                "Action Camera",
-                "LED Video Light",
-            ],
-            "Tools & Machinery": [
-                "Drill Machine",
-                "Cutter Machine",
-                "Grinder",
-                "Welding Machine",
-                "Power Tools Kit",
-                "Air Compressor",
-                "Pressure Washer",
-                "Ladder",
-            ],
-            "Cooling/Heating": [
-                "Air Cooler",
-                "AC Rental",
-                "Industrial Fan",
-                "Heater",
-                "Air Blower",
-                "Mist Fan",
-            ],
         }
         first_variant = None
         for sub_name, services in taxonomy.items():
+            sub_slug = slugify(sub_name)[:80]
+            sub_img = f"https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/{sub_slug}.png"
             sub, _ = Subcategory.objects.get_or_create(
                 category=category,
-                slug=slugify(sub_name)[:80],
-                defaults={"name": sub_name, "description": f"{sub_name} rentals."},
+                slug=sub_slug,
+                defaults={
+                    "name": sub_name,
+                    "description": f"{sub_name} rentals.",
+                    "image_url": sub_img,
+                    "is_active": True,
+                },
             )
+            if not sub.image_url:
+                sub.image_url = sub_img
+                sub.save(update_fields=["image_url"])
+            if not sub.is_active:
+                sub.is_active = True
+                sub.save(update_fields=["is_active"])
             for svc_name in services:
                 svc, _ = Service.objects.get_or_create(
                     subcategory=sub,
@@ -246,6 +211,8 @@ class Command(BaseCommand):
                 )
                 if first_variant is None:
                     first_variant = variant
+
+        Subcategory.objects.filter(category=category).exclude(name__in=taxonomy.keys()).update(is_active=False)
 
         assert first_variant is not None
 

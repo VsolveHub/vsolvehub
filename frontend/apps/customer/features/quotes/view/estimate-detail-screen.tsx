@@ -11,6 +11,7 @@ import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { useRequirement } from "@/features/requirement/queries";
 import { titleForSlug } from "@/features/requirement/view/my-requests-screen";
 import { estimateConfirmHref, estimateQuestionsHref, requestQuotesHref } from "@/lib/routes";
+import { formatCoverageTerms } from "@/lib/guarantee-presentation";
 
 import {
   canAskAboutPrice,
@@ -423,9 +424,9 @@ export function EstimateDetailScreen({
 
           {/* BAND 3 — the fine print. Referred to, not read. */}
           <div id="terms" className="scroll-mt-6 rounded-[18px] border border-line bg-surface px-4 shadow-card sm:px-5">
-            <Disclosure summary="Terms, warranty and dates">
+            <Disclosure summary="Terms, guarantee and dates">
               <dl className="grid gap-3 pb-3 sm:grid-cols-2">
-                <Fact label="Warranty" value={card.warrantyTerms} empty="Not stated" />
+                <Fact label="Coverage terms" value={card.warrantyTerms ? formatCoverageTerms(card.warrantyTerms) : null} empty="No guarantee specified" />
                 <Fact label="Valid until" value={card.validUntil === null ? null : formatDate(card.validUntil)} empty="No validity given" />
                 <Fact label="Written" value={card.visitCompletedAt === null ? null : "On site, after their visit"} empty="Not recorded" />
                 <Fact label="Sent" value={formatDate(card.submittedAt)} />
@@ -550,7 +551,7 @@ function CustomerDiscountSummary({ card }: { readonly card: QuoteCardView }) {
         </div>
       </dl>
       <p className="mt-2 text-xs leading-5 text-success-text">
-        The scope, warranty and line-item rates are unchanged. The saving is spread across your
+        The scope, guarantee and line-item rates are unchanged. The saving is spread across your
         payment stages automatically.
       </p>
     </section>
@@ -663,7 +664,7 @@ function ShareButton({ card }: { card: QuoteCardView }) {
     card.scopeSummary ?? null,
     card.inclusions.length > 0 ? `Includes: ${card.inclusions.join(", ")}` : null,
     card.exclusions.length > 0 ? `Not included: ${card.exclusions.join(", ")}` : null,
-    card.warrantyTerms !== null ? `Warranty: ${card.warrantyTerms}` : null,
+    card.warrantyTerms !== null ? `Guarantee: ${formatCoverageTerms(card.warrantyTerms)}` : null,
     "Shared from Vsolve",
   ]
     .filter((line): line is string => line !== null)

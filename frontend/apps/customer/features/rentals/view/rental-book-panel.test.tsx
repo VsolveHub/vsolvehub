@@ -169,7 +169,7 @@ describe("RentalBookPanel", () => {
     expect(screen.getByRole("heading", { name: "Book This Rental" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Self Pickup" })).toBeChecked();
     expect(screen.getByText("Refundable Security Deposit")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm Rental Booking" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm booking" })).toBeInTheDocument();
     expect(screen.queryByText(/Platform fee/)).not.toBeInTheDocument();
     expect(window.alert).not.toHaveBeenCalled();
   });
@@ -201,7 +201,7 @@ describe("RentalBookPanel", () => {
 
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
 
-    const submitBtn = screen.getByRole("button", { name: "Confirm Rental Booking" });
+    const submitBtn = screen.getByRole("button", { name: "Confirm booking" });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -227,7 +227,7 @@ describe("RentalBookPanel", () => {
 
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
 
-    const submitBtn = screen.getByRole("button", { name: "Confirm Rental Booking" });
+    const submitBtn = screen.getByRole("button", { name: "Confirm booking" });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -255,7 +255,7 @@ describe("RentalBookPanel", () => {
 
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
 
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm booking" }));
 
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith("/activity?type=rentals");
@@ -269,11 +269,11 @@ describe("RentalBookPanel", () => {
     client.POST.mockResolvedValue(ok(mockBooking({ status: "PENDING_PAYMENT" }), 201));
 
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm booking" }));
 
     const payNow = await screen.findByRole("button", { name: "Pay now" });
     expect(router.push).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Confirm Rental Booking" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Confirm booking" })).toBeNull();
 
     fireEvent.click(payNow);
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/activity?type=rentals"));
@@ -287,7 +287,7 @@ describe("RentalBookPanel", () => {
     client.POST.mockResolvedValue(ok(mockBooking({ status: "PENDING_PAYMENT" }), 201));
 
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm booking" }));
 
     expect(await screen.findByRole("button", { name: "Pay now" })).toBeInTheDocument();
     expect(router.push).not.toHaveBeenCalled();
@@ -337,7 +337,7 @@ describe("RentalBookPanel", () => {
 
     // The price is still open to everyone.
     expect(screen.getByText("Refundable Security Deposit")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirm Rental Booking" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm booking" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Sign in to book this rental" })).toBeInTheDocument();
   });
 
@@ -374,7 +374,7 @@ describe("RentalBookPanel", () => {
     );
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
 
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm booking" }));
 
     expect(
       await screen.findByRole("heading", { name: "Your session ended. Sign in again" }),

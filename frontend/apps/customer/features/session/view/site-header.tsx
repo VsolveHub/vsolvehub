@@ -77,7 +77,10 @@ export function SiteHeader() {
       "sticky top-0 z-20 transition-colors",
       pathname === "/"
         ? "bg-[#FAF9F7] md:bg-surface md:border-b md:border-line"
-        : pathname.match(/^\/catalog\/[^/]+$/)
+        : pathname.match(/^\/catalog\/[^/]+$/) ||
+            pathname === "/rentals" ||
+            pathname === "/stays" ||
+            pathname.startsWith("/account")
           ? "hidden md:block bg-surface border-b border-line"
           : "bg-surface border-b border-line"
     )}>
