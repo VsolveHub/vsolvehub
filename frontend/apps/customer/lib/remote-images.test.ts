@@ -22,6 +22,10 @@ describe("isOptimizableImage", () => {
     expect(isOptimizableImage("//images.unsplash.com/photo-1")).toBe(false);
   });
 
+  it("loads the media domain directly instead of spending Vercel's resize quota", () => {
+    expect(isOptimizableImage("https://media.vsolvehub.com/catalog/tiles/hotels.png")).toBe(false);
+  });
+
   it("refuses anything that is not a URL", () => {
     expect(isOptimizableImage("")).toBe(false);
     expect(isOptimizableImage("not a url")).toBe(false);

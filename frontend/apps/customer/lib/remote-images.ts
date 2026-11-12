@@ -17,9 +17,12 @@
  * bundler is running.
  */
 export const OPTIMIZED_IMAGE_HOSTS = [
-  // The public bucket's custom domain (R2_PUBLIC_BASE_URL, docs/runbooks/cloudflare-r2-storage.md).
-  // Saved links move here with `manage.py rehost_public_media`.
-  "media.vsolvehub.com",
+  // `media.vsolvehub.com` (the bucket's custom domain, R2_PUBLIC_BASE_URL) is deliberately NOT
+  // listed. It is served over HTTP/2 from Cloudflare's CDN, so it does not need this optimizer,
+  // and every resized copy of every catalogue image counts against Vercel's monthly
+  // Image Optimization transformation quota (5,000 on Hobby). Once that is spent every image
+  // through `/_next/image` answers 402 until the month resets. Saved links move to the media
+  // domain with `manage.py rehost_public_media`; `RemoteImage` loads them directly.
   // Catalogue artwork: category, subcategory and service-cover images. Kept until every
   // saved link has moved to the custom domain, then removed.
   "pub-32e84da8140449ddbc61c13539728e0e.r2.dev",
