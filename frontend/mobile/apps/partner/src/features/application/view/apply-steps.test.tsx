@@ -1,6 +1,11 @@
 // Ported from frontend/apps/partner/features/application/view/apply-steps.test.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { fireEvent, render } from "@testing-library/react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState, useCallback, useRef } from "react";
+import { Pressable, Text } from "react-native";
+import { ApplyDockContext, type DockConfig } from "../model/dock-context";
+import { router, setPathname } from "expo-router";
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -9,12 +14,7 @@ import { ApplicationEditor } from "./application-editor";
 import { DocumentsStep } from "./documents-step";
 import { usePartnerApplication, useUpdateApplication } from "../queries";
 
-const mockPush = jest.fn();
-
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush }),
-  usePathname: () => "/apply/about",
-}));
+const mockPush = router.push;
 
 jest.mock("expo-image-picker", () => ({
   requestCameraPermissionsAsync: jest.fn(async () => ({ granted: true })),
@@ -58,8 +58,42 @@ const initialMetrics = {
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
 };
 
+function Harness({ children }: { children: ReactElement }) {
+  const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+  const [dockConfig, setDockConfig] = useState<DockConfig | null>(null);
+  const onCommitRef = useRef<(() => void) | null>(null);
+  const registerDock = useCallback((config: DockConfig | null) => {
+    if (config?.onCommit) onCommitRef.current = config.onCommit;
+    setDockConfig((prev) => {
+      if (!prev && !config) return null;
+      if (prev && config && prev.label === config.label && prev.proceedDisabled === config.proceedDisabled) {
+        return prev;
+      }
+      return config;
+    });
+  }, []);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider initialMetrics={initialMetrics}>
+        <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
+          {children}
+          {dockConfig ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save and Continue"
+              onPress={() => onCommitRef.current?.()}
+            >
+              <Text>Save and Continue</Text>
+            </Pressable>
+          ) : null}
+        </ApplyDockContext.Provider>
+      </SafeAreaProvider>
+    </QueryClientProvider>
+  );
+}
+
 function renderInSafeArea(ui: ReactElement) {
-  return render(<SafeAreaProvider initialMetrics={initialMetrics}>{ui}</SafeAreaProvider>);
+  return render(<Harness>{ui}</Harness>);
 }
 
 const APPLICATION = {
@@ -96,9 +130,10 @@ function refusal(status: number, code: string) {
 }
 
 beforeEach(() => {
-  mockPush.mockReset();
+  setPathname("/apply/about");
+  (mockPush as jest.Mock).mockReset();
   (useUpdateApplication as jest.Mock).mockReturnValue({
-    mutate: jest.fn(),
+    mutate: jest.fn((_vars, options) => options?.onSuccess?.()),
     reset: jest.fn(),
     isPending: false,
     isSuccess: false,
@@ -163,7 +198,7 @@ describe("application editor", () => {
 
     expect(view.getByDisplayValue("Ramesh Kumar")).toBeTruthy();
     fireEvent.press(view.getByRole("button", { name: "Save and Continue" }));
-    expect(mockPush).toHaveBeenCalledWith("/apply/work");
+    expect(mockPush).toHaveBeenCalledWith("/apply/consent");
   });
 });
 
@@ -204,8 +239,8 @@ describe("documents step", () => {
 
     const view = await renderInSafeArea(<DocumentsStep />);
     fireEvent.press(view.getAllByRole("button", { name: "Choose a file" })[0]!);
-    expect(await view.findByText("Take photo")).toBeTruthy();
-    expect(view.getByText("Choose photo")).toBeTruthy();
-    expect(view.getByText("Choose PDF")).toBeTruthy();
+    expect(await view.findByText(/Take photo/i)).toBeTruthy();
+    expect(view.getByText(/photo library/i)).toBeTruthy();
+    expect(view.getByText(/Choose document/i)).toBeTruthy();
   });
 });

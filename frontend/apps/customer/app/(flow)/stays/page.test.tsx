@@ -52,7 +52,7 @@ describe("stays browse", () => {
   it("does not offer My bookings before sign-in", async () => {
     renderPage();
 
-    await screen.findByRole("heading", { name: /find rooms, pg & hotels/i });
+    await screen.findByRole("heading", { level: 1, name: /all stays/i });
     await waitFor(() => expect(screen.queryByRole("link", { name: /my bookings/i })).toBeNull());
   });
 
@@ -60,9 +60,8 @@ describe("stays browse", () => {
     api.signIn({ id: "u-1", phone_number: "+919876543210", roles: ["customer"] });
     renderPage();
 
-    expect(await screen.findByRole("link", { name: /my bookings/i })).toHaveAttribute(
-      "href",
-      "/activity?type=stays",
-    );
+    const links = await screen.findAllByRole("link", { name: /my bookings/i });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute("href", "/activity?type=stays");
   });
 });

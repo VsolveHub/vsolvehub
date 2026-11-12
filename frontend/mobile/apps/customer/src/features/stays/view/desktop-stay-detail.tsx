@@ -205,7 +205,6 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
   };
 
   // Date picker & form refs
-  const dateInputRef = useRef<any>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Capacity calculations
@@ -873,54 +872,15 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           {monthly ? "Move-in date" : "Check-in date"}
                         </Text>
                       </View>
-                      {Platform.OS === "web" ? (
-                        <div
-                          onClick={() => {
-                            try {
-                              dateInputRef.current?.showPicker?.();
-                            } catch {
-                              dateInputRef.current?.focus?.();
-                            }
-                          }}
-                          className="relative flex items-center justify-between rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] px-3.5 py-2.5 cursor-pointer hover:border-slate-400 transition"
-                        >
-                          <span className="text-sm font-medium text-navy-950 select-none">
-                            {formatToIndianDate(checkIn)}
-                          </span>
-                          <Calendar size={16} color="#6B7280" className="pointer-events-none" />
-                          <input
-                            ref={dateInputRef}
-                            type="date"
-                            value={checkIn}
-                            min={todayIso()}
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                setCheckIn(e.target.value);
-                                setError(null);
-                              }
-                            }}
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              width: "100%",
-                              height: "100%",
-                              opacity: 0,
-                              cursor: "pointer",
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <Pressable
-                          onPress={() => setDatePickerOpen(true)}
-                          className="flex-row items-center justify-between rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] px-3.5 py-2.5 active:bg-[#F2EFE9]"
-                        >
-                          <Text className="text-sm font-medium text-navy-950">
-                            {formatToIndianDate(checkIn)}
-                          </Text>
-                          <Calendar size={16} color="#6B7280" />
-                        </Pressable>
-                      )}
+                      <Pressable
+                        onPress={() => setDatePickerOpen(true)}
+                        className="flex-row items-center justify-between rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] px-3.5 py-2.5 active:bg-[#F2EFE9]"
+                      >
+                        <Text className="text-sm font-medium text-navy-950">
+                          {formatToIndianDate(checkIn)}
+                        </Text>
+                        <Calendar size={16} color="#6B7280" />
+                      </Pressable>
                     </View>
 
                     {/* For how many months / nights */}

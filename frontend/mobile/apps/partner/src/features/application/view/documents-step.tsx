@@ -38,7 +38,10 @@ export function DocumentsStep() {
   const query = usePartnerApplication();
   const router = useRouter();
   const { registerDock } = useApplyDock();
-  const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
+  const isMissing = Boolean(
+    (query.error instanceof ApiRequestError && query.error.status === 404) ||
+      (query.error && typeof query.error === "object" && (query.error as { status?: number }).status === 404),
+  );
   const [replacingKind, setReplacingKind] = useState<DocumentKind | null>(null);
 
   const application = query.data ?? null;
@@ -145,7 +148,11 @@ export function DocumentsStep() {
                       <Text style={styles.pendingPillText}>In review</Text>
                     </View>
                   )
-                ) : null}
+                ) : (
+                  <View style={styles.pendingPill}>
+                    <Text style={styles.pendingPillText}>Not uploaded</Text>
+                  </View>
+                )}
               </View>
 
               {/* Expired / Rejected Banner if Replace State */}

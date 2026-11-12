@@ -2,11 +2,9 @@
 // Supports 100% faithful desktop layout matching the web customer portal when on desktop,
 // while leaving the mobile version 100% unchanged.
 import { EmptyState, Text } from "@vsolve/mobile-ui";
-import { Image } from "expo-image";
 import { useState, type ReactNode } from "react";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { CategoryArtwork } from "@/features/catalog/category-artwork";
@@ -14,11 +12,9 @@ import { useCategories, usePromoBanners, type Category } from "@/features/catalo
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
+import { DesktopHeroCarousel, HeroBannerCarousel } from "@/features/catalog/view/hero-banner-carousel";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useIsDesktop } from "@/lib/responsive";
-
-const HERO =
-  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop";
 
 export function HomeScreen() {
   const isDesktop = useIsDesktop();
@@ -33,9 +29,23 @@ export function HomeScreen() {
  */
 function DesktopHomeScreen() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const categories = useCategories();
   const promoBannersQuery = usePromoBanners();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Responsive column count matching Web:
+  // md (768px - 1023px): 4 columns (balanced 4x3 grid for 12 categories)
+  // lg (>= 1024px): 6 columns (balanced 6x2 grid for 12 categories)
+  const numCols = windowWidth >= 1024 ? 6 : 4;
+  const gapClass = numCols === 6 ? "gap-7" : "gap-5";
+  const iconSize = numCols === 4 ? 64 : 52;
+
+  const categoryList = categories.data ?? [];
+  const rows = [];
+  for (let i = 0; i < categoryList.length; i += numCols) {
+    rows.push(categoryList.slice(i, i + numCols));
+  }
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -65,54 +75,7 @@ function DesktopHomeScreen() {
     >
       <View className="mx-auto w-full max-w-[1216px] px-6 lg:px-8 pt-6">
         {/* 1. Desktop Hero Section */}
-        <View className="relative w-full min-h-[calc(100vh-5rem)] mt-2 mb-16" style={{ minHeight: "calc(100vh - 5rem)" }}>
-          {/* Floating Vetted Badge */}
-          <View className="absolute -top-3.5 right-[10%] z-10 flex-row items-center gap-2 rounded-full border border-[#e7e2da] bg-white px-4 py-2 shadow-sm">
-            <View className="size-5 items-center justify-center rounded-full bg-[#fdf3ec]">
-              <Svg viewBox="0 0 20 20" width={14} height={14} fill="#EA580C">
-                <Path
-                  fillRule="evenodd"
-                  d="M16.403 12.652a3 3 0 0 0 0-5.304 3 3 0 0 0-3.75-3.751 3 3 0 0 0-5.305 0 3 3 0 0 0 3.751 3.75 3 3 0 0 0 0 5.305 3 3 0 0 0 3.75 3.751 3 3 0 0 0 5.305 0 3 3 0 0 0 3.751-3.75Zm-2.546-4.46a.75.75 0 0 0-1.214-.883l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z"
-                  clipRule="evenodd"
-                />
-              </Svg>
-            </View>
-            <Text className="text-sm font-bold text-navy-900">ID-verified pros</Text>
-          </View>
-
-          {/* Right Image Container */}
-          <View className="ml-auto w-3/4 rounded-[1.5rem] overflow-hidden bg-navy-100 shadow-inner" style={{ height: 550, maxHeight: "calc(100vh - 120px)", minHeight: 380 }}>
-            <Image
-              source={{ uri: HERO }}
-              contentFit="cover"
-              style={{ width: "100%", height: "100%" }}
-            />
-          </View>
-
-          {/* Left Dark Floating Card */}
-          <View className="absolute left-0 top-[18%] w-[480px] z-10 rounded-[1.5rem] bg-navy-900 p-10 shadow-2xl" style={{ top: "18%" }}>
-            <Text className="text-[2.75rem] font-extrabold leading-[1.1] text-white tracking-tight">
-              Your Home,{"\n"}
-              <Text className="text-[#EA580C] font-extrabold">Masterfully</Text>{"\n"}
-              Handled.
-            </Text>
-            <Text className="mt-5 text-[1.05rem] leading-relaxed text-white/80 font-normal">
-              Bespoke professional services for the modern homeowner. Elite, vetted specialists for every domestic need.
-            </Text>
-            <View className="mt-8">
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/catalog")}
-                className="self-start flex-row items-center gap-2 rounded-full bg-[#EA580C] px-8 py-3.5 shadow-sm active:scale-95 hover:bg-[#d65e00]"
-              >
-                <Text className="text-[0.95rem] font-bold text-white">Explore Services</Text>
-                <Svg viewBox="0 0 20 20" width={16} height={16} fill="none">
-                  <Path d="M4 10h11m-4-4 4 4-4 4" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </Pressable>
-            </View>
-          </View>
-        </View>
+        <DesktopHeroCarousel />
 
         {/* 2. Curated Services Section (mt-16 pushes it below fold) */}
         <View className="mt-16 mb-20">
@@ -136,9 +99,16 @@ function DesktopHomeScreen() {
           </View>
 
           {categories.isPending ? (
-            <View className="flex-row flex-wrap gap-5">
-              {Array.from({ length: 6 }, (_, index) => (
-                <View key={index} style={{ width: "14.8%" }} className="aspect-square rounded-2xl bg-surface-sunken" />
+            <View className={gapClass}>
+              {Array.from({ length: numCols === 6 ? 2 : 3 }, (_, rowIndex) => (
+                <View key={`skel-row-${rowIndex}`} className={`flex-row ${gapClass}`}>
+                  {Array.from({ length: numCols }, (_, colIndex) => (
+                    <View key={`skel-col-${colIndex}`} className="flex-1 items-center gap-2.5">
+                      <View className="aspect-square w-full rounded-2xl bg-surface-sunken" />
+                      <View className="h-3 w-16 rounded bg-surface-sunken mt-1" />
+                    </View>
+                  ))}
+                </View>
               ))}
             </View>
           ) : null}
@@ -155,27 +125,34 @@ function DesktopHomeScreen() {
             />
           ) : null}
 
-          {!categories.isPending && !categories.isError && (categories.data ?? []).length === 0 ? (
+          {!categories.isPending && !categories.isError && categoryList.length === 0 ? (
             <EmptyState title="No services are published yet" description="Our catalogue is being set up. Please check back shortly." />
           ) : null}
 
-          {!categories.isPending && !categories.isError ? (
-            <View className="flex-row flex-wrap gap-5">
-              {(categories.data ?? []).map((category) => (
-                <Pressable
-                  key={category.id}
-                  accessibilityRole="link"
-                  onPress={() => handleCategoryPress(category)}
-                  style={{ width: "14.8%" }}
-                  className="items-center gap-2.5 group hover:scale-105"
-                >
-                  <View className="aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-[#e7e2da] overflow-hidden items-center justify-center p-3.5 shadow-xs">
-                    <CategoryArtwork category={category} iconSize={48} />
-                  </View>
-                  <Text numberOfLines={2} className="w-full text-center text-[14px] font-bold leading-tight text-navy-900 px-1">
-                    {category.name}
-                  </Text>
-                </Pressable>
+          {!categories.isPending && !categories.isError && categoryList.length > 0 ? (
+            <View className={gapClass}>
+              {rows.map((row, rowIndex) => (
+                <View key={`cat-row-${rowIndex}`} className={`flex-row ${gapClass}`}>
+                  {row.map((category) => (
+                    <Pressable
+                      key={category.id}
+                      accessibilityRole="link"
+                      onPress={() => handleCategoryPress(category)}
+                      className="flex-1 items-center gap-2.5 group hover:scale-105"
+                    >
+                      <View className="aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-[#e7e2da] overflow-hidden items-center justify-center shadow-xs">
+                        <CategoryArtwork category={category} iconSize={iconSize} />
+                      </View>
+                      <Text numberOfLines={2} className="w-full text-center text-sm lg:text-[15px] font-bold leading-tight text-navy-900 px-1">
+                        {category.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  {row.length < numCols &&
+                    Array.from({ length: numCols - row.length }).map((_, i) => (
+                      <View key={`pad-${i}`} className="flex-1" />
+                    ))}
+                </View>
               ))}
             </View>
           ) : null}
@@ -184,11 +161,8 @@ function DesktopHomeScreen() {
         {/* 3. Rich Client Sections (Best Sellers, Electrical Safety Carousel, Electrician, Guides, Plumbing, Carpenter, Testimonials) */}
         <View className="mt-16 mb-20">
           <PromoBanners banners={promoBannersQuery.data ?? []} fallbackImageUrl="" />
-
-      <HomepageClientSections />
+          <HomepageClientSections />
         </View>
-
-        <PromoBanners banners={promoBannersQuery.data ?? []} fallbackImageUrl="" />
 
         {/* 4. The V Solve Approach Section */}
         <View className="my-16 items-center">
@@ -296,26 +270,7 @@ function MobileHomeScreen() {
         />
       </View>
 
-      <View className="relative min-h-[190px] overflow-hidden rounded-[1.5rem]">
-        <Image
-          source={{ uri: HERO }}
-          contentFit="cover"
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        />
-        <LinearGradient
-          colors={["rgba(0,17,46,0.9)", "rgba(0,17,46,0.5)", "rgba(0,17,46,0)"]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ minHeight: 190, justifyContent: "space-between", padding: 20 }}
-        >
-          <View className="self-start rounded-full bg-[#f87000] px-3 py-1">
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">Premium Quality</Text>
-          </View>
-          <Text className="mt-8 max-w-[85%] text-[1.5rem] font-extrabold leading-tight text-white">
-            Elite Home Services, at Your Doorstep
-          </Text>
-        </LinearGradient>
-      </View>
+      <HeroBannerCarousel />
 
       {/* Safety Stories Tray */}
       <SafetyStoriesTray />
@@ -328,9 +283,16 @@ function MobileHomeScreen() {
           </Pressable>
         </View>
         {categories.isPending ? (
-          <View className="flex-row flex-wrap gap-3">
-            {Array.from({ length: 6 }, (_, index) => (
-              <View key={index} className="aspect-square w-[31%] rounded-2xl bg-surface-sunken" />
+          <View className="gap-3">
+            {Array.from({ length: 2 }, (_, rowIndex) => (
+              <View key={`skel-row-${rowIndex}`} className="flex-row gap-3">
+                {Array.from({ length: 3 }, (_, colIndex) => (
+                  <View key={`skel-col-${colIndex}`} className="flex-1 items-center gap-1.5">
+                    <View className="aspect-square w-full rounded-2xl bg-surface-sunken" />
+                    <View className="h-2.5 w-14 rounded bg-surface-sunken mt-1" />
+                  </View>
+                ))}
+              </View>
             ))}
           </View>
         ) : null}
@@ -353,24 +315,39 @@ function MobileHomeScreen() {
           <EmptyState title="No services are published yet" description="Our catalogue is being set up. Please check back shortly." />
         ) : null}
         {!categories.isPending && !categories.isError ? (
-          <View className="flex-row flex-wrap gap-3">
-            {(categories.data ?? []).map((category) => (
-              <CategoryTile
-                key={category.id}
-                category={category}
-                onPress={() => {
-                  if (category.slug === "rental-services") {
-                    router.push("/rentals" as never);
-                  } else if (category.slug === "rooms-pg-hostel-hotels") {
-                    router.push("/stays" as never);
-                  } else if (category.slug === "career-jobs") {
-                    router.push("/listings" as never);
-                  } else {
-                    router.push(`/catalog/${category.slug}` as never);
-                  }
-                }}
-              />
-            ))}
+          <View className="gap-3">
+            {Array.from(
+              { length: Math.ceil((categories.data ?? []).length / 3) },
+              (_, rowIndex) => {
+                const rowItems = (categories.data ?? []).slice(rowIndex * 3, rowIndex * 3 + 3);
+                return (
+                  <View key={`cat-row-${rowIndex}`} className="flex-row gap-3">
+                    {rowItems.map((category) => (
+                      <View key={category.id} className="flex-1">
+                        <CategoryTile
+                          category={category}
+                          onPress={() => {
+                            if (category.slug === "rental-services") {
+                              router.push("/rentals" as never);
+                            } else if (category.slug === "rooms-pg-hostel-hotels") {
+                              router.push("/stays" as never);
+                            } else if (category.slug === "career-jobs") {
+                              router.push("/listings" as never);
+                            } else {
+                              router.push(`/catalog/${category.slug}` as never);
+                            }
+                          }}
+                        />
+                      </View>
+                    ))}
+                    {rowItems.length < 3 &&
+                      Array.from({ length: 3 - rowItems.length }).map((_, fillerIndex) => (
+                        <View key={`filler-${fillerIndex}`} className="flex-1" />
+                      ))}
+                  </View>
+                );
+              }
+            )}
           </View>
         ) : null}
       </View>
@@ -418,11 +395,19 @@ function MobileHomeScreen() {
 
 function CategoryTile({ category, onPress }: { category: Category; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="link" onPress={onPress} className="w-[31%] items-center gap-1.5 active:opacity-80">
-      <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-2xl border border-line/80 bg-[#F8F9FA] p-2.5 shadow-2xs">
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={category.name}
+      onPress={onPress}
+      className="w-full items-center gap-1.5 active:opacity-80"
+    >
+      <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-2xl border border-line/80 bg-[#F8F9FA] shadow-2xs">
         <CategoryArtwork category={category} iconSize={30} />
       </View>
-      <Text numberOfLines={2} className="w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
+      <Text
+        numberOfLines={2}
+        className="w-full text-center text-[11px] font-bold leading-tight text-[#00112e] px-0.5"
+      >
         {category.name}
       </Text>
     </Pressable>

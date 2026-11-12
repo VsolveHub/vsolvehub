@@ -170,9 +170,9 @@ export async function updatePartnerRentalAsset(
 export async function submitPartnerRentalAsset(assetId: string): Promise<PartnerRentalAsset> {
   const data = await callRentalApi<PartnerRentalAsset>(
     "POST",
-    "/api/v1/partner/rentals/assets/{asset_id}/submit",
+    "/api/v1/partner/rentals/assets/{asset_id}/{action}",
     {
-      params: { path: { asset_id: assetId } },
+      params: { path: { asset_id: assetId, action: "submit" } },
     },
   );
   return data;

@@ -79,7 +79,7 @@ export function CompletionPanel({
         <h2 className="font-semibold text-text">You confirmed this is finished</h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
           {engagement.completedAt !== null ? `Confirmed ${engagement.completedAt}. ` : ""}
-          The warranty period on this {nouns.engagement} is running — see below
+          The service guarantee on this {nouns.engagement} is active — see below
           for what is still held and until when.
         </p>
       </section>
@@ -163,7 +163,7 @@ export function CompletionPanel({
             consequence={`This closes the ${nouns.engagement} and the request it came from. You can still read everything that happened, and this does not give up any legal right you have — but the platform stops asking either of you for anything further.${
               project === null || project.retention.phase === "none"
                 ? ""
-                : ` A warranty period starts from today, and ${project.retention.withheldLabel} of what the professional earned stays held by Vsolve until it ends.`
+                : ` A service guarantee period starts from today, and ${project.retention.withheldLabel} of what the professional earned stays held by Vsolve until it ends.`
             }`}
             confirmLabel="Yes, it is finished"
             pending={accept.isPending}

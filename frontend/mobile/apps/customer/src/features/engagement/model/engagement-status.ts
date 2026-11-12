@@ -8,7 +8,7 @@ export const ENGAGEMENT_STATUS: Record<EngagementStatus, { label: string }> = {
   ACTIVE: { label: "In progress" },
   COMPLETING: { label: "Waiting for you to confirm" },
   COMPLETED: { label: "Finished" },
-  WARRANTY: { label: "Finished — warranty running" },
+  WARRANTY: { label: "Completed — guarantee active" },
   CLOSED: { label: "Closed" },
   DISPUTED: { label: "A problem is being looked at" },
   CANCELLED: { label: "Cancelled" },

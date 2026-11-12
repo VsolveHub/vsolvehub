@@ -26,6 +26,7 @@ import { useServiceDetail } from "../client-queries";
 import { useCart } from "@/features/checkout/queries";
 import { serviceHref } from "../service-href";
 import { addsToServiceCopy, durationLabel, warrantyText } from "../service-facts";
+import { formatGuaranteeBadge } from "@/lib/guarantee-presentation";
 import type { Category, ServiceCard } from "../queries";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
@@ -97,8 +98,8 @@ function WhatYouCanBookModal({
     ...(detail?.media?.map((m: { url: string }) => m.url) ?? []),
   ].filter(Boolean) as string[];
 
-  const warranty = warrantyText(detail?.policies);
-  const warrantyLabel = warranty?.match(/^\d+[- ]day warranty/i)?.[0] ?? warranty;
+  const guaranteePolicy = warrantyText(detail?.policies);
+  const guaranteeLabel = formatGuaranteeBadge(guaranteePolicy);
   const nonProcessPolicies = detail?.policies?.filter((p) => p.kind !== "PROCESS") ?? [];
   const variants = detail?.variants ?? [];
 
@@ -307,10 +308,10 @@ function WhatYouCanBookModal({
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-navy-900 leading-snug">
-                    {warrantyLabel || "30-Day Guarantee"}
+                    {guaranteeLabel}
                   </p>
                   <p className="text-[10px] text-text-muted leading-tight mt-0.5">
-                    Workmanship warranty
+                    Workmanship guarantee
                   </p>
                 </div>
               </div>

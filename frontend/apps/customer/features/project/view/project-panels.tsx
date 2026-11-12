@@ -98,7 +98,7 @@ export function ProjectDecisions({
     if (isNotAProject(error)) return null;
     return (
       <p className="mt-8 max-w-prose text-sm leading-6 text-text-secondary">
-        We could not read the delivery and warranty detail for this{" "}
+        We could not read the delivery and guarantee detail for this{" "}
         {engagementNoun} just now, so we are not going to show you a version of
         it we cannot vouch for. Everything above comes from the agreement itself
         and is unaffected. Reload the page to try again.

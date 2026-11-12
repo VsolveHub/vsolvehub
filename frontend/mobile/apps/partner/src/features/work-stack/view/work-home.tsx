@@ -288,24 +288,24 @@ function ScheduleFacts({ item }: { readonly item: WorkItem }) {
   const duration = durationLabel(item.durationMinutes);
   if (date === null && starts === null && duration === null && item.areaLabel === null) return null;
   return (
-    <View className="flex-row flex-wrap gap-x-4 gap-y-2">
+    <View className="flex-row flex-wrap gap-x-3 gap-y-2">
       {date === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="date" label="Date">{date}</Fact>
         </View>
       )}
       {starts === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="time" label="Starts">{starts}</Fact>
         </View>
       )}
       {duration === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="time" label="Duration">{duration}</Fact>
         </View>
       )}
       {item.areaLabel === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="distance" label="Area">{item.areaLabel}</Fact>
         </View>
       )}

@@ -14,9 +14,9 @@ import { CustomerShell } from "@/features/session/view/customer-shell";
 export default function AccountLayout({ children }: { children: ReactNode }) {
   return (
     <CustomerShell>
-      <div className="mx-auto w-full max-w-[1216px] bg-[#FAF9F7] px-4 pb-24 pt-3 md:bg-transparent md:px-6 md:pb-16 md:pt-8 lg:px-8">
-        {/* Mobile Top Bar: Left Back Arrow, Center Logo, Right Bell with Badge */}
-        <div className="flex items-center justify-between pb-3 md:hidden">
+      <div className="mx-auto w-full max-w-[1216px] bg-[#FAF9F7] px-4 pb-24 pt-0 md:bg-transparent md:px-6 md:pb-16 md:pt-8 lg:px-8">
+        {/* Mobile Top Bar: Replaces the mobile navbar with back arrow, center logo, and notification bell */}
+        <div className="sticky top-0 z-20 -mx-4 flex min-h-16 items-center justify-between border-b border-[#ECE7E1] bg-[#FAF9F7] px-4 py-3 md:hidden">
           <Link
             href="/"
             aria-label="Go to home"
@@ -44,7 +44,7 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
         </div>
 
         {/* Heading & Subtitle */}
-        <div className="mt-2 md:mt-0">
+        <div className="mt-4 md:mt-0">
           <h1 className="min-w-0 text-[1.875rem] font-extrabold leading-[1.15] tracking-tight text-[#0B1B3D] sm:text-[2.125rem] md:text-[2.5rem]">
             Your profile
           </h1>

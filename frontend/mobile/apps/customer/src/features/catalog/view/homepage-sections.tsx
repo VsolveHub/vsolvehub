@@ -6,8 +6,8 @@ import { Dialog, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError, STATIC_CONTENT, fetchCachedQuery, queryKeys, SESSION_STATE } from "@vsolve/query/native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { AccessibilityInfo, Animated, AppState, FlatList, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { cartMergeConflict, duplicateCartItemConflict } from "@/features/checkout/conflicts";
@@ -101,33 +101,64 @@ const CARPENTRY_SERVICES: HomepageServiceItem[] = [
   { name: "Shelf Installation", price: 199, slug: "carpenter-shelf-installation", categorySlug: "technician", desc: "Wall-mounted shelf fitting with level alignment and secure anchoring." },
 ];
 
-const CAROUSEL_SLIDES = [
+const ELECTRICIAN_IMG = require("../../../../assets/catalog/featured/electrician.jpg");
+const PLUMBER_IMG = require("../../../../assets/catalog/featured/plumber.jpg");
+const CARPENTER_IMG = require("../../../../assets/catalog/featured/carpenter.jpg");
+
+const FEATURED_SERVICES = [
   {
-    title: "Electrical Safety",
-    subtitle: "Ensure your home wiring is safe. Book modular switchboard repairs and switch safety audits starting at ₹129.",
-    buttonText: "Know more",
+    id: "electrician",
+    chipLabel: "⚡ Electrical",
+    categoryTag: "Electrician",
+    title: "Electrical Safety & Repairs",
+    subtitle: "Modular switchboard fixing, wiring short-circuit fault diagnosis, and safety load checks.",
+    highlights: [
+      "Modular switchboard diagnostic & spark repair",
+      "Complete home wiring audit & load calculation",
+    ],
+    price: "₹129",
+    rating: "4.8",
+    bookings: "12k bookings",
+    guarantee: "Verified Certified Pros",
+    buttonText: "Book Electrician",
     link: "/catalog/electrician",
-    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&auto=format&fit=crop",
-    bgClass: "bg-[#FFF9F5]",
-    btnBg: "bg-[#EA580C]",
+    image: ELECTRICIAN_IMG,
   },
   {
-    title: "Plumbing Upgrades",
-    subtitle: "Trace hidden pipeline leaks and install premium, drip-free bathroom mixers starting at ₹199.",
-    buttonText: "Know more",
+    id: "plumber",
+    chipLabel: "💧 Plumbing",
+    categoryTag: "Plumber",
+    title: "Plumbing Upgrades & Leaks",
+    subtitle: "Drip-free tap installations, drain unclogging, and pipe pressure tests.",
+    highlights: [
+      "Precision leak tracing with pressure meters",
+      "Premium bathroom mixer & tap replacements",
+    ],
+    price: "₹199",
+    rating: "4.9",
+    bookings: "18k bookings",
+    guarantee: "No-Mess Guarantee",
+    buttonText: "Book Plumber",
     link: "/catalog/plumber",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&auto=format&fit=crop",
-    bgClass: "bg-[#F0F7FF]",
-    btnBg: "bg-[#0284C7]",
+    image: PLUMBER_IMG,
   },
   {
-    title: "Carpentry Fitting",
-    subtitle: "Fix loose cabinet shutters, align squeaking door hinges, or mount floating wall shelves starting at ₹299.",
-    buttonText: "Know more",
+    id: "carpenter",
+    chipLabel: "🪚 Carpentry",
+    categoryTag: "Carpenter",
+    title: "Carpentry & Door Fittings",
+    subtitle: "Cabinet hinge alignment, lock repairs, and custom wall shelf mounting.",
+    highlights: [
+      "Squeak-free hinge & drawer slide alignment",
+      "Laser-level shelf and decor wall mounting",
+    ],
+    price: "₹299",
+    rating: "4.7",
+    bookings: "9k bookings",
+    guarantee: "Clean Drilling & Leveling",
+    buttonText: "Book Carpenter",
     link: "/catalog/technician",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop",
-    bgClass: "bg-[#FEFDF0]",
-    btnBg: "bg-[#D97706]",
+    image: CARPENTER_IMG,
   },
 ];
 
@@ -152,11 +183,9 @@ export function HomepageClientSections() {
     serviceName: string;
     variants: { id: string; name: string; pricePaise: number }[];
   } | null>(null);
-  const [slideIndex, setSlideIndex] = useState(0);
 
   const cartMerge = cartQuery.isError ? cartMergeConflict(cartQuery.error) : null;
   const activeGuide = activeGuideKey ? SERVICE_GUIDES[activeGuideKey] : null;
-  const slide = CAROUSEL_SLIDES[slideIndex] ?? CAROUSEL_SLIDES[0];
 
   const loadCart = async (): Promise<Cart> => {
     if (cartQuery.data) return cartQuery.data;
@@ -307,19 +336,12 @@ export function HomepageClientSections() {
 
       <ServiceRail
         title="Best Sellers"
-        subtitle="Most booked services in your city"
+        subtitle="Popular quick fixes with a fixed starting price"
         items={BEST_SELLERS}
         renderAction={renderItemAction}
         isDesktop={isDesktop}
       />
-      <HeroSplitCarousel
-        slide={slide}
-        index={slideIndex}
-        onPrev={() => setSlideIndex((prev) => (prev - 1 + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length)}
-        onNext={() => setSlideIndex((prev) => (prev + 1) % CAROUSEL_SLIDES.length)}
-        onSelect={setSlideIndex}
-        isDesktop={isDesktop}
-      />
+      <HeroSplitCarousel isDesktop={isDesktop} />
       <ServiceRail
         title="Electrician Services"
         subtitle="Certified electrical installations and diagnostics"
@@ -544,85 +566,358 @@ function ServiceCard({ item, action }: { item: HomepageServiceItem; action: Reac
 }
 
 function HeroSplitCarousel({
-  slide,
-  index,
-  onPrev,
-  onNext,
-  onSelect,
   isDesktop = false,
 }: {
-  slide: (typeof CAROUSEL_SLIDES)[number];
-  index: number;
-  onPrev: () => void;
-  onNext: () => void;
-  onSelect: (index: number) => void;
   isDesktop?: boolean;
 }) {
   const router = useRouter();
+  const N = FEATURED_SERVICES.length;
+  const half = Math.floor(N / 2);
 
+  // Desktop State
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // Mobile State
+  const { width: windowWidth } = useWindowDimensions();
+  // With px-4 (16px left/right = 32px), container width is windowWidth - 32.
+  // Card width is container width - 34px. Peek is 24px, gap is 10px.
+  const cardWidth = Math.max(260, windowWidth - 32 - 34);
+  const step = cardWidth + 10;
+  const flatListRef = useRef<FlatList>(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const currentIndexRef = useRef(0);
+  const autoplayTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isDragging = useRef(false);
+  const isReduceMotion = useRef(false);
+
+  const startAutoplay = useCallback(() => {
+    if (autoplayTimer.current) clearInterval(autoplayTimer.current);
+    if (isReduceMotion.current) return;
+    autoplayTimer.current = setInterval(() => {
+      if (isDragging.current) return;
+      const nextIndex = (currentIndexRef.current + 1) % N;
+      currentIndexRef.current = nextIndex;
+      flatListRef.current?.scrollToOffset({
+        offset: nextIndex * step,
+        animated: true,
+      });
+    }, 3500);
+  }, [N, step]);
+
+  const stopAutoplay = useCallback(() => {
+    if (autoplayTimer.current) {
+      clearInterval(autoplayTimer.current);
+      autoplayTimer.current = null;
+    }
+  }, []);
+
+  // Respect reduced motion settings
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      isReduceMotion.current = enabled;
+      if (!enabled && !isDesktop) startAutoplay();
+    });
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", (enabled) => {
+      isReduceMotion.current = enabled;
+      if (enabled) stopAutoplay();
+      else if (!isDesktop) startAutoplay();
+    });
+    return () => sub?.remove();
+  }, [isDesktop, startAutoplay, stopAutoplay]);
+
+  // Pause on app background
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        if (!isDesktop) startAutoplay();
+      } else {
+        stopAutoplay();
+      }
+    });
+    return () => sub.remove();
+  }, [isDesktop, startAutoplay, stopAutoplay]);
+
+  // Desktop Autoplay (every 3.5s)
+  useEffect(() => {
+    if (!isDesktop || isReduceMotion.current) return;
+    const timer = setInterval(() => {
+      setActiveIdx((prev) => (prev + 1) % N);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [isDesktop, N]);
+
+  // Desktop Layout
   if (isDesktop) {
     return (
-      <View className={`overflow-hidden rounded-3xl border border-[#e7e2da]/40 flex-row min-h-[280px] shadow-sm ${slide.bgClass}`}>
-        {/* Left Content */}
-        <View className="flex-1 justify-between p-10 z-10">
-          <View className="gap-2">
-            <Text className="text-[9px] font-black uppercase tracking-widest text-text-secondary/70">Featured Service</Text>
-            <Text className="text-3xl font-extrabold leading-tight text-navy-900">{slide.title}</Text>
-            <Text className="mt-1 text-xs font-medium leading-relaxed text-text-secondary max-w-sm">{slide.subtitle}</Text>
-          </View>
-          <Pressable accessibilityRole="button" onPress={() => router.push(slide.link as never)} className={`mt-6 self-start rounded-xl px-6 py-2.5 ${slide.btnBg}`}>
-            <Text className="text-xs font-bold text-white">{slide.buttonText}</Text>
-          </Pressable>
+      <View className="w-full">
+        {/* Relative Viewport */}
+        <View className="relative h-[460px] w-full overflow-hidden rounded-[32px]">
+          {FEATURED_SERVICES.map((service, i) => {
+            const p = ((i - activeIdx + N + half) % N) - half;
+            const pc = Math.max(-1, Math.min(2, p));
+            const isCurrent = pc === 0;
+            const isPeeking = pc === 1;
+
+            if (pc < 0 || pc > 1) return null;
+
+            return (
+              <Pressable
+                key={service.id}
+                accessibilityRole="button"
+                onPress={() => {
+                  if (isPeeking) {
+                    setActiveIdx((activeIdx + 1) % N);
+                  } else if (isCurrent) {
+                    router.push(service.link as never);
+                  }
+                }}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width: "100%",
+                  height: "100%",
+                  transform: [
+                    { translateX: pc * 56 },
+                    { scale: isCurrent ? 1 : 0.965 },
+                  ],
+                  opacity: isCurrent ? 1 : 0.5,
+                  zIndex: isCurrent ? 2 : 1,
+                }}
+                className="overflow-hidden rounded-3xl border border-[#E7E2DA] bg-white p-6 md:p-8 shadow-sm flex-row items-center gap-8"
+              >
+                {/* Left Content (55%) */}
+                <View className="flex-1 justify-between gap-3.5">
+                  <View className="gap-2">
+                    <View className="flex-row items-center gap-2">
+                      <View className="rounded-full border border-[#EA580C]/20 bg-[#FFF0E5] px-2.5 py-0.5">
+                        <Text className="text-[11px] font-black uppercase tracking-wider text-[#EA580C]">Featured Service</Text>
+                      </View>
+                      <Text className="text-xs font-medium text-text-secondary">{service.guarantee}</Text>
+                    </View>
+
+                    <Text className="text-3xl font-black text-navy-900 leading-tight">
+                      {service.title}
+                    </Text>
+
+                    <Text className="text-sm font-medium leading-relaxed text-text-secondary">
+                      {service.subtitle}
+                    </Text>
+                  </View>
+
+                  {/* 2 Checkmark Highlights */}
+                  <View className="gap-2 border-y border-[#F1EFEA] py-2">
+                    {service.highlights.map((hl: string, hlIdx: number) => (
+                      <View key={hlIdx} className="flex-row items-center gap-2">
+                        <View className="size-4.5 items-center justify-center rounded-full bg-[#E6F4EA]">
+                          <Text className="text-[10px] font-bold text-[#137333]">✓</Text>
+                        </View>
+                        <Text className="text-xs font-medium text-navy-900">{hl}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Price & Rating Row */}
+                  <View className="flex-row items-center justify-between pt-1">
+                    <View>
+                      <Text className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">Starting from</Text>
+                      <Text className="text-2xl font-black text-navy-900">{service.price}</Text>
+                    </View>
+
+                    <View className="flex-row items-center gap-1.5 rounded-xl border border-[#E7E2DA] bg-[#FAF9F7] px-3 py-1.5">
+                      <Text className="text-sm font-black text-amber-500">★</Text>
+                      <Text className="text-xs font-extrabold text-navy-900">{service.rating}</Text>
+                      <Text className="text-[11px] text-text-secondary">· {service.bookings}</Text>
+                    </View>
+                  </View>
+
+                  {/* Primary CTA Button */}
+                  <View className="items-start">
+                    <View className="flex-row items-center gap-2 rounded-xl bg-[#EA580C] px-6 py-3">
+                      <Text className="text-sm font-bold text-white">{service.buttonText}</Text>
+                      <Text className="text-base text-white font-bold leading-none">→</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Right Inset Image (45%) */}
+                <View className="w-[45%] h-[310px] rounded-2xl overflow-hidden border border-[#E7E2DA]/60 bg-[#F8FAFC] relative">
+                  <Image
+                    source={service.image}
+                    contentFit="cover"
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                  <View className="absolute top-3 right-3 rounded-full border border-[#E7E2DA] bg-white/95 px-3 py-1 shadow-xs">
+                    <Text className="text-[11px] font-bold text-navy-900">{service.categoryTag}</Text>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
-        {/* Right Image */}
-        <View className="w-1/2 h-[280px] overflow-hidden">
-          <Image source={{ uri: slide.image }} contentFit="cover" style={{ width: "100%", height: "100%" }} />
-        </View>
-        {/* Controls */}
-        <View className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
-          <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Previous slide" onPress={onPrev} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
-            <Chevron flip />
-          </Pressable>
-        </View>
-        <View className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
-          <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Next slide" onPress={onNext} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
-            <Chevron />
-          </Pressable>
-        </View>
-        <View className="absolute bottom-4 left-10 flex-row gap-1.5 z-20">
-          {CAROUSEL_SLIDES.map((entry, dot) => (
-            <Pressable hitSlop={8} key={entry.title} accessibilityRole="button" accessibilityLabel={`Go to slide ${dot + 1}`} onPress={() => onSelect(dot)} className={dot === index ? "h-1.5 w-5 rounded-full bg-navy-900" : "size-1.5 rounded-full bg-navy-900/30"} />
+
+        {/* Desktop Dots: 18px below card, active 24px orange pill, inactive 8px circle */}
+        <View className="mt-[18px] flex-row items-center justify-center gap-1">
+          {FEATURED_SERVICES.map((s, idx) => (
+            <Pressable
+              key={s.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Show ${s.categoryTag}`}
+              onPress={() => setActiveIdx(idx)}
+              className="p-1 items-center justify-center"
+            >
+              <View
+                style={{
+                  height: 8,
+                  borderRadius: 999,
+                  width: idx === activeIdx ? 24 : 8,
+                  backgroundColor: idx === activeIdx ? "#EA580C" : "#D6D0C8",
+                }}
+              />
+            </Pressable>
           ))}
         </View>
       </View>
     );
   }
 
+  // Mobile Layout: Horizontal FlatList with snap-to-interval, 24px peek of next card, animated dots
   return (
-    <View className={`overflow-hidden rounded-3xl border border-[#e7e2da]/40 ${slide.bgClass}`}>
-      <View className="gap-2 p-8">
-        <Text className="text-[9px] font-black uppercase tracking-widest text-text-secondary/70">Featured Service</Text>
-        <Text className="text-3xl font-extrabold leading-tight text-navy-900">{slide.title}</Text>
-        <Text className="mt-1 text-xs font-medium leading-relaxed text-text-secondary">{slide.subtitle}</Text>
-        <Pressable accessibilityRole="button" onPress={() => router.push(slide.link as never)} className={`mt-6 self-start rounded-xl px-6 py-2 ${slide.btnBg}`}>
-          <Text className="text-xs font-bold text-white">{slide.buttonText}</Text>
-        </Pressable>
-      </View>
-      <Image source={{ uri: slide.image }} contentFit="cover" style={{ height: 180, width: "100%" }} />
-      <View className="absolute left-4 top-1/2">
-        <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Previous slide" onPress={onPrev} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
-          <Chevron flip />
-        </Pressable>
-      </View>
-      <View className="absolute right-4 top-1/2">
-        <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Next slide" onPress={onNext} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
-          <Chevron />
-        </Pressable>
-      </View>
-      <View className="absolute bottom-4 left-8 flex-row gap-1.5">
-        {CAROUSEL_SLIDES.map((entry, dot) => (
-          <Pressable hitSlop={8} key={entry.title} accessibilityRole="button" accessibilityLabel={`Go to slide ${dot + 1}`} onPress={() => onSelect(dot)} className={dot === index ? "h-1.5 w-5 rounded-full bg-navy-900" : "size-1.5 rounded-full bg-navy-900/30"} />
-        ))}
+    <View className="w-full">
+      <FlatList
+        ref={flatListRef}
+        data={FEATURED_SERVICES}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={step}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        disableIntervalMomentum={true}
+        getItemLayout={(_, index) => ({
+          length: step,
+          offset: step * index,
+          index,
+        })}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: false }
+        )}
+        onScrollBeginDrag={() => {
+          isDragging.current = true;
+          stopAutoplay();
+        }}
+        onMomentumScrollEnd={(e) => {
+          isDragging.current = false;
+          const idx = Math.max(
+            0,
+            Math.min(N - 1, Math.round(e.nativeEvent.contentOffset.x / step))
+          );
+          currentIndexRef.current = idx;
+          startAutoplay();
+        }}
+        ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
+        ListFooterComponent={<View style={{ width: 24 }} />}
+        renderItem={({ item }) => (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(item.link as never)}
+            style={{ width: cardWidth }}
+            className="overflow-hidden rounded-[24px] border border-[#ECE7E1] bg-white p-3 shadow-xs justify-between"
+          >
+            {/* Inset Photo (150px height) */}
+            <View className="h-[150px] w-full rounded-2xl overflow-hidden bg-[#EDE7DF] relative">
+              <Image
+                source={item.image}
+                contentFit="cover"
+                style={{ width: "100%", height: "100%" }}
+              />
+              <View className="absolute top-2 left-2 rounded-full border border-[#E7E2DA] bg-white px-2.5 py-0.5 shadow-xs">
+                <Text className="text-[10px] font-black uppercase tracking-wider text-[#D9480F]">Featured</Text>
+              </View>
+              <View className="absolute top-2 right-2 flex-row items-center gap-1 rounded-lg bg-black/80 px-2 py-0.5 shadow-xs">
+                <Text className="text-[11px] text-amber-400">★</Text>
+                <Text className="text-[11px] font-bold text-white">{item.rating}</Text>
+              </View>
+            </View>
+
+            {/* Content Area */}
+            <View className="pt-2">
+              <Text className="text-[19px] font-black text-navy-900 leading-tight mt-1 mb-1" numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text className="text-[12.5px] font-medium text-text-secondary leading-snug mb-2" numberOfLines={2} style={{ minHeight: 34 }}>
+                {item.subtitle}
+              </Text>
+            </View>
+
+            {/* 2 Checkmarks Highlights */}
+            <View className="border-y border-[#ECE7E1] py-2 gap-1.5">
+              {item.highlights.map((hl: string, hlIdx: number) => (
+                <View key={hlIdx} className="flex-row items-center gap-2">
+                  <View className="size-4.5 items-center justify-center rounded-full bg-[#E4F4EA]">
+                    <Text className="text-[10px] font-bold text-[#137333]">✓</Text>
+                  </View>
+                  <Text className="text-xs font-medium text-navy-900 flex-1" numberOfLines={1}>
+                    {hl}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Starts at Price + Book CTA Button */}
+            <View className="mt-3 flex-row items-center justify-between gap-2.5">
+              <View>
+                <Text className="text-[9.5px] font-bold uppercase tracking-wider text-[#3C4658] leading-none">STARTS AT</Text>
+                <Text className="text-[20px] font-black text-navy-900 leading-tight mt-0.5">{item.price}</Text>
+              </View>
+
+              <View className="h-[34px] px-3.5 rounded-xl bg-[#EA580C] items-center justify-center flex-row gap-1.5 shadow-xs">
+                <Text className="text-xs font-bold text-white">{item.buttonText}</Text>
+                <Text className="text-sm font-bold text-white leading-none">→</Text>
+              </View>
+            </View>
+          </Pressable>
+        )}
+      />
+
+      {/* Mobile Animated Dots: 8px below cards, >= 44px tap target, active 24px orange pill */}
+      <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+        {FEATURED_SERVICES.map((s, idx) => {
+          const inputRange = [(idx - 1) * step, idx * step, (idx + 1) * step];
+          const dotWidth = scrollX.interpolate({
+            inputRange,
+            outputRange: [8, 24, 8],
+            extrapolate: "clamp",
+          });
+          const dotColor = scrollX.interpolate({
+            inputRange,
+            outputRange: ["#D6D0C8", "#EA580C", "#D6D0C8"],
+            extrapolate: "clamp",
+          });
+
+          return (
+            <Pressable
+              key={s.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Service ${idx + 1}`}
+              onPress={() => {
+                currentIndexRef.current = idx;
+                flatListRef.current?.scrollToOffset({ offset: idx * step, animated: true });
+              }}
+              style={{ minHeight: 44, minWidth: 20, alignItems: "center", justifyContent: "center" }}
+            >
+              <Animated.View
+                style={{
+                  height: 8,
+                  borderRadius: 999,
+                  width: dotWidth,
+                  backgroundColor: dotColor,
+                }}
+              />
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );

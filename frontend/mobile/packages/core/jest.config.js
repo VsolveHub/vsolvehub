@@ -4,6 +4,7 @@ module.exports = {
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    "^@react-native-async-storage/async-storage$": "<rootDir>/src/test/async-storage-mock.cjs",
     "^react-native/asset-registry$": "react-native/src/asset-registry.js",
     "^react-native/react-private-interface$": "react-native/src/react-private-interface.js",
     "^react-native/setup-env$": "<rootDir>/src/test/empty-mock.js",

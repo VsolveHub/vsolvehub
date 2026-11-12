@@ -281,7 +281,7 @@ describe("Project panels", () => {
   });
 
   describe("WarrantyPanel", () => {
-    it("renders warranty retention summary", async () => {
+    it("renders guarantee retention summary", async () => {
       const view = await render(
         <WarrantyPanel
           retention={mockProjectView.retention}
@@ -289,8 +289,8 @@ describe("Project panels", () => {
         />,
       );
 
-      expect(view.getByText("Your warranty is running")).toBeTruthy();
-      expect(view.getByText("₹500 held")).toBeTruthy();
+      expect(view.getByText("Your guarantee is active")).toBeTruthy();
+      expect(view.getByText("₹500 protected")).toBeTruthy();
     });
   });
 });

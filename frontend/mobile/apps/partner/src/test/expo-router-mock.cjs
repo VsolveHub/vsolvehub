@@ -1,15 +1,21 @@
 const router = {
-  push() {},
-  replace() {},
-  back() {},
+  push: typeof jest !== "undefined" ? jest.fn() : () => {},
+  replace: typeof jest !== "undefined" ? jest.fn() : () => {},
+  back: typeof jest !== "undefined" ? jest.fn() : () => {},
 };
 
-function useRouter() {
-  return router;
+let currentPathname = "/";
+
+function setPathname(p) {
+  currentPathname = p;
 }
 
 function usePathname() {
-  return "/";
+  return currentPathname;
+}
+
+function useRouter() {
+  return router;
 }
 
 function Passthrough({ children }) {
@@ -20,6 +26,7 @@ module.exports = {
   router,
   useRouter,
   usePathname,
+  setPathname,
   Slot: Passthrough,
   Stack: Passthrough,
   Link: Passthrough,

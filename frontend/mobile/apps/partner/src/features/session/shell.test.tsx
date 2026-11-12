@@ -2,6 +2,12 @@ import { focusedHeaderTitle, getPartnerChromeMode, routeRequiresPartnerRole } fr
 import { homeForApplication, safeNextPath } from "./model/redirect";
 import { PartnerGuardView } from "./partner-guard";
 import { render } from "@testing-library/react-native";
+import { I18nProvider } from "@vsolve/mobile-ui";
+import { catalogs } from "../../i18n/catalogs";
+
+function renderWithI18n(ui: React.ReactElement) {
+  return render(<I18nProvider locale="en-IN" catalog={catalogs["en-IN"]}>{ui}</I18nProvider>);
+}
 
 describe("homeForApplication", () => {
   it("sends unfinished applications to apply", () => {
@@ -42,15 +48,15 @@ describe("chrome", () => {
 
 describe("PartnerGuardView", () => {
   it("renders each access branch", async () => {
-    const checking = await render(<PartnerGuardView branch="checking" />);
+    const checking = await renderWithI18n(<PartnerGuardView branch="checking" />);
     expect(checking.getByText("Checking your access…")).toBeTruthy();
-    const signin = await render(<PartnerGuardView branch="signin" />);
+    const signin = await renderWithI18n(<PartnerGuardView branch="signin" />);
     expect(signin.getByText("Taking you to sign in…")).toBeTruthy();
-    const switched = await render(<PartnerGuardView branch="switch" />);
+    const switched = await renderWithI18n(<PartnerGuardView branch="switch" />);
     expect(switched.getByText("Switch to your Partner account")).toBeTruthy();
-    const denied = await render(<PartnerGuardView branch="no-access" />);
+    const denied = await renderWithI18n(<PartnerGuardView branch="no-access" />);
     expect(denied.getByText("You do not have a Partner account")).toBeTruthy();
-    const unknown = await render(<PartnerGuardView branch="approval-unknown" />);
+    const unknown = await renderWithI18n(<PartnerGuardView branch="approval-unknown" />);
     expect(unknown.getByText("We could not check your account")).toBeTruthy();
   });
 });

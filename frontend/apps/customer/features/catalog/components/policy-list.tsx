@@ -1,4 +1,5 @@
 import type { ServiceDetail } from "../queries";
+import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
 
 /**
  * What is and is not covered.
@@ -72,7 +73,7 @@ export function PolicyList({ policies }: { policies: ServiceDetail["policies"] }
                 <span className={group.tone}>
                   <Mark kind={group.kind} />
                 </span>
-                {policy.text}
+                {formatGuaranteePolicy(policy.text) ?? policy.text}
               </li>
             ))}
           </ul>

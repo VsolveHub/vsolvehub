@@ -7,6 +7,7 @@ import { Pressable, RefreshControl, ScrollView, Share, View } from "react-native
 
 import { useRequirement } from "@/features/requirement/queries";
 import { estimateConfirmHref, estimateQuestionsHref, requestQuotesHref } from "@/lib/routes";
+import { formatCoverageTerms } from "@/lib/guarantee-presentation";
 
 import {
   canAskAboutPrice,
@@ -217,11 +218,11 @@ export function EstimateDetail({
               {card.revision > 1 ? ` · revision ${card.revision}` : ""}
             </Text>
             <View className="mt-4 flex-row gap-3 border-t border-white/10 pt-4">
-              <View className="w-[48%]">
+              <View className="flex-1">
                 <Text className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/60">To start</Text>
                 <Text className="mt-0.5 text-lg font-extrabold text-white">{firstStage?.amountLabel ?? "Not stated"}</Text>
               </View>
-              <View className="w-[48%]">
+              <View className="flex-1">
                 <Text className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/60">Takes</Text>
                 <Text className="mt-0.5 text-lg font-extrabold text-white">{timeline ?? "Not stated"}</Text>
               </View>
@@ -343,9 +344,9 @@ export function EstimateDetail({
           ) : null}
 
           <View className="rounded-[18px] border border-line bg-surface px-4 shadow-sm">
-            <Disclosure summary="Terms, warranty and dates">
+            <Disclosure summary="Terms, guarantee and dates">
               <View className="gap-3 pb-3">
-                <Fact label="Warranty" value={card.warrantyTerms} empty="Not stated" />
+                <Fact label="Coverage terms" value={card.warrantyTerms ? formatCoverageTerms(card.warrantyTerms) : null} empty="No guarantee specified" />
                 <Fact
                   label="Valid until"
                   value={
@@ -473,7 +474,7 @@ function CustomerDiscountSummary({ card }: { readonly card: QuoteCardView }) {
         </View>
       </View>
       <Text className="mt-2 text-xs leading-5 text-success-text">
-        The scope, warranty and line-item rates are unchanged. The saving is spread across your payment stages automatically.
+        The scope, guarantee and line-item rates are unchanged. The saving is spread across your payment stages automatically.
       </Text>
     </View>
   );
@@ -566,7 +567,7 @@ function ShareButton({ card }: { card: QuoteCardView }) {
     card.scopeSummary ?? null,
     card.inclusions.length > 0 ? `Includes: ${card.inclusions.join(", ")}` : null,
     card.exclusions.length > 0 ? `Not included: ${card.exclusions.join(", ")}` : null,
-    card.warrantyTerms !== null ? `Warranty: ${card.warrantyTerms}` : null,
+    card.warrantyTerms !== null ? `Guarantee: ${formatCoverageTerms(card.warrantyTerms)}` : null,
     "Shared from Vsolve",
   ]
     .filter((line): line is string => line !== null)

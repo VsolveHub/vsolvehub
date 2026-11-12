@@ -31,6 +31,7 @@ import { PromoBanners } from "@/features/catalog/components/promo-banners";
 import { categoryHeadline } from "@/features/catalog/components/tile-desktop-rating";
 import { buildServiceFaqs } from "@/features/catalog/service-faqs";
 import { addsToServiceCopy, durationLabel, warrantyText } from "@/features/catalog/service-facts";
+import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
 import { clampDescription, SERVICE_CITY, SITE_NAME } from "@/lib/site";
 
 type PageProps = { params: Promise<{ category: string; service: string }> };
@@ -117,14 +118,15 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   // Seeded descriptions often repeat the short one; print the long copy only when it says more.
   const showDescription = addsToServiceCopy(service.description ?? "", service.short_description);
   const faqs = buildServiceFaqs(service);
-  const warranty = warrantyText(service.policies);
+  const rawGuarantee = warrantyText(service.policies);
+  const guaranteeLabel = formatGuaranteePolicy(rawGuarantee);
   const durations = service.variants.map(durationLabel).filter((label): label is string => label !== null);
   // Facts the server published, shown at a glance the way a rate card leads with them.
   const highlights = [
     service.variants.length > 1 ? `${service.variants.length} options` : null,
     // A duration chip speaks for the whole service, so only when every option shares it.
     durations.length === service.variants.length && new Set(durations).size === 1 ? durations[0] : null,
-    warranty,
+    guaranteeLabel,
   ].filter((item): item is string => item !== null && item !== undefined);
 
   const featuredImageUrl =
@@ -312,10 +314,26 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         <ServiceAssurance service={service} />
 
         {processSteps.length > 0 ? (
-          <section aria-labelledby="how-it-works-heading" className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
-            <h2 id="how-it-works-heading" className="text-[1.15rem] font-bold text-navy-900">
-              How it works
-            </h2>
+          <section
+            aria-labelledby="how-it-works-heading"
+            className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm border border-[#ECE7E1]/80"
+          >
+            <div className="flex items-center justify-between gap-3 pb-2 border-b border-line/40">
+              <div>
+                <h2
+                  id="how-it-works-heading"
+                  className="text-[1.25rem] sm:text-[1.35rem] font-black text-navy-900 tracking-tight"
+                >
+                  How it works
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Step-by-step verified execution protocol for {service.name.toLowerCase()}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-[#FFF0E5] px-3 py-1 text-xs font-bold text-action">
+                {processSteps.length} Steps
+              </span>
+            </div>
             <ProcessSteps steps={processSteps} />
           </section>
         ) : null}

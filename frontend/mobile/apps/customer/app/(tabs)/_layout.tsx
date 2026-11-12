@@ -302,15 +302,15 @@ export default function TabsLayout() {
       ) : !hideHeader ? (
         <View
           style={{ paddingTop: Math.max(insets.top, 24) + 10 }}
-          className="min-h-[76px] flex-row items-center justify-between gap-2 border-b border-line bg-[#FAF9F7] px-4 pb-3.5"
+          className="min-h-[76px] flex-row items-center justify-between gap-1.5 border-b border-line bg-[#FAF9F7] px-3 pb-3.5"
         >
-          <Pressable accessibilityRole="link" accessibilityLabel="V Solve Hub home" onPress={() => router.push("/")} className="flex-row items-center gap-2">
-            <Image source={require("../../assets/logo-mark.png")} style={{ width: 30, height: 30 }} contentFit="contain" />
-            <Text className="text-[1.2rem] font-extrabold tracking-tight text-navy-900">
-              V Solve <Text className="text-[1.2rem] font-extrabold text-[#EA580C]">Hub</Text>
+          <Pressable accessibilityRole="link" accessibilityLabel="V Solve Hub home" onPress={() => router.push("/")} className="flex-row items-center gap-1.5 shrink-1 min-w-0">
+            <Image source={require("../../assets/logo-mark.png")} style={{ width: 28, height: 28 }} contentFit="contain" />
+            <Text numberOfLines={1} className="text-[1.15rem] font-extrabold tracking-tight text-navy-900">
+              V Solve <Text className="text-[1.15rem] font-extrabold text-[#EA580C]">Hub</Text>
             </Text>
           </Pressable>
-          <View className="flex-row items-center gap-2">
+          <View className="flex-row items-center gap-1.5 shrink-0">
             <Pressable
               hitSlop={8}
               accessibilityRole="button"
@@ -319,15 +319,15 @@ export default function TabsLayout() {
                 DeviceEventEmitter.emit("open-catalog-search");
                 router.push({ pathname: "/catalog", params: { search: "1", t: Date.now().toString() } } as never);
               }}
-              className="h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100"
+              className="h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100"
             >
               <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#6B6560" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
                 <Circle cx={11} cy={11} r={7} />
                 <Path d="m20 20-3.5-3.5" />
               </Svg>
             </Pressable>
-            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-9 w-9 items-center justify-center">
-              <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#6B6560" strokeWidth={1.9}>
+            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-8 w-8 items-center justify-center">
+              <Svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                 <Circle cx={8} cy={21} r={1} />
                 <Circle cx={19} cy={21} r={1} />
                 <Path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
@@ -345,9 +345,9 @@ export default function TabsLayout() {
                   accessibilityRole="button"
                   accessibilityLabel={unreadBadgeLabel(unreadTotal)}
                   onPress={() => setAlertsOpen(true)}
-                  className="h-9 w-9 items-center justify-center"
+                  className="h-8 w-8 items-center justify-center"
                 >
-                  <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#6B6560" strokeWidth={1.9}>
+                  <Svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                     <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
                     <Path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
                   </Svg>
@@ -371,7 +371,7 @@ export default function TabsLayout() {
                   setPendingRedirect("/account");
                   setLoginOpen(true);
                 }}
-                className="rounded-full bg-orange-50 px-3.5 py-1.5"
+                className="rounded-full bg-orange-50 px-3 py-1"
               >
                 <Text className="text-xs font-bold text-[#EA580C]">Log in</Text>
               </Pressable>

@@ -59,13 +59,13 @@ export interface WarrantyPanelProps {
 export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps) {
   if (retention.phase === "none") {
     return (
-      <section aria-labelledby="warranty-heading" className="mt-8">
-        <h2 id="warranty-heading" className="text-lg font-semibold text-text">
+      <section aria-labelledby="guarantee-heading" className="mt-8">
+        <h2 id="guarantee-heading" className="text-lg font-semibold text-text">
           After the work is finished
         </h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
           Vsolve is not holding any money back on this {engagementNoun} against a
-          warranty. That is not the same as saying there is no guarantee on the
+          service guarantee. That is not the same as saying there is no guarantee on the
           work — whatever the estimate you accepted says about that still stands
           between you and the professional. If something goes wrong, contact
           support and we will take it from there.
@@ -76,14 +76,14 @@ export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps)
 
   if (retention.phase === "accruing") {
     return (
-      <section aria-labelledby="warranty-heading" className="mt-8">
-        <h2 id="warranty-heading" className="text-lg font-semibold text-text">
-          Money held back for the warranty
+      <section aria-labelledby="guarantee-heading" className="mt-8">
+        <h2 id="guarantee-heading" className="text-lg font-semibold text-text">
+          Funds protected during the guarantee period
         </h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text">
           You pay every stage in full, and{" "}
           <strong className="font-semibold">{retention.targetLabel}</strong> of what
-          the professional earns is held by Vsolve until the warranty period is
+          the professional earns is held by Vsolve until the guarantee period is
           over. It builds up as each stage is approved, and it is complete when
           the last one is.
         </p>
@@ -92,7 +92,7 @@ export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps)
           <Row label="Held by the end" value={retention.targetLabel} strong />
         </dl>
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          The warranty has not started yet, so there is no release date to show.
+          The service guarantee has not started yet, so there is no release date to show.
           It begins when the work is finished and you confirm it.
         </p>
       </section>
@@ -101,12 +101,12 @@ export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps)
 
   if (retention.phase === "held") {
     return (
-      <section aria-labelledby="warranty-heading" className="mt-8">
+      <section aria-labelledby="guarantee-heading" className="mt-8">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <h2 id="warranty-heading" className="text-lg font-semibold text-text">
-            Your warranty is running
+          <h2 id="guarantee-heading" className="text-lg font-semibold text-text">
+            Your guarantee is active
           </h2>
-          <Badge tone="success">{retention.withheldLabel} held</Badge>
+          <Badge tone="success">{retention.withheldLabel} protected</Badge>
         </div>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text">
           The work is finished and{" "}
@@ -120,7 +120,7 @@ export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps)
               until <strong className="font-semibold">{retention.warrantyEndsAt}</strong>
             </>
           )}
-          . It is released to them when the warranty period ends, and this{" "}
+          . It is released to them when the guarantee period ends, and this{" "}
           {engagementNoun} closes at the same moment.
         </p>
         {retention.warrantyEndsAt === null ? (
@@ -129,7 +129,7 @@ export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps)
           // configuration was retired keeps its retention held and waits for
           // Operations — a date invented here would be a promise nobody made.
           <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-            We do not have an end date for this warranty on file, so we are not
+            We do not have an end date for this guarantee on file, so we are not
             going to show you one. The money stays held until we do. Contact
             support and quote this {engagementNoun} if you need the date.
           </p>
@@ -140,10 +140,10 @@ export function WarrantyPanel({ retention, engagementNoun }: WarrantyPanelProps)
   }
 
   return (
-    <section aria-labelledby="warranty-heading" className="mt-8">
+    <section aria-labelledby="guarantee-heading" className="mt-8">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 id="warranty-heading" className="text-lg font-semibold text-text">
-          The warranty period is over
+        <h2 id="guarantee-heading" className="text-lg font-semibold text-text">
+          Guarantee period completed
         </h2>
         <Badge tone="neutral">Closed</Badge>
       </div>
@@ -171,10 +171,7 @@ function FaultRoute({ engagementNoun }: { engagementNoun: string }) {
     <div className="mt-3 rounded-card border border-line bg-surface-sunken p-4">
       <h3 className="text-sm font-semibold text-text">If something goes wrong</h3>
       <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        Reporting a warranty fault is not something you can do from this screen —
-        contact support with this {engagementNoun} and tell them what has
-        happened. Do it before the warranty ends: after that date the money is
-        released and there is nothing held to put right against.
+        Found an issue with the completed service? Contact our support team during your active guarantee period with this {engagementNoun} and tell them what has happened. Do it before the guarantee period ends: after that date the money is released and there is nothing held to put right against.
       </p>
     </div>
   );

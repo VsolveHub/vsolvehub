@@ -16,6 +16,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.foundation.catalog_media import catalog_image_url
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.stay.models import (
@@ -44,43 +45,14 @@ class Command(BaseCommand):
             defaults={
                 "name": "Rooms / PG / Hostel / Hotels",
                 "description": "Nights in a property unit — enquiry-first MVP.",
+                "image_url": catalog_image_url("/catalog/tiles/rooms-pg-hostel-hotels.png"),
             },
         )
+        if not category.image_url:
+            category.image_url = catalog_image_url("/catalog/tiles/rooms-pg-hostel-hotels.png")
+            category.save(update_fields=["image_url"])
+
         taxonomy: list[dict[str, Any]] = [
-            {
-                "sub": "Rooms",
-                "services": [
-                    {
-                        "name": "Room",
-                        "schema": {
-                            "type": "object",
-                            "required": ["occupancy", "furnishing", "ac", "bathroom"],
-                            "properties": {
-                                "occupancy": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Single",
-                                        "Double sharing",
-                                        "Triple sharing",
-                                        "Four sharing",
-                                        "Family",
-                                        "Studio",
-                                    ],
-                                },
-                                "furnishing": {
-                                    "type": "string",
-                                    "enum": ["Furnished", "Semi furnished", "Non furnished"],
-                                },
-                                "ac": {"type": "string", "enum": ["AC", "Non AC"]},
-                                "bathroom": {
-                                    "type": "string",
-                                    "enum": ["Attached bathroom", "Shared bathroom"],
-                                },
-                            },
-                        },
-                    }
-                ],
-            },
             {
                 "sub": "PG Accommodation",
                 "services": [
@@ -238,166 +210,6 @@ class Command(BaseCommand):
                 ],
             },
             {
-                "sub": "Rental Properties",
-                "services": [
-                    {
-                        "name": "Residential rental",
-                        "schema": {
-                            "type": "object",
-                            "required": ["property_type"],
-                            "properties": {
-                                "property_type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Independent house",
-                                        "Villa",
-                                        "Farm house",
-                                        "Studio apartment",
-                                        "Serviced apartment",
-                                        "Duplex house",
-                                    ],
-                                },
-                                "furnishing": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Furnished",
-                                        "Semi furnished",
-                                        "Unfurnished",
-                                    ],
-                                },
-                            },
-                        },
-                    },
-                    {
-                        "name": "Commercial rental",
-                        "schema": {
-                            "type": "object",
-                            "required": ["property_type"],
-                            "properties": {
-                                "property_type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Commercial space",
-                                        "Office space",
-                                        "Shop space",
-                                        "Godown / warehouse",
-                                    ],
-                                },
-                            },
-                        },
-                    },
-                ],
-            },
-            {
-                "sub": "Short Stay",
-                "services": [
-                    {
-                        "name": "Short stay",
-                        "schema": {
-                            "type": "object",
-                            "required": ["duration", "stay_type"],
-                            "properties": {
-                                "duration": {
-                                    "type": "string",
-                                    "enum": ["Daily", "Weekly", "Monthly", "Hourly"],
-                                },
-                                "stay_type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Room",
-                                        "Guest house",
-                                        "Service apartment",
-                                        "Vacation home",
-                                    ],
-                                },
-                            },
-                        },
-                    }
-                ],
-            },
-            {
-                "sub": "Student Accommodation",
-                "services": [
-                    {
-                        "name": "Student stay",
-                        "schema": {
-                            "type": "object",
-                            "required": ["stay_type"],
-                            "properties": {
-                                "stay_type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "College nearby hostel",
-                                        "College nearby PG",
-                                        "Exam stay room",
-                                        "Coaching student PG",
-                                    ],
-                                },
-                                "gender": {
-                                    "type": "string",
-                                    "enum": ["Gents", "Ladies", "Unisex"],
-                                },
-                                "food": {"type": "boolean"},
-                            },
-                        },
-                    }
-                ],
-            },
-            {
-                "sub": "Worker Accommodation",
-                "services": [
-                    {
-                        "name": "Worker stay",
-                        "schema": {
-                            "type": "object",
-                            "required": ["stay_type"],
-                            "properties": {
-                                "stay_type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Labour room",
-                                        "Labour camp",
-                                        "Construction worker stay",
-                                        "Factory worker stay",
-                                        "Staff accommodation",
-                                        "Driver accommodation",
-                                    ],
-                                },
-                                "capacity": {"type": "number"},
-                            },
-                        },
-                    }
-                ],
-            },
-            {
-                "sub": "Property Listing",
-                "services": [
-                    {
-                        "name": "Property listing",
-                        "schema": {
-                            "type": "object",
-                            "required": ["listing_type"],
-                            "properties": {
-                                "listing_type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Room for rent",
-                                        "PG for rent",
-                                        "Hostel vacancy",
-                                        "Apartment for rent",
-                                        "House for rent",
-                                        "Villa for rent",
-                                        "Commercial space for rent",
-                                        "Office space for rent",
-                                        "Godown / warehouse for rent",
-                                    ],
-                                },
-                            },
-                        },
-                    }
-                ],
-            },
-            {
                 "sub": "Premium Stays",
                 "services": [
                     {
@@ -426,11 +238,24 @@ class Command(BaseCommand):
         keep_service_ids: list[Any] = []
         for group in taxonomy:
             sub_name = str(group["sub"])
+            sub_slug = slugify(sub_name)[:80]
+            sub_img = catalog_image_url(f"/catalog/tiles/{sub_slug}.png")
             sub, _ = Subcategory.objects.get_or_create(
                 category=category,
-                slug=slugify(sub_name)[:80],
-                defaults={"name": sub_name, "description": f"{sub_name}."},
+                slug=sub_slug,
+                defaults={
+                    "name": sub_name,
+                    "description": f"{sub_name}.",
+                    "image_url": sub_img,
+                    "is_active": True,
+                },
             )
+            if not sub.image_url:
+                sub.image_url = sub_img
+                sub.save(update_fields=["image_url"])
+            if not sub.is_active:
+                sub.is_active = True
+                sub.save(update_fields=["is_active"])
             for svc_def in group["services"]:
                 svc_name = str(svc_def["name"])
                 svc, _ = Service.objects.update_or_create(
@@ -477,6 +302,9 @@ class Command(BaseCommand):
         Service.objects.filter(subcategory__category=category).exclude(
             id__in=keep_service_ids
         ).update(status=Service.Status.RETIRED)
+        Subcategory.objects.filter(category=category).exclude(
+            name__in=[g["sub"] for g in taxonomy]
+        ).update(is_active=False)
 
         assert first_variant is not None
 

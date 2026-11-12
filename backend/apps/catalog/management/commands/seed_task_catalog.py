@@ -62,6 +62,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import combinations
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Count, F, Q
@@ -1703,8 +1704,8 @@ class Command(BaseCommand):
             )
 
         cupboard = Service.objects.filter(slug="cupboard-hinge-repair").first()
-        if cupboard is not None:
-            cupboard_cover = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/Images/Home%20Services/Handyman_repairing_cabinet_fixture_202608261908.jpeg"
+        if cupboard is not None and settings.R2_PUBLIC_ENABLED:
+            cupboard_cover = f"{settings.R2_PUBLIC_BASE_URL}/Images/Home%20Services/Handyman_repairing_cabinet_fixture_202608261908.jpeg"
             Command._seed_service_cover(
                 service=cupboard,
                 url=cupboard_cover,

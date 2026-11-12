@@ -1,4 +1,5 @@
 import type { RequirementService } from "@/features/requirement/adapters";
+import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
 
 /**
  * What a day of this service is — included, not included, good to know.
@@ -67,7 +68,7 @@ function PolicyLines({
                 </svg>
               )}
             </span>
-            {text}
+            {formatGuaranteePolicy(text) ?? text}
           </li>
         ))}
       </ul>

@@ -19,10 +19,10 @@ export function policyTexts(policies: readonly Policy[] | undefined, kind: Polic
     .filter((text) => text !== "");
 }
 
-/** The policy line that states a warranty, if the service publishes one. */
+/** The policy line that states a warranty or guarantee, if the service publishes one. */
 export function warrantyText(policies: readonly Policy[] | undefined): string | null {
   const match = (policies ?? []).find(
-    (policy) => policy.kind !== "EXCLUDED" && /warrant/i.test(`${policy.title} ${policy.text}`),
+    (policy) => policy.kind !== "EXCLUDED" && /(?:warrant|guarantee)/i.test(`${policy.title} ${policy.text}`),
   );
   return match ? match.text.trim() || null : null;
 }

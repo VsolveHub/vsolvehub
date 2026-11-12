@@ -45,7 +45,7 @@ describe("login", () => {
     mockFlow.phase = "phone";
     mockFlow.codeError = null;
     const view = await render(<LoginScreen />);
-    expect(view.getByText("Welcome Back")).toBeTruthy();
+    expect(view.getByText(/Welcome back/i)).toBeTruthy();
     expect(view.getByText("Send code")).toBeTruthy();
   });
 

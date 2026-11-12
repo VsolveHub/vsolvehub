@@ -1,32 +1,92 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useBrowseList } from "@vsolve/query";
-import { ArrowLeft, FileCheck2, Search, Wrench } from "lucide-react";
+import { BadgeCheck, FileCheck2, ShieldCheck, Tag } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
-import { EMPTY_PLACE, PlaceFilter, type PlaceFilterValue } from "@vsolve/ui/location-picker";
+import { EMPTY_PLACE, type PlaceFilterValue } from "@vsolve/ui/location-picker";
 
 import { NearbyNotice, placeKey, placeQuery } from "@/features/browse/nearby";
-import { GOOGLE_MAPS_KEY } from "@/lib/google-maps";
-
-import { fetchRentals } from "@/features/rentals/queries";
+import { SplitBrowseShell, type TrustBadgeItem } from "@/features/browse/split-browse-shell";
+import {
+  ALL_TILE_SLUG,
+  buildBrowseTiles,
+  type TaxonomySubcategoryInput,
+} from "@/features/browse/taxonomy-tiles";
+import { useCategories } from "@/features/catalog/client-queries";
+import type { RentalAsset } from "@/features/rentals/model";
+import { fetchRentals, fetchRentalTaxonomy } from "@/features/rentals/queries";
+import {
+  RentalDetailDrawer,
+  RentalRowCard,
+  RentalSidebarFilters,
+} from "@/features/rentals/view";
 import { useCustomerSession } from "@/features/session/queries";
-import { type ActiveRentalFilters, RentalCard, RentalFilters } from "@/features/rentals/view";
+import { RENTAL_SERVICES_CATEGORY_SLUG } from "@/lib/routes";
+
+const RENTAL_TRUST_BADGES: readonly TrustBadgeItem[] = [
+  { label: "Verified tools & equipment", icon: ShieldCheck },
+  { label: "Transparent daily rates", icon: Tag },
+  { label: "Refundable security deposit", icon: BadgeCheck },
+];
 
 function RentalsBrowseContent() {
   const session = useCustomerSession();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const initCategory = searchParams.get("category") ?? undefined;
+  const urlTile = searchParams.get("tile") ?? searchParams.get("category") ?? ALL_TILE_SLUG;
 
+  const [selectedTileSlug, setSelectedTileSlug] = useState<string>(urlTile);
+  const [serviceSlug, setServiceSlug] = useState<string | undefined>(undefined);
   const [draftQuery, setDraftQuery] = useState("");
   const [draftPlace, setDraftPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedPlace, setAppliedPlace] = useState<PlaceFilterValue>(EMPTY_PLACE);
-  const [filters, setFilters] = useState<ActiveRentalFilters>(
-    initCategory ? { categorySlug: initCategory } : {},
+  const [minPrice, setMinPrice] = useState<number | undefined>(undefined);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
+  const [selectedAsset, setSelectedAsset] = useState<RentalAsset | null>(null);
+
+  const categoriesQuery = useCategories();
+  const rentalCategory = useMemo(
+    () =>
+      (categoriesQuery.data ?? []).find((cat) => cat.slug === RENTAL_SERVICES_CATEGORY_SLUG),
+    [categoriesQuery.data],
   );
+
+  const taxonomyQuery = useQuery({
+    queryKey: ["rentalTaxonomy"],
+    queryFn: fetchRentalTaxonomy,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const tiles = useMemo(
+    () =>
+      buildBrowseTiles({
+        taxonomy: (taxonomyQuery.data ?? []) as TaxonomySubcategoryInput[],
+        category: rentalCategory,
+        allLabel: "All Equipment",
+        allDescription:
+          "Rent certified power tools, event gear, and equipment with verified partners and transparent daily rates.",
+        fallbackIconKey: "service",
+      }),
+    [taxonomyQuery.data, rentalCategory],
+  );
+
+  const activeTile = useMemo(
+    () => tiles.find((tile) => tile.slug === selectedTileSlug) ?? tiles[0]!,
+    [tiles, selectedTileSlug],
+  );
+
+  const handleSelectTile = (slug: string) => {
+    setSelectedTileSlug(slug);
+    setServiceSlug(undefined);
+    setSelectedAsset(null);
+    const nextHref = slug === ALL_TILE_SLUG ? "/rentals" : `/rentals?tile=${encodeURIComponent(slug)}`;
+    router.replace(nextHref, { scroll: false });
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,8 +94,7 @@ function RentalsBrowseContent() {
     setAppliedPlace(draftPlace);
   };
 
-  /** A picked suggestion or Near me searches at once; typing waits for the Search button. */
-  const changePlace = (next: PlaceFilterValue, applyNow: boolean) => {
+  const handlePlaceChange = (next: PlaceFilterValue, applyNow: boolean) => {
     setDraftPlace(next);
     if (applyNow) {
       setAppliedQuery(draftQuery);
@@ -44,17 +103,21 @@ function RentalsBrowseContent() {
   };
 
   const clearFilters = () => {
+    setSelectedTileSlug(ALL_TILE_SLUG);
+    setServiceSlug(undefined);
     setDraftQuery("");
     setDraftPlace(EMPTY_PLACE);
     setAppliedQuery("");
     setAppliedPlace(EMPTY_PLACE);
-    setFilters({});
+    setMinPrice(undefined);
+    setMaxPrice(undefined);
+    setSelectedAsset(null);
+    router.replace("/rentals", { scroll: false });
   };
 
-  /**
-   * The server sends one page at a time (24, newest first) and "Show more" asks for the next.
-   * Every filter is in the key, so changing one starts again from the first page.
-   */
+  const activeServiceParam =
+    serviceSlug ?? (activeTile.slug !== ALL_TILE_SLUG ? activeTile.slug : undefined);
+
   const {
     items: rentals,
     isLoading,
@@ -68,157 +131,146 @@ function RentalsBrowseContent() {
       "rentals",
       appliedQuery,
       placeKey(appliedPlace),
-      filters.categorySlug,
-      filters.serviceSlug,
-      filters.minPrice,
-      filters.maxPrice,
+      activeServiceParam,
+      minPrice,
+      maxPrice,
     ],
     (offset, limit) =>
       fetchRentals({
         q: appliedQuery,
         ...placeQuery(appliedPlace),
-        service: filters.serviceSlug,
-        category: filters.categorySlug,
-        min_price: filters.minPrice,
-        max_price: filters.maxPrice,
+        service: activeServiceParam,
+        min_price: minPrice,
+        max_price: maxPrice,
         limit,
         offset,
       }),
   );
 
+  const activeFilterCount =
+    (appliedQuery.trim() ? 1 : 0) +
+    (appliedPlace.name.trim() || appliedPlace.latitude !== null ? 1 : 0) +
+    (serviceSlug ? 1 : 0) +
+    (minPrice !== undefined || maxPrice !== undefined ? 1 : 0);
+
+  const hasAnyFilter = activeFilterCount > 0 || activeTile.slug !== ALL_TILE_SLUG;
+
+  const heroSummary = isLoading
+    ? "Loading equipment…"
+    : `${rentals.length} ${rentals.length === 1 ? "item" : "items"} available`;
+
+  const myBookingsLink = session.isAuthenticated ? (
+    <Link
+      href="/activity?type=rentals"
+      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#e7e2da] bg-[#FAF9F7] px-2.5 sm:px-3 text-[11px] font-bold text-navy-900 transition-colors hover:border-navy-300"
+    >
+      <FileCheck2 className="size-3.5 shrink-0 text-[#EA580C]" />
+      <span className="hidden min-[400px]:inline">My bookings</span>
+      <span className="min-[400px]:hidden">Bookings</span>
+    </Link>
+  ) : null;
+
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-6 px-4 pt-3 pb-8 sm:py-8">
-      <div>
-        <Link
-          href="/"
-          className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-bold text-text-secondary hover:text-text transition"
-        >
-          <ArrowLeft className="size-4" />
-          <span>Back to Home</span>
-        </Link>
-      </div>
-
-      {/* Hero / Header Section */}
-      <section className="relative z-20 rounded-[var(--radius-card)] bg-[#000817] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-900 p-6 text-white shadow-raised sm:p-10">
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-navy-400/30 bg-navy-800/60 px-3 py-1 text-xs font-semibold text-navy-200">
-              <Wrench className="size-3.5" />
-              Verified Tools &amp; Equipment Rentals
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Rent Tools &amp; Equipment
-            </h1>
-            <p className="text-sm text-navy-100/90 sm:text-base">
-              Rent certified power tools, carpentry kits, and equipment with verified partners.
-              100% refundable security deposit and transparent daily rates.
-            </p>
-          </div>
-
-          {/* Only once signed in: before that there is nothing of theirs to show, and the
-              page would only send them to log in. */}
-          {session.isAuthenticated ? (
-          <div className="flex shrink-0 items-center gap-3">
-            <Link
-              href="/activity?type=rentals"
-              className="inline-flex items-center gap-2 rounded-control border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-xs transition hover:bg-white/20"
-            >
-              <FileCheck2 className="size-4 text-warm-100" />
-              My bookings
-            </Link>
-          </div>
-          ) : null}
-        </div>
-
-        {/* Search Bar */}
-        <form
-          onSubmit={handleSearchSubmit}
-          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_320px_auto]"
-        >
-          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
-            <Search className="size-4 shrink-0 text-text-secondary" />
-            <input
-              type="search"
-              value={draftQuery}
-              onChange={(e) => setDraftQuery(e.target.value)}
-              placeholder="Search tools (e.g. Bosch Drill, Angle Grinder, Carpentry Kit)"
-              className="w-full bg-transparent py-2.5 text-base sm:text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
-            />
-          </label>
-
-          <PlaceFilter
-            apiKey={GOOGLE_MAPS_KEY}
-            value={draftPlace}
-            onChange={changePlace}
-            placeholder="Location (e.g. Hyderabad)"
+    <SplitBrowseShell
+      sidebarTitle="Rentals"
+      sidebarDescription="Tools, appliances & event equipment with refundable deposit protection."
+      selectLabel="Select a category"
+      seeAllLabel="See all categories"
+      seeAllModalTitle="All Rental Categories"
+      seeAllModalSubtitle="Explore all equipment categories available on V Solve Hub"
+      backLabel="Home"
+      backHref="/"
+      headerAction={myBookingsLink}
+      tiles={tiles}
+      activeTile={activeTile}
+      onSelectTile={handleSelectTile}
+      activeFilterCount={activeFilterCount}
+      sidebarFilters={
+        <RentalSidebarFilters
+          draftQuery={draftQuery}
+          onDraftQueryChange={setDraftQuery}
+          draftPlace={draftPlace}
+          onPlaceChange={handlePlaceChange}
+          onSearchSubmit={handleSearchSubmit}
+          services={activeTile.services}
+          activeServiceSlug={serviceSlug}
+          onSelectService={setServiceSlug}
+          minPrice={minPrice}
+          maxPrice={maxPrice}
+          onPriceChange={(min, max) => {
+            setMinPrice(min);
+            setMaxPrice(max);
+          }}
+          hasActiveFilters={hasAnyFilter}
+          onClearFilters={clearFilters}
+        />
+      }
+      heroSummary={heroSummary}
+      trustBadges={RENTAL_TRUST_BADGES}
+      centerToolbar={
+        !isLoading && !error ? (
+          <NearbyNotice
+            place={appliedPlace}
+            noun="rentals"
+            count={rentals.length}
+            nearestKm={rentals[0]?.distance_km}
           />
-
-          <Button type="submit" className="min-h-11 px-6 font-bold sm:h-full">
-            Search Gear
-          </Button>
-        </form>
-      </section>
-
-      <RentalFilters
-        activeFilters={filters}
-        onChangeFilter={setFilters}
-        count={isLoading ? null : rentals.length}
-      />
-
-      {!isLoading && !error ? (
-        <NearbyNotice
-          place={appliedPlace}
-          noun="rentals"
-          count={rentals.length}
-          nearestKm={rentals[0]?.distance_km}
-        />
-      ) : null}
-
-      {/* State Rendering */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <div key={idx} className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line p-5">
-              <Skeleton className="h-44 w-full rounded-card" />
-              <Skeleton className="h-6 w-32" />
-              <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </div>
-          ))}
-        </div>
-      ) : error ? (
-        <ErrorState
-          title="Could not load equipment rentals"
-          message={(error as Error).message}
-          actionLabel="Retry"
-          onAction={() => refetch()}
-        />
-      ) : rentals.length === 0 ? (
-        <EmptyState
-          title="No equipment rentals found"
-          description="Try broadening your search query or location filter."
-          action={
-            <Button variant="secondary" onClick={clearFilters}>
-              Reset Filters
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {rentals.map((asset) => (
-              <RentalCard key={asset.id} asset={asset} />
+        ) : null
+      }
+      centerContent={
+        isLoading ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <Skeleton key={idx} className="h-28 w-full rounded-[1.25rem]" />
             ))}
           </div>
-          <LoadMore
-            hasMore={hasMore}
-            loading={loadingMore}
-            onLoadMore={loadMore}
-            label="Show more rentals"
+        ) : error ? (
+          <ErrorState
+            title="Could not load equipment rentals"
+            message={(error as Error).message}
+            actionLabel="Retry"
+            onAction={() => refetch()}
           />
-        </>
-      )}
-    </main>
+        ) : rentals.length === 0 ? (
+          <EmptyState
+            title="No equipment rentals found"
+            description="Try switching categories or broadening your search and rate filters."
+            action={
+              <Button variant="secondary" onClick={clearFilters}>
+                Reset Filters
+              </Button>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-3 pb-6">
+            <ul className="flex list-none flex-col gap-3 p-0 m-0">
+              {rentals.map((asset) => (
+                <li key={asset.id}>
+                  <RentalRowCard asset={asset} onQuickBook={setSelectedAsset} />
+                </li>
+              ))}
+            </ul>
+            <LoadMore
+              hasMore={hasMore}
+              loading={loadingMore}
+              onLoadMore={loadMore}
+              label="Show more rentals"
+            />
+          </div>
+        )
+      }
+      drawerOpen={selectedAsset !== null}
+      onCloseDrawer={() => setSelectedAsset(null)}
+      drawerContent={
+        selectedAsset ? (
+          <RentalDetailDrawer
+            key={selectedAsset.id}
+            asset={selectedAsset}
+            onClose={() => setSelectedAsset(null)}
+          />
+        ) : null
+      }
+    />
   );
 }
 
@@ -229,4 +281,3 @@ export default function RentalsBrowsePage() {
     </Suspense>
   );
 }
-

@@ -1,20 +1,40 @@
 import textwrap
+from typing import Any
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from apps.catalog.models import Category
-from apps.foundation.catalog_media import catalog_image_url
+
+CATEGORY_TILE_FILENAMES = {
+    "rooms-pg-hostel-hotels": "Create_3D_hotel_icon_fb85216d_2K.jpg",
+}
 
 
 class Command(BaseCommand):
     help = textwrap.dedent("""
-    Seeds local tile image URLs for Part A categories and their specific subcategories.
-    Sets image_url to /catalog/tiles/<slug>.png only if the field is currently blank.
+    Seeds Cloudflare R2 / local tile image URLs for Part A categories and their subcategories.
+    Points image_url at the public media domain (R2_PUBLIC_BASE_URL)/catalog/tiles/<slug>.png
     """)
 
-    def handle(self, *args: object, **options: object) -> None:
-        # Define target categories and their specific subcategories (or None for all)
+    def add_arguments(self, parser: CommandParser) -> None:
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            default=True,
+            help="Overwrite relative or outdated image URLs with full Cloudflare R2 URLs.",
+        )
+        parser.add_argument(
+            "--base-url",
+            default="",
+            help="Base URL for images (default: R2_PUBLIC_BASE_URL).",
+        )
+
+    def handle(self, *args: object, **options: Any) -> None:
+        force = options.get("force", True)
+        base_url = str(options.get("base_url") or settings.R2_PUBLIC_BASE_URL).rstrip("/")
+
         targets = {
             "career-jobs": None,  # None means all subcategories
             "rental-services": None,  # all rental subcategories
@@ -34,32 +54,31 @@ class Command(BaseCommand):
                     )
                     continue
 
-                # Update Category
-                if not category.image_url:
-                    category.image_url = catalog_image_url(f"/catalog/tiles/{category.slug}.png")
+                # Target Cloudflare R2 URL
+                tile_filename = CATEGORY_TILE_FILENAMES.get(category.slug, f"{category.slug}.png")
+                cat_target_url = f"{base_url}/catalog/tiles/{tile_filename}"
+                if force or not category.image_url or category.image_url.startswith("/"):
+                    category.image_url = cat_target_url
                     category.save(update_fields=["image_url", "updated_at"])
                     updated_categories += 1
-                    self.stdout.write(f"Updated category: {category.slug}")
+                    self.stdout.write(f"Updated category: {category.slug} -> {category.image_url}")
 
                 # Update Subcategories
                 if subcat_slugs is None:
-                    # All subcategories
                     subcategories = category.subcategories.all()
                 else:
-                    # Specific subcategories
                     subcategories = category.subcategories.filter(slug__in=subcat_slugs)
 
                 for subcategory in subcategories:
-                    if not subcategory.image_url:
-                        subcategory.image_url = catalog_image_url(
-                            f"/catalog/tiles/{subcategory.slug}.png"
-                        )
+                    subcat_target_url = f"{base_url}/catalog/tiles/{subcategory.slug}.png"
+                    if force or not subcategory.image_url or subcategory.image_url.startswith("/"):
+                        subcategory.image_url = subcat_target_url
                         subcategory.save(update_fields=["image_url", "updated_at"])
                         updated_subcategories += 1
-                        self.stdout.write(f"Updated subcategory: {subcategory.slug}")
+                        self.stdout.write(f"Updated subcategory: {subcategory.slug} -> {subcategory.image_url}")
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Successfully updated {updated_categories} categories and {updated_subcategories} subcategories."
+                f"Successfully updated {updated_categories} categories and {updated_subcategories} subcategories to Cloudflare R2."
             )
         )
