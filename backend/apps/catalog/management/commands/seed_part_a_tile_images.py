@@ -7,8 +7,6 @@ from django.db import transaction
 
 from apps.catalog.models import Category
 
-CANONICAL_R2_BASE = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev"
-
 CATEGORY_TILE_FILENAMES = {
     "rooms-pg-hostel-hotels": "Create_3D_hotel_icon_fb85216d_2K.jpg",
 }
@@ -17,7 +15,7 @@ CATEGORY_TILE_FILENAMES = {
 class Command(BaseCommand):
     help = textwrap.dedent("""
     Seeds Cloudflare R2 / local tile image URLs for Part A categories and their subcategories.
-    Points image_url to Cloudflare R2: https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/<slug>.png
+    Points image_url at the public media domain (R2_PUBLIC_BASE_URL)/catalog/tiles/<slug>.png
     """)
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -29,13 +27,13 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--base-url",
-            default=CANONICAL_R2_BASE,
-            help=f"Base URL for images (default: {CANONICAL_R2_BASE}).",
+            default="",
+            help="Base URL for images (default: R2_PUBLIC_BASE_URL).",
         )
 
     def handle(self, *args: object, **options: Any) -> None:
         force = options.get("force", True)
-        base_url = str(options.get("base_url") or CANONICAL_R2_BASE).rstrip("/")
+        base_url = str(options.get("base_url") or settings.R2_PUBLIC_BASE_URL).rstrip("/")
 
         targets = {
             "career-jobs": None,  # None means all subcategories

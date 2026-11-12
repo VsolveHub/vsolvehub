@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,9 @@ from apps.foundation.catalog_media import catalog_image_url
 from apps.rental.models import RentalAsset, RentalAssetMedia
 
 # Source and destination directories
-DOWNLOADS_DIR = Path(r"C:\Users\nuner\Downloads\New folder")
+_SOURCE_DIR = os.environ.get("VSOLVE_RENTAL_IMAGES_DIR")
+# Optional folder of raw photos to copy in; the committed catalog images are used when unset.
+DOWNLOADS_DIR = Path(_SOURCE_DIR) if _SOURCE_DIR else None
 FRONTEND_RENTAL_DIR = (
     Path(settings.BASE_DIR).parent
     / "frontend"
@@ -117,7 +120,7 @@ RENTAL_IMAGE_MAPPINGS: list[dict[str, Any]] = [
 
 def sync_images_from_downloads() -> None:
     """Ensure all images from Downloads/New folder are synced to frontend public and backend media."""
-    if not DOWNLOADS_DIR.exists():
+    if DOWNLOADS_DIR is None or not DOWNLOADS_DIR.exists():
         return
 
     FRONTEND_RENTAL_DIR.mkdir(parents=True, exist_ok=True)

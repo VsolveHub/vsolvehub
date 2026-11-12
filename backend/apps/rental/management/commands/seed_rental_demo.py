@@ -17,6 +17,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.foundation.catalog_media import catalog_image_url
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.rental.field_options import with_suggestions
@@ -25,6 +26,25 @@ from apps.rental.pickup_hours import DayHours, hours_are_set, save_pickup_hours
 from apps.rental.services import create_asset, create_booking, moderate_asset, submit_asset
 
 User = get_user_model()
+
+
+def _ready_to_submit(asset: RentalAsset) -> RentalAsset:
+    """submit_asset requires a photo and a pickup address; attach demo ones first."""
+    if not asset.media.exists():
+        RentalAssetMedia.objects.create(
+            asset=asset,
+            url="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800",
+            caption=asset.title,
+            display_order=0,
+        )
+    RentalAsset.objects.filter(id=asset.id).update(
+        pickup_address_line="Plot 12, Road 3, KPHB Colony",
+        pickup_area="Kukatpally",
+        pickup_city="Hyderabad",
+        pickup_pincode="500072",
+    )
+    asset.refresh_from_db()
+    return asset
 
 
 class Command(BaseCommand):
@@ -37,11 +57,11 @@ class Command(BaseCommand):
             defaults={
                 "name": "Rental Services",
                 "description": "Temporary possession of tools, appliances, and equipment.",
-                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/rental-services.png",
+                "image_url": catalog_image_url("/catalog/tiles/rental-services.png"),
             },
         )
         if not category.image_url:
-            category.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/rental-services.png"
+            category.image_url = catalog_image_url("/catalog/tiles/rental-services.png")
             category.save(update_fields=["image_url"])
 
         taxonomy = {
@@ -121,7 +141,7 @@ class Command(BaseCommand):
         first_variant = None
         for sub_name, services in taxonomy.items():
             sub_slug = slugify(sub_name)[:80]
-            sub_img = f"https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/{sub_slug}.png"
+            sub_img = catalog_image_url(f"/catalog/tiles/{sub_slug}.png")
             sub, _ = Subcategory.objects.get_or_create(
                 category=category,
                 slug=sub_slug,
@@ -259,7 +279,7 @@ class Command(BaseCommand):
                 deposit_paise=200000,
                 asset_identifier="DEMO-DRILL-001",
             )
-            submit_asset(asset=asset, partner=profile)
+            submit_asset(asset=_ready_to_submit(asset), partner=profile)
             moderate_asset(
                 asset=asset,
                 actor=owner_user,
@@ -311,7 +331,7 @@ class Command(BaseCommand):
                 deposit_paise=120000,
                 asset_identifier="STANLEY-CARP-002",
             )
-            submit_asset(asset=carpenter_kit, partner=profile)
+            submit_asset(asset=_ready_to_submit(carpenter_kit), partner=profile)
             moderate_asset(
                 asset=carpenter_kit,
                 actor=owner_user,
@@ -348,7 +368,7 @@ class Command(BaseCommand):
                 defaults={"caption": "Angle Grinder in box", "display_order": 0},
             )
             pending.refresh_from_db()
-            submit_asset(asset=pending, partner=profile)
+            submit_asset(asset=_ready_to_submit(pending), partner=profile)
             pending.moderation_status = RentalAsset.ModerationStatus.PENDING
             pending.save(update_fields=("moderation_status", "updated_at"))
 

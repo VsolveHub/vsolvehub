@@ -6,7 +6,7 @@ import { View } from "react-native";
 import { iconForService } from "./icon-catalogue/service-icon";
 import type { Category } from "./client-queries";
 
-const CLOUDFLARE_R2_BASE = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev";
+const CLOUDFLARE_R2_BASE = "https://media.vsolvehub.com";
 
 /**
  * Resolves any image URL (relative or localhost) to a fully qualified URL
@@ -26,7 +26,7 @@ export function resolveImageUrl(url: string | null | undefined): string | null {
     return trimmed;
   }
 
-  // Relative catalog tiles -> resolve directly to Cloudflare R2 CDN
+  // Relative catalog tiles -> resolve directly to the public media domain
   if (trimmed.startsWith("/catalog/")) {
     return `${CLOUDFLARE_R2_BASE}${trimmed}`;
   }

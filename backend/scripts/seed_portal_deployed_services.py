@@ -29,6 +29,7 @@ Categories & Subcategories/Services:
 
 import os
 import sys
+
 import django
 
 # Setup Django environment
@@ -36,9 +37,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 django.setup()
 
-from apps.catalog.models import Category, Subcategory, Service
+from django.conf import settings
 
-CANONICAL_R2_BASE = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev"
+from apps.catalog.models import Category, Service, Subcategory
+
+CANONICAL_R2_BASE = settings.R2_PUBLIC_BASE_URL
 
 # Canonical category icon overrides in Cloudflare R2 (`catalog/tiles/`)
 CATEGORY_ICON_OVERRIDES = {

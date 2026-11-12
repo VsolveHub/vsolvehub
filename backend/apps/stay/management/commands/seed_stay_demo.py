@@ -16,6 +16,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.foundation.catalog_media import catalog_image_url
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.stay.models import (
@@ -44,11 +45,11 @@ class Command(BaseCommand):
             defaults={
                 "name": "Rooms / PG / Hostel / Hotels",
                 "description": "Nights in a property unit — enquiry-first MVP.",
-                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/rooms-pg-hostel-hotels.png",
+                "image_url": catalog_image_url("/catalog/tiles/rooms-pg-hostel-hotels.png"),
             },
         )
         if not category.image_url:
-            category.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/rooms-pg-hostel-hotels.png"
+            category.image_url = catalog_image_url("/catalog/tiles/rooms-pg-hostel-hotels.png")
             category.save(update_fields=["image_url"])
 
         taxonomy: list[dict[str, Any]] = [
@@ -238,7 +239,7 @@ class Command(BaseCommand):
         for group in taxonomy:
             sub_name = str(group["sub"])
             sub_slug = slugify(sub_name)[:80]
-            sub_img = f"https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/{sub_slug}.png"
+            sub_img = catalog_image_url(f"/catalog/tiles/{sub_slug}.png")
             sub, _ = Subcategory.objects.get_or_create(
                 category=category,
                 slug=sub_slug,

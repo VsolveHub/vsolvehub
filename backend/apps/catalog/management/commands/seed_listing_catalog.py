@@ -29,6 +29,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.foundation.catalog_media import catalog_image_url
 from apps.identity.models import Role, UserRole
 from apps.listings.models import (
     Application,
@@ -137,12 +138,12 @@ class Command(BaseCommand):
             defaults={
                 "name": "Career Opportunity or Job Opportunities",
                 "description": "Local job listings, professional roles, and career opportunities.",
-                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/career-jobs.png",
+                "image_url": catalog_image_url("/catalog/tiles/career-jobs.png"),
             },
         )
         if category.name != "Career Opportunity or Job Opportunities" or not category.image_url:
             category.name = "Career Opportunity or Job Opportunities"
-            category.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/career-jobs.png"
+            category.image_url = catalog_image_url("/catalog/tiles/career-jobs.png")
             category.save(update_fields=("name", "image_url"))
 
         total_services_created = 0
@@ -150,7 +151,7 @@ class Command(BaseCommand):
 
         for subcat_name, service_names in taxonomy.items():
             subcat_slug = slugify(subcat_name)
-            sub_img = f"https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/{subcat_slug}.png"
+            sub_img = catalog_image_url(f"/catalog/tiles/{subcat_slug}.png")
             subcategory, _ = Subcategory.objects.get_or_create(
                 category=category,
                 slug=subcat_slug,
@@ -328,12 +329,12 @@ class Command(BaseCommand):
             defaults={
                 "name": "Hiring Partners",
                 "description": "Employer partners who post job openings on V Solve Hub.",
-                "image_url": "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/hiring-partners.png",
+                "image_url": catalog_image_url("/catalog/tiles/hiring-partners.png"),
                 "is_active": True,
             },
         )
         if not hiring_subcat.image_url:
-            hiring_subcat.image_url = "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/hiring-partners.png"
+            hiring_subcat.image_url = catalog_image_url("/catalog/tiles/hiring-partners.png")
             hiring_subcat.save(update_fields=("image_url",))
         if not hiring_subcat.is_active:
             hiring_subcat.is_active = True
