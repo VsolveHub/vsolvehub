@@ -30,9 +30,15 @@ export const OPTIMIZED_IMAGE_HOSTS = [
   "images.unsplash.com",
 ] as const;
 
-/** Whether `src` is something the optimizer will accept: a local path or a listed https host. */
+/**
+ * Whether `src` is something the optimizer will accept: a listed https host.
+ *
+ * The app's own `public/` files are deliberately not optimizable. They ship already sized (the
+ * hero and process-step images are WebP), Vercel serves them as static files for free, and
+ * sending them through `/_next/image` spends the monthly transformation quota for no gain.
+ */
 export function isOptimizableImage(src: string): boolean {
-  if (src.startsWith("/")) return !src.startsWith("//");
+  if (src.startsWith("/")) return false;
   try {
     const { protocol, hostname } = new URL(src);
     return (

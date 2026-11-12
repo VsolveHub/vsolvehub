@@ -12,8 +12,9 @@ describe("isOptimizableImage", () => {
     expect(isOptimizableImage(R2)).toBe(true);
   });
 
-  it("accepts the app's own public files", () => {
-    expect(isOptimizableImage("/catalog/tiles/fan.png")).toBe(true);
+  it("serves the app's own public files as they are, not through the resize quota", () => {
+    expect(isOptimizableImage("/catalog/tiles/fan.png")).toBe(false);
+    expect(isOptimizableImage("/catalog/featured/electrician.jpg")).toBe(false);
   });
 
   it("refuses hosts the optimizer would answer with a broken image", () => {

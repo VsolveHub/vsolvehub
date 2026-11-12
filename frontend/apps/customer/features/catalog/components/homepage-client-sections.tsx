@@ -660,6 +660,7 @@ export function HeroSplitCarousel() {
                     src={service.image}
                     alt={service.title}
                     fill
+                    unoptimized
                     sizes="(min-width: 768px) 500px, 100vw"
                     className={`object-cover object-center ${isCurrent && !reducedMotion ? "featured-kb-active" : ""}`}
                   />
@@ -733,6 +734,7 @@ export function HeroSplitCarousel() {
                   src={service.image}
                   alt={service.title}
                   fill
+                  unoptimized
                   sizes="(max-width: 768px) 100vw, 400px"
                   className="object-cover object-center"
                 />

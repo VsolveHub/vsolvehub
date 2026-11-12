@@ -28,6 +28,7 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
           <Link href="/" className="flex items-center gap-2">
             <Image
               src="/logo-mark.png"
+              unoptimized
               alt="V Solve Hub"
               width={26}
               height={26}
