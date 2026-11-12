@@ -1,5 +1,188 @@
 # API Contract Changelog
 
+## 1.99.0 - Rides V1: captain onboarding
+
+Additive. The first part of VSolve Rides (`docs/rapido/README.md`); later Rides endpoints are
+added to this entry.
+
+- **Added** `RIDE_CAPTAIN` to the Partner application `track`. A captain gives a name and accepts
+  the agreements; trades, service areas and working hours are not asked.
+- **Added** `DRIVING_LICENCE`, `VEHICLE_RC` and `VEHICLE_INSURANCE` to the Partner document
+  `kind`. `required_document_kinds` on a `RIDE_CAPTAIN` application lists them after the identity
+  documents, and submission and approval require all of them. Every other track is unchanged.
+- **Added** `GET /partner/rides/me/` (`CaptainStatus`): `approval` (the application status, or
+  `NOT_STARTED`), `is_approved`, `vehicle` (or `null`) and `blocked_reasons` (`not_approved`,
+  `vehicle_missing`). Pass, duty and ride state are added later.
+- **Changed**, additive: `CaptainStatus` (`GET /partner/rides/me/`) adds `last_duty_end`
+  (`reason`, `ended_at`; `null` while on duty or before the first duty), so the app can say why
+  the server ended duty (`PASS_EXPIRED`, `LOCATION_STALE`, `OPERATIONS`, ...).
+- **Changed** (Revision 2 build): submitting a `RIDE_CAPTAIN` application now also needs a saved
+  vehicle, refused otherwise with `409 partner_application_incomplete` and the message "Add your
+  vehicle details before submitting." The vehicle locks once sent, so an application without one
+  could never get one.
+- **Added** `PUT /partner/rides/vehicle/` (`CaptainVehicleWriteRequest` → `CaptainVehicle`):
+  `vehicle_type` (`BIKE`, `AUTO`, `CAB`), `registration_number` (stored upper-case without
+  spaces), `make_model`, `colour`. Creates or replaces the vehicle; repeating it changes nothing.
+  Allowed only while the captain application is `DRAFT` or `CHANGES_REQUIRED`:
+  `403 captain_not_approved` otherwise, or with no captain application.
+  `409 registration_already_used` when another captain holds the plate.
+- **Added** `POST /rides/quotes/` (`FareQuoteRequest` → `201 FareQuoteList`): `pickup` and `drop`,
+  each `latitude`, `longitude` and `address`. Returns `quotes`, one per vehicle type with an
+  active rate card in the pickup's service area, ordered bike, auto, cab: `id`, `vehicle_type`,
+  `fare_paise` (upfront, rounded to the rupee), `distance_m`, `duration_s`, `route_polyline`
+  (Google encoded polyline) and `expires_at` (five minutes; a quote books at most one ride).
+  Only the pickup must be in a service area. Signed-in callers only.
+  `422 area_not_served` when the pickup is outside every active area or the area has no active
+  rate card. `503 routing_unavailable` (retryable) when the route or the pickup's area cannot be
+  worked out; no quote is saved and no fare is guessed. `400` when pickup and drop are the same.
+- **Added** `RIDE_CAPTAIN_PASS` to the payment-attempt `purpose`: a captain's Daily Pass, charged
+  without a checkout. The captain who bought the pass may read and pay the attempt.
+- **Added** `GET /partner/rides/pass-plans/` (`CaptainPassPlan[]`): active plans, cheapest first:
+  `id`, `code`, `name`, `price_paise`, `duration_hours`.
+- **Added** `POST /partner/rides/passes/` (`BuyPassRequest` → `201 CaptainPass`), with a required
+  `Idempotency-Key`; a retry with the same key replays the first answer. A `price_paise` of `0`
+  plan is `ACTIVE` at once with `payment_attempt_id: null`. A paid plan is `PENDING_ACTIVATION`
+  with a `payment_attempt_id` to pay; it becomes `ACTIVE` for `duration_hours` when the payment is
+  captured. Buying the same plan again while its payment can still succeed returns that pass.
+  `409 pass_already_active` while the captain has an active pass. `404` for an inactive plan.
+  `GET` lists the captain's passes. `status` is a string: `PENDING_ACTIVATION`, `ACTIVE`,
+  `EXPIRED` or `CANCELLED`.
+- **Added** `POST /partner/rides/duty/start/` and `POST /partner/rides/duty/stop/` (`DutyStatus`:
+  `on_duty`, `started_at`). Start is refused with `403 captain_not_approved` (not approved,
+  suspended, or no vehicle; the message says which) or `403 pass_required`. Starting while on
+  duty, or stopping while off duty, changes nothing. Stopping during a ride is allowed: the ride
+  continues and no new requests arrive.
+- **Changed** `CaptainStatus` (`GET /partner/rides/me/`), additive: `active_pass` (or `null`),
+  `on_duty`, `duty_started_at`, and `blocked_reasons` may now include `suspended` (instead of
+  `not_approved`) and `pass_required`.
+- A pass past its `ends_at` expires within a minute; a captain on duty without a pass goes off
+  duty then, unless they are on a ride, in which case they go off duty after it.
+- **Added** `POST /partner/rides/location/` (`LocationPingRequest` → `204`): `latitude`,
+  `longitude`, `accuracy_m` (above 0), optional `heading` (0–360) and `captured_at`. Send every
+  5 s while on duty, including during a ride. `409 not_on_duty` when the server has ended duty
+  (the app stops pinging and says so); `422 location_stale` when `captured_at` is more than 30 s
+  old or more than 5 s ahead (a wrong phone clock); `503 location_unavailable` (retryable). A
+  captain on duty goes off duty (`LOCATION_STALE`) after 2 minutes without a ping.
+- **Added** `GET/POST /operations/rides/rate-cards/` and `PATCH /operations/rides/rate-cards/{id}/`
+  (`RideRateCard`), Operations only. `GET` filters by `service_area_id`, `vehicle_type` and
+  `active`. `POST` creates a card; `409 rate_card_exists` while one is active for that area and
+  vehicle. `PATCH` with prices makes a new version and retires the old one (quotes keep the old
+  price); `PATCH {"is_active": false}` alone switches that vehicle off in that area;
+  `409 rate_card_inactive` for a retired card. Every amount is a whole number, never negative.
+- **Added** `GET/POST /operations/rides/pass-plans/` and `PATCH /operations/rides/pass-plans/{id}/`
+  (`CaptainPassPlanOps`), Operations only. `code` is unique and cannot change; `duration_hours`
+  is at least 1. Switching a plan off removes it from the captains' list.
+- **Changed** (Revision 2), additive: `POST /rides/quotes/` is limited to 20 calls a minute per
+  user and answers `429 throttled` beyond it. `GET /partner/rides/me/` adds `queued_pass` (or
+  `null`) and `server_now`; the duty start and stop answers add `server_now`. The app keeps the
+  offset between `server_now` and the phone clock and sends location `captured_at` in server
+  time. A pass `status` may be `QUEUED`: a paid pass captured while another is active waits and
+  starts the moment that one ends. `POST /partner/rides/passes/` answers
+  `409 pass_purchase_pending` for any other plan while a paid purchase (under 30 minutes old)
+  is still going through.
+- **Added** `GET /rides/availability/?latitude=&longitude=` (`Availability`): `vehicle_types`,
+  the types bookable at that place, cheapest first; empty when Rides does not run there. Open to
+  signed-out callers, with the serviceability rate limit. `400` for a missing or out-of-range
+  place; `503 routing_unavailable` (retryable) when the place cannot be looked up. It drives the
+  Rides entry on the customer Home screen; there is no Rides catalogue category.
+- **Added** the captain trip steps, each answering the ride (`CaptainRide`) and refusing from the
+  wrong state with `409 invalid_transition`; repeating a step that is done returns the ride.
+  `POST /partner/rides/{ride_id}/arrived/`: `409 not_at_pickup` unless the last ping is under 30 s
+  old and within 200 m of the pickup, `503 location_unavailable` when Redis is down.
+  `POST /partner/rides/{ride_id}/start/` (`StartTripRequest`: `otp`, 4 digits; required
+  `Idempotency-Key`): a wrong code answers `400 otp_invalid` with `details.attempts_left`, the
+  fifth `423 otp_locked`; a retry with the same key replays the answer without counting again.
+  Starting fixes `waiting_paise`. `POST /partner/rides/{ride_id}/complete/`: `final_fare_paise` is
+  the fare plus waiting, `payment_status` `DUE`. `POST /partner/rides/{ride_id}/payment-received/`:
+  `COLLECTED`. `404` for another captain's ride.
+- **Added** Operations rides APIs, Operations only. `GET /operations/rides/?state=A,B`
+  (cursor-paged, newest first: `id`, `state`, `vehicle_type`, `service_area_id`, `rider_name`,
+  `captain_name`, fares, `payment_status`, `created_at`, `cancelled_by`; `400` for an unknown
+  state). `GET /operations/rides/{ride_id}/` (`OpsRideDetail`: the ride with `rider` and `captain`
+  name and phone, `vehicle`, `otp_attempts`, `dispatch_round`, `ratings` by side, every
+  `transition` and every `offer`). `GET /operations/rides/captains/` (cursor-paged: `approval`,
+  `vehicle`, `pass_ends_at`, `on_duty`, `rides_completed`, `rating`, `cancels`).
+  `GET /operations/rides/sos/?status=OPEN` (oldest first) and
+  `POST /operations/rides/sos/{sos_id}/resolve/` (`resolution_note` required; resolving again
+  changes nothing).
+- Rides notifications are queued with each event, once, to the right audience: a new offer to the
+  captain; captain assigned and arrived, no captain found, finding another captain and an
+  Operations cancel to the rider; a rider or Operations cancel to the assigned captain; an SOS to
+  every Operations user in the console feed.
+- **Added** ratings: `POST /rides/{ride_id}/rating/` and `POST /partner/rides/{ride_id}/rating/`
+  (`RatingRequest`: `stars`, 1-5) answer `201 { "stars" }`, once per side, only on a `COMPLETED`
+  ride; a second rating or an unfinished ride is `409 invalid_transition`. `Ride` and
+  `CaptainRide` add `my_rating` (`null` until that side rates).
+- **Added** SOS: `POST /rides/{ride_id}/sos/` and `POST /partner/rides/{ride_id}/sos/`
+  (`SosRequest`: optional `latitude` and `longitude`, together) answer
+  `201 { "sos_id", "emergency_number" }` on an open ride, `409 invalid_transition` otherwise. Never
+  refused for lack of a place (a captain's last ping is used when the phone sends none); a second
+  press while it is open returns the same SOS.
+- **Added** history: `GET /rides/` (the rider's) and `GET /partner/rides/history/` (the captain's),
+  newest first, cursor-paged: `id`, `state`, `vehicle_type`, `pickup_address`, `drop_address`,
+  `fare_paise`, `final_fare_paise`, `payment_status`, `created_at`, `completed_at`,
+  `cancelled_by`.
+- **Added** `GET /partner/rides/earnings/?period=today|week` (`Earnings`): `period`, `since`
+  (local midnight, or Monday), `rides`, `earned_paise`, `cash_collected_paise`, computed from
+  completed rides; `400` for any other period.
+- **Added** cancellations. `POST /rides/{ride_id}/cancel/` (`RiderCancelRequest`: `reason`, one of
+  `CHANGED_MIND`, `CAPTAIN_DELAYED`, `WRONG_PICKUP`, `OTHER`) answers the ride `CANCELLED`, from
+  `SEARCHING`, `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`; free. `POST
+  /partner/rides/{ride_id}/cancel/` (`CaptainCancelRequest`: `reason`, one of
+  `RIDER_NOT_REACHABLE`, `VEHICLE_ISSUE`, `PICKUP_TOO_FAR`, `OTHER`) answers `204`, from
+  `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`: the ride is `SEARCHING` again from round 1 and is never
+  offered back to that captain. `POST /operations/rides/{ride_id}/cancel/`
+  (`OperationsCancelRequest`: `reason`, free text up to 64 characters) answers `204` from any open
+  state, including `IN_TRIP`. Each refuses a closed ride with `409 invalid_transition`; cancelling
+  a cancelled ride changes nothing. Pending offers are withdrawn. `Ride` adds `searching_again`:
+  `true` while a captain's cancel has the ride looking for another captain.
+- **Added** `GET /partner/rides/current/` (`CaptainCurrentRide`): `ride`, the open ride or a
+  completed one not yet marked paid, else `null`. Polled every 5 s on a ride.
+- **Changed**, additive: `Ride` and `CaptainRide` add `captain_assigned_at`, `captain_arrived_at`,
+  `started_at`, `completed_at`, `cancelled_by`, `cancel_reason` and `emergency_number`. `Ride` adds
+  `otp` (only while `CAPTAIN_ASSIGNED` or `CAPTAIN_ARRIVED`) and the captain's `position` and
+  `eta_s` (seconds to the pickup, while on the way), each `null` when the server does not know.
+- **Changed**: `POST /partner/rides/passes/` answers `403 captain_not_approved` unless the partner
+  is an approved captain.
+- **Added** `POST /rides/` (`RideCreateRequest` → `201 Ride`), with a required `Idempotency-Key`:
+  books a ride from one of the rider's own quotes (`quote_id`). The ride starts `SEARCHING` and
+  the server offers it to nearby captains in rounds; it ends `NO_CAPTAIN_FOUND` if nobody
+  accepts. `404` for an unknown quote or someone else's; `422 quote_expired`; `409 quote_used`;
+  `422 vehicle_unavailable` when that vehicle was switched off in the area since the quote;
+  `409 ride_already_open` while the rider has another open ride.
+- **Added** `GET /rides/{ride_id}/` (`Ride`): the rider's own ride only (`404` otherwise): `id`,
+  `state`, `vehicle_type`, `pickup` and `drop` (`latitude`, `longitude`, `address`),
+  `route_polyline`, `fare_paise`, `waiting_paise`, `final_fare_paise` (`null` until complete),
+  `payment_method`, `payment_status`, `created_at`. The app polls it every 3 s during a ride.
+  `captain` is `null` until a captain accepts, then `name`, `photo_url` (or `null`),
+  `phone_number` (only while `CAPTAIN_ASSIGNED`, `CAPTAIN_ARRIVED` or `IN_TRIP`, else `null`) and
+  `vehicle`.
+- **Added** `GET /partner/rides/offers/current/` (`CurrentOffer`): `offer` (or `null`) and
+  `server_now`. An offer has `id`, `ride_id`, `vehicle_type`, `pickup`, `drop`,
+  `pickup_distance_m`, `fare_paise`, `trip_distance_m`, `trip_duration_s`, `offered_at` and
+  `expires_at` (15 s). The captain app polls it every 2 s while on duty.
+- **Added** `POST /partner/rides/offers/{offer_id}/accept/` (→ `CaptainRide`), with a required
+  `Idempotency-Key`. The first captain to accept gets the ride (`CAPTAIN_ASSIGNED`); the other
+  offers are withdrawn. Accepting the same offer again returns the ride.
+  `409 ride_no_longer_available` when another captain took it, the offer expired or the ride
+  ended; `409 not_on_duty`; `404` for someone else's offer. `CaptainRide` is the ride plus
+  `rider` (`name`, `phone_number`, with the same visibility rule as the captain's number).
+- **Added** `POST /partner/rides/offers/{offer_id}/decline/` (→ `204`). When nobody else in the
+  round is still deciding, the ride goes to the next captains at once. Declining twice or after
+  the deadline changes nothing.
+- **Changed**, additive: the `Ride` captain card (`RideCaptain`) adds `rating`, the captain's
+  average stars from riders to one decimal, `null` before the first rating.
+- **Changed**, additive: `RideRateCard` (Operations rate cards) adds `service_area_name`, so the
+  console can name the area without another call.
+- **Changed**: `StartTripRequest.otp` pattern is `^[0-9]{4}$` (ASCII digits only; other scripts'
+  digits are `400`, not a server error). Wrong start codes stay counted across a captain cancel.
+- **Changed**: `POST /partner/rides/offers/{offer_id}/accept/` also answers `403
+  captain_not_approved` or `403 pass_required` when the captain was suspended or their pass ended
+  while the offer was open. `POST /partner/rides/passes/` answers `409 pass_already_active` while
+  a paid pass is queued. `POST /partner/rides/location/` accepts pings off duty while the captain
+  has an open ride. A rider's SOS without a place uses the captain's last ping.
+- Removed: none. Renamed: none.
+
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 
 Additive.

@@ -74,6 +74,26 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
     )
 
 
+#: Documents a ride captain uploads on top of the identity documents every partner provides.
+RIDE_CAPTAIN_DOCUMENT_KINDS = (
+    PartnerDocument.Kind.DRIVING_LICENCE,
+    PartnerDocument.Kind.VEHICLE_RC,
+    PartnerDocument.Kind.VEHICLE_INSURANCE,
+)
+
+
+def required_document_kinds(track: str) -> tuple[str, ...]:
+    """The document kinds submission and approval require for an application on this track.
+
+    Every track needs the identity documents in `settings.PARTNER_REQUIRED_DOCUMENT_KINDS`. A ride
+    captain also needs a driving licence, the vehicle RC and insurance.
+    """
+    kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    if track == PartnerApplication.Track.RIDE_CAPTAIN:
+        kinds += tuple(str(kind) for kind in RIDE_CAPTAIN_DOCUMENT_KINDS)
+    return kinds
+
+
 def partner_has_required_consents(partner: PartnerProfile) -> bool:
     """Whether the Partner holds a live receipt for every agreement submission requires.
 

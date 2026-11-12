@@ -21,6 +21,9 @@ export type RequirementCode =
   | "WORKING_HOURS"
   | "GOVERNMENT_ID"
   | "ADDRESS_PROOF"
+  | "DRIVING_LICENCE"
+  | "VEHICLE_RC"
+  | "VEHICLE_INSURANCE"
   | "CONSENTS";
 
 export interface Requirement {
@@ -34,7 +37,23 @@ export interface Requirement {
 const DOCUMENT_LABELS: readonly { kind: DocumentKind; code: RequirementCode; label: string }[] = [
   { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID", label: "Government photo ID" },
   { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF", label: "Proof of address" },
+  { kind: "DRIVING_LICENCE", code: "DRIVING_LICENCE", label: "Driving licence" },
+  { kind: "VEHICLE_RC", code: "VEHICLE_RC", label: "Vehicle RC" },
+  { kind: "VEHICLE_INSURANCE", code: "VEHICLE_INSURANCE", label: "Vehicle insurance" },
 ];
+
+/**
+ * The upload boxes on the Documents step: the two identity documents every partner sees, then
+ * any other kind the server requires (a ride captain's licence, RC and insurance).
+ */
+export function offeredDocuments(application: Application | null): readonly { kind: DocumentKind; label: string }[] {
+  const identity: readonly DocumentKind[] = ["GOVERNMENT_ID", "ADDRESS_PROOF"];
+  const kinds = [...identity, ...requiredDocumentKinds(application).filter((kind) => !identity.includes(kind))];
+  return kinds.map((kind) => ({
+    kind,
+    label: DOCUMENT_LABELS.find((item) => item.kind === kind)?.label ?? "Document",
+  }));
+}
 
 /**
  * What the server requires before review. Before an application exists there is no answer to

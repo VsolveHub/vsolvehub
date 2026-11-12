@@ -621,6 +621,41 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Check the work and confirm",
         "{partner_name} has finished your {service}. Confirm it, or tell us if something is wrong.",
     ),
+    # ---- VSolve Rides (docs/rapido/README.md §5.7) ----------------------------------------
+    #: Context keys are the shared ones the feed test documents (`amount`, `partner_name`).
+    "rides_offer_new": (
+        "New ride request · {amount}",
+        "Open the app to accept: it goes to another captain in 15 seconds.",
+    ),
+    "rides_captain_assigned": (
+        "{partner_name} is coming",
+        "Your captain is on the way. Open the app to see them on the map and to get your start "
+        "code.",
+    ),
+    "rides_captain_arrived": (
+        "{partner_name} has arrived",
+        "Your captain is at the pickup. Share your start code when you meet.",
+    ),
+    "rides_no_captain_found": (
+        "No captain nearby",
+        "We couldn't find a captain for your ride. Please try booking again.",
+    ),
+    "rides_finding_another_captain": (
+        "Finding another captain",
+        "Your captain had to cancel. We're finding you another one now.",
+    ),
+    "rides_cancelled_captain": (
+        "Ride cancelled",
+        "This ride was cancelled. You can take new ride requests.",
+    ),
+    "rides_cancelled_by_operations": (
+        "Ride cancelled",
+        "VSolve support cancelled your ride. Contact support if you need help.",
+    ),
+    "rides_sos_raised": (
+        "SOS on a ride",
+        "A rider or captain pressed SOS on a live ride. Open the SOS queue now.",
+    ),
 }
 
 

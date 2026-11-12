@@ -118,6 +118,12 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
         owned = StaySubscription.objects.filter(
             payment_attempt=attempt, host__user_id=customer_id
         ).exists()
+    elif purpose == PaymentAttempt.Purpose.RIDE_CAPTAIN_PASS:
+        from apps.rides.models import CaptainPass  # noqa: PLC0415
+
+        owned = CaptainPass.objects.filter(
+            payment_attempt=attempt, partner__user_id=customer_id
+        ).exists()
     return owned
 
 

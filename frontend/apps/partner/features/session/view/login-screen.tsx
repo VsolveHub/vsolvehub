@@ -85,7 +85,11 @@ export function LoginScreen() {
   // Only once there is a session. Asking Django for an application while nobody
   // is signed in spends a guaranteed refusal on every visit to this screen.
   const application = usePartnerApplication({ enabled: isAuthenticated });
-  const flow = usePhoneAuthFlow(getApiClient());
+  // The marketing hero sends the number it collected as `?phone=`; prefill it so
+  // the person does not have to type it twice. The hook sanitizes the value.
+  const flow = usePhoneAuthFlow(getApiClient(), {
+    initialPhone: searchParams.get("phone") ?? "",
+  });
   const flowWithAudio = {
     ...flow,
     phoneError: readableFieldError(t, flow.phoneError),

@@ -413,6 +413,11 @@ def apply_provider_payment(  # noqa: PLR0911, PLR0912
 
             complete_stay_subscription_payment(payment_attempt_id=attempt.id)
             return None
+        if attempt.purpose == PaymentAttempt.Purpose.RIDE_CAPTAIN_PASS:
+            from apps.rides.services import complete_pass_payment  # noqa: PLC0415
+
+            complete_pass_payment(payment_attempt_id=attempt.id)
+            return None
         _apply_m2_capture(attempt=attempt)
         return None
     if payment.status == "authorized" and attempt.status in (

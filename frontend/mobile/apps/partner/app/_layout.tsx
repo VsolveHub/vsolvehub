@@ -45,6 +45,9 @@ import { catalogs } from "@/i18n/catalogs";
 import { useLocaleStore } from "@/i18n/locale-store";
 import { isOfferPush, resolvePartnerPushData } from "@/features/notifications/push-routing";
 import { requestOpenAlerts } from "@/features/notifications/alerts-bus";
+// Rides: defines the captain location task at start-up, so it exists when Android wakes the app
+// without a screen (brief §5.13).
+import "@/features/rides/location-task";
 
 import { LogBox, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";

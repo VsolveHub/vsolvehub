@@ -105,6 +105,21 @@ class ServiceIndexItemSerializer(serializers.ModelSerializer[Service]):
         read_only_fields = fields
 
 
+class PartnerWorkVariantSerializer(serializers.ModelSerializer[ServiceVariant]):
+    """One offerable job type on Partner onboarding: just what the checklist shows and saves."""
+
+    service_name = serializers.CharField(source="service.name", read_only=True)
+    category_name = serializers.CharField(
+        source="service.subcategory.category.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ServiceVariant
+        fields = ("id", "code", "name", "required_skill_code", "service_name", "category_name")
+        read_only_fields = fields
+
+
 class A1TaskLineSerializer(serializers.Serializer[dict[str, object]]):
     code = serializers.SlugField(read_only=True)
     label = serializers.CharField(read_only=True)  # type: ignore[assignment]

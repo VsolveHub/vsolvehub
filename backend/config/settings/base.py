@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "apps.ops_reports",
     "apps.mobile",
     "apps.stories",
+    "apps.rides",
 ]
 
 MIDDLEWARE = [
@@ -292,6 +293,8 @@ REST_FRAMEWORK = {
         "payout_account": "10/hour",
         # Withdraw taps. The daily limit is the real rule; this only stops a loop hammering it.
         "payout_withdrawal": "20/hour",
+        # Rides price checks: each costs a Geocoding call and up to two Routes calls.
+        "rides_quotes": "20/min",
     },
 }
 
@@ -418,7 +421,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.98.0",
+    "VERSION": "1.99.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -818,6 +821,34 @@ GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 2
 # 60: the Partner app re-asks for the road route as the Partner moves; a minute per rounded
 # origin keeps a still Partner, or a re-rendering screen, at one Routes API call a minute.
 ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
+
+# VSolve Rides. Routing provider (ADR-0004): "google", "fake" (laptops and tests only; refused
+# without DEBUG) or "unconfigured", which refuses every call.
+RIDES_ROUTING_PROVIDER = env("RIDES_ROUTING_PROVIDER", default="unconfigured")
+# A fare quote can be booked for this long, once.
+RIDES_QUOTE_TTL_SECONDS = env.int("RIDES_QUOTE_TTL_SECONDS", default=300)
+# Live captain positions ("who is near?"). Ephemeral; PostgreSQL stays the truth for duty.
+RIDES_REDIS_URL = env(
+    "RIDES_REDIS_URL", default=env("REDIS_URL", default="redis://127.0.0.1:56379/0")
+)
+# Dispatch (brief §5.6): one search radius per round, nearest captains first.
+RIDES_DISPATCH_RADII_M = [
+    int(radius) for radius in env.list("RIDES_DISPATCH_RADII_M", default=["2000", "4000", "6000"])
+]
+RIDES_OFFERS_PER_ROUND = env.int("RIDES_OFFERS_PER_ROUND", default=3)
+RIDES_OFFER_SECONDS = env.int("RIDES_OFFER_SECONDS", default=15)
+# The start OTP is HMAC(secret, ride id). No default on purpose: without it a ride cannot start.
+RIDES_OTP_SECRET = env("RIDES_OTP_SECRET", default="")
+# "Arrived" is accepted only this close to the pickup, from a fresh ping (see below).
+RIDES_ARRIVAL_RADIUS_M = env.int("RIDES_ARRIVAL_RADIUS_M", default=200)
+# Shown on every live ride and after an SOS.
+RIDES_EMERGENCY_NUMBER = env("RIDES_EMERGENCY_NUMBER", default="112")
+# A captain's GPS ping older than this is refused, and too old to prove "arrived".
+RIDES_PING_MAX_AGE_SECONDS = env.int("RIDES_PING_MAX_AGE_SECONDS", default=30)
+# Matching ignores positions less accurate than this (brief §5.6).
+RIDES_MATCHING_MAX_ACCURACY_M = env.int("RIDES_MATCHING_MAX_ACCURACY_M", default=100)
+# A pass purchase still waiting for payment blocks another one for this long (Revision 2).
+RIDES_PASS_PURCHASE_WINDOW_MINUTES = env.int("RIDES_PASS_PURCHASE_WINDOW_MINUTES", default=30)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -1026,6 +1057,18 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-booking-group-dispatch": {
         "task": "apps.assignments.tasks.reconcile_booking_group_dispatch",
         "schedule": 10.0,
+    },
+    "rides-expire-captain-passes": {
+        "task": "apps.rides.tasks.expire_captain_passes",
+        "schedule": 60.0,
+    },
+    "rides-sweep-captain-locations": {
+        "task": "apps.rides.tasks.sweep_captain_locations",
+        "schedule": 60.0,
+    },
+    "rides-redrive-dispatch": {
+        "task": "apps.rides.tasks.redrive_dispatch",
+        "schedule": 30.0,
     },
     "cleanup-partner-document-uploads": {
         "task": "apps.partners.tasks.cleanup_partner_document_uploads",
