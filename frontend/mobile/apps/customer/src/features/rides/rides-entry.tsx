@@ -1,44 +1,15 @@
 import { useAuthStore } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
-import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { ChevronRight } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 
-import { findOpenRide, useRidesAvailability, type Place } from "./queries";
-import { VEHICLES } from "./vehicles";
+import { findOpenRide } from "./queries";
+import { VEHICLES, type VehicleType } from "./vehicles";
 
-/**
- * Where the phone is, only if the customer already allowed location. Home never asks for the
- * permission: a customer who has not allowed it simply does not see the Rides entry.
- */
-function useAllowedPlace(): Place | null {
-  const [place, setPlace] = useState<Place | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const permission = await Location.getForegroundPermissionsAsync();
-        if (!permission.granted) return;
-        const position =
-          (await Location.getLastKnownPositionAsync()) ??
-          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
-        if (!cancelled) {
-          setPlace({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-        }
-      } catch {
-        // No position: no entry. Never a card that leads nowhere.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return place;
-}
+/** Every vehicle Rides offers, cheapest first. Which ones run at the pickup is told on booking. */
+const TYPES: VehicleType[] = ["BIKE", "AUTO", "CAB"];
 
 /** Once per app launch, so going back to Home from the ride screen doesn't bounce the rider. */
 let openRideChecked = false;
@@ -74,40 +45,40 @@ export function resetOpenRideCheck() {
 }
 
 /**
- * The Rides card on Home (brief §5.11). Shown only when `rides/availability/` lists vehicle types
- * here; while loading, on any error, or where Rides does not run, it renders nothing.
+ * The Rides card on Home: always there for a signed-in customer, like the "Where to?" bar of a
+ * ride app. Location is asked for on the next screen, and a pickup where Rides does not run is
+ * told so there ("Rides isn't available here yet"), not hidden here.
  */
 export function RidesEntry() {
   const router = useRouter();
+  const signedIn = useAuthStore((state) => state.status) === "signedIn";
   useLandOnOpenRide();
-  const availability = useRidesAvailability(useAllowedPlace());
-  const types = availability.data?.vehicle_types ?? [];
-  if (types.length === 0) return null;
+  if (!signedIn) return null;
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Book a ride"
       onPress={() => router.push("/rides" as never)}
-      className="flex-row items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4"
+      className="min-h-touch flex-row items-center gap-4 rounded-card border border-line bg-surface p-4 active:bg-surface-hover"
     >
-      <View className="flex-row -space-x-2">
-        {types.map((type) => {
+      <View className="flex-row -space-x-3">
+        {TYPES.map((type) => {
           const Icon = VEHICLES[type].icon;
           return (
-            <View key={type} className="h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-slate-100">
-              <Icon size={22} color="#0F172A" />
+            <View key={type} className="h-14 w-14 items-center justify-center rounded-full border-2 border-surface bg-surface-sunken">
+              <Icon size={40} />
             </View>
           );
         })}
       </View>
       <View className="flex-1">
-        <Text className="text-base font-extrabold text-[#00112e]">Rides</Text>
-        <Text className="text-sm text-slate-500">
-          {types.map((type) => VEHICLES[type].name).join(" · ")} near you
+        <Text className="text-lg font-extrabold text-text">Rides</Text>
+        <Text className="text-sm text-text-muted">
+          {TYPES.map((type) => VEHICLES[type].name).join(" · ")}
         </Text>
       </View>
-      <ChevronRight size={20} color="#64748B" />
+      <ChevronRight size={20} color="#756c5e" />
     </Pressable>
   );
 }

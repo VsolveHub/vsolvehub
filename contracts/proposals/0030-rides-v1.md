@@ -456,7 +456,8 @@ received. `400 validation_error` for any other `period`.
 
 ### ✅ `GET rides/availability/?latitude=17.440000&longitude=78.348900`
 
-Open to signed-out visitors (Home is), with the existing serviceability rate limit.
+Open to signed-out visitors (Home is), with the existing serviceability rate limit. The Customer
+app no longer calls it for the Home card (ADR-0013, decision 38); it is kept for other clients.
 
 ```json
 { "vehicle_types": ["BIKE", "AUTO", "CAB"] }

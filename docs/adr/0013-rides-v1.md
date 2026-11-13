@@ -229,6 +229,13 @@ the Partner app Rides workspace and the Operations console are the agreed design
     keys it by id and `offered_at`). The tunable limits moved to `RIDES_*` settings, and the sweep
     checks all captains in one Redis round trip.
 
+38. **The Rides card on Home is always shown to a signed-in customer (12 Nov).** It no longer waits
+    for `GET rides/availability/` or for location permission, which hid Rides from anyone whose
+    phone had no fix yet or sat outside a served area, with no hint why. The Where-to screen asks
+    for the location (and says why), and a pickup where Rides does not run is told so on the
+    Choose-ride screen: "Rides isn't available here yet." The availability endpoint stays; the
+    Customer app just does not call it. This departs from brief §5.11 (owner to confirm).
+
 ## Consequences
 
 - Rides reuses the partner review queue, so Operations needs no new approval screen. The cost is that
