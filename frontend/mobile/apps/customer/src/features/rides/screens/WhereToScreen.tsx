@@ -1,10 +1,21 @@
-import { PlaceSearch, useReverseGeocode, type PlaceSuggestion } from "@vsolve/mobile-core";
+import { usePlaceSearch, useReverseGeocode, type PlaceSuggestion } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
+import { describeError } from "@vsolve/query/native";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { ArrowLeft, LocateFixed } from "lucide-react-native";
+import { ArrowLeft, LocateFixed, MapPin, Search } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, View } from "react-native";
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from "react-native";
 import MapView, { Marker, type MapPressEvent } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -17,6 +28,26 @@ interface Place {
 type Field = "pickup" | "drop";
 type PickupStatus = "locating" | "ready" | "denied" | "failed";
 
+// The server refuses a search shorter than this (`PlaceSearchQuerySerializer`).
+const MIN_SEARCH_CHARS = 3;
+const SEARCH_PAUSE_MS = 250;
+
+// Token values from guide/03-design-system.md, for props that take a colour and not a class.
+const NAVY = "#00246b";
+const MUTED = "#756c5e";
+const SIGNAL = "#f87000";
+const DANGER = "#b3261e";
+
+/** "Forum Mall, Koramangala, Bengaluru" -> a bold name and a grey line for the rest. */
+function splitLabel(label: string): { title: string; subtitle: string } {
+  const [title, ...rest] = label.split(",");
+  return { title: (title ?? label).trim(), subtitle: rest.join(",").trim() };
+}
+
+/**
+ * Where to: opens as a search list, like a ride app does, not as a map. The map is one tap away
+ * ("Set location on map") and only used to drop a pin.
+ */
 export function WhereToScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -26,17 +57,28 @@ export function WhereToScreen() {
   const [pickup, setPickup] = useState<Place | null>(null);
   const [drop, setDrop] = useState<Place | null>(null);
   const [pickupStatus, setPickupStatus] = useState<PickupStatus>("locating");
-  // The field being typed into; map taps also fill this one.
-  const [active, setActive] = useState<Field | null>(null);
+  // The field being typed into. Drop first: that is what the rider came to do.
+  const [active, setActive] = useState<Field | null>("drop");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [mapMode, setMapMode] = useState(false);
 
-  function focus(place: Place) {
-    mapRef.current?.animateToRegion(
-      { latitude: place.latitude, longitude: place.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 },
-      300,
-    );
-  }
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query), SEARCH_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const search = usePlaceSearch(active ? debounced : "");
+  const results = search.data?.results ?? [];
+  const showResults = active !== null && debounced.trim().length >= MIN_SEARCH_CHARS;
 
   const setters = { pickup: setPickup, drop: setDrop };
+
+  function activate(field: Field | null) {
+    setActive(field);
+    setQuery("");
+    setDebounced("");
+  }
 
   // Set a place now, then swap its label for the street address once the server answers.
   function placeAt(field: Field, latitude: number, longitude: number, label: string) {
@@ -63,8 +105,6 @@ export function WhereToScreen() {
         if (cancelled) return;
         placeAt("pickup", coords.latitude, coords.longitude, "Your location");
         setPickupStatus("ready");
-        setActive("drop");
-        focus({ latitude: coords.latitude, longitude: coords.longitude, label: "" });
       } catch {
         if (!cancelled) setPickupStatus("failed");
       }
@@ -80,9 +120,10 @@ export function WhereToScreen() {
     const place = { label: s.label, latitude: Number(s.latitude), longitude: Number(s.longitude) };
     setters[field](place);
     if (field === "pickup") setPickupStatus("ready");
-    focus(place);
     // Move on to the next empty field, or close the editor.
-    setActive(field === "pickup" && !drop ? "drop" : null);
+    const next = field === "pickup" && !drop ? "drop" : null;
+    activate(next);
+    if (next === null) Keyboard.dismiss();
   }
 
   function handleMapPress(e: MapPressEvent) {
@@ -90,10 +131,16 @@ export function WhereToScreen() {
     const field = active ?? "drop";
     placeAt(field, latitude, longitude, "Pinned location");
     if (field === "pickup") setPickupStatus("ready");
-    setActive(null);
+    activate(null);
+    setMapMode(false);
   }
 
-  function search() {
+  function openMap() {
+    Keyboard.dismiss();
+    setMapMode(true);
+  }
+
+  function next() {
     if (!pickup || !drop) return;
     router.push({
       pathname: "/rides/choose-ride",
@@ -108,98 +155,209 @@ export function WhereToScreen() {
     });
   }
 
+  if (mapMode) {
+    const start = pickup ?? drop;
+    return (
+      <View
+        style={{ paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 16) }}
+        className="flex-1 gap-3 bg-canvas px-4"
+      >
+        <View className="min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
+          <MapView
+            ref={mapRef}
+            style={{ flex: 1 }}
+            initialRegion={
+              start
+                ? { latitude: start.latitude, longitude: start.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 }
+                : undefined
+            }
+            onPress={handleMapPress}
+            userInterfaceStyle="light"
+            showsUserLocation
+          >
+            {pickup && <Marker coordinate={pickup} title="Pickup" pinColor={NAVY} />}
+            {drop && <Marker coordinate={drop} title="Drop" pinColor={SIGNAL} />}
+          </MapView>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to search"
+            onPress={() => setMapMode(false)}
+            className="absolute left-3 top-3 h-11 w-11 items-center justify-center rounded-full bg-surface shadow-lg active:bg-surface-hover"
+          >
+            <ArrowLeft size={22} color={NAVY} />
+          </Pressable>
+        </View>
+        <View className="rounded-2xl border border-line bg-surface p-4">
+          <Text className="text-base font-bold text-text">
+            {`Tap the map to set your ${(active ?? "drop") === "pickup" ? "pickup" : "drop-off"}`}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   function renderField(field: Field, value: Place | null, placeholder: string) {
     if (active === field) {
       return (
-        <PlaceSearch
-          placeholder={placeholder}
-          onPick={(s) => handlePick(field, s)}
-          inputStyle={{ borderWidth: 0, backgroundColor: "#F3F4F6", minHeight: 40, fontSize: 14 }}
-        />
+        <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-selected bg-surface px-3">
+          <Search size={16} color={MUTED} />
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            placeholder={placeholder}
+            placeholderTextColor={MUTED}
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel={placeholder}
+            className="flex-1 py-2 text-base text-text"
+          />
+        </View>
       );
     }
     return (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={placeholder}
-        onPress={() => setActive(field)}
-        className="min-h-10 justify-center rounded-xl bg-gray-100 px-3"
+        onPress={() => activate(field)}
+        className="min-h-11 justify-center rounded-control bg-surface-sunken px-3 active:bg-surface-hover"
       >
-        <Text numberOfLines={1} className={value ? "text-sm text-slate-900" : "text-sm text-slate-400"}>
+        <Text numberOfLines={1} className={value ? "text-base text-text" : "text-base text-text-muted"}>
           {value?.label ?? placeholder}
         </Text>
       </Pressable>
     );
   }
 
+  const activeName = active === "pickup" ? "pickup" : "drop-off";
+
   return (
-    <View className="flex-1 bg-canvas">
-      <MapView
-        ref={mapRef}
-        style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        onPress={handleMapPress}
-        userInterfaceStyle="light"
-        showsUserLocation
-      >
-        {pickup && <Marker coordinate={pickup} title="Pickup" pinColor="green" />}
-        {drop && <Marker coordinate={drop} title="Drop" pinColor="red" />}
-      </MapView>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={{ paddingTop: insets.top }}
+      className="flex-1 bg-canvas"
+    >
+      <View className="flex-row items-center gap-3 px-4 py-3">
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={NAVY} />
+        </Pressable>
+        <Text className="flex-1 text-xl font-extrabold text-text">Where to?</Text>
+        <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push("/rides/history" as never)}>
+          <Text className="text-sm font-semibold text-text-link">Your rides</Text>
+        </Pressable>
+      </View>
 
-      <View
-        style={{ marginTop: insets.top + 8 }}
-        className="mx-3 rounded-2xl bg-white p-4 shadow-lg"
-      >
-        <View className="mb-3 flex-row items-center gap-2">
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => router.back()}>
-            <ArrowLeft size={22} color="#111827" />
-          </Pressable>
-          <Text className="flex-1 text-lg font-bold text-slate-900">Find a trip</Text>
-          <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push("/rides/history" as never)}>
-            <Text className="text-sm font-semibold text-blue-700">Your rides</Text>
-          </Pressable>
+      <View className="mx-4 flex-row gap-3 rounded-card border border-line bg-surface p-3">
+        {/* Pickup dot, connector line, drop square */}
+        <View className="items-center py-4">
+          <View className="h-2.5 w-2.5 rounded-full border-2 border-selected" />
+          <View className="my-1 w-0.5 flex-1 bg-line-strong" />
+          <View className="h-2.5 w-2.5 bg-selected" />
         </View>
-
-        <View className="flex-row gap-3">
-          {/* Pickup dot, connector line, drop square */}
-          <View className="items-center pt-4">
-            <View className="h-2.5 w-2.5 rounded-full border-2 border-blue-600" />
-            <View className="my-1 w-0.5 flex-1 bg-blue-600" />
-            <View className="mb-4 h-2.5 w-2.5 bg-blue-600" />
-          </View>
-          <View className="flex-1 gap-2">
-            {pickupStatus === "locating" && active !== "pickup" ? (
-              <View className="min-h-10 flex-row items-center gap-2 rounded-xl bg-gray-100 px-3">
-                <ActivityIndicator size="small" />
-                <Text className="text-sm text-slate-500">Finding your location…</Text>
-              </View>
-            ) : (
-              renderField("pickup", pickup, "Add a pick-up location")
-            )}
-            {renderField("drop", drop, "Add a drop-off location")}
-          </View>
+        <View className="flex-1 gap-2">
+          {pickupStatus === "locating" && active !== "pickup" ? (
+            <View className="min-h-11 flex-row items-center gap-2 rounded-control bg-surface-sunken px-3">
+              <ActivityIndicator size="small" color={NAVY} />
+              <Text className="text-base text-text-muted">Finding your location…</Text>
+            </View>
+          ) : (
+            renderField("pickup", pickup, "Pickup location")
+          )}
+          {renderField("drop", drop, "Where to?")}
         </View>
+      </View>
 
-        {pickupStatus === "denied" && !pickup ? (
-          <Pressable onPress={() => Linking.openSettings()} className="mt-2 flex-row items-center gap-1.5">
-            <LocateFixed size={14} color="#B91C1C" />
-            <Text className="text-xs text-red-700">Location is off. Tap to allow, or type your pickup.</Text>
-          </Pressable>
-        ) : null}
-        {pickupStatus === "failed" && !pickup ? (
-          <Text className="mt-2 text-xs text-red-700">We couldn&apos;t find your location. Type your pickup.</Text>
-        ) : null}
-        {active ? <Text className="mt-2 text-xs text-slate-500">Or tap the map to set it.</Text> : null}
+      {pickupStatus === "locating" && !pickup ? (
+        <Text className="mx-4 mt-3 text-xs text-text-muted">We use your location to find your pickup.</Text>
+      ) : null}
+      {pickupStatus === "denied" && !pickup ? (
+        <Pressable onPress={() => Linking.openSettings()} className="mx-4 mt-3 flex-row items-center gap-1.5">
+          <LocateFixed size={14} color={DANGER} />
+          <Text className="flex-1 text-xs text-danger-text">
+            Location is off. We use it to find your pickup. Tap to allow, or type your pickup.
+          </Text>
+        </Pressable>
+      ) : null}
+      {pickupStatus === "failed" && !pickup ? (
+        <Text className="mx-4 mt-3 text-xs text-danger-text">We couldn&apos;t find your location. Type your pickup.</Text>
+      ) : null}
 
-        {pickup && drop ? (
+      <ScrollView className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
+        {active && !showResults ? (
+          <Text className="px-4 py-3 text-sm text-text-muted">
+            {`Type at least ${MIN_SEARCH_CHARS} letters of the ${activeName} place.`}
+          </Text>
+        ) : null}
+
+        {showResults ? (
+          search.isFetching && results.length === 0 ? (
+            <View className="flex-row items-center gap-2 px-4 py-4">
+              <ActivityIndicator size="small" color={NAVY} />
+              <Text className="text-sm text-text-muted">Searching…</Text>
+            </View>
+          ) : search.isError ? (
+            <Text accessibilityRole="alert" className="px-4 py-4 text-sm text-danger-text">
+              {describeError(search.error, "read").message}
+            </Text>
+          ) : results.length === 0 ? (
+            <Text className="px-4 py-4 text-sm text-text-muted">
+              No matching place. Try a nearby landmark, or set it on the map.
+            </Text>
+          ) : (
+            results.map((place, index) => {
+              const { title, subtitle } = splitLabel(place.label);
+              return (
+                <Pressable
+                  key={`${place.latitude},${place.longitude},${index}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={place.label}
+                  onPress={() => active && handlePick(active, place)}
+                  className="flex-row items-center gap-3 px-4 py-3 active:bg-surface-hover"
+                >
+                  <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-sunken">
+                    <MapPin size={20} color={NAVY} />
+                  </View>
+                  <View className="flex-1 border-b border-line pb-3">
+                    <Text numberOfLines={1} className="text-base font-semibold text-text">
+                      {title}
+                    </Text>
+                    {subtitle ? (
+                      <Text numberOfLines={1} className="text-sm text-text-muted">
+                        {subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })
+          )
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Set location on map"
+          onPress={openMap}
+          className="flex-row items-center gap-3 px-4 py-3 active:bg-surface-hover"
+        >
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-action-surface">
+            <MapPin size={20} color={SIGNAL} />
+          </View>
+          <Text className="text-base font-semibold text-text">Set location on map</Text>
+        </Pressable>
+      </ScrollView>
+
+      {pickup && drop ? (
+        <View style={{ paddingBottom: insets.bottom + 12 }} className="border-t border-line bg-surface px-4 pt-3">
           <Pressable
             accessibilityRole="button"
-            onPress={search}
-            className="mt-3 items-center rounded-xl bg-slate-900 py-3 active:opacity-80"
+            accessibilityLabel="Continue"
+            onPress={next}
+            className="min-h-touch items-center justify-center rounded-control bg-action active:bg-action-active"
           >
-            <Text className="text-sm font-bold text-white">Search</Text>
+            <Text className="text-base font-bold text-action-text">Continue</Text>
           </Pressable>
-        ) : null}
-      </View>
-    </View>
+        </View>
+      ) : null}
+    </KeyboardAvoidingView>
   );
 }
