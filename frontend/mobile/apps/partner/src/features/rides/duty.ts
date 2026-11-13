@@ -27,6 +27,28 @@ async function isRunning(): Promise<boolean> {
   }
 }
 
+/** Whether the phone's own location switch (quick settings) is on. Unknown counts as on. */
+export async function locationSwitchOn(): Promise<boolean> {
+  try {
+    return await Location.hasServicesEnabledAsync();
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Ask the phone to turn its location switch on, the way a ride app does: Android's own pop-up
+ * ("Turn on device location?") and one tap on OK. Declining, or no pop-up, changes nothing: the
+ * caller looks at the switch again and says what is needed.
+ */
+export async function turnOnLocation(): Promise<void> {
+  try {
+    await Location.enableNetworkProviderAsync();
+  } catch {
+    // Declined (or Android could not show it).
+  }
+}
+
 /**
  * 1. The server puts the captain on duty (or refuses, with the reason).
  * 2. The clock offset is saved from its `server_now`.

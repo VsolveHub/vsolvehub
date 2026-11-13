@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { canEditVehicle, vehicleProblems, EMPTY_VEHICLE } from "../model/vehicle";
 import { CaptainHome } from "./captain-home";
@@ -22,7 +22,13 @@ jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
   useMutation: () => ({ mutate: mockOffDuty, isPending: false, isError: false }),
 }));
-jest.mock("../duty", () => ({ goOffDuty: jest.fn() }));
+const mockTurnOn = jest.fn();
+let mockSwitchOn = true;
+jest.mock("../duty", () => ({
+  goOffDuty: jest.fn(),
+  locationSwitchOn: async () => mockSwitchOn,
+  turnOnLocation: () => mockTurnOn(),
+}));
 jest.mock("../queries", () => ({
   useCaptainStatus: () => mockStatus,
   useSaveVehicle: () => ({ mutate: mockSave, isPending: false, isError: false }),
@@ -44,6 +50,8 @@ const APPROVED = {
 };
 
 beforeEach(() => {
+  mockSwitchOn = true;
+  mockTurnOn.mockReset();
   mockRide = null;
   mockOffDuty.mockClear();
   mockPush.mockClear();
@@ -129,7 +137,34 @@ describe("CaptainHome", () => {
 
     await fireEvent.press(view.getByText("Go on duty"));
 
-    expect(mockPush).toHaveBeenCalledWith("/rides/duty-setup");
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/rides/duty-setup"));
+    expect(mockTurnOn).not.toHaveBeenCalled(); // location is on: no pop-up
+  });
+
+  it("with the phone's location off, shows Android's pop-up on the tap, then goes on to the setup", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, blocked_reasons: [] } };
+    mockSwitchOn = false;
+    mockTurnOn.mockImplementation(async () => {
+      mockSwitchOn = true; // the captain taps OK on the pop-up
+    });
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Go on duty"));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/rides/duty-setup"));
+    expect(mockTurnOn).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays on Home with one line when the captain declines the pop-up", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, blocked_reasons: [] } };
+    mockSwitchOn = false; // and it stays off: the captain declined
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Go on duty"));
+
+    expect(await view.findByText("Turn on your phone's location to go on duty.")).toBeTruthy();
+    expect(mockTurnOn).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalledWith("/rides/duty-setup");
   });
 
   it("offers Go off duty while on duty", async () => {

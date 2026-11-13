@@ -22,10 +22,12 @@ import {
 } from "lucide-react-native";
 import { PushDiagnosticsModal } from "@/features/notifications/view/push-diagnostics-modal";
 import { useState, type ReactNode } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
 
 import { usePartnerProfile } from "@/features/profile/queries";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { isCaptainShell } from "@/features/rides/model/shell";
+import { useCaptainStatus } from "@/features/rides/queries";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { PARTNER_SUPPORT_HOURS, PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
@@ -39,16 +41,21 @@ export function MeHome() {
   const [showPushDiagnostics, setShowPushDiagnostics] = useState(false);
   const grants = usePartnerWorkspaceGrants();
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
+  // A captain goes on and off duty from Rides Home. "Your availability" is the home-services
+  // switch, which means nothing to a captain and only showed a second, unrelated Go online.
+  const isCaptain = isCaptainShell(useCaptainStatus().data, Platform.OS);
 
   return (
     <ScrollView className="flex-1 bg-canvas" contentContainerClassName="gap-4 pb-8">
       {/* Clean Professional Profile Card */}
       <IdentityCard />
 
-      {/* Live Availability Toggle Card */}
-      <View className="px-4">
-        <PartnerPresence />
-      </View>
+      {/* Live Availability Toggle Card (home-services partners) */}
+      {isCaptain ? null : (
+        <View className="px-4">
+          <PartnerPresence />
+        </View>
+      )}
 
       {/* Account & Profile Section */}
       <Section title="Account & Profile">

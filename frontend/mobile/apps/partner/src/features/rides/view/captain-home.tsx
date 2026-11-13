@@ -3,17 +3,31 @@ import { getApiClient, pushPermission } from "@vsolve/mobile-core";
 import { Button, ErrorState, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
-import { goOffDuty } from "../duty";
+import { goOffDuty, locationSwitchOn, turnOnLocation } from "../duty";
 import { offDutyMessage } from "../model/duty-setup";
 import { blockedReasonTexts, vehicleTypeName, type CaptainStatus } from "../model/shell";
 import { captainStatusKey, useCaptainStatus, useCurrentRide, type CaptainRide } from "../queries";
 
 function useAlertsOff() {
   return useQuery({ queryKey: ["rides", "push-permission"], queryFn: pushPermission }).data === "denied";
+}
+
+/**
+ * The phone's own location switch, looked at every few seconds while on duty: with it off nothing
+ * is sent, riders cannot see the captain, and duty ends after 2 minutes.
+ */
+function useLocationSwitch(onDuty: boolean) {
+  return useQuery({
+    queryKey: ["rides", "location-switch"],
+    queryFn: () => Location.hasServicesEnabledAsync(),
+    enabled: onDuty,
+    refetchInterval: 4000,
+  });
 }
 
 function useTodayEarnings() {
@@ -84,6 +98,10 @@ export function CaptainHome() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const alertsOff = useAlertsOff();
+  // Set when the captain declined Android's "turn on location" pop-up after tapping Go on duty.
+  const [needsLocation, setNeedsLocation] = useState(false);
+  const locationSwitch = useLocationSwitch(status.data?.on_duty === true);
+  const locationOff = locationSwitch.data === false;
   const currentRide = useCurrentRide();
   const offDuty = useMutation({
     mutationFn: goOffDuty,
@@ -109,6 +127,19 @@ export function CaptainHome() {
   }
 
   const data = status.data;
+  // With the phone's location off, the tap shows Android's own pop-up first; the setup steps follow
+  // once it is on. Declining stays here with one line saying what is needed.
+  const startDuty = async () => {
+    setNeedsLocation(false);
+    if (!(await locationSwitchOn())) {
+      await turnOnLocation();
+      if (!(await locationSwitchOn())) {
+        setNeedsLocation(true);
+        return;
+      }
+    }
+    router.push("/rides/duty-setup");
+  };
   const blocked = blockedReasonTexts(data.blocked_reasons);
   return (
     <ScrollView
@@ -123,6 +154,23 @@ export function CaptainHome() {
         />
       }
     >
+      {data.on_duty && locationOff ? (
+        <View className="gap-2 rounded-2xl border border-line bg-surface p-4">
+          <Text className="text-base font-bold text-danger">Location is off</Text>
+          <Text className="text-sm text-text">You won&apos;t get ride requests until your phone&apos;s location is on.</Text>
+          <Button
+            size="lg"
+            block
+            onPress={async () => {
+              await turnOnLocation();
+              void locationSwitch.refetch();
+            }}
+          >
+            Turn on location
+          </Button>
+        </View>
+      ) : null}
+
       {currentRide.data?.ride ? <YourRide ride={currentRide.data.ride} /> : null}
 
       <View className="rounded-2xl bg-surface p-4 gap-1">
@@ -154,10 +202,15 @@ export function CaptainHome() {
             Go off duty
           </Button>
         ) : (
-          <Button size="lg" block disabled={blocked.length > 0} onPress={() => router.push("/rides/duty-setup")}>
+          <Button size="lg" block disabled={blocked.length > 0} onPress={() => void startDuty()}>
             Go on duty
           </Button>
         )}
+        {needsLocation ? (
+          <Text accessibilityRole="alert" className="text-sm text-danger">
+            Turn on your phone&apos;s location to go on duty.
+          </Text>
+        ) : null}
         {offDuty.isError ? (
           <Text className="text-sm text-danger">{describeError(offDuty.error, "mutation").message}</Text>
         ) : null}
