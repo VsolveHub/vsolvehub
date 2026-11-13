@@ -26,6 +26,9 @@ jest.mock("react-native-maps", () => {
   }
   return { __esModule: true, default: MockMap, Marker: View, Polyline: View };
 });
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
 jest.mock("expo-location", () => ({ getForegroundPermissionsAsync: async () => ({ granted: false }) }));
 jest.mock("../queries", () => ({
   cancelRide: (...args: unknown[]) => mockCancel(...args),
@@ -135,6 +138,22 @@ test("in the trip, no code and no cancel", async () => {
   expect(view.queryByText("Cancel ride")).toBeNull();
   expect(view.getByText("SOS")).toBeTruthy();
   expect(view.getByText("Share")).toBeTruthy();
+});
+
+test("on the trip, the full addresses and vehicle are shown, never cut short, with no profile picture", async () => {
+  const pickup = "Alappuzha Beach Road, Near the Lighthouse, Alappuzha, Kerala 688001";
+  const drop = "Boat Jetty, Finishing Point Road, Alappuzha, Kerala 688012";
+  mockRide = ride("IN_TRIP", {
+    captain: { ...CAPTAIN, photo_url: "https://example.test/ravi.jpg" },
+    pickup: { latitude: "9.48", longitude: "76.34", address: pickup },
+    drop: { latitude: "9.50", longitude: "76.34", address: drop },
+  });
+  const view = await renderRide();
+
+  for (const text of [pickup, drop, /Honda Shine, White/]) {
+    expect(view.getByText(text).props.numberOfLines).toBeUndefined();
+  }
+  expect(view.queryByLabelText("Photo of Ravi")).toBeNull();
 });
 
 test("SOS asks first, then alerts support and offers the emergency number", async () => {

@@ -21,7 +21,7 @@ function Row({ ride, onPress }: { ride: RideHistoryRow; onPress: () => void }) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="gap-1 rounded-2xl border border-slate-200 bg-white p-4 active:opacity-80"
+      className="gap-1 rounded-2xl border border-line bg-surface p-4 active:opacity-80"
     >
       <View className="flex-row justify-between">
         <Text className="text-sm font-semibold text-slate-900">
@@ -46,7 +46,7 @@ export function RideHistoryScreen() {
 
   if (history.isPending) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
+      <View className="flex-1 items-center justify-center bg-canvas">
         <ActivityIndicator color="#2563EB" />
       </View>
     );
@@ -63,7 +63,7 @@ export function RideHistoryScreen() {
   }
   return (
     <FlatList
-      className="bg-white"
+      className="bg-canvas"
       data={history.data.results}
       keyExtractor={(ride) => ride.id}
       renderItem={({ item }) => (

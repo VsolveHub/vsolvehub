@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
 import { decodePolyline, type LatLng } from "../polyline";
@@ -18,9 +18,11 @@ export function RideMap({ ride }: { ride: Ride }) {
   const position = ride.captain?.position ?? null;
   const captain: LatLng | null = position ? { latitude: position.latitude, longitude: position.longitude } : null;
   const hasCaptain = captain !== null;
+  const [mapReady, setMapReady] = useState(false);
 
   // Frame the trip, and the captain once they appear. Not on every move, so the rider can pan.
   useEffect(() => {
+    if (!mapReady) return;
     const points = [pickup, drop, ...(captain ? [captain] : [])];
     mapRef.current?.fitToCoordinates(points, {
       edgePadding: { top: 40, right: 40, bottom: 40, left: 40 },
@@ -28,12 +30,13 @@ export function RideMap({ ride }: { ride: Ride }) {
     });
     // Refit only when the captain appears or goes, not on every 3 s move.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCaptain, ride.id]);
+  }, [mapReady, hasCaptain, ride.id]);
 
   return (
     <MapView
       ref={mapRef}
-      style={{ height: 260, borderRadius: 16 }}
+      style={{ flex: 1 }}
+      onMapReady={() => setMapReady(true)}
       userInterfaceStyle="light"
       initialRegion={{ ...pickup, latitudeDelta: 0.04, longitudeDelta: 0.04 }}
     >
