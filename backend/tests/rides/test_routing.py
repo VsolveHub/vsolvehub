@@ -160,6 +160,14 @@ def test_google_travel_mode_per_vehicle(
     assert json.loads(fake.requests[0].data)["travelMode"] == mode
 
 
+def test_google_is_asked_for_the_detailed_road_shape(
+    settings: SettingsWrapper, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = use_google(settings, monkeypatch, GOOGLE_REPLY)
+    get_route(pickup=PICKUP, drop=DROP, vehicle_type=VehicleType.BIKE)
+    assert json.loads(fake.requests[0].data)["polylineQuality"] == "HIGH_QUALITY"
+
+
 def test_google_reply_is_read_into_a_route(
     settings: SettingsWrapper, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -125,6 +125,9 @@ def _google_route(pickup: Point, drop: Point, mode: str) -> Route:
         "travelMode": mode,
         # Live traffic, so the upfront fare reflects how long the trip will really take.
         "routingPreference": "TRAFFIC_AWARE",
+        # The line the rider sees follows the road turn by turn. The default (OVERVIEW) is a
+        # simplified line that cuts corners.
+        "polylineQuality": "HIGH_QUALITY",
         "languageCode": "en-IN",
         "units": "METRIC",
     }
