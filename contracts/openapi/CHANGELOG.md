@@ -1,5 +1,17 @@
 # API Contract Changelog
 
+## 1.99.0 - WhatsApp channel for message preferences
+
+Additive.
+
+- **Added** `WHATSAPP` to `CommunicationPreference.channel` (`GET`/`PUT
+  /auth/privacy/preferences/`). WhatsApp is opt-in: nothing is sent on it until the person stores
+  `{"channel": "WHATSAPP", "purpose": "whatsapp-updates", "is_enabled": true}`. One switch covers
+  every WhatsApp message, for Customers and Partners alike. Turning it off is the same call with
+  `is_enabled: false`.
+- Not a client route: Meta's status callbacks arrive at `/api/v1/notification-webhooks/whatsapp/`,
+  a signed plain Django view outside this contract.
+
 ## 1.98.0 - Operations console: customers, cancel a visit, versioned rental fee, partner import
 
 Additive.

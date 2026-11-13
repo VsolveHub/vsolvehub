@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.98.0)
- * Checksum: b9fba9d35bc565ef
+ * Source:   contracts/openapi/v1.yaml (version 1.99.0)
+ * Checksum: 57456fb9467cac60
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -10208,9 +10208,10 @@ export interface components {
          * @description * `SMS` - SMS
          *     * `EMAIL` - Email
          *     * `PUSH` - Push
+         *     * `WHATSAPP` - WhatsApp
          * @enum {string}
          */
-        ChannelEnum: "SMS" | "EMAIL" | "PUSH";
+        ChannelEnum: "SMS" | "EMAIL" | "PUSH" | "WHATSAPP";
         /**
          * @description `M2-BE-708`. The provider reference is required: a chargeback with no bank reference cannot
          *     be represented or reconciled, and recording one would be recording a rumour.

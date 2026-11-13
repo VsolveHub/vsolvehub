@@ -45,6 +45,18 @@ def test_the_partner_is_told_once_when_the_customer_pays() -> None:
     }
 
 
+def test_the_customer_is_told_once_when_their_payment_confirms_the_booking() -> None:
+    booked = create_booked_group(key_prefix="notice-paid-customer")
+
+    notices = _notices("customer_booking_confirmed")
+    assert len(notices) == 1
+    notice = notices[0]
+    assert notice.recipient_id == booked.booking.customer_id
+    assert notice.audience == NotificationIntent.Audience.CUSTOMER
+    assert notice.status == NotificationIntent.Status.SENT
+    assert NotificationSerializer(notice).data["target"]["kind"] == "BOOKING_GROUP"
+
+
 def test_the_customer_is_told_when_the_professional_sets_off_and_arrives() -> None:
     booked = create_booked_group(key_prefix="notice-steps")
     booking = mark_en_route(

@@ -3,12 +3,15 @@
 import logging
 from datetime import timedelta
 from http import HTTPStatus
+from typing import Any
+from uuid import UUID
 
 from celery import shared_task
 from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 
+from apps.notifications.channel_router import send_copy
 from apps.notifications.models import (
     CustomerPushSubscription,
     NotificationDelivery,
@@ -16,6 +19,7 @@ from apps.notifications.models import (
     PushNotificationPreference,
 )
 from apps.notifications.onesignal import get_notification_view_metrics
+from apps.notifications.outcomes import RETRY
 from apps.notifications.templates_registry import render_notification
 from apps.notifications.transport import MessageTransportError, OneSignalMessageTransport
 from apps.partners.models import PartnerPushSubscription
@@ -298,3 +302,23 @@ def reconcile_stale_push_subscriptions(max_subscriptions: int = 500) -> dict[str
         "duplicate_partner_deactivated": duplicate_partner_count,
         "invalid_delivery_deactivated": invalid_delivery_count,
     }
+
+
+#: Spacing of the retries for a copy the provider could not take right now (rate limit, provider
+#: error, timeout). With the first attempt that is `MAX_DELIVERY_ATTEMPTS`, after which the intent
+#: is settled `FAILED` by `record_delivery_attempt`.
+CHANNEL_COPY_RETRY_SECONDS = (60, 300)
+
+
+@shared_task(bind=True, max_retries=len(CHANNEL_COPY_RETRY_SECONDS))
+def send_channel_copy(self: Any, source_intent_id: str) -> str:
+    """Record and send the WhatsApp or SMS copy of one notice (`notifications.channel_router`).
+
+    Safe to run again: the copy's idempotency key is the source notice's id, and a copy that is no
+    longer pending is never sent twice.
+    """
+
+    outcome = send_copy(source_intent_id=UUID(source_intent_id))
+    if outcome == RETRY and self.request.retries < len(CHANNEL_COPY_RETRY_SECONDS):
+        raise self.retry(countdown=CHANNEL_COPY_RETRY_SECONDS[self.request.retries])
+    return outcome

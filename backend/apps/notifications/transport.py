@@ -139,7 +139,13 @@ class Msg91MessageTransport:
         payload = json.dumps(
             {
                 "template_id": template_code,
-                "recipients": [{"mobiles": destination, **{k: str(v) for k, v in context.items()}}],
+                # MSG91 wants the number without "+", as the OTP sender already sends it.
+                "recipients": [
+                    {
+                        "mobiles": destination.removeprefix("+"),
+                        **{k: str(v) for k, v in context.items()},
+                    }
+                ],
             }
         ).encode()
         request = Request(  # noqa: S310
@@ -157,9 +163,18 @@ class Msg91MessageTransport:
                 body = response.read().decode()
         except URLError as exc:
             raise MessageTransportError("MSG91 did not accept the message.") from exc
+        # MSG91 answers 200 for some refusals (a wrong template id, an unapproved sender), with
+        # `{"type": "error"}` in the body. Reading only the HTTP status would record those as sent.
+        try:
+            answer = json.loads(body)
+        except ValueError:
+            answer = {}
+        if isinstance(answer, dict) and str(answer.get("type", "")).lower() == "error":
+            raise MessageTransportError("MSG91 refused the message.")
+        request_id = answer.get("message") if isinstance(answer, dict) else None
         return TransportResult(
             provider=self.code,
-            provider_message_id=body[:120],
+            provider_message_id=str(request_id or body)[:120],
             accepted=True,
         )
 

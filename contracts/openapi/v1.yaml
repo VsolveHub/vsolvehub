@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.98.0
+  version: 1.99.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -24990,11 +24990,13 @@ components:
       - SMS
       - EMAIL
       - PUSH
+      - WHATSAPP
       type: string
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
         * `PUSH` - Push
+        * `WHATSAPP` - WhatsApp
     ChargebackRequest:
       type: object
       description: |-
