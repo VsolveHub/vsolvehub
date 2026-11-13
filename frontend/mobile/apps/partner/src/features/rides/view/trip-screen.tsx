@@ -3,9 +3,21 @@ import { Button, Input, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { Navigation, Phone, ShieldAlert, Star } from "lucide-react-native";
-import { useState } from "react";
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, View } from "react-native";
+import { KeyRound, MapPin, Navigation, Phone, ShieldAlert, Star, Wallet } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -40,15 +52,6 @@ function errorText(error: unknown): string {
   return describeError(error, "mutation").message;
 }
 
-function Place({ label, address }: { label: string; address: string }) {
-  return (
-    <View className="gap-0.5 rounded-2xl border border-line bg-surface p-4">
-      <Text className="text-xs font-semibold uppercase text-text-muted">{label}</Text>
-      <Text className="text-base text-text">{address}</Text>
-    </View>
-  );
-}
-
 /**
  * The pickup or drop on a map, with the captain's own dot, filling the top of the screen. Shown
  * only when this build can draw maps (`isInAppMapAvailable`): an Android build without the Maps
@@ -79,7 +82,7 @@ function ErrorLine({ error }: { error: unknown }) {
 
 function CancelChoices({ onPick, busy }: { onPick: (reason: string) => void; busy: boolean }) {
   return (
-    <View className="gap-2 rounded-2xl border border-line bg-surface p-4">
+    <View className="gap-2 rounded-2xl border border-line bg-canvas p-4">
       <Text className="text-sm font-semibold text-text">Why are you cancelling?</Text>
       {CAPTAIN_CANCEL_REASONS.map(({ code, label }) => (
         <Button key={code} variant="outline" block disabled={busy} onPress={() => onPick(code)}>
@@ -95,61 +98,91 @@ const STEPS = [
   { step: "otp", label: "Code" },
   { step: "in_trip", label: "Trip" },
   { step: "collect", label: "Payment" },
+  { step: "done", label: "Rate" },
 ] as const;
 
-/** Where the captain is in the ride: the steps done and the current one are lit. */
-function StepBar({ step }: { step: string }) {
-  const at = STEPS.findIndex((s) => s.step === step);
+/**
+ * Where the captain is in the ride: one bar that fills, smoothly, as each step is reached, with
+ * the step names under it.
+ */
+function Progress({ step }: { step: string }) {
+  const at = Math.max(0, STEPS.findIndex((s) => s.step === step));
+  const [filled] = useState(() => new Animated.Value(at + 1));
+  useEffect(() => {
+    Animated.timing(filled, { toValue: at + 1, duration: 350, useNativeDriver: false }).start();
+  }, [at, filled]);
+  const width = filled.interpolate({ inputRange: [0, STEPS.length], outputRange: ["0%", "100%"] });
   return (
-    <View className="flex-row gap-2">
-      {STEPS.map((s, index) => (
-        <View key={s.step} className="flex-1 gap-1">
-          <View className={`h-1 rounded-full ${index <= at ? "bg-[#f87000]" : "bg-line"}`} />
-          <Text className={`text-xs ${index === at ? "font-bold text-text" : "text-text-muted"}`}>{s.label}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-/** The step's title, who it is about, and the fare on the right. */
-function Header({ title, subtitle, fare }: { title: string; subtitle?: string; fare: number }) {
-  return (
-    <View className="flex-row items-start justify-between gap-3">
-      <View className="flex-1 gap-0.5">
-        <Text className="text-2xl font-extrabold text-text">{title}</Text>
-        {subtitle ? <Text className="text-base text-text-muted">{subtitle}</Text> : null}
+    <View className="gap-2 px-4">
+      <View className="h-1.5 overflow-hidden rounded-full bg-line">
+        <Animated.View className="h-full rounded-full bg-[#f87000]" style={{ width }} />
       </View>
-      <Text className="text-lg font-bold text-text">{formatMoney(fare)}</Text>
-    </View>
-  );
-}
-
-function RateRider({ ride, onDone }: { ride: CaptainRide; onDone: () => void }) {
-  const [stars, setStars] = useState(0);
-  const rate = useMutation({ mutationFn: () => rateRider(ride.id, stars), onSuccess: onDone });
-  return (
-    <View className="gap-4">
-      <Text className="text-xl font-bold text-text">How was {firstName(ride.rider.name)}?</Text>
-      <View className="flex-row justify-center gap-3">
-        {[1, 2, 3, 4, 5].map((value) => (
-          <Pressable
-            key={value}
-            accessibilityRole="button"
-            accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
-            onPress={() => setStars(value)}
+      <View className="flex-row">
+        {STEPS.map((item, index) => (
+          <Text
+            key={item.step}
+            className={`flex-1 text-center text-xs ${index === at ? "font-bold text-text" : index < at ? "text-text" : "text-text-muted"}`}
           >
-            <Star size={36} color="#f87000" fill={value <= stars ? "#f87000" : "transparent"} />
-          </Pressable>
+            {item.label}
+          </Text>
         ))}
       </View>
-      <ErrorLine error={rate.error} />
-      <Button size="lg" block disabled={stars === 0} loading={rate.isPending} onPress={() => rate.mutate()}>
-        Submit
-      </Button>
-      <Button variant="ghost" block onPress={onDone}>
-        Skip
-      </Button>
+    </View>
+  );
+}
+
+const STEP_ICON = { to_pickup: MapPin, otp: KeyRound, in_trip: Navigation, collect: Wallet, done: Star } as const;
+
+/** A large soft icon for the step, in the middle of the page when there is no map to show. */
+function StepVisual({ step }: { step: string }) {
+  const Icon = STEP_ICON[step as keyof typeof STEP_ICON] ?? MapPin;
+  return (
+    <View testID="step-visual" className="h-24 w-24 items-center justify-center rounded-full bg-[#fff4ea]">
+      <Icon size={40} color="#f87000" />
+    </View>
+  );
+}
+
+/** The step's title and who it is about, centred, with the fare under them. */
+function Header({ title, subtitle, fare }: { title: string; subtitle?: string; fare?: number }) {
+  return (
+    <View className="items-center gap-1">
+      <Text className="text-center text-3xl font-extrabold text-text">{title}</Text>
+      {subtitle ? <Text className="text-center text-base text-text-muted">{subtitle}</Text> : null}
+      {fare !== undefined ? (
+        <View className="mt-1 rounded-full bg-surface px-3 py-1">
+          <Text className="text-sm font-bold text-text">{formatMoney(fare)}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+type Leg = "current" | "next" | "done";
+
+/** One end of the trip: the place you are heading to is bold, the one behind you dimmed. */
+function RouteRow({ kind, address, leg }: { kind: "pickup" | "drop"; address: string; leg: Leg }) {
+  return (
+    <View className={`flex-row items-start gap-3 ${leg === "done" ? "opacity-50" : ""}`}>
+      <View className={`mt-1.5 h-2.5 w-2.5 ${kind === "pickup" ? "rounded-full bg-green-600" : "bg-text"}`} />
+      <Text className={`flex-1 ${leg === "current" ? "text-base font-semibold text-text" : "text-sm text-text-muted"}`}>
+        {address}
+      </Text>
+    </View>
+  );
+}
+
+/** Pickup and drop on every step, so the page does not change shape as the ride moves on. */
+function RouteCard({ ride, step }: { ride: CaptainRide; step: string }) {
+  const toPickup = step === "to_pickup" || step === "otp";
+  return (
+    <View className="gap-3 rounded-2xl border border-line bg-canvas p-4">
+      <RouteRow kind="pickup" address={ride.pickup.address} leg={toPickup ? "current" : "done"} />
+      <RouteRow
+        kind="drop"
+        address={ride.drop.address}
+        leg={step === "in_trip" ? "current" : toPickup ? "next" : "done"}
+      />
     </View>
   );
 }
@@ -161,12 +194,23 @@ function RateRider({ ride, onDone }: { ride: CaptainRide; onDone: () => void }) 
 export function TripScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const queryClient = useQueryClient();
   const current = useCurrentRide();
   const [otp, setOtp] = useState("");
   const [cancelling, setCancelling] = useState(false);
   // After "Payment received" the ride is no longer current, so it is kept here for the rating.
   const [paidRide, setPaidRide] = useState<CaptainRide | null>(null);
+  // With the keyboard open (the start code), the big icon steps aside so the sheet has the room.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const refresh = (ride?: CaptainRide) => {
     if (ride) queryClient.setQueryData(currentRideKey, { ride });
@@ -185,6 +229,8 @@ export function TripScreen() {
   const complete = useMutation({ mutationFn: () => completeTrip(id), onSuccess: refresh });
   const paid = useMutation({ mutationFn: () => markPaymentReceived(id), onSuccess: (done) => setPaidRide(done) });
   const cancel = useMutation({ mutationFn: (reason: string) => cancelAsCaptain(id, reason), onSuccess: home });
+  const [stars, setStars] = useState(0);
+  const rate = useMutation({ mutationFn: () => rateRider(id, stars), onSuccess: home });
   const sos = useMutation({
     mutationFn: () => raiseCaptainSos(id),
     onSuccess: (answer) =>
@@ -235,7 +281,7 @@ export function TripScreen() {
     </Pressable>
   );
   const actions = (
-    <View className="flex-row rounded-2xl border border-line bg-surface py-3">
+    <View className="flex-row rounded-2xl border border-line bg-canvas py-3">
       {place
         ? actionButton("Navigate", <Navigation size={20} color="#071328" />, () =>
             void Linking.openURL(navigationUrl(place.latitude, place.longitude)),
@@ -264,19 +310,13 @@ export function TripScreen() {
     </Button>
   );
 
-  // The step's details scroll; its one main action is pinned at the bottom.
-  let body: React.ReactNode;
+  // One page from pickup to review. What changes per step is the title, a small panel (the start
+  // code, the amount to collect, the stars) and the one main action, which is pinned at the bottom.
+  let header: React.ReactNode;
+  let panel: React.ReactNode = null;
   let action: React.ReactNode = null;
   if (step === "to_pickup") {
-    body = (
-      <>
-        <Header title="Go to the pickup" subtitle={`Pick up ${name}`} fare={ride.fare_paise} />
-        <Place label="Pickup" address={ride.pickup.address} />
-        {actions}
-        {cancelLink}
-        <ErrorLine error={cancel.error} />
-      </>
-    );
+    header = <Header title="Go to the pickup" subtitle={`Pick up ${name}`} fare={ride.fare_paise} />;
     action = (
       <>
         <ErrorLine error={arrived.error} />
@@ -286,22 +326,17 @@ export function TripScreen() {
       </>
     );
   } else if (step === "otp") {
-    body = (
-      <>
-        <Header title="Ask for the start code" subtitle={`${name} has a 4-digit code in their app.`} fare={ride.fare_paise} />
-        <Input
-          value={otp}
-          onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 4))}
-          keyboardType="number-pad"
-          maxLength={4}
-          placeholder="0000"
-          accessibilityLabel="Start code"
-          className="text-center text-3xl font-bold tracking-[0.5em]"
-        />
-        {actions}
-        {cancelLink}
-        <ErrorLine error={cancel.error} />
-      </>
+    header = <Header title="Ask for the start code" subtitle={`${name} has a 4-digit code in their app.`} fare={ride.fare_paise} />;
+    panel = (
+      <Input
+        value={otp}
+        onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 4))}
+        keyboardType="number-pad"
+        maxLength={4}
+        placeholder="0000"
+        accessibilityLabel="Start code"
+        className="text-center text-3xl font-bold tracking-[0.5em]"
+      />
     );
     action = (
       <>
@@ -312,13 +347,7 @@ export function TripScreen() {
       </>
     );
   } else if (step === "in_trip") {
-    body = (
-      <>
-        <Header title="Drop the rider" subtitle={name} fare={ride.fare_paise} />
-        <Place label="Drop" address={ride.drop.address} />
-        {actions}
-      </>
-    );
+    header = <Header title="Drop the rider" subtitle={name} fare={ride.fare_paise} />;
     action = (
       <>
         <ErrorLine error={complete.error} />
@@ -339,18 +368,16 @@ export function TripScreen() {
     );
   } else if (step === "collect") {
     const total = ride.final_fare_paise ?? ride.fare_paise;
-    body = (
-      <>
-        <Text className="text-2xl font-extrabold text-text">Collect the payment</Text>
-        <View className="items-center gap-1 rounded-2xl border border-line bg-surface p-6">
-          <Text className="text-5xl font-extrabold text-text">{formatMoney(total)}</Text>
-          <Text className="text-sm text-text-muted">
-            {ride.waiting_paise > 0
-              ? `Fare ${formatMoney(ride.fare_paise)} + waiting ${formatMoney(ride.waiting_paise)}`
-              : "Cash or UPI to you"}
-          </Text>
-        </View>
-      </>
+    header = <Header title="Collect the payment" subtitle={`From ${name}`} />;
+    panel = (
+      <View className="items-center gap-1 rounded-2xl border border-line bg-canvas p-6">
+        <Text className="text-5xl font-extrabold text-text">{formatMoney(total)}</Text>
+        <Text className="text-sm text-text-muted">
+          {ride.waiting_paise > 0
+            ? `Fare ${formatMoney(ride.fare_paise)} + waiting ${formatMoney(ride.waiting_paise)}`
+            : "Cash or UPI to you"}
+        </Text>
+      </View>
     );
     action = (
       <>
@@ -361,29 +388,91 @@ export function TripScreen() {
       </>
     );
   } else {
-    body = <RateRider ride={ride} onDone={home} />;
+    header = <Header title={`How was ${name}?`} subtitle="Trip complete" />;
+    panel = (
+      <View className="flex-row justify-center gap-3 rounded-2xl border border-line bg-canvas py-5">
+        {[1, 2, 3, 4, 5].map((value) => (
+          <Pressable
+            key={value}
+            accessibilityRole="button"
+            accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
+            onPress={() => setStars(value)}
+          >
+            <Star size={36} color="#f87000" fill={value <= stars ? "#f87000" : "transparent"} />
+          </Pressable>
+        ))}
+      </View>
+    );
+    action = (
+      <>
+        <ErrorLine error={rate.error} />
+        <Button size="lg" block disabled={stars === 0} loading={rate.isPending} onPress={() => rate.mutate()}>
+          Submit
+        </Button>
+        <Button variant="ghost" block onPress={home}>
+          Skip
+        </Button>
+      </>
+    );
   }
+  // Navigate, Call and SOS while the ride is under way; Cancel only until the trip starts.
+  const underWay = step === "to_pickup" || step === "otp" || step === "in_trip";
+  const canCancel = step === "to_pickup" || step === "otp";
 
   return (
-    <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top + 8 }}>
+    // "padding" lifts the whole page above the keyboard; on this phone the screen does not shrink
+    // for it, and the sheet and its Start trip button were left underneath.
+    <KeyboardAvoidingView behavior="padding" className="flex-1 bg-canvas" style={{ paddingTop: insets.top + 8 }}>
+      <Progress step={step} />
+
       {showMap && place ? (
-        <View className="mx-4 min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
-          <TripMap latitude={place.latitude} longitude={place.longitude} />
+        <View className="flex-1 gap-3 px-4 pt-4">
+          {header}
+          <View className="min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
+            <TripMap latitude={place.latitude} longitude={place.longitude} />
+          </View>
         </View>
-      ) : null}
-      <ScrollView
-        className={showMap ? "max-h-[62%] grow-0" : "flex-1"}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: action ? 16 : insets.bottom + 16 }}
-        keyboardShouldPersistTaps="handled"
+      ) : (
+        // The header always keeps its own height (minHeight): squeezed, it ran over the progress
+        // labels above it and under the sheet below it.
+        <View
+          className="flex-1 items-center justify-center gap-5 px-6 pt-3"
+          style={keyboardOpen ? { minHeight: 180 } : undefined}
+        >
+          {keyboardOpen ? null : <StepVisual step={step} />}
+          {header}
+        </View>
+      )}
+
+      {/* One sheet for the whole ride: its contents change per step, the page does not. */}
+      <View
+        className="rounded-t-3xl border-t border-line bg-surface px-4 pt-4"
+        style={{
+          maxHeight: windowHeight * 0.68,
+          // Clear of the screen edge: a little more than the gesture bar, so the button is not at the very bottom.
+          paddingBottom: keyboardOpen ? 12 : Math.max(insets.bottom, 16) + 36,
+          elevation: 12,
+          shadowColor: "#000",
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
+        }}
       >
-        {step !== "done" ? <StepBar step={step} /> : null}
-        {body}
-      </ScrollView>
-      {action ? (
-        <View className="gap-2 border-t border-line bg-surface px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+        <ScrollView
+          contentContainerStyle={{ gap: 12 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {panel}
+          {/* While the keyboard is open the sheet is just the input and the button: the rest is
+              there again as soon as it closes. */}
+          {keyboardOpen ? null : <RouteCard ride={ride} step={step} />}
+          {underWay && !keyboardOpen ? actions : null}
           {action}
-        </View>
-      ) : null}
-    </View>
+          {canCancel && !keyboardOpen ? cancelLink : null}
+          {canCancel && !keyboardOpen ? <ErrorLine error={cancel.error} /> : null}
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
