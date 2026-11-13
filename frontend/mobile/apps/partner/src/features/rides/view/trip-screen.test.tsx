@@ -97,6 +97,8 @@ describe("trip rules", () => {
     expect(navigationUrl("17.44", "78.35", "android")).toBe("google.navigation:q=17.44,78.35");
     expect(navigationUrl(17.44, 78.35, "ios")).toContain("google.com/maps/dir");
     expect(firstName("Priya Sharma")).toBe("Priya");
+    expect(firstName("")).toBe("Rider");
+    expect(firstName("   ")).toBe("Rider");
     expect(isOtpComplete("123")).toBe(false);
     expect(isOtpComplete("1234")).toBe(true);
   });

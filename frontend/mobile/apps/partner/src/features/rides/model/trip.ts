@@ -33,7 +33,8 @@ export const CAPTAIN_CANCEL_REASONS: readonly { code: string; label: string }[] 
 
 /** The rider's first name only: enough to find them at the pickup. */
 export function firstName(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? "";
+  // A rider with no name saved reads "Rider", not an empty gap ("Pick up ").
+  return name.trim().split(/\s+/)[0] || "Rider";
 }
 
 /** A typed start code is four digits. */

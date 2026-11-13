@@ -3,7 +3,7 @@ import { Button, Input, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { Star } from "lucide-react-native";
+import { Navigation, Phone, ShieldAlert, Star } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from "react-native-maps";
@@ -216,36 +216,44 @@ export function TripScreen() {
   const place = step === "to_pickup" ? ride.pickup : step === "in_trip" ? ride.drop : null;
   const showMap = place !== null && isInAppMapAvailable();
 
-  // Navigate (when there is somewhere to go), Call and SOS, side by side.
+  // Navigate (when there is somewhere to go), Call and SOS: round icon buttons with a label, the
+  // way a ride app shows them.
+  const actionButton = (label: string, icon: React.ReactNode, onPress: () => void, danger = false) => (
+    <Pressable
+      key={label}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      className="flex-1 items-center gap-1.5 active:opacity-60"
+    >
+      <View
+        className={`h-12 w-12 items-center justify-center rounded-full ${danger ? "bg-red-50" : "border border-line bg-canvas"}`}
+      >
+        {icon}
+      </View>
+      <Text className={`text-xs font-semibold ${danger ? "text-danger" : "text-text"}`}>{label}</Text>
+    </Pressable>
+  );
   const actions = (
-    <View className="flex-row gap-2">
-      {place ? (
-        <Button
-          variant="outline"
-          className="flex-1"
-          onPress={() => void Linking.openURL(navigationUrl(place.latitude, place.longitude))}
-        >
-          Navigate
-        </Button>
-      ) : null}
-      {phone ? (
-        <Button variant="outline" className="flex-1" onPress={() => void Linking.openURL(`tel:${phone}`)}>
-          Call {name}
-        </Button>
-      ) : null}
-      <Button
-        variant="outline"
-        className="flex-1"
-        loading={sos.isPending}
-        onPress={() =>
+    <View className="flex-row rounded-2xl border border-line bg-surface py-3">
+      {place
+        ? actionButton("Navigate", <Navigation size={20} color="#071328" />, () =>
+            void Linking.openURL(navigationUrl(place.latitude, place.longitude)),
+          )
+        : null}
+      {phone
+        ? actionButton(`Call ${name}`, <Phone size={20} color="#071328" />, () => void Linking.openURL(`tel:${phone}`))
+        : null}
+      {actionButton(
+        "SOS",
+        <ShieldAlert size={20} color="#b3261e" />,
+        () =>
           Alert.alert("Send SOS?", "VSolve support will be alerted at once.", [
             { text: "Cancel", style: "cancel" },
             { text: "Send SOS", style: "destructive", onPress: () => sos.mutate() },
-          ])
-        }
-      >
-        SOS
-      </Button>
+          ]),
+        true,
+      )}
     </View>
   );
   const cancelLink = cancelling ? (
