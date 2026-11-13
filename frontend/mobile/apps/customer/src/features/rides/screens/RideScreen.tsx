@@ -1,7 +1,8 @@
-import { Button, Text, formatMoney } from "@vsolve/mobile-ui";
+import { Button, Text } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { CheckCircle2, SearchX, XCircle } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,7 +10,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cancelRide, rideKey, useRide, type Ride } from "../queries";
 import { RIDER_CANCEL_REASONS, canRiderCancel, cancelledText, etaText, rideStage } from "../ride-stage";
 import { RideMap } from "./RideMap";
-import { CaptainCard, RateCaptain, SafetyRow, StartCode, TripSummary } from "./ride-parts";
+import { CaptainCard, ReviewSheet, SafetyRow, StartCode, TripSummary } from "./ride-parts";
+
+/** A large soft icon for a finished ride: done, cancelled or nobody found. */
+function ResultIcon({ stage }: { stage: "pay" | "cancelled" | "no_captain" }) {
+  const look = {
+    pay: { Icon: CheckCircle2, color: "#16a34a", bg: "bg-green-50" },
+    cancelled: { Icon: XCircle, color: "#b3261e", bg: "bg-red-50" },
+    no_captain: { Icon: SearchX, color: "#756c5e", bg: "bg-surface" },
+  }[stage];
+  return (
+    <View className={`h-24 w-24 items-center justify-center rounded-full ${look.bg}`}>
+      <look.Icon size={44} color={look.color} />
+    </View>
+  );
+}
 
 /**
  * The rider's live ride (brief §5.11): searching, the captain moving on the map with the ETA and
@@ -82,23 +97,56 @@ export function RideScreen() {
   } else if (stage === "in_trip") {
     headline = "On your way";
   } else if (stage === "pay") {
-    headline = `Pay ${formatMoney(data.final_fare_paise ?? data.fare_paise)} to your captain`;
-    detail = "Cash or UPI, straight to your captain.";
+    // What to pay, and the rating, are in the review sheet over this page.
+    headline = "Trip complete";
+    detail = data.my_rating == null ? "Thanks for riding with VSolve." : "Thanks for rating your ride.";
   } else {
     headline = "Ride cancelled";
     detail = cancelledText(data.cancelled_by);
   }
 
   const showMap = live || stage === "searching";
+  // Open the review sheet only for a ride that is still to be rated; it carries its own Done.
+  const reviewing = stage === "pay" && data.captain != null && data.my_rating == null;
+  const showDone = stage === "cancelled" || stage === "no_captain" || (stage === "pay" && !reviewing);
+
+  if (!showMap) {
+    // A finished ride: the result in the middle of the page, the trip and the buttons at the bottom.
+    const result = stage === "pay" || stage === "cancelled" || stage === "no_captain" ? stage : "cancelled";
+    return (
+      <View className="flex-1 bg-canvas">
+        <View className="flex-1 items-center justify-center gap-5 px-6">
+          <ResultIcon stage={result} />
+          <View className="items-center gap-1">
+            <Text className="text-center text-3xl font-extrabold text-text">{headline}</Text>
+            {detail ? <Text className="text-center text-base text-text-muted">{detail}</Text> : null}
+          </View>
+        </View>
+        <View className="gap-3 px-4" style={{ paddingBottom: Math.max(insets.bottom, 16) + 20 }}>
+          <TripSummary ride={data} />
+          {stage === "no_captain" ? (
+            <Button size="lg" block onPress={tryAgain}>
+              Try again
+            </Button>
+          ) : null}
+          {showDone ? (
+            <Button size="lg" block variant={stage === "no_captain" ? "ghost" : "primary"} onPress={done}>
+              Done
+            </Button>
+          ) : null}
+        </View>
+        {stage === "pay" && data.captain ? <ReviewSheet ride={data} onRated={onRated} onDone={done} /> : null}
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-canvas">
-      {showMap ? (
-        <View className="mx-4 mt-2 min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
-          <RideMap ride={data} />
-        </View>
-      ) : null}
+      <View className="mx-4 mt-2 min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
+        <RideMap ride={data} />
+      </View>
       <ScrollView
-        className={showMap ? "max-h-[58%] grow-0" : "flex-1"}
+        className="max-h-[58%] grow-0"
         contentContainerStyle={{ padding: 16, paddingBottom: Math.max(insets.bottom, 16), gap: 12 }}
       >
         <View className="gap-1">
@@ -112,14 +160,6 @@ export function RideScreen() {
         {live ? <CaptainCard ride={data} /> : null}
         {(stage === "coming" || stage === "arrived") && data.otp ? <StartCode code={data.otp} /> : null}
         {live ? <SafetyRow ride={data} /> : null}
-
-        {stage === "pay" && data.captain ? (
-          data.my_rating == null ? (
-            <RateCaptain ride={data} onRated={onRated} />
-          ) : (
-            <Text className="text-center text-base text-slate-600">Thanks for rating your ride.</Text>
-          )
-        ) : null}
 
         <TripSummary ride={data} />
 
@@ -144,17 +184,6 @@ export function RideScreen() {
               Cancel ride
             </Button>
           )
-        ) : null}
-
-        {stage === "no_captain" ? (
-          <Button size="lg" block onPress={tryAgain}>
-            Try again
-          </Button>
-        ) : null}
-        {stage === "pay" || stage === "cancelled" || stage === "no_captain" ? (
-          <Button variant="ghost" block onPress={done}>
-            Done
-          </Button>
         ) : null}
       </ScrollView>
     </View>

@@ -1,8 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
-import { Button, Text, formatMoney } from "@vsolve/mobile-ui";
+import { Button, Sheet, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import * as Location from "expo-location";
-import { Star } from "lucide-react-native";
+import { CheckCircle2, Star } from "lucide-react-native";
 import { useState } from "react";
 import { Alert, Linking, Pressable, Share, View } from "react-native";
 
@@ -126,36 +126,93 @@ export function SafetyRow({ ride }: { ride: Ride }) {
   );
 }
 
-/** 1–5 stars for the captain after the trip. The rider can skip; it is asked only once. */
-export function RateCaptain({ ride, onRated }: { ride: Ride; onRated: (stars: number) => void }) {
+/**
+ * After the trip, one bottom sheet for everything that is left: what to pay, the rating, and a
+ * short thank-you, one after the other in the same sheet. Skipping, closing and Done all leave the
+ * page. Rating is asked once: a ride that already has one does not open it.
+ */
+export function ReviewSheet({
+  ride,
+  onRated,
+  onDone,
+}: {
+  ride: Ride;
+  onRated: (stars: number) => void;
+  onDone: () => void;
+}) {
   const [stars, setStars] = useState(0);
-  const rate = useMutation({ mutationFn: () => rateCaptain(ride.id, stars), onSuccess: () => onRated(stars) });
+  const [thanked, setThanked] = useState(false);
+  const [closed, setClosed] = useState(false);
+  const rate = useMutation({
+    mutationFn: () => rateCaptain(ride.id, stars),
+    onSuccess: () => {
+      onRated(stars);
+      setThanked(true);
+    },
+  });
   const name = ride.captain ? firstName(ride.captain.name) : "your captain";
+  const open = !closed && (ride.my_rating == null || thanked);
+  const leave = () => {
+    setClosed(true);
+    onDone();
+  };
 
   return (
-    <View className="items-center gap-3 rounded-2xl border border-line bg-surface p-4">
-      <Text className="text-base font-semibold text-slate-900">How was your ride with {name}?</Text>
-      <View className="flex-row gap-2">
-        {[1, 2, 3, 4, 5].map((value) => (
-          <Pressable
-            key={value}
-            accessibilityRole="button"
-            accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
-            hitSlop={6}
-            onPress={() => setStars(value)}
-          >
-            <Star size={36} color="#f87000" fill={value <= stars ? "#f87000" : "transparent"} />
-          </Pressable>
-        ))}
-      </View>
-      {rate.isError ? (
-        <Text accessibilityRole="alert" className="text-sm text-red-600">
-          {describeError(rate.error, "mutation").message}
-        </Text>
-      ) : null}
-      <Button size="lg" block disabled={stars === 0} loading={rate.isPending} onPress={() => rate.mutate()}>
-        Submit rating
-      </Button>
-    </View>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) leave();
+      }}
+      title={thanked ? "Thanks for rating!" : "Pay your captain"}
+      description={thanked ? "Your feedback helps keep rides safe and friendly." : "Cash or UPI, straight to your captain."}
+      footer={
+        thanked ? (
+          <Button size="lg" block onPress={leave}>
+            Done
+          </Button>
+        ) : (
+          <View className="gap-2">
+            <Button size="lg" block disabled={stars === 0} loading={rate.isPending} onPress={() => rate.mutate()}>
+              Submit rating
+            </Button>
+            <Button variant="ghost" block onPress={leave}>
+              Skip
+            </Button>
+          </View>
+        )
+      }
+    >
+      {thanked ? (
+        <View className="items-center py-6">
+          <View className="h-20 w-20 items-center justify-center rounded-full bg-green-50">
+            <CheckCircle2 size={40} color="#16a34a" />
+          </View>
+        </View>
+      ) : (
+        <View className="items-center gap-4 py-2">
+          <Text className="text-5xl font-extrabold text-text">{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</Text>
+          <View className="h-px w-full bg-line" />
+          <Text className="text-base font-semibold text-text">How was your ride with {name}?</Text>
+          <View className="flex-row gap-3">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Pressable
+                key={value}
+                accessibilityRole="button"
+                accessibilityLabel={`${value} star${value === 1 ? "" : "s"}`}
+                hitSlop={6}
+                onPress={() => setStars(value)}
+              >
+                <Star size={38} color="#f87000" fill={value <= stars ? "#f87000" : "transparent"} />
+              </Pressable>
+            ))}
+          </View>
+          {rate.isError ? (
+            <Text accessibilityRole="alert" className="text-center text-sm text-red-600">
+              {describeError(rate.error, "mutation").message}
+            </Text>
+          ) : null}
+        </View>
+      )}
+    </Sheet>
   );
 }

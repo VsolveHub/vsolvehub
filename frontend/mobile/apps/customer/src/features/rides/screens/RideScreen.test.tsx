@@ -185,9 +185,15 @@ test("no captain nearby offers to try again for the same trip", async () => {
   );
 });
 
-test("after the trip, says what to pay the captain", async () => {
+test("after the trip, one sheet says what to pay, over a centred Trip complete page", async () => {
   mockRide = ride("COMPLETED", { captain: CAPTAIN, final_fare_paise: 4300 });
-  expect((await renderRide()).getByText("Pay ₹43 to your captain")).toBeTruthy();
+  const view = await renderRide();
+
+  expect(view.getByText("Trip complete")).toBeTruthy();
+  expect(view.getByText("Pay your captain")).toBeTruthy();
+  expect(view.getByText("Cash or UPI, straight to your captain.")).toBeTruthy();
+  expect(view.getAllByText("₹43").length).toBeGreaterThan(0); // the amount, large, in the sheet
+  expect(view.getByText("How was your ride with Ravi?")).toBeTruthy();
 });
 
 test("after the trip, the rider rates the captain once", async () => {
@@ -199,6 +205,21 @@ test("after the trip, the rider rates the captain once", async () => {
   await fireEvent.press(view.getByText("Submit rating"));
 
   await waitFor(() => expect(mockRate).toHaveBeenCalledWith("ride-1", 4));
+  // The thank-you is the same sheet, not another page.
+  expect(await view.findByText("Thanks for rating!")).toBeTruthy();
+  expect(view.queryByText("Submit rating")).toBeNull();
+  await fireEvent.press(view.getByText("Done"));
+  expect(mockReplace).toHaveBeenCalledWith("/");
+});
+
+test("the rider can skip the review, and that leaves the page", async () => {
+  mockRide = ride("COMPLETED", { captain: CAPTAIN, final_fare_paise: 4300 });
+  const view = await renderRide();
+
+  await fireEvent.press(view.getByText("Skip"));
+
+  expect(mockRate).not.toHaveBeenCalled();
+  expect(mockReplace).toHaveBeenCalledWith("/");
 });
 
 test("an already rated ride says thanks instead of asking again", async () => {
@@ -206,6 +227,8 @@ test("an already rated ride says thanks instead of asking again", async () => {
   const view = await renderRide();
   expect(view.getByText("Thanks for rating your ride.")).toBeTruthy();
   expect(view.queryByText("Submit rating")).toBeNull();
+  expect(view.queryByText("Pay your captain")).toBeNull(); // no sheet for a ride already rated
+  expect(view.getByText("Done")).toBeTruthy();
 });
 
 test("cancelling asks for a reason", async () => {
