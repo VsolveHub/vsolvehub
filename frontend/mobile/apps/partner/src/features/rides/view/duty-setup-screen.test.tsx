@@ -3,6 +3,8 @@ import { DutySetupScreen } from "./duty-setup-screen";
 
 const mockReplace = jest.fn();
 const mockGoOnDuty = jest.fn();
+const mockEnablePush = jest.fn();
+let mockPushPermission = "granted";
 const mockStore: Record<string, string> = {};
 let mockPermission: { granted: boolean; canAskAgain: boolean; android?: { accuracy: string } };
 
@@ -22,8 +24,8 @@ jest.mock("@vsolve/mobile-core", () => ({
   kvSet: async (key: string, value: string) => {
     mockStore[key] = value;
   },
-  pushPermission: async () => "granted",
-  enablePush: async () => "granted",
+  pushPermission: async () => mockPushPermission,
+  enablePush: () => mockEnablePush(),
 }));
 jest.mock("../duty", () => ({
   START_FAILED_MESSAGE: "Couldn't start location. Try again.",
@@ -34,6 +36,8 @@ jest.mock("../queries", () => ({ captainStatusKey: ["rides", "me"] }));
 beforeEach(() => {
   mockReplace.mockClear();
   mockGoOnDuty.mockReset().mockResolvedValue(undefined);
+  mockEnablePush.mockReset().mockResolvedValue("granted");
+  mockPushPermission = "granted";
   for (const key of Object.keys(mockStore)) delete mockStore[key];
   mockPermission = { granted: true, canAskAgain: true, android: { accuracy: "fine" } };
 });
@@ -83,4 +87,42 @@ test("says so honestly when location cannot start", async () => {
 
   expect(await view.findByText("Couldn't start location. Try again.")).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+test("asks for ride alerts with Android's own pop-up only, then goes on", async () => {
+  Object.assign(mockStore, { "rides.disclosureSeen": "1", "rides.batterySeen": "1" });
+  mockPushPermission = "undetermined"; // never asked on this phone
+
+  const view = await render(<DutySetupScreen />);
+
+  await waitFor(() => expect(mockGoOnDuty).toHaveBeenCalledTimes(1));
+  expect(mockEnablePush).toHaveBeenCalledTimes(1); // the system pop-up, once
+  expect(mockStore["rides.notificationsAsked"]).toBe("1");
+  expect(view.queryByText("Allow ride alerts")).toBeNull(); // no page of our own before it
+});
+
+test("a refused alert pop-up never blocks duty", async () => {
+  Object.assign(mockStore, { "rides.disclosureSeen": "1", "rides.batterySeen": "1" });
+  mockPushPermission = "undetermined"; // never asked on this phone
+  mockEnablePush.mockRejectedValue(new Error("denied"));
+
+  await render(<DutySetupScreen />);
+
+  await waitFor(() => expect(mockGoOnDuty).toHaveBeenCalledTimes(1));
+  expect(mockStore["rides.notificationsAsked"]).toBe("1");
+});
+
+test("battery help is a sheet over the setup, shown once, then duty starts", async () => {
+  Object.assign(mockStore, { "rides.disclosureSeen": "1", "rides.notificationsAsked": "1" });
+
+  const view = await render(<DutySetupScreen />);
+
+  expect(await view.findByText("Keep VSolve running")).toBeTruthy();
+  expect(view.getByText(/Allow background activity/)).toBeTruthy(); // realme's own steps
+  expect(mockGoOnDuty).not.toHaveBeenCalled();
+
+  await fireEvent.press(view.getByText("Done, go on duty"));
+
+  await waitFor(() => expect(mockGoOnDuty).toHaveBeenCalledTimes(1));
+  expect(mockStore["rides.batterySeen"]).toBe("1");
 });

@@ -236,6 +236,12 @@ the Partner app Rides workspace and the Operations console are the agreed design
     Choose-ride screen: "Rides isn't available here yet." The availability endpoint stays; the
     Customer app just does not call it. This departs from brief §5.11 (owner to confirm).
 
+39. **Going on duty has no extra pages (14 Nov).** Location off: Go on duty shows Android's own
+    "turn on location" pop-up. Ride alerts: Android's notification pop-up, once, with no page of
+    our own before it. Battery help is a bottom sheet (first duty, and the Home link), not a page.
+    Once this phone has done the one-time setup, Home starts duty itself, the button showing it is
+    busy; the setup screen opens only for a missing step. The disclosure screen stays (Play).
+
 ## Consequences
 
 - Rides reuses the partner review queue, so Operations needs no new approval screen. The cost is that

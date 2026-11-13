@@ -1,4 +1,4 @@
-import { enablePush, kvGet, kvSet, pushPermission } from "@vsolve/mobile-core";
+import { enablePush, kvSet } from "@vsolve/mobile-core";
 import { Button, Text } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,30 +10,10 @@ import { ActivityIndicator, AppState, Linking, ScrollView, View } from "react-na
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { START_FAILED_MESSAGE, goOnDuty } from "../duty";
-import { locationAccess, nextSetupStep, type SetupState } from "../model/duty-setup";
+import { nextSetupStep, type SetupState } from "../model/duty-setup";
 import { captainStatusKey } from "../queries";
-import { BatteryHelp } from "./battery-help";
-
-export const DISCLOSURE_SEEN = "rides.disclosureSeen";
-export const NOTIFICATIONS_ASKED = "rides.notificationsAsked";
-export const BATTERY_SEEN = "rides.batterySeen";
-
-async function readSetup(): Promise<SetupState> {
-  const [disclosure, asked, battery, permission, push] = await Promise.all([
-    kvGet(DISCLOSURE_SEEN),
-    kvGet(NOTIFICATIONS_ASKED),
-    kvGet(BATTERY_SEEN),
-    Location.getForegroundPermissionsAsync(),
-    pushPermission(),
-  ]);
-  return {
-    disclosureSeen: disclosure === "1",
-    notificationsAsked: asked === "1",
-    batterySeen: battery === "1",
-    location: locationAccess(permission),
-    notifications: push,
-  };
-}
+import { BATTERY_SEEN, DISCLOSURE_SEEN, NOTIFICATIONS_ASKED, readSetup } from "../setup-state";
+import { BatteryHelpSheet } from "./battery-help";
 
 function Step({ title, body, children }: { title: string; body: string; children: React.ReactNode }) {
   return (
@@ -57,6 +37,7 @@ export function DutySetupScreen() {
   const [setup, setSetup] = useState<SetupState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const starting = useRef(false);
+  const askingAlerts = useRef(false);
 
   const refresh = async () => setSetup(await readSetup());
   // Read the phone's state now, and again whenever the app returns (for example from Settings).
@@ -105,6 +86,23 @@ export function DutySetupScreen() {
     await kvSet(key, "1");
     await refresh();
   };
+
+  // Ride alerts: Android's own notification pop-up, once, with no page of our own before it.
+  // Whatever the answer, it is never asked again and never blocks duty.
+  useEffect(() => {
+    if (step !== "notifications" || askingAlerts.current) return;
+    askingAlerts.current = true;
+    void (async () => {
+      try {
+        await enablePush();
+      } catch {
+        // Refused or unavailable: Home says so while on duty.
+      }
+      await kvSet(NOTIFICATIONS_ASKED, "1");
+      setSetup(await readSetup());
+      askingAlerts.current = false;
+    })();
+  }, [step]);
 
   let content: React.ReactNode;
   if (step === null) {
@@ -170,26 +168,9 @@ export function DutySetupScreen() {
         </Button>
       </Step>
     );
-  } else if (step === "notifications") {
-    content = (
-      <Step title="Allow ride alerts" body="So a ride request rings even when VSolve is closed or the screen is off.">
-        <Button
-          size="lg"
-          block
-          onPress={async () => {
-            await enablePush();
-            await markAndRefresh(NOTIFICATIONS_ASKED);
-          }}
-        >
-          Allow alerts
-        </Button>
-        <Button variant="ghost" block onPress={() => void markAndRefresh(NOTIFICATIONS_ASKED)}>
-          Not now
-        </Button>
-      </Step>
-    );
-  } else if (step === "battery") {
-    content = <BatteryHelp doneLabel="Done, go on duty" onDone={() => void markAndRefresh(BATTERY_SEEN)} />;
+  } else if (step === "notifications" || step === "battery") {
+    // Android's alert pop-up, or the battery sheet, shows over this.
+    content = <ActivityIndicator />;
   } else {
     content = error ? (
       <Step title="You're not on duty yet" body={error}>
@@ -209,11 +190,18 @@ export function DutySetupScreen() {
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-canvas"
-      contentContainerStyle={{ padding: 20, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }}
-    >
-      {content}
-    </ScrollView>
+    <>
+      <ScrollView
+        className="flex-1 bg-canvas"
+        contentContainerStyle={{ padding: 20, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }}
+      >
+        {content}
+      </ScrollView>
+      <BatteryHelpSheet
+        open={step === "battery"}
+        doneLabel="Done, go on duty"
+        onClose={() => void markAndRefresh(BATTERY_SEEN)}
+      />
+    </>
   );
 }

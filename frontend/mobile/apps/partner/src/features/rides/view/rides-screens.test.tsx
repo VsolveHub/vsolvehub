@@ -23,12 +23,27 @@ jest.mock("@tanstack/react-query", () => ({
   useMutation: () => ({ mutate: mockOffDuty, isPending: false, isError: false }),
 }));
 const mockTurnOn = jest.fn();
+const mockGoOnDuty = jest.fn();
 let mockSwitchOn = true;
 jest.mock("../duty", () => ({
+  START_FAILED_MESSAGE: "Couldn't start location. Try again.",
   goOffDuty: jest.fn(),
+  goOnDuty: () => mockGoOnDuty(),
   locationSwitchOn: async () => mockSwitchOn,
   turnOnLocation: () => mockTurnOn(),
 }));
+// What this phone has done for duty: the one-time setup is done, or not yet.
+const SETUP_DONE = {
+  disclosureSeen: true,
+  location: "precise",
+  notifications: "granted",
+  notificationsAsked: true,
+  batterySeen: true,
+};
+let mockSetup: Record<string, unknown> = { ...SETUP_DONE, disclosureSeen: false };
+jest.mock("../setup-state", () => ({ readSetup: async () => mockSetup }));
+jest.mock("expo-device", () => ({ manufacturer: "realme" }));
+jest.mock("expo-intent-launcher", () => ({ startActivityAsync: jest.fn(), ActivityAction: {} }));
 jest.mock("../queries", () => ({
   useCaptainStatus: () => mockStatus,
   useSaveVehicle: () => ({ mutate: mockSave, isPending: false, isError: false }),
@@ -51,6 +66,8 @@ const APPROVED = {
 
 beforeEach(() => {
   mockSwitchOn = true;
+  mockSetup = { ...SETUP_DONE, disclosureSeen: false }; // first duty on this phone
+  mockGoOnDuty.mockReset().mockResolvedValue(undefined);
   mockTurnOn.mockReset();
   mockRide = null;
   mockOffDuty.mockClear();
@@ -131,7 +148,7 @@ describe("CaptainHome", () => {
     expect((await render(<CaptainHome />)).getByText("We couldn't load your captain details")).toBeTruthy();
   });
 
-  it("opens the duty steps when nothing blocks duty", async () => {
+  it("opens the duty steps when the one-time setup is not done yet", async () => {
     mockStatus = { isPending: false, isError: false, data: { ...APPROVED, blocked_reasons: [] } };
     const view = await render(<CaptainHome />);
 
@@ -165,6 +182,39 @@ describe("CaptainHome", () => {
     expect(await view.findByText("Turn on your phone's location to go on duty.")).toBeTruthy();
     expect(mockTurnOn).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalledWith("/rides/duty-setup");
+  });
+
+  it("with the setup done, goes on duty right from Home, with no page in between", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, blocked_reasons: [] } };
+    mockSetup = SETUP_DONE;
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Go on duty"));
+
+    await waitFor(() => expect(mockGoOnDuty).toHaveBeenCalledTimes(1));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("says on Home why duty could not start", async () => {
+    mockStatus = { isPending: false, isError: false, data: { ...APPROVED, blocked_reasons: [] } };
+    mockSetup = SETUP_DONE;
+    mockGoOnDuty.mockRejectedValue(new Error("Couldn't start location. Try again."));
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Go on duty"));
+
+    expect(await view.findByText("Couldn't start location. Try again.")).toBeTruthy();
+  });
+
+  it("opens battery help as a sheet over Home, not a page", async () => {
+    const view = await render(<CaptainHome />);
+
+    await fireEvent.press(view.getByText("Battery help"));
+
+    expect(await view.findByText("Keep VSolve running")).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByText("Done"));
+    await waitFor(() => expect(view.queryByText("Keep VSolve running")).toBeNull());
   });
 
   it("offers Go off duty while on duty", async () => {

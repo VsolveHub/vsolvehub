@@ -8,10 +8,12 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
-import { goOffDuty, locationSwitchOn, turnOnLocation } from "../duty";
-import { offDutyMessage } from "../model/duty-setup";
+import { START_FAILED_MESSAGE, goOffDuty, goOnDuty, locationSwitchOn, turnOnLocation } from "../duty";
+import { nextSetupStep, offDutyMessage } from "../model/duty-setup";
 import { blockedReasonTexts, vehicleTypeName, type CaptainStatus } from "../model/shell";
 import { captainStatusKey, useCaptainStatus, useCurrentRide, type CaptainRide } from "../queries";
+import { readSetup } from "../setup-state";
+import { BatteryHelpSheet } from "./battery-help";
 
 function useAlertsOff() {
   return useQuery({ queryKey: ["rides", "push-permission"], queryFn: pushPermission }).data === "denied";
@@ -100,6 +102,9 @@ export function CaptainHome() {
   const alertsOff = useAlertsOff();
   // Set when the captain declined Android's "turn on location" pop-up after tapping Go on duty.
   const [needsLocation, setNeedsLocation] = useState(false);
+  const [startingDuty, setStartingDuty] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [batteryOpen, setBatteryOpen] = useState(false);
   const locationSwitch = useLocationSwitch(status.data?.on_duty === true);
   const locationOff = locationSwitch.data === false;
   const currentRide = useCurrentRide();
@@ -127,10 +132,12 @@ export function CaptainHome() {
   }
 
   const data = status.data;
-  // With the phone's location off, the tap shows Android's own pop-up first; the setup steps follow
-  // once it is on. Declining stays here with one line saying what is needed.
+  // With the phone's location off, the tap shows Android's own pop-up first. Then, if this phone
+  // has already done the one-time setup, duty starts right here, the button showing it is busy;
+  // only a missing step opens the setup screen. Declining the pop-up stays here with one line.
   const startDuty = async () => {
     setNeedsLocation(false);
+    setStartError(null);
     if (!(await locationSwitchOn())) {
       await turnOnLocation();
       if (!(await locationSwitchOn())) {
@@ -138,7 +145,23 @@ export function CaptainHome() {
         return;
       }
     }
-    router.push("/rides/duty-setup");
+    if (nextSetupStep(await readSetup()) !== "ready") {
+      router.push("/rides/duty-setup");
+      return;
+    }
+    setStartingDuty(true);
+    try {
+      await goOnDuty();
+      await queryClient.invalidateQueries({ queryKey: captainStatusKey });
+    } catch (failure) {
+      setStartError(
+        failure instanceof Error && failure.message === START_FAILED_MESSAGE
+          ? START_FAILED_MESSAGE
+          : describeError(failure, "mutation").message,
+      );
+    } finally {
+      setStartingDuty(false);
+    }
   };
   const blocked = blockedReasonTexts(data.blocked_reasons);
   return (
@@ -202,10 +225,15 @@ export function CaptainHome() {
             Go off duty
           </Button>
         ) : (
-          <Button size="lg" block disabled={blocked.length > 0} onPress={() => void startDuty()}>
+          <Button size="lg" block disabled={blocked.length > 0} loading={startingDuty} onPress={() => void startDuty()}>
             Go on duty
           </Button>
         )}
+        {startError ? (
+          <Text accessibilityRole="alert" className="text-sm text-danger">
+            {startError}
+          </Text>
+        ) : null}
         {needsLocation ? (
           <Text accessibilityRole="alert" className="text-sm text-danger">
             Turn on your phone&apos;s location to go on duty.
@@ -219,9 +247,10 @@ export function CaptainHome() {
             {"Ride alerts won't ring when the app is closed. Turn on notifications for VSolve in Settings."}
           </Text>
         ) : null}
-        <Pressable accessibilityRole="link" onPress={() => router.push("/rides/battery")}>
+        <Pressable accessibilityRole="button" onPress={() => setBatteryOpen(true)}>
           <Text className="text-sm font-semibold text-[#c25600]">Battery help</Text>
         </Pressable>
+        <BatteryHelpSheet open={batteryOpen} onClose={() => setBatteryOpen(false)} />
       </View>
 
       <View className="rounded-2xl bg-surface p-4 gap-2">
