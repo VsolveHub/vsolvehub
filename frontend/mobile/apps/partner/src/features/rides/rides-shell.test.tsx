@@ -41,7 +41,9 @@ beforeEach(() => {
 describe("which shell a partner gets", () => {
   it("is the Rides shell only for a captain, only on Android", () => {
     expect(isCaptainShell({ approval: "APPROVED" } as never, "android")).toBe(true);
-    expect(isCaptainShell({ approval: "DRAFT" } as never, "android")).toBe(true);
+    for (const approval of ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUIRED", "SUSPENDED"]) {
+      expect(isCaptainShell({ approval } as never, "android")).toBe(false);
+    }
     expect(isCaptainShell({ approval: "NOT_STARTED" } as never, "android")).toBe(false);
     expect(isCaptainShell({ approval: "APPROVED" } as never, "ios")).toBe(false);
     expect(isCaptainShell(undefined, "android")).toBe(false);
@@ -66,6 +68,17 @@ describe("which shell a partner gets", () => {
 
     expect(view.getByText("Work")).toBeTruthy();
     expect(view.getByText("Money")).toBeTruthy();
+    expect(view.queryByText("Wallet")).toBeNull();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("keeps a captain whose application is sent but not approved on Home, never bouncing to Rides", async () => {
+    // Rides needs an approved partner, so the guard would send them straight back to Home: the
+    // loop that crashed the app with "Maximum update depth exceeded".
+    mockCaptain = { approval: "SUBMITTED" };
+
+    const view = await render(<TabsLayout />);
+
     expect(view.queryByText("Wallet")).toBeNull();
     expect(mockReplace).not.toHaveBeenCalled();
   });

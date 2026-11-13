@@ -5,11 +5,15 @@ export type BlockedReason = "suspended" | "not_approved" | "vehicle_missing" | "
 
 /**
  * Whether this partner gets the Rides workspace instead of the normal tabs (brief Revision 2):
- * a partner with a captain application, on Android only. A partner who is not a captain, and
- * every iPhone, keeps the app exactly as it was.
+ * an approved captain, on Android only. Everyone else, every iPhone, and a captain whose
+ * application is still a draft, sent or under review keeps the app exactly as it was.
+ *
+ * Approved only: the Rides pages are for approved partners, so the guard sends anyone else back
+ * to Home. Giving them the Rides shell too would send Home on to Rides, and Rides back to Home,
+ * forever (a submitted application crashed the app with "Maximum update depth exceeded").
  */
 export function isCaptainShell(status: CaptainStatus | null | undefined, os: string): boolean {
-  return os === "android" && status != null && status.approval !== "NOT_STARTED";
+  return os === "android" && status?.approval === "APPROVED";
 }
 
 const BLOCKED_TEXT: Record<BlockedReason, string> = {
