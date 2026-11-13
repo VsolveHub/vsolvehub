@@ -17,17 +17,23 @@ export interface Trip {
 }
 
 /**
- * Upfront fares for a trip. Each call saves new quotes on the server, so this never refetches on
- * its own (focus, reconnect, retry); the screen asks again only when the quotes expire.
+ * Upfront fares for a trip. Each call saves new quotes on the server and counts against a limit of
+ * 20 a minute, so this asks once and keeps the answer for as long as it can be booked (the server
+ * keeps a quote 5 minutes). It never refetches on its own: not on focus, reconnect, remount or
+ * retry, and a failed call is not repeated by a remount. The screen asks again only when the quotes
+ * expire, or when the rider taps Try again.
  */
+const QUOTES_KEPT_MS = 4 * 60 * 1000;
+
 export function useFareQuotes(trip: Trip | null, enabled: boolean) {
   return useQuery({
     queryKey: ["rides", "quotes", trip],
     queryFn: () => request(() => getApiClient().POST("/api/v1/rides/quotes/", { body: trip! })),
     enabled: enabled && trip !== null,
     staleTime: Infinity,
-    gcTime: 0,
+    gcTime: QUOTES_KEPT_MS,
     retry: false,
+    retryOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -36,27 +42,6 @@ export function useFareQuotes(trip: Trip | null, enabled: boolean) {
 export interface Place {
   latitude: number;
   longitude: number;
-}
-
-/**
- * Which vehicle types can be booked at a place: drives the Rides entry on Home. The place is
- * rounded to about 100 m in the key, so small GPS jitter does not ask the server again.
- */
-export function useRidesAvailability(place: Place | null) {
-  return useQuery({
-    queryKey: ["rides", "availability", place?.latitude.toFixed(3), place?.longitude.toFixed(3)],
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/rides/availability/", {
-          params: {
-            query: { latitude: place!.latitude.toFixed(6), longitude: place!.longitude.toFixed(6) },
-          },
-        }),
-      ),
-    enabled: place !== null,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
 }
 
 export type Ride = Schemas["Ride"];

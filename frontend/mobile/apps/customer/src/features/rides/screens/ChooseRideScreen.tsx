@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isApiRequestError } from "@vsolve/api-client";
 import { useAuthStore } from "@vsolve/mobile-core";
 import { Button, Text, formatMoney } from "@vsolve/mobile-ui";
@@ -7,14 +7,23 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 
 import { decodePolyline } from "../polyline";
 import { bookRide, findOpenRide, useFareQuotes, type Trip } from "../queries";
-import { VEHICLES } from "../vehicles";
+import { VEHICLES, type VehicleType } from "../vehicles";
 
 const ROUTE_BLUE = "#2563EB";
+
+/**
+ * Ask for prices again this long after they arrived. The server keeps a quote 5 minutes, so this
+ * leaves a margin. Counted on the phone's own clock from the moment the answer came in, never
+ * from the quote's `expires_at`: that is the server's clock, and a phone a few minutes off would
+ * see every quote as already expired and ask again in a loop.
+ */
+const QUOTES_REFRESH_MS = 4.5 * 60 * 1000;
 
 type Params = Record<
   "pickupLat" | "pickupLng" | "pickupLabel" | "dropLat" | "dropLng" | "dropLabel",
@@ -44,20 +53,36 @@ function km(metres: number): string {
 
 export function ChooseRideScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<Params>();
-  const trip = useMemo(() => tripFrom(params), [params]);
+  const { pickupLat, pickupLng, pickupLabel, dropLat, dropLng, dropLabel } = params;
+  // The router hands back a new params object on render. Key the trip on its values, so nothing
+  // below re-runs (refit the map, ask for prices) unless the trip really changed.
+  const trip = useMemo(
+    () => tripFrom({ pickupLat, pickupLng, pickupLabel, dropLat, dropLng, dropLabel }),
+    [pickupLat, pickupLng, pickupLabel, dropLat, dropLng, dropLabel],
+  );
   const signedIn = useAuthStore((state) => state.status) === "signedIn";
   const [loginOpen, setLoginOpen] = useState(false);
+  const [booked, setBooked] = useState(false);
 
-  const quotes = useFareQuotes(trip, signedIn);
+  const quotes = useFareQuotes(trip, signedIn && !booked);
   const list = quotes.data?.quotes ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = list.find((q) => q.id === selectedId) ?? list[0] ?? null;
+  // Remember the vehicle, not the quote: a fresh answer has new quote ids for the same vehicles.
+  const [selectedType, setSelectedType] = useState<VehicleType | null>(null);
+  const selected = list.find((q) => q.vehicle_type === selectedType) ?? list[0] ?? null;
   const route = useMemo(() => (selected ? decodePolyline(selected.route_polyline) : []), [selected]);
 
   const book = useMutation({
     mutationFn: (quoteId: string) => bookRide(quoteId),
-    onSuccess: (ride) => router.replace(`/rides/ride/${ride.id}` as never),
+    onSuccess: (ride) => {
+      // The quotes are used up. Stop asking for them, and forget them so a later visit to the
+      // same trip gets fresh prices.
+      setBooked(true);
+      queryClient.removeQueries({ queryKey: ["rides", "quotes"] });
+      router.replace(`/rides/ride/${ride.id}` as never);
+    },
     onError: async (error) => {
       const code = isApiRequestError(error) ? error.code : null;
       if (code === "quote_expired" || code === "quote_used") void quotes.refetch();
@@ -73,45 +98,59 @@ export function ChooseRideScreen() {
   const pickup = trip && { latitude: Number(trip.pickup.latitude), longitude: Number(trip.pickup.longitude) };
   const drop = trip && { latitude: Number(trip.drop.latitude), longitude: Number(trip.drop.longitude) };
 
-  // Fit the whole route above the sheet once it arrives.
+  // Frame the pickup and drop as soon as the map is ready, and the whole route once it arrives.
+  // Only then: any other re-render must leave the rider's own zoom and pan alone.
+  const [mapReady, setMapReady] = useState(false);
+  const hasRoute = route.length > 0;
+  const tripKey = trip ? `${trip.pickup.latitude},${trip.pickup.longitude},${trip.drop.latitude},${trip.drop.longitude}` : "";
   useEffect(() => {
-    const points = route.length > 0 ? route : [pickup, drop].filter((p) => p !== null);
+    if (!mapReady) return;
+    const points = hasRoute ? route : [pickup, drop].filter((p) => p !== null);
     if (points.length < 2) return;
     mapRef.current?.fitToCoordinates(points, {
-      edgePadding: { top: 60, right: 40, bottom: 380, left: 40 },
+      edgePadding: { top: 40, right: 40, bottom: 40, left: 40 },
       animated: true,
     });
-    // Coordinates are derived from `route` and `trip`; refit only when those change.
+    // `route`, `pickup` and `drop` are rebuilt on every render; `tripKey` and `hasRoute` say when
+    // they really changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route, trip]);
+  }, [mapReady, hasRoute, tripKey]);
 
-  // A quote lives five minutes on the server. Ask again just after it ends, so the rider never
-  // sees a price that can no longer be booked.
-  const expiresAt = list[0]?.expires_at;
+  // A quote lives five minutes on the server. Ask again before it ends, so the rider never sees a
+  // price that can no longer be booked. One timer per answer: it restarts only when new prices
+  // arrive, and prices that were kept from an earlier visit are asked for once, not repeatedly.
+  const answeredAt = quotes.dataUpdatedAt;
+  const hasPrices = list.length > 0;
   const { refetch } = quotes;
   useEffect(() => {
-    if (!expiresAt) return;
-    const wait = Math.max(0, new Date(expiresAt).getTime() - Date.now()) + 500;
+    if (!hasPrices) return;
+    const wait = Math.max(0, answeredAt + QUOTES_REFRESH_MS - Date.now());
     const timer = setTimeout(() => void refetch(), wait);
     return () => clearTimeout(timer);
-  }, [expiresAt, refetch]);
+  }, [hasPrices, answeredAt, refetch]);
 
   return (
-    <View className="flex-1 bg-canvas">
-      <MapView
-        ref={mapRef}
-        style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        userInterfaceStyle="light"
-        initialRegion={
-          pickup ? { ...pickup, latitudeDelta: 0.05, longitudeDelta: 0.05 } : undefined
-        }
-      >
-        {pickup && <Marker coordinate={pickup} title="Pickup" pinColor="green" />}
-        {drop && <Marker coordinate={drop} title="Drop" pinColor="red" />}
-        {route.length > 1 && <Polyline coordinates={route} strokeColor={ROUTE_BLUE} strokeWidth={5} />}
-      </MapView>
+    <View
+      style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      className="flex-1 gap-2 bg-canvas px-4 pt-2"
+    >
+      <View className="min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
+        <MapView
+          ref={mapRef}
+          style={{ flex: 1 }}
+          onMapReady={() => setMapReady(true)}
+          userInterfaceStyle="light"
+          initialRegion={
+            pickup ? { ...pickup, latitudeDelta: 0.05, longitudeDelta: 0.05 } : undefined
+          }
+        >
+          {pickup && <Marker coordinate={pickup} title="Pickup" pinColor="green" />}
+          {drop && <Marker coordinate={drop} title="Drop" pinColor="red" />}
+          {route.length > 1 && <Polyline coordinates={route} strokeColor={ROUTE_BLUE} strokeWidth={5} />}
+        </MapView>
+      </View>
 
-      <View className="absolute bottom-0 left-0 right-0 max-h-[60%] rounded-t-3xl bg-white px-4 pb-8 pt-4 shadow-lg">
+      <View className="max-h-[40%] rounded-2xl border border-line bg-surface p-3">
         {trip === null ? (
           <Message text="Trip details are missing. Go back and choose your pickup and drop.">
             <Button onPress={() => router.back()}>Back</Button>
@@ -126,7 +165,13 @@ export function ChooseRideScreen() {
             <Text className="text-sm text-slate-500">Getting prices…</Text>
           </View>
         ) : quotes.isError ? (
-          <QuoteError error={quotes.error} onRetry={() => void refetch()} onChangePickup={() => router.back()} />
+          <QuoteError
+            key={quotes.errorUpdatedAt}
+            error={quotes.error}
+            busy={quotes.isFetching}
+            onRetry={() => void refetch()}
+            onChangePickup={() => router.back()}
+          />
         ) : (
           <>
           <ScrollView>
@@ -139,16 +184,16 @@ export function ChooseRideScreen() {
                   key={quote.id}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: active }}
-                  onPress={() => setSelectedId(quote.id)}
-                  className={`mb-2 flex-row items-center gap-3 rounded-2xl border p-3 ${
-                    active ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-white"
+                  onPress={() => setSelectedType(quote.vehicle_type)}
+                  className={`mb-1.5 flex-row items-center gap-3 rounded-xl border px-3 py-2 ${
+                    active ? "border-blue-600 bg-blue-50" : "border-line bg-surface"
                   }`}
                 >
-                  <View className="h-11 w-11 items-center justify-center rounded-full bg-slate-100">
-                    <Icon size={24} color="#0F172A" />
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-slate-100">
+                    <Icon size={26} />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-base font-semibold text-slate-900">{vehicle.name}</Text>
+                    <Text className="text-sm font-semibold text-slate-900">{vehicle.name}</Text>
                     <Text className="text-xs text-slate-500">
                       {minutes(quote.duration_s)} · {km(quote.distance_m)}
                     </Text>
@@ -167,7 +212,7 @@ export function ChooseRideScreen() {
             <Button
               size="lg"
               block
-              className="mt-2"
+              className="mt-1"
               loading={book.isPending}
               onPress={() => book.mutate(selected.id)}
             >
@@ -200,20 +245,57 @@ function Message({ text, children }: { text: string; children: React.ReactNode }
   );
 }
 
+/** Seconds the server asks us to wait, from a throttled (429) answer; 0 for any other error. */
+function throttleWait(error: unknown): number {
+  if (!isApiRequestError(error) || error.status !== 429) return 0;
+  const details = error.details as { retry_after_seconds?: unknown } | null;
+  return typeof details?.retry_after_seconds === "number" ? details.retry_after_seconds : 0;
+}
+
+/** Counts down from `seconds`, once a second. The error card is keyed per failure, so it restarts. */
+function useCountdown(seconds: number): number {
+  const [left, setLeft] = useState(seconds);
+  useEffect(() => {
+    if (seconds <= 0) return;
+    const timer = setInterval(() => setLeft((n) => Math.max(0, n - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [seconds]);
+  return left;
+}
+
 function QuoteError({
   error,
+  busy,
   onRetry,
   onChangePickup,
 }: {
   error: unknown;
+  busy: boolean;
   onRetry: () => void;
   onChangePickup: () => void;
 }) {
+  const wait = throttleWait(error);
+  const left = useCountdown(wait);
   const code = isApiRequestError(error) ? error.code : null;
   if (code === "area_not_served") {
     return (
-      <Message text="Rides aren't available at this pickup yet.">
+      <Message text="Rides isn't available here yet.">
         <Button onPress={onChangePickup}>Change pickup</Button>
+      </Message>
+    );
+  }
+  if (wait > 0) {
+    return (
+      <Message
+        text={
+          left > 0
+            ? `Too many price checks in a short time. You can try again in ${left} s.`
+            : "You can try again now."
+        }
+      >
+        <Button disabled={left > 0 || busy} onPress={onRetry}>
+          Try again
+        </Button>
       </Message>
     );
   }
@@ -223,7 +305,9 @@ function QuoteError({
       : describeError(error, "read").message;
   return (
     <Message text={text}>
-      <Button onPress={onRetry}>Try again</Button>
+      <Button disabled={busy} onPress={onRetry}>
+        Try again
+      </Button>
     </Message>
   );
 }
