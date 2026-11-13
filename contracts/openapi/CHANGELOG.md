@@ -1,5 +1,31 @@
 # API Contract Changelog
 
+## 1.100.0 - AI booking assistant
+
+Additive. Off unless `ASSISTANT_ENABLED` is set; every route answers `503 assistant_unavailable`
+until then.
+
+- **Added** `POST /assistant/conversations/` (no body → `AssistantConversationCreated`): starts a
+  chat and returns `conversation_token` once. The token is sent as the `X-Assistant-Token` header
+  on the two routes below and is never stored server-side, only its hash. Works signed out;
+  throttled per user or IP (`assistant_conversation`, 20/hour).
+- **Added** `GET /assistant/conversation/` (`AssistantConversation`): the visible messages
+  (`sequence`, `sender`, `text`, `actions`, `created_at`), `is_answering`, `signed_in` and
+  `has_open_booking`. Safe to poll; while a booking made in the chat is open, a poll posts the
+  booking's progress (assigning, awaiting payment, confirmed, not booked) as a server-written
+  message. `404 assistant_conversation_not_found` for an unknown token or another Customer's
+  conversation. A signed-out conversation is claimed by the first signed-in Customer who opens it.
+- **Added** `POST /assistant/conversation/messages/` (`AssistantMessageCreate`: `text`,
+  `client_message_id` → `AssistantTurn`): the Customer's message and every message it produced.
+  Resending a `client_message_id` replays the stored answer. `409 assistant_busy` while a previous
+  message is still being answered, `429 assistant_limit_reached` past
+  `ASSISTANT_MAX_USER_MESSAGES_PER_SESSION`, `503 assistant_unavailable` when disabled, not
+  configured or past the daily cap. Throttled per user or IP (`assistant_message`, 120/hour).
+- `AssistantAction.action_type` is one of `QUICK_REPLY` (send `message` when tapped), `LOGIN`,
+  `ADD_ADDRESS`, `OPEN_LINK`, `QUOTE` (`amount`, `lines`, confirm by sending `message`), `PAY` and
+  `VIEW_BOOKING` (`href` is the existing booking page, where payment happens).
+- `X-Assistant-Token` is added to `CORS_ALLOW_HEADERS`.
+
 ## 1.99.0 - WhatsApp channel for message preferences
 
 Additive.
@@ -9,6 +35,8 @@ Additive.
   `{"channel": "WHATSAPP", "purpose": "whatsapp-updates", "is_enabled": true}`. One switch covers
   every WhatsApp message, for Customers and Partners alike. Turning it off is the same call with
   `is_enabled: false`.
+- **Behaviour**: a captured booking payment now also sends the Customer an in-app
+  `customer_booking_confirmed` notice (one per order), alongside the Partner's existing one.
 - Not a client route: Meta's status callbacks arrive at `/api/v1/notification-webhooks/whatsapp/`,
   a signed plain Django view outside this contract.
 
