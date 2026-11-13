@@ -42,7 +42,7 @@ function errorText(error: unknown): string {
 
 function Place({ label, address }: { label: string; address: string }) {
   return (
-    <View className="gap-0.5 rounded-2xl bg-surface p-4">
+    <View className="gap-0.5 rounded-2xl border border-line bg-surface p-4">
       <Text className="text-xs font-semibold uppercase text-text-muted">{label}</Text>
       <Text className="text-base text-text">{address}</Text>
     </View>
@@ -50,16 +50,15 @@ function Place({ label, address }: { label: string; address: string }) {
 }
 
 /**
- * The pickup or drop on a map, with the captain's own dot. Only when this build can draw maps:
- * an Android build without the Maps key would show an empty grey square, so it shows none and
- * the address card and Navigate carry the screen.
+ * The pickup or drop on a map, with the captain's own dot, filling the top of the screen. Shown
+ * only when this build can draw maps (`isInAppMapAvailable`): an Android build without the Maps
+ * key would show an empty grey square, so then the panel takes the whole screen.
  */
 function TripMap({ latitude, longitude }: { latitude: string; longitude: string }) {
-  if (!isInAppMapAvailable()) return null;
   const point = { latitude: Number(latitude), longitude: Number(longitude) };
   return (
     <MapView
-      style={{ height: 220, borderRadius: 16 }}
+      style={{ flex: 1 }}
       provider={Platform.OS === "android" ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
       initialRegion={{ ...point, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
       showsUserLocation
@@ -80,13 +79,48 @@ function ErrorLine({ error }: { error: unknown }) {
 
 function CancelChoices({ onPick, busy }: { onPick: (reason: string) => void; busy: boolean }) {
   return (
-    <View className="gap-2 rounded-2xl bg-surface p-4">
+    <View className="gap-2 rounded-2xl border border-line bg-surface p-4">
       <Text className="text-sm font-semibold text-text">Why are you cancelling?</Text>
       {CAPTAIN_CANCEL_REASONS.map(({ code, label }) => (
         <Button key={code} variant="outline" block disabled={busy} onPress={() => onPick(code)}>
           {label}
         </Button>
       ))}
+    </View>
+  );
+}
+
+const STEPS = [
+  { step: "to_pickup", label: "Pickup" },
+  { step: "otp", label: "Code" },
+  { step: "in_trip", label: "Trip" },
+  { step: "collect", label: "Payment" },
+] as const;
+
+/** Where the captain is in the ride: the steps done and the current one are lit. */
+function StepBar({ step }: { step: string }) {
+  const at = STEPS.findIndex((s) => s.step === step);
+  return (
+    <View className="flex-row gap-2">
+      {STEPS.map((s, index) => (
+        <View key={s.step} className="flex-1 gap-1">
+          <View className={`h-1 rounded-full ${index <= at ? "bg-[#f87000]" : "bg-line"}`} />
+          <Text className={`text-xs ${index === at ? "font-bold text-text" : "text-text-muted"}`}>{s.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** The step's title, who it is about, and the fare on the right. */
+function Header({ title, subtitle, fare }: { title: string; subtitle?: string; fare: number }) {
+  return (
+    <View className="flex-row items-start justify-between gap-3">
+      <View className="flex-1 gap-0.5">
+        <Text className="text-2xl font-extrabold text-text">{title}</Text>
+        {subtitle ? <Text className="text-base text-text-muted">{subtitle}</Text> : null}
+      </View>
+      <Text className="text-lg font-bold text-text">{formatMoney(fare)}</Text>
     </View>
   );
 }
@@ -178,11 +212,25 @@ export function TripScreen() {
 
   const step = paidRide ? "done" : tripStep(ride);
   const phone = ride.rider.phone_number;
-  const callAndSos = (
+  const name = firstName(ride.rider.name);
+  const place = step === "to_pickup" ? ride.pickup : step === "in_trip" ? ride.drop : null;
+  const showMap = place !== null && isInAppMapAvailable();
+
+  // Navigate (when there is somewhere to go), Call and SOS, side by side.
+  const actions = (
     <View className="flex-row gap-2">
+      {place ? (
+        <Button
+          variant="outline"
+          className="flex-1"
+          onPress={() => void Linking.openURL(navigationUrl(place.latitude, place.longitude))}
+        >
+          Navigate
+        </Button>
+      ) : null}
       {phone ? (
         <Button variant="outline" className="flex-1" onPress={() => void Linking.openURL(`tel:${phone}`)}>
-          Call {firstName(ride.rider.name)}
+          Call {name}
         </Button>
       ) : null}
       <Button
@@ -200,42 +248,39 @@ export function TripScreen() {
       </Button>
     </View>
   );
+  const cancelLink = cancelling ? (
+    <CancelChoices busy={cancel.isPending} onPick={(reason) => cancel.mutate(reason)} />
+  ) : (
+    <Button variant="ghost" block onPress={() => setCancelling(true)}>
+      Cancel ride
+    </Button>
+  );
 
+  // The step's details scroll; its one main action is pinned at the bottom.
   let body: React.ReactNode;
+  let action: React.ReactNode = null;
   if (step === "to_pickup") {
     body = (
       <>
-        <Text className="text-2xl font-extrabold text-text">Go to the pickup</Text>
-        <Text className="text-base text-text">Pick up {firstName(ride.rider.name)}</Text>
-        <TripMap latitude={ride.pickup.latitude} longitude={ride.pickup.longitude} />
+        <Header title="Go to the pickup" subtitle={`Pick up ${name}`} fare={ride.fare_paise} />
         <Place label="Pickup" address={ride.pickup.address} />
-        <Button
-          variant="outline"
-          block
-          onPress={() => void Linking.openURL(navigationUrl(ride.pickup.latitude, ride.pickup.longitude))}
-        >
-          Navigate
-        </Button>
-        {callAndSos}
+        {actions}
+        {cancelLink}
+        <ErrorLine error={cancel.error} />
+      </>
+    );
+    action = (
+      <>
         <ErrorLine error={arrived.error} />
         <Button size="lg" block loading={arrived.isPending} onPress={() => arrived.mutate()}>
           {"I've arrived"}
         </Button>
-        {cancelling ? (
-          <CancelChoices busy={cancel.isPending} onPick={(reason) => cancel.mutate(reason)} />
-        ) : (
-          <Button variant="ghost" block onPress={() => setCancelling(true)}>
-            Cancel ride
-          </Button>
-        )}
-        <ErrorLine error={cancel.error} />
       </>
     );
   } else if (step === "otp") {
     body = (
       <>
-        <Text className="text-2xl font-extrabold text-text">Ask for the start code</Text>
-        <Text className="text-base text-text">{firstName(ride.rider.name)} has a 4-digit code in their app.</Text>
+        <Header title="Ask for the start code" subtitle={`${name} has a 4-digit code in their app.`} fare={ride.fare_paise} />
         <Input
           value={otp}
           onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 4))}
@@ -243,37 +288,31 @@ export function TripScreen() {
           maxLength={4}
           placeholder="0000"
           accessibilityLabel="Start code"
-          className="text-center text-2xl tracking-[0.5em]"
+          className="text-center text-3xl font-bold tracking-[0.5em]"
         />
+        {actions}
+        {cancelLink}
+        <ErrorLine error={cancel.error} />
+      </>
+    );
+    action = (
+      <>
         <ErrorLine error={start.error} />
         <Button size="lg" block disabled={!isOtpComplete(otp)} loading={start.isPending} onPress={() => start.mutate()}>
           Start trip
         </Button>
-        {callAndSos}
-        {cancelling ? (
-          <CancelChoices busy={cancel.isPending} onPick={(reason) => cancel.mutate(reason)} />
-        ) : (
-          <Button variant="ghost" block onPress={() => setCancelling(true)}>
-            Cancel ride
-          </Button>
-        )}
-        <ErrorLine error={cancel.error} />
       </>
     );
   } else if (step === "in_trip") {
     body = (
       <>
-        <Text className="text-2xl font-extrabold text-text">Drop the rider</Text>
-        <TripMap latitude={ride.drop.latitude} longitude={ride.drop.longitude} />
+        <Header title="Drop the rider" subtitle={name} fare={ride.fare_paise} />
         <Place label="Drop" address={ride.drop.address} />
-        <Button
-          variant="outline"
-          block
-          onPress={() => void Linking.openURL(navigationUrl(ride.drop.latitude, ride.drop.longitude))}
-        >
-          Navigate
-        </Button>
-        {callAndSos}
+        {actions}
+      </>
+    );
+    action = (
+      <>
         <ErrorLine error={complete.error} />
         <Button
           size="lg"
@@ -295,7 +334,7 @@ export function TripScreen() {
     body = (
       <>
         <Text className="text-2xl font-extrabold text-text">Collect the payment</Text>
-        <View className="items-center gap-1 rounded-2xl bg-surface p-6">
+        <View className="items-center gap-1 rounded-2xl border border-line bg-surface p-6">
           <Text className="text-5xl font-extrabold text-text">{formatMoney(total)}</Text>
           <Text className="text-sm text-text-muted">
             {ride.waiting_paise > 0
@@ -303,6 +342,10 @@ export function TripScreen() {
               : "Cash or UPI to you"}
           </Text>
         </View>
+      </>
+    );
+    action = (
+      <>
         <ErrorLine error={paid.error} />
         <Button size="lg" block loading={paid.isPending} onPress={() => paid.mutate()}>
           Payment received
@@ -314,14 +357,25 @@ export function TripScreen() {
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-canvas"
-      contentContainerStyle={{ padding: 20, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24, gap: 14 }}
-    >
-      <View className="self-start rounded-full bg-[#00112e] px-3 py-1">
-        <Text className="text-xs font-bold uppercase text-white">{formatMoney(ride.fare_paise)} ride</Text>
-      </View>
-      {body}
-    </ScrollView>
+    <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top + 8 }}>
+      {showMap && place ? (
+        <View className="mx-4 min-h-40 flex-1 overflow-hidden rounded-2xl border border-line">
+          <TripMap latitude={place.latitude} longitude={place.longitude} />
+        </View>
+      ) : null}
+      <ScrollView
+        className={showMap ? "max-h-[62%] grow-0" : "flex-1"}
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: action ? 16 : insets.bottom + 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {step !== "done" ? <StepBar step={step} /> : null}
+        {body}
+      </ScrollView>
+      {action ? (
+        <View className="gap-2 border-t border-line bg-surface px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+          {action}
+        </View>
+      ) : null}
+    </View>
   );
 }

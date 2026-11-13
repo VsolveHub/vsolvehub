@@ -71,11 +71,13 @@ beforeEach(() => {
 test("shows the countdown, fare and places, and rings", async () => {
   const view = await renderOffer();
 
-  expect(view.getByText("12")).toBeTruthy();
+  expect(view.getByText("12 s")).toBeTruthy();
+  expect(view.getByText("Bike")).toBeTruthy();
   expect(view.getByText("₹51")).toBeTruthy();
   expect(view.getByText("Gachibowli Stadium")).toBeTruthy();
   expect(view.getByText("Hitec City")).toBeTruthy();
-  expect(view.getByText(/Pickup 0.6 km away · Trip 4.2 km, 15 min/)).toBeTruthy();
+  expect(view.getByText("0.6 km away")).toBeTruthy();
+  expect(view.getByText("4.2 km · 15 min")).toBeTruthy();
   expect(mockRing).toHaveBeenLastCalledWith(true);
 });
 

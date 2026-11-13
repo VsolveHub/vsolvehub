@@ -113,6 +113,26 @@ test("to the pickup: the rider's first name, the place, and Arrived", async () =
   await waitFor(() => expect(mockApi.markArrived).toHaveBeenCalledWith("ride-1"));
 });
 
+test("shows where the captain is in the ride, the fare, and Navigate, Call and SOS together", async () => {
+  const view = await renderTrip();
+
+  // "Pickup" is both a step and the address card's label.
+  expect(view.getAllByText("Pickup")).toHaveLength(2);
+  for (const label of ["Code", "Trip", "Payment"]) expect(view.getByText(label)).toBeTruthy();
+  expect(view.getByText("₹51")).toBeTruthy();
+  expect(view.getByText("Navigate")).toBeTruthy();
+  expect(view.getByText("Call Priya")).toBeTruthy();
+  expect(view.getByText("SOS")).toBeTruthy();
+});
+
+test("at the start code there is nowhere to navigate to", async () => {
+  mockRide = ride("CAPTAIN_ARRIVED");
+  const view = await renderTrip();
+
+  expect(view.queryByText("Navigate")).toBeNull();
+  expect(view.getByText("Call Priya")).toBeTruthy();
+});
+
 test("a wrong start code says how many tries are left", async () => {
   mockRide = ride("CAPTAIN_ARRIVED");
   mockApi.startTrip.mockRejectedValue(new MockApiError("otp_invalid", { attempts_left: 2 }));
