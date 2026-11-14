@@ -16,6 +16,9 @@ for each value. It is written out here rather than derived from the in-app copy 
 approved template cannot change when somebody rewords a feed notice. `manage.py
 channel_templates` prints every entry in the form each provider asks for.
 
+- **No codes on WhatsApp.** A PIN or other code in a template makes Meta class it as an
+  authentication message and refuse it as Utility (`rental_booking_confirmed` was refused so).
+  The message says where the code is; the code itself stays in the app.
 - **WhatsApp.** Each `{name}` becomes `{{1}}`, `{{2}}` … in order of appearance; a name that
   appears twice takes two numbers and is sent twice. Every text starts with "V Solve Hub:" because
   Meta refuses a template that starts with a value. Optional fragments of the in-app copy (a
@@ -365,7 +368,7 @@ PLAN: Final[dict[str, Route]] = {
     "rental_booking_confirmed": Route(
         WHATSAPP,
         "V Solve Hub: Booking confirmed\n\nYour rental of {asset_title} is confirmed from "
-        "{start_date} to {end_date}. Your handover PIN is {pin}. Show it at handover.",
+        "{start_date} to {end_date}. Your handover PIN is in the app; show it at handover.",
     ),
     # Customer · High priority
     "rental_claim_decided_customer": Route(

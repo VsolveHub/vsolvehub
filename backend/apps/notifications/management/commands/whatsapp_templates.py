@@ -4,16 +4,18 @@
     python manage.py whatsapp_templates submit --dry-run  # what would be sent, nothing sent
     python manage.py whatsapp_templates submit            # every template not yet on Meta
     python manage.py whatsapp_templates submit --only customer_booking_confirmed,job_invite
+    python manage.py whatsapp_templates submit --resubmit-rejected  # after rewording one
 
 Every template comes from `notifications.channel_plan`, so what Meta approves is exactly what the
 code sends: the name is the template code, the body is the route's text with `{{1}}`, `{{2}}` …,
 category Utility, language `WHATSAPP_TEMPLATE_LANGUAGE`. Meta requires an example value for every
 variable; `SAMPLE_VALUES` holds one per variable name.
 
-`submit` never touches a template that already exists on the account, whatever its status, so it
-is safe to run again after fixing a rejected one (delete the rejected one in WhatsApp Manager
-first). It needs `WHATSAPP_BUSINESS_ACCOUNT_ID` and a token with template management on that
-account.
+`submit` never touches a template that already exists on the account, so it is safe to run again.
+With `--resubmit-rejected` it also sends the current text of every REJECTED template back to Meta
+as an edit of that template, keeping its name (Meta allows editing a rejected template; a deleted
+name cannot be reused for weeks). It needs `WHATSAPP_BUSINESS_ACCOUNT_ID` and a token with
+template management on that account.
 """
 
 from argparse import ArgumentParser
@@ -99,6 +101,11 @@ class Command(BaseCommand):
         parser.add_argument("action", choices=("status", "submit"))
         parser.add_argument("--dry-run", action="store_true", help="Print, send nothing.")
         parser.add_argument("--only", default="", help="Comma-separated template codes.")
+        parser.add_argument(
+            "--resubmit-rejected",
+            action="store_true",
+            help="Also send the current text of REJECTED templates back for review.",
+        )
 
     def handle(self, *_args: Any, **options: Any) -> None:
         routes = whatsapp_routes()
@@ -117,7 +124,7 @@ class Command(BaseCommand):
         if options["action"] == "status":
             self._status(routes, existing)
         else:
-            self._submit(routes, existing)
+            self._submit(routes, existing, resubmit_rejected=bool(options["resubmit_rejected"]))
 
     def _url(self) -> str:
         account = settings.WHATSAPP_BUSINESS_ACCOUNT_ID
@@ -137,7 +144,7 @@ class Command(BaseCommand):
         found: dict[str, dict[str, Any]] = {}
         url: str | None = self._url()
         params: dict[str, Any] | None = {
-            "fields": "name,status,category,language,rejected_reason",
+            "fields": "id,name,status,category,language,rejected_reason",
             "limit": 200,
         }
         while url:
@@ -166,19 +173,34 @@ class Command(BaseCommand):
         summary = ", ".join(f"{count} {state.lower()}" for state, count in sorted(counts.items()))
         self.stdout.write(f"\n{len(routes)} templates: {summary}")
 
-    def _submit(self, routes: dict[str, Route], existing: dict[str, dict[str, Any]]) -> None:
+    def _edit_url(self, template_id: str) -> str:
+        return (
+            f"{settings.WHATSAPP_GRAPH_API_BASE_URL.rstrip('/')}/"
+            f"{settings.WHATSAPP_GRAPH_API_VERSION}/{template_id}"
+        )
+
+    def _submit(
+        self,
+        routes: dict[str, Route],
+        existing: dict[str, dict[str, Any]],
+        *,
+        resubmit_rejected: bool,
+    ) -> None:
         sent = skipped = failed = 0
         for code, route in routes.items():
-            if code in existing:
+            current = existing.get(code)
+            request = template_request(code, route)
+            if current is None:
+                url = self._url()
+            elif resubmit_rejected and current.get("status") == "REJECTED" and current.get("id"):
+                # An edit takes the components (and category) only; name and language stay.
+                url = self._edit_url(str(current["id"]))
+                request = {key: request[key] for key in ("category", "components")}
+            else:
                 skipped += 1
                 continue
             try:
-                response = requests.post(
-                    self._url(),
-                    json=template_request(code, route),
-                    headers=self._headers(),
-                    timeout=20,
-                )
+                response = requests.post(url, json=request, headers=self._headers(), timeout=20)
             except requests.RequestException as exc:
                 failed += 1
                 self.stdout.write(f"FAILED   {code}: Meta could not be reached ({exc})")
@@ -186,13 +208,14 @@ class Command(BaseCommand):
             body = response.json() if response.content else {}
             if response.status_code < 300:  # noqa: PLR2004 - any 2xx
                 sent += 1
-                self.stdout.write(f"SENT     {code}: {body.get('status', 'PENDING')}")
+                state = body.get("status", "PENDING") if current is None else "RESUBMITTED"
+                self.stdout.write(f"SENT     {code}: {state}")
             else:
                 failed += 1
                 error = body.get("error", {}) if isinstance(body, dict) else {}
                 detail = error.get("error_user_msg") or error.get("message") or body
                 self.stdout.write(f"FAILED   {code}: {detail}")
         self.stdout.write(
-            f"\n{sent} submitted, {skipped} already on Meta, {failed} failed. "
+            f"\n{sent} submitted, {skipped} already on Meta (left alone), {failed} failed. "
             "Run `whatsapp_templates status` to follow the review."
         )
