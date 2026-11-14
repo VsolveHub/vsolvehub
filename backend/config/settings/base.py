@@ -1453,6 +1453,9 @@ PUSH_SUBSCRIPTION_FRESHNESS_DAYS = env.int("PUSH_SUBSCRIPTION_FRESHNESS_DAYS", d
 WHATSAPP_ENABLED = env.bool("WHATSAPP_ENABLED", default=False)
 WHATSAPP_ACCESS_TOKEN = env("WHATSAPP_ACCESS_TOKEN", default="")
 WHATSAPP_PHONE_NUMBER_ID = env("WHATSAPP_PHONE_NUMBER_ID", default="")
+#: The WhatsApp Business Account the number belongs to. Only `manage.py whatsapp_templates`
+#: needs it (templates live on the account, not the number); sending works without it.
+WHATSAPP_BUSINESS_ACCOUNT_ID = env("WHATSAPP_BUSINESS_ACCOUNT_ID", default="")
 WHATSAPP_GRAPH_API_BASE_URL = env(
     "WHATSAPP_GRAPH_API_BASE_URL", default="https://graph.facebook.com"
 )
