@@ -307,14 +307,6 @@ export default async function ServiceDetailPage({ params }: PageProps) {
 
         <ServiceAssurance service={service} />
 
-        <ServiceProfessionals service={service} />
-
-        {service.policies.some((p) => p.kind !== "PROCESS") ? (
-          <section className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
-            <PolicyList policies={service.policies.filter((p) => p.kind !== "PROCESS")} />
-          </section>
-        ) : null}
-
         {/* Related Services Section */}
         {relatedServices.length > 0 && (
           <section className="mt-16">
@@ -325,11 +317,14 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                 </h2>
                 <div className="h-px flex-1 bg-line/60" />
               </div>
-              {relatedServices.length > 1 && (
-                <span className="text-xs font-semibold text-text-muted sm:hidden shrink-0">
-                  Swipe &rarr;
-                </span>
-              )}
+              <Link
+                href={`/catalog/${category.slug}?tile=${service.subcategory_slug}`}
+                className="group inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-action hover:text-[#d65f1a] transition-colors shrink-0 py-1 px-2 sm:px-2.5 rounded-lg hover:bg-[#FFF0E5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              >
+                <span className="hidden sm:inline">View all {categoryHeadline(category.name)} services</span>
+                <span className="sm:hidden">View all</span>
+                <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+              </Link>
             </div>
             <div className="flex overflow-x-auto pb-4 gap-4 no-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:overflow-visible">
               {relatedServices.map((relatedService, index) => (
@@ -345,16 +340,6 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             </div>
           </section>
         )}
-
-        <section className="mt-12 mb-4 flex justify-center">
-          <Link
-            href={`/catalog/${category.slug}?tile=${service.subcategory_slug}`}
-            className="group inline-flex h-12 items-center justify-center rounded-full bg-white px-7 text-[0.95rem] font-medium text-navy-900 shadow-sm transition-all duration-300 hover:-translate-y-[2px] hover:shadow-md border border-line/40 hover:border-navy-300 gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          >
-            <span aria-hidden="true" className="transition-transform group-hover:-translate-x-1">&larr;</span> 
-            More {categoryHeadline(category.name)} services
-          </Link>
-        </section>
 
         {processSteps.length > 0 ? (
           <section
@@ -380,6 +365,14 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             <ProcessSteps steps={processSteps} />
           </section>
         ) : null}
+
+        {service.policies.some((p) => p.kind !== "PROCESS") ? (
+          <section className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm">
+            <PolicyList policies={service.policies.filter((p) => p.kind !== "PROCESS")} />
+          </section>
+        ) : null}
+
+        <ServiceProfessionals service={service} />
 
         <ServiceFaqSection faqs={faqs} />
       </div>

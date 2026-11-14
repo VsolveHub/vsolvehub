@@ -861,24 +861,26 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
         {/* V Solve Assurance */}
         <ServiceAssurance service={service} onOpenFaq={scrollToFaqs} />
 
-        {/* Verified Professionals */}
-        <ServiceProfessionals service={service} />
-
-        {/* What's Included / Not Included / Good to Know */}
-        {otherPolicies.length > 0 ? (
-          <View className="mt-8 rounded-[1rem] bg-white p-5 sm:p-7 md:p-8 shadow-sm">
-            <PolicyList policies={otherPolicies} />
-          </View>
-        ) : null}
-
         {/* Related Services */}
         {relatedServices.length > 0 ? (
           <View className="mt-16">
-            <View className="mb-6 flex-row items-center gap-3">
-              <Text className="text-[1.35rem] font-bold tracking-tight text-navy-900 sm:text-[1.5rem]">
-                Related Services
-              </Text>
-              <View className="h-px flex-1 bg-line/60" />
+            <View className="mb-6 flex-row items-center justify-between gap-3">
+              <View className="flex-1 flex-row items-center gap-3">
+                <Text className="text-[1.35rem] font-bold tracking-tight text-navy-900 sm:text-[1.5rem]">
+                  Related Services
+                </Text>
+                <View className="h-px flex-1 bg-line/60" />
+              </View>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => router.push(`/catalog/${category.slug}?tile=${service.subcategory_slug}` as never)}
+                className="flex-row items-center gap-1 py-1"
+              >
+                <Text className="text-xs sm:text-sm font-semibold text-action">
+                  {isDesktop ? `View all ${categoryHeadline(category.name)} services` : "View all"}
+                </Text>
+                <Text className="text-xs sm:text-sm font-semibold text-action">→</Text>
+              </Pressable>
             </View>
             <View className={isDesktop ? "flex-row gap-4" : "gap-4"}>
               {relatedServices.map((relatedService, index) => (
@@ -892,20 +894,6 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
             </View>
           </View>
         ) : null}
-
-        {/* Bottom Navigation Button */}
-        <View className="mb-4 mt-12 items-center justify-center">
-          <Pressable
-            accessibilityRole="link"
-            onPress={() => router.push(`/catalog/${category.slug}?tile=${service.subcategory_slug}` as never)}
-            className="h-12 flex-row items-center justify-center gap-2 rounded-full border border-line/40 bg-white px-7 shadow-sm active:scale-95"
-          >
-            <Text className="text-[0.95rem] font-medium text-navy-900">←</Text>
-            <Text className="text-[0.95rem] font-medium text-navy-900">
-              More {categoryHeadline(category.name)} services
-            </Text>
-          </Pressable>
-        </View>
 
         {/* How It Works */}
         {processSteps.length > 0 ? (
@@ -928,6 +916,16 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
             <ProcessSteps steps={processSteps} />
           </View>
         ) : null}
+
+        {/* What's Included / Not Included / Good to Know */}
+        {otherPolicies.length > 0 ? (
+          <View className="mt-8 rounded-[1rem] bg-white p-5 sm:p-7 md:p-8 shadow-sm">
+            <PolicyList policies={otherPolicies} />
+          </View>
+        ) : null}
+
+        {/* Verified Professionals */}
+        <ServiceProfessionals service={service} />
 
         {/* Frequently Asked Questions */}
         <View
