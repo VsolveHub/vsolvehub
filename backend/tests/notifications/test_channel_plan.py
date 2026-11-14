@@ -20,6 +20,7 @@ from apps.notifications.models import NotificationIntent
 from apps.notifications.templates_registry import _TEMPLATES, registered_template_codes
 
 _PLACEHOLDER = re.compile(r"\{([a-z0-9_]+)\}")
+_ENDS_WITH_A_VALUE = re.compile(r"\}[\s.!?,;:)\"']*$")
 
 #: The split agreed in the notification channel plan.
 WHATSAPP_ROUTES = 72
@@ -62,8 +63,9 @@ def test_every_text_starts_with_the_brand_and_not_a_value(code: str) -> None:
 
 @pytest.mark.parametrize("code", sorted(PLAN))
 def test_no_text_ends_with_a_value(code: str) -> None:
-    # Meta refuses a template whose body ends with a variable.
-    assert not PLAN[code].text.rstrip().endswith("}")
+    # Meta refuses a template whose body ends with a variable, and a value followed only by
+    # punctuation ("... on {when}.") counts as ending with it: eight templates were refused so.
+    assert not _ENDS_WITH_A_VALUE.search(PLAN[code].text)
 
 
 @pytest.mark.parametrize(

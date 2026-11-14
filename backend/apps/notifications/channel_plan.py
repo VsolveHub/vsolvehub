@@ -365,7 +365,7 @@ PLAN: Final[dict[str, Route]] = {
     "rental_booking_confirmed": Route(
         WHATSAPP,
         "V Solve Hub: Booking confirmed\n\nYour rental of {asset_title} is confirmed from "
-        "{start_date} to {end_date}. Your handover PIN is {pin}.",
+        "{start_date} to {end_date}. Your handover PIN is {pin}. Show it at handover.",
     ),
     # Customer · High priority
     "rental_claim_decided_customer": Route(
@@ -409,7 +409,7 @@ PLAN: Final[dict[str, Route]] = {
     "rental_handed_over_customer": Route(
         WHATSAPP,
         "V Solve Hub: Your rental has started\n\n{asset_title} has been handed over to you. "
-        "Please return it by {end_date}.",
+        "Please return it by {end_date}. Open the app for the rental details.",
     ),
     # Owner · High priority
     "rental_new_booking": Route(
@@ -488,7 +488,7 @@ PLAN: Final[dict[str, Route]] = {
     "customer_booking_confirmed": Route(
         WHATSAPP,
         "V Solve Hub: Booking confirmed: {service}\n\nPayment received. {partner_name} will "
-        "visit on {when}.",
+        "visit on {when}. Open the app for your booking details.",
     ),
     # Customer · High priority
     "customer_booking_unstaffable": Route(
@@ -512,13 +512,13 @@ PLAN: Final[dict[str, Route]] = {
     "stay_enquiry_confirmed": Route(
         WHATSAPP,
         "V Solve Hub: Your stay is booked\n\n{host_name} marked your enquiry for "
-        "{property_title} as booked from {check_in}.",
+        "{property_title} as booked from {check_in}. Open the app for the stay details.",
     ),
     # Guest · Medium priority
     "stay_enquiry_declined": Route(
         WHATSAPP,
         "V Solve Hub: {property_title} isn't available\n\n{host_name} can't host you from "
-        "{check_in}.",
+        "{check_in}. You can look for another stay in the app.",
     ),
     # Host · High priority
     "stay_enquiry_received": Route(
@@ -536,19 +536,19 @@ PLAN: Final[dict[str, Route]] = {
     "stay_visit_accepted": Route(
         WHATSAPP,
         "V Solve Hub: Your visit has been accepted\n\n{host_name} accepted your visit to "
-        "{property_title} on {visit_date}, {visit_time}.",
+        "{property_title} on {visit_date}, {visit_time}. Open the app for the address and details.",
     ),
     # Host · Medium priority
     "stay_visit_cancelled": Route(
         WHATSAPP,
         "V Solve Hub: A visit was cancelled\n\n{guest_name} cancelled their visit to "
-        "{property_title} on {visit_date}, {visit_time}.",
+        "{property_title} on {visit_date}, {visit_time}. Open the app for details.",
     ),
     # Guest · Medium priority
     "stay_visit_declined": Route(
         WHATSAPP,
         "V Solve Hub: Schedule not accepted\n\nThe owner has not accepted your visit to "
-        "{property_title} on {visit_date}.",
+        "{property_title} on {visit_date}. You can request another time in the app.",
     ),
     # Host · High priority
     "stay_visit_requested": Route(
