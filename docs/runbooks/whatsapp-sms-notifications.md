@@ -7,7 +7,7 @@ here needs a code change.
 
 Every notice is still written once, in-app (or push), exactly as before. A signal copies it onto
 WhatsApp or SMS when its template code is in `backend/apps/notifications/channel_plan.py`
-(72 WhatsApp, 7 SMS). `channel_router.py` holds every gate: the channel is on, the audience is a
+(71 WhatsApp, 7 SMS). `channel_router.py` holds every gate: the channel is on, the audience is a
 Customer or Partner, no kill switch or mute, the person opted in (WhatsApp only), and the notice
 is fresh (SMS 30 minutes, WhatsApp 24 hours). One notice can produce at most one message.
 Delivery attempts are `NotificationDelivery` rows with provider `meta_whatsapp` or `msg91`.
@@ -28,7 +28,7 @@ Delivery attempts are `NotificationDelivery` rows with provider `meta_whatsapp` 
    Leave `WHATSAPP_ENABLED=false` for now.
 3. **Check the keys:** `python manage.py send_test_message --channel whatsapp --to +91<your number>`
    sends Meta's built-in `hello_world`. A `200` means the number id and token work.
-4. **Submit the templates:** `python manage.py channel_templates --channel whatsapp` prints all 72.
+4. **Submit the templates:** `python manage.py channel_templates --channel whatsapp` prints all 71.
    In WhatsApp Manager create each one with the **name shown**, category **Utility**, the language
    above, and the body exactly as printed (`{{1}}`, `{{2}}` … in order). Each test value line says
    which value goes in which number. An optional static "Open app" URL button can be added in

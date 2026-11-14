@@ -76,12 +76,6 @@ PLAN: Final[dict[str, Route]] = {
         "V Solve Hub: {candidate_name} asked for another time\n\nFor {job_title} on {when}. "
         "Propose a new time.",
     ),
-    # Job seeker · Medium priority
-    "job_invite": Route(
-        WHATSAPP,
-        "V Solve Hub: {business_name} invited you to apply\n\n{job_title} in {place}. Open "
-        "the job to apply in one tap.",
-    ),
     # --- M2 crews --------------------------------------------------------------------------------
     # Customer · High priority
     "m2_booking_fee_charged_customer": Route(

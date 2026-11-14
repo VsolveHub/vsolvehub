@@ -22,8 +22,9 @@ from apps.notifications.templates_registry import _TEMPLATES, registered_templat
 _PLACEHOLDER = re.compile(r"\{([a-z0-9_]+)\}")
 _ENDS_WITH_A_VALUE = re.compile(r"\}[\s.!?,;:)\"']*$")
 
-#: The split agreed in the notification channel plan.
-WHATSAPP_ROUTES = 72
+#: The split agreed in the notification channel plan, less `job_invite`, which Meta classed as
+#: marketing (14 Nov 2026) and now stays in-app and push only.
+WHATSAPP_ROUTES = 71
 SMS_ROUTES = 7
 
 
