@@ -11,7 +11,7 @@ import {
   Store,
   Truck,
 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { type MutableRefObject, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, TextInput, View } from "react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
@@ -76,7 +76,23 @@ function checkDateOverlap(
   return null;
 }
 
-export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
+export function RentalBookPanel({
+  asset,
+  hideSubmitButton = false,
+  onSubmitRef,
+  onSubmitStateChange,
+  embedded = false,
+}: {
+  asset: RentalAsset;
+  hideSubmitButton?: boolean;
+  onSubmitRef?: MutableRefObject<(() => void) | null>;
+  onSubmitStateChange?: (state: {
+    disabled: boolean;
+    pending: boolean;
+    label: string;
+  }) => void;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const authStatus = useAuthStore((state) => state.status);
@@ -100,7 +116,7 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [contactPhone, setContactPhone] = useState<string>("");
 
-  const addressesQuery = useAddresses();
+  const addressesQuery = useAddresses(authStatus === "signedIn");
   const profileQuery = useCustomerProfile(authStatus === "signedIn");
 
   const addresses = addressesQuery.data ?? [];
@@ -289,8 +305,40 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
     mutation.mutate();
   };
 
+  const submitDisabled = mutation.isPending || isProcessing || blockBooking;
+  const submitPending = mutation.isPending || isProcessing;
+  const submitLabel = isProcessing
+    ? "Opening payment…"
+    : mutation.isPending
+      ? "Creating rental booking…"
+      : permanentlyOutOfStock
+        ? "Out of stock"
+        : dateAwareUnavailable
+          ? "Unavailable for these dates"
+          : "Confirm booking";
+
+  useEffect(() => {
+    if (onSubmitRef) {
+      onSubmitRef.current = handleConfirm;
+    }
+  });
+
+  useEffect(() => {
+    onSubmitStateChange?.({
+      disabled: submitDisabled,
+      pending: submitPending,
+      label: submitLabel,
+    });
+  }, [onSubmitStateChange, submitDisabled, submitPending, submitLabel]);
+
   return (
-    <View className="gap-4 rounded-2xl border border-line bg-surface p-5 shadow-xs">
+    <View
+      className={
+        embedded
+          ? "gap-4"
+          : "gap-4 rounded-2xl border border-line bg-surface p-5 shadow-xs"
+      }
+    >
       {/* Existing active booking banner */}
       {existingBooking ? (
         <View className="rounded-xl border border-warning-line bg-warning-surface p-3 gap-2">
@@ -362,11 +410,11 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
             accessibilityLabel="Select pickup date"
             onPress={() => setPickupPickerOpen(true)}
             disabled={permanentlyOutOfStock}
-            className="flex-1 rounded-xl border border-line bg-surface-muted/60 p-3 active:bg-surface-hover"
+            className="flex-1 rounded-xl border border-[#e7e2da] bg-[#FAF9F7] p-3 active:bg-[#F3F4F6]"
           >
             <Text className="text-[10px] uppercase tracking-wider text-text-muted">Pickup Date</Text>
             <View className="mt-1 flex-row items-center gap-1.5">
-              <Calendar size={14} color={COLOR_TOKENS.action} />
+              <Calendar size={14} color="#EA580C" />
               <Text className="text-xs font-bold text-navy-900">{formatDmy(startDate)}</Text>
             </View>
           </Pressable>
@@ -376,11 +424,11 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
             accessibilityLabel="Select return date"
             onPress={() => setReturnPickerOpen(true)}
             disabled={permanentlyOutOfStock}
-            className="flex-1 rounded-xl border border-line bg-surface-muted/60 p-3 active:bg-surface-hover"
+            className="flex-1 rounded-xl border border-[#e7e2da] bg-[#FAF9F7] p-3 active:bg-[#F3F4F6]"
           >
             <Text className="text-[10px] uppercase tracking-wider text-text-muted">Return Date</Text>
             <View className="mt-1 flex-row items-center gap-1.5">
-              <Calendar size={14} color={COLOR_TOKENS.action} />
+              <Calendar size={14} color="#EA580C" />
               <Text className="text-xs font-bold text-navy-900">{formatDmy(endDate)}</Text>
             </View>
           </Pressable>
@@ -689,12 +737,12 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
           onChangeText={setNotes}
           multiline
           numberOfLines={2}
-          className="rounded-xl border border-line bg-surface-muted p-3 text-xs text-navy-900"
+          className="rounded-xl border border-[#e7e2da] bg-[#FAF9F7] p-3 text-xs text-navy-900"
         />
       </View>
 
       {/* Pricing breakdown */}
-      <View className="gap-2 rounded-xl border border-line bg-canvas p-4">
+      <View className="gap-2 rounded-xl border border-[#e7e2da] bg-[#FAF9F7] p-4">
         <View className="flex-row justify-between">
           <Text className="text-xs text-text-secondary">
             Rental ({days}d × {formatPaise(asset.daily_rate_paise)}
@@ -717,49 +765,41 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
         <View className="flex-row justify-between">
           <View className="flex-row items-center gap-1">
             <Text className="text-xs text-text-secondary">Refundable Deposit</Text>
-            <ShieldCheck size={12} color={COLOR_TOKENS.success} />
+            <ShieldCheck size={12} color="#047857" />
           </View>
           <Text className="text-xs font-bold text-navy-900 tabular-nums">
             {formatPaise(depositPaise)}
           </Text>
         </View>
 
-        <View className="border-t border-line/60 pt-2 flex-row justify-between items-center">
+        <View className="border-t border-[#e7e2da] pt-2 flex-row justify-between items-center">
           <Text className="text-sm font-extrabold text-navy-900">Total Payable</Text>
-          <Text className="text-base font-black text-brand tabular-nums">
+          <Text className="text-base font-extrabold text-[#EA580C] tabular-nums">
             {formatPaise(totalDuePaise)}
           </Text>
         </View>
 
-        <Text className="mt-1 text-[10px] text-text-muted">
+        <Text className="mt-1 text-[11px] text-text-secondary leading-snug">
           The security deposit is 100% refundable upon return after condition check.
         </Text>
       </View>
 
       {/* Submit Button */}
-      <Button
-        variant="primary"
-        disabled={mutation.isPending || isProcessing || blockBooking}
-        onPress={handleConfirm}
-        className={`w-full py-3 flex-row items-center justify-center gap-2 ${
-          blockBooking ? "opacity-50" : ""
-        }`}
-      >
-        {mutation.isPending || isProcessing ? (
-          <ActivityIndicator size="small" color={COLOR_TOKENS.textInverse} />
-        ) : null}
-        <Text className="font-bold text-white">
-          {isProcessing
-            ? "Opening payment…"
-            : mutation.isPending
-              ? "Creating rental booking…"
-              : permanentlyOutOfStock
-                ? "Out of stock"
-                : dateAwareUnavailable
-                  ? "Unavailable for these dates"
-                  : "Confirm Rental Booking"}
-        </Text>
-      </Button>
+      {!hideSubmitButton ? (
+        <Button
+          variant="primary"
+          disabled={submitDisabled}
+          onPress={handleConfirm}
+          className={`w-full py-3 flex-row items-center justify-center gap-2 ${
+            blockBooking ? "opacity-50" : ""
+          }`}
+        >
+          {submitPending ? (
+            <ActivityIndicator size="small" color={COLOR_TOKENS.textInverse} />
+          ) : null}
+          <Text className="font-bold text-white">{submitLabel}</Text>
+        </Button>
+      ) : null}
 
       {/* Authentication Sheet for Guests */}
       <CustomerLoginSheet

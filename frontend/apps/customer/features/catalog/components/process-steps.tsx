@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import type { ServiceDetail } from "../queries";
-import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
 import { RemoteImage } from "@/components/remote-image";
+
+function cleanStep(title: string, text: string) {
+  const cleanTitle = title.replace(/Service guarantee activation/i, "Service completion sign-off");
+  const cleanText = text.replace(
+    /The workmanship is covered for 30 days from the day the visit is completed\./i,
+    "Testing and review before the professional marks the visit completed.",
+  );
+  return { title: cleanTitle, text: cleanText };
+}
 
 export type ProcessStepItem = ServiceDetail["policies"][number] & {
   image_url?: string | null;
@@ -21,192 +28,142 @@ const DEFAULT_PROCESS_STEP_IMAGES = [
  * How the visit actually runs, in order.
  *
  * - Mobile (< md): vertical timeline with numbered badges, connector stem, and 16:9 image per step.
- * - Desktop (>= md): interactive Spotlight Hero + Thumbnail Filmstrip with smooth step transitions.
+ * - Desktop (>= md): Image-Hero 2+3 Bento Mosaic (large visual showcase with hover zoom and clean badges).
  */
 export function ProcessSteps({ steps }: { steps: ProcessStepItem[] }) {
   const ordered = [...steps].sort((left, right) => left.display_order - right.display_order);
-  const [activeIndex, setActiveIndex] = useState(0);
 
   if (ordered.length === 0) return null;
 
-  const safeIndex = Math.min(activeIndex, ordered.length - 1);
-  const activeStep = ordered[safeIndex]!;
-  const activeTitle = formatGuaranteePolicy(activeStep.title) ?? activeStep.title;
-  const activeText = formatGuaranteePolicy(activeStep.text) ?? activeStep.text;
-  const activeCustomImage = activeStep.image_url?.trim();
-  const activeImageSrc =
-    activeCustomImage && activeCustomImage.length > 0
-      ? activeCustomImage
-      : DEFAULT_PROCESS_STEP_IMAGES[safeIndex % DEFAULT_PROCESS_STEP_IMAGES.length];
-
-  const filmstripColsClass =
-    ordered.length >= 5
-      ? "grid-cols-5"
-      : ordered.length === 4
-        ? "grid-cols-4"
-        : ordered.length === 3
-          ? "grid-cols-3"
-          : ordered.length === 2
-            ? "grid-cols-2"
-            : "grid-cols-1";
+  // Split into Top 2 and Bottom 3 (or remainder) for the 2+3 Bento Mosaic
+  const topSteps = ordered.slice(0, 2);
+  const bottomSteps = ordered.slice(2);
 
   return (
     <>
       {/* =================================================================
-          DESKTOP: Spotlight Hero + Thumbnail Filmstrip (md and up)
+          DESKTOP: Image-Hero 2+3 Bento Mosaic (md and up)
           ================================================================= */}
-      <div className="mt-5 hidden md:block">
-        <style>{`
-          @keyframes spotlightImgIn {
-            from { opacity: 0.25; transform: scale(1.03); }
-            to { opacity: 1; transform: scale(1); }
-          }
-          @keyframes spotlightCapIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .spotlight-img-anim {
-            animation: spotlightImgIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-          }
-          .spotlight-cap-anim {
-            animation: spotlightCapIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .spotlight-img-anim,
-            .spotlight-cap-anim {
-              animation: none !important;
-            }
-          }
-        `}</style>
-
-        {/* Main Spotlight Stage */}
-        <div className="relative h-[300px] lg:h-[340px] w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-900 shadow-sm">
-          <div key={activeStep.id} className="spotlight-img-anim relative size-full">
-            <RemoteImage
-              src={activeImageSrc}
-              alt={activeTitle || `Step ${safeIndex + 1} procedure`}
-              fill
-              sizes="(max-width: 1280px) 90vw, 900px"
-              className="object-cover object-[50%_25%]"
-            />
-          </div>
-
-          {/* Bottom Gradient Scrim */}
+      <div className="mt-6 hidden md:block space-y-4">
+        {/* Top Row: 2 Large Cards */}
+        {topSteps.length > 0 && (
           <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"
-          />
-
-          {/* Top-right Prev / Next Step Controls */}
-          {ordered.length > 1 ? (
-            <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
-              <button
-                type="button"
-                aria-label="Previous step"
-                onClick={() => setActiveIndex((safeIndex - 1 + ordered.length) % ordered.length)}
-                className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-xs transition-all hover:bg-black/70 active:scale-95"
-              >
-                <span aria-hidden="true" className="text-sm font-bold">←</span>
-              </button>
-              <button
-                type="button"
-                aria-label="Next step"
-                onClick={() => setActiveIndex((safeIndex + 1) % ordered.length)}
-                className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-xs transition-all hover:bg-black/70 active:scale-95"
-              >
-                <span aria-hidden="true" className="text-sm font-bold">→</span>
-              </button>
-            </div>
-          ) : null}
-
-          {/* Animated Step Caption Overlay */}
-          <div
-            key={`cap-${activeStep.id}`}
-            className="spotlight-cap-anim absolute inset-x-6 bottom-5 z-10"
+            className={`grid gap-4 ${
+              topSteps.length === 1 ? "grid-cols-1" : "grid-cols-2"
+            }`}
           >
-            <span className="inline-flex items-center rounded-full bg-[#EA580C] px-2.5 py-0.5 text-[11px] font-extrabold tracking-wide text-white shadow-xs">
-              Step {safeIndex + 1} of {ordered.length}
-            </span>
-            {activeTitle ? (
-              <h3 className="mt-2 text-xl lg:text-2xl font-extrabold tracking-tight text-white">
-                {activeTitle}
-              </h3>
-            ) : null}
-            {activeText ? (
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/90 line-clamp-2">
-                {activeText}
-              </p>
-            ) : null}
-          </div>
-        </div>
+            {topSteps.map((step, index) => {
+              const { title: stepTitle, text: stepText } = cleanStep(step.title, step.text);
+              const customImage = step.image_url?.trim();
+              const imageSrc =
+                customImage && customImage.length > 0
+                  ? customImage
+                  : DEFAULT_PROCESS_STEP_IMAGES[index % DEFAULT_PROCESS_STEP_IMAGES.length];
 
-        {/* 5-Thumbnail Filmstrip */}
-        <div
-          role="tablist"
-          aria-label="Process steps"
-          className={`mt-3.5 grid gap-3 ${filmstripColsClass}`}
-        >
-          {ordered.map((step, index) => {
-            const isActive = index === safeIndex;
-            const stepTitle = formatGuaranteePolicy(step.title) ?? step.title;
-            const customImage = step.image_url?.trim();
-            const imageSrc =
-              customImage && customImage.length > 0
-                ? customImage
-                : DEFAULT_PROCESS_STEP_IMAGES[index % DEFAULT_PROCESS_STEP_IMAGES.length];
-
-            return (
-              <button
-                key={step.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveIndex(index)}
-                className={`group/thumb cursor-pointer rounded-xl border p-1.5 text-left transition-all duration-200 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action ${
-                  isActive
-                    ? "border-[#EA580C] bg-[#FFF8F3] ring-2 ring-[#EA580C]/20 -translate-y-0.5 shadow-sm"
-                    : "border-slate-200 bg-white opacity-75 hover:opacity-100 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xs"
-                }`}
-              >
-                <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-slate-100">
+              return (
+                <div
+                  key={step.id}
+                  className="group relative h-[220px] lg:h-[240px] overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-900 shadow-2xs transition-all duration-300 hover:shadow-md"
+                >
                   <RemoteImage
                     src={imageSrc}
-                    alt=""
+                    alt={stepTitle || `Step ${index + 1}`}
                     fill
-                    sizes="200px"
-                    className="object-cover object-[50%_25%] transition-transform duration-300 group-hover/thumb:scale-105"
+                    sizes="(max-width: 1280px) 50vw, 500px"
+                    className="object-cover object-[50%_25%] transition-transform duration-500 ease-out group-hover:scale-105"
                   />
-                </div>
-                <div className="mt-1.5 flex items-center gap-1.5 px-0.5">
-                  <span
-                    className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold transition-colors ${
-                      isActive ? "bg-[#EA580C] text-white" : "bg-slate-200 text-slate-700"
-                    }`}
-                  >
+                  {/* Bottom Gradient Scrim */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"
+                  />
+                  {/* Step Number Badge */}
+                  <div className="absolute top-3.5 left-3.5 flex size-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#00112e] shadow-md ring-2 ring-white/50">
                     {index + 1}
-                  </span>
-                  <span
-                    className={`truncate text-xs font-bold ${
-                      isActive ? "text-navy-900" : "text-slate-700"
-                    }`}
-                  >
-                    {stepTitle || `Step ${index + 1}`}
-                  </span>
+                  </div>
+                  {/* Bottom Text Overlay */}
+                  <div className="absolute inset-x-5 bottom-4 z-10 text-white">
+                    <h3 className="text-base lg:text-[17px] font-extrabold tracking-tight text-white leading-tight">
+                      {stepTitle}
+                    </h3>
+                    {stepText ? (
+                      <p className="mt-1 text-xs lg:text-[13px] leading-snug text-white/90 line-clamp-2 max-w-xl">
+                        {stepText}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Bottom Row: 3 Medium Cards */}
+        {bottomSteps.length > 0 && (
+          <div
+            className={`grid gap-4 ${
+              bottomSteps.length === 3
+                ? "grid-cols-3"
+                : bottomSteps.length === 2
+                  ? "grid-cols-2"
+                  : "grid-cols-1"
+            }`}
+          >
+            {bottomSteps.map((step, idx) => {
+              const actualIndex = idx + 2;
+              const { title: stepTitle, text: stepText } = cleanStep(step.title, step.text);
+              const customImage = step.image_url?.trim();
+              const imageSrc =
+                customImage && customImage.length > 0
+                  ? customImage
+                  : DEFAULT_PROCESS_STEP_IMAGES[actualIndex % DEFAULT_PROCESS_STEP_IMAGES.length];
+
+              return (
+                <div
+                  key={step.id}
+                  className="group relative h-[190px] lg:h-[205px] overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-900 shadow-2xs transition-all duration-300 hover:shadow-md"
+                >
+                  <RemoteImage
+                    src={imageSrc}
+                    alt={stepTitle || `Step ${actualIndex + 1}`}
+                    fill
+                    sizes="(max-width: 1280px) 33vw, 340px"
+                    className="object-cover object-[50%_25%] transition-transform duration-500 ease-out group-hover:scale-105"
+                  />
+                  {/* Bottom Gradient Scrim */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"
+                  />
+                  {/* Step Number Badge */}
+                  <div className="absolute top-3 left-3 flex size-7 items-center justify-center rounded-full bg-white text-xs font-black text-[#00112e] shadow-md ring-2 ring-white/50">
+                    {actualIndex + 1}
+                  </div>
+                  {/* Bottom Text Overlay */}
+                  <div className="absolute inset-x-4 bottom-3.5 z-10 text-white">
+                    <h3 className="text-sm lg:text-[15px] font-extrabold tracking-tight text-white leading-tight">
+                      {stepTitle}
+                    </h3>
+                    {stepText ? (
+                      <p className="mt-1 text-xs leading-snug text-white/90 line-clamp-1">
+                        {stepText}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* =================================================================
-          MOBILE: Vertical Timeline (< md, unchanged)
+          MOBILE: Vertical timeline (< md) - preserved exactly as before
           ================================================================= */}
-      <ol className="mt-6 md:hidden">
+      <div className="mt-5 block md:hidden">
         {ordered.map((step, index) => {
           const last = index === ordered.length - 1;
-          const stepTitle = formatGuaranteePolicy(step.title) ?? step.title;
-          const stepText = formatGuaranteePolicy(step.text) ?? step.text;
+          const { title: stepTitle, text: stepText } = cleanStep(step.title, step.text);
           const customImage = step.image_url?.trim();
           const imageSrc =
             customImage && customImage.length > 0
@@ -214,48 +171,49 @@ export function ProcessSteps({ steps }: { steps: ProcessStepItem[] }) {
               : DEFAULT_PROCESS_STEP_IMAGES[index % DEFAULT_PROCESS_STEP_IMAGES.length];
 
           return (
-            <li key={step.id} className="relative flex gap-4 sm:gap-5 pb-8 last:pb-2">
-              {last ? null : (
-                <span
+            <div key={step.id} className={`relative flex gap-3.5 ${last ? "pb-2" : "pb-7"}`}>
+              {/* Connector line between steps */}
+              {!last ? (
+                <div
                   aria-hidden="true"
-                  className="absolute left-[15px] top-8 bottom-0 w-[1.5px] bg-[#E2E8F0]"
+                  className="absolute left-[15px] top-[34px] bottom-0 w-[2px] bg-[#E2E8F0]"
                 />
-              )}
+              ) : null}
 
-              <span
-                aria-hidden="true"
-                className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-[#F8FAFC] text-[13px] font-extrabold text-navy-900 shadow-2xs"
-              >
-                {index + 1}
-              </span>
+              {/* Circular Step Number Badge */}
+              <div className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-[#F8FAFC] text-navy-900 shadow-2xs">
+                <span className="text-[13px] font-extrabold">{index + 1}</span>
+              </div>
 
+              {/* Step Content */}
               <div className="min-w-0 flex-1 pt-0.5">
                 {stepTitle ? (
-                  <h3 className="text-[1.05rem] font-bold text-navy-900 leading-snug tracking-tight">
+                  <h3 className="text-[15px] font-bold text-navy-900 leading-snug">
                     {stepTitle}
                   </h3>
                 ) : null}
 
                 {stepText ? (
-                  <p className="mt-1.5 text-[0.92rem] leading-relaxed text-text-secondary">
+                  <p className="mt-1 text-xs leading-relaxed text-text-secondary">
                     {stepText}
                   </p>
                 ) : null}
 
-                <div className="mt-3.5 w-full aspect-[16/9] sm:aspect-[16/8] max-h-[250px] rounded-2xl overflow-hidden border border-slate-200/90 bg-[#F8FAFC] relative shadow-2xs">
+                {/* Single Image Slot per Step (16:9) */}
+                <div className="mt-3 relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-[#F8FAFC]">
                   <RemoteImage
                     src={imageSrc}
-                    alt={stepTitle || `Step ${index + 1} procedure`}
+                    alt={stepTitle || `Step ${index + 1} visual guide`}
                     fill
-                    sizes="(max-width: 768px) 100vw, 640px"
+                    sizes="(max-width: 640px) 100vw, 400px"
                     className="object-cover object-[50%_25%]"
                   />
                 </div>
               </div>
-            </li>
+            </div>
           );
         })}
-      </ol>
+      </div>
     </>
   );
 }

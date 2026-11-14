@@ -145,12 +145,6 @@ describe("superlativeFor", () => {
   it("awards nothing when there is nothing to compare against", () => {
     expect(superlativeFor(cheap, [cheap])).toBeNull();
   });
-
-  it("reads months out of free-text warranty terms", () => {
-    const long = card({ proposalId: "long", payablePaise: 12_000_000, warrantyTerms: "2 years on workmanship" });
-    const short = card({ proposalId: "short", payablePaise: 9_000_000, warrantyTerms: "12 months" });
-    expect(superlativeFor(long, [long, short])?.kind).toBe("LONGEST_WARRANTY");
-  });
 });
 
 describe("priceSpread", () => {

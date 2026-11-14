@@ -25,8 +25,7 @@ import { PolicyList } from "./policy-list";
 import { useServiceDetail } from "../client-queries";
 import { useCart } from "@/features/checkout/queries";
 import { serviceHref } from "../service-href";
-import { addsToServiceCopy, durationLabel, warrantyText } from "../service-facts";
-import { formatGuaranteeBadge } from "@/lib/guarantee-presentation";
+import { addsToServiceCopy, durationLabel } from "../service-facts";
 import type { Category, ServiceCard } from "../queries";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
@@ -98,9 +97,7 @@ function WhatYouCanBookModal({
     ...(detail?.media?.map((m: { url: string }) => m.url) ?? []),
   ].filter(Boolean) as string[];
 
-  const guaranteePolicy = warrantyText(detail?.policies);
-  const guaranteeLabel = formatGuaranteeBadge(guaranteePolicy);
-  const nonProcessPolicies = detail?.policies?.filter((p) => p.kind !== "PROCESS") ?? [];
+  const nonProcessPolicies = detail?.policies?.filter((p) => p.kind !== "PROCESS" && !/(?:warranty|guarantee|workmanship)/i.test(p.text)) ?? [];
   const variants = detail?.variants ?? [];
 
   useEffect(() => {
@@ -132,7 +129,7 @@ function WhatYouCanBookModal({
               <h3 id="what-you-can-book-title" className="text-base sm:text-lg font-bold text-navy-900 leading-tight truncate">
                 {service.name}
               </h3>
-              <p className="text-xs text-text-muted truncate">Available options & guarantee</p>
+              <p className="text-xs text-text-muted truncate">Available options & pricing</p>
             </div>
           </div>
           <button
@@ -282,85 +279,7 @@ function WhatYouCanBookModal({
             )}
           </div>
 
-          {/* SECTION 2: Vsolve Guarantee & Assurance */}
-          <div className="rounded-2xl border border-[#0E7C86]/25 bg-gradient-to-br from-[#E6F4F5]/70 via-[#F7FCFC] to-[#E6F4F5]/40 p-3.5 sm:p-4 shadow-2xs">
-            <div className="flex items-center justify-between gap-2 mb-2.5">
-              <div className="flex items-center gap-2">
-                <div className="grid size-7 place-items-center rounded-lg bg-[#0E7C86] text-white shadow-2xs">
-                  <ShieldCheck className="size-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-[#0E7C86] leading-tight">
-                    Vsolve Guarantee & Assurance
-                  </h4>
-                  <p className="text-[11px] text-text-secondary font-medium">Every booking is protected & verified</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#0E7C86]/30 bg-white/90 px-2 py-0.5 text-[10px] font-bold text-[#0E7C86] whitespace-nowrap shadow-2xs">
-                Verified
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-start gap-2 rounded-xl bg-white/95 border border-[#0E7C86]/15 p-2.5 shadow-2xs">
-                <div className="grid size-5 place-items-center rounded-full bg-[#E6F4F5] text-[#0E7C86] shrink-0 mt-0.5">
-                  <CheckCircle2 className="size-3" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-navy-900 leading-snug">
-                    {guaranteeLabel}
-                  </p>
-                  <p className="text-[10px] text-text-muted leading-tight mt-0.5">
-                    Workmanship guarantee
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 rounded-xl bg-white/95 border border-[#0E7C86]/15 p-2.5 shadow-2xs">
-                <div className="grid size-5 place-items-center rounded-full bg-[#E6F4F5] text-[#0E7C86] shrink-0 mt-0.5">
-                  <CheckCircle2 className="size-3" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-navy-900 leading-snug">
-                    Price shown before you pay
-                  </p>
-                  <p className="text-[10px] text-text-muted leading-tight mt-0.5">
-                    Fixed rates, no hidden fees
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 rounded-xl bg-white/95 border border-[#0E7C86]/15 p-2.5 shadow-2xs">
-                <div className="grid size-5 place-items-center rounded-full bg-[#E6F4F5] text-[#0E7C86] shrink-0 mt-0.5">
-                  <CheckCircle2 className="size-3" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-navy-900 leading-snug">
-                    Extra work only with approval
-                  </p>
-                  <p className="text-[10px] text-text-muted leading-tight mt-0.5">
-                    No extra costs without consent
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 rounded-xl bg-white/95 border border-[#0E7C86]/15 p-2.5 shadow-2xs">
-                <div className="grid size-5 place-items-center rounded-full bg-[#E6F4F5] text-[#0E7C86] shrink-0 mt-0.5">
-                  <CheckCircle2 className="size-3" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-navy-900 leading-snug">
-                    Vetted Experts
-                  </p>
-                  <p className="text-[10px] text-text-muted leading-tight mt-0.5">
-                    Trained & background checked
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION 3: Service Policies (What's included, Not included, Good to know) AS IT IS on service page */}
+          {/* SECTION 2: Service Policies (What's included, Not included, Good to know) AS IT IS on service page */}
           {nonProcessPolicies.length > 0 ? (
             <div className="rounded-2xl border border-line bg-white p-4 sm:p-5 shadow-2xs">
               <PolicyList policies={nonProcessPolicies} />

@@ -52,6 +52,8 @@ Thumbs.db
 demo/**
 
 # Python / Django backend
+**/__pycache__/
+**/*.py[cod]
 backend/.venv/
 backend/.env
 backend/.pytest_cache/
@@ -59,8 +61,6 @@ backend/.mypy_cache/
 backend/.ruff_cache/
 backend/.coverage
 backend/htmlcov/
-backend/**/__pycache__/
-backend/**/*.py[cod]
 backend/staticfiles/
 backend/media/
 backend/private-media/

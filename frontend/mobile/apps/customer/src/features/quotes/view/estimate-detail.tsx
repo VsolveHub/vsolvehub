@@ -7,7 +7,6 @@ import { Pressable, RefreshControl, ScrollView, Share, View } from "react-native
 
 import { useRequirement } from "@/features/requirement/queries";
 import { estimateConfirmHref, estimateQuestionsHref, requestQuotesHref } from "@/lib/routes";
-import { formatCoverageTerms } from "@/lib/guarantee-presentation";
 
 import {
   canAskAboutPrice,
@@ -344,9 +343,9 @@ export function EstimateDetail({
           ) : null}
 
           <View className="rounded-[18px] border border-line bg-surface px-4 shadow-sm">
-            <Disclosure summary="Terms, guarantee and dates">
+            <Disclosure summary="Scope, milestones and schedule">
               <View className="gap-3 pb-3">
-                <Fact label="Coverage terms" value={card.warrantyTerms ? formatCoverageTerms(card.warrantyTerms) : null} empty="No guarantee specified" />
+                <Fact label="Scope notes" value={card.warrantyTerms} empty="None specified" />
                 <Fact
                   label="Valid until"
                   value={
@@ -474,7 +473,7 @@ function CustomerDiscountSummary({ card }: { readonly card: QuoteCardView }) {
         </View>
       </View>
       <Text className="mt-2 text-xs leading-5 text-success-text">
-        The scope, guarantee and line-item rates are unchanged. The saving is spread across your payment stages automatically.
+        The scope, terms and line-item rates are unchanged. The saving is spread across your payment stages automatically.
       </Text>
     </View>
   );
@@ -567,7 +566,7 @@ function ShareButton({ card }: { card: QuoteCardView }) {
     card.scopeSummary ?? null,
     card.inclusions.length > 0 ? `Includes: ${card.inclusions.join(", ")}` : null,
     card.exclusions.length > 0 ? `Not included: ${card.exclusions.join(", ")}` : null,
-    card.warrantyTerms !== null ? `Guarantee: ${formatCoverageTerms(card.warrantyTerms)}` : null,
+    card.warrantyTerms !== null ? `Scope notes: ${card.warrantyTerms}` : null,
     "Shared from Vsolve",
   ]
     .filter((line): line is string => line !== null)

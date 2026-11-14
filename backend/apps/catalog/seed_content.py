@@ -108,8 +108,8 @@ REPAIR = TradeContent(
             "If the part cannot be repaired we replace it, again only once you have approved.",
         ),
         ProcessStep(
-            "Service guarantee activation",
-            "The workmanship is covered for 30 days from the day the visit is completed.",
+            "Service completion sign-off",
+            "Testing and review before the professional marks the visit completed.",
         ),
     ),
     included=(
@@ -117,7 +117,6 @@ REPAIR = TradeContent(
         "Labour for the approved repair",
         "Standard consumables such as tape, sealant and fixings",
         "Testing before the professional leaves",
-        "30-day workmanship guarantee",
     ),
     excluded=(
         "Spare parts and replacement units, quoted separately once approved",

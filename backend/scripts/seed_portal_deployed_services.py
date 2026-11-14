@@ -52,6 +52,15 @@ CATEGORY_ICON_OVERRIDES = {
     "rooms-pg-hostel-hotels": f"{CANONICAL_R2_BASE}/catalog/tiles/Create_3D_hotel_icon_fb85216d_2K.jpg",
 }
 
+# Subcategory icon overrides in Cloudflare R2 (`catalog/tiles/`)
+SUBCATEGORY_ICON_OVERRIDES = {
+    "tools-machinery": f"{CANONICAL_R2_BASE}/catalog/tiles/Cordless_power_drill_and_toolbox_1bece15f_2K.jpg",
+    "sound-system-rental": f"{CANONICAL_R2_BASE}/catalog/tiles/Speaker_and_microphone_3D_icon_dac6a94e_2K.jpg",
+    "tentshamiana": f"{CANONICAL_R2_BASE}/catalog/tiles/Tent_and_shamiana_rental_icon_8864d708_2K.jpg",
+    "home-appliance-rental": f"{CANONICAL_R2_BASE}/catalog/tiles/Home_appliance_rental_icons_5c68059e_2K.jpg",
+    "lighting-rental": f"{CANONICAL_R2_BASE}/catalog/tiles/Spotlight_stand_icon_rental_2616c2cb_2K.jpg",
+}
+
 ALLOWED_SERVICES = {
     "career-jobs": [
         "Health Care Jobs",
@@ -67,6 +76,11 @@ ALLOWED_SERVICES = {
         "Decor Items Rent",
         "Event Furniture Rental",
         "Furniture Rental (Home/Office)",
+        "Home Appliance Rental",
+        "Lighting Rental",
+        "Sound System Rental",
+        "Tent/Shamiana",
+        "Tools & Machinery",
     ],
     "rooms-pg-hostel-hotels": [
         "Apartments",
@@ -108,7 +122,9 @@ def sync_deployed_services():
         activated = Subcategory.objects.filter(category=cat, name__in=names).update(is_active=True)
 
         for sub in Subcategory.objects.filter(category=cat, name__in=names):
-            sub.image_url = f"{CANONICAL_R2_BASE}/catalog/tiles/{sub.slug}.png"
+            sub.image_url = SUBCATEGORY_ICON_OVERRIDES.get(
+                sub.slug, f"{CANONICAL_R2_BASE}/catalog/tiles/{sub.slug}.png"
+            )
             sub.save(update_fields=["image_url", "updated_at"])
 
         print(f"Category '{cat.name}': {activated} active, {deactivated} deactivated.")

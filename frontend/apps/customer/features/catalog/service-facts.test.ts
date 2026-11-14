@@ -39,10 +39,8 @@ describe("policyTexts", () => {
 });
 
 describe("warrantyText", () => {
-  it("reads a published warranty line", () => {
-    expect(warrantyText([policy("INCLUDED", "30-day warranty on the workmanship")])).toBe(
-      "30-day warranty on the workmanship",
-    );
+  it("returns null for warranty policies following platform-wide policy", () => {
+    expect(warrantyText([policy("INCLUDED", "30-day warranty on the workmanship")])).toBeNull();
   });
 
   it("does not treat an exclusion as a warranty", () => {

@@ -31,6 +31,18 @@ export function RentalDetailDrawer({
 
   const resolvedAsset = detailQuery.data ?? asset;
   const detailHref = rentalHref(key);
+  const mediaList =
+    resolvedAsset.media && resolvedAsset.media.length > 0
+      ? resolvedAsset.media
+      : (resolvedAsset as { thumbnail_url?: string }).thumbnail_url
+        ? [
+            {
+              url: (resolvedAsset as { thumbnail_url?: string }).thumbnail_url!,
+              display_order: 0,
+              caption: resolvedAsset.title,
+            },
+          ]
+        : [];
   const [submitState, setSubmitState] = useState<RentalSubmitState>({
     showSubmit: true,
     label: "Confirm booking",
@@ -80,9 +92,9 @@ export function RentalDetailDrawer({
 
       {/* Scrollable Gallery + Booking Panel */}
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
-        {resolvedAsset.media && resolvedAsset.media.length > 0 ? (
+        {mediaList.length > 0 ? (
           <StayImageGallery
-            media={resolvedAsset.media}
+            media={mediaList}
             title={resolvedAsset.title}
             fit="contain"
           />
@@ -118,12 +130,13 @@ export function RentalDetailDrawer({
             formId={RENTAL_DRAWER_FORM_ID}
             hideSubmitButton
             onSubmitStateChange={setSubmitState}
+            embedded
           />
         )}
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 border-t border-[#e7e2da] bg-white px-5 py-4">
+      <div className="shrink-0 border-t border-[#e7e2da] bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 shrink-0">
             <span className="block text-[11px] font-semibold text-text-secondary">

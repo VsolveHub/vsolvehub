@@ -3,13 +3,12 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { cn, formatMoney } from "@vsolve/ui";
-import { Clock, ShieldCheck, Ban, X } from "lucide-react";
+import { Clock, Ban, X } from "lucide-react";
 
 import { RemoteImage } from "@/components/remote-image";
 
 import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../client-queries";
-import { durationLabel, policyTexts, warrantyText } from "../service-facts";
-import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
+import { durationLabel, policyTexts } from "../service-facts";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { ServicePhoto } from "./category-artwork";
 
@@ -161,13 +160,14 @@ export function TileServiceDetailPanel({
   const detail = detailQuery.data;
   // Only what the service publishes. An empty list hides the section rather than
   // borrowing generic lines that may not describe this job.
-  const includedItems = policyTexts(detail?.policies, "INCLUDED");
+  const includedItems = policyTexts(detail?.policies, "INCLUDED").filter(
+    (item) => !/(?:warranty|guarantee|workmanship)/i.test(item),
+  );
   const imageUrl = detail?.cover?.url ?? service.cover?.url ?? "";
   const about =
     (detail?.description && detail.description.trim() !== ""
       ? detail.description
       : null) ?? service.short_description;
-  const warranty = warrantyText(detail?.policies);
   const bookableVariants = detail?.variants ?? [];
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const selectedVariant =
@@ -262,7 +262,7 @@ export function TileServiceDetailPanel({
                     />
                   </svg>
                 </span>
-                <span className="leading-snug">{formatGuaranteePolicy(item) ?? item}</span>
+                <span className="leading-snug">{item}</span>
               </li>
             ))}
           </ul>
@@ -289,15 +289,6 @@ export function TileServiceDetailPanel({
               {/* The terms depend on the slot and are priced by the server at checkout. */}
               <dd className="text-right font-semibold text-navy-900">Shown before you pay</dd>
             </div>
-            {warranty ? (
-              <div className="flex items-center justify-between gap-3 text-[13px]">
-                <dt className="flex items-center gap-2 font-medium text-text-secondary">
-                  <ShieldCheck className="size-4 shrink-0" strokeWidth={1.8} />
-                  Service Guarantee
-                </dt>
-                <dd className="text-right font-semibold text-navy-900">{formatGuaranteePolicy(warranty)}</dd>
-              </div>
-            ) : null}
           </dl>
         </section>
       </div>

@@ -1,13 +1,25 @@
 // Ported from frontend/apps/customer/features/catalog/components/process-steps.tsx
-import { useEffect, useRef, useState } from "react";
 import { Text } from "@vsolve/mobile-ui";
-import { Animated, Pressable, View } from "react-native";
 import { Image, type ImageProps } from "expo-image";
-import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
+import type { LinearGradientProps } from "expo-linear-gradient";
+import { LinearGradient } from "expo-linear-gradient";
+import { StyleSheet, View } from "react-native";
+
+// Type adapter for React 19 / JSX compatibility
+const ExpoLinearGradient = LinearGradient as unknown as (props: LinearGradientProps) => React.JSX.Element;
+
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
+import type { ServiceDetail } from "@/features/catalog/client-queries";
 import { useIsDesktop } from "@/lib/responsive";
 
-import type { ServiceDetail } from "@/features/catalog/client-queries";
+function cleanStep(title: string, text: string) {
+  const cleanTitle = title.replace(/Service guarantee activation/i, "Service completion sign-off");
+  const cleanText = text.replace(
+    /The workmanship is covered for 30 days from the day the visit is completed\./i,
+    "Testing and review before the professional marks the visit completed.",
+  );
+  return { title: cleanTitle, text: cleanText };
+}
 
 export type MobileProcessStepItem = ServiceDetail["policies"][number] & {
   image_url?: string | null;
@@ -24,199 +36,141 @@ const DEFAULT_PROCESS_STEP_IMAGES: readonly ImageProps["source"][] = [
 /**
  * How the visit actually runs, in order.
  *
- * - Mobile: vertical sequence with number badges, connector lines, and single 16:9 image slots.
- * - Desktop: interactive Spotlight Hero + Thumbnail Filmstrip with smooth fade/slide animations.
+ * - Mobile (< md / !isDesktop): vertical timeline with numbered badges, connector stem, and 16:9 image per step.
+ * - Desktop (isDesktop): Image-Hero 2+3 Bento Mosaic (top 2 large cards + bottom 3 medium cards).
  */
 export function ProcessSteps({ steps }: { steps: MobileProcessStepItem[] }) {
   const isDesktop = useIsDesktop();
   const ordered = [...steps].sort((left, right) => left.display_order - right.display_order);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
-  const safeIndex = ordered.length > 0 ? Math.min(activeIndex, ordered.length - 1) : 0;
-
-  useEffect(() => {
-    if (!isDesktop || ordered.length === 0) return;
-    fadeAnim.setValue(0.35);
-    slideAnim.setValue(8);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 280,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 280,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [safeIndex, isDesktop, ordered.length, fadeAnim, slideAnim]);
 
   if (ordered.length === 0) return null;
 
   if (isDesktop) {
-    const activeStep = ordered[safeIndex]!;
-    const activeTitle = formatGuaranteePolicy(activeStep.title) ?? activeStep.title;
-    const activeText = formatGuaranteePolicy(activeStep.text) ?? activeStep.text;
-    const activeCustomUrl = resolveImageUrl(activeStep.image_url);
-    const activeImageSource: ImageProps["source"] = activeCustomUrl
-      ? { uri: activeCustomUrl }
-      : DEFAULT_PROCESS_STEP_IMAGES[safeIndex % DEFAULT_PROCESS_STEP_IMAGES.length];
+    const topSteps = ordered.slice(0, 2);
+    const bottomSteps = ordered.slice(2);
 
     return (
-      <View className="mt-5">
-        {/* Main Spotlight Stage */}
-        <View className="relative h-[320px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-sm">
-          <Animated.View
-            style={{
-              width: "100%",
-              height: "100%",
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
-          >
-            <Image
-              source={activeImageSource}
-              contentFit="cover"
-              contentPosition={{ top: "25%", left: "50%" }}
-              accessibilityLabel={activeTitle || `Step ${safeIndex + 1} visual guide`}
-              style={{ width: "100%", height: "100%" }}
-            />
-          </Animated.View>
+      <View className="mt-6 gap-4">
+        {/* Top Row: 2 Large Cards */}
+        {topSteps.length > 0 && (
+          <View className="flex-row gap-4">
+            {topSteps.map((step, index) => {
+              const { title: stepTitle, text: stepText } = cleanStep(step.title, step.text);
+              const resolvedCustomUrl = resolveImageUrl(step.image_url);
+              const imageSource: ImageProps["source"] = resolvedCustomUrl
+                ? { uri: resolvedCustomUrl }
+                : DEFAULT_PROCESS_STEP_IMAGES[index % DEFAULT_PROCESS_STEP_IMAGES.length];
 
-          {/* Dark bottom overlay for legible caption */}
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 150,
-              backgroundColor: "rgba(0, 10, 26, 0.72)",
-            }}
-          />
-
-          {/* Top-right Prev / Next Step Controls */}
-          {ordered.length > 1 ? (
-            <View className="absolute top-4 right-4 z-10 flex-row items-center gap-1.5">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Previous step"
-                onPress={() => setActiveIndex((safeIndex - 1 + ordered.length) % ordered.length)}
-                className="size-8 items-center justify-center rounded-full bg-black/50"
-              >
-                <Text className="text-sm font-bold text-white">←</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Next step"
-                onPress={() => setActiveIndex((safeIndex + 1) % ordered.length)}
-                className="size-8 items-center justify-center rounded-full bg-black/50"
-              >
-                <Text className="text-sm font-bold text-white">→</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {/* Animated Caption */}
-          <Animated.View
-            style={{
-              position: "absolute",
-              left: 24,
-              right: 24,
-              bottom: 20,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
-          >
-            <View className="self-start rounded-full bg-[#EA580C] px-2.5 py-0.5">
-              <Text className="text-[11px] font-extrabold text-white">
-                Step {safeIndex + 1} of {ordered.length}
-              </Text>
-            </View>
-            {activeTitle ? (
-              <Text className="mt-2 text-xl font-extrabold text-white tracking-tight">
-                {activeTitle}
-              </Text>
-            ) : null}
-            {activeText ? (
-              <Text numberOfLines={2} className="mt-1 text-sm text-white/90 leading-relaxed">
-                {activeText}
-              </Text>
-            ) : null}
-          </Animated.View>
-        </View>
-
-        {/* 5-Thumbnail Filmstrip */}
-        <View className="mt-3.5 flex-row gap-3">
-          {ordered.map((step, index) => {
-            const isActive = index === safeIndex;
-            const stepTitle = formatGuaranteePolicy(step.title) ?? step.title;
-            const resolvedCustomUrl = resolveImageUrl(step.image_url);
-            const imageSource: ImageProps["source"] = resolvedCustomUrl
-              ? { uri: resolvedCustomUrl }
-              : DEFAULT_PROCESS_STEP_IMAGES[index % DEFAULT_PROCESS_STEP_IMAGES.length];
-
-            return (
-              <Pressable
-                key={step.id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                onPress={() => setActiveIndex(index)}
-                className={`flex-1 rounded-xl border p-1.5 ${
-                  isActive
-                    ? "border-[#EA580C] bg-[#FFF8F3] shadow-sm"
-                    : "border-slate-200 bg-white opacity-80"
-                }`}
-              >
-                <View className="w-full overflow-hidden rounded-lg bg-slate-100" style={{ aspectRatio: 16 / 10 }}>
+              return (
+                <View
+                  key={step.id}
+                  className="relative h-[220px] lg:h-[240px] flex-1 overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-900 shadow-2xs"
+                >
                   <Image
                     source={imageSource}
                     contentFit="cover"
                     contentPosition={{ top: "25%", left: "50%" }}
+                    accessibilityLabel={stepTitle || `Step ${index + 1} visual guide`}
                     style={{ width: "100%", height: "100%" }}
                   />
-                </View>
-                <View className="mt-1.5 flex-row items-center gap-1.5 px-0.5">
-                  <View
-                    className={`size-5 shrink-0 items-center justify-center rounded-full ${
-                      isActive ? "bg-[#EA580C]" : "bg-slate-200"
-                    }`}
-                  >
-                    <Text
-                      className={`text-[11px] font-extrabold ${
-                        isActive ? "text-white" : "text-slate-700"
-                      }`}
-                    >
-                      {index + 1}
-                    </Text>
+
+                  {/* Bottom Gradient Scrim matching web from-black/85 via-black/30 to-transparent */}
+                  <ExpoLinearGradient
+                    pointerEvents="none"
+                    colors={["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.85)"]}
+                    locations={[0, 0.5, 1]}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+
+                  {/* Step Number Badge */}
+                  <View className="absolute top-3.5 left-3.5 size-7 items-center justify-center rounded-full bg-white shadow-md border-2 border-white/50">
+                    <Text className="text-xs font-black text-[#00112e]">{index + 1}</Text>
                   </View>
-                  <Text
-                    numberOfLines={1}
-                    className={`flex-1 text-xs font-bold ${
-                      isActive ? "text-navy-900" : "text-slate-700"
-                    }`}
-                  >
-                    {stepTitle || `Step ${index + 1}`}
-                  </Text>
+
+                  {/* Bottom Text Overlay */}
+                  <View className="absolute inset-x-5 bottom-4 z-10">
+                    <Text className="text-base lg:text-[17px] font-extrabold tracking-tight text-white leading-tight">
+                      {stepTitle}
+                    </Text>
+                    {stepText ? (
+                      <Text numberOfLines={2} className="mt-1 text-xs lg:text-[13px] text-white/90 leading-snug max-w-xl">
+                        {stepText}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
-              </Pressable>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Bottom Row: 3 Medium Cards */}
+        {bottomSteps.length > 0 && (
+          <View className="flex-row gap-4">
+            {bottomSteps.map((step, idx) => {
+              const actualIndex = idx + 2;
+              const { title: stepTitle, text: stepText } = cleanStep(step.title, step.text);
+              const resolvedCustomUrl = resolveImageUrl(step.image_url);
+              const imageSource: ImageProps["source"] = resolvedCustomUrl
+                ? { uri: resolvedCustomUrl }
+                : DEFAULT_PROCESS_STEP_IMAGES[actualIndex % DEFAULT_PROCESS_STEP_IMAGES.length];
+
+              return (
+                <View
+                  key={step.id}
+                  className="relative h-[190px] lg:h-[205px] flex-1 overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-900 shadow-2xs"
+                >
+                  <Image
+                    source={imageSource}
+                    contentFit="cover"
+                    contentPosition={{ top: "25%", left: "50%" }}
+                    accessibilityLabel={stepTitle || `Step ${actualIndex + 1} visual guide`}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+
+                  {/* Bottom Gradient Scrim matching web from-black/85 via-black/30 to-transparent */}
+                  <ExpoLinearGradient
+                    pointerEvents="none"
+                    colors={["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.85)"]}
+                    locations={[0, 0.5, 1]}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+
+                  {/* Step Number Badge */}
+                  <View className="absolute top-3 left-3 size-7 items-center justify-center rounded-full bg-white shadow-md border-2 border-white/50">
+                    <Text className="text-xs font-black text-[#00112e]">{actualIndex + 1}</Text>
+                  </View>
+
+                  {/* Bottom Text Overlay */}
+                  <View className="absolute inset-x-4 bottom-3.5 z-10">
+                    <Text numberOfLines={1} className="text-sm lg:text-[15px] font-extrabold tracking-tight text-white leading-tight">
+                      {stepTitle}
+                    </Text>
+                    {stepText ? (
+                      <Text numberOfLines={1} className="mt-1 text-xs text-white/90 leading-snug">
+                        {stepText}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   }
 
+  // Mobile (< md / !isDesktop) layout - untouched
   return (
     <View className="mt-5">
       {ordered.map((step, index) => {
         const last = index === ordered.length - 1;
-        const stepTitle = formatGuaranteePolicy(step.title) ?? step.title;
-        const stepText = formatGuaranteePolicy(step.text) ?? step.text;
+        const { title: stepTitle, text: stepText } = cleanStep(step.title, step.text);
         const resolvedCustomUrl = resolveImageUrl(step.image_url);
         const imageSource: ImageProps["source"] = resolvedCustomUrl
           ? { uri: resolvedCustomUrl }

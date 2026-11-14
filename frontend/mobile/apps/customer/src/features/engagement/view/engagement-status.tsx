@@ -203,7 +203,7 @@ export const ENGAGEMENT_STATUS: Record<EngagementStatus, StatusCopy> = {
   COMPLETED: { label: "Finished", tone: "success" },
   // Deliberately not "Finished": a warranty window is a promise still running,
   // and a Customer who reads it as closed will not raise the problem in time.
-  WARRANTY: { label: "Completed — guarantee active", tone: "success" },
+  WARRANTY: { label: "Completed", tone: "success" },
   CLOSED: { label: "Closed", tone: "neutral" },
   DISPUTED: { label: "A problem is being looked at", tone: "danger" },
   CANCELLED: { label: "Cancelled", tone: "neutral" },

@@ -119,7 +119,6 @@ const FEATURED_SERVICES = [
     price: "₹129",
     rating: "4.8",
     bookings: "12k bookings",
-    guarantee: "Verified Certified Pros",
     buttonText: "Book Electrician",
     link: "/catalog/electrician",
     image: ELECTRICIAN_IMG,
@@ -137,7 +136,6 @@ const FEATURED_SERVICES = [
     price: "₹199",
     rating: "4.9",
     bookings: "18k bookings",
-    guarantee: "No-Mess Guarantee",
     buttonText: "Book Plumber",
     link: "/catalog/plumber",
     image: PLUMBER_IMG,
@@ -155,7 +153,6 @@ const FEATURED_SERVICES = [
     price: "₹299",
     rating: "4.7",
     bookings: "9k bookings",
-    guarantee: "Clean Drilling & Leveling",
     buttonText: "Book Carpenter",
     link: "/catalog/technician",
     image: CARPENTER_IMG,
@@ -693,7 +690,6 @@ function HeroSplitCarousel({
                       <View className="rounded-full border border-[#EA580C]/20 bg-[#FFF0E5] px-2.5 py-0.5">
                         <Text className="text-[11px] font-black uppercase tracking-wider text-[#EA580C]">Featured Service</Text>
                       </View>
-                      <Text className="text-xs font-medium text-text-secondary">{service.guarantee}</Text>
                     </View>
 
                     <Text className="text-3xl font-black text-navy-900 leading-tight">

@@ -45,6 +45,8 @@ interface RentalBookPanelProps {
   hideSubmitButton?: boolean;
   /** Reports submit button state to the parent drawer footer. */
   onSubmitStateChange?: (state: RentalSubmitState) => void;
+  /** When embedded inside a drawer, omits the duplicate outer card frame and header. */
+  embedded?: boolean;
 }
 
 /**
@@ -108,6 +110,7 @@ export function RentalBookPanel({
   formId,
   hideSubmitButton = false,
   onSubmitStateChange,
+  embedded = false,
 }: RentalBookPanelProps) {
   const router = useRouter();
   const toast = useToast();
@@ -352,11 +355,21 @@ export function RentalBookPanel({
   }, [onSubmitStateChange, showSubmit, submitLabel, submitDisabled, submitLoading, submitLoadingLabel]);
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised">
-      <h2 className="text-xl font-bold text-text">Book This Rental</h2>
-      <p className="mt-1 text-xs text-text-secondary">
-        Select your rental dates (DD/MM/YYYY). Zero hidden charges.
-      </p>
+    <div
+      className={
+        embedded
+          ? "space-y-4"
+          : "rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised"
+      }
+    >
+      {embedded ? null : (
+        <>
+          <h2 className="text-xl font-bold text-text">Book This Rental</h2>
+          <p className="mt-1 text-xs text-text-secondary">
+            Select your rental dates (DD/MM/YYYY). Zero hidden charges.
+          </p>
+        </>
+      )}
       {permanentlyOutOfStock ? (
         <div className="mt-4 flex items-center gap-2 rounded-control border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
           <AlertCircle className="size-4 shrink-0" />
@@ -364,7 +377,12 @@ export function RentalBookPanel({
         </div>
       ) : null}
 
-      <form id={formId} onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
+      <form
+        id={formId}
+        onSubmit={handleSubmit}
+        noValidate
+        className={embedded ? "flex flex-col gap-4" : "mt-6 flex flex-col gap-5"}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-bold text-text flex items-center gap-1.5">

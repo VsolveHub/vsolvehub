@@ -1,8 +1,7 @@
 import { RemoteImage } from "@/components/remote-image";
-import { formatGuaranteeBadge } from "@/lib/guarantee-presentation";
 
 import type { ServiceDetail } from "../queries";
-import { addsToServiceCopy, warrantyText } from "../service-facts";
+import { addsToServiceCopy } from "../service-facts";
 
 /**
  * Service-page sections laid out the way a customer compares a job: what each option is,
@@ -76,14 +75,11 @@ function OptionDifference({ variant }: { variant: Variant }) {
  * other two are how every booking works — the server prices before payment, and extra time
  * or parts need the customer's approval. No damage-cover amount: there is no such policy.
  */
-export function ServiceAssurance({ service }: { service: ServiceDetail }) {
-  const guaranteePolicy = warrantyText(service.policies);
-  const guaranteeLabel = formatGuaranteeBadge(guaranteePolicy);
+export function ServiceAssurance({ service: _service }: { service: ServiceDetail }) {
   const tiles = [
-    guaranteeLabel ? { title: guaranteeLabel, icon: <GuaranteeArt /> } : null,
     { title: "Price shown before you pay", icon: <PriceArt /> },
     { title: "Extra work only with your approval", icon: <ApprovalArt /> },
-  ].filter((tile): tile is { title: string; icon: React.JSX.Element } => tile !== null);
+  ];
 
   // Laid out like a marketplace "cover" block: a coloured wordmark-style heading, three
   // flat grey tiles with large outline art and regular-weight text, then a full-width row.
@@ -97,7 +93,7 @@ export function ServiceAssurance({ service }: { service: ServiceDetail }) {
         <AssuranceMark />
         vsolve assurance
       </h2>
-      <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {tiles.map((tile) => (
           <li key={tile.title} className="flex min-h-[7rem] sm:min-h-[9.5rem] flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-5 rounded-xl bg-[#F5F5F5] p-4 sm:p-5">
             <span aria-hidden className="text-[#0F0F0F] shrink-0">
