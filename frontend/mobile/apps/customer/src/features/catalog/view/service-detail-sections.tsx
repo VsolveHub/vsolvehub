@@ -8,9 +8,8 @@ import { useAuthStore } from "@vsolve/mobile-core";
 import { useCustomerCoins } from "@/features/account/queries";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import type { ServiceDetail } from "@/features/catalog/client-queries";
-import { addsToServiceCopy, warrantyText } from "@/features/catalog/service-facts";
+import { addsToServiceCopy } from "@/features/catalog/service-facts";
 import type { ServiceFaq } from "@/features/catalog/service-faqs";
-import { formatGuaranteeBadge } from "@/lib/guarantee-presentation";
 import { useIsDesktop } from "@/lib/responsive";
 
 type Variant = ServiceDetail["variants"][number];
@@ -71,20 +70,17 @@ function OptionDifference({ variant }: { variant: Variant }) {
  * Service assurance section.
  */
 export function ServiceAssurance({
-  service,
+  service: _service,
   onOpenFaq,
 }: {
   service: ServiceDetail;
   onOpenFaq?: () => void;
 }) {
   const isDesktop = useIsDesktop();
-  const guaranteePolicy = warrantyText(service.policies);
-  const guaranteeLabel = formatGuaranteeBadge(guaranteePolicy);
   const tiles = [
-    guaranteeLabel ? { title: guaranteeLabel, icon: <GuaranteeArt /> } : null,
     { title: "Prices known before you pay", icon: <PriceArt /> },
     { title: "Extra work only on your approval", icon: <ApprovalArt /> },
-  ].filter((tile): tile is { title: string; icon: React.JSX.Element } => tile !== null);
+  ];
 
   return (
     <View className="mt-8 rounded-[1rem] bg-white p-5 sm:p-7 md:p-8 shadow-sm">

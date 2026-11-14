@@ -281,7 +281,7 @@ describe("Project panels", () => {
   });
 
   describe("WarrantyPanel", () => {
-    it("renders guarantee retention summary", async () => {
+    it("renders milestone sign-off retention summary", async () => {
       const view = await render(
         <WarrantyPanel
           retention={mockProjectView.retention}
@@ -289,8 +289,8 @@ describe("Project panels", () => {
         />,
       );
 
-      expect(view.getByText("Your guarantee is active")).toBeTruthy();
-      expect(view.getByText("₹500 protected")).toBeTruthy();
+      expect(view.getByText("Milestone sign-off: final stage approved")).toBeTruthy();
+      expect(view.getByText("₹500 held")).toBeTruthy();
     });
   });
 });

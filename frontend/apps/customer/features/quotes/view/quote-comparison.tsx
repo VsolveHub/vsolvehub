@@ -15,7 +15,6 @@ import {
 } from "../adapters";
 import { timelineLabel, validityLabel } from "./quote-card";
 import { VendorTrustLine } from "./vendor-trust-line";
-import { formatCoverageTerms } from "@/lib/guarantee-presentation";
 
 export interface QuoteComparisonProps {
   cards: readonly QuoteCardView[];
@@ -344,16 +343,6 @@ function comparisonRows(cards: readonly QuoteCardView[]): readonly MatrixRow[] {
           </span>
         );
       }),
-    },
-    {
-      label: "Guarantee",
-      values: cards.map((card) =>
-        card.warrantyTerms === null ? (
-          <span key={card.proposalId} className="font-semibold text-warning-text">Not stated</span>
-        ) : (
-          formatCoverageTerms(card.warrantyTerms)
-        ),
-      ),
     },
     {
       label: "Priced",

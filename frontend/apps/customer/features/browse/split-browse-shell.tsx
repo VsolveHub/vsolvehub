@@ -249,6 +249,11 @@ export function SplitBrowseShell({
   const [seeAllOpen, setSeeAllOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const visibleTiles = sidebarTilesForDisplay(tiles, activeTile.slug);
   const showSeeAll = tiles.length > SIDEBAR_TILE_CAP;
@@ -268,6 +273,16 @@ export function SplitBrowseShell({
       document.documentElement.style.overflow = "";
     };
   }, []);
+
+  // Lock body scroll on mobile when modal or filters are open
+  useEffect(() => {
+    if (isDesktop || (!drawerOpen && !mobileFiltersOpen)) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isDesktop, drawerOpen, mobileFiltersOpen]);
 
   // Close drawer / mobile filter sheet on Escape.
   useEffect(() => {
@@ -634,19 +649,25 @@ export function SplitBrowseShell({
         ) : null}
 
         {/* Mobile Quick-Book / Enquiry Modal */}
-        {drawerOpen && !isDesktop ? (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) onCloseDrawer();
-            }}
-          >
-            <div className="w-full max-w-lg max-h-[calc(88dvh-4rem)] sm:max-h-[88dvh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-2xl shadow-2xl">
-              {drawerContent}
-            </div>
-          </div>
+        {drawerOpen && !isDesktop && mounted ? (
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 transition-opacity duration-200"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) onCloseDrawer();
+              }}
+            >
+              <div
+                className="w-full max-w-lg h-[min(90dvh,calc(100dvh-2.5rem))] max-h-[90dvh] sm:h-[min(85dvh,760px)] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-2xl shadow-2xl bg-white animate-in fade-in slide-in-from-bottom-4 duration-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {drawerContent}
+              </div>
+            </div>,
+            document.body,
+          )
         ) : null}
       </main>
     </>

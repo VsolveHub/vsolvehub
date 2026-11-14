@@ -94,12 +94,12 @@ export function StayDetailDrawer({
             <Skeleton className="h-36 w-full rounded-xl" />
           </div>
         ) : (
-          <StayActionPanel property={resolvedProperty} />
+          <StayActionPanel property={resolvedProperty} embedded />
         )}
       </div>
 
       {/* Footer Link */}
-      <div className="shrink-0 border-t border-[#e7e2da] bg-white px-5 py-3 flex items-center justify-between gap-3">
+      <div className="shrink-0 border-t border-[#e7e2da] bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
         <div>
           <span className="block text-[10px] font-semibold uppercase tracking-wide text-text-muted">
             Starts at

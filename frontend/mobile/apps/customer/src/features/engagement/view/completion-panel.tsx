@@ -32,7 +32,7 @@ export function CompletionPanel({
         <Text className="font-semibold text-text">You confirmed this is finished</Text>
         <Text className="mt-1 text-sm leading-6 text-text-secondary">
           {engagement.completedAt !== null ? `Confirmed ${engagement.completedAt}. ` : ""}
-          The service guarantee on this {nouns.engagement} is active — see below for what is still held and until when.
+          The work is completed. Final milestone payout has been processed.
         </Text>
       </View>
     );

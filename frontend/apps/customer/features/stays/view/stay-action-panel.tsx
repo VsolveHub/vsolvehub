@@ -19,6 +19,7 @@ export function StayActionPanel({
   onViewProperty,
   initialUnitId,
   initialLookId,
+  embedded = false,
 }: {
   property: StayProperty;
   onSelectUnit?: (unitId: string) => void;
@@ -27,21 +28,27 @@ export function StayActionPanel({
   initialUnitId?: string;
   /** Its look, when the room type has several. */
   initialLookId?: string;
+  embedded?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("enquire");
   const visits = Boolean(property.visits_offered);
+  const frame = embedded
+    ? "space-y-4"
+    : "rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised";
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-text">
-          {mode === "visit" ? "Schedule a visit" : "Send an enquiry"}
-        </h2>
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-          <ShieldCheck className="size-3.5" aria-hidden />
-          Verified host
-        </span>
-      </div>
+    <div className={frame}>
+      {embedded ? null : (
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xl font-bold text-text">
+            {mode === "visit" ? "Schedule a visit" : "Send an enquiry"}
+          </h2>
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+            <ShieldCheck className="size-3.5" aria-hidden />
+            Verified host
+          </span>
+        </div>
+      )}
 
       {visits ? (
         <div

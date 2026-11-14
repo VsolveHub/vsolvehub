@@ -1,6 +1,6 @@
 // Ported from frontend/apps/customer/app/(shop)/catalog/[category]/[service]/page.tsx
 import { ApiRequestError } from "@vsolve/api-client";
-import { Badge, Button, ErrorState, Skeleton, Text, formatMoney } from "@vsolve/mobile-ui";
+import { Badge, Button, ErrorState, Sheet, Skeleton, Text, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -32,8 +32,7 @@ import {
 } from "@/features/catalog/view/service-detail-sections";
 import { categoryHeadline } from "@/features/catalog/tile-desktop-rating";
 import { buildServiceFaqs } from "@/features/catalog/service-faqs";
-import { addsToServiceCopy, durationLabel, warrantyText } from "@/features/catalog/service-facts";
-import { formatGuaranteePolicy } from "@/lib/guarantee-presentation";
+import { addsToServiceCopy, durationLabel } from "@/features/catalog/service-facts";
 import { useIsDesktop } from "@/lib/responsive";
 import { bookCrewHref } from "@/lib/routes";
 
@@ -208,7 +207,9 @@ function PolicyList({ policies }: { policies: ServiceDetail["policies"] }) {
   const isDesktop = useIsDesktop();
   const groups = POLICY_GROUPS.map((group) => ({
     ...group,
-    items: policies.filter((policy) => policy.kind === group.kind),
+    items: policies.filter(
+      (policy) => policy.kind === group.kind && !/(?:warranty|guarantee|workmanship)/i.test(policy.text),
+    ),
   })).filter((group) => group.items.length > 0);
   if (groups.length === 0) return null;
 
@@ -230,7 +231,7 @@ function PolicyList({ policies }: { policies: ServiceDetail["policies"] }) {
                     <PolicyMark kind={group.kind} />
                   </View>
                   <Text className="flex-1 text-sm text-text leading-relaxed">
-                    {formatGuaranteePolicy(policy.text) ?? policy.text}
+                    {policy.text}
                   </Text>
                 </View>
               ))}
@@ -251,7 +252,7 @@ function PolicyList({ policies }: { policies: ServiceDetail["policies"] }) {
                   <PolicyMark kind="GOOD_TO_KNOW" />
                 </View>
                 <Text className="flex-1 text-sm text-text leading-relaxed">
-                  {formatGuaranteePolicy(policy.text) ?? policy.text}
+                  {policy.text}
                 </Text>
               </View>
             ))}
@@ -519,6 +520,71 @@ function RelatedServiceCard({
   );
 }
 
+function ServiceVariantModal({ service }: { service: ServiceDetail }) {
+  const [open, setOpen] = useState(false);
+  const cartQuery = useCart();
+  const cart = cartQuery.data;
+  const router = useRouter();
+
+  const variantIds = new Set(service.variants.map((v) => v.id));
+  const cartItemsInService = cart?.items.filter((item) => variantIds.has(item.variant_id)) ?? [];
+  const totalQuantity = cartItemsInService.reduce((sum, item) => sum + item.quantity, 0);
+  const hasItemsInCart = totalQuantity > 0;
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        className="h-11 w-full flex-row items-center justify-center rounded-xl bg-navy-900 px-6 shadow-xs active:scale-[0.98]"
+      >
+        <Text className="text-sm font-bold text-white">
+          {hasItemsInCart ? `${totalQuantity} in cart • Change` : "Add to Cart"}
+        </Text>
+      </Pressable>
+
+      <Sheet
+        open={open}
+        onOpenChange={setOpen}
+        title="What you can book"
+        description={service.name}
+        footer={
+          <View className="w-full flex-row items-center justify-between gap-3">
+            {hasItemsInCart ? (
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => {
+                  setOpen(false);
+                  router.push("/cart" as never);
+                }}
+              >
+                <Text className="text-xs font-bold text-action">View Cart ({totalQuantity}) →</Text>
+              </Pressable>
+            ) : (
+              <Text className="text-xs text-text-secondary">Prices confirmed before payment</Text>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setOpen(false)}
+              className="rounded-xl bg-navy-900 px-5 py-2.5 active:scale-[0.98]"
+            >
+              <Text className="text-xs font-bold text-white">Done</Text>
+            </Pressable>
+          </View>
+        }
+      >
+        <ScrollView className="max-h-[60vh]" showsVerticalScrollIndicator={false}>
+          <VariantList
+            variants={service.variants}
+            serviceCoverUrl={service.cover?.url}
+            serviceCopy={[service.short_description, service.description ?? ""]}
+          />
+        </ScrollView>
+      </Sheet>
+    </>
+  );
+}
+
 function BookingActions({ service }: { service: ServiceDetail }) {
   if (service.slug === FIT_OUT_PICKER_SERVICE) {
     return <FitOutServicePicker serviceSlug={service.slug} />;
@@ -537,6 +603,8 @@ function BookingActions({ service }: { service: ServiceDetail }) {
         </>
       ) : service.request_archetypes.length > 0 ? (
         <PrimaryLink label="Tell us what you need" href={`/requests/new/${service.slug}`} arrow />
+      ) : service.variants.length > 1 ? (
+        <ServiceVariantModal service={service} />
       ) : service.bookable_variant_id ? (
         <AddToCartButton variantId={service.bookable_variant_id} />
       ) : null}
@@ -617,13 +685,10 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
   const otherPolicies = service.policies.filter((policy) => policy.kind !== "PROCESS");
   const showDescription = addsToServiceCopy(service.description ?? "", service.short_description);
   const faqs = buildServiceFaqs(service);
-  const rawGuarantee = warrantyText(service.policies);
-  const guaranteeLabel = formatGuaranteePolicy(rawGuarantee);
   const durations = service.variants.map(durationLabel).filter((label): label is string => label !== null);
   const highlights = [
     service.variants.length > 1 ? `${service.variants.length} options` : null,
     durations.length === service.variants.length && new Set(durations).size === 1 ? durations[0] : null,
-    guaranteeLabel,
   ].filter((item): item is string => item !== null && item !== undefined);
 
   const coverUrl = resolveImageUrl(
@@ -681,7 +746,7 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
         />
 
         {/* Top Hero Section */}
-        <View className={isDesktop ? "mt-8 flex-row items-start gap-12 lg:gap-16" : "mt-8 gap-8"}>
+        <View className={isDesktop ? "mt-8 flex-row items-stretch gap-12 lg:gap-14" : "mt-8 gap-8"}>
           {/* Left: Featured Image */}
           <View className={isDesktop ? "w-7/12" : "w-full"}>
             <View
@@ -700,62 +765,64 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
           </View>
 
           {/* Right: Title, Badges & Booking Action Card */}
-          <View className={isDesktop ? "w-5/12 pt-2" : "w-full pt-2"}>
-            <Text className="text-[1.85rem] font-bold leading-tight text-navy-900 sm:text-[2.25rem]">
-              {service.name}
-            </Text>
-            <Text className="mt-4 text-[1rem] leading-relaxed text-text-secondary">
-              {service.short_description}
-            </Text>
+          <View className={isDesktop ? "w-5/12 justify-between" : "w-full"}>
+            <View>
+              <Text className="text-[1.85rem] font-bold leading-tight text-navy-900 sm:text-[2.1rem]">
+                {service.name}
+              </Text>
+              <Text className="mt-2.5 text-[0.95rem] leading-relaxed text-text-secondary">
+                {service.short_description}
+              </Text>
 
-            {/* Highlights Chips */}
-            {highlights.length > 0 ? (
-              <View className="mt-5 flex-row flex-wrap gap-2">
-                {highlights.map((item) => (
-                  <View
-                    key={item}
-                    className="flex-row items-center gap-1.5 rounded-full border border-line/70 bg-white px-3 py-1.5"
-                  >
-                    <Svg viewBox="0 0 20 20" width={14} height={14} fill={ACTION}>
-                      <Path
-                        fillRule="evenodd"
-                        d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                        clipRule="evenodd"
-                      />
-                    </Svg>
-                    <Text className="text-[0.8rem] font-semibold text-navy-900">{item}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
+              {/* Highlights Chips */}
+              {highlights.length > 0 ? (
+                <View className="mt-3.5 flex-row flex-wrap gap-2">
+                  {highlights.map((item) => (
+                    <View
+                      key={item}
+                      className="flex-row items-center gap-1.5 rounded-full border border-line/70 bg-white px-3 py-1"
+                    >
+                      <Svg viewBox="0 0 20 20" width={14} height={14} fill={ACTION}>
+                        <Path
+                          fillRule="evenodd"
+                          d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                          clipRule="evenodd"
+                        />
+                      </Svg>
+                      <Text className="text-[0.8rem] font-semibold text-navy-900">{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
 
             {/* Price & Action Card */}
             <View
-              className="mt-8 rounded-[1rem] border border-transparent bg-white p-5 sm:p-7 md:p-8 shadow-sm"
+              className="mt-5 rounded-2xl border border-transparent bg-white p-5 sm:p-6 shadow-sm"
               style={{ elevation: 2 }}
             >
               {service.starting_price !== null ? (
                 <>
-                  <Text className="text-[0.7rem] font-bold uppercase tracking-wider text-text-muted">Starts at</Text>
-                  <Text className="mt-1.5 text-2xl font-bold tabular-nums text-navy-900">
+                  <Text className="text-[0.68rem] font-bold uppercase tracking-wider text-text-muted">Starts at</Text>
+                  <Text className="mt-1 text-2xl font-bold tabular-nums text-navy-900">
                     {formatMoney(service.starting_price.amount_paise)}
                   </Text>
-                  <Text className="mt-4 text-[0.9rem] leading-relaxed text-text-secondary">
+                  <Text className="mt-2.5 text-[0.85rem] leading-relaxed text-text-secondary">
                     The exact price is confirmed before you pay, once you have told us what the job involves.
                   </Text>
                 </>
               ) : (
-                <Text className="text-[0.9rem] leading-relaxed text-text-secondary">
+                <Text className="text-[0.85rem] leading-relaxed text-text-secondary">
                   This work is priced per job. Tell us what you need and verified professionals will send you their own
                   quotes — describing the job costs nothing.
                 </Text>
               )}
 
-              <View className="mt-7">
+              <View className="mt-4 sm:mt-5">
                 <BookingActions service={service} />
               </View>
 
-              <View className="mt-7 flex-row items-center justify-between gap-4 border-t border-line/60 pt-5">
+              <View className="mt-4 sm:mt-5 flex-row items-center justify-between gap-4 border-t border-line/60 pt-3.5 sm:pt-4">
                 <View className="flex-row items-center gap-2.5">
                   <StrokeIcon d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" size={18} />
                   <Text className="text-[0.875rem] font-medium text-text-secondary">Vetted Pros</Text>
@@ -778,18 +845,6 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
         ) : null}
         <ServiceOfferBanner imageUrl={category.image_url} />
 
-        {/* What You Can Book */}
-        {service.variants.length > 0 ? (
-          <View className="mt-8 rounded-[1rem] bg-white p-5 sm:p-7 md:p-8 shadow-sm">
-            <Text className="text-[1.15rem] font-bold text-navy-900">What you can book</Text>
-            <VariantList
-              variants={service.variants}
-              serviceCoverUrl={service.cover?.url}
-              serviceCopy={[service.short_description, service.description ?? ""]}
-            />
-          </View>
-        ) : null}
-
         {/* Know the Difference */}
         <ServiceOptionDifferences service={service} />
 
@@ -806,13 +861,8 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
         {/* V Solve Assurance */}
         <ServiceAssurance service={service} onOpenFaq={scrollToFaqs} />
 
-        {/* How It Works */}
-        {processSteps.length > 0 ? (
-          <View className="mt-8 rounded-[1rem] bg-white p-5 sm:p-7 md:p-8 shadow-sm">
-            <Text className="text-[1.15rem] font-bold text-navy-900">How it works</Text>
-            <ProcessSteps steps={processSteps} />
-          </View>
-        ) : null}
+        {/* Verified Professionals */}
+        <ServiceProfessionals service={service} />
 
         {/* What's Included / Not Included / Good to Know */}
         {otherPolicies.length > 0 ? (
@@ -820,18 +870,6 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
             <PolicyList policies={otherPolicies} />
           </View>
         ) : null}
-
-        {/* Verified Professionals */}
-        <ServiceProfessionals service={service} />
-
-        {/* Frequently Asked Questions */}
-        <View
-          onLayout={(event) => {
-            setFaqOffsetY(event.nativeEvent.layout.y);
-          }}
-        >
-          <ServiceFaqSection faqs={faqs} />
-        </View>
 
         {/* Related Services */}
         {relatedServices.length > 0 ? (
@@ -867,6 +905,37 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
               More {categoryHeadline(category.name)} services
             </Text>
           </Pressable>
+        </View>
+
+        {/* How It Works */}
+        {processSteps.length > 0 ? (
+          <View className="mt-8 rounded-[1rem] bg-white p-4 sm:p-6 md:p-8 shadow-sm border border-[#ECE7E1]/80">
+            <View className="flex-row items-center justify-between gap-3 pb-2 border-b border-line/40">
+              <View className="flex-1">
+                <Text className="text-[1.25rem] sm:text-[1.35rem] font-black text-navy-900 tracking-tight">
+                  How it works
+                </Text>
+                <Text className="mt-1 text-sm text-text-secondary">
+                  Step-by-step verified execution protocol for {service.name.toLowerCase()}
+                </Text>
+              </View>
+              <View className="shrink-0 rounded-full bg-[#FFF0E5] px-3 py-1">
+                <Text className="text-xs font-bold text-action">
+                  {processSteps.length} Steps
+                </Text>
+              </View>
+            </View>
+            <ProcessSteps steps={processSteps} />
+          </View>
+        ) : null}
+
+        {/* Frequently Asked Questions */}
+        <View
+          onLayout={(event) => {
+            setFaqOffsetY(event.nativeEvent.layout.y);
+          }}
+        >
+          <ServiceFaqSection faqs={faqs} />
         </View>
       </View>
     </ScrollView>

@@ -73,7 +73,7 @@ STORIES_DATA: list[StorySeedItem] = [
     },
     {
         "title": "Master Plumber Precision",
-        "caption": "Non-invasive acoustic leak detection, sanitized plumbing toolkits, and transparent piping replacement guarantees.",
+        "caption": "Non-invasive acoustic leak detection, sanitized plumbing toolkits, and clear quote breakdowns for piping replacement.",
         "image_name": "story-plumber.png",
         "display_order": 5,
     },

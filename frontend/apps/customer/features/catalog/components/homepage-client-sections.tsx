@@ -318,7 +318,6 @@ interface FeaturedServiceSlide {
   price: string;
   rating: string;
   bookings: string;
-  guarantee: string;
   buttonText: string;
   link: string;
   image: string;
@@ -338,7 +337,6 @@ const FEATURED_SERVICES: FeaturedServiceSlide[] = [
     price: "₹129",
     rating: "4.8",
     bookings: "12k bookings",
-    guarantee: "Verified Certified Pros",
     buttonText: "Book Electrician",
     link: "/catalog/electrician",
     image: "/catalog/featured/electrician.jpg",
@@ -356,7 +354,6 @@ const FEATURED_SERVICES: FeaturedServiceSlide[] = [
     price: "₹199",
     rating: "4.9",
     bookings: "18k bookings",
-    guarantee: "No-Mess Guarantee",
     buttonText: "Book Plumber",
     link: "/catalog/plumber",
     image: "/catalog/featured/plumber.jpg",
@@ -374,7 +371,6 @@ const FEATURED_SERVICES: FeaturedServiceSlide[] = [
     price: "₹299",
     rating: "4.7",
     bookings: "9k bookings",
-    guarantee: "Clean Drilling & Leveling",
     buttonText: "Book Carpenter",
     link: "/catalog/technician",
     image: "/catalog/featured/carpenter.jpg",
@@ -583,13 +579,10 @@ export function HeroSplitCarousel() {
               >
                 {/* Left Content (md:col-span-7) */}
                 <div className="md:col-span-7 flex flex-col justify-center min-w-0">
-                  {/* Eyebrow: Pill + Verified Guarantee */}
+                  {/* Eyebrow */}
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="px-3 py-1 text-xs font-black uppercase tracking-wider bg-[#FFF1E8] text-[#D9480F] rounded-full border border-[#F8C9A8]">
                       Featured service
-                    </span>
-                    <span className="text-sm font-medium text-[#3C4658]">
-                      {service.guarantee}
                     </span>
                   </div>
 

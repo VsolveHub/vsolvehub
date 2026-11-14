@@ -13,6 +13,14 @@ CATEGORY_TILE_FILENAMES = {
     "rooms-pg-hostel-hotels": "Create_3D_hotel_icon_fb85216d_2K.jpg",
 }
 
+SUBCATEGORY_TILE_FILENAMES = {
+    "tools-machinery": "Cordless_power_drill_and_toolbox_1bece15f_2K.jpg",
+    "sound-system-rental": "Speaker_and_microphone_3D_icon_dac6a94e_2K.jpg",
+    "tentshamiana": "Tent_and_shamiana_rental_icon_8864d708_2K.jpg",
+    "home-appliance-rental": "Home_appliance_rental_icons_5c68059e_2K.jpg",
+    "lighting-rental": "Spotlight_stand_icon_rental_2616c2cb_2K.jpg",
+}
+
 
 class Command(BaseCommand):
     help = textwrap.dedent("""
@@ -72,7 +80,8 @@ class Command(BaseCommand):
                     subcategories = category.subcategories.filter(slug__in=subcat_slugs)
 
                 for subcategory in subcategories:
-                    subcat_target_url = f"{base_url}/catalog/tiles/{subcategory.slug}.png"
+                    tile_file = SUBCATEGORY_TILE_FILENAMES.get(subcategory.slug, f"{subcategory.slug}.png")
+                    subcat_target_url = f"{base_url}/catalog/tiles/{tile_file}"
                     if force or not subcategory.image_url or subcategory.image_url.startswith("/"):
                         subcategory.image_url = subcat_target_url
                         subcategory.save(update_fields=["image_url", "updated_at"])

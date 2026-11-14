@@ -213,7 +213,7 @@ export function EstimateDetailScreen({
         <div className="flex gap-2">
           <FactPlate label="Starts" value={estimate.startsOn} />
           <FactPlate label="Duration" value={estimate.duration} />
-          <FactPlate label="Guarantee" value={estimate.warranty} />
+          <FactPlate label="Scope notes" value={estimate.warranty} />
         </div>
 
         <Card padding="sm">

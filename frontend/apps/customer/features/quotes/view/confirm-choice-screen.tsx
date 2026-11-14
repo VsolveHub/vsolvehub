@@ -110,11 +110,9 @@ export function ConfirmChoiceScreen({ requirementId, proposalId }: { requirement
             </Line>
           ) : null}
           {timeline !== null ? <Line ok>{timeline}</Line> : null}
-          {card.warrantyTerms !== null ? (
-            <Line ok>Guarantee: {formatCoverageTerms(card.warrantyTerms)}</Line>
-          ) : (
-            <Line ok={false} warn>No guarantee specified</Line>
-          )}
+          {card.warrantyTerms !== null && formatCoverageTerms(card.warrantyTerms) !== "" ? (
+            <Line ok>Scope notes: {formatCoverageTerms(card.warrantyTerms)}</Line>
+          ) : null}
           {card.exclusions.map((line) => (
             <Line key={line} ok={false}>
               {line} — you arrange this
