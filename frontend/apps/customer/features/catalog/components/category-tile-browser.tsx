@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation";
 import { formatMoney, cn } from "@vsolve/ui";
 import {
   ArrowRight,
-  CheckCircle2,
   ChevronRight,
   ClipboardList,
   Clock,
-  ShieldCheck,
   ShoppingBag,
   X,
 } from "lucide-react";

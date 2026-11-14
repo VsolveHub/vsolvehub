@@ -199,21 +199,9 @@ function ShieldIcon() {
 
 /*
  * Tile art for the assurance row: 40px outline drawings in one stroke weight, the way a
- * marketplace "cover" row is drawn — a shield with a tick, a banknote, a receipt with a tick.
+ * marketplace "cover" row is drawn — a banknote, a receipt with a tick.
  * Drawn here rather than fetched: they are part of the page's furniture, not catalogue data.
  */
-function GuaranteeArt() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={2.2} className="size-10">
-      <path
-        strokeLinejoin="round"
-        d="M24 5 9 10.5v12.2c0 9.6 6.3 16.6 15 20.3 8.7-3.7 15-10.7 15-20.3V10.5L24 5Z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="m17 24.5 5 5 9.5-10" />
-    </svg>
-  );
-}
-
 function PriceArt() {
   return (
     <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={2.2} className="size-10">

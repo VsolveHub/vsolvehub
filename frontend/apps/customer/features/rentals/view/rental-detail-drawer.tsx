@@ -37,6 +37,8 @@ export function RentalDetailDrawer({
       : (resolvedAsset as { thumbnail_url?: string }).thumbnail_url
         ? [
             {
+              id: "thumbnail",
+              created_at: "",
               url: (resolvedAsset as { thumbnail_url?: string }).thumbnail_url!,
               display_order: 0,
               caption: resolvedAsset.title,
