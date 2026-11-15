@@ -43,45 +43,45 @@ Every picture in this file is a service photo. Open the example links to see the
 
 ### Technician › Electrician (5)
 
-- [ ] **New House Wiring**: `catalog-v2/technician/electrician/new-house-wiring.jpeg`
-- [ ] **Concealed Wiring**: `catalog-v2/technician/electrician/concealed-wiring.jpeg`
-- [ ] **Open Wiring**: `catalog-v2/technician/electrician/open-wiring.jpeg`
-- [ ] **Conduit Pipe Laying**: `catalog-v2/technician/electrician/conduit-pipe-laying.jpeg`
-- [ ] **Cable Pulling**: `catalog-v2/technician/electrician/cable-pulling.jpeg`
+- [x] **New House Wiring**: `catalog-v2/technician/electrician/new-house-wiring.jpeg`
+- [x] **Concealed Wiring**: `catalog-v2/technician/electrician/concealed-wiring.jpeg`
+- [x] **Open Wiring**: `catalog-v2/technician/electrician/open-wiring.jpeg`
+- [x] **Conduit Pipe Laying**: `catalog-v2/technician/electrician/conduit-pipe-laying.jpeg`
+- [x] **Cable Pulling**: `catalog-v2/technician/electrician/cable-pulling.jpeg`
 
 ### Technician › Plumbing (6)
 
-- [ ] **New Pipeline Installation**: `catalog-v2/technician/plumbing/new-pipeline-installation.jpeg`
-- [ ] **Old Pipe Replacement**: `catalog-v2/technician/plumbing/old-pipe-replacement.jpeg`
-- [ ] **Pipe Extension Work**: `catalog-v2/technician/plumbing/pipe-extension-work.jpeg`
-- [ ] **Underground Pipeline Work**: `catalog-v2/technician/plumbing/underground-pipeline-work.jpeg`
-- [ ] **Drain Line Installation**: `catalog-v2/technician/plumbing/drain-line-installation.jpeg`
-- [ ] **Sewer Line Work**: `catalog-v2/technician/plumbing/sewer-line-work.jpeg`
+- [x] **New Pipeline Installation**: `catalog-v2/technician/plumbing/new-pipeline-installation.jpeg`
+- [x] **Old Pipe Replacement**: `catalog-v2/technician/plumbing/old-pipe-replacement.jpeg`
+- [x] **Pipe Extension Work**: `catalog-v2/technician/plumbing/pipe-extension-work.jpeg`
+- [x] **Underground Pipeline Work**: `catalog-v2/technician/plumbing/underground-pipeline-work.jpeg`
+- [x] **Drain Line Installation**: `catalog-v2/technician/plumbing/drain-line-installation.jpeg`
+- [x] **Sewer Line Work**: `catalog-v2/technician/plumbing/sewer-line-work.jpeg`
 
 ### Technician › Carpenter (3)
 
 *Cupboard / Hinge Repair is already in the app but has no photo yet.*
 
-- [ ] **Wood Polishing**: `catalog-v2/technician/carpenter/wood-polishing.jpeg`
-- [ ] **Laminate Fixing**: `catalog-v2/technician/carpenter/laminate-fixing.jpeg`
-- [ ] **Cupboard / Hinge Repair**: `catalog-v2/technician/carpenter/cupboard-hinge-repair.jpeg`
+- [x] **Wood Polishing**: `catalog-v2/technician/carpenter/wood-polishing.jpeg`
+- [x] **Laminate Fixing**: `catalog-v2/technician/carpenter/laminate-fixing.jpeg`
+- [x] **Cupboard / Hinge Repair**: `catalog-v2/technician/carpenter/cupboard-hinge-repair.jpeg`
 
 ### Technician › Internet & WiFi Technician (1)
 
-- [ ] **LAN Cable Wiring**: `catalog-v2/technician/internet-wifi-technician/lan-cable-wiring.jpeg`
+- [x] **LAN Cable Wiring**: `catalog-v2/technician/internet-wifi-technician/lan-cable-wiring.jpeg`
 
 ### Technician › CCTV & Security Technician (2)
 
-- [ ] **Full CCTV Setup**: `catalog-v2/technician/cctv-security-technician/full-cctv-setup.jpeg`
-- [ ] **CCTV Wiring**: `catalog-v2/technician/cctv-security-technician/cctv-wiring.jpeg`
+- [x] **Full CCTV Setup**: `catalog-v2/technician/cctv-security-technician/full-cctv-setup.jpeg`
+- [x] **CCTV Wiring**: `catalog-v2/technician/cctv-security-technician/cctv-wiring.jpeg`
 
 ### Technician › Home Automation & Sound (1)
 
-- [ ] **Smart Home Setup**: `catalog-v2/technician/home-automation-sound/smart-home-setup.jpeg`
+- [x] **Smart Home Setup**: `catalog-v2/technician/home-automation-sound/smart-home-setup.jpeg`
 
 ### Beautician › Bridal Packages (4)
 
-- [ ] **Pre-Bridal Package**: `catalog-v2/beautician/bridal-packages/pre-bridal-package.jpeg`
-- [ ] **Bridal Full Package**: `catalog-v2/beautician/bridal-packages/bridal-full-package.jpeg`
-- [ ] **Engagement Package**: `catalog-v2/beautician/bridal-packages/engagement-package.jpeg`
-- [ ] **Bridesmaid Makeup**: `catalog-v2/beautician/bridal-packages/bridesmaid-makeup.jpeg`
+- [x] **Pre-Bridal Package**: `catalog-v2/beautician/bridal-packages/pre-bridal-package.jpeg`
+- [x] **Bridal Full Package**: `catalog-v2/beautician/bridal-packages/bridal-full-package.jpeg`
+- [x] **Engagement Package**: `catalog-v2/beautician/bridal-packages/engagement-package.jpeg`
+- [x] **Bridesmaid Makeup**: `catalog-v2/beautician/bridal-packages/bridesmaid-makeup.jpeg`

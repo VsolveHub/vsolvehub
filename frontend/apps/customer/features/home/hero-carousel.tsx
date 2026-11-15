@@ -6,10 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowRight,
-  Gift,
-  Sparkles,
-  Snowflake,
-  Wrench,
   Check,
 } from "lucide-react";
 
@@ -206,6 +202,27 @@ export function HeroCarousel({ slides, variant = "both" }: HeroCarouselProps) {
 
             {/* Overlapping Main Container */}
             <div className="relative w-full h-[550px]">
+              {/* Navigation Arrows: Centered to each other at the ends */}
+              {/* Previous Button (Left end) */}
+              <button
+                type="button"
+                onClick={() => goToDesktopSlide(currentIndex - 1)}
+                aria-label="Previous slide"
+                className="absolute -left-6 lg:-left-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/40 hover:bg-white/65 active:bg-white/80 backdrop-blur-md border border-white/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+              >
+                <ChevronLeft className="size-6 stroke-[2.5]" />
+              </button>
+
+              {/* Next Button (Right end) */}
+              <button
+                type="button"
+                onClick={() => goToDesktopSlide(currentIndex + 1)}
+                aria-label="Next slide"
+                className="absolute -right-6 lg:-right-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/40 hover:bg-white/65 active:bg-white/80 backdrop-blur-md border border-white/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+              >
+                <ChevronRight className="size-6 stroke-[2.5]" />
+              </button>
+
               {/* Left Dark Card - Positioned exactly to red rectangle bounds */}
               <div className="absolute left-0 top-[125px] bottom-[30px] z-10 w-[440px] lg:w-[480px] max-w-[90vw]">
                 <div className="h-full rounded-2xl bg-navy-900 p-8 lg:p-9 shadow-2xl flex flex-col justify-start">
@@ -292,55 +309,6 @@ export function HeroCarousel({ slides, variant = "both" }: HeroCarouselProps) {
                   <Logo dark />
                 </div>
 
-                {/* Photo Controls: Arrows + Thumbnails (Solid White Background) */}
-                <div className="absolute right-6 bottom-6 z-30 flex items-center gap-2">
-                  {/* Previous Button */}
-                  <button
-                    type="button"
-                    onClick={() => goToDesktopSlide(currentIndex - 1)}
-                    aria-label="Previous slide"
-                    className="size-8 rounded-full border border-line bg-white flex items-center justify-center text-navy-900 shadow-sm transition hover:bg-[#F4F1EA] cursor-pointer"
-                  >
-                    <ChevronLeft className="size-4 stroke-[2.4]" />
-                  </button>
-
-                  {/* Thumbnail Tiles */}
-                  {slides.map((slide, idx) => {
-                    const isActive = idx === currentIndex;
-                    return (
-                      <button
-                        key={slide.id}
-                        type="button"
-                        onClick={() => goToDesktopSlide(idx)}
-                        aria-label={slide.badge}
-                        aria-current={isActive ? "true" : "false"}
-                        className={`h-[44px] w-[58px] rounded-[10px] bg-white flex items-center justify-center shadow-sm cursor-pointer transition ${isActive
-                          ? "ring-2 ring-action text-action border border-transparent"
-                          : "border border-line text-[#667085] hover:text-navy-900"
-                          }`}
-                      >
-                        {slide.thumbIcon === "gift" && <Gift className="size-5 stroke-[2]" />}
-                        {slide.thumbIcon === "sparkles" && (
-                          <Sparkles className="size-5 stroke-[2]" />
-                        )}
-                        {slide.thumbIcon === "snowflake" && (
-                          <Snowflake className="size-5 stroke-[2]" />
-                        )}
-                        {slide.thumbIcon === "wrench" && <Wrench className="size-5 stroke-[2]" />}
-                      </button>
-                    );
-                  })}
-
-                  {/* Next Button */}
-                  <button
-                    type="button"
-                    onClick={() => goToDesktopSlide(currentIndex + 1)}
-                    aria-label="Next slide"
-                    className="size-8 rounded-full border border-line bg-white flex items-center justify-center text-navy-900 shadow-sm transition hover:bg-[#F4F1EA] cursor-pointer"
-                  >
-                    <ChevronRight className="size-4 stroke-[2.4]" />
-                  </button>
-                </div>
 
                 {/* 3px Progress Bar on Bottom Edge */}
                 <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-navy-900/30 z-20 overflow-hidden">
