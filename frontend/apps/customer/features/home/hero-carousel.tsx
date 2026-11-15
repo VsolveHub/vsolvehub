@@ -202,6 +202,27 @@ export function HeroCarousel({ slides, variant = "both" }: HeroCarouselProps) {
 
             {/* Overlapping Main Container */}
             <div className="relative w-full h-[550px]">
+              {/* Navigation Arrows: Centered to each other at the ends */}
+              {/* Previous Button (Left end) */}
+              <button
+                type="button"
+                onClick={() => goToDesktopSlide(currentIndex - 1)}
+                aria-label="Previous slide"
+                className="absolute -left-6 lg:-left-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/75 hover:bg-white/95 active:bg-white backdrop-blur-md border border-line/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+              >
+                <ChevronLeft className="size-6 stroke-[2.5]" />
+              </button>
+
+              {/* Next Button (Right end) */}
+              <button
+                type="button"
+                onClick={() => goToDesktopSlide(currentIndex + 1)}
+                aria-label="Next slide"
+                className="absolute -right-6 lg:-right-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/75 hover:bg-white/95 active:bg-white backdrop-blur-md border border-line/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+              >
+                <ChevronRight className="size-6 stroke-[2.5]" />
+              </button>
+
               {/* Left Dark Card - Positioned exactly to red rectangle bounds */}
               <div className="absolute left-0 top-[125px] bottom-[30px] z-10 w-[440px] lg:w-[480px] max-w-[90vw]">
                 <div className="h-full rounded-2xl bg-navy-900 p-8 lg:p-9 shadow-2xl flex flex-col justify-start">
@@ -288,26 +309,6 @@ export function HeroCarousel({ slides, variant = "both" }: HeroCarouselProps) {
                   <Logo dark />
                 </div>
 
-                {/* Navigation Arrows: Left & Right ends, vertically centered, semi-transparent & enlarged */}
-                {/* Previous Button (Center Left End of visible carousel) */}
-                <button
-                  type="button"
-                  onClick={() => goToDesktopSlide(currentIndex - 1)}
-                  aria-label="Previous slide"
-                  className="absolute left-[190px] lg:left-[215px] top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/40 hover:bg-white/70 active:bg-white/85 backdrop-blur-md border border-white/30 flex items-center justify-center text-navy-900 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
-                >
-                  <ChevronLeft className="size-6 stroke-[2.5]" />
-                </button>
-
-                {/* Next Button (Center Right End of carousel) */}
-                <button
-                  type="button"
-                  onClick={() => goToDesktopSlide(currentIndex + 1)}
-                  aria-label="Next slide"
-                  className="absolute right-5 lg:right-7 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/40 hover:bg-white/70 active:bg-white/85 backdrop-blur-md border border-white/30 flex items-center justify-center text-navy-900 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
-                >
-                  <ChevronRight className="size-6 stroke-[2.5]" />
-                </button>
 
                 {/* 3px Progress Bar on Bottom Edge */}
                 <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-navy-900/30 z-20 overflow-hidden">
