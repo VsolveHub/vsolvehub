@@ -8,12 +8,14 @@ import { listingHref } from "@/lib/routes";
 import { formatMoneyText } from "@vsolve/ui";
 import { listingFields, type Listing } from "./queries";
 import { getCompanyInitials, resolveCategoryTone } from "./view/career-tones";
+import { MATCH_LOOK, type JobMatch } from "./seeker-queries";
 
 export interface ListingOpportunityCardProps {
   listing: Listing;
   density?: "comfortable" | "compact";
   isApplied?: boolean;
   onApply?: (listing: Listing) => void;
+  match?: JobMatch;
 }
 
 export function ListingOpportunityCard({
@@ -21,10 +23,12 @@ export function ListingOpportunityCard({
   density = "comfortable",
   isApplied = false,
   onApply,
+  match,
 }: ListingOpportunityCardProps) {
   const saved = useSavedItems("listing");
   const isSaved = saved.isSaved(listing.id);
   const fields = listingFields(listing.structured_fields);
+  const matchLook = match ? ((match.level ? MATCH_LOOK[match.level] : null) ?? MATCH_LOOK.OTHER!) : null;
 
   // Pay calculation
   const rawPay = fields.pay_range || fields.salary_range || fields.compensation;
@@ -139,6 +143,13 @@ export function ListingOpportunityCard({
           >
             {listing.title}
           </span>
+
+          {match && matchLook ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#EEF2FF] text-[#3730A3] border border-[#C7D2FE]">
+              <span className="font-black text-[#1E1B4B]">{match.score}%</span>
+              <span className="text-[#4338CA]">{matchLook.label}</span>
+            </span>
+          ) : null}
 
           {isUrgent ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-[#FFF1E6] text-[#B54700] border border-[#FFD1A8]">

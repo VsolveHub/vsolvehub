@@ -31,6 +31,7 @@ import {
   ListingSidebarFilters,
   resolveCategoryTone,
 } from "@/features/listings/view";
+import { fetchJobsForYou, fetchMyJobProfile } from "@/features/listings/seeker-queries";
 import { useCustomerSession } from "@/features/session/queries";
 
 const CITIES = [
@@ -238,6 +239,27 @@ function ListingsBrowseContent() {
   const applicationsCount = myApplicationsQuery.data?.results?.length ?? 0;
   const savedCount = saved.ids?.length ?? 0;
 
+  // Jobs For You recommendations
+  const profileQuery = useQuery({
+    queryKey: ["my-job-profile"],
+    queryFn: fetchMyJobProfile,
+    enabled: session.isAuthenticated,
+  });
+
+  const jobsForYouQuery = useQuery({
+    queryKey: ["jobs-for-you"],
+    queryFn: fetchJobsForYou,
+    enabled: session.isAuthenticated && Boolean(profileQuery.data),
+  });
+
+  const jobsForYou = useMemo(() => {
+    return jobsForYouQuery.data ?? [];
+  }, [jobsForYouQuery.data]);
+
+  const jobsForYouIds = useMemo(() => {
+    return new Set(jobsForYou.map((item) => item.listing.id));
+  }, [jobsForYou]);
+
   // Compute persistent category facet counts from loaded items for sidebar
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -248,16 +270,21 @@ function ListingsBrowseContent() {
     return counts;
   }, [rawListings]);
 
-  // Client-side category filtering against selected category
+  // Client-side category filtering against selected category + deduplication against "Jobs for you"
   const filteredListings = useMemo(() => {
-    if (!selectedCategory || selectedCategory === "all") {
-      return rawListings;
+    let list = rawListings;
+    if (selectedCategory && selectedCategory !== "all") {
+      list = list.filter((listing) => {
+        const tone = resolveCategoryTone(listing.job_category, listing.title);
+        return tone.key === selectedCategory;
+      });
     }
-    return rawListings.filter((listing) => {
-      const tone = resolveCategoryTone(listing.job_category, listing.title);
-      return tone.key === selectedCategory;
-    });
-  }, [rawListings, selectedCategory]);
+    // Deduplicate: exclude any jobs currently displayed in "Jobs for you"
+    if (jobsForYouIds.size > 0) {
+      list = list.filter((listing) => !jobsForYouIds.has(listing.id));
+    }
+    return list;
+  }, [rawListings, selectedCategory, jobsForYouIds]);
 
   // Deep-linking: auto-open drawer if ?apply=slug is present on load
   useEffect(() => {
@@ -353,9 +380,6 @@ function ListingsBrowseContent() {
         </div>
       </section>
 
-      {/* Jobs For You personalized section for authenticated users */}
-      {session.isAuthenticated ? <JobsForYou /> : null}
-
       {/* Split-Browse Grid Layout (Left: Sidebar, Right: Feed) */}
       <div className="grid grid-cols-1 lg:grid-cols-[272px_minmax(0,1fr)] gap-6 items-start">
         {/* Left Sidebar */}
@@ -375,9 +399,24 @@ function ListingsBrowseContent() {
         />
 
         {/* Right Column: Feed & Controls */}
-        <div className="min-w-0">
-          {/* Feed Toolbar: Live Count + Density Toggle + Sort Selector */}
-          <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex flex-col gap-6">
+          {/* Jobs For You personalized section for authenticated users */}
+          {session.isAuthenticated ? (
+            <JobsForYou
+              profile={profileQuery.data}
+              isLoadingProfile={profileQuery.isLoading}
+              jobs={jobsForYou}
+              isLoadingJobs={jobsForYouQuery.isLoading}
+              density={density}
+              appliedListingIds={appliedListingIds}
+              onApply={handleOpenDrawer}
+            />
+          ) : null}
+
+          {/* Main Feed Section: Showing X jobs */}
+          <div>
+            {/* Feed Toolbar: Live Count + Density Toggle + Sort Selector */}
+            <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-bold text-[#15264D]">
               Showing <span className="text-[#B54700]">{filteredListings.length}</span>{" "}
               {filteredListings.length === 1 ? "job" : "jobs"}
@@ -499,6 +538,7 @@ function ListingsBrowseContent() {
           </div>
         </div>
       </div>
+    </div>
 
       {/* Right-Side Slide-Over Apply & Detail Drawer */}
       <JobApplyDrawer
