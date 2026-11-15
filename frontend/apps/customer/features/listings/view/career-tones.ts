@@ -86,28 +86,40 @@ export function getCompanyInitials(name?: string): string {
 }
 
 export function resolveCategoryTone(category?: string, title?: string): CategoryToneConfig {
-  const cat = (category || "").toLowerCase();
-  const t = (title || "").toLowerCase();
+  const text = `${category || ""} ${title || ""}`.toLowerCase();
 
-  if (cat.includes("soft") || cat.includes("it") || cat.includes("tech") || t.includes("developer") || t.includes("engineer") || t.includes("react") || t.includes("node") || t.includes("qa") || t.includes("frontend") || t.includes("backend")) {
+  // 1. IT & Software (excluding civil/site engineers)
+  if (/\b(it|software|computer|developer|engineer|full stack|frontend|backend|react|node|qa|programmer|coder|tech)\b/i.test(text)) {
+    if (/\b(construction|site|civil|builder|mason)\b/i.test(text)) {
+      return CATEGORY_TONE_CONFIGS.construction;
+    }
     return CATEGORY_TONE_CONFIGS.it;
   }
-  if (cat.includes("fin") || cat.includes("account") || cat.includes("tax") || t.includes("account") || t.includes("tally") || t.includes("gst") || t.includes("cashier") || t.includes("bookkeep")) {
-    return CATEGORY_TONE_CONFIGS.finance;
-  }
-  if (cat.includes("health") || cat.includes("medic") || cat.includes("nurse") || t.includes("nurse") || t.includes("doctor") || t.includes("pharmacist") || t.includes("lab") || t.includes("clinic")) {
-    return CATEGORY_TONE_CONFIGS.healthcare;
-  }
-  if (cat.includes("retail") || cat.includes("shop") || cat.includes("sales") || t.includes("sales") || t.includes("store") || t.includes("showroom") || t.includes("jewellery") || t.includes("counter")) {
-    return CATEGORY_TONE_CONFIGS.retail;
-  }
-  if (cat.includes("logi") || cat.includes("deliver") || cat.includes("driver") || t.includes("packer") || t.includes("warehouse") || t.includes("dispatch") || t.includes("rider") || t.includes("driver")) {
-    return CATEGORY_TONE_CONFIGS.logistics;
-  }
-  if (cat.includes("civil") || cat.includes("construct") || cat.includes("build") || t.includes("supervisor") || t.includes("civil") || t.includes("site") || t.includes("architect")) {
+
+  // 2. Construction & Site
+  if (/\b(construction|site|civil|builder|mason|carpenter|painter|electrician|plumber|supervisor)\b/i.test(text)) {
     return CATEGORY_TONE_CONFIGS.construction;
   }
 
-  // Fallback defaults to finance or IT based on title hash for pleasant distribution
-  return CATEGORY_TONE_CONFIGS.finance;
+  // 3. Healthcare
+  if (/\b(health|medic|nurse|doctor|pharmacist|pharma|clinic|hospital|lab technician)\b/i.test(text)) {
+    return CATEGORY_TONE_CONFIGS.healthcare;
+  }
+
+  // 4. Accounts & Finance
+  if (/\b(account|finance|tally|gst|tax|bookkeep|auditor)\b/i.test(text)) {
+    return CATEGORY_TONE_CONFIGS.finance;
+  }
+
+  // 5. Logistics & Warehouse
+  if (/\b(logistics|warehouse|manufacturing|delivery|driver|transport|packer|helper|loader|dispatch|rider)\b/i.test(text)) {
+    return CATEGORY_TONE_CONFIGS.logistics;
+  }
+
+  // 6. Retail & Sales Staff
+  if (/\b(retail|sales|shop|store|showroom|billing|cashier|counter|jewellery)\b/i.test(text)) {
+    return CATEGORY_TONE_CONFIGS.retail;
+  }
+
+  return CATEGORY_TONE_CONFIGS.retail;
 }

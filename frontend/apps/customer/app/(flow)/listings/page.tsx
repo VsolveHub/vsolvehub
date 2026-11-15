@@ -190,9 +190,9 @@ function ListingsBrowseContent() {
     return "";
   }, [employmentTypes]);
 
-  // Browse list query
+  // Browse list query - fetches jobs matching search query, location, employment type, work mode, salary, and sort
   const {
-    items: listings,
+    items: rawListings,
     isLoading,
     isFetching,
     error,
@@ -204,7 +204,6 @@ function ListingsBrowseContent() {
       "listings",
       appliedQuery,
       appliedLocation,
-      selectedCategory,
       mappedEmploymentType,
       mappedWorkMode,
       minSalary,
@@ -214,7 +213,6 @@ function ListingsBrowseContent() {
       fetchListings({
         q: appliedQuery,
         location: appliedLocation,
-        service: selectedCategory,
         sort,
         employment_type: mappedEmploymentType,
         work_mode: mappedWorkMode,
@@ -240,15 +238,26 @@ function ListingsBrowseContent() {
   const applicationsCount = myApplicationsQuery.data?.results?.length ?? 0;
   const savedCount = saved.ids?.length ?? 0;
 
-  // Compute category facet counts from loaded items for sidebar
+  // Compute persistent category facet counts from loaded items for sidebar
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const listing of listings) {
+    for (const listing of rawListings) {
       const tone = resolveCategoryTone(listing.job_category, listing.title);
       counts[tone.key] = (counts[tone.key] || 0) + 1;
     }
     return counts;
-  }, [listings]);
+  }, [rawListings]);
+
+  // Client-side category filtering against selected category
+  const filteredListings = useMemo(() => {
+    if (!selectedCategory || selectedCategory === "all") {
+      return rawListings;
+    }
+    return rawListings.filter((listing) => {
+      const tone = resolveCategoryTone(listing.job_category, listing.title);
+      return tone.key === selectedCategory;
+    });
+  }, [rawListings, selectedCategory]);
 
   // Deep-linking: auto-open drawer if ?apply=slug is present on load
   useEffect(() => {
@@ -360,7 +369,7 @@ function ListingsBrowseContent() {
           minSalary={minSalary}
           onSelectMinSalary={setMinSalary}
           categoryCounts={categoryCounts}
-          totalCount={listings.length}
+          totalCount={rawListings.length}
           onResetAll={clearAllFilters}
           hasActiveFilters={hasActiveFilters}
         />
@@ -370,8 +379,8 @@ function ListingsBrowseContent() {
           {/* Feed Toolbar: Live Count + Density Toggle + Sort Selector */}
           <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-bold text-[#15264D]">
-              Showing <span className="text-[#B54700]">{listings.length}</span>{" "}
-              {listings.length === 1 ? "job" : "jobs"}
+              Showing <span className="text-[#B54700]">{filteredListings.length}</span>{" "}
+              {filteredListings.length === 1 ? "job" : "jobs"}
               {selectedCategory && CATEGORY_TONE_CONFIGS[selectedCategory]
                 ? ` in ${CATEGORY_TONE_CONFIGS[selectedCategory].label}`
                 : ""}
@@ -446,9 +455,13 @@ function ListingsBrowseContent() {
           ) : null}
 
           {/* Empty State */}
-          {!isLoading && listings.length === 0 ? (
+          {!isLoading && filteredListings.length === 0 ? (
             <EmptyState
-              title="No career listings match these filters"
+              title={
+                selectedCategory && CATEGORY_TONE_CONFIGS[selectedCategory]
+                  ? `No jobs found in ${CATEGORY_TONE_CONFIGS[selectedCategory].label}`
+                  : "No career listings match these filters"
+              }
               description="Try adjusting your keywords, selecting a different city, or resetting the filters."
               action={
                 <button
@@ -464,7 +477,7 @@ function ListingsBrowseContent() {
 
           {/* Opportunity Cards List: Whole card clickable, View details removed */}
           <section className="grid gap-3.5">
-            {listings.map((listing: Listing) => (
+            {filteredListings.map((listing: Listing) => (
               <ListingOpportunityCard
                 key={listing.id}
                 listing={listing}
