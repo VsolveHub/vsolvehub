@@ -208,7 +208,7 @@ export function HeroCarousel({ slides, variant = "both" }: HeroCarouselProps) {
                 type="button"
                 onClick={() => goToDesktopSlide(currentIndex - 1)}
                 aria-label="Previous slide"
-                className="absolute -left-6 lg:-left-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/75 hover:bg-white/95 active:bg-white backdrop-blur-md border border-line/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+                className="absolute -left-6 lg:-left-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/40 hover:bg-white/65 active:bg-white/80 backdrop-blur-md border border-white/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
               >
                 <ChevronLeft className="size-6 stroke-[2.5]" />
               </button>
@@ -218,7 +218,7 @@ export function HeroCarousel({ slides, variant = "both" }: HeroCarouselProps) {
                 type="button"
                 onClick={() => goToDesktopSlide(currentIndex + 1)}
                 aria-label="Next slide"
-                className="absolute -right-6 lg:-right-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/75 hover:bg-white/95 active:bg-white backdrop-blur-md border border-line/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+                className="absolute -right-6 lg:-right-8 top-1/2 -translate-y-1/2 z-30 size-12 lg:size-14 rounded-full bg-white/40 hover:bg-white/65 active:bg-white/80 backdrop-blur-md border border-white/50 flex items-center justify-center text-navy-900 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
               >
                 <ChevronRight className="size-6 stroke-[2.5]" />
               </button>
