@@ -145,6 +145,7 @@ CHECKOUT_FREE_PURPOSES = (
     "A9_STAY_RESERVATION",
     "A7_RENTAL_BOOKING",
     "A9_STAY_SUBSCRIPTION",
+    "RIDE_CAPTAIN_PASS",
 )
 
 
@@ -196,6 +197,8 @@ class PaymentAttempt(models.Model):
         A9_STAY_RESERVATION = "A9_STAY_RESERVATION", "A9 stay reservation"
         A7_RENTAL_BOOKING = "A7_RENTAL_BOOKING", "A7 rental booking"
         A9_STAY_SUBSCRIPTION = "A9_STAY_SUBSCRIPTION", "A9 stay subscription"
+        #: A ride captain's daily pass (VSolve Rides).
+        RIDE_CAPTAIN_PASS = "RIDE_CAPTAIN_PASS", "Ride captain pass"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
     #: from the module-level tuple, which the check constraint below reads from the same name, so

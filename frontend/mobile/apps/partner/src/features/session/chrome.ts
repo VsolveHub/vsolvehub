@@ -16,7 +16,10 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/stays" ||
     pathname === "/stays/enquiries" ||
     pathname === "/stays/visits" ||
-    pathname === "/listings"
+    pathname === "/listings" ||
+    pathname === "/rides" ||
+    pathname === "/rides/history" ||
+    pathname === "/rides/wallet"
   ) {
     return "full";
   }
@@ -27,6 +30,8 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
 export function routeRequiresPartnerRole(pathname: string): boolean {
   if (pathname.startsWith("/apply")) return false;
   if (pathname === "/home" || pathname === "/work") return false;
+  // A captain saves the vehicle while the application is still a draft, before approval.
+  if (pathname === "/rides/vehicle") return false;
   return true;
 }
 
@@ -45,6 +50,7 @@ export function focusedHeaderTitle(pathname: string, titleOverride: string | nul
   else if (pathname.startsWith("/stays")) title = "Stay Hosting";
   else if (pathname.startsWith("/listings/post")) title = "Post Job Opening";
   else if (pathname.startsWith("/listings")) title = "Details";
+  else if (pathname.startsWith("/rides")) title = "Rides";
   if (titleOverride !== null) title = titleOverride;
   return title;
 }

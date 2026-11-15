@@ -14,18 +14,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
-import { requiredDocumentKinds } from "../model/readiness";
+import { offeredDocuments, requiredDocumentKinds } from "../model/readiness";
 import { isListingTrack } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
 
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
-
-const OFFERED: readonly { kind: DocumentKind; label: string }[] = [
-  { kind: "GOVERNMENT_ID", label: "Government photo ID" },
-  { kind: "ADDRESS_PROOF", label: "Proof of address" },
-];
 
 function currentDocument(application: Application, kind: DocumentKind): Schemas["PartnerDocument"] | null {
   const candidates = application.documents
@@ -46,22 +41,25 @@ export function DocumentsStep() {
 
   const application = query.data ?? null;
   const required = requiredDocumentKinds(application);
+  const offered = offeredDocuments(application);
   const allUploaded = required.every((kind) => {
     const document = application ? currentDocument(application, kind) : null;
     return document !== null && document.status !== "REJECTED";
   });
-  const anyUploaded = OFFERED.some((item) => application !== null && currentDocument(application, item.kind) !== null);
+  const anyUploaded = offered.some((item) => application !== null && currentDocument(application, item.kind) !== null);
 
+  // Ride captains go on to their vehicle; everyone else to the agreements.
+  const isCaptain = application?.track === "RIDE_CAPTAIN";
   const onCommit = useCallback(() => {
-    router.push("/apply/review");
-  }, [router]);
+    router.push(isCaptain ? "/rides/vehicle" : "/apply/review");
+  }, [router, isCaptain]);
 
   useEffect(() => {
     registerDock({
       label: anyUploaded ? "Continue" : "Continue →",
       // The step before Documents: your hours for services, About you for stays and rentals.
       backHref: isListingTrack(application?.track) ? "/apply/about" : "/apply/schedule",
-      nextStepName: "Agree & send",
+      nextStepName: isCaptain ? "Your vehicle" : "Agree & send",
       onCommit,
       isSaving: false,
       proceedDisabled: !allUploaded,
@@ -72,7 +70,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, allUploaded, anyUploaded, application?.track]);
+  }, [registerDock, onCommit, allUploaded, anyUploaded, application?.track, isCaptain]);
 
   useEffect(() => {
     return () => {
@@ -112,7 +110,7 @@ export function DocumentsStep() {
 
       {/* Cards List */}
       <View style={styles.cardsContainer}>
-        {OFFERED.map((item) => {
+        {offered.map((item) => {
           const document = application ? currentDocument(application, item.kind) : null;
           const isUploaded = document !== null;
           const isReplacing = replacingKind === item.kind;

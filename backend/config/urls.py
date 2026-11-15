@@ -31,6 +31,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/v1/", include("apps.stories.urls")),
     path("api/v1/health/", include("apps.health.urls")),
     path("api/v1/", include("apps.mobile.urls")),
+    path("api/v1/", include("apps.rides.urls")),
 ]
 
 if settings.API_DOCS_ENABLED:

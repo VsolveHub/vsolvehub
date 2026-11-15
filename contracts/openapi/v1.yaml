@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.98.0
+  version: 1.99.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -10976,6 +10976,338 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/rides/:
+    get:
+      operationId: operations_rides_list
+      description: Live and past rides, newest first.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: One or more, comma-separated.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationsRides'
+          description: ''
+  /api/v1/operations/rides/{ride_id}/:
+    get:
+      operationId: operations_rides_retrieve
+      description: One ride with both people, every transition, every offer and the
+        ratings.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsRideDetail'
+          description: ''
+  /api/v1/operations/rides/{ride_id}/cancel/:
+    post:
+      operationId: operations_rides_cancel
+      description: Operations closes any open ride, including one in trip.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsCancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsCancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsCancelRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/operations/rides/captains/:
+    get:
+      operationId: operations_rides_captains_list
+      description: Captains with vehicle, approval, pass, duty, rating and cancel
+        count, newest first.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationsCaptains'
+          description: ''
+  /api/v1/operations/rides/pass-plans/:
+    get:
+      operationId: operations_rides_pass_plans_list
+      description: Every pass plan, and a new one.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaptainPassPlanOps'
+          description: ''
+    post:
+      operationId: operations_rides_pass_plans_create
+      description: Every pass plan, and a new one.
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptainPassPlanOpsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaptainPassPlanOpsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaptainPassPlanOpsRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainPassPlanOps'
+          description: ''
+  /api/v1/operations/rides/pass-plans/{plan_id}/:
+    patch:
+      operationId: operations_rides_pass_plans_partial_update
+      description: Edit a plan. Passes already bought keep their own dates; only new
+        purchases change.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCaptainPassPlanOpsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCaptainPassPlanOpsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCaptainPassPlanOpsRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainPassPlanOps'
+          description: ''
+  /api/v1/operations/rides/rate-cards/:
+    get:
+      operationId: operations_rides_rate_cards_list
+      description: Every rate card version, newest first; and a new card for an area
+        and vehicle.
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+      - in: query
+        name: service_area_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: vehicle_type
+        schema:
+          type: string
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RideRateCard'
+          description: ''
+    post:
+      operationId: operations_rides_rate_cards_create
+      description: Every rate card version, newest first; and a new card for an area
+        and vehicle.
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateCardCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RateCardCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RateCardCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRateCard'
+          description: ''
+  /api/v1/operations/rides/rate-cards/{card_id}/:
+    patch:
+      operationId: operations_rides_rate_cards_partial_update
+      description: Edit the active card (a new version) or switch it off.
+      parameters:
+      - in: path
+        name: card_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRateCardUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRateCardUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRateCardUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRateCard'
+          description: ''
+  /api/v1/operations/rides/sos/:
+    get:
+      operationId: operations_rides_sos_list
+      description: The SOS queue, oldest first. `?status=OPEN` shows only what still
+        needs someone.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperationsRideSos'
+          description: ''
+  /api/v1/operations/rides/sos/{sos_id}/resolve/:
+    post:
+      operationId: operations_rides_sos_resolve
+      description: Close an SOS with what Operations did. Resolving it again changes
+        nothing.
+      parameters:
+      - in: path
+        name: sos_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SosResolveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SosResolveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SosResolveRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSos'
+          description: ''
   /api/v1/operations/safety-incidents/{safety_incident_id}/decision/:
     post:
       operationId: m2_safety_incident_decide
@@ -13458,6 +13790,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Order'
+          description: ''
+  /api/v1/partner-work-variants/:
+    get:
+      operationId: catalog_partner_work_variants
+      description: Everything a Partner can offer, in one response (replaces a request
+        per service).
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerWorkVariant'
           description: ''
   /api/v1/partner/application/:
     get:
@@ -17565,6 +17915,507 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PartnerConsentDocument'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/arrived/:
+    post:
+      operationId: partner_rides_arrived
+      description: 'At the pickup: the last ping is under 30 s old and within 200
+        m.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/cancel/:
+    post:
+      operationId: partner_rides_cancel
+      description: The captain gives the ride up before the trip; the ride looks for
+        another captain.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptainCancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaptainCancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaptainCancelRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/rides/{ride_id}/complete/:
+    post:
+      operationId: partner_rides_complete
+      description: 'End the trip: the final fare is the upfront fare plus waiting.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/payment-received/:
+    post:
+      operationId: partner_rides_payment_received
+      description: The rider paid the captain in cash or by UPI.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/rating/:
+    post:
+      operationId: partner_rides_rating_create
+      description: The captain rates the rider, 1-5 stars, once, after a completed
+        ride.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/sos/:
+    post:
+      operationId: partner_rides_sos_create
+      description: SOS from the captain on a live ride. Uses their last ping if the
+        phone sends no place.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SosRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SosRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SosRequestRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sos'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/start/:
+    post:
+      operationId: partner_rides_start
+      description: Start the trip with the rider's code. A network retry never costs
+        an attempt.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/current/:
+    get:
+      operationId: partner_rides_current_retrieve
+      description: The ride the captain's app shows. Polled every 5 s while on a ride.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainCurrentRide'
+          description: ''
+  /api/v1/partner/rides/duty/start/:
+    post:
+      operationId: partner_rides_duty_start
+      description: Go on duty. Refused with the first reason the captain cannot drive.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DutyStatus'
+          description: ''
+  /api/v1/partner/rides/duty/stop/:
+    post:
+      operationId: partner_rides_duty_stop
+      description: 'Go off duty. Already off: nothing changes.'
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DutyStatus'
+          description: ''
+  /api/v1/partner/rides/earnings/:
+    get:
+      operationId: partner_rides_earnings_retrieve
+      description: Today's or this week's completed rides and money, computed from
+        the rides themselves.
+      parameters:
+      - in: query
+        name: period
+        schema:
+          type: string
+          minLength: 1
+        description: today or week.
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Earnings'
+          description: ''
+  /api/v1/partner/rides/history/:
+    get:
+      operationId: partner_rides_history_list
+      description: The captain's rides, newest first.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCaptainRideHistory'
+          description: ''
+  /api/v1/partner/rides/location/:
+    post:
+      operationId: partner_rides_location_create
+      description: A GPS ping, every 5 seconds while on duty (also during a ride).
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationPingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LocationPingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LocationPingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/rides/me/:
+    get:
+      operationId: partner_rides_me_retrieve
+      description: Where the signed-in partner stands as a ride captain.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainStatus'
+          description: ''
+  /api/v1/partner/rides/offers/{offer_id}/accept/:
+    post:
+      operationId: partner_rides_offers_accept
+      description: Take the ride. The first captain to accept gets it; the others
+        get 409.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/offers/{offer_id}/decline/:
+    post:
+      operationId: partner_rides_offers_decline
+      description: Say no to a ride request. Saying no twice, or after it expired,
+        changes nothing.
+      parameters:
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/rides/offers/current/:
+    get:
+      operationId: partner_rides_offers_current_retrieve
+      description: The ride request to show the captain now, or none. The app polls
+        this every 2 s.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentOffer'
+          description: ''
+  /api/v1/partner/rides/pass-plans/:
+    get:
+      operationId: partner_rides_pass_plans_list
+      description: The passes on sale.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaptainPassPlan'
+          description: ''
+  /api/v1/partner/rides/passes/:
+    get:
+      operationId: partner_rides_passes_list
+      description: Buy a pass, and the captain's pass history.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaptainPass'
+          description: ''
+    post:
+      operationId: partner_rides_passes_create
+      description: Buy a pass, and the captain's pass history.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyPassRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BuyPassRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BuyPassRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainPass'
+          description: ''
+  /api/v1/partner/rides/vehicle/:
+    put:
+      operationId: partner_rides_vehicle_update
+      description: Save the captain's vehicle. Allowed only while the application
+        is still editable.
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptainVehicleWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaptainVehicleWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaptainVehicleWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainVehicle'
           description: ''
   /api/v1/partner/site-visits/{site_visit_id}/arrival/:
     post:
@@ -21698,6 +22549,248 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/rides/:
+    get:
+      operationId: rides_list
+      description: The rider's rides, newest first; and booking a ride from a quote.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      tags:
+      - rides
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRiderRideHistory'
+          description: ''
+    post:
+      operationId: rides_create
+      description: The rider's rides, newest first; and booking a ride from a quote.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RideCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RideCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+          description: ''
+  /api/v1/rides/{ride_id}/:
+    get:
+      operationId: rides_retrieve
+      description: One of the rider's own rides. The app polls this while the ride
+        is live.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rides
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+          description: ''
+  /api/v1/rides/{ride_id}/cancel/:
+    post:
+      operationId: rides_cancel
+      description: The rider cancels, free, until the trip starts. Cancelling twice
+        changes nothing.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderCancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RiderCancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RiderCancelRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+          description: ''
+  /api/v1/rides/{ride_id}/rating/:
+    post:
+      operationId: rides_rating_create
+      description: The rider rates the captain, 1-5 stars, once, after a completed
+        ride.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+          description: ''
+  /api/v1/rides/{ride_id}/sos/:
+    post:
+      operationId: rides_sos_create
+      description: SOS from the rider on a live ride. Operations is alerted at once.
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SosRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SosRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SosRequestRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sos'
+          description: ''
+  /api/v1/rides/availability/:
+    get:
+      operationId: rides_availability_retrieve
+      description: Which vehicle types can be booked at a place. Drives the Rides
+        entry on Home.
+      parameters:
+      - in: query
+        name: latitude
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        required: true
+      - in: query
+        name: longitude
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        required: true
+      tags:
+      - rides
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+          description: ''
+  /api/v1/rides/quotes/:
+    post:
+      operationId: rides_quotes_create
+      description: 'Upfront fares for a trip: one per vehicle type that can be booked
+        at the pickup.'
+      tags:
+      - rides
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FareQuoteRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FareQuoteRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FareQuoteRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FareQuoteList'
+          description: ''
   /api/v1/safety-stories/:
     get:
       operationId: safety_stories_list
@@ -23650,6 +24743,16 @@ components:
       - active_role
       - session_expires_at
       - user
+    Availability:
+      type: object
+      properties:
+        vehicle_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/VehicleTypesEnum'
+          description: 'Bookable here, cheapest first. Empty: hide the Rides entry.'
+      required:
+      - vehicle_types
     AvailableFromEnum:
       enum:
       - IMMEDIATE
@@ -24123,6 +25226,14 @@ components:
       - consequence
       - label
       - value
+    BuyPassRequest:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+      required:
+      - plan_id
     CancellationBand:
       type: object
       properties:
@@ -24220,6 +25331,18 @@ components:
           maxItems: 20
       required:
       - reason_code
+    CancelledByEnum:
+      enum:
+      - RIDER
+      - CAPTAIN
+      - OPERATIONS
+      - SYSTEM
+      type: string
+      description: |-
+        * `RIDER` - Rider
+        * `CAPTAIN` - Captain
+        * `OPERATIONS` - Operations
+        * `SYSTEM` - System
     CandidateMatch:
       type: object
       description: |-
@@ -24419,6 +25542,398 @@ components:
       - reason
       - reason_code
       - to_status
+    CaptainCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: 'One of: RIDER_NOT_REACHABLE, VEHICLE_ISSUE, PICKUP_TOO_FAR,
+            OTHER.'
+      required:
+      - reason
+    CaptainCurrentRide:
+      type: object
+      properties:
+        ride:
+          allOf:
+          - $ref: '#/components/schemas/CaptainRide'
+          nullable: true
+          description: The open ride, else a finished one not yet marked paid; null
+            when neither.
+      required:
+      - ride
+    CaptainPass:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPassPlan'
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+          description: PENDING_ACTIVATION, QUEUED (paid; starts when the active pass
+            ends), ACTIVE, EXPIRED or CANCELLED.
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        payment_attempt_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: 'For a paid plan: read GET /payment-attempts/{id}/ for the
+            Razorpay order and pay it. Null for a free plan, which is active at once.'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - ends_at
+      - id
+      - payment_attempt_id
+      - plan
+      - starts_at
+      - status
+    CaptainPassPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        price_paise:
+          type: integer
+          readOnly: true
+        duration_hours:
+          type: integer
+          readOnly: true
+      required:
+      - code
+      - duration_hours
+      - id
+      - name
+      - price_paise
+    CaptainPassPlanOps:
+      type: object
+      description: Operations' view of a plan. `code` is fixed once created.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - duration_hours
+      - id
+      - name
+      - price_paise
+    CaptainPassPlanOpsRequest:
+      type: object
+      description: Operations' view of a plan. `code` is fixed once created.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
+      required:
+      - code
+      - duration_hours
+      - name
+      - price_paise
+    CaptainPosition:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        heading:
+          type: number
+          format: double
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+      required:
+      - captured_at
+      - heading
+      - latitude
+      - longitude
+    CaptainRide:
+      type: object
+      description: The captain's view of the ride they are doing.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        waiting_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        captain_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        captain_arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        emergency_number:
+          type: string
+          readOnly: true
+          description: The number the SOS Call button dials. From the server; never
+            hard-coded.
+        rider:
+          allOf:
+          - $ref: '#/components/schemas/RideRider'
+          readOnly: true
+        my_rating:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: The stars the captain gave the rider, or null.
+      required:
+      - cancel_reason
+      - cancelled_by
+      - captain_arrived_at
+      - captain_assigned_at
+      - completed_at
+      - created_at
+      - drop
+      - emergency_number
+      - fare_paise
+      - final_fare_paise
+      - id
+      - my_rating
+      - payment_method
+      - payment_status
+      - pickup
+      - rider
+      - route_polyline
+      - started_at
+      - state
+      - vehicle_type
+      - waiting_paise
+    CaptainStatus:
+      type: object
+      properties:
+        approval:
+          type: string
+          description: The application status, or NOT_STARTED before a captain application
+            exists.
+        is_approved:
+          type: boolean
+        vehicle:
+          allOf:
+          - $ref: '#/components/schemas/CaptainVehicle'
+          nullable: true
+          readOnly: true
+        active_pass:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPass'
+          nullable: true
+          readOnly: true
+        on_duty:
+          type: boolean
+        duty_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        blocked_reasons:
+          type: array
+          items:
+            type: string
+          description: 'Why duty cannot start, in display order: suspended or not_approved,
+            vehicle_missing, pass_required. Empty when the captain can go on duty.'
+        queued_pass:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPass'
+          nullable: true
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          description: The server's clock. The app keeps its offset from the phone's
+            clock and sends location captured_at in server time (brief §5.6).
+        last_duty_end:
+          allOf:
+          - $ref: '#/components/schemas/LastDutyEnd'
+          nullable: true
+          description: 'While off duty: why and when the last duty ended, so the app
+            can explain it.'
+      required:
+      - active_pass
+      - approval
+      - blocked_reasons
+      - duty_started_at
+      - is_approved
+      - last_duty_end
+      - on_duty
+      - queued_pass
+      - server_now
+      - vehicle
+    CaptainVehicle:
+      type: object
+      properties:
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        registration_number:
+          type: string
+          readOnly: true
+        make_model:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+      required:
+      - colour
+      - make_model
+      - registration_number
+      - vehicle_type
+    CaptainVehicleWriteRequest:
+      type: object
+      properties:
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleTypeEnum'
+        registration_number:
+          type: string
+          minLength: 1
+          maxLength: 16
+        make_model:
+          type: string
+          minLength: 1
+          maxLength: 120
+        colour:
+          type: string
+          minLength: 1
+          maxLength: 40
+      required:
+      - colour
+      - make_model
+      - registration_number
+      - vehicle_type
     Cart:
       type: object
       properties:
@@ -27249,6 +28764,21 @@ components:
           readOnly: true
       required:
       - csrf_token
+    CurrentOffer:
+      type: object
+      properties:
+        offer:
+          allOf:
+          - $ref: '#/components/schemas/RideOffer'
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          description: The server's clock, so the countdown is right even if the phone's
+            clock is off.
+      required:
+      - offer
+      - server_now
     CurrentStatusEnum:
       enum:
       - ACTIVE
@@ -28480,6 +30010,24 @@ components:
           type: string
           default: ''
           maxLength: 400
+    DutyStatus:
+      type: object
+      properties:
+        on_duty:
+          type: boolean
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          description: The server's clock. The app keeps its offset from the phone's
+            clock and sends location captured_at in server time (brief §5.6).
+      required:
+      - on_duty
+      - server_now
+      - started_at
     EarnModeEnum:
       enum:
       - FLAT
@@ -28490,6 +30038,30 @@ components:
         * `FLAT` - Flat
         * `TIERED_ORDER_VALUE` - Tiered order value
         * `TIERED_BOOKING_SEQUENCE` - Tiered booking sequence
+    Earnings:
+      type: object
+      properties:
+        period:
+          type: string
+        since:
+          type: string
+          format: date-time
+          description: Local midnight today, or Monday for week.
+        rides:
+          type: integer
+          description: Completed rides in the period.
+        earned_paise:
+          type: integer
+          description: What riders owed for those rides.
+        cash_collected_paise:
+          type: integer
+          description: The part the captain marked as received.
+      required:
+      - cash_collected_paise
+      - earned_paise
+      - period
+      - rides
+      - since
     EngageKillSwitchRequestRequest:
       type: object
       properties:
@@ -29637,6 +31209,61 @@ components:
           minimum: 1
       required:
       - expected_version
+    FareQuote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        distance_m:
+          type: integer
+          readOnly: true
+        duration_s:
+          type: integer
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - distance_m
+      - duration_s
+      - expires_at
+      - fare_paise
+      - id
+      - route_polyline
+      - vehicle_type
+    FareQuoteList:
+      type: object
+      properties:
+        quotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FareQuote'
+          description: Bike, then auto, then cab; only the bookable ones.
+      required:
+      - quotes
+    FareQuoteRequestRequest:
+      type: object
+      properties:
+        pickup:
+          $ref: '#/components/schemas/TripPointRequest'
+        drop:
+          $ref: '#/components/schemas/TripPointRequest'
+      required:
+      - drop
+      - pickup
     FirebasePrecheckRequest:
       type: object
       properties:
@@ -31081,6 +32708,18 @@ components:
         * `CANCEL` - Cancel
         * `REVERSE` - Reverse
         * `ADJUSTMENT` - Adjustment
+    LastDutyEnd:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: CAPTAIN_OFF, LOCATION_STALE, PASS_EXPIRED, SUSPENDED or OPERATIONS.
+        ended_at:
+          type: string
+          format: date-time
+      required:
+      - ended_at
+      - reason
     LedgerAdjustmentRequestRequest:
       type: object
       description: |-
@@ -31607,6 +33246,40 @@ components:
       - variant_name
       - weekly_off
       - work_mode
+    LocationPingRequest:
+      type: object
+      description: One GPS reading. Phones send plain numbers; they are kept to 6
+        decimal places (~0.1 m).
+      properties:
+        latitude:
+          type: number
+          format: double
+          maximum: 90
+          minimum: -90
+        longitude:
+          type: number
+          format: double
+          maximum: 180
+          minimum: -180
+        accuracy_m:
+          type: number
+          format: double
+          description: Metres; must be above 0.
+        heading:
+          type: number
+          format: double
+          maximum: 360
+          minimum: 0
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+          description: When the phone took the reading.
+      required:
+      - accuracy_m
+      - captured_at
+      - latitude
+      - longitude
     LoyaltySettings:
       type: object
       properties:
@@ -32605,6 +34278,16 @@ components:
       - services
       - status
       - total_paise
+    OperationsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Why Operations closed the ride.
+          maxLength: 64
+      required:
+      - reason
     OperationsCancelRequestRequest:
       type: object
       description: |-
@@ -34245,6 +35928,53 @@ components:
           type: string
           default: ''
           maxLength: 240
+    OpsCaptain:
+      type: object
+      description: One captain in the Operations list.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone_number:
+          type: string
+        approval:
+          type: string
+          description: The captain application's status.
+        vehicle:
+          allOf:
+          - $ref: '#/components/schemas/CaptainVehicle'
+          nullable: true
+        pass_ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the active pass ends; null without one.
+        on_duty:
+          type: boolean
+        rides_completed:
+          type: integer
+          nullable: true
+          default: 0
+        rating:
+          type: number
+          format: double
+          nullable: true
+          description: Average stars from riders; null before any rating.
+        cancels:
+          type: integer
+          nullable: true
+          default: 0
+          description: Rides this captain accepted and then cancelled.
+      required:
+      - approval
+      - name
+      - on_duty
+      - partner_id
+      - pass_ends_at
+      - phone_number
+      - rating
     OpsCoinTransaction:
       type: object
       properties:
@@ -34470,6 +36200,50 @@ components:
       - next
       - previous
       - results
+    OpsOffer:
+      type: object
+      properties:
+        captain_id:
+          type: string
+          format: uuid
+        captain_name:
+          type: string
+        round:
+          type: integer
+        status:
+          type: string
+          description: PENDING, ACCEPTED, DECLINED, EXPIRED or WITHDRAWN.
+        pickup_distance_m:
+          type: integer
+        offered_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - captain_id
+      - captain_name
+      - expires_at
+      - offered_at
+      - pickup_distance_m
+      - responded_at
+      - round
+      - status
+    OpsPerson:
+      type: object
+      properties:
+        name:
+          type: string
+        phone_number:
+          type: string
+      required:
+      - name
+      - phone_number
     OpsReferralAttribution:
       type: object
       description: 'Operations view: full phone numbers, program version, terms and
@@ -34957,6 +36731,220 @@ components:
       description: |-
         * `money` - money
         * `number` - number
+    OpsRideDetail:
+      type: object
+      description: 'Everything Operations needs to understand one ride: both people,
+        the history and offers.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        waiting_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        captain_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        captain_arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        emergency_number:
+          type: string
+          readOnly: true
+          description: The number the SOS Call button dials. From the server; never
+            hard-coded.
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        rider:
+          allOf:
+          - $ref: '#/components/schemas/OpsPerson'
+          readOnly: true
+        captain:
+          allOf:
+          - $ref: '#/components/schemas/OpsPerson'
+          nullable: true
+          readOnly: true
+        vehicle:
+          allOf:
+          - $ref: '#/components/schemas/CaptainVehicle'
+          nullable: true
+          readOnly: true
+        otp_attempts:
+          type: integer
+          readOnly: true
+        dispatch_round:
+          type: integer
+          readOnly: true
+        no_captain_found_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ratings:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsTransition'
+          readOnly: true
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsOffer'
+          readOnly: true
+      required:
+      - cancel_reason
+      - cancelled_by
+      - captain
+      - captain_arrived_at
+      - captain_assigned_at
+      - completed_at
+      - created_at
+      - dispatch_round
+      - drop
+      - emergency_number
+      - fare_paise
+      - final_fare_paise
+      - id
+      - no_captain_found_at
+      - offers
+      - otp_attempts
+      - payment_method
+      - payment_status
+      - pickup
+      - ratings
+      - rider
+      - route_polyline
+      - service_area_id
+      - started_at
+      - state
+      - transitions
+      - vehicle
+      - vehicle_type
+      - waiting_paise
+    OpsRideRow:
+      type: object
+      description: One ride in the Operations list.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        rider_name:
+          type: string
+          readOnly: true
+        captain_name:
+          type: string
+          readOnly: true
+          nullable: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+      required:
+      - cancelled_by
+      - captain_name
+      - created_at
+      - fare_paise
+      - final_fare_paise
+      - id
+      - payment_status
+      - rider_name
+      - service_area_id
+      - state
+      - vehicle_type
     OpsSafetyStory:
       type: object
       properties:
@@ -35055,6 +37043,77 @@ components:
           default: true
       required:
       - file
+    OpsSos:
+      type: object
+      description: One SOS in the Operations queue.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        ride_id:
+          type: string
+          format: uuid
+          readOnly: true
+        ride_state:
+          type: string
+          readOnly: true
+        raised_by_name:
+          type: string
+          readOnly: true
+        raised_by_phone:
+          type: string
+          readOnly: true
+        raised_by_kind:
+          type: string
+          readOnly: true
+          description: rider or captain.
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        status:
+          type: string
+          readOnly: true
+          description: OPEN or RESOLVED.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        resolved_by_name:
+          type: string
+          readOnly: true
+          nullable: true
+        resolution_note:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - latitude
+      - longitude
+      - raised_by_kind
+      - raised_by_name
+      - raised_by_phone
+      - resolution_note
+      - resolved_at
+      - resolved_by_name
+      - ride_id
+      - ride_state
+      - status
     OpsStayEnquiryPage:
       type: object
       properties:
@@ -35093,6 +37152,31 @@ components:
       - next
       - previous
       - results
+    OpsTransition:
+      type: object
+      properties:
+        from_state:
+          type: string
+          description: Blank for the ride's first row.
+        to_state:
+          type: string
+        actor_kind:
+          type: string
+          description: RIDER, CAPTAIN, OPERATIONS or SYSTEM.
+        actor_name:
+          type: string
+          nullable: true
+        reason:
+          type: string
+        at:
+          type: string
+          format: date-time
+      required:
+      - actor_kind
+      - at
+      - from_state
+      - reason
+      - to_state
     OpsVendorPlanServiceOption:
       type: object
       properties:
@@ -35363,6 +37447,101 @@ components:
       required:
       - outcome
       - work_task_id
+    PaginatedCaptainRideHistory:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RideHistory'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedOperationsCaptains:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsCaptain'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedOperationsRideSos:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsSos'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedOperationsRides:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsRideRow'
+      required:
+      - next
+      - previous
+      - results
+    PaginatedRiderRideHistory:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RideHistory'
+      required:
+      - next
+      - previous
+      - results
     PartnerApplication:
       type: object
       properties:
@@ -36513,6 +38692,9 @@ components:
       - BANK
       - BACKGROUND_CHECK
       - OTHER
+      - DRIVING_LICENCE
+      - VEHICLE_RC
+      - VEHICLE_INSURANCE
       type: string
       description: |-
         * `GOVERNMENT_ID` - Government identity
@@ -36521,6 +38703,9 @@ components:
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
         * `OTHER` - Other
+        * `DRIVING_LICENCE` - Driving licence
+        * `VEHICLE_RC` - Vehicle registration certificate
+        * `VEHICLE_INSURANCE` - Vehicle insurance
     PartnerDocumentReviewAccess:
       type: object
       properties:
@@ -38543,6 +40728,39 @@ components:
         * `SENT` - SENT
         * `PAID` - PAID
         * `FAILED` - FAILED
+    PartnerWorkVariant:
+      type: object
+      description: 'One offerable job type on Partner onboarding: just what the checklist
+        shows and saves.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        required_skill_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        service_name:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+      required:
+      - category_name
+      - code
+      - id
+      - name
+      - required_skill_code
+      - service_name
     PartyCase:
       type: object
       description: |-
@@ -38660,6 +40878,30 @@ components:
         source:
           $ref: '#/components/schemas/SourceEnum'
         is_default:
+          type: boolean
+    PatchedCaptainPassPlanOpsRequest:
+      type: object
+      description: Operations' view of a plan. `code` is fixed once created.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
           type: boolean
     PatchedCartItemUpdateRequest:
       type: object
@@ -39064,6 +41306,34 @@ components:
           minLength: 1
         is_enabled:
           type: boolean
+    PatchedRateCardUpdateRequest:
+      type: object
+      description: 'Change prices (a new version), or send only `is_active: false`
+        to switch the vehicle off.'
+      properties:
+        is_active:
+          type: boolean
+        base_fare_paise:
+          type: integer
+          minimum: 0
+        included_distance_m:
+          type: integer
+          minimum: 0
+        per_km_paise:
+          type: integer
+          minimum: 0
+        per_minute_paise:
+          type: integer
+          minimum: 0
+        minimum_fare_paise:
+          type: integer
+          minimum: 0
+        free_waiting_minutes:
+          type: integer
+          minimum: 0
+        waiting_per_minute_paise:
+          type: integer
+          minimum: 0
     PatchedRequirementUpdateRequest:
       type: object
       description: |-
@@ -39436,6 +41706,19 @@ components:
         * `EXPIRED` - Expired
         * `PARTIALLY_REFUNDED` - Partially refunded
         * `REFUNDED` - Refunded
+    PaymentMethodEnum:
+      enum:
+      - CASH_OR_UPI
+      type: string
+      description: '* `CASH_OR_UPI` - Cash or UPI to the captain'
+    PaymentStatusEnum:
+      enum:
+      - DUE
+      - COLLECTED
+      type: string
+      description: |-
+        * `DUE` - Due
+        * `COLLECTED` - Collected
     PayoutAccountStatusEnum:
       enum:
       - PENDING
@@ -42725,6 +45008,7 @@ components:
       - A9_STAY_RESERVATION
       - A7_RENTAL_BOOKING
       - A9_STAY_SUBSCRIPTION
+      - RIDE_CAPTAIN_PASS
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -42743,6 +45027,7 @@ components:
         * `A9_STAY_RESERVATION` - A9 stay reservation
         * `A7_RENTAL_BOOKING` - A7 rental booking
         * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+        * `RIDE_CAPTAIN_PASS` - Ride captain pass
     PushDevice:
       type: object
       properties:
@@ -43494,6 +45779,45 @@ components:
         * `EXHAUSTED` - No crew accepted
         * `FELL_BACK` - Fell back to the quote flow
         * `CANCELLED` - Cancelled
+    RateCardCreateRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleTypeEnum'
+        base_fare_paise:
+          type: integer
+          minimum: 0
+        included_distance_m:
+          type: integer
+          minimum: 0
+        per_km_paise:
+          type: integer
+          minimum: 0
+        per_minute_paise:
+          type: integer
+          minimum: 0
+        minimum_fare_paise:
+          type: integer
+          minimum: 0
+        free_waiting_minutes:
+          type: integer
+          minimum: 0
+        waiting_per_minute_paise:
+          type: integer
+          minimum: 0
+      required:
+      - base_fare_paise
+      - free_waiting_minutes
+      - included_distance_m
+      - minimum_fare_paise
+      - per_km_paise
+      - per_minute_paise
+      - service_area_id
+      - vehicle_type
+      - waiting_per_minute_paise
     RateCardDeclineAlarm:
       type: object
       description: |-
@@ -43838,6 +46162,15 @@ components:
       description: |-
         * `CUSTOMER` - Customer
         * `PARTNER` - Partner
+    Rating:
+      type: object
+      properties:
+        stars:
+          type: integer
+          maximum: 5
+          minimum: 1
+      required:
+      - stars
     RatingCreateRequest:
       type: object
       properties:
@@ -43851,6 +46184,15 @@ components:
           maxLength: 280
       required:
       - score
+    RatingRequest:
+      type: object
+      properties:
+        stars:
+          type: integer
+          maximum: 5
+          minimum: 1
+      required:
+      - stars
     RatingSummary:
       type: object
       description: |-
@@ -46112,6 +48454,403 @@ components:
         * `REFERRER_ONLY` - Referrer only
         * `REFEREE_ONLY` - Referee only
         * `BOTH` - Both referrer and referee
+    Ride:
+      type: object
+      description: The rider's view of one ride.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        route_polyline:
+          type: string
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        waiting_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        captain_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        captain_arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        emergency_number:
+          type: string
+          readOnly: true
+          description: The number the SOS Call button dials. From the server; never
+            hard-coded.
+        captain:
+          allOf:
+          - $ref: '#/components/schemas/RideCaptain'
+          nullable: true
+          readOnly: true
+        otp:
+          type: string
+          nullable: true
+          readOnly: true
+          description: The 4-digit start code the rider tells the captain. Only before
+            the trip starts.
+        searching_again:
+          type: boolean
+          readOnly: true
+          description: 'A captain cancelled and another is being found: say "Finding
+            another captain".'
+        my_rating:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: 'The stars the rider gave, or null: ask for a rating while
+            it is null.'
+      required:
+      - cancel_reason
+      - cancelled_by
+      - captain
+      - captain_arrived_at
+      - captain_assigned_at
+      - completed_at
+      - created_at
+      - drop
+      - emergency_number
+      - fare_paise
+      - final_fare_paise
+      - id
+      - my_rating
+      - otp
+      - payment_method
+      - payment_status
+      - pickup
+      - route_polyline
+      - searching_again
+      - started_at
+      - state
+      - vehicle_type
+      - waiting_paise
+    RideCaptain:
+      type: object
+      description: 'Who is coming: what the rider sees once a captain accepts.'
+      properties:
+        name:
+          type: string
+        photo_url:
+          type: string
+          nullable: true
+          readOnly: true
+        rating:
+          type: number
+          format: double
+          nullable: true
+          readOnly: true
+          description: Average stars from riders, to one decimal; null for a new captain.
+        phone_number:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Only while the captain is on the way, at the pickup or in the
+            trip.
+        vehicle:
+          $ref: '#/components/schemas/CaptainVehicle'
+        position:
+          allOf:
+          - $ref: '#/components/schemas/CaptainPosition'
+          nullable: true
+          readOnly: true
+          description: The captain's last ping while it is fresh; null when the server
+            doesn't know.
+        eta_s:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: Seconds to the pickup, while the captain is on the way; null
+            if unknown.
+      required:
+      - eta_s
+      - name
+      - phone_number
+      - photo_url
+      - position
+      - rating
+      - vehicle
+    RideCreateRequest:
+      type: object
+      properties:
+        quote_id:
+          type: string
+          format: uuid
+          description: One of the rider's quotes from POST rides/quotes/.
+      required:
+      - quote_id
+    RideHistory:
+      type: object
+      description: One past or current ride in a list, for the rider or the captain.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        pickup_address:
+          type: string
+        drop_address:
+          type: string
+        fare_paise:
+          type: integer
+          readOnly: true
+        final_fare_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          allOf:
+          - $ref: '#/components/schemas/CancelledByEnum'
+          readOnly: true
+      required:
+      - cancelled_by
+      - completed_at
+      - created_at
+      - drop_address
+      - fare_paise
+      - final_fare_paise
+      - id
+      - payment_status
+      - pickup_address
+      - state
+      - vehicle_type
+    RideOffer:
+      type: object
+      description: A ride request on the captain's screen, with the server's deadline.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        ride_id:
+          type: string
+          format: uuid
+          readOnly: true
+        vehicle_type:
+          type: string
+          readOnly: true
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/RidePlace'
+          readOnly: true
+        pickup_distance_m:
+          type: integer
+          readOnly: true
+        fare_paise:
+          type: integer
+          readOnly: true
+        trip_distance_m:
+          type: integer
+          readOnly: true
+        trip_duration_s:
+          type: integer
+          readOnly: true
+        offered_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - drop
+      - expires_at
+      - fare_paise
+      - id
+      - offered_at
+      - pickup
+      - pickup_distance_m
+      - ride_id
+      - trip_distance_m
+      - trip_duration_s
+      - vehicle_type
+    RidePlace:
+      type: object
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        address:
+          type: string
+      required:
+      - address
+      - latitude
+      - longitude
+    RideRateCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area_name:
+          type: string
+          readOnly: true
+        vehicle_type:
+          allOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          readOnly: true
+        base_fare_paise:
+          type: integer
+          readOnly: true
+        included_distance_m:
+          type: integer
+          readOnly: true
+        per_km_paise:
+          type: integer
+          readOnly: true
+        per_minute_paise:
+          type: integer
+          readOnly: true
+        minimum_fare_paise:
+          type: integer
+          readOnly: true
+        free_waiting_minutes:
+          type: integer
+          readOnly: true
+        waiting_per_minute_paise:
+          type: integer
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_fare_paise
+      - created_at
+      - free_waiting_minutes
+      - id
+      - included_distance_m
+      - is_active
+      - minimum_fare_paise
+      - per_km_paise
+      - per_minute_paise
+      - service_area_id
+      - service_area_name
+      - vehicle_type
+      - version
+      - waiting_per_minute_paise
+    RideRider:
+      type: object
+      description: 'Who to pick up: what the captain sees once they accept.'
+      properties:
+        name:
+          type: string
+        phone_number:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Only while the captain is on the way, at the pickup or in the
+            trip.
+      required:
+      - name
+      - phone_number
+    RiderCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: 'One of: CHANGED_MIND, CAPTAIN_DELAYED, WRONG_PICKUP, OTHER.'
+      required:
+      - reason
     RoleFulfilment:
       type: object
       description: |-
@@ -47799,6 +50538,45 @@ components:
       - category
       - role
       - skills
+    Sos:
+      type: object
+      properties:
+        sos_id:
+          type: string
+          format: uuid
+        emergency_number:
+          type: string
+          readOnly: true
+          description: Show a Call button for this number. From the server; never
+            hard-coded.
+      required:
+      - emergency_number
+      - sos_id
+    SosRequestRequest:
+      type: object
+      description: 'Where the phone is, if it knows. Both or neither: an SOS is never
+        refused for lack of it.'
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+    SosResolveRequest:
+      type: object
+      properties:
+        resolution_note:
+          type: string
+          minLength: 1
+          description: What Operations did.
+          maxLength: 2000
+      required:
+      - resolution_note
     SourceEnum:
       enum:
       - MANUAL
@@ -48122,6 +50900,34 @@ components:
           format: uuid
       required:
       - plan_id
+    StartTripRequest:
+      type: object
+      properties:
+        otp:
+          type: string
+          minLength: 1
+          description: The rider's 4-digit start code.
+          pattern: ^[0-9]{4}$
+      required:
+      - otp
+    StateEnum:
+      enum:
+      - SEARCHING
+      - CAPTAIN_ASSIGNED
+      - CAPTAIN_ARRIVED
+      - IN_TRIP
+      - COMPLETED
+      - NO_CAPTAIN_FOUND
+      - CANCELLED
+      type: string
+      description: |-
+        * `SEARCHING` - Searching
+        * `CAPTAIN_ASSIGNED` - Captain assigned
+        * `CAPTAIN_ARRIVED` - Captain arrived
+        * `IN_TRIP` - In trip
+        * `COMPLETED` - Completed
+        * `NO_CAPTAIN_FOUND` - No captain found
+        * `CANCELLED` - Cancelled
     Status0a1Enum:
       enum:
       - REQUESTED
@@ -49302,12 +52108,14 @@ components:
       - STAY_HOST
       - RENTAL_OWNER
       - EMPLOYER
+      - RIDE_CAPTAIN
       type: string
       description: |-
         * `SERVICES` - Offer services
         * `STAY_HOST` - List my property
         * `RENTAL_OWNER` - Rent out items
         * `EMPLOYER` - Hire staff
+        * `RIDE_CAPTAIN` - Drive with VSolve Rides
     TransferQuoteRequest:
       type: object
       description: The replacement's price for one unfinished milestone.
@@ -49343,6 +52151,26 @@ components:
       required:
       - amount_paise
       - trip
+    TripPointRequest:
+      type: object
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        address:
+          type: string
+          minLength: 1
+          description: The address the rider sees.
+          maxLength: 255
+      required:
+      - address
+      - latitude
+      - longitude
     UnavailableReasonEnum:
       enum:
       - PAST
@@ -49624,6 +52452,26 @@ components:
       - id
       - is_current
       - last_seen_at
+    VehicleTypeEnum:
+      enum:
+      - BIKE
+      - AUTO
+      - CAB
+      type: string
+      description: |-
+        * `BIKE` - Bike
+        * `AUTO` - Auto
+        * `CAB` - Cab
+    VehicleTypesEnum:
+      enum:
+      - BIKE
+      - AUTO
+      - CAB
+      type: string
+      description: |-
+        * `BIKE` - Bike
+        * `AUTO` - Auto
+        * `CAB` - Cab
     VendorCard:
       type: object
       description: |-

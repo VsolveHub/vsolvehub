@@ -140,6 +140,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         locationWhenInUsePermission:
           "Vsolve Hub uses your location to find work near you and to confirm arrival.",
+        // Rides captains on duty: a location foreground service ("You're on duty") keeps pings
+        // going with the screen off. Adds FOREGROUND_SERVICE and FOREGROUND_SERVICE_LOCATION
+        // only; ACCESS_BACKGROUND_LOCATION stays blocked above (Rides brief §5.13).
+        isAndroidForegroundServiceEnabled: true,
+        androidForegroundServiceIcon: "./assets/android-icon-monochrome.png",
       },
     ],
     [

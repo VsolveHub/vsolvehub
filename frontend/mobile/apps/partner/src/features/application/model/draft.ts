@@ -32,7 +32,7 @@ export interface ApplicationDraft {
   displayName: string;
   biography: string;
   experienceYears: number;
-  track?: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
+  track?: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER" | "RIDE_CAPTAIN";
   skillCodes: readonly string[];
   serviceVariantIds: readonly string[];
   serviceAreaIds: readonly string[];

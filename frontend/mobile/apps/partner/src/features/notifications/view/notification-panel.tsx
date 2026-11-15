@@ -2,7 +2,7 @@
 import { Button, EmptyState, Sheet, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 
 import { AsyncSection, asyncStateFrom } from "@/components/async-section";
 
@@ -53,6 +53,11 @@ function NotificationPanelBody({
 }) {
   const feed = useNotificationFeed(open);
   const markRead = useMarkNotificationRead();
+  // The sheet is as tall as its content, up to a limit, so the list cannot be "fill the space"
+  // (that is zero height here, and every notice stayed invisible). It is as tall as its notices,
+  // up to half the screen, and scrolls beyond that.
+  const { height: windowHeight } = useWindowDimensions();
+  const listMaxHeight = Math.floor(windowHeight * 0.5);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [dismissedAll, setDismissedAll] = useState(false);
   const state = asyncStateFrom<NotificationPage, NotificationPage>(feed, (page) => page);
@@ -93,7 +98,7 @@ function NotificationPanelBody({
         </View>
       }
     >
-      <View className="flex-1 min-h-0">
+      <View>
         {markRead.isError ? (
           <Text className="mb-2 text-sm text-danger-text">We could not mark that as read. It is still unread.</Text>
         ) : null}
@@ -120,7 +125,7 @@ function NotificationPanelBody({
             const visible = dismissedAll ? [] : page.results.filter((item) => !dismissedIds.has(item.id));
             return (
               <ScrollView
-                className="flex-1"
+                style={{ maxHeight: listMaxHeight }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ gap: 10, paddingBottom: 12 }}
                 keyboardShouldPersistTaps="handled"

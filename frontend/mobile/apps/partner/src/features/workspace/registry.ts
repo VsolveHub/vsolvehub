@@ -2,6 +2,7 @@
 import type { WorkspaceGrant } from "@vsolve/query/native";
 import {
   Bell,
+  Bike,
   Briefcase,
   CalendarCheck,
   ClipboardList,
@@ -126,6 +127,15 @@ export const STAY_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/stays/visits", label: "Visits", icon: CalendarCheck, desktopOnly: true },
   { href: "/stays/bookings", label: "Bookings", icon: CalendarCheck, desktopOnly: true },
   { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
+/** A ride captain's tabs (Rides brief §2, §5.11). Shown only on Android, to captains. */
+export const RIDES_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/rides", label: "Home", icon: Home },
+  { href: "/rides/history", label: "Rides", icon: Bike, activePrefix: "/rides/history" },
+  { href: "/rides/wallet", label: "Wallet", icon: Wallet, activePrefix: "/rides/wallet" },
   { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];

@@ -248,6 +248,41 @@ def public_service_index() -> QuerySet[Service]:
     )
 
 
+def partner_work_variants() -> list[ServiceVariant]:
+    """Every variant a Partner can offer on onboarding, in one read.
+
+    The same two sets the service detail publishes as `variants` (priced A1 work, plus the A10
+    hiring-partner row), so `/apply/work` needs one request instead of one per service. The
+    prefetches `_public_variants` carries for the booking workspace (questions, task rates) are
+    cleared: an onboarding checklist only needs the id, name and required skill.
+    """
+    in_catalog = Q(
+        service__status=Service.Status.ACTIVE,
+        service__subcategory__is_active=True,
+        service__subcategory__category__is_active=True,
+    )
+    related = "service__subcategory__category"
+    priced = _public_variants().prefetch_related(None).filter(in_catalog).select_related(related)
+    listing = _listing_apply_variants().filter(in_catalog).select_related("service", related)
+
+    def catalog_order(variant: ServiceVariant) -> tuple[object, ...]:
+        service = variant.service
+        subcategory = service.subcategory
+        category = subcategory.category
+        return (
+            category.display_order,
+            category.name,
+            subcategory.display_order,
+            subcategory.name,
+            service.display_order,
+            service.name,
+            variant.display_order,
+            variant.name,
+        )
+
+    return sorted([*priced, *listing], key=catalog_order)
+
+
 def public_services_by_id(service_ids: Iterable[UUID]) -> QuerySet[Service]:
     """Publishable cards for an explicit set of services — **priced ones only**.
 

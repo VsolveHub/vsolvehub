@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import {
   AlertCircle,
   Bell,
+  Bike,
   Briefcase,
   Check,
   CheckCircle2,
@@ -23,6 +24,8 @@ import {
 } from "react-native";
 
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
+import { vehicleTypeName } from "@/features/rides/model/shell";
+import { useCaptainStatus } from "@/features/rides/queries";
 import { useApplyDock } from "../model/dock-context";
 import { isEditable, outstandingRequirements } from "../model/readiness";
 import { isListingTrack } from "../model/steps";
@@ -42,6 +45,9 @@ const consentKey = (purpose: string, version: string) => `${purpose}@${version}`
 export function ReviewStep() {
   const router = useRouter();
   const query = usePartnerApplication();
+  // A ride captain also sends a vehicle; it is listed below with the rest, to check or add.
+  const isCaptain = query.data?.track === "RIDE_CAPTAIN";
+  const vehicle = useCaptainStatus(isCaptain).data?.vehicle ?? null;
   const submit = useSubmitApplication();
   const updateApp = useUpdateApplication();
   const { registerDock } = useApplyDock();
@@ -353,6 +359,20 @@ export function ReviewStep() {
             <Text style={styles.editText}>Edit</Text>
           </Pressable>
         </View>
+
+        {isCaptain ? (
+          <SummaryCard
+            icon={<Bike size={18} color="#00112e" strokeWidth={2.2} />}
+            title="Your vehicle"
+            subtitle={
+              vehicle
+                ? `${vehicleTypeName(vehicle.vehicle_type)} · ${vehicle.registration_number}`
+                : "Not added yet"
+            }
+            done={vehicle !== null}
+            onEdit={() => router.push("/rides/vehicle")}
+          />
+        ) : null}
       </View>
 
       {editable ? (
