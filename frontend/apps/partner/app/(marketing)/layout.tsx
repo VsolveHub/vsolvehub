@@ -3,6 +3,7 @@ import { Logo } from "@vsolve/ui";
 import { ShieldCheck, PhoneCall, Lock, Zap } from "lucide-react";
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { MarketingNavCta } from "@/components/marketing-nav-cta";
+import { MarketingDesktopNav } from "@/components/marketing-desktop-nav";
 import { HomeHeroLink } from "@/components/home-hero-link";
 
 const NAV = [
@@ -48,37 +49,17 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-canvas text-text relative overflow-x-clip">
       {/* Floating Dynamic-Island Navigation with White Background */}
       <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
-        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
-          <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Brand & Live Demand Tag */}
-            <div className="flex items-center gap-2.5 sm:gap-3">
+        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-full bg-white/95 backdrop-blur-2xl border border-slate-200/60 shadow-[0_8px_30px_rgba(0,17,46,0.08),0_1px_3px_rgba(0,0,0,0.04)] px-4 sm:px-6 py-2 sm:py-2.5 transition-all duration-300">
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
+            {/* Brand Logo */}
+            <div className="flex items-center">
               <HomeHeroLink className="flex items-center gap-2 group">
                 <Logo className="h-6 sm:h-7 w-auto" />
               </HomeHeroLink>
-
-              {/* Live Demand Status Badge */}
-              <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px]">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
-                </span>
-                <span className="text-text-secondary font-medium">Now onboarding:</span>
-                <span className="text-navy-900 font-bold">Hyderabad</span>
-              </div>
             </div>
 
-            {/* Desktop Center Navigation Capsule */}
-            <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
-              {NAV.map((n) => (
-                <Link
-                  key={n.label}
-                  href={n.href}
-                  className="whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-text-secondary transition-colors duration-150 hover:bg-surface hover:text-navy-900"
-                >
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
+            {/* Desktop Center Navigation Links */}
+            <MarketingDesktopNav items={NAV} />
 
             {/* Right Action CTA & Mobile Drawer */}
             <div className="flex items-center gap-2">

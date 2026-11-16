@@ -1,124 +1,191 @@
 // Ported from frontend/apps/partner/features/application/view/status-banner.tsx
+// 100% accurate layout, typography, status badges, and 4-stop stepper.
+
 import type { Schemas } from "@vsolve/api-client";
-import { cn, Text } from "@vsolve/mobile-ui";
+import { Text } from "@vsolve/mobile-ui";
+import { Check } from "lucide-react-native";
 import { View } from "react-native";
 
+import { applicationStatusPresentation, trackerStage, type Tone } from "../model/status";
+
 type Application = Schemas["PartnerApplication"];
-type Status = Schemas["PartnerApplicationStatusEnum"];
 
-interface Presentation {
-  tone: "neutral" | "info" | "success" | "warning" | "danger";
-  label: string;
-  headline: string;
-  detail: string;
-  isWaiting: boolean;
-}
+const STOPS = [
+  { label: "Fill in" },
+  { label: "Sent" },
+  { label: "In review" },
+  { label: "Decision" },
+] as const;
 
-const PRESENTATION: Record<Status, Presentation> = {
-  DRAFT: {
-    tone: "neutral",
-    label: "Draft",
-    headline: "Your application is not submitted yet",
-    detail: "Finish the steps below and send it for review. You can come back any time.",
-    isWaiting: false,
-  },
-  SUBMITTED: {
-    tone: "info",
-    label: "Submitted",
-    headline: "We have your application",
-    detail: "Nothing more is needed from you right now. We will message you when a reviewer has looked at it.",
-    isWaiting: true,
-  },
-  UNDER_REVIEW: {
-    tone: "info",
-    label: "Under review",
-    headline: "A reviewer is checking your documents",
-    detail: "Nothing more is needed from you right now. If anything is unclear, we will ask you directly.",
-    isWaiting: true,
-  },
-  CHANGES_REQUIRED: {
-    tone: "warning",
-    label: "Changes needed",
-    headline: "We need something corrected",
-    detail: "",
-    isWaiting: false,
-  },
-  APPROVED: {
-    tone: "success",
-    label: "Approved",
-    headline: "You are approved to take work",
-    detail: "Publish the hours you want to work and you will start receiving job offers.",
-    isWaiting: false,
-  },
-  SUSPENDED: {
-    tone: "danger",
-    label: "Suspended",
-    headline: "Your account is suspended",
-    detail: "You will not receive job offers. Contact support to discuss this.",
-    isWaiting: false,
-  },
-  DECLINED: {
-    tone: "danger",
-    label: "Declined",
-    headline: "Your application was declined",
-    detail: "Contact support if you believe this is an error.",
-    isWaiting: false,
-  },
-  OFFBOARDED: {
-    tone: "neutral",
-    label: "Closed",
-    headline: "Your Partner account is closed",
-    detail: "Contact support if you believe this is wrong.",
-    isWaiting: false,
-  },
-};
-
-export interface ApplicationStatusBannerProps {
+export interface ApplicationStatusTrackerProps {
   application: Application;
 }
 
-export function ApplicationStatusBanner({ application }: ApplicationStatusBannerProps) {
-  if (application.status === "DRAFT") return null;
+const BADGE_STYLES: Record<Tone, { bg: string; text: string }> = {
+  neutral: { bg: "#f4f1ec", text: "#453f37" },
+  info: { bg: "#e0f2fe", text: "#0369a1" },
+  success: { bg: "#dcfce7", text: "#15803d" },
+  warning: { bg: "#fef3c7", text: "#b45309" },
+  danger: { bg: "#fee2e2", text: "#b91c1c" },
+};
 
-  const presentation = PRESENTATION[application.status];
-  const detail =
-    application.status === "CHANGES_REQUIRED"
-      ? application.change_request_message ||
-        "A reviewer asked for changes but did not leave a note. Contact support and we will tell you what is needed."
-      : presentation.detail;
+export function ApplicationStatusTracker({ application }: ApplicationStatusTrackerProps) {
+  const presentation = applicationStatusPresentation(application.status);
+  const stage = trackerStage(application.status);
+  const isWaiting = application.status === "SUBMITTED" || application.status === "UNDER_REVIEW";
+  const badgeStyle = BADGE_STYLES[presentation.tone] ?? BADGE_STYLES.neutral;
 
   return (
     <View
-      accessibilityLiveRegion={presentation.isWaiting ? "polite" : "assertive"}
-      className={cn(
-        "rounded-2xl border p-5",
-        presentation.tone === "info" && "border-sky-200 bg-sky-50",
-        presentation.tone === "warning" && "border-amber-300 bg-amber-50",
-        presentation.tone === "success" && "border-emerald-300 bg-emerald-50",
-        presentation.tone === "danger" && "border-rose-300 bg-rose-50",
-        presentation.tone === "neutral" && "border-line bg-surface-sunken",
-      )}
+      accessibilityRole="summary"
+      style={{
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: "#e7e2da",
+        backgroundColor: "#ffffff",
+        padding: 18,
+        rowGap: 16,
+      }}
     >
-      <View className="flex-row flex-wrap items-center gap-2.5">
-        <Text
-          className={cn(
-            "overflow-hidden rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider text-white",
-            presentation.tone === "info" && "bg-sky-600",
-            presentation.tone === "warning" && "bg-amber-600",
-            presentation.tone === "success" && "bg-emerald-600",
-            presentation.tone === "danger" && "bg-rose-600",
-            presentation.tone === "neutral" && "bg-navy-900",
-          )}
+      {/* Top: Status Badge + Headline */}
+      <View style={{ rowGap: 6, alignItems: "flex-start" }}>
+        <View
+          style={{
+            backgroundColor: badgeStyle.bg,
+            borderRadius: 9999,
+            paddingHorizontal: 12,
+            paddingVertical: 3.5,
+          }}
         >
-          {presentation.label}
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              color: badgeStyle.text,
+            }}
+          >
+            {presentation.label}
+          </Text>
+        </View>
+
+        <Text
+          style={{
+            fontSize: 23,
+            fontWeight: "800",
+            color: "#00112e",
+            letterSpacing: -0.4,
+            lineHeight: 28,
+          }}
+        >
+          {presentation.headline}
         </Text>
-        <Text className="text-base font-bold text-navy-900">{presentation.headline}</Text>
       </View>
-      <Text className="mt-2 text-sm leading-relaxed text-text-secondary">{detail}</Text>
-      {application.submitted_at && presentation.isWaiting ? (
-        <Text className="mt-3 border-t border-line pt-2 text-xs font-medium text-text-muted">
+
+      {/* 4-Stop Horizontal Stepper matching the web tracker */}
+      <View
+        accessibilityLabel="Application progress"
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          paddingVertical: 2,
+        }}
+      >
+        {STOPS.map((stop, index) => {
+          const isDone = index < stage;
+          const isCurrent = index === stage;
+
+          return (
+            <View
+              key={stop.label}
+              style={{
+                alignItems: "center",
+                flex: 1,
+              }}
+            >
+              {/* Step Circle Indicator */}
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isDone
+                    ? "#15803d"
+                    : isCurrent
+                      ? "#f87000"
+                      : "transparent",
+                  borderWidth: isDone || isCurrent ? 0 : 1.5,
+                  borderColor: isDone || isCurrent ? "transparent" : "#cbd5e1",
+                }}
+              >
+                {isDone ? (
+                  <Check size={14} color="#ffffff" strokeWidth={3} />
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: isCurrent ? "#ffffff" : "#64748b",
+                    }}
+                  >
+                    {index + 1}
+                  </Text>
+                )}
+              </View>
+
+              {/* Step Label */}
+              <Text
+                style={{
+                  marginTop: 6,
+                  fontSize: 12,
+                  fontWeight: isCurrent ? "700" : "500",
+                  color: isCurrent ? "#00112e" : "#64748b",
+                  textAlign: "center",
+                }}
+              >
+                {stop.label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Reviewer Note for CHANGES_REQUIRED */}
+      {application.status === "CHANGES_REQUIRED" ? (
+        <View
+          style={{
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#fde68a",
+            backgroundColor: "#fffbeb",
+            padding: 12,
+          }}
+        >
+          <Text style={{ fontSize: 13, color: "#92400e", lineHeight: 18 }}>
+            {application.change_request_message ||
+              "A reviewer asked for changes. Review your application details below."}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Subtitle / Next Instructions */}
+      <Text
+        style={{
+          fontSize: 14,
+          color: "#453f37",
+          lineHeight: 20,
+        }}
+      >
+        {presentation.next}
+      </Text>
+
+      {/* Submission Timestamp for Waiting States */}
+      {isWaiting && application.submitted_at ? (
+        <Text style={{ fontSize: 12, color: "#94a3b8" }}>
           Submitted on{" "}
-          <Text className="font-bold text-navy-900">
+          <Text style={{ fontWeight: "700", color: "#475569" }}>
             {new Intl.DateTimeFormat("en-IN", {
               dateStyle: "medium",
               timeStyle: "short",
@@ -130,3 +197,6 @@ export function ApplicationStatusBanner({ application }: ApplicationStatusBanner
     </View>
   );
 }
+
+// Backward-compatible export
+export const ApplicationStatusBanner = ApplicationStatusTracker;

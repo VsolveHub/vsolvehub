@@ -5,10 +5,14 @@ import { useMobileLogout } from "@vsolve/mobile-core";
 import { Redirect, Slot, usePathname, useRouter } from "expo-router";
 import {
   ArrowLeft,
+  Bell,
+  BellOff,
+  Check,
   ChevronLeft,
   ChevronRight,
   Headphones,
   HelpCircle,
+  ListChecks,
   Phone,
   Send,
   User,
@@ -31,9 +35,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApplyDockContext, type DockConfig } from "@/features/application/model/dock-context";
-import { previousStep } from "@/features/application/model/progress";
+import { previousStep, stepProgress } from "@/features/application/model/progress";
 import { applicationSteps, nextStep } from "@/features/application/model/steps";
-import { usePartnerApplication } from "@/features/application/queries";
+import { usePartnerApplication, usePartnerAvailability } from "@/features/application/queries";
 import { PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
 import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
 import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
@@ -54,6 +58,8 @@ export default function ApplyLayout() {
   const [dockConfig, setDockConfig] = useState<DockConfig | null>(null);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [stepSheetOpen, setStepSheetOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const onCommitRef = useRef<(() => void) | null>(null);
 
@@ -97,8 +103,10 @@ export default function ApplyLayout() {
   }, []);
 
   const query = usePartnerApplication();
+  const availability = usePartnerAvailability();
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = missing ? null : (query.data ?? null);
+  const pathSteps = stepProgress(application, availability.data).filter((s) => s.state !== "waypoint");
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
   const back = isStatusPage ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
@@ -141,10 +149,19 @@ export default function ApplyLayout() {
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
       <View style={styles.rootContainer}>
         {/* Top Header with Safe Area Spacing */}
-        <View style={[styles.headerContainer, { paddingTop: topInset + 6 }]}>
+        <View style={[styles.headerContainer, { paddingTop: topInset }]}>
           <View style={[styles.headerInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
-            {/* Left: Back chevron or balanced placeholder */}
-            {isStatusPage ? (
+            {/* Left: On overview, display logo mark alone; otherwise back chevron + logo mark */}
+            {isOverview ? (
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Image
+                  source={logoMark}
+                  style={{ width: 30, height: 30 }}
+                  resizeMode="contain"
+                  accessibilityLabel="VSolve Hub"
+                />
+              </View>
+            ) : isStatusPage ? (
               <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -162,64 +179,83 @@ export default function ApplyLayout() {
               >
                 <ArrowLeft size={22} color="#00112e" strokeWidth={2.2} />
               </Pressable>
-            ) : back !== null && currentStepIdx > 0 ? (
-              <Pressable cssInterop={false}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-                onPress={() => router.push(back.href as any)}
-                style={({ pressed }) => [
-                  styles.backButton,
-                  pressed ? styles.backButtonPressed : null,
-                ]}
-              >
-                <ChevronLeft size={22} color="#00112e" />
-              </Pressable>
             ) : (
-              <View style={styles.backPlaceholder} />
+              <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8 }}>
+                <Pressable cssInterop={false}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go back"
+                  onPress={() => {
+                    const target = dockConfig?.backHref || back?.href || "/apply";
+                    router.push(target as any);
+                  }}
+                  style={({ pressed }) => [
+                    styles.backButton,
+                    pressed ? styles.backButtonPressed : null,
+                  ]}
+                >
+                  <ChevronLeft size={22} color="#00112e" strokeWidth={2.2} />
+                </Pressable>
+                <Pressable cssInterop={false}
+                  accessibilityRole="button"
+                  accessibilityLabel="VSolve Hub overview"
+                  onPress={() => router.push("/apply" as any)}
+                >
+                  <Image
+                    source={logoMark}
+                    style={{ width: 30, height: 30 }}
+                    resizeMode="contain"
+                    accessibilityLabel="VSolve Hub"
+                  />
+                </Pressable>
+              </View>
             )}
 
-            {/* Center: VSolve Hub Logo matching Mockup */}
-            <View style={styles.logoCenter}>
-              <Image
-                source={logoMark}
-                style={{ width: 28, height: 28 }}
-                resizeMode="contain"
-                accessibilityLabel="VSolve Hub"
-              />
-              <Text style={styles.logoTextNavy}>
-                V Solve <Text style={styles.logoTextOrange}>Hub</Text>
+            {/* Center: Step X of Y on inner steps, omitted on overview and status */}
+            {isOverview || isStatusPage ? null : (
+              <Text style={styles.headerStepCounter}>
+                {`Step ${currentStepIdx + 1} of ${steps.length}`}
               </Text>
-            </View>
+            )}
 
-            {/* Right: Circular User Initial Badge */}
-            <Pressable cssInterop={false}
-              accessibilityRole="button"
-              accessibilityLabel="Partner profile & options"
-              onPress={() => setProfileModalOpen(true)}
-              style={({ pressed }) => [
-                styles.avatarBadge,
-                pressed ? styles.avatarBadgePressed : null,
-              ]}
-            >
-              {initialLetter ? (
-                <Text style={styles.avatarText}>{initialLetter}</Text>
-              ) : (
-                <User size={16} color="#ea580c" />
-              )}
-            </Pressable>
+            {/* Right: Actions */}
+            <View style={{ flexDirection: "row", alignItems: "center", columnGap: 6 }}>
+              <Pressable cssInterop={false}
+                accessibilityRole="button"
+                accessibilityLabel="View application steps"
+                onPress={() => setStepSheetOpen(true)}
+                style={({ pressed }) => [
+                  styles.headerIconButton,
+                  pressed ? styles.headerIconButtonPressed : null,
+                ]}
+              >
+                <ListChecks size={20} color="#453f37" strokeWidth={2} />
+              </Pressable>
+
+              <Pressable cssInterop={false}
+                accessibilityRole="button"
+                accessibilityLabel="Notifications"
+                onPress={() => setNotificationsOpen(true)}
+                style={({ pressed }) => [
+                  styles.headerIconButton,
+                  pressed ? styles.headerIconButtonPressed : null,
+                ]}
+              >
+                <Bell size={20} color="#453f37" strokeWidth={2} />
+              </Pressable>
+
+              <Pressable cssInterop={false}
+                accessibilityRole="button"
+                accessibilityLabel="Partner profile & options"
+                onPress={() => setProfileModalOpen(true)}
+                style={({ pressed }) => [
+                  styles.avatarBadgeNavy,
+                  pressed ? styles.avatarBadgeNavyPressed : null,
+                ]}
+              >
+                <Text style={styles.avatarTextWhite}>{initialLetter || "R"}</Text>
+              </Pressable>
+            </View>
           </View>
-
-          {/* Stepper: Circles variant for Steps 1-3, Segmented variant for Mixed Documents & Step 4 */}
-          {isOverview ? null : (
-            <View style={[styles.stepperWrapper, { maxWidth: isDesktop ? 672 : "100%" }]}>
-              <OnboardingStepper
-                currentStep={currentStepIdx}
-                totalSteps={steps.length}
-                stepLabel={currentStep.label}
-                variant="segmented"
-              />
-            </View>
-          )}
         </View>
 
         {/* Scrollable Main Content */}
@@ -268,22 +304,25 @@ export default function ApplyLayout() {
                 </View>
               ) : null}
 
-              {/* Main Dock Row: "Need help?" on left, "Continue ->" on right */}
+              {/* Main Dock Row: "Back" on left, "Save and Continue" on right */}
               <View style={styles.dockActionRow}>
-                {/* Left: Need help? */}
+                {/* Left: Back */}
                 <Pressable cssInterop={false}
                   accessibilityRole="button"
-                  onPress={() => setHelpModalOpen(true)}
+                  accessibilityLabel="Back"
+                  onPress={() => {
+                    const target = dockConfig?.backHref || back?.href || "/apply";
+                    router.push(target as any);
+                  }}
                   style={({ pressed }) => [
-                    styles.helpButton,
+                    styles.dockBackButton,
                     pressed ? { opacity: 0.7 } : null,
                   ]}
                 >
-                  
-                  <Text style={styles.helpButtonText}>Need help?</Text>
+                  <Text style={styles.dockBackButtonText}>Back</Text>
                 </Pressable>
 
-                {/* Right: Continue -> (or Submit application) */}
+                {/* Right: Save and Continue */}
                 <Pressable cssInterop={false}
                   accessibilityRole="button"
                   accessibilityLabel={primaryLabel}
@@ -293,20 +332,20 @@ export default function ApplyLayout() {
                     styles.continueButton,
                     {
                       backgroundColor: isProceedDisabled
-                        ? "#cbd5e1"
+                        ? "#e8e5df"
                         : pressed
                         ? "#d65e00"
                         : "#f87000",
-                      opacity: isProceedDisabled ? 0.95 : 1,
+                      opacity: 1,
                     },
                   ]}
                 >
                   {isSaving ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
+                    <ActivityIndicator color={isProceedDisabled ? "#78716c" : "#00112e"} size="small" />
                   ) : (
                     <View style={styles.continueButtonContent}>
-                      <Text style={styles.continueButtonText}>
-                        {primaryLabel.includes("Submit application") ? "Submit application" : "Continue"}
+                      <Text style={[styles.continueButtonText, isProceedDisabled ? { color: "#78716c" } : null]}>
+                        {primaryLabel}
                       </Text>
                     </View>
                   )}
@@ -387,6 +426,193 @@ export default function ApplyLayout() {
           partnerName={application?.display_name}
           partnerInitial={initialLetter}
         />
+
+        {/* 1. Step Sheet Modal Matching Image 1 */}
+        <Modal
+          visible={stepSheetOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setStepSheetOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setStepSheetOpen(false)}
+              accessibilityLabel="Dismiss steps dialog"
+            />
+            <View
+              style={[
+                styles.sheetModalCard,
+                { paddingBottom: Math.max(bottomInset + 16, 24) },
+              ]}
+            >
+              {/* Header: "Your steps" + Outlined Square Close Button */}
+              <View style={styles.sheetModalHeader}>
+                <Text style={styles.sheetModalTitle}>Your steps</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close steps sheet"
+                  onPress={() => setStepSheetOpen(false)}
+                  style={({ pressed }) => [
+                    styles.sheetCloseButtonSquare,
+                    pressed ? styles.sheetCloseButtonSquarePressed : null,
+                  ]}
+                >
+                  <X size={18} color="#00112e" strokeWidth={2.4} />
+                </Pressable>
+              </View>
+
+              {/* Steps List */}
+              <View style={{ paddingTop: 8, rowGap: 2 }}>
+                {pathSteps.map((step) => {
+                  const isDone = step.state === "done";
+                  const subtitle = isDone
+                    ? "Done"
+                    : step.state === "optional"
+                      ? "Optional — you can set this later"
+                      : step.outstanding === 1
+                        ? "1 thing needed"
+                        : `${step.outstanding} things needed`;
+
+                  return (
+                    <Pressable
+                      key={step.href}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setStepSheetOpen(false);
+                        router.push(step.href as any);
+                      }}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        columnGap: 14,
+                        paddingVertical: 14,
+                        paddingHorizontal: 4,
+                        backgroundColor: pressed ? "#f8fafc" : "#ffffff",
+                        borderRadius: 12,
+                      })}
+                    >
+                      {/* Step Indicator */}
+                      {isDone ? (
+                        <View
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: 13,
+                            backgroundColor: "#15803d",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Check size={15} color="#ffffff" strokeWidth={3} />
+                        </View>
+                      ) : (
+                        <View
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: 13,
+                            borderWidth: 2,
+                            borderColor: "#ea580c",
+                            backgroundColor: "transparent",
+                          }}
+                        />
+                      )}
+
+                      {/* Title & Subtitle */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>
+                          {step.label}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                          {subtitle}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* 2. Notifications Modal Matching Image 2 */}
+        <Modal
+          visible={notificationsOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setNotificationsOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setNotificationsOpen(false)}
+              accessibilityLabel="Dismiss notifications dialog"
+            />
+            <View
+              style={[
+                styles.sheetModalCard,
+                { paddingBottom: Math.max(bottomInset + 20, 28) },
+              ]}
+            >
+              {/* Header: "Notifications" + X Close Icon */}
+              <View style={styles.sheetModalHeaderNotifications}>
+                <Text style={styles.sheetModalTitle}>Notifications</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close notifications sheet"
+                  onPress={() => setNotificationsOpen(false)}
+                  style={({ pressed }) => [
+                    styles.notificationCloseIconButton,
+                    pressed ? styles.headerIconButtonPressed : null,
+                  ]}
+                >
+                  <X size={20} color="#00112e" strokeWidth={2} />
+                </Pressable>
+              </View>
+
+              {/* Dashed/Subtle Card Empty State */}
+              <View
+                style={{
+                  marginTop: 18,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: "#e7e2da",
+                  backgroundColor: "#ffffff",
+                  paddingVertical: 32,
+                  paddingHorizontal: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <BellOff size={28} color="#78716c" strokeWidth={1.8} />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: "#00112e",
+                    marginTop: 14,
+                    textAlign: "center",
+                  }}
+                >
+                  Nothing to read yet
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 13.5,
+                    lineHeight: 20,
+                    color: "#453f37",
+                    textAlign: "center",
+                    marginTop: 8,
+                    maxWidth: 320,
+                  }}
+                >
+                  Vsolve tells you here when a job is confirmed, when a customer answers, and when money moves. There is nothing you need to do.
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ApplyDockContext.Provider>
   );
@@ -399,19 +625,19 @@ const styles = StyleSheet.create({
     minHeight: "100%",
   },
   headerContainer: {
-    backgroundColor: "#faf8f5",
-    borderBottomWidth: 0,
-    borderColor: "transparent",
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e7e2da",
     zIndex: 20,
   },
   headerInner: {
     width: "100%",
     marginHorizontal: "auto",
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    height: 48,
+    height: 56,
   },
   backButton: {
     width: 36,
@@ -442,6 +668,12 @@ const styles = StyleSheet.create({
   logoTextOrange: {
     color: "#f87000",
   },
+  headerStepCounter: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#00112e",
+    textAlign: "center",
+  },
   avatarBadge: {
     width: 36,
     height: 36,
@@ -459,6 +691,33 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#f87000",
+  },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIconButtonPressed: {
+    backgroundColor: "#f4f1ec",
+  },
+  avatarBadgeNavy: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#00112e",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 2,
+  },
+  avatarBadgeNavyPressed: {
+    backgroundColor: "#00204d",
+  },
+  avatarTextWhite: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
   },
   stepperWrapper: {
     width: "100%",
@@ -497,8 +756,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     width: "100%",
     marginHorizontal: "auto",
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   dockContainer: {
     position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
@@ -506,21 +765,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 40,
-    backgroundColor: "#faf8f5",
-    borderTopWidth: 0,
-    borderColor: "transparent",
-    paddingHorizontal: 20,
+    backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#e7e2da",
+    paddingHorizontal: 16,
     paddingTop: 12,
     ...(Platform.OS === "web"
       ? ({
-          boxShadow: "0 -4px 16px rgba(0, 17, 46, 0.05)",
+          boxShadow: "0 -2px 10px rgba(0, 17, 46, 0.04)",
         } as any)
       : {
-          elevation: 8,
+          elevation: 4,
           shadowColor: "#00112e",
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.06,
-          shadowRadius: 10,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 6,
         }),
   },
   dockInner: {
@@ -585,47 +844,39 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    columnGap: 12,
   },
-  helpButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  helpButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#00112e",
-    textDecorationLine: "underline",
-  },
-  continueButton: {
-    height: 50,
-    minWidth: 136,
-    paddingHorizontal: 36,
-    borderRadius: 14,
+  dockBackButton: {
+    height: 48,
+    paddingHorizontal: 28,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
-    ...(Platform.OS === "web"
-      ? ({
-          boxShadow: "0 4px 14px rgba(234, 88, 12, 0.35)",
-        } as any)
-      : {
-          elevation: 4,
-          shadowColor: "#f87000",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.35,
-          shadowRadius: 8,
-        }),
+  },
+  dockBackButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#00112e",
+  },
+  continueButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   continueButtonContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    columnGap: 8,
   },
   continueButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#00112e",
   },
   continueButtonArrow: {
     fontSize: 15,
@@ -829,5 +1080,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#be123c",
+  },
+  sheetModalCard: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  sheetModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    paddingBottom: 16,
+  },
+  sheetModalHeaderNotifications: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    paddingBottom: 14,
+  },
+  sheetModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#00112e",
+  },
+  sheetCloseButtonSquare: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#00112e",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+  sheetCloseButtonSquarePressed: {
+    backgroundColor: "#f4f1ec",
+  },
+  notificationCloseIconButton: {
+    padding: 6,
+    borderRadius: 8,
   },
 });
