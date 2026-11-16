@@ -269,6 +269,9 @@ class CommunicationPreference(models.Model):
         SMS = "SMS", "SMS"
         EMAIL = "EMAIL", "Email"
         PUSH = "PUSH", "Push"
+        #: Opt-in, not opt-out: WhatsApp's policy requires the person to have asked. Nothing is
+        #: sent on this channel without a row where `is_enabled=True` (`notifications.whatsapp`).
+        WHATSAPP = "WHATSAPP", "WhatsApp"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

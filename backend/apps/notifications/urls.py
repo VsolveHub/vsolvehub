@@ -16,8 +16,15 @@ from apps.notifications.views import (
     NotificationUnreadCountView,
     PartnerPushNotificationPreferencesView,
 )
+from apps.notifications.whatsapp_webhook import WhatsAppWebhookView
 
 urlpatterns = [
+    # Meta's WhatsApp status callbacks. Signed by Meta, not a client route; see the module.
+    path(
+        "notification-webhooks/whatsapp/",
+        WhatsAppWebhookView.as_view(),
+        name="notification-webhook-whatsapp",
+    ),
     # Everyone. Deliberately unprefixed by role: a Customer, a lead and an operator all read
     # their own feed through the same three routes, and the recipient is the session rather than
     # a path segment.
