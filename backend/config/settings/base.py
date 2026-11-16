@@ -27,7 +27,7 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key", "x-assistant-token")
 # A browser hides every response header outside the CORS safelist from JavaScript,
 # and `Date` is not on that safelist.  Shared countdown calibration reads it on every
 # response, so leaving it unexposed makes each offer, undo, hold and OTP deadline
@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "apps.ops_reports",
     "apps.mobile",
     "apps.stories",
+    "apps.assistant",
 ]
 
 MIDDLEWARE = [
@@ -292,6 +293,11 @@ REST_FRAMEWORK = {
         "payout_account": "10/hour",
         # Withdraw taps. The daily limit is the real rule; this only stops a loop hammering it.
         "payout_withdrawal": "20/hour",
+        # AI booking assistant. Every message is a paid model call, and these routes are open to
+        # signed-out visitors, so they are keyed per user when signed in and per IP otherwise.
+        # A real booking conversation is 10 to 20 messages; nobody honest starts 20 chats an hour.
+        "assistant_conversation": "20/hour",
+        "assistant_message": "120/hour",
     },
 }
 
@@ -418,7 +424,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.98.0",
+    "VERSION": "1.100.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -791,6 +797,13 @@ MSG91_AUTH_KEY = env("MSG91_AUTH_KEY", default="")
 MSG91_SENDER_ID = env("MSG91_SENDER_ID", default="")
 MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
+#: Notification SMS (`notifications.channel_plan`). Off by default, like WhatsApp below. On, a
+#: routed notice is sent through `MESSAGE_TRANSPORT`, which must then be `msg91` in production.
+SMS_NOTIFICATIONS_ENABLED = env.bool("SMS_NOTIFICATIONS_ENABLED", default=False)
+#: Each DLT-registered MSG91 template, keyed by our template code, as JSON:
+#: {"customer_visit_en_route": "6650f0c2d6fc05...", ...}. A routed SMS whose code has no id here
+#: is recorded as skipped (`no_provider_template`) rather than sent with the wrong text.
+MSG91_TEMPLATE_IDS = env.json("MSG91_TEMPLATE_IDS", default={})
 
 # Mobile apps (frontend/mobile). Push is fail-closed like MESSAGE_TRANSPORT.
 # "onesignal": the apps are OneSignal subscribers like the web, so every push (job offers
@@ -1433,3 +1446,58 @@ PARTNER_LOCATION_MAX_AGE_MINUTES = env.int("PARTNER_LOCATION_MAX_AGE_MINUTES", d
 MAX_DISPATCH_ATTEMPTS = env.int("MAX_DISPATCH_ATTEMPTS", default=5)
 MAX_CONSECUTIVE_MISSED_OFFERS = env.int("MAX_CONSECUTIVE_MISSED_OFFERS", default=3)
 PUSH_SUBSCRIPTION_FRESHNESS_DAYS = env.int("PUSH_SUBSCRIPTION_FRESHNESS_DAYS", default=30)
+
+# WhatsApp notifications through Meta's WhatsApp Cloud API, directly (`notifications.whatsapp`).
+# Off by default. Only people who opted in receive anything; `notifications.channel_plan` says
+# which notices go, and `notifications.channel_router` holds every gate.
+WHATSAPP_ENABLED = env.bool("WHATSAPP_ENABLED", default=False)
+WHATSAPP_ACCESS_TOKEN = env("WHATSAPP_ACCESS_TOKEN", default="")
+WHATSAPP_PHONE_NUMBER_ID = env("WHATSAPP_PHONE_NUMBER_ID", default="")
+#: The WhatsApp Business Account the number belongs to. Only `manage.py whatsapp_templates`
+#: needs it (templates live on the account, not the number); sending works without it.
+WHATSAPP_BUSINESS_ACCOUNT_ID = env("WHATSAPP_BUSINESS_ACCOUNT_ID", default="")
+WHATSAPP_GRAPH_API_BASE_URL = env(
+    "WHATSAPP_GRAPH_API_BASE_URL", default="https://graph.facebook.com"
+)
+WHATSAPP_GRAPH_API_VERSION = env("WHATSAPP_GRAPH_API_VERSION", default="v23.0")
+#: The language the templates were approved in: "en" for English, "en_US" for English (US).
+WHATSAPP_TEMPLATE_LANGUAGE = env("WHATSAPP_TEMPLATE_LANGUAGE", default="en")
+WHATSAPP_CONNECT_TIMEOUT_SECONDS = env.float("WHATSAPP_CONNECT_TIMEOUT_SECONDS", default=5.0)
+WHATSAPP_READ_TIMEOUT_SECONDS = env.float("WHATSAPP_READ_TIMEOUT_SECONDS", default=10.0)
+#: Status webhook (`notifications.whatsapp_webhook`). The verify token is any string you choose
+#: and type into the Meta app's webhook settings; the app secret signs every callback.
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = env("WHATSAPP_WEBHOOK_VERIFY_TOKEN", default="")
+WHATSAPP_APP_SECRET = env("WHATSAPP_APP_SECRET", default="")
+
+# AI booking assistant (`apps.assistant`, ADR 0013). Off unless explicitly enabled, and fail-closed
+# like every other provider (ADR 0004): a named provider without its key and model refuses with a
+# 503 instead of switching to something nobody configured. The fallback is opt-in.
+ASSISTANT_ENABLED = env.bool("ASSISTANT_ENABLED", default=False)
+ASSISTANT_PRIMARY_PROVIDER = env("ASSISTANT_PRIMARY_PROVIDER", default="gemini")
+ASSISTANT_FALLBACK_PROVIDER = env("ASSISTANT_FALLBACK_PROVIDER", default="")
+GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+GEMINI_MODEL = env("GEMINI_MODEL", default="")
+GEMINI_API_BASE_URL = env(
+    "GEMINI_API_BASE_URL", default="https://generativelanguage.googleapis.com/v1beta"
+)
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_MODEL = env("OPENAI_MODEL", default="")
+OPENAI_API_BASE_URL = env("OPENAI_API_BASE_URL", default="https://api.openai.com/v1")
+ASSISTANT_LLM_CONNECT_TIMEOUT_SECONDS = env.float(
+    "ASSISTANT_LLM_CONNECT_TIMEOUT_SECONDS", default=5.0
+)
+ASSISTANT_LLM_READ_TIMEOUT_SECONDS = env.float("ASSISTANT_LLM_READ_TIMEOUT_SECONDS", default=15.0)
+ASSISTANT_MAX_OUTPUT_TOKENS = env.int("ASSISTANT_MAX_OUTPUT_TOKENS", default=1024)
+#: Model calls per Customer message. A full booking step is usually one or two.
+ASSISTANT_MAX_TOOL_ROUNDS = env.int("ASSISTANT_MAX_TOOL_ROUNDS", default=6)
+#: No new model call starts after this. With the read timeout above, a turn ends inside ~45
+#: seconds: under a reverse proxy's usual 60-second read timeout. The widget's own deadline is 55.
+ASSISTANT_TURN_DEADLINE_SECONDS = env.int("ASSISTANT_TURN_DEADLINE_SECONDS", default=30)
+ASSISTANT_TURN_LEASE_SECONDS = env.int("ASSISTANT_TURN_LEASE_SECONDS", default=90)
+ASSISTANT_HISTORY_MESSAGES = env.int("ASSISTANT_HISTORY_MESSAGES", default=40)
+ASSISTANT_MAX_MESSAGE_CHARS = env.int("ASSISTANT_MAX_MESSAGE_CHARS", default=1000)
+ASSISTANT_MAX_USER_MESSAGES_PER_SESSION = env.int(
+    "ASSISTANT_MAX_USER_MESSAGES_PER_SESSION", default=60
+)
+#: A spend ceiling across every conversation, counted over the last 24 hours.
+ASSISTANT_DAILY_USER_MESSAGE_CAP = env.int("ASSISTANT_DAILY_USER_MESSAGE_CAP", default=5000)

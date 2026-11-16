@@ -58,6 +58,11 @@ const PURPOSE_COPY: Record<string, { label: string; description: string }> = {
     label: "Reminders",
     description: "Nudges before a visit and when a service is due again.",
   },
+  "whatsapp-updates": {
+    label: "WhatsApp updates",
+    description:
+      "Confirmations, payments and anything that needs your answer, on WhatsApp. Turning this off stops every WhatsApp message.",
+  },
 };
 
 function humanise(slug: string): string {
@@ -72,6 +77,7 @@ const CHANNEL_LABEL: Record<PreferenceChannel, string> = {
   SMS: "SMS",
   EMAIL: "Email",
   PUSH: "Push",
+  WHATSAPP: "WhatsApp",
 };
 
 function PreferenceRow({

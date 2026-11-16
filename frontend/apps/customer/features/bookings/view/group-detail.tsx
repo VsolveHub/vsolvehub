@@ -10,6 +10,7 @@ import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
 import { bookingVisitHref } from "@/lib/routes";
 import { CustomerPushPromptCard } from "@/features/notifications/view/CustomerPushPromptCard";
+import { WhatsAppUpdatesPrompt } from "@/features/account/view/whatsapp-updates-prompt";
 
 import { cleanServiceLabel, formatBookingWhen } from "./booking-format";
 import {
@@ -524,6 +525,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         }
       >
         <CustomerPushPromptCard bookingId={groupId} />
+        <WhatsAppUpdatesPrompt />
 
         {isAwaitingPayment ? (
           <div className="space-y-3">
