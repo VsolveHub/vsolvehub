@@ -49,6 +49,23 @@ describe("login", () => {
     expect(view.getByText("Send code")).toBeTruthy();
   });
 
+  it("renders the phone app sign-in without the website header", async () => {
+    mockFlow.phase = "phone";
+    mockFlow.codeError = null;
+    const view = await render(<LoginScreen />);
+    expect(view.queryByText("Join")).toBeNull();
+    expect(view.getByText("Register as a new Partner")).toBeTruthy();
+    expect(view.getByText("Need help with your phone number or OTP?")).toBeTruthy();
+  });
+
+  it("renders a phone number error", async () => {
+    mockFlow.phase = "phone";
+    mockFlow.phoneError = "Enter your 10-digit mobile number.";
+    const view = await render(<LoginScreen />);
+    expect(view.getByText("Enter your 10-digit mobile number.")).toBeTruthy();
+    mockFlow.phoneError = null;
+  });
+
   it("renders a code error", async () => {
     mockFlow.phase = "code";
     mockFlow.codeError = "That code is not right, or it has expired. Check the code, or request a new one.";

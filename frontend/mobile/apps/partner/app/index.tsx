@@ -349,6 +349,9 @@ export default function Index() {
   if (status === "signedIn") {
     return <Redirect href="/home" />;
   }
+  if (Platform.OS !== "web") {
+    return <Redirect href="/login" />;
+  }
 
   const activeOffer = DEMO_OFFERS[offerIndex];
   const ActiveIcon = activeOffer.icon;
