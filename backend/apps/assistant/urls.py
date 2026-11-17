@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     AssistantConversationCreateView,
     AssistantConversationView,
+    AssistantHistoryView,
     AssistantMessageCreateView,
 )
 
@@ -14,6 +15,7 @@ urlpatterns = [
         AssistantConversationCreateView.as_view(),
         name="conversation-create",
     ),
+    path("assistant/history/", AssistantHistoryView.as_view(), name="history"),
     path("assistant/conversation/", AssistantConversationView.as_view(), name="conversation"),
     path(
         "assistant/conversation/messages/",

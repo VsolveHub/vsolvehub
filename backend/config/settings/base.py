@@ -1501,3 +1501,5 @@ ASSISTANT_MAX_USER_MESSAGES_PER_SESSION = env.int(
 )
 #: A spend ceiling across every conversation, counted over the last 24 hours.
 ASSISTANT_DAILY_USER_MESSAGE_CAP = env.int("ASSISTANT_DAILY_USER_MESSAGE_CAP", default=5000)
+#: How many of a Customer's most recent conversations the history list returns.
+ASSISTANT_CONVERSATION_LIST_LIMIT = env.int("ASSISTANT_CONVERSATION_LIST_LIMIT", default=30)

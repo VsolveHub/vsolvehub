@@ -8,7 +8,7 @@ from datetime import timedelta
 from typing import Any, cast
 
 from django.conf import settings
-from django.db.models import Max, Q, QuerySet
+from django.db.models import Max, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.carts.models import BookingGroup
@@ -64,6 +64,27 @@ def session_for(*, token: str, user: User | None) -> AssistantSession:
     if session.customer_id is not None and (user is None or session.customer_id != user.id):
         raise AssistantConversationNotFoundApiError
     return session
+
+
+def conversations_for(user: User) -> QuerySet[AssistantSession]:
+    """This Customer's conversations, newest first, for their history list.
+
+    Only conversations the Customer has written in: a fresh one that holds just the greeting is
+    not history. Each row carries `title`, the first thing the Customer said, read in the same
+    query so the list costs one database round trip however long it is.
+    """
+
+    first_words = (
+        AssistantMessage.objects.filter(session=OuterRef("pk"), role=Role.USER)
+        .order_by("sequence")
+        .values("text")[:1]
+    )
+    return (
+        AssistantSession.objects.filter(customer=user)
+        .annotate(title=Subquery(first_words))
+        .filter(title__isnull=False)
+        .order_by("-last_activity_at")[: settings.ASSISTANT_CONVERSATION_LIST_LIMIT]
+    )
 
 
 @contextmanager
