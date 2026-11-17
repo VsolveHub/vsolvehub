@@ -32,6 +32,8 @@ import { WelcomeHero } from "./welcome-hero";
  */
 
 const MAX_MESSAGE_LENGTH = 1000;
+/** `create_session` in backend/apps/assistant/services.py writes the greeting first. */
+const OPENING_GREETING_SEQUENCE = 1;
 
 export function AssistantScreen() {
   const insets = useSafeAreaInsets();
@@ -55,7 +57,11 @@ export function AssistantScreen() {
     if (needsConversation) startConversation();
   }, [needsConversation, startConversation]);
 
-  const messages = conversation.data?.messages ?? [];
+  // The server opens every conversation with a greeting as message #1; the app's own welcome
+  // block replaces it, so that one message is not shown. Every other message is.
+  const messages = (conversation.data?.messages ?? []).filter(
+    (message) => !(message.sequence === OPENING_GREETING_SEQUENCE && message.sender === "assistant"),
+  );
   const answering = send.isPending || Boolean(conversation.data?.is_answering);
   const hasCustomerMessage = pending !== null || messages.some((message) => message.sender === "customer");
 

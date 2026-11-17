@@ -38,6 +38,11 @@ const created = {
   },
 };
 
+/** The chat is ready once its new conversation's token has been saved. */
+function conversationReady(token = "token-1") {
+  return waitFor(() => expect(mockKvSet).toHaveBeenCalledWith("assistant.conversation", token));
+}
+
 // A repeated name and a blank one: neither should become a chip.
 const categories = [{ name: "AC Repair" }, { name: "AC Repair" }, { name: "  " }, { name: "Home Cleaning" }];
 
@@ -126,7 +131,7 @@ describe("AssistantScreen", () => {
     const screen = await renderScreen();
 
     // The chips work once the conversation exists.
-    await screen.findByText(GREETING, { exact: false });
+    await conversationReady();
     expect(await screen.findAllByText("AC Repair")).toHaveLength(1);
     expect(screen.getByText("Home Cleaning")).toBeTruthy();
 
@@ -148,20 +153,41 @@ describe("AssistantScreen", () => {
     mockClient.POST.mockResolvedValue(reply(created));
     const screen = await renderScreen();
 
-    await screen.findByText(GREETING, { exact: false });
+    await conversationReady();
     expect(screen.getByText("How can I help you today?")).toBeTruthy();
     expect(screen.queryByText("AC Repair")).toBeNull();
     expect(screen.queryByText("Home Cleaning")).toBeNull();
   });
 
-  it("starts a conversation and shows the assistant's greeting", async () => {
+  it("starts a conversation with the app's welcome instead of the server's greeting", async () => {
     mockClient.POST.mockResolvedValue(reply(created));
     const screen = await renderScreen();
 
-    expect(await screen.findByText(GREETING, { exact: false })).toBeTruthy();
+    await conversationReady();
     expect(screen.getByText("Booking assistant")).toBeTruthy();
     // A new chat opens with the welcome until the customer says something.
     expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    expect(screen.queryByText(GREETING, { exact: false })).toBeNull();
+  });
+
+  it("hides only the opening greeting and keeps the rest of the conversation", async () => {
+    const conversation = {
+      ...created.conversation,
+      messages: [
+        ...created.conversation.messages,
+        { sequence: 2, sender: "customer", text: "AC not cooling", actions: [], created_at: "" },
+        { sequence: 3, sender: "assistant", text: "Which day suits you?", actions: [], created_at: "" },
+      ],
+    };
+    mockClient.POST.mockResolvedValue(reply({ ...created, conversation }));
+    mockClient.GET.mockImplementation(async (path: string) =>
+      path === "/api/v1/categories/" ? reply(categories, 200) : reply(conversation, 200),
+    );
+    const screen = await renderScreen();
+
+    expect(await screen.findByText("Which day suits you?")).toBeTruthy();
+    expect(screen.getByText("AC not cooling")).toBeTruthy();
+    expect(screen.queryByText(GREETING, { exact: false })).toBeNull();
   });
 
   it("shows the server's error and starts again when the person taps Try again", async () => {
@@ -171,7 +197,7 @@ describe("AssistantScreen", () => {
     fireEvent.press(await screen.findByText("Try again"));
 
     await waitFor(() => expect(mockClient.POST).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(GREETING, { exact: false })).toBeTruthy();
+    await conversationReady();
     expect(screen.queryByText("Try again")).toBeNull();
   });
 });
