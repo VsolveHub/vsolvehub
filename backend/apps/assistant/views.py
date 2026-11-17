@@ -12,7 +12,7 @@ from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,12 +28,10 @@ from .models import AssistantSession
 from .serializers import (
     AssistantConversationCreatedSerializer,
     AssistantConversationSerializer,
-    AssistantConversationSummarySerializer,
     AssistantMessageCreateSerializer,
     AssistantTurnSerializer,
 )
 from .services import (
-    conversations_for,
     create_session,
     has_open_booking,
     recent_visible_messages,
@@ -109,28 +107,6 @@ class AssistantConversationCreateView(ThrottledWriteMixin, APIView):
         }
         return Response(
             AssistantConversationCreatedSerializer(body).data, status=status.HTTP_201_CREATED
-        )
-
-
-class AssistantHistoryView(APIView):
-    """The signed-in Customer's past conversations, so any device they log in on shows them."""
-
-    permission_classes = (IsAuthenticated,)
-
-    @extend_schema(
-        tags=["Assistant"],
-        operation_id="assistant_history_list",
-        responses={
-            200: AssistantConversationSummarySerializer(many=True),
-            503: ApiErrorSerializer,
-        },
-    )
-    def get(self, request: Request) -> Response:
-        if not settings.ASSISTANT_ENABLED:
-            raise AssistantUnavailableApiError
-        user = cast(User, request.user)
-        return Response(
-            AssistantConversationSummarySerializer(conversations_for(user), many=True).data
         )
 
 

@@ -2,9 +2,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AssistantMessage, AssistantSession
-
-TITLE_LENGTH = 60
+from .models import AssistantMessage
 
 ACTION_TYPES = (
     "QUICK_REPLY",
@@ -49,23 +47,6 @@ class AssistantConversationSerializer(serializers.Serializer[dict[str, object]])
     is_answering = serializers.BooleanField()
     signed_in = serializers.BooleanField()
     has_open_booking = serializers.BooleanField()
-
-
-class AssistantConversationSummarySerializer(serializers.ModelSerializer[AssistantSession]):
-    """A row of the history list: which conversation, what it was about, when it last moved."""
-
-    title = serializers.SerializerMethodField()
-
-    class Meta:
-        model = AssistantSession
-        fields = ("id", "title", "last_activity_at")
-        read_only_fields = fields
-
-    @staticmethod
-    @extend_schema_field(serializers.CharField())
-    def get_title(session: AssistantSession) -> str:
-        # `title` is added by `conversations_for`: the first thing the Customer said.
-        return str(getattr(session, "title", ""))[:TITLE_LENGTH]
 
 
 class AssistantConversationCreatedSerializer(serializers.Serializer[dict[str, object]]):
