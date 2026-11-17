@@ -150,13 +150,12 @@ export function AssistantScreen() {
         contentContainerClassName="gap-3 px-4 py-4"
         keyboardShouldPersistTaps="handled"
       >
-        {hasCustomerMessage ? null : (
-          <WelcomeHero
-            key={token ?? "new"}
-            disabled={!token || send.isPending}
-            onPick={(categoryName) => sendText(`I need ${categoryName}`)}
-          />
-        )}
+        {/* Always at the top of the chat, so the starter chips stay one tap away. */}
+        <WelcomeHero
+          key={token ?? "new"}
+          disabled={!token || send.isPending}
+          onPick={(categoryName) => sendText(`I need ${categoryName}`)}
+        />
         {messages.map((message) =>
           canEdit && message.sequence === lastCustomerMessage?.sequence ? (
             <OwnMessage

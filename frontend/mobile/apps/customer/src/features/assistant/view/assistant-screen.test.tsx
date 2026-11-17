@@ -142,7 +142,9 @@ describe("AssistantScreen", () => {
     fireEvent.press(screen.getByText("AC Repair"));
 
     expect(await screen.findByText("I need AC Repair")).toBeTruthy();
-    expect(screen.queryByText("How can I help you today?")).toBeNull();
+    // The welcome and its chips stay at the top after a message is sent.
+    expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    expect(screen.getByText("Home Cleaning")).toBeTruthy();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const sent = fetchMock.mock.calls[0]?.[0] as Request;
     expect(sent.url).toContain("/api/v1/assistant/conversation/messages/");
@@ -193,6 +195,9 @@ describe("AssistantScreen", () => {
     expect(await screen.findByText("Which day suits you?")).toBeTruthy();
     expect(screen.getByText("AC not cooling")).toBeTruthy();
     expect(screen.queryByText(GREETING, { exact: false })).toBeNull();
+    // A chat that already has messages still opens with the welcome and chips at the top.
+    expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    expect(screen.getByText("AC Repair")).toBeTruthy();
   });
 
   describe("edit and delete", () => {
@@ -269,7 +274,7 @@ describe("AssistantScreen", () => {
       await waitFor(() => expect(screen.queryByText("AC not cooling")).toBeNull());
       expect(screen.queryByText("Which day suits you?")).toBeNull();
       expect(savedHidden()).toEqual([2, 3]);
-      // With nothing of the customer's left, the chat shows the welcome again.
+      // The welcome is still at the top.
       expect(screen.getByText("How can I help you today?")).toBeTruthy();
     });
   });
