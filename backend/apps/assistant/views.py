@@ -6,6 +6,7 @@ Customer to log in, and a conversation then belongs to that Customer only.
 
 import logging
 from typing import cast
+from uuid import UUID
 
 from django.conf import settings
 from django.utils import timezone
@@ -36,6 +37,7 @@ from .services import (
     conversations_for,
     create_session,
     has_open_booking,
+    owned_session,
     recent_visible_messages,
     session_for,
     sync_progress,
@@ -155,12 +157,42 @@ class AssistantConversationView(APIView):
         if not settings.ASSISTANT_ENABLED:
             raise AssistantUnavailableApiError
         user = _user(request)
-        session = session_for(token=request.headers.get(TOKEN_HEADER, ""), user=user)
+        session = self.find_session(request, user)
         if has_open_booking(session):
             with turn_lease(session, required=False) as acquired:
                 if acquired:
                     sync_progress(session)
         return Response(AssistantConversationSerializer(_conversation(session, user=user)).data)
+
+    def find_session(self, request: Request, user: User | None) -> AssistantSession:
+        return session_for(token=request.headers.get(TOKEN_HEADER, ""), user=user)
+
+
+class AssistantOwnedConversationView(AssistantConversationView):
+    """The same conversation, opened by its id for the signed-in Customer who owns it.
+
+    How a second device continues a chat it has no token for: the history list gives the id.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Assistant"],
+        operation_id="assistant_owned_conversation_retrieve",
+        responses={
+            200: AssistantConversationSerializer,
+            404: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, **_url_kwargs: object) -> Response:
+        return super().get(request)
+
+    def find_session(self, _request: Request, user: User | None) -> AssistantSession:
+        return owned_session(
+            conversation_id=cast(UUID, self.kwargs["conversation_id"]),
+            user=cast(User, user),
+        )
 
 
 class AssistantMessageCreateView(ThrottledWriteMixin, APIView):
@@ -187,7 +219,7 @@ class AssistantMessageCreateView(ThrottledWriteMixin, APIView):
         serializer = AssistantMessageCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = _user(request)
-        session = session_for(token=request.headers.get(TOKEN_HEADER, ""), user=user)
+        session = self.find_session(request, user)
         cart_session_key = _cart_session_key(request)
         with turn_lease(session):
             messages = run_turn(
@@ -199,3 +231,33 @@ class AssistantMessageCreateView(ThrottledWriteMixin, APIView):
                 chat_model=chat_model,
             )
         return Response(AssistantTurnSerializer({"messages": messages}).data)
+
+    def find_session(self, request: Request, user: User | None) -> AssistantSession:
+        return session_for(token=request.headers.get(TOKEN_HEADER, ""), user=user)
+
+
+class AssistantOwnedMessageCreateView(AssistantMessageCreateView):
+    """Send a message in a conversation opened by its id, as the Customer who owns it."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Assistant"],
+        operation_id="assistant_owned_message_create",
+        request=AssistantMessageCreateSerializer,
+        responses={
+            200: AssistantTurnSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+            429: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, **_url_kwargs: object) -> Response:
+        return super().post(request)
+
+    def find_session(self, _request: Request, user: User | None) -> AssistantSession:
+        return owned_session(
+            conversation_id=cast(UUID, self.kwargs["conversation_id"]),
+            user=cast(User, user),
+        )
