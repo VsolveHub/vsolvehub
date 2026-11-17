@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.101.0
+  version: 1.100.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -292,158 +292,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssistantConversationCreated'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/assistant/conversations/{conversation_id}/:
-    get:
-      operationId: assistant_owned_conversation_retrieve
-      description: |-
-        The same conversation, opened by its id for the signed-in Customer who owns it.
-
-        How a second device continues a chat it has no token for: the history list gives the id.
-      parameters:
-      - in: path
-        name: conversation_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - Assistant
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssistantConversation'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-    delete:
-      operationId: assistant_owned_conversation_destroy
-      description: |-
-        The same conversation, opened by its id for the signed-in Customer who owns it.
-
-        How a second device continues a chat it has no token for: the history list gives the id.
-      parameters:
-      - in: path
-        name: conversation_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - Assistant
-      security:
-      - cookieAuth: []
-      responses:
-        '204':
-          description: No response body
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/assistant/conversations/{conversation_id}/messages/:
-    post:
-      operationId: assistant_owned_message_create
-      description: Send a message in a conversation opened by its id, as the Customer
-        who owns it.
-      parameters:
-      - in: path
-        name: conversation_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - Assistant
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssistantMessageCreateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AssistantMessageCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AssistantMessageCreateRequest'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssistantTurn'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/assistant/history/:
-    get:
-      operationId: assistant_history_list
-      description: The signed-in Customer's past conversations, so any device they
-        log in on shows them.
-      tags:
-      - Assistant
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AssistantConversationSummary'
           description: ''
         '503':
           content:
@@ -23796,26 +23644,6 @@ components:
       required:
       - conversation
       - conversation_token
-    AssistantConversationSummary:
-      type: object
-      description: 'A row of the history list: which conversation, what it was about,
-        when it last moved.'
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        title:
-          type: string
-          readOnly: true
-        last_activity_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - id
-      - last_activity_at
-      - title
     AssistantMessage:
       type: object
       properties:

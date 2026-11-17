@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.101.0)
- * Checksum: 7ec043e94ed2b075
+ * Source:   contracts/openapi/v1.yaml (version 1.100.0)
+ * Checksum: b5d23ef54143cd89
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -100,66 +100,6 @@ export interface paths {
         put?: never;
         /** @description Start a conversation. The token in the response is shown once. */
         post: operations["assistant_conversation_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/assistant/conversations/{conversation_id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description The same conversation, opened by its id for the signed-in Customer who owns it.
-         *
-         *     How a second device continues a chat it has no token for: the history list gives the id.
-         */
-        get: operations["assistant_owned_conversation_retrieve"];
-        put?: never;
-        post?: never;
-        /**
-         * @description The same conversation, opened by its id for the signed-in Customer who owns it.
-         *
-         *     How a second device continues a chat it has no token for: the history list gives the id.
-         */
-        delete: operations["assistant_owned_conversation_destroy"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/assistant/conversations/{conversation_id}/messages/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Send a message in a conversation opened by its id, as the Customer who owns it. */
-        post: operations["assistant_owned_message_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/assistant/history/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The signed-in Customer's past conversations, so any device they log in on shows them. */
-        get: operations["assistant_history_list"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9705,14 +9645,6 @@ export interface components {
             /** @description Send as the X-Assistant-Token header. Shown once; keep it on the device. */
             conversation_token: string;
             conversation: components["schemas"]["AssistantConversation"];
-        };
-        /** @description A row of the history list: which conversation, what it was about, when it last moved. */
-        AssistantConversationSummary: {
-            /** Format: uuid */
-            readonly id: string;
-            readonly title: string;
-            /** Format: date-time */
-            readonly last_activity_at: string;
         };
         AssistantMessage: {
             readonly sequence: number;
@@ -21094,165 +21026,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssistantConversationCreated"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    assistant_owned_conversation_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantConversation"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    assistant_owned_conversation_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    assistant_owned_message_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssistantMessageCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["AssistantMessageCreateRequest"];
-                "multipart/form-data": components["schemas"]["AssistantMessageCreateRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantTurn"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    assistant_history_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantConversationSummary"][];
                 };
             };
             503: {

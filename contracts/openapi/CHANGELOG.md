@@ -1,26 +1,5 @@
 # API Contract Changelog
 
-## 1.101.0 - Assistant chat history on every device
-
-Additive. The token routes from 1.100.0 are unchanged. These routes let a signed-in Customer see
-and continue their own conversations from any device, by conversation id instead of the token.
-
-- **Added** `GET /assistant/history/` (`AssistantConversationSummary[]`): the signed-in Customer's
-  conversations, newest first, each with `id`, `title` (the Customer's first message, at most 60
-  characters) and `last_activity_at`. Conversations the Customer has not written in are left out.
-  At most `ASSISTANT_CONVERSATION_LIST_LIMIT` (default 30). Needs a signed-in Customer;
-  `503 assistant_unavailable` when disabled.
-- **Added** `GET /assistant/conversations/{id}/` (`AssistantConversation`): the same body as
-  `GET /assistant/conversation/`, for the signed-in owner, no token needed.
-- **Added** `POST /assistant/conversations/{id}/messages/` (`AssistantMessageCreate` →
-  `AssistantTurn`): the same as `POST /assistant/conversation/messages/`, for the signed-in owner,
-  with the same `409`/`429`/`503` errors, replay of a resent `client_message_id` and throttle.
-- **Added** `DELETE /assistant/conversations/{id}/` (`204`): deletes the conversation and its
-  messages for good. Bookings it made stay in the Customer's bookings. `409 assistant_busy` while
-  an answer is being written. Works even when the assistant is disabled.
-- On every `{id}` route, another Customer's conversation, an unclaimed signed-out one and an
-  unknown id all answer `404 assistant_conversation_not_found`.
-
 ## 1.100.0 - AI booking assistant
 
 Additive. Off unless `ASSISTANT_ENABLED` is set; every route answers `503 assistant_unavailable`
