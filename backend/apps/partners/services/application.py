@@ -399,7 +399,17 @@ def submit_partner_application(
     if application.track not in (
         PartnerApplication.Track.STAY_HOST,
         PartnerApplication.Track.RENTAL_OWNER,
+        # Same short application as a stay host: who they are and the agreements. Without this
+        # an employer was asked for trades, areas and hours that this track never shows.
+        PartnerApplication.Track.EMPLOYER,
     ):
+        # The apps already refuse to continue past "About you" without it; the server says the
+        # same, so a client that skips the screen cannot send an application the review expects
+        # to read experience from.
+        if partner.experience_years < 1:
+            raise PartnerApplicationIncompleteError(
+                "Tell us how many years of experience you have before submitting.",
+            )
         _validate_service_configuration(
             skills=skills,
             variants=variants,

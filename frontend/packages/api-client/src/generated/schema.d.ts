@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.100.0)
- * Checksum: b5d23ef54143cd89
+ * Source:   contracts/openapi/v1.yaml (version 1.101.0)
+ * Checksum: 9130679429edeeb8
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7803,6 +7803,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/work-catalog/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What an applicant can offer on "Your work", in one read.
+         *
+         *     Public, like the catalog it reads, and cacheable for the same five minutes. It replaces a walk
+         *     of one request per category and one per service that the apps made on every visit to the step.
+         */
+        get: operations["partner_work_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/workspaces/": {
         parameters: {
             query?: never;
@@ -15578,6 +15600,32 @@ export interface components {
          * @enum {string}
          */
         PartnerWithdrawalStatusEnum: "REQUESTED" | "SENT" | "PAID" | "FAILED";
+        /** @description A trade on "Your work" with every service a Partner can offer under it. */
+        PartnerWorkCategory: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            icon_key: string;
+            image_url: string;
+            services: components["schemas"]["PartnerWorkService"][];
+        };
+        /** @description A service a Partner can offer ("Gas Stove Repair") with the variants under it. */
+        PartnerWorkService: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            variants: components["schemas"]["PartnerWorkVariant"][];
+        };
+        /** @description One size or kind of a service ("2 burner"). The application stores these ids. */
+        PartnerWorkVariant: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            required_skill_code: string;
+        };
         /**
          * @description A case as one of its two parties may read it.
          *
@@ -38357,6 +38405,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_work_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkCategory"][];
                 };
             };
         };

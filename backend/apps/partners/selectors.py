@@ -54,6 +54,70 @@ def applicant_service_areas() -> QuerySet[ServiceArea]:
     ).only("id", "slug", "name", "timezone", "is_accepting_partners")
 
 
+#: Catalog categories that are not trades on the "Your work" step. Stays, rentals, hiring and crew
+#: or project work are their own ways to join, chosen on the first screen or added after approval.
+WORK_CATALOG_EXCLUDED_CATEGORY_SLUGS: tuple[str, ...] = (
+    "rooms-pg-hostel",
+    "rooms-pg-hostel-hotels",
+    "rental-services",
+    "workforce-and-projects",
+    "career-jobs",
+)
+
+
+def partner_work_catalog() -> list[dict[str, object]]:
+    """Trade categories, each with its services and their variants, for the "Your work" step."""
+    from apps.catalog.models import Category  # noqa: PLC0415
+    from apps.catalog.selectors import work_catalog_services  # noqa: PLC0415
+
+    # Every active trade is listed, including one with nothing to offer yet (Events today): the
+    # step tells the applicant "no job types are open for this category yet" rather than hiding it.
+    categories: dict[object, dict[str, object]] = {
+        category.id: {
+            "id": category.id,
+            "slug": category.slug,
+            "name": category.name,
+            "icon_key": category.icon_key,
+            "image_url": category.image_url,
+            "services": [],
+        }
+        for category in Category.objects.filter(is_active=True)
+        .exclude(slug__in=WORK_CATALOG_EXCLUDED_CATEGORY_SLUGS)
+        .order_by("display_order", "name")
+    }
+    for service in work_catalog_services(
+        excluded_category_slugs=WORK_CATALOG_EXCLUDED_CATEGORY_SLUGS,
+    ):
+        variants = [
+            *getattr(service, "public_variants", []),
+            *getattr(service, "listing_variants", []),
+        ]
+        if not variants:
+            continue
+        entry = categories.get(service.subcategory.category_id)
+        if entry is None:
+            continue
+        services = entry["services"]
+        assert isinstance(services, list)  # noqa: S101 - narrows the type for mypy
+        services.append(
+            {
+                "id": service.id,
+                "slug": service.slug,
+                "name": service.name,
+                "variants": [
+                    {
+                        "id": variant.id,
+                        "code": variant.code,
+                        "name": variant.name,
+                        "required_skill_code": variant.required_skill_code,
+                    }
+                    for variant in variants
+                ],
+            },
+        )
+    return list(categories.values())
+
+
 def applicant_skills() -> QuerySet[Skill]:
     return Skill.objects.filter(is_active=True).only("code", "name", "description")
 

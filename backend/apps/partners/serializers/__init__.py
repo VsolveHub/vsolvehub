@@ -90,6 +90,9 @@ from .onboarding import (
     PartnerProfileSerializer,
     PartnerProfileUpdateSerializer,
     PartnerSkillOptionSerializer,
+    PartnerWorkCategorySerializer,
+    PartnerWorkServiceSerializer,
+    PartnerWorkVariantSerializer,
 )
 
 __all__ = [
@@ -162,6 +165,9 @@ __all__ = [
     "PartnerScheduleUpdateSerializer",
     "PartnerSkillChipSerializer",
     "PartnerSkillOptionSerializer",
+    "PartnerWorkCategorySerializer",
+    "PartnerWorkServiceSerializer",
+    "PartnerWorkVariantSerializer",
     "ProgressiveGateListSerializer",
     "ProgressiveGateSerializer",
 ]

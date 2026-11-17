@@ -242,6 +242,35 @@ class PartnerSkillOptionSerializer(serializers.ModelSerializer[Skill]):
         read_only_fields = fields
 
 
+class PartnerWorkVariantSerializer(serializers.Serializer[dict[str, object]]):
+    """One size or kind of a service ("2 burner"). The application stores these ids."""
+
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    required_skill_code = serializers.CharField(allow_blank=True)
+
+
+class PartnerWorkServiceSerializer(serializers.Serializer[dict[str, object]]):
+    """A service a Partner can offer ("Gas Stove Repair") with the variants under it."""
+
+    id = serializers.UUIDField()
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    variants = PartnerWorkVariantSerializer(many=True)
+
+
+class PartnerWorkCategorySerializer(serializers.Serializer[dict[str, object]]):
+    """A trade on "Your work" with every service a Partner can offer under it."""
+
+    id = serializers.UUIDField()
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    icon_key = serializers.CharField(allow_blank=True)
+    image_url = serializers.CharField(allow_blank=True)
+    services = PartnerWorkServiceSerializer(many=True)
+
+
 class PartnerDocumentSerializer(serializers.ModelSerializer[PartnerDocument]):
     file_name = serializers.CharField(read_only=True)
     can_replace = serializers.SerializerMethodField()

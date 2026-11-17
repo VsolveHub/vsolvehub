@@ -38,6 +38,7 @@ from apps.partners.views import (
     PartnerPushSubscriptionSyncView,
     PartnerScheduleView,
     PartnerSkillListView,
+    PartnerWorkCatalogView,
     RequiredPartnerConsentListView,
 )
 from apps.partners.views.operations import PartnerImportView
@@ -46,6 +47,7 @@ urlpatterns = [
     path("service-areas/", ApplicantServiceAreaListView.as_view(), name="partner-service-areas"),
     path("partner/me/", PartnerMeView.as_view(), name="partner-me"),
     path("partner/skills/", PartnerSkillListView.as_view(), name="partner-skills"),
+    path("partner/work-catalog/", PartnerWorkCatalogView.as_view(), name="partner-work-catalog"),
     path(
         "partner/required-consents/",
         RequiredPartnerConsentListView.as_view(),

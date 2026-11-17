@@ -1,5 +1,26 @@
 # API Contract Changelog
 
+## 1.101.0 - One-read catalogue for "Your work", and two submit rules
+
+Additive, with two behaviour changes to `POST /partner/application/submit/`.
+
+- **Added** `GET /partner/work-catalog/` (`PartnerWorkCategory[]`): the trades an applicant can
+  offer, each with its services and their variants (`id`, `code`, `name`, `required_skill_code`),
+  in one read. Public and cacheable for five minutes (`Cache-Control: public, max-age=300`), like
+  the catalog it reads. It returns exactly the variants `GET /services/{slug}/configuration/`
+  publishes, for every active trade category, so the onboarding apps no longer make one request
+  per category and one per service. Categories that are their own way to join are left out:
+  `rooms-pg-hostel`, `rooms-pg-hostel-hotels`, `rental-services`, `workforce-and-projects` and
+  `career-jobs` (hiring is the `EMPLOYER` track). A trade with nothing open is listed with
+  `services: []`.
+- **Behaviour** `POST /partner/application/submit/` for a services application now answers
+  `409 partner_application_incomplete` ("Tell us how many years of experience you have before
+  submitting.") when `experience_years` is below 1. The apps already refuse to continue past
+  "About you" without it. Stay hosts, rental owners and employers are not asked.
+- **Behaviour** an `EMPLOYER` application is submitted like a stay host's: who they are, the
+  agreements and the identity document. It was wrongly required to have trades, service areas and
+  working hours, which that track never shows, so it could not be sent.
+
 ## 1.100.0 - AI booking assistant
 
 Additive. Off unless `ASSISTANT_ENABLED` is set; every route answers `503 assistant_unavailable`
