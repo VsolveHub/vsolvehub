@@ -46,6 +46,10 @@ const logoMark = require("../../../assets/logo-mark.png");
 export default function ApplyLayout() {
   const pathname = usePathname();
   const isStatusPage = pathname === "/apply/status" || pathname.endsWith("/status");
+  // The read-only profile preview gets the same header as the status page: a back arrow, no step
+  // counter and no Continue dock.
+  const isProfilePage = pathname === "/apply/profile";
+  const isSideScreen = isStatusPage || isProfilePage;
   // `/apply` itself is the overview (the choice of how to join, then the checklist), as on the
   // website: no step counter and no Continue dock.
   const isOverview = pathname === "/apply" || pathname === "/apply/";
@@ -121,8 +125,8 @@ export default function ApplyLayout() {
   const pathSteps = stepProgress(application, availability.data).filter((s) => s.state !== "waypoint");
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
-  const back = isStatusPage ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
-  const shouldShowDock = !isSubmitted && !isStatusPage && !isOverview;
+  const back = isSideScreen ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
+  const shouldShowDock = !isSubmitted && !isSideScreen && !isOverview;
 
   // Find the current step in this partner's own sequence
   const steps = applicationSteps(application?.track);
@@ -173,7 +177,7 @@ export default function ApplyLayout() {
                   accessibilityLabel="VSolve Hub"
                 />
               </View>
-            ) : isStatusPage ? (
+            ) : isSideScreen ? (
               <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -223,7 +227,7 @@ export default function ApplyLayout() {
             )}
 
             {/* Center: Step X of Y on inner steps, omitted on overview and status */}
-            {isOverview || isStatusPage ? null : (
+            {isOverview || isSideScreen ? null : (
               <Text style={styles.headerStepCounter}>
                 {`Step ${currentStepIdx + 1} of ${steps.length}`}
               </Text>

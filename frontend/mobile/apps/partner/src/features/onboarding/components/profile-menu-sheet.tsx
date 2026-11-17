@@ -170,7 +170,7 @@ export function ProfileMenuSheet({
               cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Profile"
-              onPress={() => handleNavigate("/apply/about")}
+              onPress={() => handleNavigate("/apply/profile")}
               style={({ pressed }) => [styles.menuItem, pressed ? styles.menuItemPressed : null]}
             >
               <View style={styles.menuItemLeft}>
