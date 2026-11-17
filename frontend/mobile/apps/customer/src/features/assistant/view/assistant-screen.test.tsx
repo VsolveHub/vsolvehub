@@ -38,6 +38,9 @@ const created = {
   },
 };
 
+// A repeated name and a blank one: neither should become a chip.
+const categories = [{ name: "AC Repair" }, { name: "AC Repair" }, { name: "  " }, { name: "Home Cleaning" }];
+
 async function renderScreen() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -63,7 +66,10 @@ describe("AssistantScreen", () => {
   beforeEach(() => {
     mockClient.GET.mockReset();
     mockClient.POST.mockReset();
-    mockClient.GET.mockResolvedValue(reply(created.conversation, 200));
+    // The screen reads the conversation, and the welcome reads the service categories.
+    mockClient.GET.mockImplementation(async (path: string) =>
+      path === "/api/v1/categories/" ? reply(categories, 200) : reply(created.conversation, 200),
+    );
     mockKvGet.mockReset();
     mockKvGet.mockResolvedValue(null);
     mockKvSet.mockClear();
@@ -111,6 +117,41 @@ describe("AssistantScreen", () => {
     fireEvent.press(await screen.findByLabelText("Chat history"));
     expect(await screen.findByText("No chats yet")).toBeTruthy();
     expect(screen.queryByText("Open now")).toBeNull();
+  });
+
+  it("offers each service category once as a starter chip and sends it as the first message", async () => {
+    // The reply is still on its way, as it is for a few seconds in real life.
+    const fetchMock = jest.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => undefined));
+    mockClient.POST.mockResolvedValue(reply(created));
+    const screen = await renderScreen();
+
+    // The chips work once the conversation exists.
+    await screen.findByText(GREETING, { exact: false });
+    expect(await screen.findAllByText("AC Repair")).toHaveLength(1);
+    expect(screen.getByText("Home Cleaning")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("AC Repair"));
+
+    expect(await screen.findByText("I need AC Repair")).toBeTruthy();
+    expect(screen.queryByText("How can I help you today?")).toBeNull();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const sent = fetchMock.mock.calls[0]?.[0] as Request;
+    expect(sent.url).toContain("/api/v1/assistant/conversation/messages/");
+    expect(await sent.text()).toContain("I need AC Repair");
+    fetchMock.mockRestore();
+  });
+
+  it("shows the welcome without chips when the categories cannot be loaded", async () => {
+    mockClient.GET.mockImplementation(async (path: string) =>
+      path === "/api/v1/categories/" ? failure(500) : reply(created.conversation, 200),
+    );
+    mockClient.POST.mockResolvedValue(reply(created));
+    const screen = await renderScreen();
+
+    await screen.findByText(GREETING, { exact: false });
+    expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    expect(screen.queryByText("AC Repair")).toBeNull();
+    expect(screen.queryByText("Home Cleaning")).toBeNull();
   });
 
   it("starts a conversation and shows the assistant's greeting", async () => {

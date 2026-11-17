@@ -141,7 +141,13 @@ export function AssistantScreen() {
         contentContainerClassName="gap-3 px-4 py-4"
         keyboardShouldPersistTaps="handled"
       >
-        {hasCustomerMessage ? null : <WelcomeHero key={token ?? "new"} />}
+        {hasCustomerMessage ? null : (
+          <WelcomeHero
+            key={token ?? "new"}
+            disabled={!token || send.isPending}
+            onPick={(categoryName) => sendText(`I need ${categoryName}`)}
+          />
+        )}
         {messages.map((message) => (
           <MessageBubble
             key={message.sequence}

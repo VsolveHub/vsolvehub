@@ -1,7 +1,9 @@
 import { Text } from "@vsolve/mobile-ui";
-import { useEffect, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, Pressable, View } from "react-native";
 import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
+
+import { useCategories } from "@/features/catalog/client-queries";
 
 /**
  * Shown at the top of a chat until the customer says something. It eases in once
@@ -9,7 +11,15 @@ import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
  * native driver and stops when the block goes away. With the phone's "reduce motion"
  * setting on, it just appears and stays still.
  */
-export function WelcomeHero() {
+export function WelcomeHero({
+  onPick,
+  disabled,
+}: {
+  /** Called with a service category's name when the customer taps its chip. */
+  onPick: (categoryName: string) => void;
+  disabled: boolean;
+}) {
+  const categoryNames = useStarterCategories();
   const [entrance] = useState(() => new Animated.Value(0));
   const [bob] = useState(() => new Animated.Value(0));
 
@@ -70,8 +80,45 @@ export function WelcomeHero() {
         V Solve <Text className="text-lg font-extrabold text-[#EA580C]">Hub</Text> AI
       </Text>
       <Text className="mt-1 text-sm text-[#6B6560]">How can I help you today?</Text>
+      {categoryNames.length ? (
+        <View className="mt-4 flex-row flex-wrap justify-center gap-2 px-2">
+          {categoryNames.map((name) => (
+            <Pressable
+              key={name}
+              accessibilityRole="button"
+              disabled={disabled}
+              onPress={() => onPick(name)}
+              className={`min-h-11 max-w-full justify-center rounded-full border border-[#EA580C]/30 bg-white px-4 active:bg-orange-50 ${
+                disabled ? "opacity-50" : ""
+              }`}
+            >
+              <Text numberOfLines={1} className="text-sm font-medium text-navy-900">
+                {name}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </Animated.View>
   );
+}
+
+const MAX_STARTER_CHIPS = 6;
+const MAX_CHIP_NAME_LENGTH = 40;
+
+/**
+ * Starter chips come from the service categories the server already serves, never a list
+ * typed into the app. Until they load, or if they fail or come back empty, there are none and
+ * the welcome simply has no chips. Blank, over-long and repeated names are left out.
+ */
+function useStarterCategories(): string[] {
+  const categories = useCategories();
+  return useMemo(() => {
+    const names = (categories.data ?? [])
+      .map((category) => category.name.trim())
+      .filter((name) => name.length > 0 && name.length <= MAX_CHIP_NAME_LENGTH);
+    return [...new Set(names)].slice(0, MAX_STARTER_CHIPS);
+  }, [categories.data]);
 }
 
 /** The V Solve Hub helper: a friendly navy bot with the brand's orange. Decorative only. */
