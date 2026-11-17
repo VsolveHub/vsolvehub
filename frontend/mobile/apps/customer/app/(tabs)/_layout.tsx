@@ -147,6 +147,7 @@ export default function TabsLayout() {
   const hideHeader =
     !isDesktop &&
     (pathname.startsWith("/account") ||
+      pathname.startsWith("/ai-chat") ||
       pathname.startsWith("/activity") ||
       pathname.startsWith("/listings"));
 
