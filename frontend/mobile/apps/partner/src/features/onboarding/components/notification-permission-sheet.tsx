@@ -114,7 +114,7 @@ export function NotificationPermissionSheet({
 
           {/* Action Buttons */}
           <View style={styles.actions}>
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Allow notifications"
               disabled={requesting}
@@ -131,7 +131,7 @@ export function NotificationPermissionSheet({
               )}
             </Pressable>
 
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Not now"
               onPress={onClose}

@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
 import { Pressable, Text } from "react-native";
 import { ApplyDockContext, type DockConfig } from "../model/dock-context";
-import { router, setPathname } from "expo-router";
+import { router } from "expo-router";
+const { setPathname } = require("expo-router") as { setPathname: (p: string) => void };
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -37,6 +38,7 @@ jest.mock("../queries", () => {
 });
 
 jest.mock("../upload-queries", () => ({
+  usePartnerDocumentAccess: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUploadDocument: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -198,7 +200,7 @@ describe("application editor", () => {
 
     expect(view.getByDisplayValue("Ramesh Kumar")).toBeTruthy();
     fireEvent.press(view.getByRole("button", { name: "Save and Continue" }));
-    expect(mockPush).toHaveBeenCalledWith("/apply/consent");
+    expect(mockPush).toHaveBeenCalledWith("/apply/work");
   });
 });
 
@@ -226,6 +228,64 @@ describe("documents step", () => {
 
     const missing = await renderInSafeArea(<DocumentsStep />);
     expect(missing.getAllByText("Not uploaded").length).toBeGreaterThan(0);
+  });
+
+  const document = (overrides: Record<string, unknown>) => ({
+    id: "d-1",
+    kind: "GOVERNMENT_ID",
+    version: 1,
+    status: "PENDING",
+    scan_status: "CLEAN",
+    review_reason: "",
+    can_replace: true,
+    file_name: "aadhaar.jpg",
+    content_type: "image/jpeg",
+    size_bytes: 120_000,
+    uploaded_at: "2026-08-02T09:00:00Z",
+    ...overrides,
+  });
+
+  function showDocuments(documents: unknown[], applicationOverrides: Record<string, unknown> = {}) {
+    (usePartnerApplication as jest.Mock).mockReturnValue({
+      isPending: false,
+      isError: false,
+      error: null,
+      data: { ...APPLICATION, documents, ...applicationOverrides },
+      refetch: jest.fn(),
+    });
+    return renderInSafeArea(<DocumentsStep />);
+  }
+
+  it("lets a draft applicant replace a document that is still waiting for review", async () => {
+    // Regression: Replace was offered only for a rejected document, but the server lets an
+    // applicant replace any document while the application is a draft, so a wrong photo was stuck.
+    const view = await showDocuments([document({ status: "PENDING", can_replace: true })]);
+    expect(view.getByRole("button", { name: "Replace file" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Re-upload document" })).toBeNull();
+  });
+
+  it("treats a file that failed the security scan as rejected, with the reason and a re-upload", async () => {
+    // Regression: only `status` was checked, so a scan-failed file read "In review" with no way on.
+    const view = await showDocuments([document({ status: "PENDING", scan_status: "REJECTED", can_replace: true })]);
+    expect(view.getByText("This file failed our security check. Upload it again.")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Re-upload document" })).toBeTruthy();
+  });
+
+  it("shows the reviewer's reason for a rejected document", async () => {
+    const view = await showDocuments([document({ status: "REJECTED", review_reason: "Photo is blurred." })]);
+    expect(view.getByText("Reason: Photo is blurred.")).toBeTruthy();
+  });
+
+  it("is locked while the application is with a reviewer", async () => {
+    const view = await showDocuments([document({ status: "PENDING", can_replace: false })], { status: "SUBMITTED" });
+    expect(view.getByText("Locked while your application is being reviewed.")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Replace file" })).toBeNull();
+  });
+
+  it("lets the applicant view an uploaded document and shows when it was uploaded", async () => {
+    const view = await showDocuments([document({})]);
+    expect(view.getByRole("button", { name: "View document" })).toBeTruthy();
+    expect(view.getByText(/2 Aug 2026/)).toBeTruthy();
   });
 
   it("opens a document chooser with Take photo, Choose photo and Choose PDF", async () => {

@@ -2,7 +2,7 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Button, ErrorState, Skeleton, buttonStyles, cn, useT, type Translator } from "@vsolve/ui";
-import { BedDouble, Check, ChevronRight, Package, Sparkles, Wrench } from "lucide-react";
+import { BedDouble, Briefcase, Check, ChevronRight, Package, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -349,6 +349,12 @@ const TRACK_CHOICES = [
     titleKey: "apply.overview.track.rentals.title",
     descriptionKey: "apply.overview.track.rentals.description",
     icon: Package,
+  },
+  {
+    track: "EMPLOYER",
+    titleKey: "apply.overview.track.employer.title",
+    descriptionKey: "apply.overview.track.employer.description",
+    icon: Briefcase,
   },
 ] as const;
 

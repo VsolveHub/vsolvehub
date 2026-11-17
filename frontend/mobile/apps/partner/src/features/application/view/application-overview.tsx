@@ -2,31 +2,27 @@
 // 100% accurate layout, styling, track selection, typography, and responsiveness.
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton, Text, cn } from "@vsolve/mobile-ui";
+import { Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowRight,
   BedDouble,
+  Briefcase,
   Check,
   ChevronRight,
-  Clock,
-  FileText,
   Package,
-  ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import { Platform, Pressable, useWindowDimensions, View } from "react-native";
 
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
-import { canSubmit, isEditable, rejectedDocuments } from "../model/readiness";
+import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
+import { documentLabel } from "../model/status";
 import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
-import { ApplicationStatusBanner } from "./status-banner";
+import { ApplicationStatusTracker } from "./status-banner";
 
 type Application = Schemas["PartnerApplication"];
 
@@ -55,8 +51,6 @@ export function ApplicationOverview() {
     );
   }
 
-  // As on the website: the choice of how to join shows until the partner has made it. The server
-  // creates an untouched Services draft on first sign-in, so "no application" alone never shows it.
   const application = query.data;
 
   if (isMissing || !application || isUnchosenDraft(application)) {
@@ -67,20 +61,16 @@ export function ApplicationOverview() {
 }
 
 /**
- * NotStarted — 100% replica of Web partner portal /apply (matching Images 1, 3, 4)
- * Shown when the user hasn't started their application yet or wants to pick their track.
+ * NotStarted — Shown when the user hasn't started their application yet or wants to pick their track.
  */
 function NotStarted() {
   const router = useRouter();
   const start = useUpdateApplication();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
-
   const [chosen, setChosen] = useState<StartTrack | null>(null);
 
   return (
     <View style={{ width: "100%", rowGap: 24, paddingBottom: 40 }}>
-      {/* 1. Deep Navy Hero Card with LinearGradient Matching Image 3 */}
+      {/* Deep Navy Hero Card */}
       <View
         style={{
           width: "100%",
@@ -101,7 +91,6 @@ function NotStarted() {
             justifyContent: "center",
           }}
         >
-          {/* Top Circle Sparkles Icon */}
           <View
             style={{
               width: 56,
@@ -143,30 +132,19 @@ function NotStarted() {
         </LinearGradient>
       </View>
 
-      {/* 2. Track Prompt Heading */}
+      {/* Track Prompt Heading */}
       <View style={{ rowGap: 2, marginTop: 4 }}>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "700",
-            color: "#00112e",
-          }}
-        >
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>
           What will you do on VSolve?
         </Text>
-        <Text
-          style={{
-            fontSize: 14,
-            color: "#453f37",
-          }}
-        >
+        <Text style={{ fontSize: 14, color: "#453f37" }}>
           Pick one to see what happens next.
         </Text>
       </View>
 
-      {/* 3. The three ways to join, then what happens next for the one picked */}
+      {/* Track options */}
       <View accessibilityRole="radiogroup" style={{ gap: 12, width: "100%" }}>
-        {TRACK_CHOICES.map(({ track, title, description, Icon }) => (
+        {TRACK_CHOICES.map(({ track, title, description, icon: Icon }) => (
           <TrackCard
             key={track}
             icon={<Icon size={22} color="#ea580c" />}
@@ -184,7 +162,7 @@ function NotStarted() {
           pending={start.isPending}
           failed={start.isError}
           onStart={() =>
-            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about") })
+            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about" as never) })
           }
           onBack={() => setChosen(null)}
         />
@@ -203,23 +181,28 @@ const TRACK_CHOICES = [
     track: "SERVICES",
     title: "I do work at customers' homes",
     description: "Electrician, plumber, cleaning, beauty, AC, pets, construction, events and more.",
-    Icon: Wrench,
+    icon: Wrench,
   },
   {
     track: "STAY_HOST",
     title: "I have rooms to rent",
     description: "PG, hostel, hotel or rooms.",
-    Icon: BedDouble,
+    icon: BedDouble,
   },
   {
     track: "RENTAL_OWNER",
     title: "I rent out tools or equipment",
     description: "Tools, machinery, event or home items.",
-    Icon: Package,
+    icon: Package,
+  },
+  {
+    track: "EMPLOYER",
+    title: "I want to hire staff",
+    description: "A shop, clinic, office or business looking for people to work for you.",
+    icon: Briefcase,
   },
 ] as const;
 
-/** What a chosen way of joining asks for, before the applicant commits to it. */
 function TrackPreview({
   track,
   pending,
@@ -300,7 +283,6 @@ function TrackCard({
 }) {
   return (
     <Pressable
-      cssInterop={false}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       onPress={onPress}
@@ -353,48 +335,6 @@ function TrackCard({
   );
 }
 
-/**
- * Switching between services, stays and rentals while the application is still a draft, as on
- * the website. Only in DRAFT: once a reviewer has asked for changes, it stays what they looked at.
- */
-function SwitchTrack({ current }: { current: string }) {
-  const router = useRouter();
-  const update = useUpdateApplication();
-  const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
-
-  return (
-    <View
-      style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: "#e2e8f0",
-        backgroundColor: "#ffffff",
-        padding: 16,
-        rowGap: 10,
-      }}
-    >
-      <Text style={{ fontSize: 14, fontWeight: "700", color: "#00112e" }}>Signed up for the wrong thing?</Text>
-      <Text style={{ fontSize: 13, lineHeight: 18, color: "#64748b" }}>
-        You can switch until you send your application. Nothing you have filled in is lost.
-      </Text>
-      {others.map(({ track, title }) => (
-        <Button
-          key={track}
-          variant="outline"
-          size="sm"
-          disabled={update.isPending}
-          onPress={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about") })}
-        >
-          {title}
-        </Button>
-      ))}
-      {update.isError ? (
-        <Text style={{ fontSize: 13, color: "#be123c" }}>We could not start that. Please try again.</Text>
-      ) : null}
-    </View>
-  );
-}
-
 function PromiseItem({ text }: { text: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", columnGap: 10 }}>
@@ -410,246 +350,418 @@ function PromiseItem({ text }: { text: string }) {
       >
         <Check size={13} color="#15803d" strokeWidth={3} />
       </View>
-      <Text
-        style={{
-          fontSize: 15,
-          lineHeight: 24,
-          color: "#453f37",
-        }}
-      >
-        {text}
-      </Text>
+      <Text style={{ fontSize: 15, lineHeight: 24, color: "#453f37" }}>{text}</Text>
     </View>
   );
 }
 
 /**
- * Standing — Dashboard shown when application progress is in flight.
+ * StepMark — Exact 1:1 replica of Web StepMark component.
+ * Done: Solid green circle with white check icon.
+ * Todo: Orange outline hollow circle (border-action).
+ * Inactive / other: Subtle gray outline with small dash.
+ */
+function StepMark({ state }: { state: StepProgress["state"] }) {
+  if (state === "done") {
+    return (
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
+          backgroundColor: "#15803d",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Check size={15} color="#ffffff" strokeWidth={3} />
+      </View>
+    );
+  }
+  if (state === "todo") {
+    return (
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
+          borderWidth: 2,
+          borderColor: "#ea580c",
+          backgroundColor: "transparent",
+        }}
+      />
+    );
+  }
+  return (
+    <View
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderWidth: 2,
+        borderColor: "#cbd5e1",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View style={{ width: 8, height: 2, borderRadius: 1, backgroundColor: "#94a3b8" }} />
+    </View>
+  );
+}
+
+function describeStep(step: StepProgress): string {
+  if (step.state === "done") return "Done";
+  if (step.state === "optional") return "Optional — you can set this later";
+  if (step.outstanding === 1) return "1 thing needed";
+  return `${step.outstanding} things needed`;
+}
+
+/**
+ * Standing — Exact 1:1 replica of Web Partner Portal /apply Standing view.
  */
 function Standing({ application }: { application: Application }) {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
   const availability = usePartnerAvailability();
   const steps = stepProgress(application, availability.data).filter((step) => step.state !== "waypoint");
   const summary = progressSummary(application, availability.data);
-  const rejected = rejectedDocuments(application);
+  const replaceable = replaceableRejectedDocuments(application);
   const editable = isEditable(application);
-  const ready = canSubmit(application, availability.data);
-  const percent = Math.round(summary.fraction * 100);
-  const remaining = summary.total - summary.done;
-  const nextHref = ready ? "/apply/review" : (summary.nextIncomplete?.href ?? "/apply/review");
 
   return (
-    <View style={{ width: "100%", rowGap: 24, paddingBottom: 40 }}>
-      <ApplicationStatusBanner application={application} />
+    <View style={{ width: "100%", rowGap: 16, paddingBottom: 40 }}>
+      {/* 1. Status Tracker Card (Top Card) */}
+      <ApplicationStatusTracker application={application} />
 
-      {/* Responsive layout: 2 columns on desktop, stacked on mobile */}
-      <View
-        style={{
-          flexDirection: isDesktop ? "row" : "column",
-          columnGap: 24,
-          rowGap: 24,
-          alignItems: "flex-start",
-        }}
-      >
-        {/* Left Column (Desktop 7-cols) */}
-        <View style={{ flex: isDesktop ? 1.4 : undefined, width: "100%", rowGap: 20 }}>
-          {/* Progress Hero Card */}
-          {editable ? (
-            <View
-              style={{
-                borderRadius: 20,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.1)",
-                boxShadow: "0 12px 32px rgba(0, 17, 46, 0.15)",
-              }}
-            >
-              <LinearGradient
-                colors={["#00204d", "#00183b", "#00112e"]}
-                start={{ x: 0.1, y: 0 }}
-                end={{ x: 0.9, y: 1 }}
-                style={{
-                  padding: isDesktop ? 28 : 20,
-                  rowGap: 16,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", columnGap: 6 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 9999, backgroundColor: "#f87000" }} />
-                    <Text style={{ fontSize: 11, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase", color: "#fcd34d" }}>
-                      Application Progress
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      borderRadius: 9999,
-                      backgroundColor: "rgba(255, 255, 255, 0.1)",
-                      borderWidth: 1,
-                      borderColor: "rgba(255, 255, 255, 0.15)",
-                      paddingHorizontal: 10,
-                      paddingVertical: 3,
-                    }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
-                      {ready ? "All Done" : `${summary.done} of ${summary.total} Completed`}
-                    </Text>
-                  </View>
-                </View>
+      {/* Replaceable rejected documents notice if any */}
+      {replaceable.length > 0 ? (
+        <View
+          style={{
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: "#fecdd3",
+            backgroundColor: "#fff1f2",
+            padding: 16,
+            rowGap: 8,
+          }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: "700", color: "#9f1239" }}>
+            Action Required: Documents need replacing
+          </Text>
+          <Text style={{ fontSize: 13, color: "#be123c", lineHeight: 18 }}>
+            A reviewer has rejected one or more verification files. Please upload clear replacement files.
+          </Text>
+          <Pressable
+            onPress={() => router.push("/apply/documents" as never)}
+            style={{
+              alignSelf: "flex-start",
+              marginTop: 4,
+              backgroundColor: "#e11d48",
+              borderRadius: 8,
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>
+              Upload Replacement Documents
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
-                <View style={{ rowGap: 4 }}>
-                  <Text style={{ fontSize: 24, fontWeight: "900", color: "#ffffff", letterSpacing: -0.5 }}>
-                    {ready ? "Application Complete!" : `${remaining} ${remaining === 1 ? "step" : "steps"} remaining`}
-                  </Text>
-                  <Text style={{ fontSize: 13, lineHeight: 20, color: "#cbd5e1" }}>
-                    {ready
-                      ? "All required steps are filled. Review your details and submit for verification."
-                      : `Next up: Complete your ${summary.nextIncomplete?.label.toLowerCase() ?? "profile"} to submit for fast 24h approval.`}
-                  </Text>
-                </View>
-
-                {/* Progress Bar */}
-                <View style={{ rowGap: 6 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#94a3b8" }}>Overall Completion</Text>
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#fcd34d" }}>{percent}%</Text>
-                  </View>
-                  <View style={{ height: 8, width: "100%", borderRadius: 9999, backgroundColor: "rgba(255, 255, 255, 0.15)", overflow: "hidden" }}>
-                    <View style={{ height: "100%", borderRadius: 9999, backgroundColor: "#f87000", width: `${Math.max(6, percent)}%` }} />
-                  </View>
-                </View>
-
-                <Pressable cssInterop={false}
-                  accessibilityRole="button"
-                  onPress={() => router.push(nextHref as never)}
-                  style={({ pressed }) => ({
-                    height: 48,
-                    borderRadius: 14,
-                    backgroundColor: pressed ? "#e06400" : "#f87000",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 4px 14px rgba(248, 112, 0, 0.35)",
-                  })}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#ffffff" }}>
-                    {ready ? "Review & Submit Application" : `Continue to ${summary.nextIncomplete?.label ?? "Next Step"}`}
-                  </Text>
-                </Pressable>
-              </LinearGradient>
-            </View>
-          ) : null}
-
-          {application.status === "DRAFT" ? <SwitchTrack current={application.track} /> : null}
-
-          {/* Multi-crew Contractor Option */}
-          {isListingTrack(application.track) ? null : (
-            <View
-              style={{
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: "#e2e8f0",
-                backgroundColor: "#ffffff",
-                padding: 18,
-                rowGap: 10,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", columnGap: 8 }}>
-                <Text style={{ fontSize: 15, fontWeight: "800", color: "#00112e" }}>
-                  Contractor & Multi-Crew Supply
-                </Text>
-                <View style={{ borderRadius: 9999, backgroundColor: "#f1f5f9", paddingHorizontal: 8, paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#64748b" }}>Optional</Text>
-                </View>
-              </View>
-              <Text style={{ fontSize: 12, lineHeight: 18, color: "#64748b" }}>
-                Have a crew of 3+ technicians? Dispatch work teams and bid for custom corporate contracts.
-              </Text>
+      {/* 2. Checklist Card with Inline Continue Button */}
+      {editable ? (
+        <View
+          style={{
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: "#e7e2da",
+            backgroundColor: "#ffffff",
+            padding: 16,
+            rowGap: 12,
+          }}
+        >
+          {/* List of steps */}
+          <View style={{ width: "100%" }}>
+            {steps.map((step, idx) => (
               <Pressable cssInterop={false}
+                key={step.href}
                 accessibilityRole="button"
-                onPress={() => router.push("/apply/capabilities" as never)}
+                onPress={() => router.push(step.href as never)}
                 style={({ pressed }) => ({
-                  alignSelf: "flex-start",
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: "#cbd5e1",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 12,
+                  borderBottomWidth: idx < steps.length - 1 ? 1 : 0,
+                  borderBottomColor: "#e7e2da",
                   backgroundColor: pressed ? "#f8fafc" : "#ffffff",
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
                 })}
               >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#00112e" }}>
-                  Explore Crew Rates
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        {/* Right Column (Desktop 5-cols): Application Checklist */}
-        <View style={{ flex: isDesktop ? 1 : undefined, width: "100%", rowGap: 12 }}>
-          <Text style={{ fontSize: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5, color: "#00112e" }}>
-            Application Checklist
-          </Text>
-
-          <View style={{ borderRadius: 20, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#ffffff", overflow: "hidden" }}>
-            {steps.map((step, idx) => {
-              const isDone = step.state === "done";
-              const isFirstIncomplete = !isDone && step.href === summary.nextIncomplete?.href;
-
-              return (
-                <Pressable cssInterop={false}
-                  key={step.href}
-                  accessibilityRole="button"
-                  onPress={() => router.push(step.href as never)}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: 16,
-                    borderBottomWidth: idx < steps.length - 1 ? 1 : 0,
-                    borderColor: "#f1f5f9",
-                    backgroundColor: pressed ? "#f8fafc" : "#ffffff",
-                  })}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", columnGap: 12, flex: 1 }}>
-                    <View
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 9999,
-                        backgroundColor: isDone ? "#ecfdf5" : isFirstIncomplete ? "#fff7ed" : "#f1f5f9",
-                        borderWidth: 1,
-                        borderColor: isDone ? "#a7f3d0" : isFirstIncomplete ? "#fed7aa" : "#e2e8f0",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {isDone ? (
-                        <Check size={14} color="#059669" strokeWidth={3} />
-                      ) : (
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: isFirstIncomplete ? "#ea580c" : "#64748b" }}>
-                          {idx + 1}
-                        </Text>
-                      )}
-                    </View>
-
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#00112e" }}>
-                        {step.label}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: "#64748b", marginTop: 1 }}>
-                        {isDone ? "Completed" : isFirstIncomplete ? "Next up" : "To do"}
-                      </Text>
-                    </View>
+                <View style={{ flexDirection: "row", alignItems: "center", columnGap: 14, flex: 1 }}>
+                  <StepMark state={step.state} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e" }}>
+                      {step.label}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                      {describeStep(step)}
+                    </Text>
                   </View>
+                </View>
 
-                  <ChevronRight size={16} color="#94a3b8" />
-                </Pressable>
-              );
-            })}
+                <ChevronRight size={16} color="#94a3b8" />
+              </Pressable>
+            ))}
           </View>
+
+          {/* Solid Orange Primary Action Button */}
+          <Pressable cssInterop={false}
+            accessibilityRole="button"
+            onPress={() => router.push((summary.nextIncomplete?.href ?? "/apply/review") as never)}
+            style={({ pressed }) => ({
+              marginTop: 4,
+              height: 48,
+              borderRadius: 12,
+              backgroundColor: pressed ? "#e06400" : "#f87000",
+              alignItems: "center",
+              justifyContent: "center",
+            })}
+          >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#ffffff" }}>
+              {summary.nextIncomplete
+                ? `Continue: ${summary.nextIncomplete.label}`
+                : "Review and send"}
+            </Text>
+          </Pressable>
         </View>
+      ) : null}
+
+      {/* 3. Switch Track Card ("Signed up for the wrong thing?") */}
+      {application.status === "DRAFT" ? <SwitchTrack current={application.track} /> : null}
+
+      {/* 4. History Timeline ("WHAT HAS HAPPENED") */}
+      <History application={application} />
+    </View>
+  );
+}
+
+/**
+ * Switching between services, stays and rentals while the application is in DRAFT.
+ * Matches web 1:1 with icons.
+ */
+function SwitchTrack({ current }: { current: string }) {
+  const router = useRouter();
+  const update = useUpdateApplication();
+  const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
+
+  return (
+    <View
+      style={{
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: "#e7e2da",
+        backgroundColor: "#ffffff",
+        padding: 16,
+        rowGap: 10,
+      }}
+    >
+      <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e", letterSpacing: -0.3 }}>
+        Signed up for the wrong thing?
+      </Text>
+      <Text style={{ fontSize: 13, lineHeight: 19, color: "#453f37" }}>
+        You can switch until you send your application. Nothing you have filled in is lost.
+      </Text>
+      <View style={{ rowGap: 8, marginTop: 2 }}>
+        {others.map(({ track, title, icon: Icon }) => (
+          <Pressable cssInterop={false}
+            key={track}
+            accessibilityRole="button"
+            disabled={update.isPending}
+            onPress={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about" as never) })}
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              columnGap: 8,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: "#756c5e",
+              backgroundColor: pressed ? "#f4f1ec" : "#ffffff",
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+            })}
+          >
+            <Icon size={16} color="#00112e" strokeWidth={2} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#00112e" }}>{title}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {update.isError ? (
+        <Text style={{ fontSize: 13, color: "#be123c" }}>We could not start that. Please try again.</Text>
+      ) : null}
+    </View>
+  );
+}
+
+interface HistoryEntry {
+  id: string;
+  at: string;
+  title: string;
+  detail: string;
+}
+
+const ARRIVED_LABELS: Record<string, string> = {
+  DRAFT: "You started your application",
+  SUBMITTED: "You sent it for review",
+  UNDER_REVIEW: "A reviewer started checking it",
+  CHANGES_REQUIRED: "We asked you to correct something",
+  APPROVED: "You were approved",
+  SUSPENDED: "Your account was suspended",
+  OFFBOARDED: "Your account was closed",
+  DECLINED: "Your application was not approved",
+};
+
+function describeTransition(fromStatus: string, toStatus: string): string {
+  if (fromStatus === "SUSPENDED" && toStatus === "APPROVED") {
+    return "Your account was reinstated";
+  }
+  return ARRIVED_LABELS[toStatus] ?? `${fromStatus} → ${toStatus}`;
+}
+
+function formatHistoryDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const formatted = new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    }).format(d);
+    return formatted.replace(/am|pm|AM|PM/, (m) => m.toLowerCase());
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * What has happened, newest first: application steps and document events.
+ * 100% replica of Web History section.
+ */
+function History({ application }: { application: Application }) {
+  const transitionEntries: HistoryEntry[] = (application.transitions ?? []).map((transition) => ({
+    id: transition.id,
+    at: transition.occurred_at,
+    title:
+      transition.reason_code === "application_resubmitted"
+        ? "You sent it again"
+        : describeTransition(transition.from_status, transition.to_status),
+    detail: transition.reason ?? "",
+  }));
+
+  // Fallback: If no transitions are recorded yet, synthesize the initial draft start event from created_at
+  if (transitionEntries.length === 0 && application.created_at) {
+    transitionEntries.push({
+      id: "initial-creation",
+      at: application.created_at,
+      title: "You started your application",
+      detail: "",
+    });
+  }
+
+  const documentEntries: HistoryEntry[] = (application.documents ?? []).flatMap((document) => {
+    const label = documentLabel(document.kind);
+    const events: HistoryEntry[] = [];
+    if (document.version > 1 && document.uploaded_at) {
+      events.push({
+        id: `${document.id}:uploaded`,
+        at: document.uploaded_at,
+        title: `You uploaded a new ${label}`,
+        detail: "",
+      });
+    }
+    if (document.status === "REJECTED" && document.reviewed_at) {
+      events.push({
+        id: `${document.id}:rejected`,
+        at: document.reviewed_at,
+        title: `${label}: needs replacing`,
+        detail: document.review_reason ?? "",
+      });
+    }
+    return events;
+  });
+
+  const entries: HistoryEntry[] = [...transitionEntries, ...documentEntries].sort(
+    (a, b) => Date.parse(b.at) - Date.parse(a.at),
+  );
+
+  if (entries.length === 0) return null;
+
+  return (
+    <View style={{ marginTop: 8 }}>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "800",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          color: "#78716c",
+          marginBottom: 12,
+        }}
+      >
+        WHAT HAS HAPPENED
+      </Text>
+
+      <View style={{ width: "100%" }}>
+        {entries.map((entry, index) => {
+          const isLatest = index === 0;
+          const isLast = index === entries.length - 1;
+
+          return (
+            <View key={entry.id} style={{ flexDirection: "row", columnGap: 12 }}>
+              {/* Bullet Dot & Connecting Line */}
+              <View style={{ alignItems: "center", width: 14 }}>
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: isLatest ? "#f87000" : "#cbd5e1",
+                    marginTop: 4,
+                  }}
+                />
+                {!isLast ? (
+                  <View
+                    style={{
+                      width: 1.5,
+                      flex: 1,
+                      backgroundColor: "#e2e8f0",
+                      marginVertical: 4,
+                    }}
+                  />
+                ) : null}
+              </View>
+
+              {/* Title & Timestamp */}
+              <View style={{ flex: 1, paddingBottom: isLast ? 0 : 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e" }}>
+                  {entry.title}
+                </Text>
+                {entry.detail ? (
+                  <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                    {entry.detail}
+                  </Text>
+                ) : null}
+                <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
+                  {formatHistoryDate(entry.at)}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );

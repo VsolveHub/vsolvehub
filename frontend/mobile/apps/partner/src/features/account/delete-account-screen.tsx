@@ -186,7 +186,7 @@ export function DeleteAccountScreen() {
         <View style={[styles.dockInner, { maxWidth: isDesktop ? 540 : "100%" }]}>
           {step === "STEP_1_WARN" ? (
             <View style={styles.buttonStack}>
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Delete my account"
                 onPress={() => setStep("STEP_2_CONFIRM")}
@@ -198,7 +198,7 @@ export function DeleteAccountScreen() {
                 <Text style={styles.solidRedButtonText}>Delete my account</Text>
               </Pressable>
 
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Keep my account"
                 onPress={() => router.back()}
@@ -213,7 +213,7 @@ export function DeleteAccountScreen() {
           ) : null}
 
           {step === "STEP_2_CONFIRM" ? (
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Delete my account"
               disabled={!isConfirmed || isDeleting}
@@ -233,7 +233,7 @@ export function DeleteAccountScreen() {
           ) : null}
 
           {step === "STEP_3_DONE" ? (
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Done"
               onPress={handleDone}

@@ -1,6 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
 
 import { documentLabelKey, isDocumentRejected } from "./status";
+import { isListingTrack } from "./steps";
 
 /**
  * What is still missing before an application can be submitted.
@@ -147,10 +148,10 @@ export function requirements(
     },
   ];
 
-  // A stay host or rental owner lists something they own. Trades, areas and
-  // experience are for people who travel to a customer, and the server does not
-  // ask either listing track for them.
-  if (application?.track === "STAY_HOST" || application?.track === "RENTAL_OWNER") {
+  // A stay host, rental owner or employer lists something or hires for a business. Trades,
+  // areas and experience are for people who travel to a customer, and the server does not
+  // ask a listing track for them.
+  if (isListingTrack(application?.track)) {
     return list.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
   }
   return list;

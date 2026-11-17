@@ -60,7 +60,7 @@ export function LanguagePicker() {
       showsVerticalScrollIndicator={false}
     >
       {/* Back to Account Link */}
-      <Pressable
+      <Pressable cssInterop={false}
         accessibilityRole="button"
         accessibilityLabel="Back to Account"
         onPress={() => router.back()}
@@ -127,7 +127,7 @@ export function LanguagePicker() {
           const isActive = currentLocale === option.code;
 
           return (
-            <Pressable
+            <Pressable cssInterop={false}
               key={option.code}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected }}

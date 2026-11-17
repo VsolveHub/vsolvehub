@@ -88,6 +88,30 @@ def test_stay_host_still_needs_identity_documents(host_user):
 
 
 @pytest.mark.django_db
+def test_employer_submits_without_trades_areas_or_hours(host_user):
+    """Hire staff is the same short sign-up as a stay host.
+
+    Regression: submit exempted stay hosts and rental owners from trades, areas and hours but not
+    employers, so an employer (who is never shown those steps) could not send an application.
+    """
+    application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+    _upload_required_documents(application)
+
+    submitted = submit_partner_application(user=host_user, expected_version=application.version)
+
+    assert submitted.status == PartnerApplication.Status.SUBMITTED
+    assert submitted.track == PartnerApplication.Track.EMPLOYER
+
+
+@pytest.mark.django_db
+def test_employer_still_needs_identity_documents(host_user):
+    application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+
+    with pytest.raises(PartnerApplicationIncompleteError):
+        submit_partner_application(user=host_user, expected_version=application.version)
+
+
+@pytest.mark.django_db
 def test_service_partners_still_need_trades_and_areas(host_user):
     application = _start(host_user, track=PartnerApplication.Track.SERVICES)
     _upload_required_documents(application)

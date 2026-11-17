@@ -35,6 +35,8 @@ export interface DocumentUploadProps {
   expectedVersion: number | null;
   replacing?: boolean;
   disabled?: boolean;
+  /** Called once the server has accepted the file, so a step can leave its "replacing" state. */
+  onSuccess?: () => void;
 }
 
 export function DocumentUpload({
@@ -43,6 +45,7 @@ export function DocumentUpload({
   expectedVersion,
   replacing = false,
   disabled = false,
+  onSuccess,
 }: DocumentUploadProps) {
   const upload = useUploadDocument();
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -67,6 +70,7 @@ export function DocumentUpload({
         onProgress: setProgress,
       });
       setPendingFile(null);
+      onSuccess?.();
     } catch (error) {
       setProgress({ phase: "failed", percent: 0 });
       setFailure(
@@ -161,18 +165,15 @@ export function DocumentUpload({
         ]}
       >
         {/* Orange Cloud Icon */}
-        <CloudUpload size={32} color="#ea580c" />
+        <CloudUpload size={28} color="#ea580c" strokeWidth={1.8} />
 
-        {/* Peach Pill Button [^ Upload] */}
-        <View style={styles.uploadPill}>
-          <UploadIcon size={14} color="#c2410c" strokeWidth={2.5} />
-          <Text style={styles.uploadPillText}>
-            {replacing ? "Replace file" : "Upload"}
-          </Text>
-        </View>
+        {/* Text: Choose a file */}
+        <Text style={styles.chooseFileText}>
+          {replacing ? "Replace file" : "Choose a file"}
+        </Text>
 
         {/* Helper Subtext */}
-        <Text style={styles.dropzoneSubtext}>JPG, PNG or PDF • up to 20 MB</Text>
+        <Text style={styles.dropzoneSubtext}>JPG, PNG or PDF · max 20 MB</Text>
       </Pressable>
 
       {/* File Chooser Sheet */}
@@ -257,43 +258,34 @@ const styles = StyleSheet.create({
   },
   dropzone: {
     width: "100%",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderStyle: "dashed",
-    borderColor: "#fed7aa",
-    backgroundColor: "#fffaf5",
-    paddingVertical: 22,
+    borderColor: "#78716c",
+    backgroundColor: "#ffffff",
+    paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   dropzonePressed: {
     borderColor: "#ea580c",
-    backgroundColor: "#fff7ed",
+    backgroundColor: "#fbf9f6",
   },
   dropzoneDisabled: {
     opacity: 0.6,
   },
-  uploadPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 6,
-    backgroundColor: "#ffedd5",
-    borderRadius: 9999,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginTop: 10,
-  },
-  uploadPillText: {
-    color: "#c2410c",
-    fontSize: 13,
+  chooseFileText: {
+    fontSize: 15,
     fontWeight: "700",
+    color: "#00112e",
+    marginTop: 6,
   },
   dropzoneSubtext: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#64748b",
-    marginTop: 8,
-    fontWeight: "500",
+    marginTop: 4,
+    fontWeight: "400",
   },
   sheetOption: {
     minHeight: 48,

@@ -1,30 +1,26 @@
 // Ported from frontend/apps/partner/features/application/view/review-step.tsx
-import { ApiRequestError } from "@vsolve/api-client";
+import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import {
-  AlertCircle,
-  Bell,
-  Briefcase,
-  Check,
-  CheckCircle2,
-  Circle,
-  Clock,
-  FileCheck2,
-  MapPin,
-  User,
-} from "lucide-react-native";
+import { AlertCircle, Bell, Check, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
 
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
 import { useApplyDock } from "../model/dock-context";
-import { isEditable, outstandingRequirements } from "../model/readiness";
+import {
+  isEditable,
+  outstandingRequirements,
+  requiredDocumentKinds,
+} from "../model/readiness";
+import { documentLabel, documentStatusPresentation, statusRouteFor } from "../model/status";
 import { isListingTrack } from "../model/steps";
 import {
   describeRefusal,
@@ -34,8 +30,22 @@ import {
   useSubmitApplication,
   useUpdateApplication,
 } from "../queries";
-import { useApplicationReference } from "../reference-queries";
-import { ConsentList } from "./consent-step";
+import { useApplicationReference, type RequiredConsent } from "../reference-queries";
+import { StepFrame } from "./application-editor";
+
+type Application = Schemas["PartnerApplication"];
+type DocumentKind = Schemas["PartnerDocumentKindEnum"];
+
+function currentDocument(
+  application: Application,
+  kind: DocumentKind,
+): Schemas["PartnerDocument"] | null {
+  const matches = application.documents.filter(
+    (doc) => doc.kind === kind && doc.status !== "SUPERSEDED",
+  );
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1] ?? null;
+}
 
 const consentKey = (purpose: string, version: string) => `${purpose}@${version}`;
 
@@ -46,9 +56,9 @@ export function ReviewStep() {
   const updateApp = useUpdateApplication();
   const { registerDock } = useApplyDock();
 
-  // Optional: nobody has to accept push notifications to send an application.
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permissionSheetOpen, setPermissionSheetOpen] = useState(false);
+  const [selectedConsentDoc, setSelectedConsentDoc] = useState<RequiredConsent | null>(null);
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = query.data ?? null;
@@ -60,8 +70,6 @@ export function ReviewStep() {
     [reference.requiredConsents],
   );
 
-  // As on the website: agreements already on record stay ticked; new ticks are kept here and
-  // saved together with the send, after the "details are true" box.
   const locked = useMemo(
     () =>
       new Set(
@@ -73,10 +81,12 @@ export function ReviewStep() {
   );
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [declared, setDeclared] = useState(false);
+
   const isAccepted = (purpose: string, version: string) => {
     const key = consentKey(purpose, version);
     return locked.has(key) || ticked.has(key);
   };
+
   const toggleConsent = (purpose: string, version: string) => {
     const key = consentKey(purpose, version);
     if (locked.has(key)) return;
@@ -87,6 +97,7 @@ export function ReviewStep() {
       return next;
     });
   };
+
   const consentsTicked = requiredConsents.every((consent) =>
     isAccepted(consent.purpose, consent.document_version),
   );
@@ -106,12 +117,11 @@ export function ReviewStep() {
     appStatus === "REJECTED" ||
     appStatus === "DECLINED";
 
-  // If already submitted, navigate directly to status screen
   useEffect(() => {
     if (isSubmitted) {
-      router.replace("/apply/status" as any);
+      router.replace(statusRouteFor(appStatus) as any);
     }
-  }, [isSubmitted, router]);
+  }, [appStatus, isSubmitted, router]);
 
   const submitMutateRef = useRef(submit.mutate);
   submitMutateRef.current = submit.mutate;
@@ -144,7 +154,8 @@ export function ReviewStep() {
       submitMutateRef.current(undefined, {
         onSuccess: () => {
           void refetchRef.current();
-          router.replace("/apply/status" as any);
+          // A sent application has just become SUBMITTED; the screen for that is `/apply`.
+          router.replace(statusRouteFor("SUBMITTED") as any);
         },
       });
     } catch {
@@ -227,22 +238,22 @@ export function ReviewStep() {
 
   if (application === null) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.title}>Agree & send</Text>
-        <Text style={styles.subtitle}>You have not started your application yet.</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/apply/about")}
-          style={styles.startButton}
-        >
-          <Text style={styles.startButtonText}>Start Your Application</Text>
-        </Pressable>
-      </View>
+      <StepFrame title="Agree & send">
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>You have not started your application yet.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/apply/about")}
+            style={styles.startButton}
+          >
+            <Text style={styles.startButtonText}>Start your application</Text>
+          </Pressable>
+        </View>
+      </StepFrame>
     );
   }
 
   const displayName = application.display_name;
-  const bioLength = application.biography?.length ?? 0;
   const listing = isListingTrack(application.track);
   const areaNames = application.service_area_ids.map(
     (id) => reference.serviceAreas.find((area) => area.id === id)?.name ?? id.slice(0, 8),
@@ -250,16 +261,9 @@ export function ReviewStep() {
   const hoursSet = application.service_area_ids.filter((areaId) =>
     (availability.data?.rules ?? []).some((rule) => rule.service_area_id === areaId && rule.is_active),
   ).length;
-  const documentsCount = application.documents.filter((document) => document.status !== "SUPERSEDED").length;
 
   return (
     <View style={styles.container}>
-      {/* Title */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Agree & send</Text>
-        <Text style={styles.subtitle}>Check your details, accept the agreements and send.</Text>
-      </View>
-
       {/* Error / Refusal Banner if submission failed */}
       {activeError && (
         <View style={styles.errorBanner}>
@@ -280,142 +284,303 @@ export function ReviewStep() {
         </View>
       )}
 
-      {/* 3 Summary Cards matching Screen 5 & User Mockup */}
-      <View style={styles.cardsContainer}>
-        {/* Card 1: About you */}
-        <View style={styles.summaryCard}>
-          <View style={styles.cardLeft}>
-            <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
-            <View style={styles.iconWrapper}>
-              <User size={18} color="#00112e" strokeWidth={2.2} />
+      {/* Main Step Frame matching reference images */}
+      <StepFrame
+        title="Agree & send"
+        description={editable ? "Check your details, accept the agreements and send." : undefined}
+      >
+        {/* Definition List of Application Steps */}
+        <View style={styles.summaryList}>
+          {/* Row 1: About you */}
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryLeftCol}>
+              <Text style={styles.summaryLabel}>About you</Text>
+              <Text style={styles.summaryValue}>{displayName || "Not set"}</Text>
             </View>
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle}>About you</Text>
-              <Text style={styles.cardSubtitle}>
-                {displayName} / {bioLength}/200
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit about you"
+              onPress={() => router.push("/apply/about")}
+              hitSlop={8}
+            >
+              <Text style={styles.editLink}>Edit</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          {/* Services-only Steps */}
+          {listing ? null : (
+            <>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLeftCol}>
+                  <Text style={styles.summaryLabel}>Your work</Text>
+                  <Text style={styles.summaryValue}>
+                    {`${application.skill_codes.length} trades · ${application.service_variant_ids.length} job types`}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit your work"
+                  onPress={() => router.push("/apply/work")}
+                  hitSlop={8}
+                >
+                  <Text style={styles.editLink}>Edit</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.summaryDivider} />
+
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLeftCol}>
+                  <Text style={styles.summaryLabel}>Where you work</Text>
+                  <Text style={styles.summaryValue}>
+                    {areaNames.length > 0 ? areaNames.join(", ") : "Not set"}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit where you work"
+                  onPress={() => router.push("/apply/areas" as never)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.editLink}>Edit</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.summaryDivider} />
+
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLeftCol}>
+                  <Text style={styles.summaryLabel}>Your hours</Text>
+                  <Text style={styles.summaryValue}>
+                    {`Hours set for ${hoursSet} of ${application.service_area_ids.length} areas`}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit your hours"
+                  onPress={() => router.push("/apply/schedule")}
+                  hitSlop={8}
+                >
+                  <Text style={styles.editLink}>Edit</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.summaryDivider} />
+            </>
+          )}
+
+          {/* Row 2: Documents */}
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryLeftCol}>
+              <Text style={styles.summaryLabel}>Documents</Text>
+              <View style={styles.badgeRow}>
+                {requiredDocumentKinds(application).map((kind) => {
+                  const doc = currentDocument(application, kind);
+                  const badge = doc ? documentStatusPresentation(doc) : null;
+                  return (
+                    <View key={kind} style={styles.badgePill}>
+                      <Text style={styles.badgeText}>
+                        {documentLabel(kind)}: {badge ? badge.label : "Not uploaded"}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit documents"
+              onPress={() => router.push("/apply/documents")}
+              hitSlop={8}
+            >
+              <Text style={styles.editLink}>Edit</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Blocker Card: "Still needed before you can send:" */}
+        {editable && outstanding.length > 0 ? (
+          <View style={styles.outstandingCard}>
+            <Text style={styles.outstandingTitle}>Still needed before you can send:</Text>
+            <View style={styles.outstandingList}>
+              {outstanding.map((req) => (
+                <Pressable
+                  key={req.code}
+                  accessibilityRole="link"
+                  accessibilityLabel={req.label}
+                  onPress={() => router.push(req.href as any)}
+                  hitSlop={6}
+                >
+                  <Text style={styles.outstandingLink}>{req.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Agreements Section */}
+        {editable ? (
+          <View style={styles.agreementsSection}>
+            <Text style={styles.agreementsHeading}>Agreements</Text>
+
+            {requiredConsents.map((doc) => {
+              const key = consentKey(doc.purpose, doc.document_version);
+              const accepted = isAccepted(doc.purpose, doc.document_version);
+              const isLocked = locked.has(key);
+              return (
+                <View key={key} style={styles.agreementCard}>
+                  <Pressable
+                    cssInterop={false}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: accepted, disabled: isSaving || isLocked }}
+                    disabled={isSaving || isLocked}
+                    onPress={() => toggleConsent(doc.purpose, doc.document_version)}
+                    style={[
+                      styles.checkbox,
+                      accepted ? styles.checkboxChecked : styles.checkboxUnchecked,
+                    ]}
+                  >
+                    {accepted ? <Check size={13} color="#ffffff" strokeWidth={3} /> : null}
+                  </Pressable>
+
+                  <View style={styles.agreementContent}>
+                    <Pressable
+                      disabled={isSaving || isLocked}
+                      onPress={() => toggleConsent(doc.purpose, doc.document_version)}
+                    >
+                      <Text style={styles.agreementText}>
+                        I agree to the {doc.title}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Read ${doc.title}`}
+                      onPress={() => setSelectedConsentDoc(doc)}
+                      hitSlop={6}
+                    >
+                      <Text style={styles.readDocumentLink}>Read document</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+
+            {/* Declaration Checkbox Card */}
+            <View style={styles.agreementCard}>
+              <Pressable
+                cssInterop={false}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: declared, disabled: isSaving }}
+                disabled={isSaving}
+                onPress={() => setDeclared(!declared)}
+                style={[
+                  styles.checkbox,
+                  declared ? styles.checkboxChecked : styles.checkboxUnchecked,
+                ]}
+              >
+                {declared ? <Check size={13} color="#ffffff" strokeWidth={3} /> : null}
+              </Pressable>
+
+              <View style={styles.agreementContent}>
+                <Pressable
+                  disabled={isSaving}
+                  onPress={() => setDeclared(!declared)}
+                >
+                  <Text style={styles.agreementText}>
+                    The details and documents I've given are true.
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Push Notification Opt-in Card */}
+        <View style={styles.notificationCard}>
+          <View style={styles.notificationTopRow}>
+            <View style={styles.notificationIconCircle}>
+              <Bell size={20} color="#f87000" strokeWidth={2} />
+            </View>
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationTitle}>Get notified about your application</Text>
+              <Text style={styles.notificationSubtitle}>
+                We'll tell you when it's reviewed, approved or needs a change.
               </Text>
             </View>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Edit about you"
-            onPress={() => router.push("/apply/about")}
-            hitSlop={8}
-          >
-            <Text style={styles.editText}>Edit</Text>
-          </Pressable>
-        </View>
-
-        {listing ? null : (
-          <>
-            <SummaryCard
-              icon={<Briefcase size={18} color="#00112e" strokeWidth={2.2} />}
-              title="Your work"
-              subtitle={`${application.skill_codes.length} trades · ${application.service_variant_ids.length} job types`}
-              done={application.service_variant_ids.length > 0}
-              onEdit={() => router.push("/apply/work")}
-            />
-            <SummaryCard
-              icon={<MapPin size={18} color="#00112e" strokeWidth={2.2} />}
-              title="Where you work"
-              subtitle={areaNames.length > 0 ? areaNames.join(", ") : "Not set yet"}
-              done={application.service_area_ids.length > 0}
-              onEdit={() => router.push("/apply/areas" as never)}
-            />
-            <SummaryCard
-              icon={<Clock size={18} color="#00112e" strokeWidth={2.2} />}
-              title="Your hours"
-              subtitle={`Set for ${hoursSet} of ${application.service_area_ids.length} areas`}
-              done={application.service_area_ids.length > 0 && hoursSet === application.service_area_ids.length}
-              onEdit={() => router.push("/apply/schedule")}
-            />
-          </>
-        )}
-
-        {/* Card 3: Documents */}
-        <View style={styles.summaryCard}>
-          <View style={styles.cardLeft}>
-            <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
-            <View style={styles.iconWrapper}>
-              <FileCheck2 size={18} color="#00112e" strokeWidth={2.2} />
-            </View>
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle}>Documents</Text>
-              <Text style={styles.cardSubtitle}>{documentsCount} documents</Text>
-            </View>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Edit documents"
-            onPress={() => router.push("/apply/documents")}
-            hitSlop={8}
-          >
-            <Text style={styles.editText}>Edit</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {editable ? (
-        <View style={styles.agreements}>
-          <Text style={styles.agreementsTitle}>Agreements</Text>
-          <ConsentList
-            documents={requiredConsents}
-            isAccepted={isAccepted}
-            onToggle={toggleConsent}
-            disabled={isSaving}
-          />
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: declared, disabled: isSaving }}
-            disabled={isSaving}
-            onPress={() => setDeclared(!declared)}
-            style={styles.declaration}
-          >
-            <View style={[styles.declarationBox, declared ? styles.declarationBoxOn : null]}>
-              {declared ? <Check size={14} color="#ffffff" strokeWidth={3} /> : null}
-            </View>
-            <Text style={styles.declarationText}>{"The details and documents I've given are true."}</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {/* Notification Toggle Card matching User Uploaded Image 2 */}
-      <View style={styles.notificationCard}>
-        <View style={styles.notificationLeft}>
-          <View style={styles.bellIconBox}>
-            <Bell size={20} color="#f87000" strokeWidth={2.2} />
-          </View>
-          <View style={styles.notificationInfo}>
-            <Text style={styles.notificationTitle}>Get updates on your application</Text>
-            <Text style={styles.notificationSubtitle}>We'll notify you when it's reviewed.</Text>
+          <View style={styles.notificationBadgeContainer}>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityLabel="Notification status On"
+              onPress={handleToggleNotifications}
+              style={styles.onBadgePill}
+            >
+              <Text style={styles.onBadgeText}>On</Text>
+            </Pressable>
           </View>
         </View>
+      </StepFrame>
 
-        {/* Custom Toggle Switch matching exact image: Orange track with Teal/Emerald knob when active */}
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityLabel="Get updates on your application"
-          accessibilityState={{ checked: notificationsEnabled }}
-          onPress={handleToggleNotifications}
-          style={[
-            styles.customSwitchTrack,
-            {
-              backgroundColor: notificationsEnabled ? "#ea580c" : "#cbd5e1",
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.customSwitchThumb,
-              {
-                backgroundColor: notificationsEnabled ? "#008a7a" : "#ffffff",
-                alignSelf: notificationsEnabled ? "flex-end" : "flex-start",
-              },
-            ]}
-          />
-        </Pressable>
-      </View>
+      {/* Document Reader Modal */}
+      <Modal
+        visible={selectedConsentDoc !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedConsentDoc(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>{selectedConsentDoc?.title}</Text>
+                <Text style={styles.modalVersion}>Version {selectedConsentDoc?.document_version}</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close document"
+                onPress={() => setSelectedConsentDoc(null)}
+                style={styles.modalCloseButton}
+              >
+                <X size={20} color="#00112e" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
+              <Text style={styles.docBodyText}>
+                By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub's partner terms, service quality standards, and platform policies.
+                {"\n\n"}
+                Document URL: {selectedConsentDoc?.document_url || "https://vsolvehub.com/terms"}
+              </Text>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              {selectedConsentDoc && !isAccepted(selectedConsentDoc.purpose, selectedConsentDoc.document_version) ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    toggleConsent(selectedConsentDoc.purpose, selectedConsentDoc.document_version);
+                    setSelectedConsentDoc(null);
+                  }}
+                  style={styles.modalAcceptButton}
+                >
+                  <Text style={styles.modalAcceptButtonText}>Accept Agreement</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setSelectedConsentDoc(null)}
+                  style={styles.modalDismissButton}
+                >
+                  <Text style={styles.modalDismissButtonText}>Close</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Notification Permission Bottom Sheet */}
       <NotificationPermissionSheet
@@ -427,85 +592,7 @@ export function ReviewStep() {
   );
 }
 
-function SummaryCard({
-  icon,
-  title,
-  subtitle,
-  done,
-  onEdit,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  done: boolean;
-  onEdit: () => void;
-}) {
-  return (
-    <View style={styles.summaryCard}>
-      <View style={styles.cardLeft}>
-        {done ? (
-          <CheckCircle2 size={22} color="#2fa84f" strokeWidth={2.2} />
-        ) : (
-          <Circle size={22} color="#cbd5e1" strokeWidth={2.2} />
-        )}
-        <View style={styles.iconWrapper}>{icon}</View>
-        <View style={styles.cardInfo}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardSubtitle}>{subtitle}</Text>
-        </View>
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Edit ${title.toLowerCase()}`}
-        onPress={onEdit}
-        hitSlop={8}
-      >
-        <Text style={styles.editText}>Edit</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  agreements: {
-    rowGap: 12,
-    marginBottom: 16,
-  },
-  agreementsTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#00112e",
-  },
-  declaration: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    columnGap: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#ffffff",
-  },
-  declarationBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#cbd5e1",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-  declarationBoxOn: {
-    backgroundColor: "#ea580c",
-    borderColor: "#ea580c",
-  },
-  declarationText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#00112e",
-  },
   container: {
     flexDirection: "column",
     width: "100%",
@@ -524,154 +611,213 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     alignItems: "center",
   },
-  header: {
-    marginBottom: 20,
-    marginTop: 4,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#00112e",
-    letterSpacing: -0.5,
-  },
-  subtitle: {
+  emptyText: {
     fontSize: 14,
-    color: "#64748b",
-    marginTop: 4,
+    color: "#453f37",
+    marginBottom: 16,
   },
   startButton: {
-    marginTop: 16,
     backgroundColor: "#f87000",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 9999,
   },
   startButtonText: {
-    color: "#ffffff",
+    color: "#00112e",
     fontWeight: "700",
     fontSize: 15,
   },
-  cardsContainer: {
+  summaryList: {
     flexDirection: "column",
-    rowGap: 12,
-    marginBottom: 16,
+    width: "100%",
   },
-  summaryCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+  summaryRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    paddingVertical: 12,
   },
-  cardLeft: {
-    flexDirection: "row",
-    alignItems: "center",
+  summaryLeftCol: {
     flex: 1,
-    columnGap: 12,
+    paddingRight: 12,
   },
-  iconWrapper: {
-    width: 24,
-    alignItems: "center",
-    justifyContent: "center",
+  summaryLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#453f37",
+    marginBottom: 3,
   },
-  cardInfo: {
-    flexDirection: "column",
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
+  summaryValue: {
+    fontSize: 15,
     fontWeight: "700",
     color: "#00112e",
-    letterSpacing: -0.2,
   },
-  cardSubtitle: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 2,
+  summaryDivider: {
+    height: 1,
+    backgroundColor: "#f1f5f9",
   },
-  editText: {
+  editLink: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1d4ed8",
+    color: "#c2410c",
     textDecorationLine: "underline",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
-  notificationCard: {
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 3,
+  },
+  badgePill: {
+    backgroundColor: "#f4f1ec",
+    borderRadius: 9999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+  },
+  badgeText: {
+    fontSize: 12.5,
+    fontWeight: "500",
+    color: "#453f37",
+  },
+  outstandingCard: {
     backgroundColor: "#fff7ed",
-    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#fed7aa",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-    marginBottom: 24,
-  },
-  notificationLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    columnGap: 12,
-    paddingRight: 8,
-  },
-  bellIconBox: {
-    width: 38,
-    height: 38,
     borderRadius: 12,
-    backgroundColor: "#ffedd5",
+    padding: 16,
+    marginVertical: 16,
+  },
+  outstandingTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#00112e",
+    marginBottom: 8,
+  },
+  outstandingList: {
+    flexDirection: "column",
+    gap: 4,
+  },
+  outstandingLink: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#00112e",
+    textDecorationLine: "underline",
+    paddingVertical: 2,
+  },
+  agreementsSection: {
+    flexDirection: "column",
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  agreementsHeading: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#00112e",
+    marginBottom: 12,
+  },
+  agreementCard: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e7e2da",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "#cbd5e1",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+    backgroundColor: "#ffffff",
+  },
+  checkboxChecked: {
+    backgroundColor: "#f87000",
+    borderColor: "#f87000",
+  },
+  checkboxUnchecked: {
+    backgroundColor: "#ffffff",
+    borderColor: "#cbd5e1",
+  },
+  agreementContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  agreementText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#00112e",
+    lineHeight: 20,
+  },
+  readDocumentLink: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#c2410c",
+    textDecorationLine: "underline",
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  notificationCard: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e7e2da",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  notificationTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  notificationIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#fff7ed",
     alignItems: "center",
     justifyContent: "center",
   },
-  notificationInfo: {
-    flexDirection: "column",
+  notificationTextContainer: {
     flex: 1,
+    marginLeft: 12,
   },
   notificationTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#071328",
+    color: "#00112e",
     letterSpacing: -0.2,
   },
   notificationSubtitle: {
-    fontSize: 13.5,
-    color: "#78350f",
-    marginTop: 2,
+    fontSize: 13,
+    color: "#453f37",
+    marginTop: 4,
+    lineHeight: 18,
   },
-  customSwitchTrack: {
-    width: 54,
-    height: 30,
-    borderRadius: 15,
-    paddingHorizontal: 3,
+  notificationBadgeContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 10,
+  },
+  onBadgePill: {
+    backgroundColor: "#e8f7ec",
+    borderRadius: 9999,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    alignItems: "center",
     justifyContent: "center",
   },
-  customSwitchThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    ...(Platform.OS === "web"
-      ? ({
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-          transition: "all 0.2s ease-in-out",
-        } as any)
-      : {
-          elevation: 3,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1.5 },
-          shadowOpacity: 0.2,
-          shadowRadius: 2.5,
-        }),
+  onBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1b6d37",
   },
   errorBanner: {
     flexDirection: "row",
@@ -697,5 +843,88 @@ const styles = StyleSheet.create({
     color: "#991b1b",
     marginTop: 2,
     lineHeight: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 520,
+    maxHeight: "80%",
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 20,
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+        } as any)
+      : {
+          elevation: 5,
+        }),
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    paddingBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#00112e",
+  },
+  modalVersion: {
+    fontSize: 13,
+    color: "#64748b",
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#f1f5f9",
+  },
+  modalBody: {
+    paddingVertical: 16,
+  },
+  docBodyText: {
+    fontSize: 14,
+    color: "#453f37",
+    lineHeight: 22,
+  },
+  modalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 14,
+  },
+  modalAcceptButton: {
+    backgroundColor: "#f87000",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalAcceptButtonText: {
+    color: "#00112e",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  modalDismissButton: {
+    backgroundColor: "#f1f5f9",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalDismissButtonText: {
+    color: "#00112e",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });

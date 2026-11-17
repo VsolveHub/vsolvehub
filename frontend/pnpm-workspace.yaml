@@ -1,5 +1,8 @@
 overrides:
-  react-native-gesture-handler: "2.32.0"
+  react-native-gesture-handler: "~3.3.0"
+  "@expo/metro-runtime": "^58.0.17"
+  "@expo/dom-webview": "~58.0.2"
+  expo-router: "~58.0.31"
 
 packageExtensions:
   react-native-css-interop:

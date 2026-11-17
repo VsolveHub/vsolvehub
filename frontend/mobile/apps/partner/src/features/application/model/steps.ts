@@ -1,3 +1,4 @@
+import { isListingTrack } from "@vsolve/query/native";
 // Ported from frontend/apps/partner/features/application/model/steps.ts
 /**
  * The same steps, in the same order, as the website: the agreements are accepted on the last
@@ -29,9 +30,8 @@ export const SERVICE_APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
-export function isListingTrack(track?: string | null): boolean {
-  return track === "STAY_HOST" || track === "RENTAL_OWNER";
-}
+/** Stays, rentals and hiring share the short application. Services walk the full list. */
+export { isListingTrack };
 
 /** The step sequence for this partner. Services is the server's default track, as on the web. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
@@ -49,13 +49,14 @@ export function isUnchosenDraft(
   return application?.status === "DRAFT" && application.version === 1;
 }
 
-/** The three ways to join offered on the first screen. */
-export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
+/** The ways to join offered on the first screen. */
+export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
 
 const AFTER_APPROVAL: Record<StartTrack, string> = {
   SERVICES: "After approval, job offers come to you in the V Solve Hub partner app.",
   STAY_HOST: "After approval, you add your property and rooms, and guests can book.",
   RENTAL_OWNER: "After approval, you add your items, and customers can rent them.",
+  EMPLOYER: "After approval, you post your jobs and people can apply.",
 };
 
 /** What the first screen shows once a way of joining is picked, before anything starts. */

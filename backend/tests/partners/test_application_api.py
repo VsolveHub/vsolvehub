@@ -28,6 +28,7 @@ pytestmark = pytest.mark.django_db
 
 INITIAL_APPLICATION_VERSION = 2
 REQUIRED_CONSENT_COUNT = 2
+EXPERIENCE_YEARS = 6
 SECOND_DOCUMENT_VERSION = 2
 
 
@@ -148,10 +149,15 @@ def test_application_patch_saves_independent_steps_and_preserves_omitted_fields(
 ) -> None:
     about = partner_setup.client.patch(
         "/api/v1/partner/application/",
-        {"display_name": "Ravi K.", "biography": "Residential specialist."},
+        {
+            "display_name": "Ravi K.",
+            "biography": "Residential specialist.",
+            "experience_years": 6,
+        },
         format="json",
     )
     assert about.status_code == HTTPStatus.CREATED
+    assert about.json()["experience_years"] == EXPERIENCE_YEARS
     assert about.json()["service_variant_ids"] == []
 
     work = partner_setup.client.patch(
@@ -206,6 +212,31 @@ def test_application_patch_saves_independent_steps_and_preserves_omitted_fields(
     )
     assert submitted.status_code == HTTPStatus.OK
     assert submitted.json()["status"] == PartnerApplication.Status.SUBMITTED
+
+
+def test_submission_requires_years_of_experience_for_a_services_application(
+    partner_setup: PartnerSetup,
+) -> None:
+    """The apps will not move past "About you" without experience; the server says the same."""
+    created = partner_setup.client.patch(
+        "/api/v1/partner/application/",
+        {**application_payload(partner_setup), "experience_years": 0},
+        format="json",
+    )
+    assert created.status_code == HTTPStatus.CREATED
+    _add_identity_document(partner_setup, created.json()["version"])
+    set_partner_schedule(partner_setup)
+    application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+
+    submitted = partner_setup.client.post(
+        "/api/v1/partner/application/submit/",
+        {"expected_version": application.version},
+        format="json",
+    )
+
+    assert submitted.status_code == HTTPStatus.CONFLICT
+    assert submitted.json()["error"]["code"] == "partner_application_incomplete"
+    assert "years of experience" in submitted.json()["error"]["message"]
 
 
 def test_submission_requires_the_current_published_consent_version(

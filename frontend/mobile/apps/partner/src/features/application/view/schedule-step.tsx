@@ -4,6 +4,8 @@ import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useMemo } from "react";
 import { View } from "react-native";
 
+import { nextStep } from "../model/steps";
+import { previousStep } from "../model/progress";
 import { toDraft, toRuleInputs, type DraftPeriod } from "../model/schedule";
 import { usePartnerApplication, usePartnerAvailability, useUpdateAvailability } from "../queries";
 import { useApplicationReference } from "../reference-queries";
@@ -22,6 +24,10 @@ export function ScheduleStep() {
       label: names.get(id) ?? `Service area ${id.slice(0, 8)}`,
     }));
   }, [application.data?.service_area_ids, reference.serviceAreas]);
+
+  const track = application.data?.track;
+  const following = nextStep("/apply/schedule", track);
+  const preceding = previousStep("/apply/schedule", track);
 
   const initialPeriods = useMemo<DraftPeriod[]>(
     () => toDraft(availability.data?.rules ?? []),
@@ -53,6 +59,9 @@ export function ScheduleStep() {
       key={availability.dataUpdatedAt}
       areas={areas}
       initialPeriods={initialPeriods}
+      backHref={preceding?.href ?? "/apply/areas"}
+      nextHref={following?.href ?? "/apply/documents"}
+      nextStepName={following?.label ?? null}
       isSaving={save.isPending}
       saveError={
         save.isError
@@ -61,19 +70,22 @@ export function ScheduleStep() {
             : "Your hours were not saved. Check your connection and try again."
           : null
       }
-      onSave={(periods) =>
-        save.mutate({
-          rules: toRuleInputs(periods),
-          exceptions: (availability.data?.exceptions ?? []).map((exception) => ({
-            service_area_id: exception.service_area_id,
-            date: exception.date,
-            is_available: exception.is_available,
-            starts_at: exception.starts_at,
-            ends_at: exception.ends_at,
-            ends_next_day: exception.ends_next_day,
-            reason: exception.reason,
-          })),
-        })
+      onSave={(periods, onSaved) =>
+        save.mutate(
+          {
+            rules: toRuleInputs(periods),
+            exceptions: (availability.data?.exceptions ?? []).map((exception) => ({
+              service_area_id: exception.service_area_id,
+              date: exception.date,
+              is_available: exception.is_available,
+              starts_at: exception.starts_at,
+              ends_at: exception.ends_at,
+              ends_next_day: exception.ends_next_day,
+              reason: exception.reason,
+            })),
+          },
+          { onSuccess: () => onSaved?.() },
+        )
       }
     />
   );

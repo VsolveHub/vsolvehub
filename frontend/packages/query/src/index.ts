@@ -616,3 +616,30 @@ export type {
   TouchRollup,
   TouchVerdict,
 } from "./m2-ops";
+
+export {
+  fetchWorkCatalog,
+  findSkillForCategory,
+  groupByService,
+  isListingTrack,
+  isServiceGroupSelected,
+  isTradeCategorySelected,
+  selectedTradeCategories,
+  syncRequiredSkills,
+  tickableCategories,
+  toggleServiceGroup,
+  toggleTradeCategorySelection,
+  variantIdsForCategory,
+  workCatalogFrom,
+} from "./partner-work";
+export type {
+  ApplicationTrack,
+  CategoryRef,
+  MainCategory,
+  OfferableService,
+  ServiceGroup,
+  WorkCatalog,
+} from "./partner-work";
+
+export { areasWithoutHours, presetPeriods } from "./partner-hours";
+export type { HoursPreset, PresetPeriod } from "./partner-hours";

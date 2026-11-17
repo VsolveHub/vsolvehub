@@ -7,7 +7,14 @@ const config = getDefaultConfig(projectRoot);
 
 // One copy of each of these, always the app's own. Workspace packages (@vsolve/*) import them
 // too, and a second copy of React breaks every hook ("Invalid hook call").
-const SINGLETONS = ["react", "react-native", "@tanstack/react-query", "expo-router"];
+const SINGLETONS = [
+  "react",
+  "react-native",
+  "@tanstack/react-query",
+  "expo-router",
+  "react-native-css-interop",
+  "nativewind",
+];
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   // Normalize a RELATIVE monorepo path into node_modules ("../../node_modules/react" -> "react").
   // Absolute paths are left alone: Metro asks for its own files by absolute path (for example
@@ -18,6 +25,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   const isRelative = moduleName.startsWith("./") || moduleName.startsWith("../");
   if (isRelative && targetName.includes("node_modules/")) {
     targetName = targetName.slice(targetName.lastIndexOf("node_modules/") + "node_modules/".length);
+  }
+
+  // react-native-maps is native-only (iOS/Android). On web, alias to a mock to avoid
+  // "codegenNativeComponent is not a function" runtime errors.
+  if (platform === "web" && (targetName === "react-native-maps" || targetName.startsWith("react-native-maps/"))) {
+    return {
+      filePath: path.resolve(projectRoot, "src/test/maps-mock.cjs"),
+      type: "sourceFile",
+    };
   }
 
   if (SINGLETONS.some((name) => targetName === name || targetName.startsWith(`${name}/`))) {

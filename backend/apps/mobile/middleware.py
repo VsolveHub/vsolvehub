@@ -11,6 +11,22 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 
 from common.observability.context import get_request_id
 
+# Endpoints that start a session from nothing. A phone holding a dead token from an
+# earlier session (expired, revoked, or from a database that was reset) must still be
+# able to sign in here, so an unknown bearer key is ignored on these paths instead of
+# refusing the request before the sign-in view runs. Step-up is deliberately absent:
+# it acts on an existing session.
+SIGN_IN_PATHS = frozenset(
+    {
+        "/api/v1/auth/otp/request/",
+        "/api/v1/auth/otp/verify/",
+        "/api/v1/auth/firebase/precheck/",
+        "/api/v1/auth/firebase/verify/",
+        "/api/v1/auth/mobile/otp/verify/",
+        "/api/v1/auth/mobile/firebase/verify/",
+    },
+)
+
 
 class BearerAwareSessionMiddleware(SessionMiddleware):
     def process_request(self, request: HttpRequest) -> HttpResponse | None:
@@ -18,6 +34,9 @@ class BearerAwareSessionMiddleware(SessionMiddleware):
         prefix = "Bearer "
         if header.startswith(prefix):
             key = header[len(prefix) :].strip()
+            if key and request.path in SIGN_IN_PATHS and not self.SessionStore().exists(key):
+                # Treat a dead token on a sign-in call as if none was sent.
+                key = ""
             if key:
                 store = self.SessionStore(key)
                 request.vsolve_bearer = True  # type: ignore[attr-defined]

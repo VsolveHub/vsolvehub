@@ -95,6 +95,21 @@ const CSRF_FAILED_CODE = "csrf_failed";
 const SIGN_IN_PATHS = new Set(["/api/v1/auth/otp/verify/", "/api/v1/auth/firebase/verify/"]);
 
 /**
+ * Bearer mode: calls that start a session from nothing. The stored token is never sent on
+ * these. A dead token left from an earlier session (expired, revoked, a reset database)
+ * would otherwise be refused by Django before the sign-in view runs, and the person could
+ * not sign in at all. Firebase step-up is absent on purpose: it acts on the current session.
+ */
+const BEARER_SIGN_IN_PATHS = new Set([
+  "/api/v1/auth/otp/request/",
+  "/api/v1/auth/otp/verify/",
+  "/api/v1/auth/firebase/precheck/",
+  "/api/v1/auth/firebase/verify/",
+  "/api/v1/auth/mobile/otp/verify/",
+  "/api/v1/auth/mobile/firebase/verify/",
+]);
+
+/**
  * Codes that mean "there is no usable session", whatever status carries them.
  *
  * DRF's `SessionAuthentication` supplies no `WWW-Authenticate` header, so an
@@ -315,7 +330,9 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
     credentials: bearerAuth ? "omit" : "include",
     fetch: bearerAuth
       ? async (request: Request) => {
-          const token = bearerAuth.getToken();
+          const path = pathOf(request);
+          const isSignIn = path !== null && BEARER_SIGN_IN_PATHS.has(path);
+          const token = isSignIn ? null : bearerAuth.getToken();
           if (!token) {
             const attempt = new Request(request.clone(), { credentials: "include" });
             return fetchWithCsrf(attempt);

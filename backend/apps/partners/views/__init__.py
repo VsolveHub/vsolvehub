@@ -73,6 +73,7 @@ from .partner_application import (
     PartnerPushSubscriptionSyncView,
     PartnerScheduleView,
     PartnerSkillListView,
+    PartnerWorkCatalogView,
     RequiredPartnerConsentListView,
 )
 
@@ -117,6 +118,7 @@ __all__ = [
     "PartnerPushSubscriptionSyncView",
     "PartnerScheduleView",
     "PartnerSkillListView",
+    "PartnerWorkCatalogView",
     "RequiredPartnerConsentListView",
     "_application_response",
     "_audit_self_review_denial",
