@@ -2,8 +2,8 @@
 import { describeError } from "@vsolve/query/native";
 import { Text } from "@vsolve/mobile-ui";
 import { type Href, useRouter } from "expo-router";
-import { History, Send, SquarePen } from "lucide-react-native";
-import { type ComponentRef, useCallback, useEffect, useRef, useState } from "react";
+import { Check, History, Pencil, Send, SquarePen, Trash2, X } from "lucide-react-native";
+import { type ComponentRef, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   KeyboardAvoidingView,
@@ -37,7 +37,8 @@ const OPENING_GREETING_SEQUENCE = 1;
 
 export function AssistantScreen() {
   const insets = useSafeAreaInsets();
-  const { token, loaded, chats, add, select, openNew, remove, nameFromMessage } = useAssistantChats();
+  const { token, loaded, chats, add, select, openNew, remove, nameFromMessage, hideMessages } =
+    useAssistantChats();
   const start = useStartConversation(add);
   // A conversation the server no longer knows is dropped from the list too.
   const forget = useCallback(() => {
@@ -58,9 +59,13 @@ export function AssistantScreen() {
   }, [needsConversation, startConversation]);
 
   // The server opens every conversation with a greeting as message #1; the app's own welcome
-  // block replaces it, so that one message is not shown. Every other message is.
+  // block replaces it, so that one message is not shown. Messages edited or deleted on this
+  // phone are not shown either. Every other message is.
+  const hidden = new Set(chats.find((chat) => chat.token === token)?.hidden ?? []);
   const messages = (conversation.data?.messages ?? []).filter(
-    (message) => !(message.sequence === OPENING_GREETING_SEQUENCE && message.sender === "assistant"),
+    (message) =>
+      !hidden.has(message.sequence) &&
+      !(message.sequence === OPENING_GREETING_SEQUENCE && message.sender === "assistant"),
   );
   const answering = send.isPending || Boolean(conversation.data?.is_answering);
   const hasCustomerMessage = pending !== null || messages.some((message) => message.sender === "customer");
@@ -104,6 +109,27 @@ export function AssistantScreen() {
   const lastAssistantSequence = [...messages].reverse().find((m) => m.sender === "assistant")
     ?.sequence;
   const error = start.error ?? send.error ?? conversation.error;
+
+  /*
+   * Edit and delete, on the customer's latest message only, and only while no answer is being
+   * written, so neither can contradict a step the assistant has already taken. The server keeps
+   * every message, so both work by hiding on this phone: that message and the replies after it.
+   * An edit then sends the new text as a fresh message, so it reads as replaced.
+   */
+  const lastCustomerMessage = [...messages].reverse().find((m) => m.sender === "customer");
+  const canEdit = Boolean(token) && !answering && pending === null;
+
+  const hideFrom = (sequence: number) => {
+    if (!token) return;
+    hideMessages(
+      token,
+      messages.filter((m) => m.sequence >= sequence).map((m) => m.sequence),
+    );
+  };
+  const saveEdit = (sequence: number, text: string) => {
+    hideFrom(sequence);
+    sendText(text);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -154,14 +180,23 @@ export function AssistantScreen() {
             onPick={(categoryName) => sendText(`I need ${categoryName}`)}
           />
         )}
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.sequence}
-            message={message}
-            interactive={message.sequence === lastAssistantSequence && !answering}
-            onSend={sendText}
-          />
-        ))}
+        {messages.map((message) =>
+          canEdit && message.sequence === lastCustomerMessage?.sequence ? (
+            <OwnMessage
+              key={`${token}-${message.sequence}`}
+              text={message.text}
+              onSave={(text) => saveEdit(message.sequence, text)}
+              onDelete={() => hideFrom(message.sequence)}
+            />
+          ) : (
+            <MessageBubble
+              key={message.sequence}
+              message={message}
+              interactive={message.sequence === lastAssistantSequence && !answering}
+              onSend={sendText}
+            />
+          ),
+        )}
         {pending ? <Bubble sender="customer" text={pending} muted /> : null}
         {answering ? <ReplyingDots /> : null}
         {error && !answering ? (
@@ -262,6 +297,115 @@ function Bubble({ sender, text, muted }: { sender: string; text: string; muted?:
       >
         <Text className={`text-sm ${mine ? "text-white" : "text-slate-900"}`}>{text}</Text>
       </View>
+    </View>
+  );
+}
+
+/** A round icon button for the message tools. */
+function IconAction({
+  label,
+  onPress,
+  disabled,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      className={`min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-200 ${
+        disabled ? "opacity-40" : ""
+      }`}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/**
+ * The customer's latest message. Tapping it shows an edit and a delete icon; editing turns the
+ * bubble itself into a text box with cancel and send icons. Its state lives here, so it resets
+ * by itself when the message stops being the editable one (a new message, another chat).
+ */
+function OwnMessage({
+  text,
+  onSave,
+  onDelete,
+}: {
+  text: string;
+  onSave: (text: string) => void;
+  onDelete: () => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "tools" | "editing">("idle");
+  const [value, setValue] = useState(text);
+
+  if (mode === "editing") {
+    const edited = value.trim().slice(0, MAX_MESSAGE_LENGTH);
+    return (
+      <View className="items-end">
+        <View className="w-[85%] rounded-2xl bg-[#00112e] px-3 py-1">
+          <TextInput
+            value={value}
+            onChangeText={setValue}
+            multiline
+            autoFocus
+            maxLength={MAX_MESSAGE_LENGTH}
+            accessibilityLabel="Edit your message"
+            className="max-h-40 min-h-11 text-sm text-white"
+          />
+        </View>
+        <View className="flex-row">
+          <IconAction
+            label="Cancel edit"
+            onPress={() => {
+              setValue(text);
+              setMode("idle");
+            }}
+          >
+            <X size={18} color="#475569" />
+          </IconAction>
+          <IconAction
+            label="Send edited message"
+            disabled={!edited}
+            onPress={() => {
+              // Nothing changed: there is nothing new to send.
+              if (edited === text.trim()) setMode("idle");
+              else onSave(edited);
+            }}
+          >
+            <Check size={18} color="#00112e" />
+          </IconAction>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View className="items-end">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint="Shows edit and delete"
+        onPress={() => setMode(mode === "tools" ? "idle" : "tools")}
+        className="max-w-[85%] rounded-2xl bg-[#00112e] px-3 py-2 active:opacity-80"
+      >
+        <Text className="text-sm text-white">{text}</Text>
+      </Pressable>
+      {mode === "tools" ? (
+        <View className="flex-row">
+          <IconAction label="Edit message" onPress={() => setMode("editing")}>
+            <Pencil size={17} color="#475569" />
+          </IconAction>
+          <IconAction label="Delete message" onPress={onDelete}>
+            <Trash2 size={17} color="#DC2626" />
+          </IconAction>
+        </View>
+      ) : null}
     </View>
   );
 }

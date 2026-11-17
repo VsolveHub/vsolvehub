@@ -190,6 +190,87 @@ describe("AssistantScreen", () => {
     expect(screen.queryByText(GREETING, { exact: false })).toBeNull();
   });
 
+  describe("edit and delete", () => {
+    const conversation = {
+      ...created.conversation,
+      messages: [
+        ...created.conversation.messages,
+        { sequence: 2, sender: "customer", text: "AC not cooling", actions: [], created_at: "" },
+        { sequence: 3, sender: "assistant", text: "Which day suits you?", actions: [], created_at: "" },
+      ],
+    };
+
+    async function openChat() {
+      mockClient.POST.mockResolvedValue(reply({ ...created, conversation }));
+      mockClient.GET.mockImplementation(async (path: string) =>
+        path === "/api/v1/categories/" ? reply(categories, 200) : reply(conversation, 200),
+      );
+      const screen = await renderScreen();
+      await conversationReady();
+      // Tapping the latest message shows its tools.
+      await fireEvent.press(await screen.findByText("AC not cooling"));
+      expect(await screen.findByLabelText("Edit message")).toBeTruthy();
+      expect(screen.getByLabelText("Delete message")).toBeTruthy();
+      return screen;
+    }
+
+    /** The sequences saved as hidden for the open chat. */
+    function savedHidden() {
+      const lastSave = mockKvSet.mock.calls.filter(([key]) => key === "assistant.chats").at(-1);
+      const chats = JSON.parse(lastSave?.[1] ?? "[]") as { token: string; hidden?: number[] }[];
+      return chats.find((chat) => chat.token === "token-1")?.hidden;
+    }
+
+    it("edits inside the message and sends the new text in its place", async () => {
+      const fetchMock = jest.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => undefined));
+      const screen = await openChat();
+
+      await fireEvent.press(screen.getByLabelText("Edit message"));
+      const box = screen.getByLabelText("Edit your message");
+      expect(box.props.value).toBe("AC not cooling");
+      await fireEvent.changeText(box, "AC not cooling since yesterday");
+      await fireEvent.press(screen.getByLabelText("Send edited message"));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      expect(await (fetchMock.mock.calls[0]?.[0] as Request).text()).toContain("AC not cooling since yesterday");
+      // The old message and the reply to it are hidden on this phone; the box at the bottom was not used.
+      expect(savedHidden()).toEqual([2, 3]);
+      expect(screen.queryByText("Which day suits you?")).toBeNull();
+      expect(screen.getByLabelText("Your message").props.value).toBe("");
+      fetchMock.mockRestore();
+    });
+
+    it("sends nothing when the edit is cancelled or unchanged", async () => {
+      const fetchMock = jest.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => undefined));
+      const screen = await openChat();
+
+      await fireEvent.press(screen.getByLabelText("Edit message"));
+      await fireEvent.press(screen.getByLabelText("Send edited message"));
+      expect(screen.queryByLabelText("Edit your message")).toBeNull();
+
+      await fireEvent.press(screen.getByText("AC not cooling"));
+      await fireEvent.press(await screen.findByLabelText("Edit message"));
+      await fireEvent.changeText(screen.getByLabelText("Edit your message"), "something else");
+      await fireEvent.press(screen.getByLabelText("Cancel edit"));
+      expect(screen.getByText("AC not cooling")).toBeTruthy();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      fetchMock.mockRestore();
+    });
+
+    it("deletes the message and the reply after it from this phone", async () => {
+      const screen = await openChat();
+
+      await fireEvent.press(screen.getByLabelText("Delete message"));
+
+      await waitFor(() => expect(screen.queryByText("AC not cooling")).toBeNull());
+      expect(screen.queryByText("Which day suits you?")).toBeNull();
+      expect(savedHidden()).toEqual([2, 3]);
+      // With nothing of the customer's left, the chat shows the welcome again.
+      expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    });
+  });
+
   it("shows the server's error and starts again when the person taps Try again", async () => {
     mockClient.POST.mockResolvedValueOnce(failure(503)).mockResolvedValueOnce(reply(created));
     const screen = await renderScreen();

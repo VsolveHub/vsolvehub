@@ -57,6 +57,11 @@ export interface SavedChat {
   token: string;
   /** The first thing the customer said; null until they say something. */
   title: string | null;
+  /**
+   * Messages edited or deleted on this phone, by sequence. The server cannot remove them and the
+   * assistant still remembers them; they are only no longer shown here.
+   */
+  hidden?: number[];
 }
 
 interface ChatState {
@@ -175,7 +180,19 @@ export function useAssistantChats() {
     [apply],
   );
 
-  return { ...state, add, select, openNew, remove, nameFromMessage };
+  /** Stop showing these messages of a chat on this phone. */
+  const hideMessages = useCallback(
+    (token: string, sequences: number[]) =>
+      apply({
+        ...latest.current,
+        chats: latest.current.chats.map((c) =>
+          c.token === token ? { ...c, hidden: [...new Set([...(c.hidden ?? []), ...sequences])] } : c,
+        ),
+      }),
+    [apply],
+  );
+
+  return { ...state, add, select, openNew, remove, nameFromMessage, hideMessages };
 }
 
 export function useStartConversation(onToken: (token: string) => void) {
