@@ -90,12 +90,37 @@ describe("AssistantScreen", () => {
     expect(JSON.parse(lastSave?.[1] ?? "[]")).toEqual([{ token: "token-1", title: "AC not cooling" }]);
   });
 
+  it("closes the history when the last chat is deleted and never lists the fresh blank chat", async () => {
+    mockKvGet.mockImplementation(async (key: string) =>
+      key === "assistant.conversation"
+        ? "token-1"
+        : key === "assistant.chats"
+          ? JSON.stringify([{ token: "token-1", title: "AC not cooling" }])
+          : null,
+    );
+    mockClient.POST.mockResolvedValue(reply({ ...created, conversation_token: "token-2" }));
+    const screen = await renderScreen();
+
+    fireEvent.press(await screen.findByLabelText("Chat history"));
+    fireEvent.press(await screen.findByLabelText("Delete chat AC not cooling"));
+
+    // Back on the assistant's page: the sheet is gone and a fresh conversation has started.
+    await waitFor(() => expect(screen.queryByText("Chat history")).toBeNull());
+    await waitFor(() => expect(mockClient.POST).toHaveBeenCalledTimes(1));
+
+    fireEvent.press(await screen.findByLabelText("Chat history"));
+    expect(await screen.findByText("No chats yet")).toBeTruthy();
+    expect(screen.queryByText("Open now")).toBeNull();
+  });
+
   it("starts a conversation and shows the assistant's greeting", async () => {
     mockClient.POST.mockResolvedValue(reply(created));
     const screen = await renderScreen();
 
     expect(await screen.findByText(GREETING, { exact: false })).toBeTruthy();
     expect(screen.getByText("Booking assistant")).toBeTruthy();
+    // A new chat opens with the welcome until the customer says something.
+    expect(screen.getByText("How can I help you today?")).toBeTruthy();
   });
 
   it("shows the server's error and starts again when the person taps Try again", async () => {

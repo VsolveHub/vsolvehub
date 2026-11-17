@@ -136,8 +136,18 @@ export function useAssistantChats() {
     [apply],
   );
 
-  /** Open a saved chat. */
-  const select = useCallback((token: string) => apply({ ...latest.current, token }), [apply]);
+  /** Open a saved chat. The blank page it replaces is dropped, so blank chats never pile up. */
+  const select = useCallback(
+    (token: string) =>
+      apply({
+        ...latest.current,
+        token,
+        chats: latest.current.chats.filter(
+          (c) => c.token === token || c.token !== latest.current.token || c.title,
+        ),
+      }),
+    [apply],
+  );
 
   /** Leave the open chat (kept in the list); with no token, a fresh conversation starts. */
   const openNew = useCallback(() => apply({ ...latest.current, token: null }), [apply]);

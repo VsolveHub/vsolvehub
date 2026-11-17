@@ -1,8 +1,8 @@
 // Ported from frontend/apps/customer/features/assistant/view/assistant-widget.tsx
 import { describeError } from "@vsolve/query/native";
-import { Sheet, Text } from "@vsolve/mobile-ui";
+import { Text } from "@vsolve/mobile-ui";
 import { type Href, useRouter } from "expo-router";
-import { History, Plus, Send, Trash2 } from "lucide-react-native";
+import { History, Send, SquarePen } from "lucide-react-native";
 import { type ComponentRef, useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -22,6 +22,8 @@ import {
   type AssistantAction,
   type AssistantMessage,
 } from "../queries";
+import { HistorySheet } from "./history-sheet";
+import { WelcomeHero } from "./welcome-hero";
 
 /**
  * The booking assistant. It books through the same commands as the booking flow
@@ -42,6 +44,7 @@ export function AssistantScreen() {
   const conversation = useConversation(token, forget);
   const send = useSendMessage(token);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const listRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -54,6 +57,7 @@ export function AssistantScreen() {
 
   const messages = conversation.data?.messages ?? [];
   const answering = send.isPending || Boolean(conversation.data?.is_answering);
+  const hasCustomerMessage = pending !== null || messages.some((message) => message.sender === "customer");
 
   useEffect(() => {
     listRef.current?.scrollToEnd({ animated: true });
@@ -71,8 +75,15 @@ export function AssistantScreen() {
     [send, token, nameFromMessage],
   );
 
-  // An empty chat is already a new chat: do not pile up blank ones.
+  // A chat nobody has written in is not history: it is the blank page a new chat starts on.
+  const usedChats = chats.filter((chat) => chat.title);
   const openedChatIsEmpty = chats.find((chat) => chat.token === token)?.title == null;
+
+  // Deleting the last chat leaves nothing to look at, so go back to the assistant's fresh page.
+  const deleteChat = (chatToken: string) => {
+    remove(chatToken);
+    if (usedChats.length <= 1) closeHistory();
+  };
   const startNewChat = () => {
     setHistoryOpen(false);
     if (token && !openedChatIsEmpty) openNew();
@@ -102,15 +113,26 @@ export function AssistantScreen() {
           <Text className="text-sm font-semibold text-navy-900">Booking assistant</Text>
           <Text className="text-xs text-[#6B6560]">Tell me what you need done at home</Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Chat history"
-          hitSlop={8}
-          onPress={() => setHistoryOpen(true)}
-          className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
-        >
-          <History size={22} color="#1E293B" />
-        </Pressable>
+        <View className="flex-row items-center">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+            hitSlop={8}
+            onPress={startNewChat}
+            className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
+          >
+            <SquarePen size={21} color="#1E293B" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Chat history"
+            hitSlop={8}
+            onPress={() => setHistoryOpen(true)}
+            className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
+          >
+            <History size={22} color="#1E293B" />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -119,6 +141,7 @@ export function AssistantScreen() {
         contentContainerClassName="gap-3 px-4 py-4"
         keyboardShouldPersistTaps="handled"
       >
+        {hasCustomerMessage ? null : <WelcomeHero key={token ?? "new"} />}
         {messages.map((message) => (
           <MessageBubble
             key={message.sequence}
@@ -169,47 +192,14 @@ export function AssistantScreen() {
         </Pressable>
       </View>
 
-      <Sheet open={historyOpen} onOpenChange={setHistoryOpen} title="Chats">
-        <Pressable
-          accessibilityRole="button"
-          onPress={startNewChat}
-          className="mb-3 min-h-11 flex-row items-center justify-center gap-2 rounded-xl bg-[#00112e]"
-        >
-          <Plus size={18} color="#FFFFFF" />
-          <Text className="text-sm font-semibold text-white">New chat</Text>
-        </Pressable>
-        <ScrollView className="max-h-80">
-          {chats.map((chat) => (
-            <View key={chat.token} className="flex-row items-center border-b border-slate-100">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: chat.token === token }}
-                onPress={() => {
-                  setHistoryOpen(false);
-                  if (chat.token !== token) select(chat.token);
-                }}
-                className="min-h-11 flex-1 justify-center py-2"
-              >
-                <Text
-                  numberOfLines={1}
-                  className={`text-sm ${chat.token === token ? "font-bold text-navy-900" : "text-slate-800"}`}
-                >
-                  {chat.title ?? "New chat"}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Delete chat ${chat.title ?? "New chat"}`}
-                hitSlop={8}
-                onPress={() => remove(chat.token)}
-                className="min-h-11 min-w-11 items-center justify-center"
-              >
-                <Trash2 size={18} color="#B91C1C" />
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
-      </Sheet>
+      <HistorySheet
+        open={historyOpen}
+        onClose={closeHistory}
+        chats={usedChats}
+        currentToken={token}
+        onSelect={select}
+        onDelete={deleteChat}
+      />
     </KeyboardAvoidingView>
   );
 }
