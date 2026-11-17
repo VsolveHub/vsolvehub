@@ -7,7 +7,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./native": "./src/native.ts"
+    "./native": "./src/native.ts",
+    "./partner-work": "./src/partner-work.ts",
+    "./partner-hours": "./src/partner-hours.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

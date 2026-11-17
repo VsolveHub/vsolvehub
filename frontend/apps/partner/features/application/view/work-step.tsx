@@ -5,13 +5,15 @@ import { Badge, ErrorState, Spinner, useT } from "@vsolve/ui";
 
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 import type { MainCategory, OfferableService } from "@/features/catalog/queries";
-import { toggle } from "../model/draft";
 import {
   findSkillForCategory,
+  groupByService,
+  isServiceGroupSelected,
   isTradeCategorySelected,
   selectedTradeCategories,
   tickableCategories,
   syncRequiredSkills,
+  toggleServiceGroup,
   toggleTradeCategorySelection,
   variantIdsForCategory,
 } from "../model/main-categories";
@@ -125,6 +127,7 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
               draft.skillCodes,
             );
             const categoryServices = servicesForCategory(category, services);
+            const categoryGroups = groupByService(categoryServices);
             const allCategoryIds = variantIdsForCategory(category.name, services);
             const allServicesSelected =
               allCategoryIds.length > 0 &&
@@ -182,37 +185,32 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
                       </div>
 
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {categoryServices.map((service) => {
-                          const needsSkill =
-                            service.requiredSkillCode.length > 0 &&
-                            !draft.skillCodes.includes(service.requiredSkillCode) &&
-                            !reference.skills.some(
-                              (skill) => skill.code === service.requiredSkillCode,
-                            );
+                        {categoryGroups.map((group) => {
+                          const selected = isServiceGroupSelected(group, draft.serviceVariantIds);
+                          // Only for a skill Django does not offer: `select` adds every other one.
+                          const notOpenYet = group.requiredSkillCodes.some(
+                            (code) =>
+                              !draft.skillCodes.includes(code) &&
+                              !reference.skills.some((skill) => skill.code === code),
+                          );
 
                           return (
-                            <div key={service.variantId} className="flex flex-col gap-1">
+                            <div
+                              key={`${group.categoryName}::${group.serviceId}`}
+                              className="flex flex-col gap-1"
+                            >
                               <SelectableRow
-                                checked={draft.serviceVariantIds.includes(service.variantId)}
+                                checked={selected}
                                 disabled={isReadOnly}
                                 onChange={() =>
                                   select({
-                                    serviceVariantIds: toggle(
-                                      draft.serviceVariantIds,
-                                      service.variantId,
-                                    ),
+                                    serviceVariantIds: toggleServiceGroup(group, draft.serviceVariantIds),
                                   })
                                 }
-                                label={service.variantName}
-                                caption={service.serviceName}
+                                label={group.serviceName}
                               />
-                              {needsSkill &&
-                              draft.serviceVariantIds.includes(service.variantId) ? (
-                                // Only reachable now when the skill is not one
-                                // Django offers: `select` adds every other one.
-                                <Badge tone="warning">
-                                  {t("apply.work.notOpenYet")}
-                                </Badge>
+                              {notOpenYet && selected ? (
+                                <Badge tone="warning">{t("apply.work.notOpenYet")}</Badge>
                               ) : null}
                             </div>
                           );
