@@ -36,7 +36,6 @@ from .serializers import (
 from .services import (
     conversations_for,
     create_session,
-    delete_conversation,
     has_open_booking,
     owned_session,
     recent_visible_messages,
@@ -188,16 +187,6 @@ class AssistantOwnedConversationView(AssistantConversationView):
     )
     def get(self, request: Request, **_url_kwargs: object) -> Response:
         return super().get(request)
-
-    @extend_schema(
-        tags=["Assistant"],
-        operation_id="assistant_owned_conversation_destroy",
-        responses={204: None, 404: ApiErrorSerializer, 409: ApiErrorSerializer},
-    )
-    def delete(self, request: Request, **_url_kwargs: object) -> Response:
-        # Not gated on ASSISTANT_ENABLED: a Customer can always remove their own chats.
-        delete_conversation(self.find_session(request, _user(request)))
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def find_session(self, _request: Request, user: User | None) -> AssistantSession:
         return owned_session(

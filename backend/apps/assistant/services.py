@@ -1,7 +1,6 @@
 """Conversation lifecycle: tokens, ownership, the turn lease, messages, history and notices."""
 
 import hashlib
-import logging
 import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -25,8 +24,6 @@ from .exceptions import (
 from .llm import JsonObject, ToolCall, ToolResult, Turn
 from .models import AssistantBooking, AssistantMessage, AssistantSession
 from .progress import describe
-
-logger = logging.getLogger(__name__)
 
 GREETING = (
     "Hi! Tell me what you need done at home — for example “AC not cooling” or “fan "
@@ -82,23 +79,6 @@ def owned_session(*, conversation_id: UUID, user: User) -> AssistantSession:
     if session is None:
         raise AssistantConversationNotFoundApiError
     return session
-
-
-def delete_conversation(session: AssistantSession) -> None:
-    """Delete a conversation and its messages for good.
-
-    The bookings it made are untouched: `AssistantBooking` is only a link, and the checkout and
-    booking group it points at are protected, so they stay in the Customer's bookings. Refused
-    (409) while an answer is being written, so a turn can never write into a deleted chat.
-    """
-
-    conversation_id, customer_id = session.id, session.customer_id
-    with turn_lease(session):
-        session.delete()
-    logger.info(
-        "assistant.conversation_deleted",
-        extra={"conversation_id": str(conversation_id), "customer_id": str(customer_id)},
-    )
 
 
 def conversations_for(user: User) -> QuerySet[AssistantSession]:
