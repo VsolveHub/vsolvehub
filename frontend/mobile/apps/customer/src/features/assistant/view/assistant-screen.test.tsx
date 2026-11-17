@@ -24,7 +24,14 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }) }));
+// The screen counts as in view from the start, as it is when someone opens the tab.
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import("react")>("react");
+    useEffect(effect, [effect]);
+  },
+}));
 
 const GREETING = "Hi! Tell me what you need done at home";
 

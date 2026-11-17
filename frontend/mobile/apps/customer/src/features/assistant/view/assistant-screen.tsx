@@ -1,7 +1,7 @@
 // Ported from frontend/apps/customer/features/assistant/view/assistant-widget.tsx
 import { describeError } from "@vsolve/query/native";
 import { Text } from "@vsolve/mobile-ui";
-import { type Href, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { Check, History, Pencil, Send, SquarePen, Trash2, X } from "lucide-react-native";
 import { type ComponentRef, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -34,6 +34,7 @@ import { WelcomeHero } from "./welcome-hero";
 const MAX_MESSAGE_LENGTH = 1000;
 /** `create_session` in backend/apps/assistant/services.py writes the greeting first. */
 const OPENING_GREETING_SEQUENCE = 1;
+const KEYBOARD_OPEN_DELAY_MS = 300;
 
 export function AssistantScreen() {
   const insets = useSafeAreaInsets();
@@ -51,6 +52,16 @@ export function AssistantScreen() {
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const listRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+
+  // Opening the chat opens the keyboard, every time the screen comes into view. The short wait
+  // lets the screen finish arriving; Android can drop a focus asked for mid-transition.
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setTimeout(() => inputRef.current?.focus(), KEYBOARD_OPEN_DELAY_MS);
+      return () => clearTimeout(timer);
+    }, []),
+  );
 
   const startConversation = start.mutate;
   const needsConversation = loaded && token === null && !start.isPending && !start.isError;
@@ -217,6 +228,7 @@ export function AssistantScreen() {
 
       <View className="flex-row items-end gap-2 border-t border-slate-200 p-3">
         <TextInput
+          ref={inputRef}
           value={draft}
           onChangeText={setDraft}
           multiline
