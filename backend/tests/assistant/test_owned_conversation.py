@@ -74,23 +74,6 @@ def test_the_owner_opens_their_conversation_by_id_without_its_token() -> None:
     assert body["is_answering"] is False
 
 
-def test_a_conversation_started_signed_in_opens_by_the_id_it_was_given(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Starting a chat checks a model is configured; tests stand one in.
-    _use(monkeypatch, ScriptedModel([]))
-    me = _customer("+919811111111")
-    client = _client(me)
-
-    started = client.post("/api/v1/assistant/conversations/")
-
-    assert started.status_code == HTTPStatus.CREATED, started.json()
-    conversation_id = started.json()["conversation_id"]
-    opened = client.get(_url(conversation_id))
-    assert opened.status_code == HTTPStatus.OK
-    assert opened.json() == started.json()["conversation"]
-
-
 def test_a_second_device_sees_exactly_what_the_first_one_does() -> None:
     me = _customer("+919811111111")
     session = _chat(me)

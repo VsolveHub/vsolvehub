@@ -107,7 +107,6 @@ class AssistantConversationCreateView(ThrottledWriteMixin, APIView):
         user = _user(request)
         session, token = create_session(user=user)
         body: dict[str, object] = {
-            "conversation_id": session.id,
             "conversation_token": token,
             "conversation": _conversation(session, user=user),
         }

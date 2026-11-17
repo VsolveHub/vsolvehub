@@ -23787,11 +23787,6 @@ components:
     AssistantConversationCreated:
       type: object
       properties:
-        conversation_id:
-          type: string
-          format: uuid
-          description: Opens this conversation on the id routes, for the signed-in
-            Customer owning it.
         conversation_token:
           type: string
           description: Send as the X-Assistant-Token header. Shown once; keep it on
@@ -23800,7 +23795,6 @@ components:
           $ref: '#/components/schemas/AssistantConversation'
       required:
       - conversation
-      - conversation_id
       - conversation_token
     AssistantConversationSummary:
       type: object

@@ -69,9 +69,6 @@ class AssistantConversationSummarySerializer(serializers.ModelSerializer[Assista
 
 
 class AssistantConversationCreatedSerializer(serializers.Serializer[dict[str, object]]):
-    conversation_id = serializers.UUIDField(
-        help_text="Opens this conversation on the id routes, for the signed-in Customer owning it.",
-    )
     conversation_token = serializers.CharField(
         help_text="Send as the X-Assistant-Token header. Shown once; keep it on the device.",
     )

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.101.0)
- * Checksum: ccf0ea2bf102f3ea
+ * Checksum: 7ec043e94ed2b075
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -9702,11 +9702,6 @@ export interface components {
             has_open_booking: boolean;
         };
         AssistantConversationCreated: {
-            /**
-             * Format: uuid
-             * @description Opens this conversation on the id routes, for the signed-in Customer owning it.
-             */
-            conversation_id: string;
             /** @description Send as the X-Assistant-Token header. Shown once; keep it on the device. */
             conversation_token: string;
             conversation: components["schemas"]["AssistantConversation"];
