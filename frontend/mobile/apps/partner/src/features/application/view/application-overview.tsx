@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   BedDouble,
+  Briefcase,
   Check,
   ChevronRight,
   Package,
@@ -193,6 +194,12 @@ const TRACK_CHOICES = [
     title: "I rent out tools or equipment",
     description: "Tools, machinery, event or home items.",
     icon: Package,
+  },
+  {
+    track: "EMPLOYER",
+    title: "I want to hire staff",
+    description: "A shop, clinic, office or business looking for people to work for you.",
+    icon: Briefcase,
   },
 ] as const;
 
@@ -476,7 +483,7 @@ function Standing({ application }: { application: Application }) {
           {/* List of steps */}
           <View style={{ width: "100%" }}>
             {steps.map((step, idx) => (
-              <Pressable
+              <Pressable cssInterop={false}
                 key={step.href}
                 accessibilityRole="button"
                 onPress={() => router.push(step.href as never)}
@@ -508,7 +515,7 @@ function Standing({ application }: { application: Application }) {
           </View>
 
           {/* Solid Orange Primary Action Button */}
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             onPress={() => router.push((summary.nextIncomplete?.href ?? "/apply/review") as never)}
             style={({ pressed }) => ({
@@ -566,7 +573,7 @@ function SwitchTrack({ current }: { current: string }) {
       </Text>
       <View style={{ rowGap: 8, marginTop: 2 }}>
         {others.map(({ track, title, icon: Icon }) => (
-          <Pressable
+          <Pressable cssInterop={false}
             key={track}
             accessibilityRole="button"
             disabled={update.isPending}

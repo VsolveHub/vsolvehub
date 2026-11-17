@@ -32,7 +32,7 @@ export function BrandHeader({
       <View style={styles.inner}>
         {/* Left: Back chevron / arrow or placeholder */}
         {showBack && onBack ? (
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             onPress={onBack}
@@ -64,7 +64,7 @@ export function BrandHeader({
 
         {/* Right: Avatar Badge */}
         {showAvatar ? (
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel="Partner account menu"
             onPress={onAvatarPress}

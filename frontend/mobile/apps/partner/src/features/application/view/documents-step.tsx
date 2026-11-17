@@ -2,6 +2,7 @@
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import {
   AlertCircle,
   AlertTriangle,
@@ -15,8 +16,10 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
 import { requiredDocumentKinds } from "../model/readiness";
+import { isDocumentRejected } from "../model/status";
 import { isListingTrack } from "../model/steps";
 import { usePartnerApplication } from "../queries";
+import { usePartnerDocumentAccess } from "../upload-queries";
 import { StepFrame } from "./application-editor";
 import { DocumentUpload } from "./document-upload";
 
@@ -44,12 +47,31 @@ export function DocumentsStep() {
       (query.error && typeof query.error === "object" && (query.error as { status?: number }).status === 404),
   );
   const [replacingKind, setReplacingKind] = useState<DocumentKind | null>(null);
+  const access = usePartnerDocumentAccess();
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  /** A short-lived link to one of the person's own documents, as the website's "View document". */
+  async function viewDocument(documentId: string) {
+    setAccessError(null);
+    setOpeningId(documentId);
+    try {
+      const response = await access.mutateAsync(documentId);
+      if (response.access_url) await WebBrowser.openBrowserAsync(response.access_url);
+      else setAccessError("Could not generate a preview link. Please try again.");
+    } catch {
+      setAccessError("Could not open this document right now. Please try again.");
+    } finally {
+      setOpeningId(null);
+    }
+  }
 
   const application = query.data ?? null;
   const required = requiredDocumentKinds(application);
   const allUploaded = required.every((kind) => {
     const document = application ? currentDocument(application, kind) : null;
-    return document !== null && document.status !== "REJECTED";
+    // A file that failed the security scan is rejected too, as on the website.
+    return document !== null && !isDocumentRejected(document);
   });
   const anyUploaded = OFFERED.some((item) => application !== null && currentDocument(application, item.kind) !== null);
 
@@ -107,16 +129,23 @@ export function DocumentsStep() {
       description="A reviewer checks these before you can take work."
     >
       <View style={styles.cardsContainer}>
-        {OFFERED.map((item) => {
+        {[...OFFERED]
+          .sort((a, b) => Number(required.includes(b.kind)) - Number(required.includes(a.kind)))
+          .map((item) => {
           const document = application ? currentDocument(application, item.kind) : null;
           const isUploaded = document !== null;
           const isReplacing = replacingKind === item.kind;
           const isApproved = document?.status === "APPROVED";
-          const isRejected = document?.status === "REJECTED";
+          const isRejected = document !== null && isDocumentRejected(document);
           const isPending = document?.status === "PENDING";
           // Replaceable only when the server says so: a declined application refuses it with a 409.
           const canReplace = document?.can_replace ?? false;
           const isReplaceState = isRejected && canReplace;
+          // Locked once sent: only a document the reviewer rejected can be swapped.
+          const isLockedForReview =
+            document !== null &&
+            !canReplace &&
+            (application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW");
           const isRequired = required.includes(item.kind);
 
           const hint =
@@ -156,15 +185,20 @@ export function DocumentsStep() {
                 )}
               </View>
 
-              {/* Hint text */}
-              <Text style={styles.hintText}>{hint}</Text>
+              {/* Hint text: only while there is nothing, or a rejection, to act on */}
+              {!isUploaded || isRejected ? <Text style={styles.hintText}>{hint}</Text> : null}
 
               {/* Expired / Rejected Banner if Replace State */}
               {isUploaded && !isReplacing && isReplaceState ? (
                 <View style={styles.expiredBanner}>
                   <AlertCircle size={15} color="#d32f1e" strokeWidth={2.2} />
                   <Text style={styles.expiredBannerText}>
-                    {document?.review_reason || "This document was not accepted."}
+                    {document?.scan_status === "REJECTED"
+                      ? "This file failed our security check. Upload it again."
+                      : `Reason: ${
+                          document?.review_reason ||
+                          "We could not verify this document. Upload a clearer photo or PDF."
+                        }`}
                   </Text>
                 </View>
               ) : null}
@@ -184,21 +218,40 @@ export function DocumentsStep() {
                     <View style={styles.fileInfo}>
                       <Text style={styles.fileName}>{document.file_name}</Text>
                       <Text style={styles.fileMeta}>
-                        {Math.round(document.size_bytes / 1024)} KB · {document.content_type.split("/")[1]?.toUpperCase()}
+                        {Math.round(document.size_bytes / 1024)} KB · {document.content_type.split("/")[1]?.toUpperCase()} ·{" "}
+                        {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+                          new Date(document.uploaded_at),
+                        )}
                       </Text>
                     </View>
                   </View>
 
-                  {isReplaceState ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View document"
+                    disabled={openingId === document.id}
+                    onPress={() => void viewDocument(document.id)}
+                    style={styles.reuploadButton}
+                  >
+                    <Text style={styles.reuploadButtonText}>
+                      {openingId === document.id ? "Opening…" : "View document"}
+                    </Text>
+                  </Pressable>
+
+                  {canReplace ? (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Re-upload document"
+                      accessibilityLabel={isRejected ? "Re-upload document" : "Replace file"}
                       onPress={() => setReplacingKind(item.kind)}
                       style={styles.reuploadButton}
                     >
                       <RotateCw size={15} color="#f87000" strokeWidth={2.4} />
-                      <Text style={styles.reuploadButtonText}>Re-upload</Text>
+                      <Text style={styles.reuploadButtonText}>{isRejected ? "Re-upload" : "Replace file"}</Text>
                     </Pressable>
+                  ) : null}
+
+                  {isLockedForReview ? (
+                    <Text style={styles.hintText}>Locked while your application is being reviewed.</Text>
                   ) : null}
                 </View>
               ) : (
@@ -212,6 +265,7 @@ export function DocumentsStep() {
                     label={item.label}
                     expectedVersion={application?.version ?? null}
                     replacing={isReplacing || isReplaceState}
+                    onSuccess={() => setReplacingKind(null)}
                   />
                   {isReplacing ? (
                     <Pressable
@@ -227,6 +281,11 @@ export function DocumentsStep() {
             </View>
           );
         })}
+        {accessError ? (
+          <Text accessibilityRole="alert" style={{ fontSize: 12, fontWeight: "600", color: "#be123c" }}>
+            {accessError}
+          </Text>
+        ) : null}
       </View>
     </StepFrame>
   );

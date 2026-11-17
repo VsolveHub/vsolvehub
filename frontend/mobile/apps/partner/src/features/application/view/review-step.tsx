@@ -20,7 +20,7 @@ import {
   outstandingRequirements,
   requiredDocumentKinds,
 } from "../model/readiness";
-import { documentLabel, documentStatusPresentation } from "../model/status";
+import { documentLabel, documentStatusPresentation, statusRouteFor } from "../model/status";
 import { isListingTrack } from "../model/steps";
 import {
   describeRefusal,
@@ -119,9 +119,9 @@ export function ReviewStep() {
 
   useEffect(() => {
     if (isSubmitted) {
-      router.replace("/apply/status" as any);
+      router.replace(statusRouteFor(appStatus) as any);
     }
-  }, [isSubmitted, router]);
+  }, [appStatus, isSubmitted, router]);
 
   const submitMutateRef = useRef(submit.mutate);
   submitMutateRef.current = submit.mutate;
@@ -154,7 +154,8 @@ export function ReviewStep() {
       submitMutateRef.current(undefined, {
         onSuccess: () => {
           void refetchRef.current();
-          router.replace("/apply/status" as any);
+          // A sent application has just become SUBMITTED; the screen for that is `/apply`.
+          router.replace(statusRouteFor("SUBMITTED") as any);
         },
       });
     } catch {

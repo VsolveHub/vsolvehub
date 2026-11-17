@@ -2,7 +2,7 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useServerCountdown, type Countdown } from "@vsolve/query/native";
 import { Badge, ErrorState, Spinner, Text, cn, formatMoney } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -11,6 +11,7 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession, subscribeStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { shellForApplication } from "@/features/session/model/redirect";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
@@ -32,8 +33,8 @@ export function WorkHome() {
 
   if (query.isPending) {
     return (
-      <View className="mx-auto w-full max-w-md px-4 py-6">
-        <ApplicationOverview />
+      <View className="flex-1 items-center justify-center">
+        <Spinner />
       </View>
     );
   }
@@ -52,6 +53,11 @@ export function WorkHome() {
   }
 
   if (isMissing || query.data === undefined || query.data.status !== "APPROVED") {
+    // The workspace shell is for approved Partners. Anyone still applying belongs in the
+    // onboarding shell, so a deep link or the Home button never shows the checklist inside the
+    // workspace dock.
+    const route = shellForApplication(isMissing ? null : (query.data?.status ?? null));
+    if (route !== "/home") return <Redirect href={route} />;
     return (
       <View className="mx-auto w-full max-w-md px-4 py-6">
         <ApplicationOverview />

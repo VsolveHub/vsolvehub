@@ -41,7 +41,7 @@ export function HelpSupportScreen() {
         {/* 4 Contact Rows matching Screen 14 */}
         <View style={styles.rowsContainer}>
           {/* Row 1: WhatsApp */}
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel="Chat on WhatsApp"
             onPress={() => handleOpenUrl("https://wa.me/918008765832")}
@@ -60,7 +60,7 @@ export function HelpSupportScreen() {
           </Pressable>
 
           {/* Row 2: Call support */}
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel="Call support"
             onPress={openSupportCall}
@@ -79,7 +79,7 @@ export function HelpSupportScreen() {
           </Pressable>
 
           {/* Row 3: Email us */}
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel="Email us"
             onPress={() => openSupportEmail()}
@@ -98,7 +98,7 @@ export function HelpSupportScreen() {
           </Pressable>
 
           {/* Row 4: FAQs */}
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel="FAQs"
             onPress={() => handleOpenUrl("https://vsolvehub.com/faqs")}
