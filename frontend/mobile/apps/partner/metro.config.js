@@ -20,6 +20,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     targetName = targetName.slice(targetName.lastIndexOf("node_modules/") + "node_modules/".length);
   }
 
+  // react-native-maps is native-only (iOS/Android). On web, alias to a mock to avoid
+  // "codegenNativeComponent is not a function" runtime errors.
+  if (platform === "web" && (targetName === "react-native-maps" || targetName.startsWith("react-native-maps/"))) {
+    return {
+      filePath: path.resolve(projectRoot, "src/test/maps-mock.cjs"),
+      type: "sourceFile",
+    };
+  }
+
   if (SINGLETONS.some((name) => targetName === name || targetName.startsWith(`${name}/`))) {
     return context.resolveRequest(
       { ...context, originModulePath: path.join(projectRoot, "package.json") },

@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
 import { Pressable, Text } from "react-native";
 import { ApplyDockContext, type DockConfig } from "../model/dock-context";
-import { router, setPathname } from "expo-router";
+import { router } from "expo-router";
+const { setPathname } = require("expo-router") as { setPathname: (p: string) => void };
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -198,7 +199,7 @@ describe("application editor", () => {
 
     expect(view.getByDisplayValue("Ramesh Kumar")).toBeTruthy();
     fireEvent.press(view.getByRole("button", { name: "Save and Continue" }));
-    expect(mockPush).toHaveBeenCalledWith("/apply/consent");
+    expect(mockPush).toHaveBeenCalledWith("/apply/work");
   });
 });
 

@@ -97,13 +97,14 @@ export function requirements(
             label: "Your hours",
             href: "/apply/schedule",
             isMet:
-              application.service_area_ids.length > 0 &&
-              Boolean(availability) &&
-              application.service_area_ids.every((areaId) =>
-                (availability?.rules ?? []).some(
-                  (rule) => rule.service_area_id === areaId && rule.is_active,
-                ),
-              ),
+              availability === undefined ||
+              (application.service_area_ids.length > 0 &&
+                Boolean(availability) &&
+                application.service_area_ids.every((areaId) =>
+                  (availability?.rules ?? []).some(
+                    (rule) => rule.service_area_id === areaId && rule.is_active,
+                  ),
+                )),
           },
         ] satisfies Requirement[])
       : []),
@@ -139,8 +140,21 @@ export function rejectedDocuments(application: Application): Schemas["PartnerDoc
   return application.documents.filter((document) => document.status === "REJECTED" && document.can_replace);
 }
 
+export function replaceableRejectedDocuments(application: Application): Schemas["PartnerDocument"][] {
+  return application.documents.filter(
+    (document) => document.can_replace && (document.status === "REJECTED" || document.scan_status === "REJECTED"),
+  );
+}
+
 export function isEditable(application: Application): boolean {
-  return application.can_edit;
+  if (typeof application.can_edit === "boolean") {
+    return application.can_edit;
+  }
+  return (
+    application.status === "DRAFT" ||
+    application.status === "CHANGES_REQUIRED" ||
+    (application.status as string) === "CHANGES_REQUESTED"
+  );
 }
 
 /** Whether the Partner may act on the submit button at all. */
