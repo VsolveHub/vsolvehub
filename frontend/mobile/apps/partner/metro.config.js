@@ -7,7 +7,14 @@ const config = getDefaultConfig(projectRoot);
 
 // One copy of each of these, always the app's own. Workspace packages (@vsolve/*) import them
 // too, and a second copy of React breaks every hook ("Invalid hook call").
-const SINGLETONS = ["react", "react-native", "@tanstack/react-query", "expo-router"];
+const SINGLETONS = [
+  "react",
+  "react-native",
+  "@tanstack/react-query",
+  "expo-router",
+  "react-native-css-interop",
+  "nativewind",
+];
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   // Normalize a RELATIVE monorepo path into node_modules ("../../node_modules/react" -> "react").
   // Absolute paths are left alone: Metro asks for its own files by absolute path (for example

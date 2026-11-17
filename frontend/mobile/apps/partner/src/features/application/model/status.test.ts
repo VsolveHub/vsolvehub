@@ -2,6 +2,8 @@ import {
   applicationStatusPresentation,
   documentLabel,
   documentStatusPresentation,
+  isWaitingForDecision,
+  statusRouteFor,
   trackerStage,
 } from "./status";
 
@@ -43,5 +45,28 @@ describe("document labels & status", () => {
     expect(documentStatusPresentation({ status: "REJECTED", scan_status: "CLEAN" }).label).toBe(
       "Needs replacing",
     );
+  });
+});
+
+describe("statusRouteFor", () => {
+  it("keeps an application waiting for a decision on /apply, like the website", () => {
+    // Regression: submitting sent the phone to a separate "Application in review" screen the
+    // website does not have, so the two showed different pages for the same application.
+    expect(statusRouteFor("SUBMITTED")).toBe("/apply");
+    expect(statusRouteFor("UNDER_REVIEW")).toBe("/apply");
+  });
+
+  it("keeps the status screen for the states that need an answer", () => {
+    expect(statusRouteFor("DECLINED")).toBe("/apply/status");
+    expect(statusRouteFor("REJECTED")).toBe("/apply/status");
+    expect(statusRouteFor(undefined)).toBe("/apply/status");
+  });
+
+  it("knows which statuses are waiting", () => {
+    expect(isWaitingForDecision("SUBMITTED")).toBe(true);
+    expect(isWaitingForDecision("UNDER_REVIEW")).toBe(true);
+    expect(isWaitingForDecision("DRAFT")).toBe(false);
+    expect(isWaitingForDecision("APPROVED")).toBe(false);
+    expect(isWaitingForDecision(null)).toBe(false);
   });
 });

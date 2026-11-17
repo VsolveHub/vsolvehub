@@ -170,3 +170,19 @@ export function trackLabelKey(track: Schemas["TrackEnum"] | null | undefined): s
 export function trackLabel(track: Schemas["TrackEnum"] | null | undefined): string {
   return track ? TRACK_LABELS[track]?.label ?? "Home services" : "Home services";
 }
+
+/** An application that has been sent and is waiting for a decision. */
+export function isWaitingForDecision(status: string | null | undefined): boolean {
+  return status === "SUBMITTED" || status === "UNDER_REVIEW";
+}
+
+/**
+ * Where someone goes once their application is sent (or opens its status).
+ *
+ * The website has no separate status page: `/apply` shows "We have your application", the steps
+ * and "What has happened" for an application in review. A decision that needs an answer (declined,
+ * rejected) keeps the status screen, where the appeal lives.
+ */
+export function statusRouteFor(status: string | null | undefined): "/apply" | "/apply/status" {
+  return isWaitingForDecision(status) ? "/apply" : "/apply/status";
+}

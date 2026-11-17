@@ -10,10 +10,11 @@ import uuid
 from http import HTTPStatus
 from typing import cast
 
+from django.utils.cache import patch_cache_control
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,6 +30,7 @@ from apps.partners.selectors import (
     applicant_skills,
     partner_profile_for_user,
     partner_schedule,
+    partner_work_catalog,
     required_partner_consent_documents,
 )
 from apps.partners.serializers import (
@@ -51,6 +53,7 @@ from apps.partners.serializers import (
     PartnerScheduleSerializer,
     PartnerScheduleUpdateSerializer,
     PartnerSkillOptionSerializer,
+    PartnerWorkCategorySerializer,
 )
 from apps.partners.services import (
     _ensure_partner_role,
@@ -97,6 +100,29 @@ class PartnerSkillListView(APIView):
     )
     def get(self, _request: Request) -> Response:
         return Response(PartnerSkillOptionSerializer(applicant_skills(), many=True).data)
+
+
+class PartnerWorkCatalogView(APIView):
+    """What an applicant can offer on "Your work", in one read.
+
+    Public, like the catalog it reads, and cacheable for the same five minutes. It replaces a walk
+    of one request per category and one per service that the apps made on every visit to the step.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Partner application"],
+        operation_id="partner_work_catalog",
+        responses={200: PartnerWorkCategorySerializer(many=True)},
+    )
+    def get(self, _request: Request) -> Response:
+        response = Response(
+            [PartnerWorkCategorySerializer(category).data for category in partner_work_catalog()]
+        )
+        patch_cache_control(response, public=True, max_age=300, stale_while_revalidate=600)
+        return response
 
 
 class RequiredPartnerConsentListView(APIView):

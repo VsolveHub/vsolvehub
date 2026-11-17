@@ -1,5 +1,6 @@
 "use client";
 
+import { presetPeriods } from "@vsolve/query/partner-hours";
 import { Badge, Button, useT } from "@vsolve/ui";
 import { Plus, Trash2, X, Clock, Edit2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -157,24 +158,25 @@ export function AvailabilityEditor({
   }
 
   function applyPreset(type: "fulltime" | "weekdays" | "clear") {
-    const areaId = areas[0]?.id;
-    if (areaId === undefined) return;
+    if (areas.length === 0) return;
 
     if (type === "clear") {
       setPeriods([]);
       return;
     }
 
-    const days = type === "fulltime" ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4];
-    const newSchedule: DraftPeriod[] = days.map((day) => ({
-      key: `preset-${day}-${Date.now()}`,
-      serviceAreaId: areaId,
-      weekday: day,
-      startsAt: "09:00",
-      endsAt: "18:00",
-      endsNextDay: false,
-    }));
-    setPeriods(newSchedule);
+    // Every selected area, because Django needs hours for each one before it accepts the
+    // application. It used to fill only the first.
+    const stamp = Date.now();
+    setPeriods(
+      presetPeriods(
+        type,
+        areas.map((area) => area.id),
+      ).map((period) => ({
+        ...period,
+        key: `preset-${period.serviceAreaId}-${period.weekday}-${stamp}`,
+      })),
+    );
   }
 
   if (areas.length === 0) {

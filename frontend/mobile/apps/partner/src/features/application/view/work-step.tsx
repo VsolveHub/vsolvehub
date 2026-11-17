@@ -1,15 +1,19 @@
 // Ported from frontend/apps/partner/features/application/view/work-step.tsx
-import { Badge, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { Badge, ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useMemo } from "react";
 import { Pressable, View } from "react-native";
 
 import type { MainCategory, OfferableService } from "@/features/catalog/queries";
 
-import { toggle } from "../model/draft";
 import {
+  findSkillForCategory,
+  groupByService,
+  isServiceGroupSelected,
   isTradeCategorySelected,
   selectedTradeCategories,
+  syncRequiredSkills,
   tickableCategories,
+  toggleServiceGroup,
   toggleTradeCategorySelection,
   variantIdsForCategory,
 } from "../model/main-categories";
@@ -27,6 +31,7 @@ function servicesForCategory(category: MainCategory, catalog: readonly Offerable
 }
 
 export function WorkStep({ mainCategories: catalogCategories, services }: WorkStepProps) {
+  const t = useT();
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
   // A category is ticked through its skill, so one with no skill could never be ticked. Leave it
@@ -52,6 +57,29 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
         .length,
     [draft.serviceVariantIds, selectableServices],
   );
+
+  const categorySkillCodes = useMemo(
+    () =>
+      mainCategories
+        .map((category) => findSkillForCategory(reference.skills, category)?.code)
+        .filter((code): code is string => code !== undefined),
+    [mainCategories, reference.skills],
+  );
+
+  // Every change goes through here, so the skills the chosen services need travel with them.
+  function select(next: { skillCodes?: readonly string[]; serviceVariantIds: readonly string[] }) {
+    update({
+      serviceVariantIds: [...next.serviceVariantIds],
+      skillCodes: syncRequiredSkills({
+        skillCodes: next.skillCodes ?? draft.skillCodes,
+        previousVariantIds: draft.serviceVariantIds,
+        nextVariantIds: next.serviceVariantIds,
+        services,
+        skills: reference.skills,
+        categorySkillCodes,
+      }),
+    });
+  }
 
   useProceedDisabled(
     selectedCategories.length === 0 || (selectableServices.length > 0 && selectedServiceCount === 0),
@@ -89,6 +117,7 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
           {mainCategories.map((category) => {
             const checked = isTradeCategorySelected(category, reference.skills, draft.skillCodes);
             const categoryServices = servicesForCategory(category, services);
+            const categoryGroups = groupByService(categoryServices);
             const allCategoryIds = variantIdsForCategory(category.name, services);
             const allServicesSelected =
               allCategoryIds.length > 0 && allCategoryIds.every((id) => draft.serviceVariantIds.includes(id));
@@ -99,7 +128,7 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
                   checked={checked}
                   disabled={isReadOnly}
                   onChange={() =>
-                    update(
+                    select(
                       toggleTradeCategorySelection(
                         category,
                         reference.skills,
@@ -124,13 +153,13 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
                             accessibilityRole="button"
                             onPress={() => {
                               if (allServicesSelected) {
-                                update({
+                                select({
                                   serviceVariantIds: draft.serviceVariantIds.filter(
                                     (id) => !allCategoryIds.includes(id),
                                   ),
                                 });
                               } else {
-                                update({
+                                select({
                                   serviceVariantIds: Array.from(
                                     new Set([...draft.serviceVariantIds, ...allCategoryIds]),
                                   ),
@@ -146,27 +175,28 @@ export function WorkStep({ mainCategories: catalogCategories, services }: WorkSt
                       </View>
 
                       <View className="flex-col gap-2">
-                        {categoryServices.map((service) => {
-                          const needsSkill =
-                            service.requiredSkillCode.length > 0 &&
-                            !draft.skillCodes.includes(service.requiredSkillCode);
+                        {categoryGroups.map((group) => {
+                          const selected = isServiceGroupSelected(group, draft.serviceVariantIds);
+                          // Only for a skill Django does not offer (the others were added above).
+                          const notOpenYet = group.requiredSkillCodes.some(
+                            (code) =>
+                              !draft.skillCodes.includes(code) &&
+                              !reference.skills.some((skill) => skill.code === code),
+                          );
                           return (
-                            <View key={service.variantId} className="flex-col gap-1">
+                            <View key={`${group.categoryName}::${group.serviceId}`} className="flex-col gap-1">
                               <SelectableRow
-                                checked={draft.serviceVariantIds.includes(service.variantId)}
+                                checked={selected}
                                 disabled={isReadOnly}
                                 onChange={() =>
-                                  update({
-                                    serviceVariantIds: toggle(draft.serviceVariantIds, service.variantId),
+                                  select({
+                                    serviceVariantIds: toggleServiceGroup(group, draft.serviceVariantIds),
                                   })
                                 }
-                                label={service.variantName}
-                                caption={service.serviceName}
+                                label={group.serviceName}
                               />
-                              {needsSkill && draft.serviceVariantIds.includes(service.variantId) ? (
-                                <Badge tone="warning">
-                                  Requires {service.requiredSkillCode.replace(/-/g, " ")} trade
-                                </Badge>
+                              {notOpenYet && selected ? (
+                                <Badge tone="warning">{t("apply.work.notOpenYet")}</Badge>
                               ) : null}
                             </View>
                           );

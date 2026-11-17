@@ -17,6 +17,7 @@ import { useAuthStore } from "./auth-store";
 import { deviceLabel } from "./device-label";
 import { getFirebaseAuthModule } from "./firebase-module";
 import { installationId } from "./installation-id";
+import { logAuthFailure } from "./log-auth-failure";
 import type { MobileOtpFlow, MobileOtpFlowOptions } from "./use-mobile-otp-flow";
 
 const CODE_LENGTH = 6;
@@ -145,6 +146,7 @@ export function useMobileFirebaseFlow(options?: MobileOtpFlowOptions): MobileOtp
         setExpiresUntil(null);
         setPhase("authenticated");
       } catch (error) {
+        logAuthFailure("firebase verify", error);
         // The ID token is single use. Back to the number, as the web does, so a spent token is
         // never resubmitted.
         clearConfirmation();
@@ -197,6 +199,7 @@ export function useMobileFirebaseFlow(options?: MobileOtpFlowOptions): MobileOtp
         }),
       );
     } catch (error) {
+      logAuthFailure("firebase precheck", error);
       if (abandoned()) return;
       setRequesting(false);
       const invalidPhone =

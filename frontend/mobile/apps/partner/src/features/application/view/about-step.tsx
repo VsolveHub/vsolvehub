@@ -11,13 +11,15 @@ import {
   View,
 } from "react-native";
 
+import { isListingTrack } from "../model/steps";
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
   const { draft, update, isReadOnly, application } = useApplicationEditor();
   const isStayHost = application?.track === "STAY_HOST";
   const isRentalOwner = application?.track === "RENTAL_OWNER";
-  const isListing = isStayHost || isRentalOwner;
+  const isEmployer = application?.track === "EMPLOYER";
+  const isListing = isListingTrack(application?.track);
 
   // The name given at sign-up. Offered as starting value so user does not re-type.
   const profile = useQuery({
@@ -39,14 +41,9 @@ export function AboutStep() {
     }
   }, [signUpName, application?.display_name, isReadOnly, draft.displayName, update]);
 
-  // A stay host or rental owner is not asked for experience, and the server does not need it.
-  // Someone offering services answers for themselves below: never a made-up number.
-  useEffect(() => {
-    if (!isReadOnly && isListing && draft.experienceYears <= 0) {
-      update({ experienceYears: 1 });
-    }
-  }, [isListing, draft.experienceYears, isReadOnly, update]);
-
+  // A stay host, rental owner or employer is not asked for experience, and the server does not
+  // need it. Nothing is filled in for them: this used to write 1 year into their application, a
+  // number nobody gave. Someone offering services answers for themselves below.
   const trimmedName = draft.displayName.trim();
   const isNameInvalid = trimmedName.length > 0 && trimmedName.length < 2;
   const isExperienceMissing = !isListing && draft.experienceYears <= 0;
@@ -57,6 +54,8 @@ export function AboutStep() {
     ? "A line guests will see, e.g. Running this PG for working women since 2018."
     : isRentalOwner
     ? "A line customers will see, e.g. Tools and equipment for site work in Hyderabad."
+    : isEmployer
+    ? "Tell us about your business and the kind of people you want to hire."
     : "A line customers will see, e.g. Home appliance repairs in Madhapur since 2019.";
 
   return (

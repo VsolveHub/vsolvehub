@@ -35,12 +35,26 @@ jest.mock("@/features/application/queries", () => ({
   usePartnerApplication: () => ({ isPending: false, data: undefined, error: null }),
 }));
 
+const mockUseMobileOtpFlow = jest.fn((..._args: unknown[]) => mockFlow);
+
 jest.mock("@vsolve/mobile-core", () => ({
   useAuthStore: (select: (state: { status: string }) => unknown) => select({ status: "signedOut" }),
-  useMobileOtpFlow: () => mockFlow,
+  useMobileOtpFlow: (...args: unknown[]) => mockUseMobileOtpFlow(...args),
 }));
 
 describe("login", () => {
+  it("does not ask the server to refuse numbers without a Partner account", async () => {
+    // Regression: `intendedRole: "partner"` made Django answer 404 no_account_for_role for any
+    // new number. The Partner role only exists after someone starts an application, so a new
+    // applicant (and "Register as a new Partner", which signs in first) could never get a code.
+    mockFlow.phase = "phone";
+    await render(<LoginScreen />);
+    expect(mockUseMobileOtpFlow).toHaveBeenCalled();
+    for (const args of mockUseMobileOtpFlow.mock.calls) {
+      expect(args[0] ?? {}).not.toHaveProperty("intendedRole");
+    }
+  });
+
   it("renders the phone step", async () => {
     mockFlow.phase = "phone";
     mockFlow.codeError = null;

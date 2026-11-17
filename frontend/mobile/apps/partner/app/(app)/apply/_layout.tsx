@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/apply-shell.tsx
-import { Text } from "@vsolve/mobile-ui";
+import { Text, useT } from "@vsolve/mobile-ui";
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { Redirect, Slot, usePathname, useRouter } from "expo-router";
@@ -11,9 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Headphones,
-  HelpCircle,
   ListChecks,
-  Phone,
   Send,
   User,
   X,
@@ -22,7 +20,6 @@ import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -38,8 +35,10 @@ import { ApplyDockContext, type DockConfig } from "@/features/application/model/
 import { previousStep, stepProgress } from "@/features/application/model/progress";
 import { applicationSteps, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication, usePartnerAvailability } from "@/features/application/queries";
-import { PARTNER_SUPPORT_PHONE, PARTNER_SUPPORT_PHONE_DISPLAY } from "@/features/support/contact";
 import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
+import { isRequestOpen, usePrivacyRequests } from "@/features/account/privacy-queries";
+import { DeleteAccountDialog } from "@/features/application/view/delete-account-dialog";
+import { HelpSheet } from "@/features/application/view/help-sheet";
 import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
 
 const logoMark = require("../../../assets/logo-mark.png");
@@ -60,6 +59,19 @@ export default function ApplyLayout() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [stepSheetOpen, setStepSheetOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const t = useT();
+  const privacyRequests = usePrivacyRequests();
+  const openDeletion = (privacyRequests.data ?? []).find(
+    (item) => item.kind === "ERASURE" && isRequestOpen(item),
+  );
+  const deletionNote = openDeletion
+    ? t("apply.account.delete.requested", {
+        date: new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+          new Date(openDeletion.requested_at),
+        ),
+      })
+    : null;
 
   const onCommitRef = useRef<(() => void) | null>(null);
 
@@ -252,7 +264,12 @@ export default function ApplyLayout() {
                   pressed ? styles.avatarBadgeNavyPressed : null,
                 ]}
               >
-                <Text style={styles.avatarTextWhite}>{initialLetter || "R"}</Text>
+                {initialLetter ? (
+                  <Text style={styles.avatarTextWhite}>{initialLetter}</Text>
+                ) : (
+                  // No name saved yet: the person icon, never an invented letter.
+                  <User size={16} color="#ffffff" strokeWidth={2.2} />
+                )}
               </Pressable>
             </View>
           </View>
@@ -355,69 +372,11 @@ export default function ApplyLayout() {
           </View>
         ) : null}
 
-        {/* Need Help Modal */}
-        <Modal
-          visible={helpModalOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setHelpModalOpen(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.helpModalCard}>
-              <View style={styles.modalHeader}>
-                <View style={styles.modalHeaderLeft}>
-                  <HelpCircle size={22} color="#ea580c" />
-                  <Text style={styles.modalHeaderTitle}>Need help onboarding?</Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setHelpModalOpen(false)}
-                  style={styles.modalCloseIcon}
-                >
-                  <X size={20} color="#64748b" />
-                </Pressable>
-              </View>
+        {/* "Need help?" bottom sheet, opened from the profile menu */}
+        <HelpSheet open={helpModalOpen} onOpenChange={setHelpModalOpen} />
 
-              <Text style={styles.helpModalDescription}>
-                Our partner operations team is here to assist you with your document submission, profile verification, and registration questions.
-              </Text>
-
-              <View style={styles.helpActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setHelpModalOpen(false);
-                    void Linking.openURL(`tel:${PARTNER_SUPPORT_PHONE}`);
-                  }}
-                  style={styles.helpPrimaryAction}
-                >
-                  <Phone size={18} color="#ffffff" />
-                  <Text style={styles.helpPrimaryActionText}>Call Support ({PARTNER_SUPPORT_PHONE_DISPLAY})</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setHelpModalOpen(false);
-                    void Linking.openURL(`https://wa.me/${PARTNER_SUPPORT_PHONE.replace("+", "")}`);
-                  }}
-                  style={styles.helpSecondaryAction}
-                >
-                  <Send size={18} color="#ea580c" />
-                  <Text style={styles.helpSecondaryActionText}>WhatsApp Partner Support</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setHelpModalOpen(false)}
-                  style={styles.helpDismissButton}
-                >
-                  <Text style={styles.helpDismissButtonText}>Dismiss</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        {/* "Delete your account?" confirmation, opened from the profile menu */}
+        <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
 
         {/* Screen 11: Profile Menu Bottom Sheet */}
         <ProfileMenuSheet
@@ -425,9 +384,13 @@ export default function ApplyLayout() {
           onClose={() => setProfileModalOpen(false)}
           partnerName={application?.display_name}
           partnerInitial={initialLetter}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenHelp={() => setHelpModalOpen(true)}
+          onOpenDelete={() => setDeleteOpen(true)}
+          deletionNote={deletionNote}
         />
 
-        {/* 1. Step Sheet Modal Matching Image 1 */}
+        {/* 1. Step Sheet Modal Matching Design Reference */}
         <Modal
           visible={stepSheetOpen}
           transparent
@@ -436,6 +399,7 @@ export default function ApplyLayout() {
         >
           <View style={styles.modalOverlay}>
             <Pressable
+              cssInterop={false}
               style={StyleSheet.absoluteFill}
               onPress={() => setStepSheetOpen(false)}
               accessibilityLabel="Dismiss steps dialog"
@@ -443,13 +407,14 @@ export default function ApplyLayout() {
             <View
               style={[
                 styles.sheetModalCard,
-                { paddingBottom: Math.max(bottomInset + 16, 24) },
+                { paddingBottom: Math.max(bottomInset + 24, 36) },
               ]}
             >
               {/* Header: "Your steps" + Outlined Square Close Button */}
               <View style={styles.sheetModalHeader}>
                 <Text style={styles.sheetModalTitle}>Your steps</Text>
                 <Pressable
+                  cssInterop={false}
                   accessibilityRole="button"
                   accessibilityLabel="Close steps sheet"
                   onPress={() => setStepSheetOpen(false)}
@@ -458,12 +423,12 @@ export default function ApplyLayout() {
                     pressed ? styles.sheetCloseButtonSquarePressed : null,
                   ]}
                 >
-                  <X size={18} color="#00112e" strokeWidth={2.4} />
+                  <X size={20} color="#00112e" strokeWidth={2.2} />
                 </Pressable>
               </View>
 
               {/* Steps List */}
-              <View style={{ paddingTop: 8, rowGap: 2 }}>
+              <View style={styles.sheetStepsList}>
                 {pathSteps.map((step) => {
                   const isDone = step.state === "done";
                   const subtitle = isDone
@@ -477,54 +442,32 @@ export default function ApplyLayout() {
                   return (
                     <Pressable
                       key={step.href}
+                      cssInterop={false}
                       accessibilityRole="button"
                       onPress={() => {
                         setStepSheetOpen(false);
                         router.push(step.href as any);
                       }}
-                      style={({ pressed }) => ({
-                        flexDirection: "row",
-                        alignItems: "center",
-                        columnGap: 14,
-                        paddingVertical: 14,
-                        paddingHorizontal: 4,
-                        backgroundColor: pressed ? "#f8fafc" : "#ffffff",
-                        borderRadius: 12,
-                      })}
+                      style={({ pressed }) => [
+                        styles.stepRowPressable,
+                        pressed ? styles.stepRowPressed : null,
+                      ]}
                     >
                       {/* Step Indicator */}
                       {isDone ? (
-                        <View
-                          style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: 13,
-                            backgroundColor: "#15803d",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Check size={15} color="#ffffff" strokeWidth={3} />
+                        <View style={styles.stepIndicatorDone}>
+                          <Check size={16} color="#ffffff" strokeWidth={3} />
                         </View>
                       ) : (
-                        <View
-                          style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: 13,
-                            borderWidth: 2,
-                            borderColor: "#ea580c",
-                            backgroundColor: "transparent",
-                          }}
-                        />
+                        <View style={styles.stepIndicatorTodo} />
                       )}
 
                       {/* Title & Subtitle */}
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>
+                      <View style={styles.stepTextContainer}>
+                        <Text style={styles.stepTitleText}>
                           {step.label}
                         </Text>
-                        <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                        <Text style={styles.stepSubtitleText}>
                           {subtitle}
                         </Text>
                       </View>
@@ -545,6 +488,7 @@ export default function ApplyLayout() {
         >
           <View style={styles.modalOverlay}>
             <Pressable
+              cssInterop={false}
               style={StyleSheet.absoluteFill}
               onPress={() => setNotificationsOpen(false)}
               accessibilityLabel="Dismiss notifications dialog"
@@ -559,6 +503,7 @@ export default function ApplyLayout() {
               <View style={styles.sheetModalHeaderNotifications}>
                 <Text style={styles.sheetModalTitle}>Notifications</Text>
                 <Pressable
+                  cssInterop={false}
                   accessibilityRole="button"
                   accessibilityLabel="Close notifications sheet"
                   onPress={() => setNotificationsOpen(false)}
@@ -1083,17 +1028,24 @@ const styles = StyleSheet.create({
   },
   sheetModalCard: {
     backgroundColor: "#ffffff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    width: "100%",
+    maxWidth: 672,
+    alignSelf: "center",
+    shadowColor: "#00112e",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 12,
   },
   sheetModalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    width: "100%",
     paddingBottom: 16,
   },
   sheetModalHeaderNotifications: {
@@ -1105,14 +1057,15 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   sheetModalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
     color: "#00112e",
+    letterSpacing: -0.3,
   },
   sheetCloseButtonSquare: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: "#00112e",
     alignItems: "center",
@@ -1121,6 +1074,58 @@ const styles = StyleSheet.create({
   },
   sheetCloseButtonSquarePressed: {
     backgroundColor: "#f4f1ec",
+  },
+  sheetStepsList: {
+    width: "100%",
+    flexDirection: "column",
+    paddingTop: 4,
+  },
+  stepRowPressable: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+  },
+  stepRowPressed: {
+    backgroundColor: "#f8fafc",
+  },
+  stepIndicatorDone: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#15803d",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 18,
+  },
+  stepIndicatorTodo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    borderColor: "#ea580c",
+    backgroundColor: "transparent",
+    marginRight: 18,
+  },
+  stepTextContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  stepTitleText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#00112e",
+    lineHeight: 22,
+  },
+  stepSubtitleText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+    marginTop: 2,
+    lineHeight: 18,
   },
   notificationCloseIconButton: {
     padding: 6,

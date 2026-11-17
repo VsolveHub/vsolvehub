@@ -7,6 +7,7 @@ import { useEffect } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
 
+import { isListingTrack } from "../model/steps";
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
@@ -14,7 +15,8 @@ export function AboutStep() {
   const { draft, update, isReadOnly, application } = useApplicationEditor();
   const isStayHost = application?.track === "STAY_HOST";
   const isRentalOwner = application?.track === "RENTAL_OWNER";
-  const isListing = isStayHost || isRentalOwner;
+  const isEmployer = application?.track === "EMPLOYER";
+  const isListing = isListingTrack(application?.track);
 
   // The name given at sign-up. Offered as the starting value so nobody types it twice.
   const profile = useQuery({
@@ -92,7 +94,9 @@ export function AboutStep() {
               ? t("apply.about.bio.placeholder.stayHost")
               : isRentalOwner
                 ? t("apply.about.bio.placeholder.rentalOwner")
-                : t("apply.about.bio.placeholder.services")
+                : isEmployer
+                  ? t("apply.about.bio.placeholder.employer")
+                  : t("apply.about.bio.placeholder.services")
           }
           value={draft.biography}
           disabled={isReadOnly}

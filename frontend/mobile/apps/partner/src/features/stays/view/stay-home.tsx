@@ -328,7 +328,7 @@ export function StayHome() {
                   </Text>
                 </View>
 
-                <Pressable
+                <Pressable cssInterop={false}
                   accessibilityRole="button"
                   accessibilityLabel={`Call ${customerName}`}
                   onPress={() => {

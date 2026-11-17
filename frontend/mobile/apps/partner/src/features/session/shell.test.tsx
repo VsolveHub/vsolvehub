@@ -44,6 +44,15 @@ describe("chrome", () => {
     expect(routeRequiresPartnerRole("/home")).toBe(false);
     expect(routeRequiresPartnerRole("/money")).toBe(true);
   });
+
+  it("lets any signed-in account open Help and Delete account", () => {
+    // Regression: both opened for about a second, then the guard sent an applicant back to /apply.
+    expect(routeRequiresPartnerRole("/help")).toBe(false);
+    expect(routeRequiresPartnerRole("/delete-account")).toBe(false);
+    // Only those exact pages: nearby partner pages stay guarded.
+    expect(routeRequiresPartnerRole("/me/delete-account")).toBe(true);
+    expect(routeRequiresPartnerRole("/helpdesk")).toBe(true);
+  });
 });
 
 describe("PartnerGuardView", () => {

@@ -51,9 +51,10 @@ describe("the services path", () => {
   });
 });
 
-describe("the stays and rentals path", () => {
+describe("the stays, rentals and hiring path", () => {
   it("is the short form: About you, Documents, Agree & send", () => {
-    for (const track of ["STAY_HOST", "RENTAL_OWNER"]) {
+    // Hiring staff (EMPLOYER) is the same short form: it never shows trades, areas or hours.
+    for (const track of ["STAY_HOST", "RENTAL_OWNER", "EMPLOYER"]) {
       expect(applicationSteps(track).map((step) => step.href)).toEqual([
         "/apply/about",
         "/apply/documents",

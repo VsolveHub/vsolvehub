@@ -1,3 +1,5 @@
+import { isListingTrack } from "@vsolve/query/partner-work";
+
 /**
  * The onboarding step sequence.
  *
@@ -33,18 +35,16 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
 /**
  * What the partner signed up to do, as the server records it on the application.
  *
- * `STAY_HOST` lists a property. `RENTAL_OWNER` lists items for rent. Trades,
- * service areas and working hours describe travelling to a customer, so neither
- * listing path sees those steps.
+ * `STAY_HOST` lists a property, `RENTAL_OWNER` lists items for rent and `EMPLOYER`
+ * hires staff. Trades, service areas and working hours describe travelling to a
+ * customer, so none of the three sees those steps.
  */
-export type ApplicationTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
+export type { ApplicationTrack } from "@vsolve/query/partner-work";
 
 const LISTING_STEPS = new Set(["/apply", "/apply/about", "/apply/documents", "/apply/review"]);
 
-/** Stays and rentals share the short application. Services walk the full list. */
-export function isListingTrack(track?: string | null): boolean {
-  return track === "STAY_HOST" || track === "RENTAL_OWNER";
-}
+/** Stays, rentals and hiring share the short application. Services walk the full list. */
+export { isListingTrack };
 
 /** The step sequence for this partner. Every caller goes through here, never the constant. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
@@ -70,13 +70,14 @@ export function isUnchosenDraft(application: { status: string; version: number }
   return application?.status === "DRAFT" && application.version === 1;
 }
 
-/** The three ways to join offered on the first screen. */
-export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
+/** The ways to join offered on the first screen. */
+export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
 
 const AFTER_APPROVAL: Record<StartTrack, string> = {
   SERVICES: "apply.overview.preview.after.services",
   STAY_HOST: "apply.overview.preview.after.stays",
   RENTAL_OWNER: "apply.overview.preview.after.rentals",
+  EMPLOYER: "apply.overview.preview.after.employer",
 };
 
 /**

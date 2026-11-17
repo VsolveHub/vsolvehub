@@ -9,6 +9,16 @@ import type { Catalog, Locale } from "@vsolve/mobile-ui";
  */
 
 const en: Catalog = {
+  "apply.overview.track.employer.title": "I want to hire staff",
+  "apply.overview.track.employer.description": "A shop, clinic, office or business looking for people to work for you.",
+  "apply.overview.preview.after.employer": "After approval, you post your jobs and people can apply.",
+  "apply.about.bio.placeholder.employer": "Tell us about your business and the kind of people you want to hire.",
+  "apply.account.delete.title": "Delete your account?",
+  "apply.account.delete.consequence": "We'll close your partner account and delete your data, except records the law requires us to keep. Our team will contact you to confirm.",
+  "apply.account.delete.confirm": "Request deletion",
+  "apply.account.delete.requested": "Deletion requested on {date}. We'll contact you.",
+  "apply.account.delete.failed": "We couldn't send that request",
+  "apply.help.title": "Need help?",
   // Shared within this domain only (not common.ts — see rules).
   "apply.common.checkConnectionAndRetry": "Check your connection and try again.",
   "apply.common.continuingApplication": "Continuing your application…",
@@ -441,6 +451,16 @@ const en: Catalog = {
 };
 
 const te: Catalog = {
+  "apply.overview.track.employer.title": "నేను సిబ్బందిని నియమించుకోవాలి",
+  "apply.overview.track.employer.description": "మీ దుకాణం, క్లినిక్, ఆఫీసు లేదా వ్యాపారానికి పని చేసే వారిని వెతుకుతున్నారా.",
+  "apply.overview.preview.after.employer": "అప్రూవ్ అయ్యాక, మీరు ఉద్యోగాలను పోస్ట్ చేస్తారు, వ్యక్తులు దరఖాస్తు చేసుకుంటారు.",
+  "apply.about.bio.placeholder.employer": "మీ వ్యాపారం గురించి, మీరు ఎలాంటి వ్యక్తులను నియమించుకోవాలనుకుంటున్నారో చెప్పండి.",
+  "apply.account.delete.title": "మీ అకౌంట్ డిలీట్ చేయాలా?",
+  "apply.account.delete.consequence": "మీ పార్ట్‌నర్ అకౌంట్‌ని మూసివేసి, చట్టం ప్రకారం ఉంచాల్సిన రికార్డులు తప్ప మీ డేటాను డిలీట్ చేస్తాం. నిర్ధారించడానికి మా టీమ్ మిమ్మల్ని సంప్రదిస్తుంది.",
+  "apply.account.delete.confirm": "డిలీట్ చేయమని అడగండి",
+  "apply.account.delete.requested": "{date}న డిలీట్ చేయమని అడిగారు. మేము మిమ్మల్ని సంప్రదిస్తాం.",
+  "apply.account.delete.failed": "ఆ అభ్యర్థనను పంపలేకపోయాం",
+  "apply.help.title": "సహాయం కావాలా?",
   "apply.common.checkConnectionAndRetry": "మీ కనెక్షన్‌ని చూసి మళ్ళీ ప్రయత్నించండి.",
   "apply.common.continuingApplication": "మీ అప్లికేషన్‌ని కొనసాగిస్తున్నాం…",
 
@@ -840,6 +860,16 @@ const te: Catalog = {
 };
 
 const hi: Catalog = {
+  "apply.overview.track.employer.title": "मुझे स्टाफ़ रखना है",
+  "apply.overview.track.employer.description": "आपकी दुकान, क्लिनिक, ऑफ़िस या कारोबार के लिए काम करने वाले लोग खोज रहे हैं।",
+  "apply.overview.preview.after.employer": "अप्रूव होने के बाद आप नौकरियाँ पोस्ट करते हैं और लोग आवेदन कर सकते हैं।",
+  "apply.about.bio.placeholder.employer": "अपने कारोबार के बारे में और जिन लोगों को आप रखना चाहते हैं, उनके बारे में बताइए।",
+  "apply.account.delete.title": "अपना अकाउंट डिलीट करें?",
+  "apply.account.delete.consequence": "हम आपका पार्टनर अकाउंट बंद करेंगे और आपका डेटा डिलीट करेंगे, सिवाय उन रिकॉर्ड के जिन्हें क़ानून के अनुसार रखना ज़रूरी है। पुष्टि के लिए हमारी टीम आपसे संपर्क करेगी।",
+  "apply.account.delete.confirm": "डिलीट करने का अनुरोध करें",
+  "apply.account.delete.requested": "{date} को डिलीट करने का अनुरोध किया गया। हम आपसे संपर्क करेंगे।",
+  "apply.account.delete.failed": "वह अनुरोध नहीं भेज पाए",
+  "apply.help.title": "मदद चाहिए?",
   "apply.common.checkConnectionAndRetry": "अपना कनेक्शन देखें और फिर से कोशिश करें।",
   "apply.common.continuingApplication": "आपका आवेदन जारी रखा जा रहा है…",
 

@@ -35,6 +35,8 @@ export interface DocumentUploadProps {
   expectedVersion: number | null;
   replacing?: boolean;
   disabled?: boolean;
+  /** Called once the server has accepted the file, so a step can leave its "replacing" state. */
+  onSuccess?: () => void;
 }
 
 export function DocumentUpload({
@@ -43,6 +45,7 @@ export function DocumentUpload({
   expectedVersion,
   replacing = false,
   disabled = false,
+  onSuccess,
 }: DocumentUploadProps) {
   const upload = useUploadDocument();
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -67,6 +70,7 @@ export function DocumentUpload({
         onProgress: setProgress,
       });
       setPendingFile(null);
+      onSuccess?.();
     } catch (error) {
       setProgress({ phase: "failed", percent: 0 });
       setFailure(

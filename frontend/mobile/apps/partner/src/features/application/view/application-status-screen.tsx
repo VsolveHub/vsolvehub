@@ -234,7 +234,7 @@ export function ApplicationStatusScreen() {
               </View>
             </View>
 
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Re-upload proof of address"
               onPress={() => router.push("/apply/documents" as any)}
@@ -281,7 +281,7 @@ export function ApplicationStatusScreen() {
               <Text style={styles.nextStepCaption}>Next step</Text>
               <Text style={styles.nextStepTitle}>Your workspace is ready.</Text>
 
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go to home"
                 onPress={handleOpenPartnerApp}
@@ -328,7 +328,7 @@ export function ApplicationStatusScreen() {
 
           {/* Actions below Timeline: Full-width Solid Orange Contact Support & Outline Appeal */}
           <View style={styles.rejectedActionStack}>
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Contact support"
               onPress={() => setSupportModalOpen(true)}
@@ -350,7 +350,7 @@ export function ApplicationStatusScreen() {
       {/* ========================================================================= */}
       <View style={styles.footerHairlineWrapper}>
         <View style={styles.footerHairline} />
-        <Pressable
+        <Pressable cssInterop={false}
           accessibilityRole="link"
           accessibilityLabel="Need help?"
           onPress={() => setSupportModalOpen(true)}

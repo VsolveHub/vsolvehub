@@ -10,6 +10,7 @@ import {
   Trash2,
   User,
 } from "lucide-react-native";
+import { useCallback, useRef } from "react";
 import {
   Modal,
   Platform,
@@ -25,6 +26,23 @@ export interface ProfileMenuSheetProps {
   partnerName?: string;
   partnerPhone?: string;
   partnerInitial?: string;
+  /**
+   * Opens the notifications panel in place, as the website does. Without it the row goes to the
+   * notifications page, which only an approved Partner can open.
+   */
+  onOpenNotifications?: () => void;
+  /**
+   * Opens the "Need help?" sheet over the application, as the website does. Without it the row
+   * goes to the full help page.
+   */
+  onOpenHelp?: () => void;
+  /**
+   * Opens the "Delete your account?" confirmation over the application, as the website does.
+   * Without it the row goes to the full delete page.
+   */
+  onOpenDelete?: () => void;
+  /** Already worded, e.g. "Deletion requested on 12 Nov 2026. We'll contact you." */
+  deletionNote?: string | null;
 }
 
 export function ProfileMenuSheet({
@@ -33,6 +51,10 @@ export function ProfileMenuSheet({
   partnerName,
   partnerPhone,
   partnerInitial,
+  onOpenNotifications,
+  onOpenHelp,
+  onOpenDelete,
+  deletionNote,
 }: ProfileMenuSheetProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -40,16 +62,68 @@ export function ProfileMenuSheet({
   const bottomInset = Math.max(insets.bottom, Platform.OS === "ios" ? 34 : 16);
 
   const name = partnerName?.trim() || "Your account";
-  const initial = (partnerInitial || name[0] || "").toUpperCase();
+  // The letter comes from a real name only. "Your account" is a label, not a name, so its "Y"
+  // must never become the avatar.
+  const initial = (partnerInitial || partnerName?.trim()[0] || "").toUpperCase();
 
-  const handleNavigate = (route: string) => {
+  /**
+   * Runs `action` once the sheet has finished closing.
+   *
+   * The sheet is a native `Modal`. On iOS a native screen push (`/help`, `/delete-account`) or a
+   * root replace (sign out) made while that modal is still dismissing is silently dropped, so the
+   * tap looks dead. "Application status" only worked because `/apply/*` swaps content inside the
+   * apply layout instead of pushing a native screen. iOS reports the end of the dismissal through
+   * `onDismiss`; a timer covers the case where it never arrives. Android has no such limit.
+   */
+  const pendingAction = useRef<(() => void) | null>(null);
+  const runPending = useCallback(() => {
+    const action = pendingAction.current;
+    pendingAction.current = null;
+    action?.();
+  }, []);
+  const afterClose = (action: () => void) => {
     onClose();
-    router.push(route as any);
+    if (Platform.OS !== "ios") {
+      action();
+      return;
+    }
+    pendingAction.current = action;
+    setTimeout(runPending, 700);
   };
 
-  const handleSignOut = async () => {
-    onClose();
-    await signOut();
+  // These sheets are only opened from the onboarding shell, so every row must lead somewhere an
+  // applicant can open: `/me/*` is for approved Partners, and the partner guard turns anyone else
+  // back to `/apply`, which made Profile, Notifications and Delete account look dead.
+  const handleNavigate = (route: string) => {
+    afterClose(() => router.push(route as any));
+  };
+
+  const handleNotifications = () => {
+    if (!onOpenNotifications) {
+      handleNavigate("/me/notifications");
+      return;
+    }
+    afterClose(onOpenNotifications);
+  };
+
+  const handleHelp = () => {
+    if (!onOpenHelp) {
+      handleNavigate("/help");
+      return;
+    }
+    afterClose(onOpenHelp);
+  };
+
+  const handleDelete = () => {
+    if (!onOpenDelete) {
+      handleNavigate("/delete-account");
+      return;
+    }
+    afterClose(onOpenDelete);
+  };
+
+  const handleSignOut = () => {
+    afterClose(() => void signOut());
   };
 
   return (
@@ -58,6 +132,7 @@ export function ProfileMenuSheet({
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      onDismiss={runPending}
     >
       <View style={styles.overlay}>
         <Pressable
@@ -74,7 +149,11 @@ export function ProfileMenuSheet({
           {/* Header Row: Large Avatar + Name & Phone */}
           <View style={styles.headerRow}>
             <View style={styles.avatarLarge}>
-              <Text style={styles.avatarTextLarge}>{initial}</Text>
+              {initial ? (
+                <Text style={styles.avatarTextLarge}>{initial}</Text>
+              ) : (
+                <User size={26} color="#f26a0f" strokeWidth={2.2} />
+              )}
             </View>
             <View style={styles.headerInfo}>
               <Text style={styles.nameText}>{name}</Text>
@@ -91,7 +170,7 @@ export function ProfileMenuSheet({
               cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Profile"
-              onPress={() => handleNavigate("/me/profile")}
+              onPress={() => handleNavigate("/apply/about")}
               style={({ pressed }) => [styles.menuItem, pressed ? styles.menuItemPressed : null]}
             >
               <View style={styles.menuItemLeft}>
@@ -123,7 +202,7 @@ export function ProfileMenuSheet({
               cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Notifications"
-              onPress={() => handleNavigate("/me/notifications")}
+              onPress={handleNotifications}
               style={({ pressed }) => [styles.menuItem, pressed ? styles.menuItemPressed : null]}
             >
               <View style={styles.menuItemLeft}>
@@ -139,7 +218,7 @@ export function ProfileMenuSheet({
               cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Help & support"
-              onPress={() => handleNavigate("/help")}
+              onPress={handleHelp}
               style={({ pressed }) => [styles.menuItem, pressed ? styles.menuItemPressed : null]}
             >
               <View style={styles.menuItemLeft}>
@@ -155,7 +234,7 @@ export function ProfileMenuSheet({
               cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Delete account"
-              onPress={() => handleNavigate("/me/delete-account")}
+              onPress={handleDelete}
               style={({ pressed }) => [styles.menuItem, pressed ? styles.menuItemPressed : null]}
             >
               <View style={styles.menuItemLeft}>
@@ -164,6 +243,7 @@ export function ProfileMenuSheet({
               </View>
               <ChevronRight size={18} color="#94a3b8" />
             </Pressable>
+            {deletionNote ? <Text style={styles.deletionNote}>{deletionNote}</Text> : null}
             <View style={styles.rowDivider} />
 
             {/* 6. Sign out */}
@@ -282,6 +362,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#0b1b3a",
+  },
+  deletionNote: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#6b7280",
+    paddingHorizontal: 4,
+    paddingBottom: 8,
   },
   rowDivider: {
     height: 1,
