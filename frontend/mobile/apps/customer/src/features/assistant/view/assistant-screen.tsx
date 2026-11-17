@@ -135,8 +135,11 @@ export function AssistantScreen() {
     hideMessages(
       token,
       messages.filter((m) => m.sequence >= sequence).map((m) => m.sequence),
+      // Nothing the customer wrote stays visible: the chat leaves the history.
+      { noneLeft: !messages.some((m) => m.sender === "customer" && m.sequence < sequence) },
     );
   };
+  // When it was the only message, sending the new text names the chat after it again.
   const saveEdit = (sequence: number, text: string) => {
     hideFrom(sequence);
     sendText(text);

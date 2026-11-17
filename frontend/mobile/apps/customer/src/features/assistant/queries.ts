@@ -180,13 +180,22 @@ export function useAssistantChats() {
     [apply],
   );
 
-  /** Stop showing these messages of a chat on this phone. */
+  /**
+   * Stop showing these messages of a chat on this phone. When none of the customer's own words
+   * are left, the chat loses its title too, so it is a blank chat again and leaves the history.
+   */
   const hideMessages = useCallback(
-    (token: string, sequences: number[]) =>
+    (token: string, sequences: number[], { noneLeft }: { noneLeft: boolean }) =>
       apply({
         ...latest.current,
         chats: latest.current.chats.map((c) =>
-          c.token === token ? { ...c, hidden: [...new Set([...(c.hidden ?? []), ...sequences])] } : c,
+          c.token === token
+            ? {
+                ...c,
+                title: noneLeft ? null : c.title,
+                hidden: [...new Set([...(c.hidden ?? []), ...sequences])],
+              }
+            : c,
         ),
       }),
     [apply],
