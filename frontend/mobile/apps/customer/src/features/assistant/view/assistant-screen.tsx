@@ -1,10 +1,11 @@
 // Ported from frontend/apps/customer/features/assistant/view/assistant-widget.tsx
 import { describeError } from "@vsolve/query/native";
-import { Spinner, Text } from "@vsolve/mobile-ui";
+import { Sheet, Text } from "@vsolve/mobile-ui";
 import { type Href, useRouter } from "expo-router";
-import { Send } from "lucide-react-native";
+import { History, Plus, Send, Trash2 } from "lucide-react-native";
 import { type ComponentRef, useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -14,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  useAssistantToken,
+  useAssistantChats,
   useConversation,
   useSendMessage,
   useStartConversation,
@@ -32,11 +33,15 @@ const MAX_MESSAGE_LENGTH = 1000;
 
 export function AssistantScreen() {
   const insets = useSafeAreaInsets();
-  const { token, loaded, save: saveToken } = useAssistantToken();
-  const start = useStartConversation(saveToken);
-  const forget = useCallback(() => saveToken(null), [saveToken]);
+  const { token, loaded, chats, add, select, openNew, remove, nameFromMessage } = useAssistantChats();
+  const start = useStartConversation(add);
+  // A conversation the server no longer knows is dropped from the list too.
+  const forget = useCallback(() => {
+    if (token) remove(token);
+  }, [token, remove]);
   const conversation = useConversation(token, forget);
   const send = useSendMessage(token);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const listRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -60,10 +65,18 @@ export function AssistantScreen() {
       if (!trimmed || !token || send.isPending) return;
       setPending(trimmed);
       setDraft("");
+      nameFromMessage(token, trimmed);
       send.mutate(trimmed, { onSettled: () => setPending(null) });
     },
-    [send, token],
+    [send, token, nameFromMessage],
   );
+
+  // An empty chat is already a new chat: do not pile up blank ones.
+  const openedChatIsEmpty = chats.find((chat) => chat.token === token)?.title == null;
+  const startNewChat = () => {
+    setHistoryOpen(false);
+    if (token && !openedChatIsEmpty) openNew();
+  };
 
   // A failed start leaves no token, so Send stays off until it runs again; a failed read just re-reads.
   const retry = () => {
@@ -83,10 +96,21 @@ export function AssistantScreen() {
     >
       <View
         style={{ paddingTop: Math.max(insets.top, 24) + 10 }}
-        className="border-b border-line bg-[#FAF9F7] px-4 pb-3"
+        className="flex-row items-center justify-between gap-3 border-b border-line bg-[#FAF9F7] px-4 pb-3"
       >
-        <Text className="text-sm font-semibold text-navy-900">Booking assistant</Text>
-        <Text className="text-xs text-[#6B6560]">Tell me what you need done at home</Text>
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-navy-900">Booking assistant</Text>
+          <Text className="text-xs text-[#6B6560]">Tell me what you need done at home</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Chat history"
+          hitSlop={8}
+          onPress={() => setHistoryOpen(true)}
+          className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
+        >
+          <History size={22} color="#1E293B" />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -104,12 +128,7 @@ export function AssistantScreen() {
           />
         ))}
         {pending ? <Bubble sender="customer" text={pending} muted /> : null}
-        {answering ? (
-          <View className="flex-row items-center gap-2">
-            <Spinner size="sm" />
-            <Text className="text-xs text-slate-500">Typing…</Text>
-          </View>
-        ) : null}
+        {answering ? <ReplyingDots /> : null}
         {error && !answering ? (
           <View accessibilityRole="alert" className="gap-2 rounded-lg bg-red-50 px-3 py-2">
             <Text className="text-xs text-red-700">{describeError(error, "mutation").message}</Text>
@@ -149,7 +168,84 @@ export function AssistantScreen() {
           <Send size={16} color="#FFFFFF" />
         </Pressable>
       </View>
+
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen} title="Chats">
+        <Pressable
+          accessibilityRole="button"
+          onPress={startNewChat}
+          className="mb-3 min-h-11 flex-row items-center justify-center gap-2 rounded-xl bg-[#00112e]"
+        >
+          <Plus size={18} color="#FFFFFF" />
+          <Text className="text-sm font-semibold text-white">New chat</Text>
+        </Pressable>
+        <ScrollView className="max-h-80">
+          {chats.map((chat) => (
+            <View key={chat.token} className="flex-row items-center border-b border-slate-100">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: chat.token === token }}
+                onPress={() => {
+                  setHistoryOpen(false);
+                  if (chat.token !== token) select(chat.token);
+                }}
+                className="min-h-11 flex-1 justify-center py-2"
+              >
+                <Text
+                  numberOfLines={1}
+                  className={`text-sm ${chat.token === token ? "font-bold text-navy-900" : "text-slate-800"}`}
+                >
+                  {chat.title ?? "New chat"}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Delete chat ${chat.title ?? "New chat"}`}
+                hitSlop={8}
+                onPress={() => remove(chat.token)}
+                className="min-h-11 min-w-11 items-center justify-center"
+              >
+                <Trash2 size={18} color="#B91C1C" />
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
+      </Sheet>
     </KeyboardAvoidingView>
+  );
+}
+
+/** An assistant-side bubble with three pulsing dots, shown while an answer is on its way. */
+function ReplyingDots() {
+  const [pulses] = useState(() => [0, 1, 2].map(() => new Animated.Value(0.3)));
+
+  useEffect(() => {
+    const loops = pulses.map((pulse, index) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(index * 160),
+          Animated.timing(pulse, { toValue: 1, duration: 360, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 0.3, duration: 360, useNativeDriver: true }),
+          Animated.delay((2 - index) * 160),
+        ]),
+      ),
+    );
+    loops.forEach((loop) => loop.start());
+    return () => loops.forEach((loop) => loop.stop());
+  }, [pulses]);
+
+  return (
+    <View
+      accessible
+      accessibilityLabel="The assistant is replying"
+      accessibilityLiveRegion="polite"
+      className="items-start"
+    >
+      <View className="flex-row items-center gap-1 rounded-2xl bg-slate-100 px-3 py-2.5">
+        {pulses.map((pulse, index) => (
+          <Animated.View key={index} style={{ opacity: pulse }} className="size-1.5 rounded-full bg-slate-500" />
+        ))}
+      </View>
+    </View>
   );
 }
 

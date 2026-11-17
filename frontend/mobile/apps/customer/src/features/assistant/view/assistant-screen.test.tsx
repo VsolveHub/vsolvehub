@@ -8,11 +8,15 @@ const mockClient = { GET: jest.fn(), POST: jest.fn() };
 jest.mock("@vsolve/mobile-core", () => ({
   getApiClient: () => mockClient,
   apiBaseUrl: () => "http://localhost:8000",
+  useAuthStore: { getState: () => ({ token: "session-token" }) },
 }));
 
+const mockKvGet = jest.fn();
+const mockKvSet = jest.fn<Promise<void>, [string, string]>(async () => undefined);
+
 jest.mock("@vsolve/mobile-core/storage", () => ({
-  kvGet: jest.fn(async () => null),
-  kvSet: jest.fn(async () => undefined),
+  kvGet: (key: string) => mockKvGet(key),
+  kvSet: (key: string, value: string) => mockKvSet(key, value),
   kvRemove: jest.fn(async () => undefined),
 }));
 
@@ -60,6 +64,30 @@ describe("AssistantScreen", () => {
     mockClient.GET.mockReset();
     mockClient.POST.mockReset();
     mockClient.GET.mockResolvedValue(reply(created.conversation, 200));
+    mockKvGet.mockReset();
+    mockKvGet.mockResolvedValue(null);
+    mockKvSet.mockClear();
+  });
+
+  it("lists saved chats in the history sheet and forgets one that is deleted", async () => {
+    const saved = [
+      { token: "token-1", title: "AC not cooling" },
+      { token: "token-9", title: "Fan installation" },
+    ];
+    mockKvGet.mockImplementation(async (key: string) =>
+      key === "assistant.conversation" ? "token-1" : key === "assistant.chats" ? JSON.stringify(saved) : null,
+    );
+    const screen = await renderScreen();
+
+    fireEvent.press(await screen.findByLabelText("Chat history"));
+    expect(await screen.findByText("Fan installation")).toBeTruthy();
+    expect(screen.getByText("AC not cooling")).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText("Delete chat Fan installation"));
+
+    await waitFor(() => expect(screen.queryByText("Fan installation")).toBeNull());
+    const lastSave = mockKvSet.mock.calls.filter(([key]) => key === "assistant.chats").at(-1);
+    expect(JSON.parse(lastSave?.[1] ?? "[]")).toEqual([{ token: "token-1", title: "AC not cooling" }]);
   });
 
   it("starts a conversation and shows the assistant's greeting", async () => {
