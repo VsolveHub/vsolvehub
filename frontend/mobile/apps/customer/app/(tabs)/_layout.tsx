@@ -20,7 +20,7 @@ import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 import { isCustomerTabActive, requiresCustomerSignIn } from "@/features/session/navigation";
 import { useIsDesktop } from "@/lib/responsive";
 
-type TabIconType = "home" | "services" | "bookings" | "login" | "profile";
+type TabIconType = "home" | "services" | "aichat" | "bookings" | "login" | "profile";
 
 interface TabItem {
   name: string;
@@ -83,6 +83,7 @@ export default function TabsLayout() {
   const tabs: TabItem[] = [
     { name: "Home", href: "/", icon: "home" },
     { name: "Search", href: "/catalog", icon: "services" },
+    { name: "AI Chat", href: "/ai-chat", icon: "aichat" },
     { name: "Bookings", href: "/activity", icon: "bookings" },
     status === "signedIn"
       ? { name: "Profile", href: "/account", icon: "profile" }
@@ -90,6 +91,16 @@ export default function TabsLayout() {
   ];
 
   const handleTabPress = (tab: TabItem) => {
+    if (tab.name === "AI Chat") {
+      if (status === "signedIn") {
+        router.push("/ai-chat" as never);
+      } else {
+        setPendingRedirect("/ai-chat");
+        setLoginOpen(true);
+      }
+      return;
+    }
+
     if (tab.name === "Bookings") {
       if (status === "signedIn") {
         router.push("/activity");
@@ -457,6 +468,13 @@ function TabIcon({ type, color }: { type: TabIconType; color: string }) {
       <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
         <Circle cx={11} cy={11} r={8} stroke={color} strokeWidth={2} />
         <Path d="m21 21-4.3-4.3" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    );
+  }
+  if (type === "aichat") {
+    return (
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+        <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     );
   }

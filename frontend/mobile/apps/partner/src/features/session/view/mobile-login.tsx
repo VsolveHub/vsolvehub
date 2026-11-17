@@ -15,8 +15,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const HERO = require("../../../../assets/images/login-hero.jpg");
+const HERO = require("../../../../assets/images/login-hero.png");
 const HERO_ASPECT = 1672 / 941;
+const HERO_SHIFT_UP = 40;
 const LOGO_MARK = require("../../../../assets/logo-mark.png");
 const HERO_NAVY = "#001534";
 const LOGO_TOP_GAP = 12;
@@ -51,12 +52,17 @@ export function MobileLogin({
       <View style={StyleSheet.absoluteFill}>
         <Image
           source={HERO}
-          style={{ width, height: Math.round(width * HERO_ASPECT) }}
+          style={{ width, height: Math.round(width * HERO_ASPECT), transform: [{ translateY: -HERO_SHIFT_UP }] }}
           contentFit="cover"
           priority="high"
           accessible={false}
         />
       </View>
+      <View
+        pointerEvents="none"
+        className="bg-canvas"
+        style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "30%" }}
+      />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <ScrollView
           ref={scrollRef}
