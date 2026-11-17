@@ -20,6 +20,8 @@ and continue their own conversations from any device, by conversation id instead
   an answer is being written. Works even when the assistant is disabled.
 - On every `{id}` route, another Customer's conversation, an unclaimed signed-out one and an
   unknown id all answer `404 assistant_conversation_not_found`.
+- **Added** `conversation_id` to `AssistantConversationCreated` (`POST /assistant/conversations/`),
+  so a client can use the `{id}` routes from the first message.
 
 ## 1.100.0 - AI booking assistant
 
