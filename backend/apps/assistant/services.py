@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any, cast
-from uuid import UUID
 
 from django.conf import settings
 from django.db.models import Max, OuterRef, Q, QuerySet, Subquery
@@ -63,20 +62,6 @@ def session_for(*, token: str, user: User | None) -> AssistantSession:
         AssistantSession.objects.filter(id=session.id, customer__isnull=True).update(customer=user)
         session.refresh_from_db()
     if session.customer_id is not None and (user is None or session.customer_id != user.id):
-        raise AssistantConversationNotFoundApiError
-    return session
-
-
-def owned_session(*, conversation_id: UUID, user: User) -> AssistantSession:
-    """A conversation this signed-in Customer owns, opened by its id rather than its token.
-
-    The id is not a secret, so ownership is the whole check: someone else's conversation, a
-    signed-out one nobody has claimed, and an id that does not exist all look the same — not
-    found — so ids cannot be probed.
-    """
-
-    session = AssistantSession.objects.filter(id=conversation_id, customer=user).first()
-    if session is None:
         raise AssistantConversationNotFoundApiError
     return session
 
