@@ -16,10 +16,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const HERO = require("../../../../assets/images/login-hero.png");
-const HERO_ASPECT = 1672 / 941;
-const HERO_SHIFT_UP = 40;
+// Height / width of login-hero.png (1206 × 1305). Keep in step with the file when it changes.
+const HERO_ASPECT = 1305 / 1206;
 const LOGO_MARK = require("../../../../assets/logo-mark.png");
-const HERO_NAVY = "#001534";
+// The photo's own white background, so the area around it blends in.
+const HERO_BG = "#ffffff";
 const LOGO_TOP_GAP = 12;
 const LOGO_PILL_HEIGHT = 34;
 
@@ -48,11 +49,12 @@ export function MobileLogin({
   const isCodeStep = flow.phase === "code";
 
   return (
-    <View style={{ flex: 1, backgroundColor: HERO_NAVY }}>
+    <View style={{ flex: 1, backgroundColor: HERO_BG }}>
       <View style={StyleSheet.absoluteFill}>
+        {/* Starts below the logo pill, so the pill never covers a face. */}
         <Image
           source={HERO}
-          style={{ width, height: Math.round(width * HERO_ASPECT), transform: [{ translateY: -HERO_SHIFT_UP }] }}
+          style={{ width, height: Math.round(width * HERO_ASPECT), marginTop: headerHeight }}
           contentFit="cover"
           priority="high"
           accessible={false}
