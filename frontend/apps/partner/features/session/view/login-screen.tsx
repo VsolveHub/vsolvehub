@@ -277,7 +277,7 @@ export function LoginScreen() {
               className="flex flex-1 flex-col overflow-hidden rounded-3xl border border-line-strong bg-surface shadow-xl"
             >
               {/* Header Card Accent */}
-              <div className="bg-[#00112e] px-6 py-7 text-white relative overflow-hidden">
+              <div className="relative overflow-hidden bg-[#00112e] px-6 py-6 text-white">
                 <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 bg-signal-500/10 rounded-full blur-2xl" />
                 <div className="relative z-10">
                   <span className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300 border border-white/10 mb-3">
@@ -295,14 +295,17 @@ export function LoginScreen() {
               </div>
 
               {/* Form Body */}
-              <div className="flex-1 p-6 sm:p-7">
+              <div className="flex-1 p-6">
                 <OtpForm
                   {...formFlow}
                   heading={formFlow.phase === "code" ? t("auth.login.heading.code") : t("auth.login.heading.phone")}
                   headingLevel={2}
                   phoneDigits={10}
                   verifyLabel={t("auth.login.verifyLabel")}
+                  // Only on the number step, as on the phone app: someone entering a code has
+                  // already chosen to sign in, and the card then keeps to the panel's height.
                   footer={
+                    formFlow.phase === "code" ? undefined : (
                     <div className="mt-1 flex flex-col gap-1 rounded-2xl border border-line bg-surface-sunken p-4">
                       <p className="text-sm font-bold text-navy-900">{t("auth.login.newToVsh")}</p>
                       <p className="text-xs leading-relaxed text-text-muted">{t("auth.login.newToVshDetail")}</p>
@@ -313,6 +316,7 @@ export function LoginScreen() {
                         {t("auth.login.registerAsNewPartner")}
                       </Link>
                     </div>
+                    )
                   }
                 />
               </div>
