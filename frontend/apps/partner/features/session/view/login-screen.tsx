@@ -3,7 +3,7 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated, useT } from "@vsolve/ui";
-import { CheckCircle2, HelpCircle, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
+import { CheckCircle2, HelpCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -61,6 +61,20 @@ function readableFieldError(t: ReturnType<typeof useT>, message: string | null |
   };
   return FIELD_ERROR_COPY[message] ?? t("auth.login.error.generic");
 }
+
+/** What a partner can expect, beside the photo on the desktop panel. Same words as before. */
+const PANEL_POINTS = [
+  {
+    title: "KYC & Document Review",
+    detail: "Fast 24-hour verification for Government ID, Address Proof & bank accounts.",
+  },
+  {
+    title: "Mobile App Operations",
+    detail: "Daily job requests, turn-by-turn navigation, and customer chat run on phone.",
+  },
+  { title: "15,000+ Verified Partners", detail: "" },
+  { title: "Direct Bank Deposits", detail: "" },
+] as const;
 
 function LoginShell({ children }: { children: ReactNode }) {
   return <div className="min-h-screen bg-canvas text-text relative overflow-x-clip">{children}</div>;
@@ -198,81 +212,63 @@ export function LoginScreen() {
         </header>
       </div>
 
-      {/* Page Content */}
-      <main className="mx-auto w-full max-w-md lg:max-w-5xl xl:max-w-6xl px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-36 pb-16">
-        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
-          {/* Desktop Left Column: Registration Portal Value Prop */}
-          <div className="hidden lg:flex lg:col-span-7 flex-col gap-6 pr-6">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-sunken px-3.5 py-1 text-xs font-bold text-navy-900 shadow-xs">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+      {/* Page Content: fills the screen on desktop, both columns centred under the fixed nav */}
+      <main className="mx-auto flex w-full max-w-md flex-col px-4 pb-16 pt-24 sm:px-6 sm:pt-28 lg:min-h-dvh lg:max-w-6xl lg:justify-center lg:px-8 lg:pb-8 lg:pt-28">
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-stretch xl:gap-10">
+          {/* Desktop brand panel: the pitch and what to expect on the left, the photo bottom-right */}
+          <section
+            aria-labelledby="partner-login-title"
+            className="relative hidden overflow-hidden rounded-3xl border border-line bg-white shadow-sm lg:col-span-7 lg:flex lg:min-h-[37rem] lg:flex-col"
+          >
+            {/* One reading column: pitch, then what to expect, with even spacing throughout. */}
+            <div className="relative z-10 flex flex-col gap-3.5 p-9">
+              <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-line bg-surface-sunken px-3 py-1 text-xs font-bold text-navy-900">
+                <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-500" />
                 Partner Onboarding Portal
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
-                <Sparkles size={12} className="text-amber-600" />
-                Desktop Registration
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <h1 className="text-4xl xl:text-5xl font-black tracking-tight text-navy-900 leading-[1.15]">
+              <h1
+                id="partner-login-title"
+                className="max-w-lg text-[2.25rem] font-black leading-[1.12] tracking-tight text-navy-900 xl:text-[2.5rem]"
+              >
                 Register & Verify as a Partner on Desktop
               </h1>
-              <p className="text-base text-text-secondary leading-relaxed max-w-lg">
+              <p className="max-w-md text-[0.9375rem] leading-relaxed text-text-secondary">
                 Enter your mobile number to register as a new partner or continue your document verification. Once approved, live dispatches operate exclusively on our Partner Mobile App.
               </p>
+
+              <ul className="mt-7 flex max-w-[16.5rem] list-none flex-col gap-3.5 p-0">
+                {PANEL_POINTS.map((item) => (
+                  <li key={item.title} className="flex gap-2.5">
+                    <CheckCircle2 size={18} aria-hidden className="mt-0.5 shrink-0 text-emerald-600" />
+                    <span className="flex flex-col">
+                      <span className="text-sm font-bold text-navy-900">{item.title}</span>
+                      {item.detail ? (
+                        <span className="text-xs leading-relaxed text-text-secondary">{item.detail}</span>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            {/* next/image serves a resized copy of the ~2 MB PNG. The photo has a white
-                background; multiply blends it into the page colour. */}
+            {/* The main image of the page: loaded first, resized by next/image, never a layout jump.
+                It stands on the panel's bottom edge, beside the list, so it never sets the text's spacing. */}
             <Image
               src="/partner-login-hero.png"
               alt="Two V Solve Hub partners in uniform"
               width={1206}
               height={1305}
-              sizes="300px"
-              className="h-72 xl:h-80 w-auto self-start object-contain mix-blend-multiply"
+              priority
+              sizes="400px"
+              className="pointer-events-none absolute bottom-0 right-2 h-[25rem] w-auto object-contain object-bottom xl:right-4"
             />
-
-            {/* 3 Pillars */}
-            <div className="grid gap-3.5 sm:grid-cols-2 pt-2">
-              <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
-                <div className="flex items-center gap-2 text-xs font-bold text-navy-900">
-                  <ShieldCheck size={16} className="text-emerald-600" />
-                  <span>KYC & Document Review</span>
-                </div>
-                <p className="mt-1 text-xs text-text-secondary leading-relaxed">
-                  Fast 24-hour verification for Government ID, Address Proof & bank accounts.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
-                <div className="flex items-center gap-2 text-xs font-bold text-navy-900">
-                  <Smartphone size={16} className="text-blue-600" />
-                  <span>Mobile App Operations</span>
-                </div>
-                <p className="mt-1 text-xs text-text-secondary leading-relaxed">
-                  Daily job requests, turn-by-turn navigation, and customer chat run on phone.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 pt-2 text-xs font-semibold text-text-muted">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-emerald-600" /> 15,000+ Verified Partners
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-emerald-600" /> Direct Bank Deposits
-              </span>
-            </div>
-          </div>
+          </section>
 
           {/* Right Column: OtpForm Card */}
-          <div className="w-full lg:col-span-5 mx-auto max-w-md">
+          <div className="mx-auto flex w-full max-w-md flex-col lg:col-span-5">
             <Card
               padding="none"
-              className="overflow-hidden shadow-xl border border-line-strong rounded-3xl bg-surface"
+              className="flex flex-1 flex-col overflow-hidden rounded-3xl border border-line-strong bg-surface shadow-xl"
             >
               {/* Header Card Accent */}
               <div className="bg-[#00112e] px-6 py-7 text-white relative overflow-hidden">
@@ -293,7 +289,7 @@ export function LoginScreen() {
               </div>
 
               {/* Form Body */}
-              <div className="p-6 sm:p-7">
+              <div className="flex-1 p-6 sm:p-7">
                 <OtpForm
                   {...flowWithAudio}
                   heading={flow.phase === "code" ? t("auth.login.heading.code") : t("auth.login.heading.phone")}
@@ -314,18 +310,18 @@ export function LoginScreen() {
                   }
                 />
               </div>
-            </Card>
 
-            {/* Helpdesk Contact */}
-            <div className="mt-6 text-center">
-              <Link
-                href="/contact"
-                className="inline-flex min-h-11 items-center justify-center gap-1.5 text-xs font-semibold text-text-muted hover:text-navy-900 transition-colors"
-              >
-                <HelpCircle size={15} aria-hidden />
-                {t("auth.login.needHelp")}
-              </Link>
-            </div>
+              {/* Help, as the card's quiet footer */}
+              <div className="border-t border-line bg-surface-sunken/60 px-6 py-2 text-center">
+                <Link
+                  href="/contact"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 text-xs font-semibold text-text-muted transition-colors hover:text-navy-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                >
+                  <HelpCircle size={15} aria-hidden />
+                  {t("auth.login.needHelp")}
+                </Link>
+              </div>
+            </Card>
           </div>
         </div>
       </main>
