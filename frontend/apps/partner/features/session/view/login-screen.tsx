@@ -4,6 +4,7 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated, useT } from "@vsolve/ui";
 import { CheckCircle2, HelpCircle, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -221,6 +222,17 @@ export function LoginScreen() {
                 Enter your mobile number to register as a new partner or continue your document verification. Once approved, live dispatches operate exclusively on our Partner Mobile App.
               </p>
             </div>
+
+            {/* next/image serves a resized copy of the ~2 MB PNG. The photo has a white
+                background; multiply blends it into the page colour. */}
+            <Image
+              src="/partner-login-hero.png"
+              alt="Two V Solve Hub partners in uniform"
+              width={1206}
+              height={1305}
+              sizes="300px"
+              className="h-72 xl:h-80 w-auto self-start object-contain mix-blend-multiply"
+            />
 
             {/* 3 Pillars */}
             <div className="grid gap-3.5 sm:grid-cols-2 pt-2">
