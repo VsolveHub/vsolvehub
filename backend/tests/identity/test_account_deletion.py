@@ -44,6 +44,9 @@ def clear_rate_limit_cache() -> None:
 
 
 def _sign_in(phone: str = PHONE) -> APIClient:
+    # A second code for the same number inside the resend cooldown is refused; the cooldown lives
+    # in the cache, and these tests sign the same number in more than once on purpose.
+    cache.clear()
     client = APIClient()
     issued = client.post("/api/v1/auth/otp/request/", {"phone_number": phone}, format="json").json()
     verified = client.post(
@@ -140,6 +143,8 @@ def test_repeating_the_request_returns_the_open_one() -> None:
     assert PrivacyRequest.objects.filter(user=user, kind="ERASURE").count() == 1
 
 
+# The booking factory pays through on-commit hooks, so it needs real transactions.
+@pytest.mark.django_db(transaction=True)
 def test_open_bookings_refuse_the_request() -> None:
     booked = create_booked_group(key_prefix="deletion-open-work")
 
