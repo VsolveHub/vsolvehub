@@ -75,7 +75,9 @@ export function privacyRequest(
     kind: "ACCESS",
     status: "RECEIVED",
     requested_at: "2026-07-28T09:00:00Z",
+    scheduled_for: null,
     completed_at: null,
+    cancelled_at: null,
     ...overrides,
   };
 }

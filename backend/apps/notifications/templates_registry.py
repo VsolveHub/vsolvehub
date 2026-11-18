@@ -613,6 +613,10 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "You are offline now",
         "{reason} Open the app and go online to get jobs again.",
     ),
+    "account_deletion_cancelled": (
+        "Your account is staying",
+        "You signed in again, so we cancelled your account deletion. Nothing was removed.",
+    ),
     "customer_visit_en_route": (
         "{partner_name} is on the way",
         "Your professional has set off for your {service}. Keep your phone close.",

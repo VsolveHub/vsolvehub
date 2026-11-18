@@ -73,7 +73,7 @@ export default function ApplyLayout() {
   const deletionNote = openDeletion
     ? t("apply.account.delete.requested", {
         date: new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
-          new Date(openDeletion.requested_at),
+          new Date(openDeletion.scheduled_for ?? openDeletion.requested_at),
         ),
       })
     : null;

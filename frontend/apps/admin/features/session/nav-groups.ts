@@ -16,6 +16,7 @@ import {
   ToggleLeft,
   Upload,
   User,
+  UserX,
   UserCheck,
   Users,
   Wallet,
@@ -83,6 +84,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/operations/stories", label: "Safety stories", icon: ShieldCheck },
       { href: "/operations/loyalty", label: "Wallet and rewards", icon: Coins },
       { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
+      // Partners and customers both ask here; most people who delete an account are customers.
+      { href: "/operations/account-deletions", label: "Account deletions", icon: UserX },
     ],
   },
   {

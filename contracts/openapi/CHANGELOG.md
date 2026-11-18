@@ -1,5 +1,31 @@
 # API Contract Changelog
 
+## 1.102.0 - Account deletion: grace period, holds, erasure and an Operations queue
+
+Additive, with one behaviour change to `POST /auth/privacy/requests/` for `kind: ERASURE`.
+
+- **Behaviour** `POST /auth/privacy/requests/` with `ERASURE` now closes the account: every other
+  session is signed out at once, the calling session ends within 10 minutes (so the app can show
+  its confirmation and sign itself out), and a Partner is taken offline. The account is erased at
+  `scheduled_for` (30 days, `ACCOUNT_DELETION_GRACE_DAYS`) unless the person signs in again
+  first, which cancels the request and leaves an in-app notice (`account_deletion_cancelled`).
+  Repeating the request returns the open one instead of filing a second.
+- **Added** `409 account_deletion_open_work` on that call while the person has open bookings
+  (as Customer or Partner): finish or cancel them first.
+- **Added** `PrivacyRequest.scheduled_for` and `PrivacyRequest.cancelled_at`, and the status
+  `CANCELLED` (signed in again, or cancelled by support).
+- **Added** Operations queue `GET /operations/privacy-requests/?state=open|closed|all&kind=`
+  (`OperationsPrivacyRequest[]`: the person, the request, its notes and the live `holds`:
+  `open_work`, `money_owed`, `wallet_balance`), and commands on one request: `hold/`,
+  `release/`, `cancel/`, `reject/` (each with `reason`), `complete/` (ACCESS, with `note`) and
+  `erase/` (erase now; needs a recent Operations step-up; `409 account_deletion_held` lists what
+  is unsettled).
+- **Added** `POST /operations/users/{user_id}/deletion-request/` (`reason`): file a deletion for
+  somebody who reached support instead of the app.
+- **Scheduled** hourly erasure of due requests. A request that cannot be erased yet moves to
+  `IN_REVIEW` with the hold in its notes and is re-checked every run; one an operator held waits
+  for a release.
+
 ## 1.101.0 - One-read catalogue for "Your work", and two submit rules
 
 Additive, with two behaviour changes to `POST /partner/application/submit/`.

@@ -145,6 +145,7 @@ describe("the workspaces", () => {
       "/operations/stories",
       "/operations/loyalty",
       "/operations/feedback",
+      "/operations/account-deletions",
       // Money
       "/finance",
       "/operations/payouts",

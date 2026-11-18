@@ -1,8 +1,8 @@
 "use client";
 
-import type { Schemas } from "@vsolve/api-client";
+import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { useCurrentSession, useLogout } from "@vsolve/query";
-import { ConfirmAction, Sheet, buttonStyles, useT } from "@vsolve/ui";
+import { Button, ConfirmAction, Dialog, Sheet, buttonStyles, useT } from "@vsolve/ui";
 import {
   Bell,
   ChevronRight,
@@ -36,6 +36,13 @@ import {
 
 type Application = Schemas["PartnerApplication"];
 
+/** A date the way the deletion copy says it: "18 Dec 2026", in India's time zone. */
+function deletionDate(value: string): string {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+    new Date(value),
+  );
+}
+
 export function AccountButton({
   application,
   onOpenHelp,
@@ -49,6 +56,9 @@ export function AccountButton({
   const [mounted, setMounted] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Set once the deletion is filed: Django has closed the account and keeps this session only
+  // for a few minutes, so the person is told the date and signed out from here.
+  const [closedUntil, setClosedUntil] = useState<string | null>(null);
 
   const session = useCurrentSession(getApiClient());
   const logout = useLogout(getApiClient());
@@ -222,10 +232,9 @@ export function AccountButton({
                   {openDeletionRequest ? (
                     <p className="px-2 pb-2 text-xs text-text-secondary">
                       {t("apply.account.delete.requested", {
-                        date: new Intl.DateTimeFormat("en-IN", {
-                          dateStyle: "medium",
-                          timeZone: "Asia/Kolkata",
-                        }).format(new Date(openDeletionRequest.requested_at)),
+                        date: deletionDate(
+                          openDeletionRequest.scheduled_for ?? openDeletionRequest.requested_at,
+                        ),
                       })}
                     </p>
                   ) : null}
@@ -285,7 +294,10 @@ export function AccountButton({
       {/* Confirm Account Deletion Dialog */}
       <ConfirmAction
         open={confirmingDelete}
-        onOpenChange={setConfirmingDelete}
+        onOpenChange={(next) => {
+          if (!next) removeDeletion.reset();
+          setConfirmingDelete(next);
+        }}
         title={t("apply.account.delete.title")}
         consequence={t("apply.account.delete.consequence")}
         confirmLabel={t("apply.account.delete.confirm")}
@@ -294,13 +306,41 @@ export function AccountButton({
         pending={removeDeletion.isPending}
         onConfirm={() =>
           removeDeletion.mutate(undefined, {
-            onSuccess: () => {
+            onSuccess: (created) => {
               setConfirmingDelete(false);
               setOpen(false);
+              setClosedUntil(created.scheduled_for ?? created.requested_at);
             },
           })
         }
-      />
+      >
+        {removeDeletion.isError ? (
+          <p role="alert" className="text-sm font-semibold text-danger-text">
+            {removeDeletion.error instanceof ApiRequestError &&
+            removeDeletion.error.code === "account_deletion_open_work"
+              ? t("apply.account.delete.openWork")
+              : t("apply.account.delete.failed")}
+          </p>
+        ) : null}
+      </ConfirmAction>
+
+      {/* The account is closed: say when it goes, then sign out. */}
+      <Dialog
+        open={closedUntil !== null}
+        onOpenChange={() => logout.mutate()}
+        title={t("apply.account.delete.closed.title")}
+        footer={
+          <Button onClick={() => logout.mutate()} loading={logout.isPending}>
+            {t("apply.account.delete.closed.ok")}
+          </Button>
+        }
+      >
+        <p className="text-sm text-text-secondary">
+          {closedUntil
+            ? t("apply.account.delete.closed.body", { date: deletionDate(closedUntil) })
+            : null}
+        </p>
+      </Dialog>
     </>
   );
 }

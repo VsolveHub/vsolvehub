@@ -424,7 +424,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.101.0",
+    "VERSION": "1.102.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -474,6 +474,9 @@ SPECTACULAR_SETTINGS = {
         "PlatformEnum": "apps.notifications.models.CustomerPushSubscription.Platform",
         "QuoteLineKindEnum": "apps.carts.models.QuoteLine.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
+        # Pinned when the Operations privacy queue (1.102.0) reused this choice set under another
+        # `status` field, which would otherwise rename it to a positional `Status…Enum`.
+        "PrivacyStatusEnum": "apps.identity.models.PrivacyRequest.Status",
         "ScopeAmendmentStatusEnum": "apps.fulfilment.models.ScopeAmendment.Status",
         "ScopeAmendmentLineKindEnum": "apps.fulfilment.models.ScopeAmendmentLine.Kind",
         "WorkTaskKindEnum": "apps.fulfilment.models.WorkTask.Kind",
@@ -700,6 +703,10 @@ OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
+# Account deletion (apps.identity.account_deletion): how long a closed account waits before it is
+# erased. Signing in again inside it keeps the account. 30 days is the common platform window and
+# what the public deletion pages promise; change both together.
+ACCOUNT_DELETION_GRACE_DAYS = env.int("ACCOUNT_DELETION_GRACE_DAYS", default=30)
 
 FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
 FIREBASE_CREDENTIALS_JSON = env("FIREBASE_CREDENTIALS_JSON", default="")
@@ -1124,6 +1131,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.payouts.tasks.reconcile_payouts",
         # Hourly. Ambiguous payouts are never re-submitted — this only *reads* the provider
         # and settles an item once it is definite, so a slow cadence costs nothing.
+        "schedule": 60.0 * 60,
+    },
+    "identity-account-deletions": {
+        "task": "apps.identity.tasks.process_due_account_deletions",
+        # Hourly. A deletion is due on a date, not a minute; holds are re-checked each run.
         "schedule": 60.0 * 60,
     },
     "identity-retention-sweep": {

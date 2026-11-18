@@ -17,10 +17,12 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.identity.account_deletion import AccountDeletionRefusedError
 from apps.identity.auth_cookies import mark_auth_cookies_for_clearing
 from apps.identity.delivery import OtpDeliveryError
 from apps.identity.exceptions import (
     AccountBlockedApiError,
+    AccountDeletionRefusedApiError,
     InvalidOtpApiError,
     NoAccountForRoleApiError,
     OtpThrottled,
@@ -625,15 +627,34 @@ class PrivacyRequestView(APIView):
     @extend_schema(
         tags=["Privacy"],
         request=PrivacyRequestCreateSerializer,
-        responses={201: PrivacyRequestSerializer},
+        responses={
+            201: PrivacyRequestSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description=(
+                    "ERASURE only: the account cannot be deleted yet "
+                    "(`account_deletion_open_work`: bookings still open)."
+                ),
+            ),
+        },
+        description=(
+            "File an ACCESS or ERASURE request. ERASURE closes the account: every other "
+            "session is signed out at once and this one ends within minutes, and the account "
+            "is erased at `scheduled_for` unless the person signs in again first. Repeating an "
+            "ERASURE request returns the open one."
+        ),
     )
     def post(self, request: Request) -> Response:
         serializer = PrivacyRequestCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        privacy_request = create_privacy_request(
-            user=cast(User, request.user),
-            kind=serializer.validated_data["kind"],
-        )
+        try:
+            privacy_request = create_privacy_request(
+                user=cast(User, request.user),
+                kind=serializer.validated_data["kind"],
+                current_session_key=request.session.session_key,
+            )
+        except AccountDeletionRefusedError as exc:
+            raise AccountDeletionRefusedApiError(detail=exc.message, code=exc.code) from exc
         return Response(
             PrivacyRequestSerializer(privacy_request).data, status=status.HTTP_201_CREATED
         )

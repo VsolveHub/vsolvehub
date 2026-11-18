@@ -41,7 +41,7 @@ export interface ProfileMenuSheetProps {
    * Without it the row goes to the full delete page.
    */
   onOpenDelete?: () => void;
-  /** Already worded, e.g. "Deletion requested on 12 Nov 2026. We'll contact you." */
+  /** Already worded, e.g. "Your account will be deleted on 12 Dec 2026." */
   deletionNote?: string | null;
 }
 

@@ -1,8 +1,11 @@
 "use client";
 
-import { describeError } from "@vsolve/query";
+import { ApiRequestError } from "@vsolve/api-client";
+import { describeError, useLogout } from "@vsolve/query";
 import { Badge, Button, Dialog, ErrorState, Skeleton } from "@vsolve/ui";
 import { useState } from "react";
+
+import { getApiClient } from "@/lib/api/browser";
 
 import {
   isRequestOpen,
@@ -26,11 +29,13 @@ import { Moment } from "./chrome";
  * rule the server owns, which is wrong the first time they disagree. `REJECTED`
  * is exactly that case — it is finished, and it has no completion.
  *
- * ## Erasure is confirmed, and the confirmation says what it costs
+ * ## Erasure closes the account, and the confirmation says so
  *
- * Filing an erasure request is not itself destructive, but it starts something
- * the customer cannot take back from this screen, and the honest thing is to say
- * what happens next rather than to make it feel like a toggle.
+ * Filing an erasure request closes the account at once: Django signs the person
+ * out everywhere and keeps this session only for a few minutes, and the account
+ * is erased 30 days later unless they sign in again
+ * (`backend/apps/identity/account_deletion.py`). So a success is followed by the
+ * date and a sign-out, never by the page carrying on as if nothing happened.
  */
 
 const KIND_COPY: Record<PrivacyRequestKind, { label: string; description: string }> = {
@@ -40,9 +45,9 @@ const KIND_COPY: Record<PrivacyRequestKind, { label: string; description: string
       "We put together everything held against your account — your bookings, addresses, payments and the consents on record — and send it to you.",
   },
   ERASURE: {
-    label: "Delete my data",
+    label: "Delete my account",
     description:
-      "We remove what we are not required to keep. Records tax and consumer law require us to hold, such as invoices for completed work, stay until they expire.",
+      "Your account closes now and is deleted after 30 days. Sign in again before then to keep it. Invoices and payment records that tax and consumer law require are kept, without your name.",
   },
 };
 
@@ -51,6 +56,7 @@ const STATUS_TONE: Record<PrivacyStatus, "info" | "warning" | "success" | "dange
   IN_REVIEW: "warning",
   COMPLETED: "success",
   REJECTED: "danger",
+  CANCELLED: "info",
 };
 
 const STATUS_LABEL: Record<PrivacyStatus, string> = {
@@ -58,6 +64,7 @@ const STATUS_LABEL: Record<PrivacyStatus, string> = {
   IN_REVIEW: "In review",
   COMPLETED: "Completed",
   REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
 };
 
 const STATUS_MEANING: Record<PrivacyStatus, string> = {
@@ -65,7 +72,15 @@ const STATUS_MEANING: Record<PrivacyStatus, string> = {
   IN_REVIEW: "Someone is working through it now.",
   COMPLETED: "Finished. Check your messages for what we sent.",
   REJECTED: "We could not act on this one. Contact support and we will explain why.",
+  CANCELLED: "You signed in again, so we kept your account.",
 };
+
+/** "18 Dec 2026", in India's time zone. */
+function deletionDate(value: string): string {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+    new Date(value),
+  );
+}
 
 function RequestRow({ privacyRequest }: { privacyRequest: PrivacyRequest }) {
   return (
@@ -97,7 +112,11 @@ function RequestRow({ privacyRequest }: { privacyRequest: PrivacyRequest }) {
 export function PrivacyRequests() {
   const requestsQuery = usePrivacyRequests();
   const createRequest = useCreatePrivacyRequest();
+  const logout = useLogout(getApiClient());
   const [confirming, setConfirming] = useState<PrivacyRequestKind | null>(null);
+  // Set once a deletion is filed: the account is closed, so the person is told the date and
+  // signed out from here.
+  const [closedUntil, setClosedUntil] = useState<string | null>(null);
 
   const requests = requestsQuery.data ?? [];
 
@@ -115,8 +134,9 @@ export function PrivacyRequests() {
 
   async function file(kind: PrivacyRequestKind) {
     try {
-      await createRequest.mutateAsync(kind);
+      const created = await createRequest.mutateAsync(kind);
       setConfirming(null);
+      if (kind === "ERASURE") setClosedUntil(created.scheduled_for ?? created.requested_at);
     } catch {
       // The dialog stays open and shows the reason.
     }
@@ -202,7 +222,7 @@ export function PrivacyRequests() {
         title={confirming ? KIND_COPY[confirming].label : ""}
         description={
           confirming === "ERASURE"
-            ? "We will start removing what we are not required to keep. You cannot cancel this from here."
+            ? "Your account closes now: you are signed out everywhere. We delete it 30 days later, unless you sign in again before then."
             : "We will put your data together and send it to you."
         }
         dismissable={!createRequest.isPending}
@@ -224,22 +244,42 @@ export function PrivacyRequests() {
               loading={createRequest.isPending}
               loadingLabel="Sending your request"
             >
-              {confirming === "ERASURE" ? "Request deletion" : "Request my data"}
+              {confirming === "ERASURE" ? "Delete my account" : "Request my data"}
             </Button>
           </>
         }
       >
         <p className="text-sm text-text-secondary">
           {confirming === "ERASURE"
-            ? "Bookings that are still going ahead are not cancelled by this. Cancel those first if that is what you want."
+            ? "Bookings that are still going ahead must be finished or cancelled first. Wallet money left over is settled before deletion."
             : "This usually takes a few days. We will message you when it is ready."}
         </p>
 
         {createRequest.isError ? (
           <p role="alert" className="mt-3 text-sm font-medium text-danger-text">
-            {describeError(createRequest.error, "mutation").message}
+            {createRequest.error instanceof ApiRequestError &&
+            createRequest.error.code === "account_deletion_open_work"
+              ? "You have bookings that are still going ahead. Finish or cancel them first, then delete your account."
+              : describeError(createRequest.error, "mutation").message}
           </p>
         ) : null}
+      </Dialog>
+
+      <Dialog
+        open={closedUntil !== null}
+        onOpenChange={() => logout.mutate()}
+        title="Your account is closed"
+        footer={
+          <Button onClick={() => logout.mutate()} loading={logout.isPending} loadingLabel="Signing out">
+            Sign out
+          </Button>
+        }
+      >
+        <p className="text-sm text-text-secondary">
+          {closedUntil
+            ? `We will delete it on ${deletionDate(closedUntil)}. Changed your mind? Sign in again before then and your account stays.`
+            : null}
+        </p>
       </Dialog>
     </div>
   );
