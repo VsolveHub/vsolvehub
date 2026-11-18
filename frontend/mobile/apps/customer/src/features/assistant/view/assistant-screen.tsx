@@ -1,8 +1,8 @@
 // Ported from frontend/apps/customer/features/assistant/view/assistant-widget.tsx
 import { describeError } from "@vsolve/query/native";
-import { Text } from "@vsolve/mobile-ui";
+import { Logo, Text } from "@vsolve/mobile-ui";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { Check, History, Pencil, Send, SquarePen, Trash2, X } from "lucide-react-native";
+import { Check, Pencil, Send, SquarePen, Trash2, X } from "lucide-react-native";
 import { type ComponentRef, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -15,14 +15,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  useAssistantChats,
+  useAssistantChat,
   useConversation,
   useSendMessage,
   useStartConversation,
   type AssistantAction,
   type AssistantMessage,
 } from "../queries";
-import { HistorySheet } from "./history-sheet";
 import { WelcomeHero } from "./welcome-hero";
 
 /**
@@ -38,17 +37,11 @@ const KEYBOARD_OPEN_DELAY_MS = 300;
 
 export function AssistantScreen() {
   const insets = useSafeAreaInsets();
-  const { token, loaded, chats, add, select, openNew, remove, nameFromMessage, hideMessages } =
-    useAssistantChats();
-  const start = useStartConversation(add);
-  // A conversation the server no longer knows is dropped from the list too.
-  const forget = useCallback(() => {
-    if (token) remove(token);
-  }, [token, remove]);
-  const conversation = useConversation(token, forget);
+  const { token, loaded, hidden, open, reset, hideMessages } = useAssistantChat();
+  const start = useStartConversation(open);
+  // A conversation the server no longer knows is left behind, and a fresh one starts.
+  const conversation = useConversation(token, reset);
   const send = useSendMessage(token);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const closeHistory = useCallback(() => setHistoryOpen(false), []);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const listRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -72,10 +65,10 @@ export function AssistantScreen() {
   // The server opens every conversation with a greeting as message #1; the app's own welcome
   // block replaces it, so that one message is not shown. Messages edited or deleted on this
   // phone are not shown either. Every other message is.
-  const hidden = new Set(chats.find((chat) => chat.token === token)?.hidden ?? []);
+  const hiddenHere = new Set(hidden);
   const messages = (conversation.data?.messages ?? []).filter(
     (message) =>
-      !hidden.has(message.sequence) &&
+      !hiddenHere.has(message.sequence) &&
       !(message.sequence === OPENING_GREETING_SEQUENCE && message.sender === "assistant"),
   );
   const answering = send.isPending || Boolean(conversation.data?.is_answering);
@@ -91,24 +84,14 @@ export function AssistantScreen() {
       if (!trimmed || !token || send.isPending) return;
       setPending(trimmed);
       setDraft("");
-      nameFromMessage(token, trimmed);
       send.mutate(trimmed, { onSettled: () => setPending(null) });
     },
-    [send, token, nameFromMessage],
+    [send, token],
   );
 
-  // A chat nobody has written in is not history: it is the blank page a new chat starts on.
-  const usedChats = chats.filter((chat) => chat.title);
-  const openedChatIsEmpty = chats.find((chat) => chat.token === token)?.title == null;
-
-  // Deleting the last chat leaves nothing to look at, so go back to the assistant's fresh page.
-  const deleteChat = (chatToken: string) => {
-    remove(chatToken);
-    if (usedChats.length <= 1) closeHistory();
-  };
+  // A chat nobody has written in is already a new chat: do not replace it with another.
   const startNewChat = () => {
-    setHistoryOpen(false);
-    if (token && !openedChatIsEmpty) openNew();
+    if (token && hasCustomerMessage) reset();
   };
 
   // A failed start leaves no token, so Send stays off until it runs again; a failed read just re-reads.
@@ -132,14 +115,8 @@ export function AssistantScreen() {
 
   const hideFrom = (sequence: number) => {
     if (!token) return;
-    hideMessages(
-      token,
-      messages.filter((m) => m.sequence >= sequence).map((m) => m.sequence),
-      // Nothing the customer wrote stays visible: the chat leaves the history.
-      { noneLeft: !messages.some((m) => m.sender === "customer" && m.sequence < sequence) },
-    );
+    hideMessages(messages.filter((m) => m.sequence >= sequence).map((m) => m.sequence));
   };
-  // When it was the only message, sending the new text names the chat after it again.
   const saveEdit = (sequence: number, text: string) => {
     hideFrom(sequence);
     sendText(text);
@@ -155,30 +132,16 @@ export function AssistantScreen() {
         style={{ paddingTop: Math.max(insets.top, 24) + 10 }}
         className="flex-row items-center justify-between gap-3 border-b border-line bg-[#FAF9F7] px-4 pb-3"
       >
-        <View className="flex-1">
-          <Text className="text-sm font-semibold text-navy-900">Booking assistant</Text>
-          <Text className="text-xs text-[#6B6560]">Tell me what you need done at home</Text>
-        </View>
-        <View className="flex-row items-center">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-            hitSlop={8}
-            onPress={startNewChat}
-            className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
-          >
-            <SquarePen size={21} color="#1E293B" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Chat history"
-            hitSlop={8}
-            onPress={() => setHistoryOpen(true)}
-            className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
-          >
-            <History size={22} color="#1E293B" />
-          </Pressable>
-        </View>
+        <Logo className="flex-1" />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="New chat"
+          hitSlop={8}
+          onPress={startNewChat}
+          className="min-h-11 min-w-11 items-center justify-center rounded-full active:bg-slate-100"
+        >
+          <SquarePen size={21} color="#1E293B" />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -187,13 +150,12 @@ export function AssistantScreen() {
         contentContainerClassName="gap-3 px-4 py-4"
         keyboardShouldPersistTaps="handled"
       >
-        {hasCustomerMessage ? null : (
-          <WelcomeHero
-            key={token ?? "new"}
-            disabled={!token || send.isPending}
-            onPick={(categoryName) => sendText(`I need ${categoryName}`)}
-          />
-        )}
+        {/* Always at the top of the chat, so the starter chips stay one tap away. */}
+        <WelcomeHero
+          key={token ?? "new"}
+          disabled={!token || send.isPending}
+          onPick={(categoryName) => sendText(`I need ${categoryName}`)}
+        />
         {messages.map((message) =>
           canEdit && message.sequence === lastCustomerMessage?.sequence ? (
             <OwnMessage
@@ -254,14 +216,6 @@ export function AssistantScreen() {
         </Pressable>
       </View>
 
-      <HistorySheet
-        open={historyOpen}
-        onClose={closeHistory}
-        chats={usedChats}
-        currentToken={token}
-        onSelect={select}
-        onDelete={deleteChat}
-      />
     </KeyboardAvoidingView>
   );
 }

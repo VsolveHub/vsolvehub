@@ -13,11 +13,12 @@ jest.mock("@vsolve/mobile-core", () => ({
 
 const mockKvGet = jest.fn();
 const mockKvSet = jest.fn<Promise<void>, [string, string]>(async () => undefined);
+const mockKvRemove = jest.fn<Promise<void>, [string]>(async () => undefined);
 
 jest.mock("@vsolve/mobile-core/storage", () => ({
   kvGet: (key: string) => mockKvGet(key),
   kvSet: (key: string, value: string) => mockKvSet(key, value),
-  kvRemove: jest.fn(async () => undefined),
+  kvRemove: (key: string) => mockKvRemove(key),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -85,50 +86,46 @@ describe("AssistantScreen", () => {
     mockKvGet.mockReset();
     mockKvGet.mockResolvedValue(null);
     mockKvSet.mockClear();
+    mockKvRemove.mockClear();
   });
 
-  it("lists saved chats in the history sheet and forgets one that is deleted", async () => {
-    const saved = [
-      { token: "token-1", title: "AC not cooling" },
-      { token: "token-9", title: "Fan installation" },
-    ];
-    mockKvGet.mockImplementation(async (key: string) =>
-      key === "assistant.conversation" ? "token-1" : key === "assistant.chats" ? JSON.stringify(saved) : null,
-    );
+  it("keeps no chat history: no history button, and an old saved list is wiped from the phone", async () => {
+    mockClient.POST.mockResolvedValue(reply(created));
     const screen = await renderScreen();
 
-    fireEvent.press(await screen.findByLabelText("Chat history"));
-    expect(await screen.findByText("Fan installation")).toBeTruthy();
-    expect(screen.getByText("AC not cooling")).toBeTruthy();
-
-    fireEvent.press(screen.getByLabelText("Delete chat Fan installation"));
-
-    await waitFor(() => expect(screen.queryByText("Fan installation")).toBeNull());
-    const lastSave = mockKvSet.mock.calls.filter(([key]) => key === "assistant.chats").at(-1);
-    expect(JSON.parse(lastSave?.[1] ?? "[]")).toEqual([{ token: "token-1", title: "AC not cooling" }]);
+    await conversationReady();
+    expect(screen.queryByLabelText("Chat history")).toBeNull();
+    expect(mockKvRemove).toHaveBeenCalledWith("assistant.chats");
   });
 
-  it("closes the history when the last chat is deleted and never lists the fresh blank chat", async () => {
-    mockKvGet.mockImplementation(async (key: string) =>
-      key === "assistant.conversation"
-        ? "token-1"
-        : key === "assistant.chats"
-          ? JSON.stringify([{ token: "token-1", title: "AC not cooling" }])
-          : null,
+  it("starts a fresh chat from New chat, but not when the open chat is still empty", async () => {
+    const used = {
+      ...created.conversation,
+      messages: [
+        ...created.conversation.messages,
+        { sequence: 2, sender: "customer", text: "AC not cooling", actions: [], created_at: "" },
+      ],
+    };
+    mockKvGet.mockImplementation(async (key: string) => (key === "assistant.conversation" ? "token-1" : null));
+    // The old chat has a message; the fresh one (token-2) has only the greeting.
+    mockClient.GET.mockImplementation(
+      async (path: string, init?: { params?: { header?: Record<string, string> } }) => {
+        if (path === "/api/v1/categories/") return reply(categories, 200);
+        const token = init?.params?.header?.["X-Assistant-Token"];
+        return reply(token === "token-1" ? used : created.conversation, 200);
+      },
     );
     mockClient.POST.mockResolvedValue(reply({ ...created, conversation_token: "token-2" }));
     const screen = await renderScreen();
+    await screen.findByText("AC not cooling");
 
-    fireEvent.press(await screen.findByLabelText("Chat history"));
-    fireEvent.press(await screen.findByLabelText("Delete chat AC not cooling"));
+    await fireEvent.press(screen.getByLabelText("New chat"));
 
-    // Back on the assistant's page: the sheet is gone and a fresh conversation has started.
-    await waitFor(() => expect(screen.queryByText("Chat history")).toBeNull());
-    await waitFor(() => expect(mockClient.POST).toHaveBeenCalledTimes(1));
-
-    fireEvent.press(await screen.findByLabelText("Chat history"));
-    expect(await screen.findByText("No chats yet")).toBeTruthy();
-    expect(screen.queryByText("Open now")).toBeNull();
+    await conversationReady("token-2");
+    expect(mockClient.POST).toHaveBeenCalledTimes(1);
+    // The fresh chat is empty: New chat again does not start another one.
+    await fireEvent.press(screen.getByLabelText("New chat"));
+    expect(mockClient.POST).toHaveBeenCalledTimes(1);
   });
 
   it("offers each service category once as a starter chip and sends it as the first message", async () => {
@@ -145,7 +142,9 @@ describe("AssistantScreen", () => {
     fireEvent.press(screen.getByText("AC Repair"));
 
     expect(await screen.findByText("I need AC Repair")).toBeTruthy();
-    expect(screen.queryByText("How can I help you today?")).toBeNull();
+    // The welcome and its chips stay at the top after a message is sent.
+    expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    expect(screen.getByText("Home Cleaning")).toBeTruthy();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const sent = fetchMock.mock.calls[0]?.[0] as Request;
     expect(sent.url).toContain("/api/v1/assistant/conversation/messages/");
@@ -171,7 +170,8 @@ describe("AssistantScreen", () => {
     const screen = await renderScreen();
 
     await conversationReady();
-    expect(screen.getByText("Booking assistant")).toBeTruthy();
+    // The header carries only the V Solve Hub logo.
+    expect(screen.getByLabelText("V Solve Hub")).toBeTruthy();
     // A new chat opens with the welcome until the customer says something.
     expect(screen.getByText("How can I help you today?")).toBeTruthy();
     expect(screen.queryByText(GREETING, { exact: false })).toBeNull();
@@ -195,6 +195,9 @@ describe("AssistantScreen", () => {
     expect(await screen.findByText("Which day suits you?")).toBeTruthy();
     expect(screen.getByText("AC not cooling")).toBeTruthy();
     expect(screen.queryByText(GREETING, { exact: false })).toBeNull();
+    // A chat that already has messages still opens with the welcome and chips at the top.
+    expect(screen.getByText("How can I help you today?")).toBeTruthy();
+    expect(screen.getByText("AC Repair")).toBeTruthy();
   });
 
   describe("edit and delete", () => {
@@ -208,14 +211,7 @@ describe("AssistantScreen", () => {
     };
 
     async function openChat() {
-      // A chat already in the history, named after its only message.
-      mockKvGet.mockImplementation(async (key: string) =>
-        key === "assistant.conversation"
-          ? "token-1"
-          : key === "assistant.chats"
-            ? JSON.stringify([{ token: "token-1", title: "AC not cooling" }])
-            : null,
-      );
+      mockKvGet.mockImplementation(async (key: string) => (key === "assistant.conversation" ? "token-1" : null));
       mockClient.GET.mockImplementation(async (path: string) =>
         path === "/api/v1/categories/" ? reply(categories, 200) : reply(conversation, 200),
       );
@@ -227,15 +223,10 @@ describe("AssistantScreen", () => {
       return screen;
     }
 
-    /** The open chat as last saved on the phone. */
-    function savedChat() {
-      const lastSave = mockKvSet.mock.calls.filter(([key]) => key === "assistant.chats").at(-1);
-      const chats = JSON.parse(lastSave?.[1] ?? "[]") as {
-        token: string;
-        title: string | null;
-        hidden?: number[];
-      }[];
-      return chats.find((chat) => chat.token === "token-1");
+    /** The messages last saved as hidden on this phone. */
+    function savedHidden() {
+      const lastSave = mockKvSet.mock.calls.filter(([key]) => key === "assistant.hidden").at(-1);
+      return JSON.parse(lastSave?.[1] ?? "[]") as number[];
     }
 
     it("edits inside the message and sends the new text in its place", async () => {
@@ -251,9 +242,7 @@ describe("AssistantScreen", () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalled());
       expect(await (fetchMock.mock.calls[0]?.[0] as Request).text()).toContain("AC not cooling since yesterday");
       // The old message and the reply to it are hidden on this phone; the box at the bottom was not used.
-      expect(savedChat()?.hidden).toEqual([2, 3]);
-      // It was the only message, so the history now names the chat after the new text.
-      expect(savedChat()?.title).toBe("AC not cooling since yesterday");
+      expect(savedHidden()).toEqual([2, 3]);
       expect(screen.queryByText("Which day suits you?")).toBeNull();
       expect(screen.getByLabelText("Your message").props.value).toBe("");
       fetchMock.mockRestore();
@@ -277,20 +266,16 @@ describe("AssistantScreen", () => {
       fetchMock.mockRestore();
     });
 
-    it("deletes the message, the reply after it and, when nothing is left, the chat's history entry", async () => {
+    it("deletes the message and the reply after it from this phone", async () => {
       const screen = await openChat();
 
       await fireEvent.press(screen.getByLabelText("Delete message"));
 
       await waitFor(() => expect(screen.queryByText("AC not cooling")).toBeNull());
       expect(screen.queryByText("Which day suits you?")).toBeNull();
-      expect(savedChat()?.hidden).toEqual([2, 3]);
-      // With nothing of the customer's left, the chat shows the welcome again...
+      expect(savedHidden()).toEqual([2, 3]);
+      // The welcome is still at the top.
       expect(screen.getByText("How can I help you today?")).toBeTruthy();
-      // ...and it is no longer in the history.
-      expect(savedChat()?.title).toBeNull();
-      await fireEvent.press(screen.getByLabelText("Chat history"));
-      expect(await screen.findByText("No chats yet")).toBeTruthy();
     });
   });
 

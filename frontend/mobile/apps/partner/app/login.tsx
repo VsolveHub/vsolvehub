@@ -62,7 +62,12 @@ export default function LoginScreen() {
     }
   }, [params.switch, signedIn]);
 
-  const justSignedIn = flow.phase === "authenticated";
+  // The flow signs in before it finishes refreshing data and marks itself "authenticated", so a
+  // sign-in still verifying counts too. Otherwise the "Already Signed In" card flashes in between.
+  const justSignedIn = flow.phase === "authenticated" || (signedIn && flow.isVerifying);
+  // On the phone, keep the sign-in screen with the Verify button spinning until the next page
+  // opens, instead of swapping to a separate "Taking you to…" screen in between.
+  const holdOnForm = justSignedIn && Platform.OS !== "web";
 
   // Handle redirect after sign in (with brief delay if already signed in so user can switch)
   useEffect(() => {
@@ -81,7 +86,7 @@ export default function LoginScreen() {
     );
   }
 
-  if (signedIn && params.switch !== "true" && justSignedIn) {
+  if (signedIn && params.switch !== "true" && justSignedIn && !holdOnForm) {
     return (
       <View className="flex-1 items-center justify-center bg-canvas">
         <Text className="text-text-secondary">
@@ -91,7 +96,7 @@ export default function LoginScreen() {
     );
   }
 
-  if (signedIn && params.switch !== "true") {
+  if (signedIn && params.switch !== "true" && !holdOnForm) {
     return (
       <View className="flex-1 items-center justify-center bg-canvas px-4">
         <View
@@ -181,7 +186,7 @@ export default function LoginScreen() {
   if (Platform.OS !== "web") {
     return (
       <MobileLogin
-        flow={flow}
+        flow={holdOnForm ? { ...flow, phase: "code", isVerifying: true } : flow}
         footer={
           <View className="mt-3 flex-row flex-wrap items-center justify-center gap-x-1">
             <Text className="text-sm text-text-secondary">New to V Solve Hub?</Text>

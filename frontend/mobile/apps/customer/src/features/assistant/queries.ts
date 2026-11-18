@@ -49,44 +49,33 @@ export const assistantKeys = {
 };
 
 /**
- * Chat history lives on this phone only: the server finds a conversation by its
- * token and offers no "list" or "delete", so the app keeps its own list of tokens
- * with a title taken from the first message. Deleting a chat forgets its token.
+ * The one open chat, kept on this phone: its token, and the messages edited or deleted here. The
+ * server keeps every message, so those are only no longer shown. A new chat replaces the open one;
+ * there is no list of past chats.
  */
-export interface SavedChat {
-  token: string;
-  /** The first thing the customer said; null until they say something. */
-  title: string | null;
-  /**
-   * Messages edited or deleted on this phone, by sequence. The server cannot remove them and the
-   * assistant still remembers them; they are only no longer shown here.
-   */
-  hidden?: number[];
-}
-
 interface ChatState {
   token: string | null;
-  chats: SavedChat[];
+  /** Sequences of the open chat's messages hidden on this phone. */
+  hidden: number[];
   loaded: boolean;
 }
 
-const CHATS_STORAGE_KEY = "assistant.chats";
-const MAX_SAVED_CHATS = 30;
-const TITLE_LENGTH = 40;
+const HIDDEN_STORAGE_KEY = "assistant.hidden";
+/** Written by the chat-history list that was removed; cleared from phones that still have it. */
+const RETIRED_CHATS_STORAGE_KEY = "assistant.chats";
 
-async function readStoredState(): Promise<{ token: string | null; chats: SavedChat[] }> {
+async function readStoredState(): Promise<{ token: string | null; hidden: number[] }> {
   try {
+    await kvRemove(RETIRED_CHATS_STORAGE_KEY);
     const token = await kvGet(TOKEN_STORAGE_KEY);
-    const raw = await kvGet(CHATS_STORAGE_KEY);
+    const raw = token ? await kvGet(HIDDEN_STORAGE_KEY) : null;
     const parsed: unknown = raw ? JSON.parse(raw) : [];
-    const chats = Array.isArray(parsed)
-      ? (parsed as SavedChat[]).filter((chat) => typeof chat?.token === "string")
+    const hidden = Array.isArray(parsed)
+      ? parsed.filter((sequence): sequence is number => typeof sequence === "number")
       : [];
-    // A conversation from before the list existed still belongs in it.
-    if (token && !chats.some((chat) => chat.token === token)) chats.unshift({ token, title: null });
-    return { token, chats };
+    return { token, hidden };
   } catch {
-    return { token: null, chats: [] };
+    return { token: null, hidden: [] };
   }
 }
 
@@ -94,18 +83,19 @@ async function writeStoredState(state: ChatState): Promise<void> {
   try {
     if (state.token) await kvSet(TOKEN_STORAGE_KEY, state.token);
     else await kvRemove(TOKEN_STORAGE_KEY);
-    await kvSet(CHATS_STORAGE_KEY, JSON.stringify(state.chats));
+    if (state.hidden.length) await kvSet(HIDDEN_STORAGE_KEY, JSON.stringify(state.hidden));
+    else await kvRemove(HIDDEN_STORAGE_KEY);
   } catch {
-    // Storage unavailable: chats last for this app session only.
+    // Storage unavailable: the chat lasts for this app session only.
   }
 }
 
 /**
- * The open chat's token and the saved chats, read after mount. `loaded` stops the
- * screen from starting a second conversation before the first one's token has been read.
+ * The open chat, read after mount. `loaded` stops the screen from starting a second
+ * conversation before the first one's token has been read.
  */
-export function useAssistantChats() {
-  const [state, setState] = useState<ChatState>({ token: null, chats: [], loaded: false });
+export function useAssistantChat() {
+  const [state, setState] = useState<ChatState>({ token: null, hidden: [], loaded: false });
   // The latest state, so the actions below keep one identity and never act on a stale copy.
   const latest = useRef(state);
 
@@ -127,81 +117,20 @@ export function useAssistantChats() {
     };
   }, []);
 
-  /** A conversation was just created: open it and put it first in the list. */
-  const add = useCallback(
-    (token: string) =>
-      apply({
-        loaded: true,
-        token,
-        chats: [{ token, title: null }, ...latest.current.chats.filter((c) => c.token !== token)].slice(
-          0,
-          MAX_SAVED_CHATS,
-        ),
-      }),
-    [apply],
-  );
+  /** A conversation was just created: it is now the open chat. */
+  const open = useCallback((token: string) => apply({ token, hidden: [], loaded: true }), [apply]);
 
-  /** Open a saved chat. The blank page it replaces is dropped, so blank chats never pile up. */
-  const select = useCallback(
-    (token: string) =>
-      apply({
-        ...latest.current,
-        token,
-        chats: latest.current.chats.filter(
-          (c) => c.token === token || c.token !== latest.current.token || c.title,
-        ),
-      }),
-    [apply],
-  );
+  /** Leave the open chat for good; with no token, a fresh conversation starts. */
+  const reset = useCallback(() => apply({ token: null, hidden: [], loaded: true }), [apply]);
 
-  /** Leave the open chat (kept in the list); with no token, a fresh conversation starts. */
-  const openNew = useCallback(() => apply({ ...latest.current, token: null }), [apply]);
-
-  /** Forget a chat. Forgetting the open one also leaves no token, so a fresh one starts. */
-  const remove = useCallback(
-    (token: string) =>
-      apply({
-        loaded: true,
-        token: latest.current.token === token ? null : latest.current.token,
-        chats: latest.current.chats.filter((c) => c.token !== token),
-      }),
-    [apply],
-  );
-
-  /** Name a chat after its first message; later messages never rename it. */
-  const nameFromMessage = useCallback(
-    (token: string, text: string) =>
-      apply({
-        ...latest.current,
-        chats: latest.current.chats.map((c) =>
-          c.token === token && !c.title ? { ...c, title: text.trim().slice(0, TITLE_LENGTH) } : c,
-        ),
-      }),
-    [apply],
-  );
-
-  /**
-   * Stop showing these messages of a chat on this phone. When none of the customer's own words
-   * are left, the chat loses its title too, so it is a blank chat again and leaves the history.
-   */
+  /** Stop showing these messages of the open chat on this phone. */
   const hideMessages = useCallback(
-    (token: string, sequences: number[], { noneLeft }: { noneLeft: boolean }) =>
-      apply({
-        ...latest.current,
-        chats: latest.current.chats.map((c) =>
-          c.token === token
-            ? {
-                ...c,
-                title: noneLeft ? null : c.title,
-                hidden: [...new Set([...(c.hidden ?? []), ...sequences])],
-              }
-            : c,
-        ),
-      }),
+    (sequences: number[]) =>
+      apply({ ...latest.current, hidden: [...new Set([...latest.current.hidden, ...sequences])] }),
     [apply],
   );
 
-  return { ...state, add, select, openNew, remove, nameFromMessage, hideMessages };
+  return { ...state, open, reset, hideMessages };
 }
 
 export function useStartConversation(onToken: (token: string) => void) {

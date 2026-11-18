@@ -42,7 +42,7 @@ afterEach(() => {
 
 describe("ProfileMenuSheet (applicant menu)", () => {
   it.each([
-    ["Profile", "/apply/about"],
+    ["Profile", "/apply/profile"],
     ["Application status", "/apply/status"],
   ]) ("%s closes the sheet and opens %s, a route an applicant can open", async (label, route) => {
     const { getByLabelText, onClose } = await open();
