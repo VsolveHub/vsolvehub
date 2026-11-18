@@ -28,7 +28,7 @@ const STOPS = [
 ] as const;
 
 /** The top strip, in the badge's own colour, so the state reads before any word does. */
-const ACCENT: Record<Tone, string> = {
+export const STATUS_ACCENT: Record<Tone, string> = {
   neutral: "bg-line-strong",
   info: "bg-info-text",
   success: "bg-success-text",
@@ -53,7 +53,7 @@ export function ApplicationStatusTracker({ application }: { application: Applica
       aria-live="polite"
       className="overflow-hidden rounded-card border border-line bg-surface shadow-xs"
     >
-      <div aria-hidden className={cn("h-1", ACCENT[presentation.tone])} />
+      <div aria-hidden className={cn("h-1", STATUS_ACCENT[presentation.tone])} />
 
       <div className="flex flex-col gap-5 p-4 sm:p-5">
         <div className="flex flex-col gap-2">

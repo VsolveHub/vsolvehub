@@ -2,14 +2,15 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { useCurrentSession } from "@vsolve/query";
-import { Badge, ErrorState, Skeleton, buttonStyles, useT } from "@vsolve/ui";
-import { CheckCircle2, MapPin, Pencil, User } from "lucide-react";
+import { Badge, ErrorState, Skeleton, buttonStyles, cn, useT } from "@vsolve/ui";
+import { Check, CheckCircle2, MapPin, Pencil, User } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { OfferableService } from "@/features/catalog/queries";
 import { getApiClient } from "@/lib/api/browser";
 
+import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { isEditable, requiredDocumentKinds } from "../model/readiness";
 import { WEEKDAY_KEYS } from "../model/schedule";
 import {
@@ -19,9 +20,10 @@ import {
   documentStatusPresentation,
   trackLabelKey,
 } from "../model/status";
-import { applicationSteps, isListingTrack } from "../model/steps";
+import { isListingTrack } from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability } from "../queries";
 import { useApplicationReference, type ApplicationReference } from "../reference-queries";
+import { STATUS_ACCENT } from "./status-banner";
 
 type Application = Schemas["PartnerApplication"];
 type T = ReturnType<typeof useT>;
@@ -69,6 +71,7 @@ export function ProfilePreview({ services }: { services: readonly OfferableServi
   const query = usePartnerApplication();
   const reference = useApplicationReference();
   const session = useCurrentSession(getApiClient());
+  const availability = usePartnerAvailability();
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending || reference.isPending) {
@@ -111,58 +114,65 @@ export function ProfilePreview({ services }: { services: readonly OfferableServi
   const status = applicationStatusPresentation(application.status);
   const name = application.display_name.trim();
   const phone = session.data?.user?.phone_number;
-  const steps = applicationSteps(application.track).filter((step) => SECTIONS[step.href]);
+  // The same progress the overview checklist shows, so a card never disagrees with it.
+  const progress = stepProgress(application, availability.data).filter((step) => SECTIONS[step.href]);
+  const summary = progressSummary(application, availability.data);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Who, which track, and where the application is now */}
-      <section className={card}>
-        <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-navy-900 text-lg font-extrabold text-white">
-            {name ? name[0]?.toUpperCase() : <User size={22} aria-hidden />}
-          </span>
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-extrabold tracking-tight text-text">
-              {name || t("apply.profile.title")}
-            </h1>
-            <p className={muted}>{[phone, t(trackLabelKey(application.track))].filter(Boolean).join(" · ")}</p>
+      {/* Who, which track, where the application is, and how much of it is done */}
+      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-xs">
+        <div aria-hidden className={cn("h-1", STATUS_ACCENT[status.tone])} />
+        <div className="flex flex-col gap-4 p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-navy-900 text-lg font-extrabold text-white">
+              {name ? name[0]?.toUpperCase() : <User size={22} aria-hidden />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-extrabold tracking-tight text-text">
+                {name || t("apply.profile.title")}
+              </h1>
+              <p className={muted}>{[phone, t(trackLabelKey(application.track))].filter(Boolean).join(" · ")}</p>
+            </div>
+            <ProgressRing
+              done={summary.done}
+              total={summary.total}
+              label={t("apply.profile.progress", { done: summary.done, total: summary.total })}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-3.5">
+            <Badge tone={status.tone} dot>
+              {t(status.labelKey)}
+            </Badge>
+            {application.submitted_at ? (
+              <span className="text-xs text-text-muted">
+                {t("apply.statusBanner.submittedOn", { date: SUBMITTED_AT.format(new Date(application.submitted_at)) })}
+              </span>
+            ) : null}
           </div>
         </div>
-        <div className="h-px bg-line" />
-        <div className="flex items-center justify-between gap-3">
-          <span className={label}>{t("apply.account.status")}</span>
-          <Badge tone={status.tone} dot>
-            {t(status.labelKey)}
-          </Badge>
-        </div>
-        {application.submitted_at ? (
-          <p className="text-xs text-text-muted">
-            {t("apply.statusBanner.submittedOn", { date: SUBMITTED_AT.format(new Date(application.submitted_at)) })}
-          </p>
-        ) : null}
       </section>
 
-      {steps.map((step, index) => {
+      {progress.map((step, index) => {
         const Section = SECTIONS[step.href]!;
         return (
           <section key={step.href} className={card}>
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs font-bold text-text-secondary">
-                {index + 1}
-              </span>
-              <h2 className="flex-1 text-base font-extrabold text-text">{t(step.labelKey)}</h2>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <StepMark step={step} number={index + 1} t={t} />
+              <h2 className="text-base font-extrabold text-text">{t(step.labelKey)}</h2>
               {editable ? (
                 <Link
                   href={step.href}
                   aria-label={`${t("apply.review.edit")}: ${t(step.labelKey)}`}
-                  className="inline-flex min-h-9 items-center gap-1 rounded-full bg-signal-50 px-3 text-sm font-bold text-signal-700 hover:bg-signal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                  className="ml-auto inline-flex min-h-9 items-center gap-1 rounded-full bg-signal-50 px-3 text-sm font-bold text-signal-700 hover:bg-signal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 >
                   <Pencil size={13} aria-hidden />
                   {t("apply.review.edit")}
                 </Link>
               ) : null}
             </div>
-            <div className="flex flex-col gap-3.5 sm:pl-8.5">
+            <div className="flex flex-col gap-3.5 border-t border-line pt-3.5">
               <Section application={application} reference={reference} services={services} t={t} />
             </div>
           </section>
@@ -172,11 +182,71 @@ export function ProfilePreview({ services }: { services: readonly OfferableServi
   );
 }
 
+/**
+ * How much of the application is filled in: a ring that closes as steps are done, the count
+ * inside. The full sentence is its accessible name.
+ */
+function ProgressRing({ done, total, label }: { done: number; total: number; label: string }) {
+  const radius = 20;
+  const circumference = 2 * Math.PI * radius;
+  const complete = total > 0 && done >= total;
+  return (
+    <span role="img" aria-label={label} title={label} className="relative grid h-14 w-14 shrink-0 place-items-center">
+      <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden>
+        <circle cx="24" cy="24" r={radius} fill="none" strokeWidth="4" className="stroke-line" />
+        <circle
+          cx="24"
+          cy="24"
+          r={radius}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - (total > 0 ? done / total : 0))}
+          className={cn("transition-[stroke-dashoffset] duration-500", complete ? "stroke-success-text" : "stroke-action")}
+        />
+      </svg>
+      <span aria-hidden className="text-xs font-extrabold tabular-nums text-text">
+        {done}/{total}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The step's number circle doubles as its state: a tick when complete, "!" while something is
+ * missing, the number when the step is optional. The words are its accessible name and tooltip.
+ */
+function StepMark({ step, number, t }: { step: StepProgress; number: number; t: T }) {
+  const description =
+    step.state === "done"
+      ? t("common.done")
+      : step.state === "optional"
+        ? t("apply.shell.describe.optional")
+        : t("apply.shell.describe.outstanding", { count: step.outstanding });
+  return (
+    <span
+      role="img"
+      aria-label={description}
+      title={description}
+      className={cn(
+        "grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-extrabold",
+        step.state === "done" && "bg-success-text text-surface",
+        step.state === "todo" && "bg-warning-surface text-warning-text ring-1 ring-warning-line",
+        step.state !== "done" && step.state !== "todo" && "bg-surface-sunken text-text-secondary",
+      )}
+    >
+      {step.state === "done" ? <Check size={13} strokeWidth={3} aria-hidden /> : step.state === "todo" ? "!" : number}
+    </span>
+  );
+}
+
+/** Label beside value on wide screens, stacked on narrow ones. */
 function Row({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 sm:grid sm:grid-cols-[11rem_1fr] sm:gap-4">
       <span className={label}>{name}</span>
-      {children}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

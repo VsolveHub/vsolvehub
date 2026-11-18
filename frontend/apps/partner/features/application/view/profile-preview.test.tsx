@@ -90,6 +90,12 @@ describe("ProfilePreview", () => {
     expect(screen.getByText("Alappuzha", { selector: "li" })).toBeInTheDocument();
     expect(screen.getByText("09:00 – 18:00")).toBeInTheDocument();
     expect(screen.getByText("Not uploaded")).toBeInTheDocument();
+    // Progress, from the same helper as the overview checklist.
+    // The ring and the step marks show no words, so check what a screen reader hears.
+    expect(screen.getByRole("img", { name: /^\d+ of \d+ steps complete$/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Done" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("img", { name: /needed$/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Done")).toBeNull();
     expect(screen.getByText("Partner terms")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /^Edit/ })).toHaveLength(6);
   });

@@ -30,7 +30,7 @@ const BADGE_STYLES: Record<Tone, { bg: string; text: string }> = {
 };
 
 /** The card's top strip: the badge's own colour, grey while it is still a draft. */
-const ACCENT: Record<Tone, string> = {
+export const STATUS_ACCENT: Record<Tone, string> = {
   neutral: "#d3ccc0",
   info: BADGE_STYLES.info.text,
   success: BADGE_STYLES.success.text,
@@ -83,7 +83,7 @@ export function ApplicationStatusTracker({ application }: ApplicationStatusTrack
       }}
     >
       {/* A strip in the status colour, so the state reads before any word does (as on the website). */}
-      <View style={{ height: 4, backgroundColor: ACCENT[presentation.tone] }} />
+      <View style={{ height: 4, backgroundColor: STATUS_ACCENT[presentation.tone] }} />
       <View style={{ padding: 18, rowGap: 20 }}>
         {/* Status pill + headline */}
         <View style={{ rowGap: 8, alignItems: "flex-start" }}>
