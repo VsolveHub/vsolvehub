@@ -23,6 +23,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -123,6 +124,20 @@ export default function ApplyLayout() {
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
   const application = missing ? null : (query.data ?? null);
   const pathSteps = stepProgress(application, availability.data).filter((s) => s.state !== "waypoint");
+
+  // Pull down on the overview to check for a decision without restarting the app. Only there: on a
+  // form step a refetch could reset what is being typed.
+  const [refreshing, setRefreshing] = useState(false);
+  const { refetch: refetchApplication } = query;
+  const { refetch: refetchAvailability } = availability;
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchApplication(), refetchAvailability()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchApplication, refetchAvailability]);
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
   const back = isSideScreen ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
@@ -291,6 +306,11 @@ export default function ApplyLayout() {
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            isOverview ? (
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f87000" colors={["#f87000"]} />
+            ) : undefined
+          }
         >
           <Slot />
         </ScrollView>

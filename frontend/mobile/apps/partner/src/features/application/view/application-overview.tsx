@@ -10,6 +10,7 @@ import {
   Briefcase,
   Check,
   ChevronRight,
+  FileText,
   Package,
   Sparkles,
   Wrench,
@@ -432,6 +433,31 @@ function Standing({ application }: { application: Application }) {
       {/* 1. Status Tracker Card (Top Card) */}
       <ApplicationStatusTracker application={application} />
 
+      {/* While it cannot be edited (sent, in review), the one useful action is to look at it. */}
+      {editable ? null : (
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          accessibilityLabel="View your application"
+          onPress={() => router.push("/apply/profile" as never)}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            columnGap: 12,
+            minHeight: 56,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: "#e7e2da",
+            backgroundColor: pressed ? "#f4f1ec" : "#ffffff",
+            paddingHorizontal: 16,
+          })}
+        >
+          <FileText size={18} color="#00112e" strokeWidth={2} />
+          <Text style={{ flex: 1, fontSize: 15, fontWeight: "700", color: "#00112e" }}>View your application</Text>
+          <ChevronRight size={18} color="#94a3b8" />
+        </Pressable>
+      )}
+
       {/* Replaceable rejected documents notice if any */}
       {replaceable.length > 0 ? (
         <View
@@ -701,21 +727,21 @@ function History({ application }: { application: Application }) {
   if (entries.length === 0) return null;
 
   return (
-    <View style={{ marginTop: 8 }}>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "800",
-          textTransform: "uppercase",
-          letterSpacing: 0.6,
-          color: "#78716c",
-          marginBottom: 12,
-        }}
-      >
-        WHAT HAS HAPPENED
+    <View style={{ marginTop: 4, rowGap: 10 }}>
+      <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e", paddingHorizontal: 2 }}>
+        What has happened
       </Text>
 
-      <View style={{ width: "100%" }}>
+      <View
+        style={{
+          width: "100%",
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: "#e7e2da",
+          backgroundColor: "#ffffff",
+          padding: 16,
+        }}
+      >
         {entries.map((entry, index) => {
           const isLatest = index === 0;
           const isLast = index === entries.length - 1;
@@ -724,15 +750,27 @@ function History({ application }: { application: Application }) {
             <View key={entry.id} style={{ flexDirection: "row", columnGap: 12 }}>
               {/* Bullet Dot & Connecting Line */}
               <View style={{ alignItems: "center", width: 14 }}>
+                {/* The latest event gets a soft ring so it reads as "now". */}
                 <View
                   style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: isLatest ? "#f87000" : "#cbd5e1",
-                    marginTop: 4,
+                    width: 14,
+                    height: 14,
+                    borderRadius: 7,
+                    marginTop: 2,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: isLatest ? "#ffedd5" : "transparent",
                   }}
-                />
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: isLatest ? "#f87000" : "#cbd5e1",
+                    }}
+                  />
+                </View>
                 {!isLast ? (
                   <View
                     style={{

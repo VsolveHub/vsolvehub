@@ -3,7 +3,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { Text } from "@vsolve/mobile-ui";
-import { Check } from "lucide-react-native";
+import { Check, Clock } from "lucide-react-native";
 import { View } from "react-native";
 
 import { applicationStatusPresentation, trackerStage, type Tone } from "../model/status";
@@ -29,6 +29,12 @@ const BADGE_STYLES: Record<Tone, { bg: string; text: string }> = {
   danger: { bg: "#fee2e2", text: "#b91c1c" },
 };
 
+const SUBMITTED_AT = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Kolkata",
+});
+
 export function ApplicationStatusTracker({ application }: ApplicationStatusTrackerProps) {
   const presentation = applicationStatusPresentation(application.status);
   const stage = trackerStage(application.status);
@@ -43,157 +49,142 @@ export function ApplicationStatusTracker({ application }: ApplicationStatusTrack
         borderWidth: 1,
         borderColor: "#e7e2da",
         backgroundColor: "#ffffff",
-        padding: 18,
-        rowGap: 16,
+        overflow: "hidden",
       }}
     >
-      {/* Top: Status Badge + Headline */}
-      <View style={{ rowGap: 6, alignItems: "flex-start" }}>
-        <View
-          style={{
-            backgroundColor: badgeStyle.bg,
-            borderRadius: 9999,
-            paddingHorizontal: 12,
-            paddingVertical: 3.5,
-          }}
-        >
-          <Text
+      <View style={{ padding: 18, rowGap: 18 }}>
+        {/* Status pill + headline */}
+        <View style={{ rowGap: 8, alignItems: "flex-start" }}>
+          <View
             style={{
-              fontSize: 12,
-              fontWeight: "600",
-              color: badgeStyle.text,
+              flexDirection: "row",
+              alignItems: "center",
+              columnGap: 6,
+              backgroundColor: badgeStyle.bg,
+              borderRadius: 9999,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
             }}
           >
-            {presentation.label}
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: badgeStyle.text }} />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: badgeStyle.text }}>{presentation.label}</Text>
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: "#00112e", letterSpacing: -0.4, lineHeight: 28 }}>
+            {presentation.headline}
           </Text>
         </View>
 
-        <Text
-          style={{
-            fontSize: 23,
-            fontWeight: "800",
-            color: "#00112e",
-            letterSpacing: -0.4,
-            lineHeight: 28,
-          }}
-        >
-          {presentation.headline}
-        </Text>
-      </View>
-
-      {/* 4-Stop Horizontal Stepper matching the web tracker */}
-      <View
-        accessibilityLabel="Application progress"
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          paddingVertical: 2,
-        }}
-      >
-        {STOPS.map((stop, index) => {
-          const isDone = index < stage;
-          const isCurrent = index === stage;
-
-          return (
-            <View
-              key={stop.label}
-              style={{
-                alignItems: "center",
-                flex: 1,
-              }}
-            >
-              {/* Step Circle Indicator */}
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: isDone
-                    ? "#15803d"
-                    : isCurrent
-                      ? "#f87000"
-                      : "transparent",
-                  borderWidth: isDone || isCurrent ? 0 : 1.5,
-                  borderColor: isDone || isCurrent ? "transparent" : "#cbd5e1",
-                }}
-              >
-                {isDone ? (
-                  <Check size={14} color="#ffffff" strokeWidth={3} />
-                ) : (
-                  <Text
+        {/* 4-stop stepper, joined by a line that fills as the application moves on */}
+        <View accessibilityLabel="Application progress" style={{ flexDirection: "row" }}>
+          {STOPS.map((stop, index) => {
+            const isDone = index < stage;
+            const isCurrent = index === stage;
+            return (
+              <View key={stop.label} style={{ flex: 1, alignItems: "center" }}>
+                <View style={{ width: "100%", height: 24, alignItems: "center", justifyContent: "center" }}>
+                  {index > 0 ? (
+                    <View
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: "50%",
+                        height: 2,
+                        backgroundColor: index <= stage ? "#15803d" : "#e7e2da",
+                      }}
+                    />
+                  ) : null}
+                  {index < STOPS.length - 1 ? (
+                    <View
+                      style={{
+                        position: "absolute",
+                        left: "50%",
+                        right: 0,
+                        height: 2,
+                        backgroundColor: index < stage ? "#15803d" : "#e7e2da",
+                      }}
+                    />
+                  ) : null}
+                  <View
                     style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: isCurrent ? "#ffffff" : "#64748b",
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: isDone ? "#15803d" : isCurrent ? "#f87000" : "#ffffff",
+                      borderWidth: isDone || isCurrent ? 0 : 1.5,
+                      borderColor: "#d3ccc0",
                     }}
                   >
-                    {index + 1}
-                  </Text>
-                )}
+                    {isDone ? (
+                      <Check size={13} color="#ffffff" strokeWidth={3} />
+                    ) : (
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: isCurrent ? "#ffffff" : "#756c5e" }}>
+                        {index + 1}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <Text
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    fontWeight: isCurrent ? "700" : "500",
+                    color: isCurrent ? "#00112e" : "#756c5e",
+                    textAlign: "center",
+                  }}
+                >
+                  {stop.label}
+                </Text>
               </View>
+            );
+          })}
+        </View>
 
-              {/* Step Label */}
-              <Text
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  fontWeight: isCurrent ? "700" : "500",
-                  color: isCurrent ? "#00112e" : "#64748b",
-                  textAlign: "center",
-                }}
-              >
-                {stop.label}
-              </Text>
-            </View>
-          );
-        })}
+        {/* Reviewer note for CHANGES_REQUIRED */}
+        {application.status === "CHANGES_REQUIRED" ? (
+          <View
+            style={{
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#fde68a",
+              backgroundColor: "#fffbeb",
+              padding: 12,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: "#92400e", lineHeight: 18 }}>
+              {application.change_request_message ||
+                "A reviewer asked for changes. Review your application details below."}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* Reviewer Note for CHANGES_REQUIRED */}
-      {application.status === "CHANGES_REQUIRED" ? (
-        <View
-          style={{
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: "#fde68a",
-            backgroundColor: "#fffbeb",
-            padding: 12,
-          }}
-        >
-          <Text style={{ fontSize: 13, color: "#92400e", lineHeight: 18 }}>
-            {application.change_request_message ||
-              "A reviewer asked for changes. Review your application details below."}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Subtitle / Next Instructions */}
-      <Text
+      {/* Footer strip: what happens next, and when it was sent */}
+      <View
         style={{
-          fontSize: 14,
-          color: "#453f37",
-          lineHeight: 20,
+          flexDirection: "row",
+          columnGap: 10,
+          borderTopWidth: 1,
+          borderTopColor: "#efebe5",
+          backgroundColor: "#faf8f5",
+          paddingHorizontal: 18,
+          paddingVertical: 14,
         }}
       >
-        {presentation.next}
-      </Text>
-
-      {/* Submission Timestamp for Waiting States */}
-      {isWaiting && application.submitted_at ? (
-        <Text style={{ fontSize: 12, color: "#94a3b8" }}>
-          Submitted on{" "}
-          <Text style={{ fontWeight: "700", color: "#475569" }}>
-            {new Intl.DateTimeFormat("en-IN", {
-              dateStyle: "medium",
-              timeStyle: "short",
-              timeZone: "Asia/Kolkata",
-            }).format(new Date(application.submitted_at))}
-          </Text>
-        </Text>
-      ) : null}
+        <Clock size={16} color="#756c5e" strokeWidth={2} style={{ marginTop: 2 }} />
+        <View style={{ flex: 1, rowGap: 4 }}>
+          <Text style={{ fontSize: 14, color: "#453f37", lineHeight: 20 }}>{presentation.next}</Text>
+          {isWaiting && application.submitted_at ? (
+            <Text style={{ fontSize: 12, color: "#756c5e" }}>
+              Submitted on{" "}
+              <Text style={{ fontWeight: "700", color: "#453f37" }}>
+                {SUBMITTED_AT.format(new Date(application.submitted_at))}
+              </Text>
+            </Text>
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 }
