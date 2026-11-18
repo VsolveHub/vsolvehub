@@ -115,6 +115,12 @@ export function LoginScreen() {
     },
   };
 
+  // Just signed in on this screen: keep the form, with "Verify" still working, until the redirect
+  // lands, instead of swapping to a separate "Taking you to your account…" page in between.
+  // Same as the phone app. A visit while already signed in still gets the wait screen.
+  const holdOnForm = flow.phase === "authenticated";
+  const formFlow = holdOnForm ? { ...flowWithAudio, phase: "code" as const, isVerifying: true } : flowWithAudio;
+
   const next = safeNextPath(searchParams.get("next"));
 
   // A 404 is an answer — "you have never applied" — not a failure to wait on.
@@ -134,7 +140,7 @@ export function LoginScreen() {
     router.replace(homeForApplication(application.data?.status ?? null));
   }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
 
-  if (!hydrated || guard.status === "checking") {
+  if (!holdOnForm && (!hydrated || guard.status === "checking")) {
     return (
       <LoginShell>
         <LoginWait message={t("common.checkingSession")} />
@@ -157,7 +163,7 @@ export function LoginScreen() {
     );
   }
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !holdOnForm) {
     return (
       <LoginShell>
         <LoginWait message={t("common.takingYouToYourAccount")} />
@@ -259,8 +265,8 @@ export function LoginScreen() {
               width={1206}
               height={1305}
               priority
-              sizes="400px"
-              className="pointer-events-none absolute bottom-0 right-2 h-[25rem] w-auto object-contain object-bottom xl:right-4"
+              sizes="360px"
+              className="pointer-events-none absolute bottom-0 right-2 h-[22rem] w-auto object-contain object-bottom xl:right-4"
             />
           </section>
 
@@ -281,7 +287,7 @@ export function LoginScreen() {
                     {t("auth.login.welcomeBack")}
                   </h2>
                   <p className="mt-1.5 text-sm text-slate-300 leading-relaxed">
-                    {flow.phase === "code"
+                    {formFlow.phase === "code"
                       ? t("auth.login.hero.code")
                       : t("auth.login.hero.phone")}
                   </p>
@@ -291,8 +297,8 @@ export function LoginScreen() {
               {/* Form Body */}
               <div className="flex-1 p-6 sm:p-7">
                 <OtpForm
-                  {...flowWithAudio}
-                  heading={flow.phase === "code" ? t("auth.login.heading.code") : t("auth.login.heading.phone")}
+                  {...formFlow}
+                  heading={formFlow.phase === "code" ? t("auth.login.heading.code") : t("auth.login.heading.phone")}
                   headingLevel={2}
                   phoneDigits={10}
                   verifyLabel={t("auth.login.verifyLabel")}
