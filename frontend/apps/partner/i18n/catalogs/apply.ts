@@ -328,6 +328,7 @@ const en: Catalog = {
   "apply.account.status": "Application status",
   // Profile preview (features/application/view/profile-preview.tsx)
   "apply.profile.title": "Your profile",
+  "apply.overview.viewApplication": "View your application",
   "apply.profile.trades": "Trades",
   "apply.profile.acceptedOn": "Accepted on {date}",
   "apply.profile.notAccepted": "Not accepted yet",
@@ -673,6 +674,7 @@ const te: Catalog = {
   "apply.account.status": "అప్లికేషన్ స్టేటస్",
   // Profile preview (features/application/view/profile-preview.tsx)
   "apply.profile.title": "మీ ప్రొఫైల్",
+  "apply.overview.viewApplication": "మీ అప్లికేషన్ చూడండి",
   "apply.profile.trades": "ట్రేడ్‌లు",
   "apply.profile.acceptedOn": "{date} న ఆమోదించారు",
   "apply.profile.notAccepted": "ఇంకా ఆమోదించలేదు",
@@ -1016,6 +1018,7 @@ const hi: Catalog = {
   "apply.account.status": "आवेदन की स्थिति",
   // Profile preview (features/application/view/profile-preview.tsx)
   "apply.profile.title": "आपकी प्रोफ़ाइल",
+  "apply.overview.viewApplication": "अपना आवेदन देखें",
   "apply.profile.trades": "ट्रेड",
   "apply.profile.acceptedOn": "{date} को स्वीकार किया",
   "apply.profile.notAccepted": "अभी स्वीकार नहीं किया",
