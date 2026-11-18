@@ -29,6 +29,28 @@ const BADGE_STYLES: Record<Tone, { bg: string; text: string }> = {
   danger: { bg: "#fee2e2", text: "#b91c1c" },
 };
 
+/** The coloured status pill ("● Sent"), shared by the status card and the profile page. */
+export function StatusPill({ tone, label }: { tone: Tone; label: string }) {
+  const colors = BADGE_STYLES[tone] ?? BADGE_STYLES.neutral;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        alignSelf: "flex-start",
+        columnGap: 6,
+        backgroundColor: colors.bg,
+        borderRadius: 9999,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+      }}
+    >
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.text }} />
+      <Text style={{ fontSize: 12, fontWeight: "700", color: colors.text }}>{label}</Text>
+    </View>
+  );
+}
+
 const SUBMITTED_AT = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -39,7 +61,6 @@ export function ApplicationStatusTracker({ application }: ApplicationStatusTrack
   const presentation = applicationStatusPresentation(application.status);
   const stage = trackerStage(application.status);
   const isWaiting = application.status === "SUBMITTED" || application.status === "UNDER_REVIEW";
-  const badgeStyle = BADGE_STYLES[presentation.tone] ?? BADGE_STYLES.neutral;
 
   return (
     <View
@@ -55,20 +76,7 @@ export function ApplicationStatusTracker({ application }: ApplicationStatusTrack
       <View style={{ padding: 18, rowGap: 18 }}>
         {/* Status pill + headline */}
         <View style={{ rowGap: 8, alignItems: "flex-start" }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              columnGap: 6,
-              backgroundColor: badgeStyle.bg,
-              borderRadius: 9999,
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-            }}
-          >
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: badgeStyle.text }} />
-            <Text style={{ fontSize: 12, fontWeight: "700", color: badgeStyle.text }}>{presentation.label}</Text>
-          </View>
+          <StatusPill tone={presentation.tone} label={presentation.label} />
           <Text style={{ fontSize: 22, fontWeight: "800", color: "#00112e", letterSpacing: -0.4, lineHeight: 28 }}>
             {presentation.headline}
           </Text>

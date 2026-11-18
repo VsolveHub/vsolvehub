@@ -81,15 +81,18 @@ describe("ProfilePreview", () => {
     mockQueries({ isPending: false, isError: false, data: application, error: null });
     const view = await render(<ProfilePreview />);
 
-    for (const title of ["1. About you", "2. Your work", "3. Where you work", "4. Your hours", "5. Documents", "6. Agree & send"]) {
-      expect(view.getByText(title)).toBeTruthy();
+    for (const title of ["About you", "Your work", "Where you work", "Your hours", "Documents", "Agree & send"]) {
+      expect(view.getByLabelText(`Edit ${title}`)).toBeTruthy();
     }
-    expect(view.getByText("Ravi Kumar")).toBeTruthy();
-    expect(view.getByText("+919900000099")).toBeTruthy();
+    expect(view.getByText("Draft")).toBeTruthy();
+    expect(view.getAllByText("Ravi Kumar").length).toBeGreaterThan(0);
+    expect(view.getByText("+919900000099 · Home services")).toBeTruthy();
     expect(view.getByText("Electrical")).toBeTruthy();
-    expect(view.getByText("• Fan repair · Ceiling fan")).toBeTruthy();
+    expect(view.getByText("Fan repair · Ceiling fan")).toBeTruthy();
+    expect(view.getByText("Not uploaded")).toBeTruthy();
     expect(view.getAllByText("Alappuzha").length).toBeGreaterThan(0);
-    expect(view.getByText("Monday: 09:00 – 18:00")).toBeTruthy();
+    expect(view.getByText("Monday")).toBeTruthy();
+    expect(view.getByText("09:00 – 18:00")).toBeTruthy();
     expect(view.getByText("Partner terms")).toBeTruthy();
     expect(view.getAllByText("Edit")).toHaveLength(6);
   });
@@ -97,6 +100,7 @@ describe("ProfilePreview", () => {
   it("hides edit links once the application is sent", async () => {
     mockQueries({ isPending: false, isError: false, data: { ...application, status: "SUBMITTED", can_edit: false }, error: null });
     const view = await render(<ProfilePreview />);
+    expect(view.getByText("Sent")).toBeTruthy();
     expect(view.queryByText("Edit")).toBeNull();
   });
 });
