@@ -2,9 +2,9 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { Badge, cn, useT } from "@vsolve/ui";
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 
-import { applicationStatusPresentation, trackerStage } from "../model/status";
+import { applicationStatusPresentation, trackerStage, type Tone } from "../model/status";
 
 /**
  * Where the application is, on one card: the status, a four-stop tracker, and what happens next.
@@ -12,6 +12,10 @@ import { applicationStatusPresentation, trackerStage } from "../model/status";
  * Replaces a status banner, a progress hero, a "submitted" hero and a desktop guide box that each
  * restated the same status in their own words. The reviewer's message appears here and only
  * here, verbatim — a generic "something needs attention" sends people to fix the wrong thing.
+ *
+ * Same layout as the phone app's card (`frontend/mobile/apps/partner/.../status-banner.tsx`):
+ * a strip in the status colour along the top, the stops joined by a line that fills as the
+ * application moves on, and what happens next in a quiet footer.
  */
 
 type Application = Schemas["PartnerApplication"];
@@ -23,6 +27,21 @@ const STOPS = [
   "apply.tracker.decision",
 ] as const;
 
+/** The top strip, in the badge's own colour, so the state reads before any word does. */
+const ACCENT: Record<Tone, string> = {
+  neutral: "bg-line-strong",
+  info: "bg-info-text",
+  success: "bg-success-text",
+  warning: "bg-warning-text",
+  danger: "bg-danger-text",
+};
+
+const SUBMITTED_AT = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Kolkata",
+});
+
 export function ApplicationStatusTracker({ application }: { application: Application }) {
   const t = useT();
   const presentation = applicationStatusPresentation(application.status);
@@ -32,65 +51,88 @@ export function ApplicationStatusTracker({ application }: { application: Applica
   return (
     <section
       aria-live="polite"
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-3.5 shadow-xs sm:p-5"
+      className="overflow-hidden rounded-card border border-line bg-surface shadow-xs"
     >
-      <div className="flex flex-col gap-1.5">
-        <Badge tone={presentation.tone} className="self-start">
-          {t(presentation.labelKey)}
-        </Badge>
-        <h1 className="text-xl font-extrabold tracking-tight text-text">{t(presentation.headlineKey)}</h1>
+      <div aria-hidden className={cn("h-1", ACCENT[presentation.tone])} />
+
+      <div className="flex flex-col gap-5 p-4 sm:p-5">
+        <div className="flex flex-col gap-2">
+          <Badge tone={presentation.tone} dot className="self-start">
+            {t(presentation.labelKey)}
+          </Badge>
+          <h1 className="text-xl font-extrabold tracking-tight text-text sm:text-2xl">
+            {t(presentation.headlineKey)}
+          </h1>
+        </div>
+
+        <ol className="grid list-none grid-cols-4 p-0" aria-label={t("apply.tracker.label")}>
+          {STOPS.map((key, index) => {
+            const isDone = index < stage;
+            const isCurrent = index === stage;
+            return (
+              <li key={key} className="flex min-w-0 flex-col items-center gap-2 text-center">
+                <span className="relative flex h-6 w-full items-center justify-center">
+                  {index > 0 ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "absolute left-0 right-1/2 h-0.5",
+                        index <= stage ? "bg-success-text" : "bg-line",
+                      )}
+                    />
+                  ) : null}
+                  {index < STOPS.length - 1 ? (
+                    <span
+                      aria-hidden
+                      className={cn("absolute left-1/2 right-0 h-0.5", index < stage ? "bg-success-text" : "bg-line")}
+                    />
+                  ) : null}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "relative grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold",
+                      isDone && "bg-success-text text-surface",
+                      isCurrent && "bg-action text-action-text",
+                      !isDone && !isCurrent && "border-2 border-line-strong bg-surface text-text-muted",
+                    )}
+                  >
+                    {isDone ? <Check size={13} strokeWidth={3} /> : index + 1}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "break-words text-[11px] leading-tight sm:text-xs",
+                    isCurrent ? "font-bold text-text" : "text-text-secondary",
+                  )}
+                  aria-current={isCurrent ? "step" : undefined}
+                >
+                  {t(key)}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        {application.status === "CHANGES_REQUIRED" ? (
+          <p className="rounded-control border border-warning-line bg-warning-surface p-3 text-sm text-text">
+            {application.change_request_message || t("apply.statusBanner.changesRequired.fallbackDetail")}
+          </p>
+        ) : null}
       </div>
 
-      <ol className="grid list-none grid-cols-4 gap-1 p-0" aria-label={t("apply.tracker.label")}>
-        {STOPS.map((key, index) => {
-          const isDone = index < stage;
-          const isCurrent = index === stage;
-          return (
-            <li key={key} className="flex flex-col items-center gap-1.5 text-center min-w-0">
-              <span
-                aria-hidden
-                className={cn(
-                  "grid h-6 w-6 sm:h-7 sm:w-7 place-items-center rounded-full border-2 text-[10px] sm:text-xs font-bold shrink-0",
-                  isDone && "border-success-text bg-success-text text-surface",
-                  isCurrent && "border-action bg-action text-action-text",
-                  !isDone && !isCurrent && "border-line-strong text-text-muted",
-                )}
-              >
-                {isDone ? <Check size={13} strokeWidth={3} /> : index + 1}
-              </span>
-              <span
-                className={cn(
-                  "text-[10px] sm:text-xs break-words leading-tight",
-                  isCurrent ? "font-bold text-text" : "text-text-secondary",
-                )}
-                aria-current={isCurrent ? "step" : undefined}
-              >
-                {t(key)}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-
-      {application.status === "CHANGES_REQUIRED" ? (
-        <p className="rounded-control border border-warning-line bg-warning-surface p-3 text-sm text-text">
-          {application.change_request_message || t("apply.statusBanner.changesRequired.fallbackDetail")}
-        </p>
-      ) : null}
-
-      <p className="text-sm text-text-secondary">{t(presentation.nextKey)}</p>
-
-      {isWaiting && application.submitted_at ? (
-        <p className="text-xs text-text-muted">
-          {t("apply.statusBanner.submittedOn", {
-            date: new Intl.DateTimeFormat("en-IN", {
-              dateStyle: "medium",
-              timeStyle: "short",
-              timeZone: "Asia/Kolkata",
-            }).format(new Date(application.submitted_at)),
-          })}
-        </p>
-      ) : null}
+      <div className="flex gap-2.5 border-t border-line bg-surface-sunken/60 px-4 py-3.5 sm:px-5">
+        <Clock size={16} aria-hidden className="mt-0.5 shrink-0 text-text-muted" />
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="text-sm text-text-secondary">{t(presentation.nextKey)}</p>
+          {isWaiting && application.submitted_at ? (
+            <p className="text-xs text-text-muted">
+              {t("apply.statusBanner.submittedOn", {
+                date: SUBMITTED_AT.format(new Date(application.submitted_at)),
+              })}
+            </p>
+          ) : null}
+        </div>
+      </div>
     </section>
   );
 }

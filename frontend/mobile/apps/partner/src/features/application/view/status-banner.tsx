@@ -29,6 +29,15 @@ const BADGE_STYLES: Record<Tone, { bg: string; text: string }> = {
   danger: { bg: "#fee2e2", text: "#b91c1c" },
 };
 
+/** The card's top strip: the badge's own colour, grey while it is still a draft. */
+const ACCENT: Record<Tone, string> = {
+  neutral: "#d3ccc0",
+  info: BADGE_STYLES.info.text,
+  success: BADGE_STYLES.success.text,
+  warning: BADGE_STYLES.warning.text,
+  danger: BADGE_STYLES.danger.text,
+};
+
 /** The coloured status pill ("● Sent"), shared by the status card and the profile page. */
 export function StatusPill({ tone, label }: { tone: Tone; label: string }) {
   const colors = BADGE_STYLES[tone] ?? BADGE_STYLES.neutral;
@@ -73,7 +82,9 @@ export function ApplicationStatusTracker({ application }: ApplicationStatusTrack
         overflow: "hidden",
       }}
     >
-      <View style={{ padding: 18, rowGap: 18 }}>
+      {/* A strip in the status colour, so the state reads before any word does (as on the website). */}
+      <View style={{ height: 4, backgroundColor: ACCENT[presentation.tone] }} />
+      <View style={{ padding: 18, rowGap: 20 }}>
         {/* Status pill + headline */}
         <View style={{ rowGap: 8, alignItems: "flex-start" }}>
           <StatusPill tone={presentation.tone} label={presentation.label} />
