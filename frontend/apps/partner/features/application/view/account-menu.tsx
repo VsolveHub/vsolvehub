@@ -143,7 +143,8 @@ export function AccountButton({
                     type="button"
                     onClick={() => {
                       setOpen(false);
-                      router.push("/me/profile");
+                      // `/me/profile` needs an approved Partner; an applicant gets the preview.
+                      router.push("/apply/profile");
                     }}
                     className="flex w-full items-center justify-between py-3.5 px-1 text-left transition-colors hover:bg-slate-50 active:bg-slate-100 rounded-lg cursor-pointer"
                   >
