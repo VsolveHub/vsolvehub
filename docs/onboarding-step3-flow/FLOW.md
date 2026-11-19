@@ -1,379 +1,338 @@
-# Partner onboarding Step 3 "Where you work": updated flow (proposal)
+# Partner onboarding Step 3 "Where you work": simple flow
 
-> **Status:** design proposal only. Nothing here is built. The clickable mock is
-> [`index.html`](./index.html) (open it by double-clicking; it uses mock data only).
+> **Status:** design agreed on 2026-11-19. Nothing is built yet.
 >
-> Paths below are relative to the repo root (`vsolvehub/`). Links go up two folders from this doc.
-> Sections marked **TODAY** describe the code as read on 2026-11-19. Sections marked
-> **PROPOSED** are the design.
+> This replaces the first proposal in commit `e4b78ad2` (GPS lookup, waitlists, activation, four new
+> tables). The owner judged that proposal too heavy for this step.
+>
+> - **Partner side:** the simple flow in section 1.
+> - **Operations console:** the admin slides in [`index.html`](./index.html), with the changes
+>   listed in section 3.
+>
+> The **partner** slides in `index.html` still show the first proposal (GPS, waitlist, Activate).
+> They are out of date until they are redrawn.
+>
+> Paths are relative to the repo root (`vsolvehub/`); links go up two folders from this doc.
 
 ## Design principles
 
-1. No limit on how many areas a partner can select.
-2. A partner is never blocked or lost because their area is not in the system.
-3. "Use my current location" only **suggests and pre-selects an existing area**. It never
-   creates one. Typing a PIN or searching a place works just as well.
-4. Location is optional and asked for only after consent. We keep only the PIN (or a location
-   rounded to about 1 km), never exact coordinates (DPDP).
-5. Dispatch keeps using the area as a strict filter for jobs. Nothing pending or requested ever
-   reaches dispatch.
-6. Admin can see partner counts per area and per PIN, and act on low-supply areas.
-7. Web and phone behave the same. New rules live in `@vsolve/query`, as already agreed for
-   onboarding.
+1. Step 3 stays **one screen** with **one extra input**: "My area is not listed".
+2. A partner is never blocked or lost because their area is not set up yet.
+3. No GPS and no maps calls. The partner types a PIN. Place names come from our own PIN table.
+4. No new statuses for partners or for requests. The state of an asked PIN is **worked out live**
+   from the areas and PINs at that moment.
+5. Dispatch does not change. A partner only gets jobs in areas they actively hold.
+6. Web and phone behave the same. Shared rules live in `@vsolve/query`. All text comes from the
+   en / te / hi catalogs.
+7. The Operations console follows the admin slides in `index.html`.
 
 ---
 
 ## 0. TODAY: what the code does now
 
+These are unchanged from the first proposal and were checked again on 2026-11-19. T22–T25 are new.
+
 ### Partner (web and phone)
 
 | # | Behaviour | Source |
 |---|---|---|
-| T1 | Area list comes from `GET /api/v1/service-areas/`, which returns every area where `is_active = true` and `is_accepting_partners = true`. Not paged, not grouped. | [partners/urls.py:47](../../backend/apps/partners/urls.py#L47), [views/partner_application.py:80-91](../../backend/apps/partners/views/partner_application.py#L80-L91), [selectors.py:50-54](../../backend/apps/partners/selectors.py#L50-L54) |
-| T2 | "Continue" is disabled until at least one area is ticked. | [areas-step.tsx:13](../../frontend/apps/partner/features/application/view/areas-step.tsx#L13) |
+| T1 | The area list comes from `GET /api/v1/service-areas/`: every area where `is_active` and `is_accepting_partners` are true. Not paged and not grouped. | [partners/urls.py:47](../../backend/apps/partners/urls.py#L47), [selectors.py:50-54](../../backend/apps/partners/selectors.py#L50-L54) |
+| T2 | "Continue" stays disabled until at least one area is ticked. | [areas-step.tsx:13](../../frontend/apps/partner/features/application/view/areas-step.tsx#L13) |
 | T3 | **Dead end:** if no areas come back, the screen shows a static message and there is no way forward. | [areas-step.tsx:35-44](../../frontend/apps/partner/features/application/view/areas-step.tsx#L35-L44) |
-| T4 | Areas are checkboxes, with "Select all" when there are 2 or more. **No limit on the number.** | [areas-step.tsx:58-73](../../frontend/apps/partner/features/application/view/areas-step.tsx#L58-L73), [:75](../../frontend/apps/partner/features/application/view/areas-step.tsx#L75) |
+| T4 | Areas are checkboxes, with "Select all" when there are 2 or more. No limit on how many. | [areas-step.tsx:58-73](../../frontend/apps/partner/features/application/view/areas-step.tsx#L58-L73) |
 | T5 | **Silent help text:** "Can't find your area? … Ask us from Help". Nothing is recorded. | [areas-step.tsx:94](../../frontend/apps/partner/features/application/view/areas-step.tsx#L94) |
-| T6 | The phone screen is a port of the web screen but has **hard-coded English text**, even though translation catalogs exist. | [mobile areas-step.tsx](../../frontend/mobile/apps/partner/src/features/application/view/areas-step.tsx), [mobile i18n apply.ts:194](../../frontend/mobile/apps/partner/src/i18n/catalogs/apply.ts#L194) |
-| T7 | There is no location or PIN lookup in Step 3. The customer app already has device location ([locate-device.ts](../../frontend/apps/customer/features/addresses/locate-device.ts)). Reverse geocoding and place search exist at `/geocoding/reverse/` and `/geocoding/search/`, throttled at 30/min. | [locations/urls.py:16-17](../../backend/apps/locations/urls.py#L16-L17), [geocoding.py:21-32](../../backend/apps/locations/geocoding.py#L21-L32), [geocoding.py:201-210](../../backend/apps/locations/geocoding.py#L201-L210), [settings/base.py:249](../../backend/config/settings/base.py#L249) |
-| T8 | Saving checks that every area is active and accepting partners. If not, the **whole save** fails with "One or more selected service areas are unavailable." | [services/application.py:225-246](../../backend/apps/partners/services/application.py#L225-L246) |
-| T9 | Saving checks that every chosen service is enabled in at least one chosen area. | [services/application.py:104-145](../../backend/apps/partners/services/application.py#L104-L145) |
-| T10 | Saving activates the ticked links and deactivates unticked ones. **Hours for an unticked area are not touched.** | [services/application.py:86-100](../../backend/apps/partners/services/application.py#L86-L100) |
-| T11 | Step 4 hours are stored **per area**. Presets fill every area. A hand-added shift defaults to the **first** area. | [schedule-step.tsx:60-68](../../frontend/apps/partner/features/application/view/schedule-step.tsx#L60-L68), [availability-editor.tsx:102](../../frontend/apps/partner/features/application/view/availability-editor.tsx#L102), [availability-editor.tsx:160-180](../../frontend/apps/partner/features/application/view/availability-editor.tsx#L160-L180) |
-| T12 | Submit requires at least one active area, and hours for **every** area. | [services/application.py:110-123](../../backend/apps/partners/services/application.py#L110-L123), [:419-426](../../backend/apps/partners/services/application.py#L419-L426), [readiness.ts:129-135](../../frontend/apps/partner/features/application/model/readiness.ts#L129-L135) |
-| T13 | After approval, areas cannot be changed. Editing is allowed only in DRAFT or CHANGES_REQUIRED. | [models/onboarding.py:186-188](../../backend/apps/partners/models/onboarding.py#L186-L188), [services/application.py:182](../../backend/apps/partners/services/application.py#L182) |
+| T6 | The phone screen has **hard-coded English** even though translation catalogs exist. | [mobile areas-step.tsx](../../frontend/mobile/apps/partner/src/features/application/view/areas-step.tsx) |
+| T7 | Step 3 has no PIN lookup. | — |
+| T8 | When saving, if any ticked area is no longer open, the **whole save** fails with "One or more selected service areas are unavailable." | [services/application.py:225-246](../../backend/apps/partners/services/application.py#L225-L246) |
+| T9 | Saving checks that every chosen service is offered in at least one chosen area. | [services/application.py:104-145](../../backend/apps/partners/services/application.py#L104-L145) |
+| T10 | Saving activates the ticked links and deactivates the unticked ones. | [services/application.py:86-100](../../backend/apps/partners/services/application.py#L86-L100) |
+| T11 | Step 4 hours are stored **per area**. Presets fill every area; a shift added by hand goes to the **first** area. | [availability-editor.tsx:102](../../frontend/apps/partner/features/application/view/availability-editor.tsx#L102), [:160-180](../../frontend/apps/partner/features/application/view/availability-editor.tsx#L160-L180) |
+| T12 | Submitting needs hours for **every** chosen area. | [services/application.py:419-426](../../backend/apps/partners/services/application.py#L419-L426), [readiness.ts:129-135](../../frontend/apps/partner/features/application/model/readiness.ts#L129-L135) |
+| T13 | After approval, the partner cannot change areas. Editing is allowed only in DRAFT or CHANGES_REQUIRED. | [models/onboarding.py:186-188](../../backend/apps/partners/models/onboarding.py#L186-L188) |
+| T22 | **Submitting needs at least one active area link**, checked in two places. | [services/base.py:131-150](../../backend/apps/partners/services/base.py#L131-L150), [services/application.py:110-123](../../backend/apps/partners/services/application.py#L110-L123) |
 
-### Admin
+### Operations
 
 | # | Behaviour | Source |
 |---|---|---|
-| T14 | **No areas screen in the admin console.** Areas, PINs and services are managed only through basic Django admin registration. | [locations/admin.py](../../backend/apps/locations/admin.py) |
-| T15 | **The review screen shows only a count**: "Coverage Areas: N service areas". | [review-detail.tsx:437-444](../../frontend/apps/admin/features/partner-review/view/review-detail.tsx#L437-L444) |
-| T16 | The directory shows an area count. The partner record shows area names. | [partner-directory.tsx:197](../../frontend/apps/admin/features/partners/view/partner-directory.tsx#L197), [partner-record.tsx:159-160](../../frontend/apps/admin/features/partners/view/partner-record.tsx#L159-L160) |
-| T17 | Approval is refused if any active area has no hours. | [partners/services/review.py:257-279](../../backend/apps/partners/services/review.py#L257-L279) |
-| T18 | An area can be paused with the kill switch. That blocks new bookings and offers, but **not onboarding**. | [locations/pauses.py](../../backend/apps/locations/pauses.py), [selectors.py:50-54](../../backend/apps/partners/selectors.py#L50-L54) |
-| T19 | **One PIN can be in two areas.** Uniqueness is only per (area, PIN) pair. The customer check then picks the area that comes first alphabetically. | [locations/models.py:86-92](../../backend/apps/locations/models.py#L86-L92), [locations/services.py:99-142](../../backend/apps/locations/services.py#L99-L142) |
-| T20 | **Customers turned away as outside the service area are not recorded.** | [locations/services.py:113](../../backend/apps/locations/services.py#L113) |
+| T14 | No areas screen in the console. Areas, PINs and services are managed only in Django admin. | [locations/admin.py](../../backend/apps/locations/admin.py) |
+| T15 | The review screen shows only a count: "Coverage Areas: N service areas". | [review-detail.tsx:437-444](../../frontend/apps/admin/features/partner-review/view/review-detail.tsx#L437-L444) |
+| T17 | Approval is refused if any active area has no hours. | [services/review.py:257-279](../../backend/apps/partners/services/review.py#L257-L279) |
+| T18 | Pausing an area (kill switch) blocks bookings and offers, but not onboarding. | [locations/pauses.py](../../backend/apps/locations/pauses.py) |
+| T19 | One PIN can be in two areas. The customer check then picks whichever area comes first alphabetically. | [locations/models.py:86-92](../../backend/apps/locations/models.py#L86-L92), [locations/services.py:99-142](../../backend/apps/locations/services.py#L99-L142) |
+| T20 | Customers turned away as outside the service area are not recorded. | [locations/services.py:113](../../backend/apps/locations/services.py#L113) |
+| T23 | **Approval also needs at least one active area link.** The hours check only looks at linked areas. | [services/review.py:355-362](../../backend/apps/partners/services/review.py#L355-L362) |
+| T24 | Operations can edit a partner's hours after approval, but not their areas. | [partners/urls.py:194-196](../../backend/apps/partners/urls.py#L194-L196) |
+| T25 | A `PostalCode` table holds the city and state for each PIN we have loaded. | [locations/models.py:27-33](../../backend/apps/locations/models.py#L27-L33) |
 
 ### Dispatch
 
 | # | Behaviour | Source |
 |---|---|---|
-| T21 | The partner's active area link is a strict filter. Ranking is by stable UUID (`service_area_stable_uuid`), **not distance**. | [assignments/ranking.py:44](../../backend/apps/assignments/ranking.py#L44), [:283-293](../../backend/apps/assignments/ranking.py#L283-L293), [assignments/services.py:47-51](../../backend/apps/assignments/services.py#L47-L51), [carts/availability.py:435-439](../../backend/apps/carts/availability.py#L435-L439) |
+| T21 | The partner's active area link is a strict filter. Ranking does not use distance. **Unchanged by this design.** | [assignments/ranking.py:283-293](../../backend/apps/assignments/ranking.py#L283-L293), [assignments/services.py:47-51](../../backend/apps/assignments/services.py#L47-L51) |
 
 ---
 
-## 1. Partner journey: today vs proposed
-
-| Moment | TODAY | PROPOSED |
-|---|---|---|
-| Arrive on Step 3 | A flat list of open areas (T1, T4) | A "Find areas near you" card: **Use my current location**, **Enter PIN code**, or **Search a place**, plus "Browse all areas" |
-| Location | Not offered (T7) | Optional. A consent sheet first ("we keep only your PIN"), then the system prompt. Denied or no PIN means PIN entry or search (case D) |
-| Area found and open | Partner must spot it in the list | **Case A:** pre-ticked, with a "You're in Kukatpally" banner and nearby open areas to add |
-| Area full | Hidden, so the partner assumes we don't operate there | **Case B:** "Gachibowli is full right now", then **Join waitlist** (with their trades). Never blocks |
-| No area covers the PIN | Dead end (T3) or silent help text (T5) | **Case C:** "We're not in 509216 yet", then **Request this area**, which saves an `AreaRequest`. Never blocks |
-| Many areas | Long flat grid (T4) | **Case E:** search, grouping by city or zone, "Select all" (overall and per group), a selected-count chip. No limit |
-| Mixed result | Not possible | **Case F:** summary in three groups: Active when approved, Waitlisted, Requested |
-| Hours (Step 4) | Per-area editor; new shifts default to the first area (T11) | "Same hours in all areas" **on by default**, plus "Copy these hours to all N areas". Hours only for covered areas |
-| Area changes mid-application | Whole save fails (T8) | **Case G:** areas you already hold stay. A closed area gets a "Remove to continue" banner. A paused area gets an info note |
-| Bad PIN or outside India | Not applicable | **Case H:** six-digit check, then geocoder check. Fake PIN shows "We couldn't find 599999". A non-IN country shows "We work in India only" (nothing saved) |
-| Submit | Needs at least 1 area with hours (T12) | **Case I:** can submit with **at least 1 covered area** (hours needed only for those) **or with only requested/waitlisted areas** (sent as "area pending") |
-| After approval | Areas fixed (T13) | Partner gets "We opened your area", then a one-tap **Activate** (reusing their usual hours). Self-serve to add an open area or remove one |
-
----
-
-## 2. Partner journey flowchart
+## 1. Partner flow (agreed)
 
 ```mermaid
 flowchart TD
-    S([Step 3: Where you work]) --> F{How do you want to find areas?}
-    F -->|Use my current location| C1[Consent sheet: why, and 'we keep only the PIN']
-    F -->|Enter PIN code| P[PIN input]
-    F -->|Search a place| Q[Place search: geocoding/search, then geocoding/reverse]
-    F -->|Browse all areas| L[Area list: search, groups, Select all]
-
-    C1 -->|Not now| P
-    C1 -->|Allow| OS{System permission}
-    OS -->|Denied| D[Case D: 'Location is off', type PIN or search]
-    OS -->|Allowed| G[Device location, then reverse geocode]
-    G -->|No PIN returned / timeout| D
-    G -->|PIN found| LK
-    D --> P
-    D --> Q
-    Q -->|place picked, reverse geocode| LK
-    P -->|6 digits, first 1-9| LK
-    P -->|bad format| H1[Case H: 'Enter a 6-digit Indian PIN']
-    H1 --> P
-
-    LK{{Lookup PIN: partner endpoint}}
-    LK -->|country is not IN| H2[Case H: 'We work in India only'. Nothing saved]
-    LK -->|PIN unknown to geocoder| H3[Case H: 'We couldn't find this PIN'. Retry or search]
-    LK -->|area open| A[Case A: area pre-ticked, 'You're in Kukatpally', nearby open areas]
-    LK -->|area full| B[Case B: 'Area is full', Join waitlist with trades]
-    LK -->|no area covers PIN| C[Case C: 'Not in 509216 yet', Request this area]
-
-    B --> BW[AreaRequest status WAITLISTED]
-    C --> CR[AreaRequest status REQUESTED]
-    A --> SUM
-    BW --> SUM
-    CR --> SUM
-    L -->|Case E: 20+ or all areas| SUM
-    H3 --> P
-
-    SUM[Case F: summary. Active when approved / Waitlisted / Requested]
-    SUM -->|add more| F
-    SUM --> GCHK{Case G: anything changed since picked?}
-    GCHK -->|area closed to new partners| G1[Keep it. You already hold it]
-    GCHK -->|area deactivated| G2[Banner: remove to continue]
-    GCHK -->|area paused| G3[Info: keep it. Jobs resume when reopened]
-    GCHK -->|nothing| HRS
-    G1 --> HRS
-    G2 --> SUM
-    G3 --> HRS
-
-    HRS[Step 4 Hours: same hours in all areas ON, Copy to all N areas. Covered areas only]
-    HRS --> DOC[Step 5 Documents] --> SUB{Step 6: Agree and send}
-    SUB -->|>= 1 covered area with hours| OK1[Case I: submitted. Requested areas stay pending]
-    SUB -->|0 covered, >= 1 requested or waitlisted| OK2[Case I: submitted as 'area pending']
-    OK1 --> R[Admin review]
-    OK2 --> R
-    R --> AP[Approved: active in covered areas]
-    R --> DM[Approved dormant: verified, no jobs yet]
-    AP --> N{{Later: area opens / spot frees}}
-    DM --> N
-    N --> NT[Push or SMS: 'We opened Shadnagar'] --> ACT[Activate: use my usual hours] --> ACTIVE([Active in new area. Dispatch can now offer jobs])
+    S([Step 3: Where you work]) --> L{Any open areas?}
+    L -->|yes| LIST[List of open areas: tick one or more]
+    L -->|no| PIN
+    LIST --> NL["My area is not listed (always shown)"]
+    NL --> PIN[Enter 6-digit PIN]
+    PIN -->|bad format| E1["Enter a 6-digit PIN"] --> PIN
+    PIN --> M{Match the PIN against open areas}
+    M -->|in 1 or more open areas| TICK["Ticked for you: '509001 is in Mahbubnagar'"]
+    M -->|in a full area, or in no area| REQ["Noted: 'We don't work in 509216 yet'"]
+    TICK --> C
+    REQ --> C
+    LIST --> C{"Continue: at least 1 ticked area OR at least 1 asked PIN"}
+    C --> H{Any ticked areas?}
+    H -->|yes| HRS[Hours: one weekly set, saved to every ticked area]
+    H -->|no| SKIP["Hours: 'No hours needed yet'"]
+    HRS --> DOC[Documents]
+    SKIP --> DOC
+    DOC --> SEND["Agree and send: lists asked PINs, 'No jobs there until we open it'"]
+    SEND --> R[Operations review]
 ```
 
-### Case notes
+### Cases
 
-| Case | Trigger | What the partner sees | What is stored |
+| Case | When | What the partner sees | What is stored |
 |---|---|---|---|
-| **A** | PIN maps to an area that is active and accepting partners | Area pre-ticked, banner, nearby open areas | `PartnerServiceArea` (today's model) once saved |
-| **B** | PIN maps to an area with `is_accepting_partners = false` | "Full right now", then Join waitlist (trades preset from "Your work") | `AreaRequest(matched_area, status=WAITLISTED)` |
-| **C** | No area has this PIN, or the PIN isn't in `PostalCode` | "Not here yet", Request this area, then a confirmation | `AreaRequest(postal_code, city, state, verified, status=REQUESTED)` |
-| **D** | Permission denied, unsupported, timeout, or no PIN from geocoder | Friendly fallback: PIN box plus place search on the same screen | Nothing until a PIN is checked |
-| **E** | Partner wants 20+ or every area | Search, groups (city or zone), Select all overall and per group, "23 selected" chip | Same links as today, saved in one batch |
-| **F** | Any mix of A, B and C | Three-group summary. Hours only for "Active when approved" | As above |
-| **G** | Area paused, closed to new partners, or deactivated after being picked | Paused: info note, keep. Closed to new partners: keep (already held). Deactivated: "Remove to continue" | Server keeps held links (change from T8) |
-| **H** | Bad format, PIN unknown to geocoder, or outside India | Inline error, retry or search. Outside India: polite stop, nothing saved | Nothing |
-| **I** | Submitting with some or all areas pending | Submit screen lists pending areas with "No jobs here until it opens" | Application plus `AreaRequest`s linked to it |
+| **A** | Ticks an open area from the list | Ticked, as today | `PartnerServiceArea` (today's model) |
+| **B** | Types a PIN that is in one or more open areas | Those areas are ticked and named: "509001 is in Mahbubnagar. We ticked it." If the PIN is in two areas, both are ticked. | `PartnerServiceArea` |
+| **C** | Types a PIN that is in an area **not accepting partners** | "We're not adding partners in Gachibowli right now. We've noted 500032." | `PartnerAreaRequest` |
+| **D** | Types a PIN that **no area covers** | "We don't work in 509216 yet. We've noted it. You can still send your application." | `PartnerAreaRequest` |
+| **E** | Bad format (not 6 digits, or starts with 0) | "Enter a 6-digit PIN" | Nothing |
+| **F** | **No open areas at all** (today's dead end) | The PIN box takes the list's place; then case C or D | As C or D |
+| **G** | A ticked area closes before the save | The server names it. The app removes only that area and says "Gachibowli stopped taking new partners. We removed it." The other areas are kept. | That link is deactivated |
+| **H** | An asked PIN gets covered while the application is still a draft or sent back | Step 3 shows "509216 is now in Shadnagar. Tick it." | Nothing new; this is the live status |
+| **I** | Submitting with **zero ticked areas** | Hours step skipped. After sending, the status reads "In review. Waiting for your area to open." | Application plus its requests |
 
-**Location rules (DPDP):** ask only when the partner taps the button. The consent sheet explains
-the purpose before the OS prompt. Store **PIN, city, state and source** (GPS / PIN / SEARCH); if a
-location is kept at all, round it to 2 decimals (about 1 km). The raw device location is used once
-for the reverse-geocode call and never saved. Delete `AreaRequest`s on drafts abandoned for longer
-than the retention period.
+**Rules for the PIN box:**
 
----
+- 6 digits, first digit 1–9 (the existing `indian_postal_code_validator`).
+- At most **5** asked PINs per application, and no repeats.
+- The place name comes from `PostalCode` if we have that PIN. Otherwise Operations sees it tagged
+  "Not in our PIN list". It is still saved; a typed PIN never fails because of this.
+- The match happens on the device: each area in the existing list now carries its `postal_codes`.
+  No new partner endpoint and no geocoder call.
 
-## 3. Admin journey
+### Hours (Step 4)
 
-### 3a. From area request to active partner
+- **One weekly editor, the same hours for all areas.** Saving writes the same rules to every ticked
+  area. Storage stays per area, so the approval check (T17) and the Operations hours screen (T24)
+  do not change.
+- If an older draft already has different hours per area, the editor shows the first area's
+  hours with the note "Saving uses these hours for all your areas."
+- With zero ticked areas, the step says "No hours needed yet. You'll set them when your area
+  opens," and "Continue" goes straight to Documents.
 
-```mermaid
-flowchart LR
-    R1[Partners file AreaRequests in Step 3] --> W[Area requests view: grouped by PIN, then trade]
-    CU[Customers turned away: UnservedDemandEvent] --> W
-    W --> DCS{Decide per PIN}
-    DCS -->|PIN belongs in an existing area| LNK[Link PIN to area: bulk-PIN conflict check]
-    DCS -->|enough demand and supply| NEW[Open new area: name, PINs, services, hours, accepting = on]
-    DCS -->|area full, spots free| ACC[Set accepting = on, or raise the target]
-    DCS -->|spam or fake| SP[Mark spam]
-    DCS -->|not yet| KEEP[Keep waiting]
-    LNK --> MATCH
-    NEW --> MATCH
-    ACC --> MATCH
-    MATCH[Matching requests become PENDING_ACTIVATION] --> NOTIFY[Notify: push / SMS, logged with notified_at]
-    NOTIFY --> PA[Partner taps Activate, confirms hours]
-    PA --> LINK[PartnerServiceArea is_active = true]
-    LINK --> DSP[Dispatch can offer jobs: strict area filter unchanged]
-```
+### Rule changes (server and app)
 
-### 3b. Application review screen (PROPOSED changes to [review-detail.tsx:437-444](../../frontend/apps/admin/features/partner-review/view/review-detail.tsx#L437-L444))
-
-- **Area names, not a count.** Chips grouped by city, folded after 10, each showing whether it has hours set.
-- **Requested but unavailable:** a separate block listing `AreaRequest`s. Each shows PIN, place,
-  "verified / unverified" and status (REQUESTED or WAITLISTED), with inline actions **Link to
-  existing area** and **Mark spam**.
-- **Trade vs area-service mismatch:**
-  - Flag any chosen area where **none** of the partner's services are enabled ("Miyapur: no AC repair").
-  - Flag any service with zero coverage. The server already refuses that today ([services/application.py:134-145](../../backend/apps/partners/services/application.py#L134-L145)), so it should not appear unless rules changed after submit.
-- **Changed since submit:** flag areas deactivated or closed since the partner picked them.
-
-### 3c. Approval rules when some areas are pending
-
-| Situation | Allowed actions | Notes |
+| Rule | Today | New |
 |---|---|---|
-| At least 1 covered area with hours, plus pending areas | **Approve** | Pending requests stay open. They never block approval and never reach dispatch |
-| At least 1 covered area, but a mismatch flag | **Approve without the flagged area**, or **Request changes** | Removing an area from the review screen is a new admin action |
-| 0 covered areas, at least 1 pending | **Approve dormant** or **Keep on waitlist** | Dormant means verified but no jobs: dispatch sends nothing because there are no active links (T21). Whether to run paid checks early is an open question (Q1) |
-| A chosen area was deactivated after submit | **Request changes** | Same rule as today's submit check |
-| Hours missing for a covered area | Blocked | Unchanged (T17) |
-
-### 3d. Areas management (new console screen; Django admin improved first)
-
-- List of areas: name, city or zone, PIN count, services count, accepting partners on or off,
-  paused, partners, target.
-- Create or edit an area: name, city or zone, `state_code`, timezone, PIN chips, service toggles
-  grouped by trade, operating windows, **accepting partners** switch, target per trade.
-- **Bulk PIN upload** (CSV `pin,area_slug` or pasted list): dry run first, then apply.
-  - Invalid rows (bad format, unknown PIN) are rejected.
-  - **Conflict** rows ("500032 is already in Gachibowli") ask the admin to *Move* or *Skip*.
-  - Proposed rule: one PIN belongs to one area only.
-- Deactivating an area first shows "N partners and M confirmed bookings affected", then notifies those partners.
+| Submit, services track | Needs at least 1 active area (T22) | Needs **at least 1 active area OR at least 1 asked PIN** |
+| Services offered in the chosen areas (T9) | Always checked | Checked only when at least 1 area is ticked; unchanged otherwise |
+| Hours for every area (T12) | Every chosen area | Every **ticked** area (with zero ticked areas there is nothing to check) |
+| A closed area on save (T8) | Whole save fails | The error lists `unavailable_service_area_ids`; the app removes those areas and says why |
+| `readiness.ts` | Areas and hours always needed | Same as the new server rules, in `@vsolve/query` so web and phone share them |
+| Approve (T23) | Needs at least 1 active area | **Unchanged.** Zero-area applications stay in review as "Area pending" (see Q1) |
+| Phone text (T6) | Hard-coded English | Moved to the catalogs |
 
 ---
 
-## 4. Admin tracking dashboard flow
+## 2. When an asked PIN gets an area
 
-```mermaid
-flowchart TD
-    D0[Coverage dashboard] --> F1[Filters: status, trade, availability, city]
-    F1 --> K[KPI tiles: approved partners, areas below target, open requests, unserved lookups]
-    F1 --> T[Ranked table by area or PIN, sorted by most under-supplied]
-    T --> RW[Row: partners vs target bar, demand 28d, partners per 100 jobs, offer expiry %, flag]
-    RW --> DR[Drill-down: per trade, per PIN, 12-week trend]
-    RW --> A1[Open waitlist for this PIN] --> W2[Area requests view]
-    RW --> A2[Recruitment push: export contacts / campaign link]
-    RW --> A3[Export CSV]
-    RW --> A4[Edit target]
-    K -->|red area count| T
-```
+Operations opens an area, adds the PIN to an existing area, or switches an area back to accepting
+partners. What happens next depends on where each asking partner is:
 
-**Low-supply flag** (per area and trade):
+| Partner's application | What happens | Partner taps |
+|---|---|---|
+| Draft or sent back for changes | Notified: "We now work in 509216 (Shadnagar)." Step 3 shows it ready to tick (case H). | Tick it, set hours |
+| Submitted or under review | Their row shows **Ready · now in Shadnagar**. The reviewer clicks **Send back to add it**, which is the existing Request changes with the message filled in. | Tick it, set hours, resend |
+| Approved (they had other areas) | Operations adds the area for them, copying their usual hours, and they are notified: "You'll now get jobs in Shadnagar." | Nothing (see Q3) |
 
-- 🔴 **Critical:** below 30% of target, *or* offer expiry above 25%, *or* demand with zero partners.
-- 🟠 **Low:** 30–70% of target, *or* fewer than 8 partners per 100 jobs in the last 28 days.
-- 🟢 **Healthy:** otherwise.
-- ⚪ **Gap:** a PIN with requests or turned-away demand but no area.
-
-Thresholds are editable per area. Admins get a daily summary of areas that turned red.
-
-**Per-PIN counts:** partners choose *areas*, not PINs, so "partners per PIN" means **partners
-covering that PIN** (area → PINs → partners). A future optional `home_postal_code` would give
-"partners living in this PIN".
-
-Mock data used in the presentation: **500001 = 100 partners**, **500002 = 50 partners**, and
-500072 = 64, 500032 = 41 (area full), 500049 = 18, 500050 = 12, 509216 = 0 (no area, 38 requests).
+A request counts as **Done** on its own once the partner holds an area that covers that PIN.
+Nothing needs closing by hand.
 
 ---
 
-## 5. Partner-area link states
+## 3. Operations console (design = the admin slides in `index.html`)
 
-```mermaid
-stateDiagram-v2
-    [*] --> SELECTED: ticks an open area (draft)
-    [*] --> REQUESTED: PIN with no area (Case C)
-    [*] --> WAITLISTED: area full (Case B)
+The four admin slides stay as designed. The changes below line them up with the simple flow.
 
-    SELECTED --> ACTIVE: application approved (hours set)
-    SELECTED --> REMOVED: partner unticks (hours deactivated too)
+### 3a. Application review (slide "Application A-1042")
 
-    REQUESTED --> PENDING_ACTIVATION: admin opens area / links PIN
-    WAITLISTED --> PENDING_ACTIVATION: admin re-opens area to partners
-    REQUESTED --> REJECTED: marked spam / invalid
-    REQUESTED --> WITHDRAWN: partner removes request
-    WAITLISTED --> WITHDRAWN: partner removes request
+**Kept as designed:**
 
-    PENDING_ACTIVATION --> ACTIVE: partner taps Activate and confirms hours
-    PENDING_ACTIVATION --> EXPIRED: no response in N days
+- The **Where they work** card: area chips with zone and hours ✓.
+- The trade/area mismatch flag with **Approve without Miyapur**.
+- The line confirming every chosen service is offered in at least one area.
+- The **Requested, not available** table.
+- The "Rest of the application" summary and the decision bar.
 
-    ACTIVE --> INACTIVE: partner removes area / area deactivated
-    INACTIVE --> ACTIVE: re-added (area open again)
+**Changed:**
 
-    note right of ACTIVE
-      Only ACTIVE (PartnerServiceArea.is_active = true)
-      plus an APPROVED application is seen by dispatch.
-      A paused area keeps links ACTIVE. The kill switch
-      blocks offers separately.
-    end note
+- Request statuses are the live ones:
+
+  | Status | Meaning |
+  |---|---|
+  | Waiting | No area covers the PIN |
+  | Area full | An area covers it but isn't taking partners |
+  | Ready · now in X | An open area covers it now |
+  | Done | The partner holds an area covering it |
+  | Not valid | Operations dismissed it |
+
+- The "Check" column reads **In our PIN list ✓ / ✗**, not "found on map". There is no geocoder.
+- Row actions:
+  - Ready → **Send back to add it**
+  - Waiting → **Link PIN to an area…** (opens the Areas screen)
+  - Not in our PIN list → **Mark not valid** (was "Mark spam")
+- The "Approval rules" panel loses "Approve dormant" and "Keep on waitlist". It now reads: "No
+  ticked areas → can't approve yet; stays in Area pending."
+- With zero ticked areas, a banner shows across the top: "Area pending. Approve once an area
+  covers 509216." The Approve button explains why it can't go ahead.
+- The Approve button label becomes "Approve · 2 areas, 1 asked PIN stays open".
+
+### 3b. Review queue (an addition; not in `index.html`)
+
+- A new **Area pending** tab beside the existing ones (All in-review, Unassigned, Mine, Changes
+  requested).
+- A tag on each row: `Area pending · 509216`, `Ready · now in Shadnagar`, or `2 areas · 1 PIN asked`.
+- File: [review-queue.tsx](../../frontend/apps/admin/features/partner-review/view/review-queue.tsx).
+
+### 3c. Area requests (slide "Area requests")
+
+**Kept as designed:**
+
+- One row per PIN: place, kind pill, number of partners, date first asked, and the action.
+- The trade filter, the per-trade split when a row is opened, and CSV export.
+- The "Open new area" form: name, zone, PINs, services pre-ticked from trades with 5 or more
+  asks, and the accepting switch.
+
+**Changed:**
+
+- The kinds are: no area, area full, PIN not in an area, and not in our PIN list. There is no
+  "nearest area" suggestion, because suggesting one needs distances; the action is **Link to an
+  area…** with a picker instead.
+- The trades are the asking partners' own trades. They are not copied onto the request.
+- The status filter is Open / Ready / Done / Not valid, all worked out live. "Notified" uses
+  `notified_at`.
+- The notify step uses the existing partner notifications (push and in-app). Its note no longer
+  mentions PENDING_ACTIVATION, the Activate tap or a 14-day reminder. It shows the table from
+  section 2 instead.
+- The **Customer lookups 28d** column and the **Target** field in the form wait for Phase 2.
+
+### 3d. Areas (slide "Areas")
+
+**Kept as designed:**
+
+- The area list: name, zone, PIN count, services on/total, partners, the accepting switch, and
+  live or paused.
+- The edit panel: accepting switch, paused note, PIN chips to add or remove, and service toggles
+  grouped by trade.
+- **+ New area**, and **Bulk PIN upload** (dry run first, then Move or Skip on conflicts).
+
+**Changed:**
+
+- The help text next to the accepting switch reads "Partners who type its PIN are noted as Area
+  full," not "Join waitlist".
+- **Target per trade** waits for Phase 2.
+- The conflict rule in bulk upload depends on Q2 (one PIN, one area).
+- This screen replaces Django admin for day-to-day area work. Django admin stays as a fallback.
+
+### 3e. Partner coverage (slide "Partner coverage")
+
+**Phase 1, a "lite" version built from data we already have:**
+
+- Partners covering each area and PIN (area → PINs → partners), filtered by status, trade and zone.
+- Open asked PINs per area.
+- Bookings and offer-expiry per area over 28 days.
+- CSV export.
+
+**Phase 2:**
+
+- Targets, the "vs target" bars and the red/amber/green flags.
+- Customers turned away.
+- The 12-week trend.
+- The recruitment push.
+
+---
+
+## 4. Data and contract (sketch only; nothing created)
+
+```
+PartnerAreaRequest                        # one PIN a partner asked for
+  id              uuid
+  application     FK PartnerApplication   on delete cascade (also covered by account erasure)
+  postal_code     char(6)                 validated by indian_postal_code_validator
+  created_at      datetime
+  notified_at     datetime null           set when Operations notifies about this PIN
+  dismissed_at    datetime null           "Mark not valid"
+  dismissed_by    FK User null
+  unique(application, postal_code); at most 5 per application (service rule)
+
+  Status is worked out live, not stored:
+    Not valid  dismissed_at is set
+    Done       partner holds an active link to an area covering the PIN
+    Ready      an active area accepting partners covers the PIN
+    Area full  an active area covers the PIN but is not accepting partners
+    Waiting    no active area covers the PIN
+  Place name: join to PostalCode; "Not in our PIN list" when missing.
+  Trades: the partner's own active skills.
+
+ServiceArea           + zone char           # Phase 1: grouping on Areas, Requests, Coverage
+ServiceAreaPostalCode   unique(postal_code) # only if Q2 = yes, after cleaning up overlaps
+
+Phase 2 only
+  AreaSupplyTarget(service_area, skill null, target_partners, alert_below)
+  UnservedDemandEvent(postal_code, variant null, reason_code, source, created_at)
+  Weekly coverage snapshots (for the trend)
 ```
 
-**Where each state lives:**
+**Contract changes**
 
-| States | Lives in |
+| For | Change |
 |---|---|
-| SELECTED, ACTIVE, INACTIVE, REMOVED | `PartnerServiceArea` (today's model, plus `disabled_at` and `disabled_reason`) |
-| REQUESTED, WAITLISTED, PENDING_ACTIVATION, REJECTED, WITHDRAWN, EXPIRED | New `AreaRequest` |
-
-This split keeps dispatch reading exactly what it reads today.
-
----
-
-## 6. Data implied (text sketch only; nothing created)
-
-```
-AreaRequest                         # waitlist and "area interest"
-  id                uuid
-  user              FK identity.User
-  application       FK PartnerApplication, nullable
-  postal_code       char(6)          # normalised
-  postal_code_ref   FK PostalCode, nullable
-  city, state       char             # from geocoder
-  country_code      char(2)
-  approx_lat/lng    decimal(5,2) null  # ~1 km; optional
-  source            GPS | PIN | SEARCH | ADMIN
-  verified          bool             # geocoder confirmed the PIN
-  skills            M2M Skill        # trades for that place
-  matched_area      FK ServiceArea, nullable
-  status            REQUESTED | WAITLISTED | PENDING_ACTIVATION | ACTIVATED | WITHDRAWN | REJECTED | EXPIRED
-  notified_at, activated_at, created_at, updated_at
-  unique(user, postal_code)
-
-UnservedDemandEvent                 # customer turned away (anonymous)
-  id, postal_code, variant FK null, reason_code, source WEB|APP, created_at
-
-AreaSupplyTarget
-  service_area FK, skill FK null, target_partners int, alert_below int, updated_by, updated_at
-  unique(service_area, skill)
-
-AreaChangeRequest (approved partners adding a full or requested area)
-  partner FK, add M2M, remove M2M, status, reviewer FK, decided_at, reason_code
-
-Changes to existing models
-  ServiceArea           + city (or FK ServiceZone)
-  ServiceAreaPostalCode   unique(postal_code), after cleaning up overlaps
-  PostalCode            + district, centroid lat/lng   # India Post import, later
-  PartnerServiceArea    + disabled_at, disabled_reason
-  PartnerProfile        + home_postal_code (optional, later)
-New endpoint
-  GET /partner/service-areas/lookup?postal_code=   -> {status: OPEN|FULL|NONE|INVALID|OUTSIDE_INDIA, areas[], place{city,state,country}}
-```
-
-**Can be built from existing data:**
-
-| Feature | Existing data used |
-|---|---|
-| Partners per area, split by application status, trade and hours | `PartnerServiceArea`, `PartnerApplication.status`, partner service links, `PartnerAvailabilityRule` |
-| Partners covering a PIN | area → PINs → partners |
-| Demand per area | `Quote` and `FulfilmentUnit` service area, `CustomerRequirement.service_area` |
-| Offer outcomes per area | `PartnerOffer` and `DispatchOffer` statuses |
-| Online hours | `PartnerOnlineSession` |
-| Area names on the review screen | already in `service_area_ids` |
-
-**Needs new data:** waitlist and requests, turned-away customer demand, targets, city grouping,
-removal history (`disabled_at`), home PIN, PIN centre points for a map.
+| Partner | The `service-areas` list items gain `postal_codes[]` |
+| Partner | The application gains `requested_postal_codes[]` (write) and `area_requests[]` (read: PIN, place, status, covering area) |
+| Partner | The save error for closed areas gains `unavailable_service_area_ids[]` |
+| Operations | The review application gains `area_requests[]` with status and covering area. The queue gains an `area_pending` filter |
+| Operations | Area requests: list grouped by PIN, notify, mark not valid |
+| Operations | Areas: list, create, update, PINs add and remove, services toggle, bulk upload preview and apply |
+| Operations | A partner's areas: add an area to an approved partner (copies their hours); remove an area during review ("Approve without X") |
+| Operations | Coverage lite: read only |
 
 ---
 
-## 7. Open questions and assumptions
+## 5. Build order
 
-**Questions**
+| Phase | Scope | Size |
+|---|---|---|
+| **1a** | The partner flow (section 1) on web and phone, the rule changes, `PartnerAreaRequest`, the review screen (3a) and the queue tab (3b) | M |
+| **1b** | Area requests (3c), Areas with bulk upload (3d), Coverage lite (3e), adding an area to an approved partner, `zone` on areas | L |
+| **2** | Targets and flags, customers turned away, the trend, the recruitment push, and target fields on the Areas and Requests screens | M |
 
-1. **Verification cost.** Should "area pending" applicants get paid background checks before their area opens (dormant approval), or only once it opens?
-2. **PIN overlap.** Should each PIN belong to exactly one area? Are current overlaps mistakes?
-3. **Targets.** Per area, or per area and trade? Who owns them?
-4. **Self-serve after approval.** May partners add **open** areas themselves? (Proposed: yes. Full or requested areas go through a request.)
-5. **Notification channel** for "We opened your area": push, SMS, WhatsApp? Which provider?
-6. **Geocoding.** Is the Google key live in production, and is the cost OK for partner lookups? Or should the India Post PIN import come first?
-7. **Grouping.** What is the unit above an area: city, district or zone?
-8. **Activation window.** How long should PENDING_ACTIVATION wait before EXPIRED (proposed: 14 days, then one reminder)?
+Phase 1a alone fixes everything the partner sees: no dead end, no lost partners, no whole-save
+failure, one set of hours, and the phone text in the right language. It also gives Operations
+area names and asked PINs on every application.
 
-**Assumptions**
+---
 
-- The truncated brief ended at "PIN 500001 = 100 partners, PIN …". I assumed **500002 = 50**
-  (from the earlier brief) and added other PINs as mock data.
-- Code was read, not production data. Area and PIN counts are unknown.
-- Phone and web Step 3 behave the same except for the hard-coded phone text (T6).
-- Distance-aware ranking (partners with many areas getting far-away jobs) is out of scope for this
-  flow. It is noted as a long-term follow-up.
+## 6. Open questions (with the default we'll use)
+
+1. **Can partners with zero areas be approved?** Default: **no**. They stay in review as "Area
+   pending" until an area covers their PIN, because approved partners can't change their areas
+   (T13).
+2. **Can one PIN be in only one area?** Default: **yes**, after cleaning up today's overlaps (T19).
+   This also sets the bulk-upload conflict rule.
+3. **Approved partner whose asked PIN opens:** add the area directly with their usual hours, or ask
+   them first? Default: **add directly and notify**, since they asked for it.
+4. **Maximum asked PINs per application:** default **5**.
+5. **Grouping above an area:** default **zone** (Hyderabad West, Central, South), as in the mock.
+6. **Notification channel:** default **the existing partner notifications (push and in-app)**.
+7. **Is the 1a / 1b / 2 phase split right?**
