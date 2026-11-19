@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.102.0
+  version: 1.103.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -19378,6 +19378,57 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/payout-webhooks/cashfree/:
+    post:
+      operationId: payout_webhook_cashfree
+      description: |-
+        Cashfree Payouts V2 transfer events, verified with the Payouts client secret.
+
+        Applied inline, like RazorpayX's. Cashfree sends no event id, so the body's hash names the
+        delivery: a redelivery is the same body, and `event_time` tells two real events apart.
+      parameters:
+      - in: header
+        name: x-webhook-signature
+        schema:
+          type: string
+        description: Base64 HMAC-SHA256 of the timestamp followed by the raw body,
+          keyed with the Cashfree Payouts client secret.
+        required: true
+      - in: header
+        name: x-webhook-timestamp
+        schema:
+          type: string
+        description: The timestamp Cashfree signed together with the body.
+        required: true
+      tags:
+      - Payout Webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutWebhookAccepted'
+          description: ''
+        '400':
           content:
             application/json:
               schema:

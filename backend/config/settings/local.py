@@ -9,7 +9,7 @@ _backend_dir = Path(__file__).resolve().parents[2]
 environ.Env.read_env(_backend_dir / ".env", overwrite=False)
 
 from config.settings.base import *  # noqa: E402
-from config.settings.guards import guard_razorpayx_test_keys  # noqa: E402
+from config.settings.guards import guard_cashfree_sandbox, guard_razorpayx_test_keys  # noqa: E402
 
 # Base settings keep connections open for 60s (CONN_MAX_AGE), which is fine in
 # production behind a pooler. Locally, three Next.js apps SSR-fanning catalog
@@ -49,6 +49,7 @@ PAYOUT_PROVIDER = env("PAYOUT_PROVIDER", default="fake")
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=True)
 # Trying RazorpayX locally means test-mode keys. A live key here would pay real bank accounts.
 guard_razorpayx_test_keys(RAZORPAYX_KEY_ID)
+guard_cashfree_sandbox(CASHFREE_PAYOUT_API_BASE_URL)
 
 REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
     *REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"],

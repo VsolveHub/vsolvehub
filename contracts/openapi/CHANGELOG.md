@@ -1,5 +1,15 @@
 # API Contract Changelog
 
+## 1.103.0 - Cashfree Payouts webhook
+
+Additive.
+
+- **Added** `POST /payout-webhooks/cashfree/`: Cashfree Payouts V2 transfer events
+  (`TRANSFER_ACKNOWLEDGED`, `TRANSFER_SUCCESS`, `TRANSFER_FAILED`, `TRANSFER_REVERSED`,
+  `TRANSFER_REJECTED`), verified by `x-webhook-signature` over `x-webhook-timestamp` and the raw
+  body. Unauthenticated, like the RazorpayX one; answers `PayoutWebhookAccepted`, or
+  `400 webhook_signature_invalid` / `400 webhook_invalid`. Used when `PAYOUT_PROVIDER=cashfree`.
+
 ## 1.102.0 - Account deletion: grace period, holds, erasure and an Operations queue
 
 Additive, with one behaviour change to `POST /auth/privacy/requests/` for `kind: ERASURE`.

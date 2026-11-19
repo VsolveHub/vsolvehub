@@ -48,6 +48,7 @@ from apps.payouts.models import (
     PayoutWebhookEvent,
 )
 from apps.payouts.providers import (
+    CashfreePayoutProvider,
     PayoutProviderAmbiguousError,
     PayoutProviderError,
     PayoutProviderRejectedError,
@@ -1479,6 +1480,81 @@ def apply_razorpayx_payout_event(
     item = PayoutBatchItem.objects.select_for_update().get(id=candidate.id)
     if provider_payout_id and not item.provider_payout_id:
         item.provider_payout_id = provider_payout_id
+        item.save(update_fields=("provider_payout_id", "updated_at"))
+    before = item.status
+    result = apply_payout_result(
+        item_id=item.id, status=status, failure_reason=tracking.failure_reason, tracking=tracking
+    )
+    record.payout_item = result
+    record.changed_status = result.status != before
+    record.save(update_fields=("payout_item", "changed_status"))
+    return result
+
+
+#: Cashfree Payouts webhook events that carry a transfer's status.
+_CASHFREE_TRANSFER_EVENTS = frozenset(
+    {
+        "TRANSFER_ACKNOWLEDGED",
+        "TRANSFER_SUCCESS",
+        "TRANSFER_FAILED",
+        "TRANSFER_REVERSED",
+        "TRANSFER_REJECTED",
+    }
+)
+
+
+@transaction.atomic
+def apply_cashfree_payout_event(
+    event: Mapping[str, object], *, event_id: str, payload_sha256: str
+) -> PayoutBatchItem | None:
+    """Settle a transfer from a verified Cashfree Payouts V2 webhook, once per delivery.
+
+    The same path as `apply_razorpayx_payout_event`: recorded once under `event_id`, settled
+    through `apply_payout_result`, and every other event type acknowledged and ignored.
+    """
+
+    name = event.get("type")
+    if not isinstance(name, str) or name not in _CASHFREE_TRANSFER_EVENTS:
+        return None
+    data = dict(_mapping(event.get("data")))
+    provider_payout_id = str(data.get("cf_transfer_id") or "")
+    reference = str(data.get("transfer_id") or "")
+    try:
+        tracking = CashfreePayoutProvider.parse_transfer(data)
+    except PayoutProviderError:
+        tracking = None
+    status = (
+        tracking.status
+        if tracking is not None
+        else str(data.get("status") or "").lower()  # unparsable: recorded, never decided on
+    )
+    record, created = PayoutWebhookEvent.objects.get_or_create(
+        provider_event_id=event_id,
+        defaults={
+            "event_type": name[:64],
+            "provider_payout_id": provider_payout_id[:128],
+            "provider_status": status[:24],
+            "payload_sha256": payload_sha256,
+            # A summary, not the payload: a transfer embeds the bank account number.
+            "summary": {
+                "status": data.get("status"),
+                "status_code": data.get("status_code"),
+                "amount": data.get("transfer_amount"),
+                "transfer_id": reference,
+                "utr": tracking.utr if tracking else "",
+            },
+        },
+    )
+    if not created or tracking is None:
+        return None
+    candidate = _item_for_provider_payout(
+        provider_payout_id=provider_payout_id, reference=reference
+    )
+    if candidate is None:
+        return None
+    item = PayoutBatchItem.objects.select_for_update().get(id=candidate.id)
+    if provider_payout_id and not item.provider_payout_id:
+        item.provider_payout_id = provider_payout_id[:128]
         item.save(update_fields=("provider_payout_id", "updated_at"))
     before = item.status
     result = apply_payout_result(
