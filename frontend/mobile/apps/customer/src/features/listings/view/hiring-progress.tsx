@@ -3,7 +3,6 @@ import { Alert, Linking, TextInput, View } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Text } from "@vsolve/mobile-ui";
 import {
-  Award,
   Calendar,
   CheckCircle2,
   MapPin,
@@ -13,7 +12,7 @@ import {
 import type { ListingApplication } from "../queries";
 import { answerInterview, HIRING_STEP_LABELS } from "../seeker-queries";
 
-const STEPS = ["Applied", "Shortlisted", "Interview", "Connected", "Hired"] as const;
+const STEPS = ["Applied", "Shortlisted", "Interview", "Connected"] as const;
 
 function stepIndex(status: string): number {
   const label = HIRING_STEP_LABELS[status] ?? "";
@@ -52,11 +51,10 @@ export function HiringProgress({ app }: { app: ListingApplication }) {
   const current = stepIndex(app.status);
   const closed = ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
   const connected = app.status === "CONNECTED" || app.status === "CONTACTED";
-  const hired = app.status === "HIRED";
 
   return (
     <View className="gap-3">
-      {/* 5-Step Pipeline Pill Line */}
+      {/* 4-Step Pipeline Pill Line */}
       {!closed ? (
         <View className="flex-row gap-1.5">
           {STEPS.map((name, i) => {
@@ -82,7 +80,7 @@ export function HiringProgress({ app }: { app: ListingApplication }) {
       ) : null}
 
       {/* Interview Invitation / Status Card */}
-      {interview && interview.status !== "CANCELLED" && !connected && !hired ? (
+      {interview && interview.status !== "CANCELLED" && !connected ? (
         <View className="rounded-2xl border border-sky-300 bg-sky-50/70 p-3.5 gap-2">
           <View className="flex-row items-center justify-between">
             <Text className="text-sm font-extrabold text-sky-950">
@@ -183,15 +181,6 @@ export function HiringProgress({ app }: { app: ListingApplication }) {
       ) : null}
 
       {/* Connected Confirmation Banner */}
-      {hired ? (
-        <View className="flex-row items-start gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
-          <Award size={16} color="#059669" />
-          <Text className="flex-1 text-xs font-semibold leading-relaxed text-emerald-950">
-            Congratulations! The employer has hired you. Continue directly with them for joining details.
-          </Text>
-        </View>
-      ) : null}
-
       {connected ? (
         <View className="flex-row items-start gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
           <CheckCircle2 size={16} color="#059669" className="mt-0.5" />

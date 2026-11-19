@@ -12,7 +12,6 @@ describe("my applications tabs", () => {
       "INTERVIEW",
       "CONNECTED",
       "CONTACTED",
-      "HIRED",
       "REJECTED",
       "WITHDRAWN",
       "EXPIRED",
