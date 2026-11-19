@@ -82,17 +82,7 @@ export interface BusinessProfileInput {
    * unchanged is what makes this form safe to submit.
    */
   readonly upi_vpa: string;
-  /**
-   * An employer's details (contract 1.103.0), asked on the "Business details" sign-up step.
-   * Carried through every other form for the same reason as `upi_vpa`: the `PUT` replaces the
-   * whole record, so a form that left them out would erase them.
-   */
-  readonly business_category: BusinessCategory | "";
-  readonly city: string;
-  readonly address: string;
 }
-
-export type BusinessCategory = Exclude<NonNullable<BusinessProfileWrite["business_category"]>, "">;
 
 export function toBusinessProfileWrite(input: BusinessProfileInput): BusinessProfileWrite {
   return {
@@ -104,9 +94,6 @@ export function toBusinessProfileWrite(input: BusinessProfileInput): BusinessPro
     years_in_operation: input.years_in_operation,
     // Round-tripped verbatim. See `BusinessProfileInput.upi_vpa`.
     upi_vpa: input.upi_vpa,
-    business_category: input.business_category,
-    city: input.city,
-    address: input.address,
   };
 }
 
@@ -128,9 +115,6 @@ export function toBusinessProfileInput(profile: BusinessProfile | null): Busines
     gstin: profile?.gstin ?? "",
     years_in_operation: profile?.years_in_operation ?? 0,
     upi_vpa: profile?.upi_vpa ?? "",
-    business_category: (profile?.business_category ?? "") as BusinessCategory | "",
-    city: profile?.city ?? "",
-    address: profile?.address ?? "",
   };
 }
 

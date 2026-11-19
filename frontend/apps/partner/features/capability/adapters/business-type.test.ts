@@ -28,9 +28,6 @@ function profile(overrides: Partial<BusinessProfileInput> = {}): BusinessProfile
     gstin: "",
     years_in_operation: 0,
     upi_vpa: "",
-    business_category: "",
-    city: "",
-    address: "",
     ...overrides,
   };
 }

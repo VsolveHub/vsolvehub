@@ -119,7 +119,7 @@ export function updatePartnerListing(
 
 export function runListingAction(
   listingId: string,
-  action: "submit" | "publish" | "republish" | "close" | "premium" | "fill",
+  action: "submit" | "publish" | "republish" | "close" | "premium",
   reason = "",
 ) {
   return request(() =>
