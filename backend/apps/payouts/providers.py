@@ -1,4 +1,4 @@
-"""Payout provider boundary: RazorpayX in production, a deterministic fake everywhere else.
+"""Payout provider boundary: RazorpayX or Cashfree Payouts, a deterministic fake for tests.
 
 The shape mirrors `apps.commerce.providers` on purpose, and so does the one distinction that
 matters most:
@@ -16,15 +16,20 @@ than the payments one: production refuses to start without both credentials *and
 activation.
 """
 
+import base64
 import hashlib
 import hmac
 import logging
 import re
+import time
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from http import HTTPStatus
 from typing import Any, Protocol, cast
 
 import requests
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -468,6 +473,327 @@ def verify_razorpayx_signature(*, body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+#: Cashfree's own vocabulary reduced to the one `apps.payouts.services` decides on, which is
+#: RazorpayX's. Only the words change here; which of them is final is still decided in services.
+#: `SUCCESS` counts as paid only with status code `COMPLETED`: Cashfree documents a transfer as
+#: successful only then, so any other `SUCCESS` stays in flight until a poll or webhook says so.
+_CASHFREE_STATUSES: dict[str, str] = {
+    "RECEIVED": "processing",
+    "PENDING": "processing",
+    "APPROVAL_PENDING": "pending",
+    "VALIDATION_PENDING": "pending",
+    "SUCCESS": "processed",
+    "FAILED": "failed",
+    "REJECTED": "rejected",
+    "MANUALLY_REJECTED": "rejected",
+    "REVERSED": "reversed",
+}
+_CASHFREE_COMPLETED = "COMPLETED"
+#: `beneficiary_name`: alphabets and whitespace only, at most 100.
+_CASHFREE_NAME_DISALLOWED = re.compile(r"[^A-Za-z ]+")
+_CASHFREE_NAME_MAX_LENGTH = 100
+#: `transfer_id`: letters, digits and underscore, at most 40.
+_CASHFREE_TRANSFER_ID = re.compile(r"^[A-Za-z0-9_]{1,40}$")
+#: `transfer_remarks`, shown on the Partner's statement, at most 70.
+CASHFREE_TRANSFER_REMARKS = PAYOUT_NARRATION
+#: 409 codes that mean "you already sent exactly this", so the earlier result stands.
+_CASHFREE_DUPLICATE_BENEFICIARY = "beneficiary_id_already_exists"
+_CASHFREE_DUPLICATE_TRANSFER = "transfer_id_already_exists"
+_CASHFREE_TRANSFER_NOT_FOUND = "transfer_id_not_found"
+
+
+def cashfree_status(status: object, status_code: object) -> str:
+    """Cashfree's `status` and `status_code` in the shared vocabulary; unknown stays as sent."""
+
+    raw = str(status or "").strip().upper()
+    if raw == "SUCCESS" and str(status_code or "").strip().upper() != _CASHFREE_COMPLETED:
+        return "processing"
+    return _CASHFREE_STATUSES.get(raw, raw.lower())
+
+
+def _rupees_to_paise(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        paise = (Decimal(str(value)) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        return None
+    return int(paise)
+
+
+def _paise_to_rupees(paise: int) -> float:
+    # Exact for every whole-paise amount: two decimals always round-trip through a float.
+    return float(Decimal(paise) / 100)
+
+
+class CashfreePayoutProvider:
+    """Cashfree Payouts (API v2), with bounded I/O and no automatic retry.
+
+    Cashfree has no separate contact: a beneficiary is the bank account. `create_contact` only
+    names the Partner, and `create_fund_account` registers the beneficiary under an id derived
+    from the Partner and the account, so registering the same account twice finds the first.
+
+    Idempotency is `transfer_id`, which Cashfree refuses to reuse. It is our item reference, so a
+    resubmission finds the original transfer rather than making a second one, and
+    `find_payout_by_reference` settles an ambiguous submission by the same id.
+
+    Every request is authenticated by IP whitelisting on Cashfree's side, or, when
+    `CASHFREE_PAYOUT_PUBLIC_KEY` is set, by the `X-Cf-Signature` 2FA header.
+    """
+
+    code = "cashfree"
+
+    def __init__(self) -> None:
+        self._base_url = settings.CASHFREE_PAYOUT_API_BASE_URL.rstrip("/")
+        self._client_id = settings.CASHFREE_PAYOUT_CLIENT_ID
+        self._client_secret = settings.CASHFREE_PAYOUT_CLIENT_SECRET
+        self._public_key = settings.CASHFREE_PAYOUT_PUBLIC_KEY
+        self._timeout = (
+            settings.PAYMENT_PROVIDER_CONNECT_TIMEOUT_SECONDS,
+            settings.PAYMENT_PROVIDER_READ_TIMEOUT_SECONDS,
+        )
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "x-client-id": self._client_id,
+            "x-client-secret": self._client_secret,
+            "x-api-version": settings.CASHFREE_PAYOUT_API_VERSION,
+        }
+        if self._public_key:
+            headers["x-cf-signature"] = cashfree_2fa_signature(
+                client_id=self._client_id, public_key_pem=self._public_key
+            )
+        return headers
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, object] | None = None,
+        params: dict[str, str] | None = None,
+    ) -> requests.Response:
+        try:
+            return requests.request(
+                method,
+                f"{self._base_url}{path}",
+                json=cast(Any, payload),
+                headers=self._headers(),
+                params=params,
+                timeout=self._timeout,
+            )
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            logger.warning(
+                "Cashfree did not answer %s %s",
+                method,
+                path,
+                extra={"error_type": type(exc).__name__},
+            )
+            raise PayoutProviderAmbiguousError(
+                "Cashfree did not return a conclusive response."
+            ) from exc
+
+    @staticmethod
+    def _json(response: requests.Response) -> dict[str, object]:
+        try:
+            data = response.json()
+        except (requests.JSONDecodeError, ValueError) as exc:
+            raise PayoutProviderAmbiguousError("Cashfree returned an invalid response.") from exc
+        if not isinstance(data, dict):
+            raise PayoutProviderAmbiguousError("Cashfree returned an invalid response shape.")
+        return cast(dict[str, object], data)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, object] | None = None,
+        params: dict[str, str] | None = None,
+        accept_codes: tuple[str, ...] = (),
+    ) -> tuple[dict[str, object], str]:
+        """The decoded body, and the error code when it was one of `accept_codes`."""
+
+        response = self._send(method, path, payload=payload, params=params)
+        if response.status_code < HTTPStatus.BAD_REQUEST:
+            return self._json(response), ""
+        detail = _cashfree_error_detail(response)
+        if detail.code in accept_codes:
+            return {}, detail.code
+        # Never the request body: it carries a full bank account number.
+        logger.warning(
+            "Cashfree refused %s %s",
+            method,
+            path,
+            extra={
+                "http_status": detail.http_status,
+                "provider_error_code": detail.code,
+                "provider_error_reason": detail.reason,
+                "provider_error_description": detail.description,
+            },
+        )
+        if response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+            raise PayoutProviderAmbiguousError("Cashfree returned a temporary server error.")
+        said = detail.description or detail.code or "no reason given"
+        raise PayoutProviderRejectedError(f"Cashfree rejected the request: {said}", detail=detail)
+
+    @staticmethod
+    def parse_transfer(data: dict[str, object]) -> ProviderPayout:
+        identifier = data.get("cf_transfer_id")
+        amount = _rupees_to_paise(data.get("transfer_amount"))
+        if isinstance(identifier, int) and not isinstance(identifier, bool):
+            identifier = str(identifier)
+        if not isinstance(identifier, str) or not identifier or amount is None:
+            raise PayoutProviderAmbiguousError("Cashfree omitted a transfer identifier or amount.")
+        status = cashfree_status(data.get("status"), data.get("status_code"))
+        description = _text(data.get("status_description"), _DETAIL_MAX_LENGTH)
+        final_failure = status in ("failed", "rejected", "reversed")
+        return ProviderPayout(
+            provider_payout_id=identifier,
+            amount_paise=amount,
+            currency=str(data.get("transfer_currency") or "INR"),
+            status=status,
+            failure_reason=_text(data.get("status_code"), 64) if final_failure else "",
+            utr=_text(data.get("transfer_utr"), 64),
+            mode=_text(data.get("transfer_mode"), 8),
+            fees_paise=_rupees_to_paise(data.get("transfer_service_charge")),
+            tax_paise=_rupees_to_paise(data.get("transfer_service_tax")),
+            status_reason=description,
+        )
+
+    def create_payout(
+        self,
+        *,
+        fund_account_id: str,
+        amount_paise: int,
+        currency: str,
+        reference: str,
+        idempotency_key: str,  # noqa: ARG002 - Cashfree's idempotency is `transfer_id`
+        batch_reference: str,  # noqa: ARG002 - Cashfree has no notes field on a transfer
+    ) -> ProviderPayout:
+        if not _CASHFREE_TRANSFER_ID.match(reference):
+            raise PayoutProviderRejectedError(
+                "The payout reference is outside Cashfree's limits.",
+                detail=ProviderErrorDetail(reason="transfer_id_invalid"),
+            )
+        data, duplicate = self._request(
+            "POST",
+            "/transfers",
+            payload={
+                "transfer_id": reference,
+                "transfer_amount": _paise_to_rupees(amount_paise),
+                "transfer_currency": currency,
+                "transfer_mode": "imps",
+                "beneficiary_details": {"beneficiary_id": fund_account_id},
+                "transfer_remarks": CASHFREE_TRANSFER_REMARKS,
+            },
+            accept_codes=(_CASHFREE_DUPLICATE_TRANSFER,),
+        )
+        if duplicate:
+            # Sent before under this id: the original transfer is the answer, never a new one.
+            found = self.find_payout_by_reference(reference=reference)
+            if found is None:
+                raise PayoutProviderAmbiguousError("Cashfree reported a duplicate it cannot find.")
+            return found
+        return self.parse_transfer(data)
+
+    def fetch_payout(self, *, provider_payout_id: str) -> ProviderPayout:
+        data, _ = self._request("GET", "/transfers", params={"cf_transfer_id": provider_payout_id})
+        return self.parse_transfer(data)
+
+    def find_payout_by_reference(self, *, reference: str) -> ProviderPayout | None:
+        data, missing = self._request(
+            "GET",
+            "/transfers",
+            params={"transfer_id": reference},
+            accept_codes=(_CASHFREE_TRANSFER_NOT_FOUND,),
+        )
+        if missing:
+            return None
+        return self.parse_transfer(data)
+
+    def verify_webhook(self, *, body: bytes, signature: str) -> bool:  # noqa: ARG002
+        # Cashfree signs the timestamp with the body; `verify_cashfree_signature` takes both.
+        return False
+
+    def create_contact(self, *, name: str, reference_id: str) -> str:  # noqa: ARG002
+        # No contact object at Cashfree. The Partner id, compacted, prefixes the beneficiary.
+        return "vsh" + reference_id.replace("-", "")[:32]
+
+    def create_fund_account(
+        self, *, contact_id: str, holder_name: str, ifsc: str, account_number: str
+    ) -> str:
+        # Derived from the details, so the same account twice is the same beneficiary. Hashed so
+        # the number itself never appears in the identifier. 35 + 1 + 14 = 50, Cashfree's limit.
+        digest = hashlib.sha256(f"{ifsc}:{account_number}".encode()).hexdigest()[:14]
+        beneficiary_id = f"{contact_id}_{digest}"
+        name = " ".join(_CASHFREE_NAME_DISALLOWED.sub(" ", holder_name).split())
+        _, duplicate = self._request(
+            "POST",
+            "/beneficiary",
+            payload={
+                "beneficiary_id": beneficiary_id,
+                "beneficiary_name": name[:_CASHFREE_NAME_MAX_LENGTH],
+                "beneficiary_instrument_details": {
+                    "bank_account_number": account_number,
+                    "bank_ifsc": ifsc,
+                },
+            },
+            accept_codes=(_CASHFREE_DUPLICATE_BENEFICIARY,),
+        )
+        del duplicate  # Same id means same Partner and same account: the earlier one stands.
+        return beneficiary_id
+
+
+def cashfree_2fa_signature(*, client_id: str, public_key_pem: str) -> str:
+    """`X-Cf-Signature`: RSA-OAEP (SHA-1) of `<client id>.<unix time>` with Cashfree's key.
+
+    Valid for five minutes, so it is made fresh for every request.
+    """
+
+    key = serialization.load_pem_public_key(public_key_pem.encode())
+    if not isinstance(key, rsa.RSAPublicKey):
+        raise PayoutProviderError("CASHFREE_PAYOUT_PUBLIC_KEY is not an RSA public key.")
+    message = f"{client_id}.{int(time.time())}".encode()
+    # SHA-1 is Cashfree's published OAEP scheme for this header; it is not a choice made here.
+    sha1 = hashes.SHA1()  # noqa: S303
+    encrypted = key.encrypt(
+        message, padding.OAEP(mgf=padding.MGF1(algorithm=sha1), algorithm=sha1, label=None)
+    )
+    return base64.b64encode(encrypted).decode()
+
+
+def verify_cashfree_signature(*, body: bytes, signature: str, timestamp: str) -> bool:
+    """Base64 HMAC-SHA256 of `timestamp + raw body`, keyed with the Payouts client secret.
+
+    Refuses outright while the secret is unset, for the same reason as RazorpayX's.
+    """
+
+    secret = settings.CASHFREE_PAYOUT_CLIENT_SECRET
+    if not secret or not signature or not timestamp:
+        return False
+    digest = hmac.new(secret.encode(), timestamp.encode() + body, hashlib.sha256).digest()
+    return hmac.compare_digest(base64.b64encode(digest).decode(), signature)
+
+
+def _cashfree_error_detail(response: requests.Response) -> ProviderErrorDetail:
+    """Cashfree's `{"code", "message", "type"}` error body, if it sent one."""
+
+    try:
+        data = response.json()
+    except (requests.JSONDecodeError, ValueError):
+        return ProviderErrorDetail(http_status=response.status_code)
+    if not isinstance(data, dict):
+        return ProviderErrorDetail(http_status=response.status_code)
+    error = cast(dict[str, object], data)
+    return ProviderErrorDetail(
+        http_status=response.status_code,
+        code=_error_text(error, "code"),
+        reason=_error_text(error, "type"),
+        description=_error_text(error, "message"),
+    )
+
+
 def get_payout_account_provider(*, provider_code: str | None = None) -> PayoutAccountProvider:
     """The provider that registers bank accounts.
 
@@ -487,6 +813,10 @@ def get_payout_account_provider(*, provider_code: str | None = None) -> PayoutAc
         if not (settings.RAZORPAYX_KEY_ID and settings.RAZORPAYX_KEY_SECRET):
             raise PayoutProviderError("RazorpayX credentials are not configured.")
         return RazorpayXPayoutProvider()
+    if code == CashfreePayoutProvider.code:
+        if not (settings.CASHFREE_PAYOUT_CLIENT_ID and settings.CASHFREE_PAYOUT_CLIENT_SECRET):
+            raise PayoutProviderError("Cashfree Payouts credentials are not configured.")
+        return CashfreePayoutProvider()
     raise PayoutProviderError("No payout provider is configured for this environment.")
 
 
@@ -514,4 +844,13 @@ def get_payout_provider(*, provider_code: str | None = None) -> PayoutProvider:
                 "activation."
             )
         return RazorpayXPayoutProvider()
+    if code == CashfreePayoutProvider.code:
+        if not (settings.CASHFREE_PAYOUT_CLIENT_ID and settings.CASHFREE_PAYOUT_CLIENT_SECRET):
+            raise PayoutProviderError("Cashfree Payouts credentials are not configured.")
+        if not settings.PAYOUTS_LIVE_ENABLED:
+            raise PayoutProviderError(
+                "Live payouts are not enabled for this deployment. Credentials alone are not "
+                "activation."
+            )
+        return CashfreePayoutProvider()
     raise PayoutProviderError("No payout provider is configured for this environment.")

@@ -158,8 +158,18 @@ if PAYOUT_PROVIDER == "razorpayx":
         raise ImproperlyConfigured("RAZORPAYX_WEBHOOK_SECRET must contain at least 32 characters.")
     if not RAZORPAYX_API_BASE_URL.startswith("https://"):
         raise ImproperlyConfigured("RAZORPAYX_API_BASE_URL must use HTTPS.")
-if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER != "razorpayx":
-    raise ImproperlyConfigured("PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx.")
+if PAYOUT_PROVIDER == "cashfree":
+    if not (CASHFREE_PAYOUT_CLIENT_ID and CASHFREE_PAYOUT_CLIENT_SECRET):
+        raise ImproperlyConfigured(
+            "CASHFREE_PAYOUT_CLIENT_ID and CASHFREE_PAYOUT_CLIENT_SECRET must be set when "
+            "PAYOUT_PROVIDER is cashfree."
+        )
+    if not CASHFREE_PAYOUT_API_BASE_URL.startswith("https://"):
+        raise ImproperlyConfigured("CASHFREE_PAYOUT_API_BASE_URL must use HTTPS.")
+if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER not in ("razorpayx", "cashfree"):
+    raise ImproperlyConfigured(
+        "PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx or PAYOUT_PROVIDER=cashfree."
+    )
 guard_payout_account_cooling(
     PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=PRODUCTION_MINIMUM_PAYOUT_COOLING_HOURS
 )

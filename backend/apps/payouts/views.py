@@ -55,7 +55,7 @@ from apps.payouts.models import (
     PayoutBatchItem,
 )
 from apps.payouts.performance import partner_performance
-from apps.payouts.providers import verify_razorpayx_signature
+from apps.payouts.providers import verify_cashfree_signature, verify_razorpayx_signature
 from apps.payouts.selectors import with_hold_flags
 from apps.payouts.serializers import (
     DeclineWithdrawalRequestSerializer,
@@ -83,6 +83,7 @@ from apps.payouts.serializers import (
     VersionedBatchCommandSerializer,
 )
 from apps.payouts.services import (
+    apply_cashfree_payout_event,
     apply_razorpayx_payout_event,
     approve_payout_batch,
     approve_withdrawal,
@@ -695,6 +696,63 @@ class RazorpayXPayoutWebhookView(APIView):
         event_id = request.headers.get("X-Razorpay-Event-Id", "").strip()[:128] or payload_sha256
         item = apply_razorpayx_payout_event(
             decoded, event_id=event_id, payload_sha256=payload_sha256
+        )
+        return Response({"accepted": True, "applied": item is not None})
+
+
+class CashfreePayoutWebhookView(APIView):
+    """Cashfree Payouts V2 transfer events, verified with the Payouts client secret.
+
+    Applied inline, like RazorpayX's. Cashfree sends no event id, so the body's hash names the
+    delivery: a redelivery is the same body, and `event_time` tells two real events apart.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Payout Webhooks"],
+        operation_id="payout_webhook_cashfree",
+        request=OpenApiTypes.OBJECT,
+        parameters=[
+            OpenApiParameter(
+                "x-webhook-signature",
+                str,
+                location=OpenApiParameter.HEADER,
+                required=True,
+                description=(
+                    "Base64 HMAC-SHA256 of the timestamp followed by the raw body, keyed with "
+                    "the Cashfree Payouts client secret."
+                ),
+            ),
+            OpenApiParameter(
+                "x-webhook-timestamp",
+                str,
+                location=OpenApiParameter.HEADER,
+                required=True,
+                description="The timestamp Cashfree signed together with the body.",
+            ),
+        ],
+        responses={200: PayoutWebhookAcceptedSerializer, 400: ApiErrorSerializer},
+        auth=[],
+    )
+    def post(self, request: Request) -> Response:
+        raw_body = request._request.body
+        if not verify_cashfree_signature(
+            body=raw_body,
+            signature=request.headers.get("x-webhook-signature", ""),
+            timestamp=request.headers.get("x-webhook-timestamp", ""),
+        ):
+            raise ValidationError("Webhook signature is invalid.", code="webhook_signature_invalid")
+        try:
+            decoded = json.loads(raw_body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid") from exc
+        if not isinstance(decoded, dict):
+            raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid")
+        payload_sha256 = hashlib.sha256(raw_body).hexdigest()
+        item = apply_cashfree_payout_event(
+            decoded, event_id=f"cf_{payload_sha256}"[:128], payload_sha256=payload_sha256
         )
         return Response({"accepted": True, "applied": item is not None})
 

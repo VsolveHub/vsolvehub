@@ -424,7 +424,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.102.0",
+    "VERSION": "1.103.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -749,6 +749,16 @@ RAZORPAYX_KEY_ID = env("RAZORPAYX_KEY_ID", default="")
 RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
 RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
 RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
+# Cashfree Payouts (`PAYOUT_PROVIDER=cashfree`). The client secret also signs its webhooks, so
+# there is no separate webhook secret. The public key is Cashfree's 2FA key (PEM), needed only
+# when the server's outbound IP is not whitelisted in the Cashfree dashboard.
+CASHFREE_PAYOUT_API_BASE_URL = env(
+    "CASHFREE_PAYOUT_API_BASE_URL", default="https://sandbox.cashfree.com/payout"
+)
+CASHFREE_PAYOUT_API_VERSION = env("CASHFREE_PAYOUT_API_VERSION", default="2024-01-01")
+CASHFREE_PAYOUT_CLIENT_ID = env("CASHFREE_PAYOUT_CLIENT_ID", default="")
+CASHFREE_PAYOUT_CLIENT_SECRET = env("CASHFREE_PAYOUT_CLIENT_SECRET", default="")
+CASHFREE_PAYOUT_PUBLIC_KEY = env("CASHFREE_PAYOUT_PUBLIC_KEY", default="").replace("\\n", "\n")
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
 # paying people, and a wrong payout — unlike a wrong capture — cannot be refunded. The name is
 # older than test mode: RazorpayX test keys need it on too, and move only dummy money.

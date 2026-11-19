@@ -92,6 +92,13 @@ cancelling and refunding a home visit, offering a visit to a partner, search pic
 typed ids) and the partner import in proposal 0029. It is that scope only, not a general transfer
 of backend ownership; the owner-run test rule still applies.
 
+#### Cashfree Payouts — owner directive, 19 November 2026
+
+Codex will not build it, so the owner directed Claude to build Cashfree Payouts for Partner
+payouts end to end, **including** `backend/**`, `contracts/openapi/**` and their tests: the
+`PAYOUT_PROVIDER=cashfree` adapter beside RazorpayX, its webhook, settings and guards. It is that
+scope only, not a general transfer of backend ownership; the owner-run test rule still applies.
+
 ### Mobile apps (Customer + Partner) — owner directive, 30 September 2026
 
 The owner assigned the native mobile apps, **including the backend work they need**, to the
