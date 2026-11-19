@@ -20,9 +20,7 @@ const monday: DraftPeriod = {
 function mount(props: Partial<React.ComponentProps<typeof AvailabilityEditor>> = {}) {
   const docks: (DockConfig | null)[] = [];
   const ui: ReactElement = (
-    <ApplyDockContext.Provider
-      value={{ dockConfig: null, registerDock: (config) => void docks.push(config), scrollFieldIntoView: () => {} }}
-    >
+    <ApplyDockContext.Provider value={{ dockConfig: null, registerDock: (config) => void docks.push(config) }}>
       <AvailabilityEditor
         areas={[{ id: "area-1", label: "Madhapur" }]}
         initialPeriods={[monday]}

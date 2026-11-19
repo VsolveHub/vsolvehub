@@ -50,7 +50,7 @@ function problemsIn(input: BusinessProfileInput): Set<Problem> {
 export function EmployerStep() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { registerDock, scrollFieldIntoView } = useApplyDock();
+  const { registerDock } = useApplyDock();
   const application = usePartnerApplication();
   const profile = usePartnerBusinessProfile();
   const save = useSaveBusinessProfile();
@@ -146,7 +146,6 @@ export function EmployerStep() {
       <View style={styles.fields}>
         <Field label="Business name" required error={show("name") ? "Enter your business name." : null}>
           <TextInput
-            onFocus={scrollFieldIntoView}
             value={current.legal_name}
             maxLength={200}
             placeholder="e.g. Sri Sai Mobiles"
@@ -180,7 +179,6 @@ export function EmployerStep() {
 
         <Field label="City" required error={show("city") ? "Enter the city." : null}>
           <TextInput
-            onFocus={scrollFieldIntoView}
             value={current.city}
             maxLength={80}
             placeholderTextColor="#78716c"
@@ -192,7 +190,6 @@ export function EmployerStep() {
 
         <Field label="Business address" optional>
           <TextInput
-            onFocus={scrollFieldIntoView}
             value={current.address}
             maxLength={240}
             editable={editable}
@@ -203,7 +200,6 @@ export function EmployerStep() {
 
         <Field label="GSTIN" optional error={show("gstin") ? "A GSTIN has 15 letters and numbers." : null}>
           <TextInput
-            onFocus={scrollFieldIntoView}
             value={current.gstin}
             maxLength={15}
             autoCapitalize="characters"

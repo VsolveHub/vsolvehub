@@ -77,7 +77,7 @@ function Harness({ children }: { children: ReactElement }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider initialMetrics={initialMetrics}>
-        <ApplyDockContext.Provider value={{ dockConfig, registerDock, scrollFieldIntoView: () => {} }}>
+        <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
           {children}
           {dockConfig ? (
             <Pressable
