@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
+import { usePartnerBusinessProfile } from "@/features/capability/queries";
 import { useWorkCatalog } from "@/features/catalog/queries";
 
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
@@ -47,6 +48,7 @@ interface SectionProps {
  */
 const SECTIONS: Record<string, (props: SectionProps) => ReactNode> = {
   "/apply/about": AboutSection,
+  "/apply/employer": BusinessSection,
   "/apply/work": WorkSection,
   "/apply/areas": AreasSection,
   "/apply/schedule": HoursSection,
@@ -244,6 +246,33 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function NotSet() {
   return <Text style={styles.muted}>Not set</Text>;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  SHOP: "Shop",
+  CLINIC: "Clinic",
+  OFFICE: "Office",
+  RESTAURANT: "Restaurant",
+  OTHER: "Other",
+};
+
+/** An employer's "Business details" step. */
+function BusinessSection() {
+  const business = usePartnerBusinessProfile();
+  if (business.isPending) return <Spinner size="sm" />;
+  const data = business.data;
+  return (
+    <>
+      <Row label="Business name" value={data?.legal_name || "Not set"} />
+      <Row
+        label="Type of business"
+        value={data?.business_category ? (CATEGORY_LABELS[data.business_category] ?? data.business_category) : "Not set"}
+      />
+      <Row label="City" value={data?.city || "Not set"} />
+      {data?.address ? <Row label="Business address" value={data.address} /> : null}
+      {data?.gstin ? <Row label="GSTIN" value={data.gstin} /> : null}
+    </>
+  );
 }
 
 function AboutSection({ application }: SectionProps) {

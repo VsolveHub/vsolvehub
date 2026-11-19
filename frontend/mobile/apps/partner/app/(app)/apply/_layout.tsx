@@ -16,10 +16,12 @@ import {
   User,
   X,
 } from "lucide-react-native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -27,6 +29,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -127,6 +130,35 @@ export default function ApplyLayout() {
 
   // Pull down on the overview to check for a decision without restarting the app. Only there: on a
   // form step a refetch could reset what is being typed.
+  // While the keyboard is open the screen shrinks to what is above it (`KeyboardAvoidingView`
+  // below) and the Continue bar steps aside, so neither covers the field being typed in.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => {
+      setKeyboardOpen(true);
+      // Bring the field being typed in clear of the keyboard, whichever step it is on. A short
+      // wait lets the screen finish resizing first.
+      setTimeout(() => {
+        const field = TextInput.State.currentlyFocusedInput();
+        const content = scrollRef.current?.getInnerViewNode();
+        if (!field || content == null) return;
+        field.measureLayout(
+          content,
+          (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true }),
+          () => undefined,
+        );
+      }, 120);
+    });
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () =>
+      setKeyboardOpen(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   const [refreshing, setRefreshing] = useState(false);
   const { refetch: refetchApplication } = query;
   const { refetch: refetchAvailability } = availability;
@@ -178,7 +210,10 @@ export default function ApplyLayout() {
 
   return (
     <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
-      <View style={styles.rootContainer}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.rootContainer}
+      >
         {/* Top Header with Safe Area Spacing */}
         <View style={[styles.headerContainer, { paddingTop: topInset }]}>
           <View style={[styles.headerInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
@@ -296,15 +331,21 @@ export default function ApplyLayout() {
 
         {/* Scrollable Main Content */}
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
             {
               maxWidth: isDesktop ? 672 : "100%",
-              paddingBottom: (shouldShowDock || isStatusPage) ? bottomInset + 88 : 40,
+              // Room under the last field while typing, so it can be scrolled clear of the keyboard.
+              paddingBottom: keyboardOpen
+                ? 96
+                : (shouldShowDock || isStatusPage) ? bottomInset + 88 : 40,
             },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
           refreshControl={
             isOverview ? (
@@ -316,7 +357,7 @@ export default function ApplyLayout() {
         </ScrollView>
 
         {/* Fixed Bottom Action Dock Matching Mockups */}
-        {shouldShowDock ? (
+        {shouldShowDock && !keyboardOpen ? (
           <View style={[styles.dockContainer, { paddingBottom: bottomInset + 12 }]}>
             <View style={[styles.dockInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
               {/* Conflict / Error alerts if any */}
@@ -582,7 +623,7 @@ export default function ApplyLayout() {
             </View>
           </View>
         </Modal>
-      </View>
+      </KeyboardAvoidingView>
     </ApplyDockContext.Provider>
   );
 }

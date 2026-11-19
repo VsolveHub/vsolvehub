@@ -74,7 +74,7 @@ export async function updatePartnerListing(
 
 export async function runListingAction(
   listingId: string,
-  action: "submit" | "publish" | "republish" | "close" | "purchase-premium",
+  action: "submit" | "publish" | "republish" | "close" | "purchase-premium" | "fill",
   reason: string = "",
 ): Promise<unknown> {
   const data = await request(() =>

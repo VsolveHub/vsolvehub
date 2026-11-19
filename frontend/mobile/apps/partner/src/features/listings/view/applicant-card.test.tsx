@@ -48,9 +48,24 @@ describe("ApplicantCard actions", () => {
     }
   });
 
-  it("offers no further stage actions once connected", async () => {
-    const { view } = await renderCard("CONNECTED");
-    for (const label of ["Shortlist", "Schedule interview", "Mark connected", "Not selected"]) {
+  it("offers Mark as hired and Not selected once connected, and hiring sends HIRED", async () => {
+    const { view, onUpdateStatus } = await renderCard("CONNECTED");
+    expect(view.getByRole("button", { name: "Not selected" })).toBeTruthy();
+    for (const label of ["Shortlist", "Schedule interview", "Mark connected"]) {
+      expect(view.queryByRole("button", { name: label })).toBeNull();
+    }
+    fireEvent.press(view.getByRole("button", { name: "Mark as hired" }));
+    expect(onUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ id: "a-1" }), "HIRED");
+  });
+
+  it("offers Mark as hired after an interview, but never on a new applicant", async () => {
+    expect((await renderCard("INTERVIEW")).view.getByRole("button", { name: "Mark as hired" })).toBeTruthy();
+    expect((await renderCard("SUBMITTED")).view.queryByRole("button", { name: "Mark as hired" })).toBeNull();
+  });
+
+  it("offers no stage actions once hired", async () => {
+    const { view } = await renderCard("HIRED");
+    for (const label of ["Shortlist", "Schedule interview", "Mark connected", "Not selected", "Mark as hired"]) {
       expect(view.queryByRole("button", { name: label })).toBeNull();
     }
   });
