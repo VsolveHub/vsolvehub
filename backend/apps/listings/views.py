@@ -90,6 +90,7 @@ from apps.listings.services import (
     close_listing,
     create_listing,
     duplicate_listing,
+    fill_listing,
     job_options,
     moderate_listing,
     partner_summary,
@@ -426,7 +427,9 @@ class MyApplicationsView(APIView):
         responses=page_serializer(ApplicationSerializer, "ApplicationPage"),
     )
     def get(self, request: Any) -> Response:
-        rows = Application.objects.select_related("listing").filter(applicant=request.user)
+        rows = Application.objects.select_related("listing__poster__business_profile").filter(
+            applicant=request.user
+        )
         rows = filter_statuses(rows, request, Application.Status.values)
         listing_id = (request.query_params.get("listing") or "").strip()
         if listing_id:
@@ -613,6 +616,9 @@ class PartnerListingActionView(APIView):
                     actor=request.user,
                     reason=serializer.validated_data.get("reason", ""),
                 )
+            elif action == "fill":
+                # Hired for this job: close it and tell everyone still waiting.
+                listing = fill_listing(listing=listing, actor=request.user)
             elif action == "purchase-premium":
                 listing = start_premium_purchase(
                     listing=listing,
@@ -767,7 +773,9 @@ class OpsListingCollectionView(APIView):
         responses=page_serializer(PartnerListingSerializer, "OpsListingPage"),
     )
     def get(self, request: Any) -> Response:
-        rows = Listing.objects.select_related("poster", "variant", "variant__service")
+        rows = Listing.objects.select_related(
+            "poster", "poster__business_profile", "variant", "variant__service"
+        )
         rows = filter_statuses(rows, request, Listing.Status.values)
         query = (request.query_params.get("q") or "").strip()
         if query:
@@ -1140,7 +1148,7 @@ class MySavedJobsView(APIView):
         ids = SavedJob.objects.filter(user=request.user).values_list("listing_id", flat=True)
         rows = (
             Listing.objects.filter(id__in=list(ids))
-            .select_related("poster", "variant", "variant__service")
+            .select_related("poster", "poster__business_profile", "variant", "variant__service")
             .prefetch_related("media")
         )
         return Response(ListingSummarySerializer(rows, many=True).data)

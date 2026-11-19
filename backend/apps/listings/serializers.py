@@ -18,6 +18,7 @@ from apps.listings.models import (
     VendorSubscription,
     VendorSubscriptionPlan,
 )
+from apps.listings.selectors import employer_name
 
 
 class PhoneNumberField(serializers.CharField):
@@ -90,7 +91,8 @@ class ListingMediaSerializer(serializers.ModelSerializer[ListingMedia]):
 
 
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
-    poster_name = serializers.CharField(source="poster.display_name", read_only=True)
+    #: The business name when the employer gave one, else the person's name.
+    poster_name = serializers.SerializerMethodField()
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
     variant_name = serializers.CharField(source="variant.name", read_only=True)
     #: Live applications (withdrawn and expired ones excluded). Uses the queryset annotation when
@@ -99,6 +101,10 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     public_state = serializers.CharField(read_only=True)
     salary_display = serializers.SerializerMethodField()
     media = ListingMediaSerializer(many=True, read_only=True)
+
+    @extend_schema_field(serializers.CharField())
+    def get_poster_name(self, obj: Listing) -> str:
+        return employer_name(obj.poster)
 
     class Meta:
         model = Listing
@@ -182,6 +188,8 @@ class JobCountsSerializer(serializers.Serializer[dict[str, Any]]):
     shortlisted = serializers.IntegerField()
     interviews = serializers.IntegerField()
     connected = serializers.IntegerField()
+    #: People taken on; compared with the job's `vacancies` to offer "close as filled".
+    hired = serializers.IntegerField()
     #: Strong and good matches who have not applied yet: people the employer can invite.
     matches = serializers.IntegerField()
 
@@ -252,6 +260,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "shortlisted": live.filter(status=Application.Status.SHORTLISTED).count(),
             "interviews": live.filter(status=Application.Status.INTERVIEW).count(),
             "connected": live.filter(status=Application.Status.CONNECTED).count(),
+            "hired": live.filter(status=Application.Status.HIRED).count(),
             "matches": invitable_match_count(obj),
         }
 
@@ -416,7 +425,8 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
     status_events = ApplicationStatusEventSerializer(many=True, read_only=True)
     #: The latest interview, if any.
     interview = serializers.SerializerMethodField()
-    employer_name = serializers.CharField(source="listing.poster.display_name", read_only=True)
+    #: The business name when the employer gave one, else the person's name.
+    employer_name = serializers.SerializerMethodField()
     #: Shown to the candidate once an interview is accepted or they are connected.
     employer_phone = serializers.SerializerMethodField()
 
@@ -453,6 +463,10 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
             "created_at",
             "updated_at",
         )
+
+    @extend_schema_field(serializers.CharField())
+    def get_employer_name(self, obj: Application) -> str:
+        return employer_name(obj.listing.poster)
 
     @extend_schema_field(InterviewSerializer(allow_null=True))
     def get_interview(self, obj: Application) -> dict[str, Any] | None:

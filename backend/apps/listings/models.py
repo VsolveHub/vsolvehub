@@ -193,6 +193,8 @@ class Application(models.Model):
         #: Employer and candidate are in touch directly; V Solve Hub's part is done.
         CONNECTED = "CONNECTED", "Connected"
         CONTACTED = "CONTACTED", "Contacted"
+        #: The employer took this person on. Final, like the closed states below.
+        HIRED = "HIRED", "Hired"
         REJECTED = "REJECTED", "Rejected"
         WITHDRAWN = "WITHDRAWN", "Withdrawn"
         EXPIRED = "EXPIRED", "Expired"

@@ -34,6 +34,7 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
+from apps.partners.selectors import employer_business_complete
 
 from .base import (
     PARTNER_APPLICATION_PROGRESS_PURPOSE,
@@ -425,6 +426,12 @@ def submit_partner_application(
                 raise PartnerApplicationIncompleteError(
                     "Set your weekly working hours for each service area before submitting.",
                 )
+    if application.track == PartnerApplication.Track.EMPLOYER and not employer_business_complete(
+        partner
+    ):
+        raise PartnerApplicationIncompleteError(
+            "Add your business name, type and city before submitting.",
+        )
     if not _base_application_is_complete(application):
         raise PartnerApplicationIncompleteError(
             "Complete your profile, services, areas, skills, and required consents "

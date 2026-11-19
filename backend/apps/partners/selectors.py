@@ -138,6 +138,21 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
     )
 
 
+def employer_business_complete(partner: PartnerProfile) -> bool:
+    """Whether an employer has given the business details its jobs are shown under.
+
+    Business name, kind of business and city. Address and GSTIN are optional. The one rule for
+    both submitting an employer application and the apps' "Business details" checklist step.
+    """
+    business = getattr(partner, "business_profile", None)
+    return bool(
+        business
+        and business.legal_name.strip()
+        and business.business_category
+        and business.city.strip()
+    )
+
+
 def partner_has_required_consents(partner: PartnerProfile) -> bool:
     """Whether the Partner holds a live receipt for every agreement submission requires.
 

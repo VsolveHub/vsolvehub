@@ -7,13 +7,25 @@ from apps.listings.models import Listing
 from apps.partners.models import PartnerApplication
 
 
+def employer_name(poster: Any) -> str:
+    """The name a job is shown under: the employer's business name, else the person's name.
+
+    Read with `select_related("poster__business_profile")` to stay at one query per page.
+    """
+    business = getattr(poster, "business_profile", None)
+    name = business.legal_name.strip() if business else ""
+    return name or poster.display_name
+
+
 def public_listings(  # noqa: PLR0912
     filters: dict[str, Any] | None = None,
 ) -> QuerySet[Listing]:
 
     filters = filters or {}
     qs = (
-        Listing.objects.select_related("poster", "variant", "variant__service")
+        Listing.objects.select_related(
+            "poster", "poster__business_profile", "variant", "variant__service"
+        )
         .prefetch_related("variant__a10_configurations")
         .annotate(
             application_count=Count(

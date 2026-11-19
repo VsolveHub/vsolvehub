@@ -155,4 +155,6 @@ def test_api_invite_answer_and_job_card_counts(application, employer, client):
         "shortlisted": 0,
         "interviews": 1,
         "connected": 0,
+        "hired": 0,
+        "matches": 0,
     }

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.101.0)
- * Checksum: 9130679429edeeb8
+ * Source:   contracts/openapi/v1.yaml (version 1.103.0)
+ * Checksum: 49d30992c7292772
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -9561,7 +9561,7 @@ export interface components {
             listing: string;
             readonly listing_title: string;
             readonly listing_slug: string;
-            readonly status: components["schemas"]["StatusD32Enum"];
+            readonly status: components["schemas"]["Status8ebEnum"];
             applicant_snapshot?: unknown;
             readonly applicant_name: string;
             readonly applicant_phone: string;
@@ -9622,7 +9622,7 @@ export interface components {
             readonly created_at: string;
         };
         ApplicationStatusRequest: {
-            status: components["schemas"]["StatusD32Enum"];
+            status: components["schemas"]["Status8ebEnum"];
         };
         /**
          * @description * `LEGACY` - Legacy
@@ -9947,6 +9947,15 @@ export interface components {
             address_id: string;
             group_key?: string;
         };
+        /**
+         * @description * `SHOP` - Shop
+         *     * `CLINIC` - Clinic
+         *     * `OFFICE` - Office
+         *     * `RESTAURANT` - Restaurant
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        BusinessCategoryEnum: "SHOP" | "CLINIC" | "OFFICE" | "RESTAURANT" | "OTHER";
         BusinessTypeOption: {
             readonly value: string;
             readonly label: string;
@@ -12567,6 +12576,7 @@ export interface components {
             shortlisted: number;
             interviews: number;
             connected: number;
+            hired: number;
             matches: number;
         };
         /**
@@ -14415,6 +14425,7 @@ export interface components {
             readonly can_edit: boolean;
             readonly required_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
             readonly consents_complete: boolean;
+            readonly business_details_complete: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -14656,6 +14667,9 @@ export interface components {
             readonly tax_profile_effective_from: string | null;
             readonly years_in_operation: number;
             readonly upi_vpa: string;
+            readonly business_category: components["schemas"]["BusinessCategoryEnum"];
+            readonly city: string;
+            readonly address: string;
             /** Format: date-time */
             readonly updated_at: string;
         };
@@ -14676,6 +14690,12 @@ export interface components {
             years_in_operation?: number;
             /** @default  */
             upi_vpa: string;
+            /** @default  */
+            business_category: components["schemas"]["BusinessCategoryEnum"] | components["schemas"]["BlankEnum"];
+            /** @default  */
+            city: string;
+            /** @default  */
+            address: string;
         };
         /**
          * @description * `INDIVIDUAL` - Individual
@@ -19520,6 +19540,20 @@ export interface components {
          */
         Status4a3Enum: "RESERVED" | "CAPTURED" | "RELEASED";
         /**
+         * @description * `SUBMITTED` - Submitted
+         *     * `UNDER_REVIEW` - Under review
+         *     * `SHORTLISTED` - Shortlisted
+         *     * `INTERVIEW` - Interview
+         *     * `CONNECTED` - Connected
+         *     * `CONTACTED` - Contacted
+         *     * `HIRED` - Hired
+         *     * `REJECTED` - Rejected
+         *     * `WITHDRAWN` - Withdrawn
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        Status8ebEnum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW" | "CONNECTED" | "CONTACTED" | "HIRED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
+        /**
          * @description * `PENDING` - Pending
          *     * `QUALIFIED` - Qualified
          *     * `REWARDED` - Rewarded
@@ -19545,19 +19579,6 @@ export interface components {
          * @enum {string}
          */
         StatusD1aEnum: "OPEN" | "RESOLVED";
-        /**
-         * @description * `SUBMITTED` - Submitted
-         *     * `UNDER_REVIEW` - Under review
-         *     * `SHORTLISTED` - Shortlisted
-         *     * `INTERVIEW` - Interview
-         *     * `CONNECTED` - Connected
-         *     * `CONTACTED` - Contacted
-         *     * `REJECTED` - Rejected
-         *     * `WITHDRAWN` - Withdrawn
-         *     * `EXPIRED` - Expired
-         * @enum {string}
-         */
-        StatusD32Enum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW" | "CONNECTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
         StayAmenity: {
             key: string;
             label: string;

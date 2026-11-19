@@ -16,7 +16,7 @@ from django.utils import timezone
 from apps.listings import jobs
 from apps.listings.matching import GOOD, OTHER, STRONG, Match, score_match
 from apps.listings.models import Application, JobSeekerProfile, Listing, SavedJob
-from apps.listings.selectors import public_listings
+from apps.listings.selectors import employer_name, public_listings
 from apps.listings.services import (
     ListingStateError,
     can_see_matching_candidates,
@@ -238,22 +238,14 @@ def quick_apply(
         raise ListingStateError("Create your job profile first.")
     if skills:
         merge_into_profile(profile=profile, listing=listing, skills=skills)
-    application = submit_application(
+    # `submit_application` tells the employer, as it does for every application.
+    return submit_application(
         listing=listing,
         applicant=user,
         applicant_snapshot=profile_snapshot(profile, phone=str(user.phone_number)),
         cover_note=note,
         resume_url=resume_url,
     )
-    _notify(
-        recipient_id=listing.poster.user_id,
-        audience="PARTNER",
-        template_code="job_application_received",
-        purpose="jobs.application.received",
-        key=f"job-applied:{application.id}",
-        context={"job_title": listing.title, "candidate_name": profile.full_name},
-    )
-    return application
 
 
 def set_saved(*, user: Any, listing: Listing, saved: bool) -> bool:
@@ -415,7 +407,7 @@ def invite_to_apply(*, listing: Listing, profile: JobSeekerProfile) -> None:
         purpose="jobs.invite",
         key=f"job-invite:{listing.id}:{profile.id}",
         context={
-            "business_name": listing.poster.display_name,
+            "business_name": employer_name(listing.poster),
             "job_title": listing.title,
             "place": listing.location_text,
         },
