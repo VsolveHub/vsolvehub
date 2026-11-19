@@ -54,7 +54,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "V Solve Hub Partner",
   slug: "vsolve-partner",
-  owner: "vsolvehub",
+  // The partner app's EAS project (and its Play upload keystore) lives on the webaura7000
+  // account; the customer app stays on vsolvehub. EAS refuses to build when this disagrees.
+  owner: "webaura7000",
   scheme: "vsolvepartner",
   // 1.1.0: the job screen map adds a native module (react-native-maps). With the
   // `appVersion` runtime policy this keeps its JS off 1.0.0 binaries, which would crash on it.
@@ -103,7 +105,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "POST_NOTIFICATIONS",
       "VIBRATE",
     ],
-    blockedPermissions: ["ACCESS_BACKGROUND_LOCATION", "RECORD_AUDIO"],
+    // Location is used only while the app is open, so no location foreground service either:
+    // Google Play asks for a declaration and a demo video for every foreground-service type.
+    blockedPermissions: [
+      "ACCESS_BACKGROUND_LOCATION",
+      "RECORD_AUDIO",
+      "FOREGROUND_SERVICE_LOCATION",
+      "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+    ],
     ...(googleServicesFile ? { googleServicesFile } : {}),
     ...(googleMapsAndroidKey ? { config: { googleMaps: { apiKey: googleMapsAndroidKey } } } : {}),
   },
@@ -124,7 +133,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
     "expo-secure-store",
     "expo-asset",
-    "expo-audio",
+    // The offer ringtone plays only while the app is open (shouldPlayInBackground: false); a
+    // closed app rings through the OneSignal notification sound. So no background-playback service.
+    ["expo-audio", { enableBackgroundPlayback: false }],
     "expo-image",
     "expo-web-browser",
     [

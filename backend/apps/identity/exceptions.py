@@ -26,6 +26,22 @@ class AccountBlockedApiError(APIException):
     default_code = "account_blocked"
 
 
+class AccountDeletionRefusedApiError(APIException):
+    """A deletion request that cannot be filed yet, for a reason the person can act on."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Your account cannot be deleted yet."
+    default_code = "account_deletion_refused"
+
+
+class AccountDeletionHeldApiError(APIException):
+    """Erasure refused while something is unsettled. The detail lists what."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This account cannot be erased yet."
+    default_code = "account_deletion_held"
+
+
 class NoAccountForRoleApiError(APIException):
     status_code = status.HTTP_404_NOT_FOUND
     default_detail = "No account with that role exists for this number."

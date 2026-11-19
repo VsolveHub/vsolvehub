@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.103.0)
- * Checksum: 49d30992c7292772
+ * Source:   contracts/openapi/v1.yaml (version 1.104.0)
+ * Checksum: 1189a9f8959e4270
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -327,6 +327,7 @@ export interface paths {
         };
         get: operations["auth_privacy_requests_list"];
         put?: never;
+        /** @description File an ACCESS or ERASURE request. ERASURE closes the account: every other session is signed out at once and this one ends within minutes, and the account is erased at `scheduled_for` unless the person signs in again first. Repeating an ERASURE request returns the open one. */
         post: operations["auth_privacy_requests_create"];
         delete?: never;
         options?: never;
@@ -4190,6 +4191,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/privacy-requests/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Deletion and data-copy requests. `?state=open` (default) is the working queue. */
+        get: operations["operations_privacy_requests_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/privacy-requests/{privacy_request_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The person asked support to keep their account. */
+        post: operations["operations_privacy_request_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/privacy-requests/{privacy_request_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Record that a data copy was sent. ACCESS requests only. */
+        post: operations["operations_privacy_request_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/privacy-requests/{privacy_request_id}/erase/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Refused with 409 `account_deletion_held` while something is unsettled; the message lists what. 403 without a recent Operations step-up. */
+        post: operations["operations_privacy_request_erase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/privacy-requests/{privacy_request_id}/hold/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stop the clock on a deletion (a dispute, a legal request). Waits for a release. */
+        post: operations["operations_privacy_request_hold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/privacy-requests/{privacy_request_id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Refuse a request, with the reason the person will be told. */
+        post: operations["operations_privacy_request_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/privacy-requests/{privacy_request_id}/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Put a held deletion back on its schedule. Past its date, the next hourly run erases it. */
+        post: operations["operations_privacy_request_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/queues/": {
         parameters: {
             query?: never;
@@ -4584,6 +4704,28 @@ export interface paths {
         get: operations["operations_unpayable_partners"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/users/{user_id}/deletion-request/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description File a deletion for somebody who asked support (they could not use the app or website).
+         *
+         *     Support checks it is them first; the reason records how. The person is signed out
+         *     everywhere and gets the same grace period as a request they filed themselves.
+         */
+        post: operations["operations_user_deletion_request"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13837,6 +13979,28 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["OperationsPayoutAccount"][];
         };
+        OperationsPrivacyRequest: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["PrivacyRequestKindEnum"];
+            status: components["schemas"]["PrivacyStatusEnum"];
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: date-time */
+            scheduled_for: string | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            cancelled_at: string | null;
+            notes: string;
+            /** @description The operator who last decided something about it. */
+            handled_by_name: string | null;
+            /** @description IN_REVIEW only. True when an operator placed the hold, so only a release restarts it; false when the scheduled sweep did, which re-checks it every run. */
+            held_by_operations: boolean;
+            person: components["schemas"]["PrivacyRequestPerson"];
+            /** @description Open ERASURE requests only, worked out now. Empty means it can be erased. */
+            holds: components["schemas"]["PrivacyRequestHold"][];
+        };
         /** @description Every safe Operations action takes a reason. `M2-AC-804` requires it. */
         OperationsReasonRequest: {
             reason: string;
@@ -16368,26 +16532,72 @@ export interface components {
             readonly status: components["schemas"]["PrivacyStatusEnum"];
             /** Format: date-time */
             readonly requested_at: string;
+            /**
+             * Format: date-time
+             * @description ERASURE only: when the account is erased unless the person signs in again first. Null for ACCESS.
+             */
+            readonly scheduled_for: string | null;
             /** Format: date-time */
             readonly completed_at: string | null;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
         };
         PrivacyRequestCreateRequest: {
             kind: components["schemas"]["PrivacyRequestKindEnum"];
         };
+        PrivacyRequestHold: {
+            /**
+             * @description What must be settled before the account can be erased.
+             *
+             *     * `open_work` - open_work
+             *     * `money_owed` - money_owed
+             *     * `wallet_balance` - wallet_balance
+             */
+            kind: components["schemas"]["PrivacyRequestHoldKindEnum"];
+            /** @description Plain words an operator can act on or relay. */
+            detail: string;
+        };
+        /**
+         * @description * `open_work` - open_work
+         *     * `money_owed` - money_owed
+         *     * `wallet_balance` - wallet_balance
+         * @enum {string}
+         */
+        PrivacyRequestHoldKindEnum: "open_work" | "money_owed" | "wallet_balance";
         /**
          * @description * `ACCESS` - Access
          *     * `ERASURE` - Erasure
          * @enum {string}
          */
         PrivacyRequestKindEnum: "ACCESS" | "ERASURE";
+        PrivacyRequestNoteRequest: {
+            /** @description How the copy was sent, kept in the request's history. */
+            note: string;
+        };
+        PrivacyRequestPerson: {
+            /** Format: uuid */
+            user_id: string;
+            /** @description Empty once erased. */
+            name: string;
+            /** @description An `erased-…` placeholder once erased. */
+            phone_number: string;
+            roles: string[];
+            /** Format: uuid */
+            partner_id: string | null;
+        };
+        PrivacyRequestReasonRequest: {
+            /** @description Kept in the request's history. */
+            reason: string;
+        };
         /**
          * @description * `RECEIVED` - Received
          *     * `IN_REVIEW` - In review
          *     * `COMPLETED` - Completed
          *     * `REJECTED` - Rejected
+         *     * `CANCELLED` - Cancelled
          * @enum {string}
          */
-        PrivacyStatusEnum: "RECEIVED" | "IN_REVIEW" | "COMPLETED" | "REJECTED";
+        PrivacyStatusEnum: "RECEIVED" | "IN_REVIEW" | "COMPLETED" | "REJECTED" | "CANCELLED";
         ProbableDuplicate: {
             /** Format: uuid */
             readonly id: string;
@@ -21605,6 +21815,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrivacyRequest"];
+                };
+            };
+            /** @description ERASURE only: the account cannot be deleted yet (`account_deletion_open_work`: bookings still open). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -30473,6 +30692,339 @@ export interface operations {
             };
         };
     };
+    operations_privacy_requests_list: {
+        parameters: {
+            query?: {
+                kind?: "ACCESS" | "ERASURE";
+                /** @description `open`: RECEIVED or IN_REVIEW, soonest deletion first. */
+                state?: "all" | "closed" | "open";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_privacy_request_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                privacy_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyRequestReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PrivacyRequestReasonRequest"];
+                "multipart/form-data": components["schemas"]["PrivacyRequestReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_privacy_request_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                privacy_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyRequestNoteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PrivacyRequestNoteRequest"];
+                "multipart/form-data": components["schemas"]["PrivacyRequestNoteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_privacy_request_erase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                privacy_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_privacy_request_hold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                privacy_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyRequestReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PrivacyRequestReasonRequest"];
+                "multipart/form-data": components["schemas"]["PrivacyRequestReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_privacy_request_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                privacy_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyRequestReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PrivacyRequestReasonRequest"];
+                "multipart/form-data": components["schemas"]["PrivacyRequestReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_privacy_request_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                privacy_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_operations_queues: {
         parameters: {
             query?: never;
@@ -31334,6 +31886,65 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_user_deletion_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyRequestReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PrivacyRequestReasonRequest"];
+                "multipart/form-data": components["schemas"]["PrivacyRequestReasonRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPrivacyRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

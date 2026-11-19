@@ -1,6 +1,8 @@
 // Ported from frontend/apps/customer/features/account/view/privacy-requests.tsx
 // and consent-receipts.tsx
 // Exact match with Image 3 (Privacy tab: Consents & Your data)
+import { ApiRequestError } from "@vsolve/api-client";
+import { useMobileLogout } from "@vsolve/mobile-core";
 import { describeError } from "@vsolve/query/native";
 import { Badge, Button, ConfirmAction, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
@@ -14,9 +16,28 @@ import {
 } from "@/features/account/queries";
 import { AccountPageShell } from "./account-page-shell";
 
+/** "18 Dec 2026", in India's time zone. */
+function deletionDate(value: string): string {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+    new Date(value),
+  );
+}
+
+const STATUS_LABEL: Record<PrivacyRequest["status"], string> = {
+  RECEIVED: "Received",
+  IN_REVIEW: "In review",
+  COMPLETED: "Completed",
+  REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
+};
+
 export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const requests = usePrivacyRequests();
   const create = useCreatePrivacyRequest();
+  const signOut = useMobileLogout("/login");
+  // Set once a deletion is filed: Django has closed the account (signed out everywhere, this
+  // session for a few more minutes), so the person is told the date and signed out from here.
+  const [closedUntil, setClosedUntil] = useState<string | null>(null);
 
   const [confirmingErasure, setConfirmingErasure] = useState(false);
   const [confirmingAccess, setConfirmingAccess] = useState(false);
@@ -130,9 +151,9 @@ export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {})
 
             {/* Box B: Delete my data */}
             <View className="rounded-xl bg-[#F7F5F0] p-4">
-              <Text className="text-sm font-bold text-navy-900">Delete my data</Text>
+              <Text className="text-sm font-bold text-navy-900">Delete my account</Text>
               <Text className="mt-1 text-xs leading-relaxed text-text-secondary">
-                We remove what we are not required to keep. Records tax and consumer law require us to hold, such as invoices for completed work, stay until they expire.
+                Your account closes now and is deleted after 30 days. Sign in again before then to keep it. Invoices and payment records that tax and consumer law require are kept, without your name.
               </Text>
               <View className="mt-3.5">
                 <Pressable
@@ -142,7 +163,7 @@ export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {})
                   className="h-10 self-start items-center justify-center rounded-xl border border-line bg-white px-4 active:bg-[#FAF9F7] disabled:opacity-50"
                 >
                   <Text className="text-xs font-semibold text-navy-900">
-                    {openErasure ? "Request pending" : "Delete my data"}
+                    {openErasure ? "Request pending" : "Delete my account"}
                   </Text>
                 </Pressable>
               </View>
@@ -167,7 +188,7 @@ export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {})
                       <Text className="text-[10px] text-text-muted">{item.requested_at}</Text>
                     </View>
                     <Badge tone={item.status === "COMPLETED" ? "success" : "neutral"}>
-                      {item.status}
+                      {STATUS_LABEL[item.status] ?? item.status}
                     </Badge>
                   </View>
                 ))}
@@ -177,7 +198,10 @@ export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {})
 
           {create.error ? (
             <Text className="mt-3 text-xs text-danger-text">
-              {describeError(create.error, "mutation").message}
+              {create.error instanceof ApiRequestError &&
+              create.error.code === "account_deletion_open_work"
+                ? "You have bookings that are still going ahead. Finish or cancel them first, then delete your account."
+                : describeError(create.error, "mutation").message}
             </Text>
           ) : null}
         </View>
@@ -186,19 +210,36 @@ export function PrivacyScreen({ embedded = false }: { embedded?: boolean } = {})
         <ConfirmAction
           open={confirmingErasure}
           onOpenChange={setConfirmingErasure}
-          title="Delete your account data?"
-          consequence="We will review the request. Records required by law stay until their statutory period expires."
-          confirmLabel="Send delete request"
+          title="Delete your account?"
+          consequence="Your account closes now: you are signed out everywhere. We delete it 30 days later, unless you sign in again before then. Records the law requires us to keep stay, without your name. Finish or cancel open bookings first."
+          confirmLabel="Delete my account"
           pending={create.isPending}
           destructive
           onConfirm={() =>
             create.mutate("ERASURE", {
-              onSuccess: () => {
+              onSuccess: (created) => {
                 setConfirmingErasure(false);
-                void requests.refetch();
+                setClosedUntil(created.scheduled_for ?? created.requested_at);
               },
             })
           }
+        />
+
+        {/* The account is closed: say when it goes, then sign out either way. */}
+        <ConfirmAction
+          open={closedUntil !== null}
+          onOpenChange={(next) => {
+            if (!next) void signOut();
+          }}
+          title="Your account is closed"
+          consequence={
+            closedUntil
+              ? `We will delete it on ${deletionDate(closedUntil)}. Changed your mind? Sign in again before then and your account stays.`
+              : ""
+          }
+          confirmLabel="Sign out"
+          cancelLabel="Sign out"
+          onConfirm={() => void signOut()}
         />
 
         {/* Confirmation Dialog for Access */}

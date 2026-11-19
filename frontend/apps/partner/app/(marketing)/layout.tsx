@@ -40,6 +40,7 @@ const FOOTER_COLS = [
       { href: "/contact", label: "Partner Offices & Helpdesk" },
       { href: "/privacy", label: "Privacy & Data Protection" },
       { href: "/terms", label: "Partner Terms & Policies" },
+      { href: "/delete-account", label: "Delete Your Account" },
     ],
   },
 ];

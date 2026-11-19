@@ -129,6 +129,11 @@ export default function PrivacyPage() {
                 exercise these rights, contact us using the details below. Some data may be
                 retained where we are legally required to keep it.
               </p>
+              <p id="delete-account">
+                To delete your account, follow the steps on{" "}
+                <a href="/delete-account">Delete your account</a>. It also lists what we delete and
+                what the law requires us to keep.
+              </p>
             </>
           ),
         },

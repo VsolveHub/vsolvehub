@@ -15,9 +15,9 @@ import { ok, privacyRequest, refusal } from "../fixtures";
  * inferred "pending" from a null `completed_at` would tell somebody their
  * erasure request is still being worked on when it was refused days ago.
  *
- * **Erasure is confirmed, and the confirmation says what it costs.** Filing one
- * is not itself destructive, but it starts something the customer cannot take
- * back from this screen.
+ * **Erasure closes the account, and the confirmation says so.** Filing one
+ * signs the person out everywhere and deletes the account 30 days later unless
+ * they sign in again, so a success ends in the date and a sign-out.
  */
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
@@ -67,6 +67,12 @@ describe("status is Django's word", () => {
           status: "COMPLETED",
           completed_at: "2026-08-01T10:00:00Z",
         }),
+        privacyRequest({
+          id: "pr-4",
+          kind: "ERASURE",
+          status: "CANCELLED",
+          cancelled_at: "2026-08-02T10:00:00Z",
+        }),
       ]),
     );
     render(<PrivacyRequests />, { wrapper });
@@ -74,6 +80,8 @@ describe("status is Django's word", () => {
     expect(await screen.findByText("Received")).toBeInTheDocument();
     expect(screen.getByText("In review")).toBeInTheDocument();
     expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    expect(screen.getByText(/signed in again, so we kept your account/i)).toBeInTheDocument();
   });
 
   it("says plainly when nothing has been asked for", async () => {
@@ -94,7 +102,7 @@ describe("a second identical request is not offered", () => {
     // than left as a dead button.
     expect(await screen.findByRole("button", { name: /get a copy of my data/i })).toBeDisabled();
     expect(screen.getByText(/already asked for on/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /delete my data/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /delete my account/i })).toBeEnabled();
   });
 
   it("allows another once the previous one has finished", async () => {
@@ -116,7 +124,7 @@ describe("a second identical request is not offered", () => {
     client.GET.mockResolvedValue(ok([privacyRequest({ kind: "ERASURE", status: "REJECTED" })]));
     render(<PrivacyRequests />, { wrapper });
 
-    expect(await screen.findByRole("button", { name: /delete my data/i })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: /delete my account/i })).toBeEnabled();
   });
 });
 
@@ -125,22 +133,23 @@ describe("erasure is confirmed, and the confirmation is honest about it", () => 
     client.GET.mockResolvedValue(ok([]));
     render(<PrivacyRequests />, { wrapper });
 
-    fireEvent.click(await screen.findByRole("button", { name: /delete my data/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /delete my account/i }));
 
     expect(client.POST).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("says it cannot be cancelled from here, and does not claim to cancel bookings", async () => {
+  it("says the account closes now, how to keep it, and that bookings come first", async () => {
     client.GET.mockResolvedValue(ok([]));
     render(<PrivacyRequests />, { wrapper });
 
-    fireEvent.click(await screen.findByRole("button", { name: /delete my data/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /delete my account/i }));
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/cannot cancel this from here/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/signed out everywhere/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/unless you sign in again/i)).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/still going ahead are not cancelled by this/i),
+      within(dialog).getByText(/must be finished or cancelled first/i),
     ).toBeInTheDocument();
   });
 
@@ -148,26 +157,39 @@ describe("erasure is confirmed, and the confirmation is honest about it", () => 
     client.GET.mockResolvedValue(ok([]));
     render(<PrivacyRequests />, { wrapper });
 
-    await screen.findByRole("button", { name: /delete my data/i });
-    expect(screen.getByText(/records tax and consumer law require us to hold/i)).toBeInTheDocument();
+    await screen.findByRole("button", { name: /delete my account/i });
+    expect(
+      screen.getByText(/records that tax and consumer law require are kept/i),
+    ).toBeInTheDocument();
   });
 
-  it("files the request Django's way and shows the server's own row", async () => {
+  it("files the request Django's way, then gives the date and offers sign-out", async () => {
     client.GET.mockResolvedValue(ok([]));
     client.POST.mockResolvedValue(
-      ok(privacyRequest({ id: "pr-new", kind: "ERASURE", status: "RECEIVED" }), 201),
+      ok(
+        privacyRequest({
+          id: "pr-new",
+          kind: "ERASURE",
+          status: "RECEIVED",
+          scheduled_for: "2026-12-18T06:30:00Z",
+        }),
+        201,
+      ),
     );
     render(<PrivacyRequests />, { wrapper });
 
-    fireEvent.click(await screen.findByRole("button", { name: /delete my data/i }));
-    fireEvent.click(screen.getByRole("button", { name: /request deletion/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /delete my account/i }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /delete my account/i }),
+    );
 
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
     expect(client.POST.mock.calls[0]![0]).toBe("/api/v1/auth/privacy/requests/");
     expect(client.POST.mock.calls[0]![1].body).toEqual({ kind: "ERASURE" });
-    // The id, the timestamp and the opening status are Django's to decide, so
-    // the row is the 201 body rather than something assembled from the form.
-    expect(await screen.findByText("Received")).toBeInTheDocument();
+    // The date is Django's `scheduled_for`, never one this screen worked out.
+    expect(await screen.findByText("Your account is closed")).toBeInTheDocument();
+    expect(screen.getByText(/delete it on 18 Dec 2026/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
   });
 
   it("keeps the dialog open and says why when the request is refused", async () => {

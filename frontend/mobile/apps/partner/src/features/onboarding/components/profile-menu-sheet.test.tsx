@@ -82,13 +82,13 @@ describe("ProfileMenuSheet (applicant menu)", () => {
   });
 
   it("says so when a deletion has already been requested", async () => {
-    const { queryByText } = await open({ deletionNote: "Deletion requested on 12 Nov 2026. We'll contact you." });
-    expect(queryByText("Deletion requested on 12 Nov 2026. We'll contact you.")).toBeTruthy();
+    const { queryByText } = await open({ deletionNote: "Your account will be deleted on 12 Dec 2026." });
+    expect(queryByText("Your account will be deleted on 12 Dec 2026.")).toBeTruthy();
   });
 
   it("shows no deletion note when nothing was requested", async () => {
     const { queryByText } = await open();
-    expect(queryByText(/Deletion requested/)).toBeNull();
+    expect(queryByText(/will be deleted on/)).toBeNull();
   });
 
   it("falls back to the help page when no sheet is provided", async () => {

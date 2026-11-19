@@ -281,6 +281,11 @@ def create_authenticated_session(
             "revoked_at": None,
         },
     )
+    # Every sign-in path ends here, so this is the one place "signing in again before the
+    # deletion date keeps the account" has to be true.
+    from apps.identity.account_deletion import cancel_deletion_on_sign_in  # noqa: PLC0415
+
+    cancel_deletion_on_sign_in(user)
     return session
 
 
@@ -430,7 +435,14 @@ def set_communication_preference(
     return preference
 
 
-def create_privacy_request(*, user: User, kind: str) -> PrivacyRequest:
+def create_privacy_request(
+    *, user: User, kind: str, current_session_key: str | None = None
+) -> PrivacyRequest:
+    if kind == PrivacyRequest.Kind.ERASURE:
+        # A deletion is a lifecycle, not a row: it closes the account and schedules erasure.
+        from apps.identity.account_deletion import request_account_deletion  # noqa: PLC0415
+
+        return request_account_deletion(user=user, current_session_key=current_session_key)
     request = PrivacyRequest.objects.create(user=user, kind=kind)
     record_access_event(
         actor=user,
