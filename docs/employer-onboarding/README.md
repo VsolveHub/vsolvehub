@@ -437,9 +437,9 @@ you open yours; `1.103.0` at the time of writing). Add a CHANGELOG entry in the 
 
 ## 6. Work plan: phases and tasks
 
-Estimates assume full days. Finish each phase's "Done when" before starting the next.
+Finish each phase's "Done when" before starting the next.
 
-### Phase 0: Set up and read (½ day)
+### Phase 0: Set up and read
 
 - [ ] 0.1 `git checkout main && git pull`, then `git checkout -b employer-onboarding/v1`.
 - [ ] 0.2 Run the backend (`backend\scripts\server.cmd`), the partner web and admin apps, and
@@ -449,7 +449,7 @@ Estimates assume full days. Finish each phase's "Done when" before starting the 
 **Done when:** you can describe today's EMPLOYER flow end to end, and you've written down
 anything in this plan that doesn't match the code (ask the owner about it).
 
-### Phase 1: Backend models and GSTIN module (1½ days)
+### Phase 1: Backend models and GSTIN module
 
 - [ ] 1.1 `backend/apps/partners/models/employer.py`: both models exactly as in 3.1, exported.
 - [ ] 1.2 Add the three `PartnerDocument.Kind` values (3.2).
@@ -465,7 +465,7 @@ constraint refuses a bad row (use `pytest.raises(IntegrityError)`).
 
 **Done when:** `backend\scripts\quality-static.cmd` passes.
 
-### Phase 2: Backend applicant side (2 days)
+### Phase 2: Backend applicant side
 
 - [ ] 2.1 `required_document_kinds` / `offered_document_kinds` (4.2), and replace the four reads.
 - [ ] 2.2 `SELFIE` only accepts images (3.2).
@@ -493,7 +493,7 @@ constraint refuses a bad row (use `pytest.raises(IntegrityError)`).
 
 **Done when:** `quality-static.cmd` passes and the focused modules are written.
 
-### Phase 3: Backend Operations review (1½ days)
+### Phase 3: Backend Operations review
 
 - [ ] 3.1 `employer_hints(profile)` (4.3).
 - [ ] 3.2 `set_employer_check(...)` service + `OperationsEmployerCheckView` (A5) in
@@ -511,7 +511,7 @@ constraint refuses a bad row (use `pytest.raises(IntegrityError)`).
 - hints: state mismatch, PAN type mismatch, duplicate GSTIN (including one held by a
   `PartnerBusinessProfile`), Udyam
 
-### Phase 4: Backend job rules (1½ days)
+### Phase 4: Backend job rules
 
 - [ ] 4.1 `employer_public_identity` + serializer changes (4.4.1–2).
 - [ ] 4.2 Individual limits (4.4.3).
@@ -528,7 +528,7 @@ constraint refuses a bad row (use `pytest.raises(IntegrityError)`).
 `test_employer_drafts_before_approval.py`. Update `backend/tests/listings/jobs_helpers.py` so
 helper employers get an `EmployerProfile` (business by default).
 
-### Phase 5: Publish the contract (½ day)
+### Phase 5: Publish the contract
 
 From `backend`:
 
@@ -549,7 +549,7 @@ pnpm contract:check
 **Done when:** `quality-static.cmd` (it includes the contract drift check) and
 `pnpm contract:check` both pass.
 
-### Phase 6: Partner web onboarding screens (3 days)
+### Phase 6: Partner web onboarding screens
 
 All under `frontend/apps/partner/`.
 
@@ -610,7 +610,7 @@ Continue; switching type asks first).
 
 **Done when:** `pnpm lint`, `pnpm typecheck` and `pnpm build` pass in `frontend`.
 
-### Phase 7: Operations console (1½ days)
+### Phase 7: Operations console
 
 All under `frontend/apps/admin/features/partner-review/`.
 
@@ -632,7 +632,7 @@ All under `frontend/apps/admin/features/partner-review/`.
 **Tests to write:** `view/employer-review-panel.test.tsx`: renders both types; approve is
 disabled until all checks pass; Fail needs a note.
 
-### Phase 8: Partner web job form + customer web job cards (1 day)
+### Phase 8: Partner web job form + customer web job cards
 
 - [ ] 8.1 `frontend/apps/partner/features/listings/view/post-job-wizard.tsx`: when the employer is
       an individual (read `employer.hiring_as` from `usePartnerApplication()`):
@@ -651,7 +651,7 @@ disabled until all checks pass; Fail needs a note.
 **Tests to write:** wizard test for the individual restrictions; a render test for the employer
 block on a job card (both types).
 
-### Phase 9: Mobile apps (3 days)
+### Phase 9: Mobile apps
 
 Read `frontend/mobile/AGENTS.md` and `frontend/mobile/README.md` first, and tell the mobile
 developer you're starting.
@@ -672,7 +672,7 @@ developer you're starting.
 **Done when:** the mobile typecheck and lint commands from `frontend/mobile/README.md` pass.
 **Do not start an EAS build or an `eas update`.** The owner does releases.
 
-### Phase 10: Demo data, manual test, hand-over (1 day)
+### Phase 10: Demo data, manual test, hand-over
 
 - [ ] 10.1 `seed_jobs_demo.py`: give both existing demo employers a complete **business**
       `EmployerProfile` with `has_gst=False` and `business_proof_type=SHOP_ESTABLISHMENT`.
@@ -683,8 +683,6 @@ developer you're starting.
 - [ ] 10.3 Walk through section 8 yourself in the browser and fix what breaks.
 - [ ] 10.4 Open the PR (section 9 checklist). Put screenshots of every new screen (desktop +
       phone width) in the PR description.
-
-Total: about **16–17 working days**.
 
 ---
 
