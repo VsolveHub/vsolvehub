@@ -37,6 +37,9 @@ class PartnerBusinessProfileSerializer(serializers.ModelSerializer[PartnerBusine
             "tax_profile_effective_from",
             "years_in_operation",
             "upi_vpa",
+            "business_category",
+            "city",
+            "address",
             "updated_at",
         )
         read_only_fields = fields
@@ -64,6 +67,16 @@ class PartnerBusinessProfileWriteSerializer(serializers.Serializer[dict[str, obj
     #: that is where Vsolve pays somebody and this is where somebody else pays them. Blank is the
     #: ordinary state — the deep link is simply not offered and the published amount still is.
     upi_vpa = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
+    #: An employer's details ("I want to hire staff"). Optional here; submitting an employer
+    #: application needs `legal_name`, `business_category` and `city`.
+    business_category = serializers.ChoiceField(
+        choices=PartnerBusinessProfile.BusinessCategory.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    city = serializers.CharField(required=False, allow_blank=True, max_length=80, default="")
+    address = serializers.CharField(required=False, allow_blank=True, max_length=240, default="")
 
 
 class OperationsTaxProfileVerifySerializer(serializers.Serializer[dict[str, object]]):

@@ -34,7 +34,7 @@ from apps.partners.models import (
     PartnerServiceArea,
     PartnerSkill,
 )
-from apps.partners.selectors import partner_has_required_consents
+from apps.partners.selectors import employer_business_complete, partner_has_required_consents
 from apps.partners.storage import SignedUpload
 
 logger = logging.getLogger(__name__)
@@ -137,6 +137,12 @@ def _base_application_is_complete(application: PartnerApplication) -> bool:
     ):
         # A stay host or rental owner: who they are and the agreements are enough.
         # Trades, services and areas describe travelling to a customer and are not asked.
+        # An employer also names the business its jobs are posted under.
+        if (
+            application.track == PartnerApplication.Track.EMPLOYER
+            and not employer_business_complete(partner)
+        ):
+            return False
         return bool(partner.display_name.strip()) and partner_has_required_consents(partner)
     return all(
         (

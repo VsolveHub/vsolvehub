@@ -14,6 +14,7 @@ type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
 export type RequirementCode =
   | "DISPLAY_NAME"
+  | "BUSINESS_DETAILS"
   | "EXPERIENCE_YEARS"
   | "SKILLS"
   | "SERVICES"
@@ -64,6 +65,17 @@ export function requirements(
       href: "/apply/about",
       isMet: (application?.display_name ?? "").trim().length > 0,
     },
+    ...(application?.track === "EMPLOYER"
+      ? ([
+          {
+            // The server's own rule (business name, kind and city), as on the website.
+            code: "BUSINESS_DETAILS",
+            label: "Business details",
+            href: "/apply/employer",
+            isMet: application.business_details_complete,
+          },
+        ] satisfies Requirement[])
+      : []),
     ...(application?.track === "SERVICES"
       ? ([
           {

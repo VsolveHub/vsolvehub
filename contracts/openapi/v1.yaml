@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.102.0
+  version: 1.104.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -23811,7 +23811,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusD32Enum'
+          - $ref: '#/components/schemas/Status8ebEnum'
           readOnly: true
         applicant_snapshot: {}
         applicant_name:
@@ -23983,7 +23983,7 @@ components:
       type: object
       properties:
         status:
-          $ref: '#/components/schemas/StatusD32Enum'
+          $ref: '#/components/schemas/Status8ebEnum'
       required:
       - status
     ArchetypeEnum:
@@ -24779,6 +24779,20 @@ components:
           minLength: 1
       required:
       - address_id
+    BusinessCategoryEnum:
+      enum:
+      - SHOP
+      - CLINIC
+      - OFFICE
+      - RESTAURANT
+      - OTHER
+      type: string
+      description: |-
+        * `SHOP` - Shop
+        * `CLINIC` - Clinic
+        * `OFFICE` - Office
+        * `RESTAURANT` - Restaurant
+        * `OTHER` - Other
     BusinessTypeOption:
       type: object
       properties:
@@ -31279,11 +31293,14 @@ components:
           type: integer
         connected:
           type: integer
+        hired:
+          type: integer
         matches:
           type: integer
       required:
       - applied
       - connected
+      - hired
       - interviews
       - matches
       - shortlisted
@@ -36189,6 +36206,9 @@ components:
         consents_complete:
           type: boolean
           readOnly: true
+        business_details_complete:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -36199,6 +36219,7 @@ components:
           readOnly: true
       required:
       - biography
+      - business_details_complete
       - can_edit
       - change_request_message
       - consents
@@ -36813,12 +36834,25 @@ components:
         upi_vpa:
           type: string
           readOnly: true
+        business_category:
+          allOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
         updated_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - address
+      - business_category
       - business_type
+      - city
       - gst_registered
       - gstin
       - gstin_verified_at
@@ -36860,6 +36894,19 @@ components:
           type: string
           default: ''
           maxLength: 120
+        business_category:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        city:
+          type: string
+          default: ''
+          maxLength: 80
+        address:
+          type: string
+          default: ''
+          maxLength: 240
       required:
       - business_type
     PartnerBusinessTypeEnum:
@@ -49060,6 +49107,30 @@ components:
         * `RESERVED` - Reserved
         * `CAPTURED` - Captured
         * `RELEASED` - Released
+    Status8ebEnum:
+      enum:
+      - SUBMITTED
+      - UNDER_REVIEW
+      - SHORTLISTED
+      - INTERVIEW
+      - CONNECTED
+      - CONTACTED
+      - HIRED
+      - REJECTED
+      - WITHDRAWN
+      - EXPIRED
+      type: string
+      description: |-
+        * `SUBMITTED` - Submitted
+        * `UNDER_REVIEW` - Under review
+        * `SHORTLISTED` - Shortlisted
+        * `INTERVIEW` - Interview
+        * `CONNECTED` - Connected
+        * `CONTACTED` - Contacted
+        * `HIRED` - Hired
+        * `REJECTED` - Rejected
+        * `WITHDRAWN` - Withdrawn
+        * `EXPIRED` - Expired
     Status9f9Enum:
       enum:
       - PENDING
@@ -49100,28 +49171,6 @@ components:
       description: |-
         * `OPEN` - Open
         * `RESOLVED` - Resolved
-    StatusD32Enum:
-      enum:
-      - SUBMITTED
-      - UNDER_REVIEW
-      - SHORTLISTED
-      - INTERVIEW
-      - CONNECTED
-      - CONTACTED
-      - REJECTED
-      - WITHDRAWN
-      - EXPIRED
-      type: string
-      description: |-
-        * `SUBMITTED` - Submitted
-        * `UNDER_REVIEW` - Under review
-        * `SHORTLISTED` - Shortlisted
-        * `INTERVIEW` - Interview
-        * `CONNECTED` - Connected
-        * `CONTACTED` - Contacted
-        * `REJECTED` - Rejected
-        * `WITHDRAWN` - Withdrawn
-        * `EXPIRED` - Expired
     StayAmenity:
       type: object
       properties:

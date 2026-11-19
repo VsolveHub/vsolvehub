@@ -11,11 +11,13 @@ import {
   View,
 } from "react-native";
 
+import { useApplyDock } from "../model/dock-context";
 import { isListingTrack } from "../model/steps";
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
   const { draft, update, isReadOnly, application } = useApplicationEditor();
+  const { scrollFieldIntoView } = useApplyDock();
   const isStayHost = application?.track === "STAY_HOST";
   const isRentalOwner = application?.track === "RENTAL_OWNER";
   const isEmployer = application?.track === "EMPLOYER";
@@ -66,6 +68,7 @@ export function AboutStep() {
           Full Name <Text style={styles.requiredAsterisk}>*</Text>
         </Text>
         <TextInput
+          onFocus={scrollFieldIntoView}
           autoComplete="name"
           maxLength={120}
           placeholder="e.g. Ramesh Kumar"
@@ -87,6 +90,7 @@ export function AboutStep() {
             Years of Experience <Text style={styles.requiredAsterisk}>*</Text>
           </Text>
           <TextInput
+            onFocus={scrollFieldIntoView}
             keyboardType="number-pad"
             maxLength={2}
             placeholder="e.g. 5"
@@ -106,6 +110,7 @@ export function AboutStep() {
           <Text style={styles.optionalText}>(optional)</Text>
         </Text>
         <TextInput
+          onFocus={scrollFieldIntoView}
           multiline
           numberOfLines={4}
           maxLength={2000}

@@ -26,7 +26,7 @@ from apps.partners.models import (
     PartnerProfile,
     Skill,
 )
-from apps.partners.selectors import partner_has_required_consents
+from apps.partners.selectors import employer_business_complete, partner_has_required_consents
 from apps.payouts.models import PartnerPayoutAccount
 
 #: Serializer context value for the applicant reading their own application. Without it the
@@ -482,6 +482,7 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     can_edit = serializers.BooleanField(source="is_editable", read_only=True)
     required_document_kinds = serializers.SerializerMethodField()
     consents_complete = serializers.SerializerMethodField()
+    business_details_complete = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerApplication
@@ -508,6 +509,7 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "can_edit",
             "required_document_kinds",
             "consents_complete",
+            "business_details_complete",
             "created_at",
             "updated_at",
         )
@@ -526,6 +528,15 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     def get_consents_complete(application: PartnerApplication) -> bool:
         """Every agreement currently required for submission is accepted, at its current version."""
         return partner_has_required_consents(application.partner)
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_business_details_complete(application: PartnerApplication) -> bool:
+        """An employer has named its business, its kind and city (the server's own rule). Always
+        true for other tracks, which are not asked."""
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return True
+        return employer_business_complete(application.partner)
 
     def to_representation(self, instance: PartnerApplication) -> dict[str, Any]:
         """The applicant's own view drops what belongs to Operations.

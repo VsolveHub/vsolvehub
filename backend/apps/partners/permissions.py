@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import AccessAuditEvent, User, UserRole, UserSession
 from apps.identity.services import record_access_event
+from apps.partners.models import PartnerProfile
 from common.observability.context import get_request_id
 
 
@@ -68,6 +69,29 @@ class IsPartnerUser(BasePermission):
             and user.is_authenticated
             and user.is_active
             and has_active_session_role(request=request, role_code="partner")
+        )
+
+
+class IsPartnerOrApplicant(BasePermission):
+    """A signed-in user who has a partner profile: an approved Partner, or someone who has only
+    just started an application.
+
+    The apply screens run on a session that has not switched to the partner role yet (the
+    application endpoints need only a signed-in user for that reason), so a screen inside them,
+    such as an employer's "Business details", cannot use `IsPartnerUser`. A plain customer has no
+    partner profile and is still refused. Views using this must scope every read and write to the
+    caller's own profile.
+    """
+
+    message = "Partner access is required."
+
+    def has_permission(self, request: Request, _view: APIView) -> bool:
+        user = request.user
+        return bool(
+            isinstance(user, User)
+            and user.is_authenticated
+            and user.is_active
+            and PartnerProfile.objects.filter(user=user).exists()
         )
 
 

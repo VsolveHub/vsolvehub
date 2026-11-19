@@ -1,5 +1,43 @@
 # API Contract Changelog
 
+## 1.104.0 - Employer business details
+
+Additive, with one behaviour change to submitting an `EMPLOYER` application.
+
+- **Added** `business_category` (`SHOP`, `CLINIC`, `OFFICE`, `RESTAURANT`, `OTHER`), `city` and
+  `address` to `PartnerBusinessProfile` and to `PUT /partner/business-profile/` (all optional
+  there). `legal_name` is the business name.
+- **Added** `business_details_complete` (boolean) on `PartnerApplication`: an `EMPLOYER` has a
+  business name, kind of business and city. Always `true` for other tracks.
+- **Behaviour** `POST /partner/application/submit/` for an `EMPLOYER` answers
+  `409 partner_application_incomplete` ("Add your business name, type and city before
+  submitting.") until those three are given.
+- **Behaviour** `poster_name` on listings and `employer_name` on applications are the employer's
+  business name when one is given, else the person's name (as before).
+
+## 1.103.0 - Hiring outcome: Hired, allowed stage moves, close a job as filled
+
+Additive, with one behaviour change to applicant status updates.
+
+- **Added** `HIRED` to the job application status (`Application.status`): the employer took the
+  person on. Final. The candidate is told ("Congratulations! The employer has hired you.").
+- **Added** `counts.hired` on `PartnerListing`, so the apps can offer to close a job as filled once
+  hires reach `vacancies`.
+- **Added** action `fill` on `POST /partner/listings/{listing_id}/{action}`: closes the job, moves
+  every applicant still being considered to `REJECTED` (audited as "Position filled", told "This
+  position has been filled"), and cancels their open interviews. Needs at least one `HIRED`
+  applicant (`409 listing_state_conflict` otherwise). On a closed job it changes nothing.
+- **Behaviour** `POST /partner/listing-applications/{id}/status` now allows only these moves and
+  answers `409 listing_state_conflict` for any other: Submitted/Under review → Shortlisted,
+  Interview, Connected, Not selected; Shortlisted → Interview, Connected, Not selected; Interview →
+  Connected, Hired, Not selected; Contacted → Interview, Connected, Hired, Not selected; Connected →
+  Hired, Not selected; Not selected → Interview (re-invite). Hired, Withdrawn and Expired are final.
+  Asking for the current status again changes nothing (safe to retry).
+- **Behaviour** `reveal-contact` moves only a new, in-review or shortlisted applicant to
+  `CONTACTED`; an interviewee or hire keeps their stage.
+- **Behaviour** the employer is now notified (`job_application_received`) for every application,
+  not only quick applies.
+
 ## 1.102.0 - Account deletion: grace period, holds, erasure and an Operations queue
 
 Additive, with one behaviour change to `POST /auth/privacy/requests/` for `kind: ERASURE`.

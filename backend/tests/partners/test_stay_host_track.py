@@ -17,8 +17,15 @@ from apps.catalog.models import (
 )
 from apps.identity.models import User
 from apps.partners.capabilities import is_approved_stay_host, workspace_grants
+from apps.partners.capabilities.registration import upsert_business_profile
 from apps.partners.exceptions import PartnerApplicationIncompleteError
-from apps.partners.models import PartnerApplication, PartnerConsentDocument, PartnerDocument
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerBusinessProfile,
+    PartnerConsentDocument,
+    PartnerDocument,
+)
+from apps.partners.serializers import PartnerApplicationSerializer
 from apps.partners.services import submit_partner_application, update_partner_application
 from apps.stay.services import create_property, public_properties, submit_property
 
@@ -63,6 +70,17 @@ def _upload_required_documents(application: PartnerApplication) -> None:
         )
 
 
+def _business_details(application: PartnerApplication, **overrides: str) -> None:
+    """The employer's "Business details" step."""
+    values = {"legal_name": "Asha Stores", "business_category": "SHOP", "city": "Hyderabad"}
+    values.update(overrides)
+    upsert_business_profile(
+        partner=application.partner,
+        business_type=PartnerBusinessProfile.BusinessType.EMPLOYER,
+        **values,
+    )
+
+
 @pytest.fixture
 def host_user(db):  # noqa: ARG001
     return User.objects.create_user(phone_number="+919977770001", full_name="Asha Rao")
@@ -95,12 +113,41 @@ def test_employer_submits_without_trades_areas_or_hours(host_user):
     employers, so an employer (who is never shown those steps) could not send an application.
     """
     application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+    _business_details(application)
     _upload_required_documents(application)
 
     submitted = submit_partner_application(user=host_user, expected_version=application.version)
 
     assert submitted.status == PartnerApplication.Status.SUBMITTED
     assert submitted.track == PartnerApplication.Track.EMPLOYER
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("missing", ["legal_name", "business_category", "city"])
+def test_employer_needs_business_name_type_and_city(host_user, missing):
+    application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+    _business_details(application, **{missing: ""})
+    _upload_required_documents(application)
+
+    with pytest.raises(PartnerApplicationIncompleteError, match="business name, type and city"):
+        submit_partner_application(user=host_user, expected_version=application.version)
+
+
+@pytest.mark.django_db
+def test_application_says_whether_business_details_are_complete(host_user):
+    """The apps' "Business details" checklist step reads the server's own rule."""
+    application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+    assert PartnerApplicationSerializer(application).data["business_details_complete"] is False
+
+    _business_details(application, address="", gstin="")
+    application.refresh_from_db()
+    assert PartnerApplicationSerializer(application).data["business_details_complete"] is True
+
+
+@pytest.mark.django_db
+def test_other_tracks_are_never_asked_for_business_details(host_user):
+    application = _start(host_user, track=PartnerApplication.Track.STAY_HOST)
+    assert PartnerApplicationSerializer(application).data["business_details_complete"] is True
 
 
 @pytest.mark.django_db

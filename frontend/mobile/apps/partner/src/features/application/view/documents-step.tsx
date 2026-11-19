@@ -17,7 +17,7 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useApplyDock } from "../model/dock-context";
 import { requiredDocumentKinds } from "../model/readiness";
 import { isDocumentRejected } from "../model/status";
-import { isListingTrack } from "../model/steps";
+import { previousStep } from "../model/progress";
 import { usePartnerApplication } from "../queries";
 import { usePartnerDocumentAccess } from "../upload-queries";
 import { StepFrame } from "./application-editor";
@@ -79,11 +79,14 @@ export function DocumentsStep() {
     router.push("/apply/review");
   }, [router]);
 
+  // The step before Documents in this partner's own list: hours for services, Business details
+  // for employers, About you for stays and rentals.
+  const backHref = previousStep("/apply/documents", application?.track)?.href ?? "/apply/about";
+
   useEffect(() => {
     registerDock({
       label: "Continue",
-      // The step before Documents: your hours for services, About you for stays and rentals.
-      backHref: isListingTrack(application?.track) ? "/apply/about" : "/apply/schedule",
+      backHref,
       nextStepName: "Agree & send",
       onCommit,
       isSaving: false,
@@ -95,7 +98,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, isListingTrack(application?.track)]);
+  }, [registerDock, onCommit, backHref]);
 
   useEffect(() => {
     return () => {

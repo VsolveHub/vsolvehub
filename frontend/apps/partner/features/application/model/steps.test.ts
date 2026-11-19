@@ -164,3 +164,27 @@ describe("whether the partner has chosen how to join", () => {
     expect(isUnchosenDraft(null)).toBe(false);
   });
 });
+
+describe("the employer path", () => {
+  it("adds Business details after About you, and nothing for travelling to a customer", () => {
+    expect(applicationSteps("EMPLOYER").map((step) => step.href)).toEqual([
+      "/apply",
+      "/apply/about",
+      "/apply/employer",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+    expect(nextStep("/apply/about", "EMPLOYER")?.href).toBe("/apply/employer");
+    expect(nextStep("/apply/employer", "EMPLOYER")?.href).toBe("/apply/documents");
+  });
+
+  it("shows Business details in the preview before starting", () => {
+    expect(trackPreview("EMPLOYER").steps.map((step) => step.href)).toContain("/apply/employer");
+  });
+
+  it("is never asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"] as const) {
+      expect(applicationSteps(track).map((step) => step.href)).not.toContain("/apply/employer");
+    }
+  });
+});

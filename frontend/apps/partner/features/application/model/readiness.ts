@@ -23,6 +23,7 @@ type Schedule = Schemas["PartnerSchedule"];
 
 export type RequirementCode =
   | "DISPLAY_NAME"
+  | "BUSINESS_DETAILS"
   | "EXPERIENCE_YEARS"
   | "SKILLS"
   | "SERVICE_AREAS"
@@ -98,6 +99,13 @@ export function requirements(
       isMet: (application?.display_name ?? "").trim().length > 0,
     },
     {
+      // The server's own rule (business name, kind and city); only employers are asked.
+      code: "BUSINESS_DETAILS",
+      labelKey: "apply.requirements.businessDetails",
+      href: "/apply/employer",
+      isMet: application?.business_details_complete ?? false,
+    },
+    {
       code: "EXPERIENCE_YEARS",
       labelKey: "apply.requirements.experienceYears",
       href: "/apply/about",
@@ -151,10 +159,14 @@ export function requirements(
   // A stay host, rental owner or employer lists something or hires for a business. Trades,
   // areas and experience are for people who travel to a customer, and the server does not
   // ask a listing track for them.
+  const forTrack =
+    application?.track === "EMPLOYER"
+      ? list
+      : list.filter((requirement) => requirement.code !== "BUSINESS_DETAILS");
   if (isListingTrack(application?.track)) {
-    return list.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
+    return forTrack.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
   }
-  return list;
+  return forTrack;
 }
 
 const SERVICE_ONLY_REQUIREMENTS: ReadonlySet<RequirementCode> = new Set([

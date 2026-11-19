@@ -90,6 +90,12 @@ describe("ProfilePreview", () => {
     expect(view.getByText("Electrical")).toBeTruthy();
     expect(view.getByText("Fan repair · Ceiling fan")).toBeTruthy();
     expect(view.getByText("Not uploaded")).toBeTruthy();
+    // Progress, from the same helper as the overview checklist.
+    // The ring and the step marks show no words, so check what a screen reader hears.
+    expect(view.getByLabelText(/^\d+ of \d+ steps complete$/)).toBeTruthy();
+    expect(view.getAllByLabelText("Done").length).toBeGreaterThan(0);
+    expect(view.getAllByLabelText(/things? needed$/).length).toBeGreaterThan(0);
+    expect(view.queryByText("Done")).toBeNull();
     expect(view.getAllByText("Alappuzha").length).toBeGreaterThan(0);
     expect(view.getByText("Monday")).toBeTruthy();
     expect(view.getByText("09:00 – 18:00")).toBeTruthy();

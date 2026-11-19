@@ -23,6 +23,7 @@ from apps.listings.models import (
     VendorSubscription,
     VendorSubscriptionPlan,
 )
+from apps.listings.selectors import employer_name
 from apps.partners.capabilities import has_approved_application, is_approved_employer
 from apps.partners.models import PartnerProfile
 
@@ -39,6 +40,38 @@ FREE_TIER_MAX_ACTIVE_LISTINGS = 1
 
 class ListingStateError(ValueError):
     pass
+
+
+_S = Application.Status
+#: Where an applicant may go from each stage, and nowhere else. Every move is audited
+#: (`ApplicationStatusEvent`). Rejected can be reopened only by booking an interview
+#: (`interviews.propose_interview`), which the employer chooses deliberately.
+#: Hired, withdrawn and expired are final.
+ALLOWED_APPLICATION_MOVES: dict[str, frozenset[str]] = {
+    _S.SUBMITTED: frozenset(
+        {_S.UNDER_REVIEW, _S.SHORTLISTED, _S.INTERVIEW, _S.CONNECTED, _S.REJECTED}
+    ),
+    _S.UNDER_REVIEW: frozenset({_S.SHORTLISTED, _S.INTERVIEW, _S.CONNECTED, _S.REJECTED}),
+    _S.SHORTLISTED: frozenset({_S.INTERVIEW, _S.CONNECTED, _S.REJECTED}),
+    _S.INTERVIEW: frozenset({_S.CONNECTED, _S.HIRED, _S.REJECTED}),
+    _S.CONTACTED: frozenset({_S.INTERVIEW, _S.CONNECTED, _S.HIRED, _S.REJECTED}),
+    _S.CONNECTED: frozenset({_S.HIRED, _S.REJECTED}),
+    _S.REJECTED: frozenset({_S.INTERVIEW}),
+    _S.HIRED: frozenset(),
+    _S.WITHDRAWN: frozenset(),
+    _S.EXPIRED: frozenset(),
+}
+#: Applicants still being considered: the ones a filled job turns down.
+OPEN_APPLICATION_STATUSES = (
+    _S.SUBMITTED,
+    _S.UNDER_REVIEW,
+    _S.SHORTLISTED,
+    _S.INTERVIEW,
+    _S.CONTACTED,
+    _S.CONNECTED,
+)
+#: Revealing a contact moves only an applicant the employer has not yet progressed.
+_CONTACT_REVEAL_MOVES_FROM = (_S.SUBMITTED, _S.UNDER_REVIEW, _S.SHORTLISTED)
 
 
 class ListingPlanCapError(ListingStateError):
@@ -258,6 +291,43 @@ def close_listing(*, listing: Listing, actor: Any, reason: str = "") -> Listing:
 
 
 @transaction.atomic
+def fill_listing(*, listing: Listing, actor: Any) -> Listing:
+    """The employer has hired for this job: close it and turn down everyone still waiting.
+
+    Needs at least one hire, so "filled" always means someone was taken on. Each remaining
+    applicant moves to Rejected through the normal rules (audited, "Position filled") and is
+    told the position has been filled; their open interviews are cancelled. Calling it again
+    on a closed job changes nothing.
+    """
+    from apps.listings.models import Interview  # noqa: PLC0415
+
+    listing = Listing.objects.select_for_update().get(id=listing.id)
+    _require_poster(listing, actor)
+    if listing.status == Listing.Status.CLOSED:
+        return listing
+    if not listing.applications.filter(status=Application.Status.HIRED).exists():
+        raise ListingStateError(
+            "Mark at least one applicant as hired before closing this job as filled."
+        )
+    for application in listing.applications.filter(status__in=OPEN_APPLICATION_STATUSES):
+        application.interviews.filter(
+            status__in=(
+                Interview.Status.PROPOSED,
+                Interview.Status.ACCEPTED,
+                Interview.Status.RESCHEDULE_REQUESTED,
+            )
+        ).update(status=Interview.Status.CANCELLED, updated_at=timezone.now())
+        update_application_status(
+            application=application,
+            actor=actor,
+            status=Application.Status.REJECTED,
+            note="Position filled",
+            message=POSITION_FILLED_MESSAGE,
+        )
+    return close_listing(listing=listing, actor=actor, reason="Position filled")
+
+
+@transaction.atomic
 def republish_listing(*, listing: Listing, actor: Any) -> Listing:
     _require_poster(listing, actor)
     _require_listing_capability(listing.poster)
@@ -361,15 +431,49 @@ def submit_application(
         idempotency_key=f"application:{application.id}:submitted",
         payload={"application_id": str(application.id), "listing_id": str(listing.id)},
     )
+    # Every application tells the employer, however it was sent (form or quick apply).
+    from apps.listings.seekers import _notify  # noqa: PLC0415
+
+    _notify(
+        recipient_id=listing.poster.user_id,
+        audience="PARTNER",
+        template_code="job_application_received",
+        purpose="jobs.application.received",
+        key=f"job-applied:{application.id}",
+        context={
+            "job_title": listing.title,
+            "candidate_name": str(applicant_snapshot.get("name") or "A candidate"),
+        },
+    )
     return application
 
 
 @transaction.atomic
-def update_application_status(*, application: Application, actor: Any, status: str) -> Application:
+def update_application_status(
+    *, application: Application, actor: Any, status: str, note: str = "", message: str = ""
+) -> Application:
+    """Move an applicant to the next stage, only along `ALLOWED_APPLICATION_MOVES`.
+
+    Asking for the stage it is already in changes nothing, so a retried request is safe.
+    `note` is kept on the audit row; `message` replaces the candidate's usual notice.
+    """
     if status not in Application.Status.values:
         raise ListingStateError("Unsupported application status.")
-    if application.status in (Application.Status.WITHDRAWN, Application.Status.EXPIRED):
-        raise ListingStateError("Terminal applications cannot be updated.")
+    # Lock the row and read its current stage into the caller's own object: two quick taps (or
+    # two people) must not both move it, and callers keep seeing the up-to-date applicant.
+    list(
+        Application.objects.select_for_update()
+        .filter(id=application.id)
+        .values_list("id", flat=True)
+    )
+    application.refresh_from_db()
+    if application.status == status:
+        return application
+    if status not in ALLOWED_APPLICATION_MOVES.get(application.status, frozenset()):
+        raise ListingStateError(
+            f"An applicant who is {application.get_status_display().lower()} "
+            f"cannot be moved to {Application.Status(status).label.lower()}."
+        )
     old_status = application.status
     application.status = status
     application.save(update_fields=("status", "updated_at"))
@@ -379,8 +483,9 @@ def update_application_status(*, application: Application, actor: Any, status: s
         from_status=old_status,
         to_status=status,
         kind="STATUS_UPDATE",
+        note=note[:480],
     )
-    _tell_candidate(application, status)
+    _tell_candidate(application, status, message=message)
     enqueue_outbox_event(
         aggregate_type="application",
         aggregate_id=application.id,
@@ -397,6 +502,13 @@ def update_application_status(*, application: Application, actor: Any, status: s
 
 @transaction.atomic
 def reveal_contact(*, application: Application, actor: Any) -> Application:
+    # Current stage, under a lock: an earlier move must not be undone by a stale copy.
+    list(
+        Application.objects.select_for_update()
+        .filter(id=application.id)
+        .values_list("id", flat=True)
+    )
+    application.refresh_from_db()
     cutoff = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     reveals_today = Application.objects.filter(
         listing__poster=application.listing.poster,
@@ -409,7 +521,10 @@ def reveal_contact(*, application: Application, actor: Any) -> Application:
         old_status = application.status
         application.contact_revealed_at = timezone.now()
         application.contact_revealed_by = actor
-        application.status = Application.Status.CONTACTED
+        # Seeing a number never moves someone backwards (an interviewee, a hire) or reopens a
+        # closed application: only an applicant not yet progressed becomes "contacted".
+        if old_status in _CONTACT_REVEAL_MOVES_FROM:
+            application.status = Application.Status.CONTACTED
         application.save(
             update_fields=("contact_revealed_at", "contact_revealed_by", "status", "updated_at")
         )
@@ -417,7 +532,7 @@ def reveal_contact(*, application: Application, actor: Any) -> Application:
             application=application,
             actor=actor if getattr(actor, "is_authenticated", True) else None,
             from_status=old_status,
-            to_status=Application.Status.CONTACTED,
+            to_status=application.status,
             kind="CONTACT_REVEALED",
             note="Contact details revealed by poster.",
         )
@@ -813,7 +928,7 @@ def _job_description(listing: Listing) -> str:
             "salary_period": listing.salary_period,
             "benefits": listing.benefits,
         },
-        business_name=str(getattr(listing.poster, "display_name", "") or ""),
+        business_name=employer_name(listing.poster),
     )
 
 
@@ -1008,11 +1123,13 @@ _CANDIDATE_UPDATES: dict[str, str] = {
         "V Solve Hub has completed the connection. You can continue directly with the employer."
     ),
     Application.Status.REJECTED: "The employer has moved ahead with other candidates.",
+    Application.Status.HIRED: "Congratulations! The employer has hired you.",
 }
+POSITION_FILLED_MESSAGE = "This position has been filled. Thank you for applying."
 
 
-def _tell_candidate(application: Application, status: str) -> None:
-    message = _CANDIDATE_UPDATES.get(status)
+def _tell_candidate(application: Application, status: str, *, message: str = "") -> None:
+    message = message or _CANDIDATE_UPDATES.get(status, "")
     if not message:
         return
     from apps.listings.seekers import _notify  # noqa: PLC0415

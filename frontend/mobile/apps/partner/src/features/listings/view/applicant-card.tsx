@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Alert, Linking, Pressable, View } from "react-native";
 import { Text } from "@vsolve/mobile-ui";
 import {
+  Award,
   Calendar,
   CheckCircle2,
   Clock,
@@ -10,6 +10,7 @@ import {
   Lock,
   Phone,
   Unlock,
+  UserCheck,
   UserX,
 } from "lucide-react-native";
 
@@ -29,7 +30,7 @@ function formatDmy(dateStr?: string | null): string {
   return `${day}/${month}/${year}`;
 }
 
-const STEPS = ["Applied", "Shortlisted", "Interview", "Connected"] as const;
+const STEPS = ["Applied", "Shortlisted", "Interview", "Connected", "Hired"] as const;
 
 export interface ApplicantCardProps {
   application: PartnerApplication;
@@ -49,7 +50,15 @@ export function ApplicantCard({
   const status = (application.status ?? "SUBMITTED").toUpperCase();
   const stepLabel = HIRING_STEP_LABELS[status] ?? status;
   const closed = ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(status);
-  const isConnected = status === "CONNECTED" || status === "CONTACTED";
+  // Which actions fit this applicant's stage, the same rules as the website's applicant card.
+  // Hired is final too: the steps stay, the stage actions go. These follow the server's
+  // allowed moves, the same as the website's applicant card.
+  const decided = closed || status === "HIRED";
+  const canShortlist = !decided && (status === "SUBMITTED" || status === "UNDER_REVIEW");
+  const canInterview = !decided && status !== "CONNECTED";
+  const canReject = !decided;
+  const canMarkConnected = status === "INTERVIEW" || status === "CONTACTED";
+  const canMarkHired = status === "INTERVIEW" || status === "CONTACTED" || status === "CONNECTED";
   const isContactUnlocked = !!application.contact_revealed_at;
   const snapshot = snapshotFields(application.applicant_snapshot);
 
@@ -284,9 +293,20 @@ export function ApplicantCard({
 
       {/* Action Buttons */}
       <View className="mt-4 flex-col gap-2.5">
-        {/* Full-width Schedule Interview Button (Solid Orange) */}
-        {!closed ? (
+        {canShortlist ? (
           <Pressable
+            accessibilityRole="button"
+            onPress={() => onUpdateStatus(application, "SHORTLISTED")}
+            className="w-full flex-row items-center justify-center gap-2 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] py-2.5 px-4 active:bg-[#d1fae5]"
+          >
+            <UserCheck size={15} color="#059669" />
+            <Text className="text-sm font-bold text-[#059669]">Shortlist</Text>
+          </Pressable>
+        ) : null}
+
+        {canInterview ? (
+          <Pressable
+            accessibilityRole="button"
             onPress={() => {
               if (onScheduleInterview) {
                 onScheduleInterview(application);
@@ -303,46 +323,44 @@ export function ApplicantCard({
                 : "Schedule interview"}
             </Text>
           </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => {
-              if (onScheduleInterview) {
-                onScheduleInterview(application);
-              } else {
-                onUpdateStatus(application, "INTERVIEW");
-              }
-            }}
-            className="w-full flex-row items-center justify-center gap-2 rounded-xl bg-[#ea580c] py-2.5 px-4 shadow-xs active:opacity-90"
-          >
-            <Calendar size={15} color="#071328" />
-            <Text className="text-sm font-bold text-[#071328]">
-              Schedule interview
-            </Text>
-          </Pressable>
-        )}
+        ) : null}
 
-        {/* Second Row: Mark Connected & Not Selected */}
-        <View className="flex-row gap-2">
+        {canMarkHired ? (
           <Pressable
-            onPress={() => onUpdateStatus(application, "CONNECTED")}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] py-2.5 px-3 active:bg-[#d1fae5]"
+            accessibilityRole="button"
+            onPress={() => onUpdateStatus(application, "HIRED")}
+            className="w-full flex-row items-center justify-center gap-2 rounded-xl bg-[#059669] py-2.5 px-4 active:opacity-90"
           >
-            <CheckCircle2 size={15} color="#059669" />
-            <Text className="text-xs font-bold text-[#059669]">
-              Mark connected
-            </Text>
+            <Award size={15} color="#ffffff" />
+            <Text className="text-sm font-bold text-white">Mark as hired</Text>
           </Pressable>
+        ) : null}
 
-          <Pressable
-            onPress={() => onUpdateStatus(application, "REJECTED")}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-[#e2e8f0] bg-white py-2.5 px-3 active:bg-[#f8fafc]"
-          >
-            <UserX size={15} color="#64748b" />
-            <Text className="text-xs font-semibold text-[#64748b]">
-              Not selected
-            </Text>
-          </Pressable>
-        </View>
+        {canMarkConnected || canReject ? (
+          <View className="flex-row gap-2">
+            {canMarkConnected ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onUpdateStatus(application, "CONNECTED")}
+                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] py-2.5 px-3 active:bg-[#d1fae5]"
+              >
+                <CheckCircle2 size={15} color="#059669" />
+                <Text className="text-xs font-bold text-[#059669]">Mark connected</Text>
+              </Pressable>
+            ) : null}
+
+            {canReject ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onUpdateStatus(application, "REJECTED")}
+                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-[#e2e8f0] bg-white py-2.5 px-3 active:bg-[#f8fafc]"
+              >
+                <UserX size={15} color="#64748b" />
+                <Text className="text-xs font-semibold text-[#64748b]">Not selected</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Third Row: Report button */}
         {onReport ? (

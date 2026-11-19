@@ -52,6 +52,15 @@ class PartnerBusinessProfile(models.Model):
         RENTAL_OWNER = "RENTAL_OWNER", "Rental owner"
         PROPERTY_HOST = "PROPERTY_HOST", "Property host"
 
+    class BusinessCategory(models.TextChoices):
+        """What kind of business an employer runs ("I want to hire staff")."""
+
+        SHOP = "SHOP", "Shop"
+        CLINIC = "CLINIC", "Clinic"
+        OFFICE = "OFFICE", "Office"
+        RESTAURANT = "RESTAURANT", "Restaurant"
+        OTHER = "OTHER", "Other"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner = models.OneToOneField(
         "partners.PartnerProfile",
@@ -81,6 +90,13 @@ class PartnerBusinessProfile(models.Model):
     #: settlement job finding it. Blank is the ordinary state: the deep link is simply not offered,
     #: the published amount still is, and the crew is paid the way they were paid before the app.
     upi_vpa = models.CharField(max_length=120, blank=True)
+    #: An employer's business details, asked on the "Business details" sign-up step. Blank for
+    #: every other Partner. `legal_name` above is the business name shown on their jobs.
+    business_category = models.CharField(
+        max_length=16, choices=BusinessCategory.choices, blank=True
+    )
+    city = models.CharField(max_length=80, blank=True)
+    address = models.CharField(max_length=240, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

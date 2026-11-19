@@ -51,10 +51,10 @@ describe("the services path", () => {
   });
 });
 
-describe("the stays, rentals and hiring path", () => {
+describe("the stays and rentals path", () => {
   it("is the short form: About you, Documents, Agree & send", () => {
-    // Hiring staff (EMPLOYER) is the same short form: it never shows trades, areas or hours.
-    for (const track of ["STAY_HOST", "RENTAL_OWNER", "EMPLOYER"]) {
+    // Hiring staff (EMPLOYER) adds Business details to this short form; see "the employer path".
+    for (const track of ["STAY_HOST", "RENTAL_OWNER"]) {
       expect(applicationSteps(track).map((step) => step.href)).toEqual([
         "/apply/about",
         "/apply/documents",
@@ -98,5 +98,22 @@ describe("what the first screen shows before starting", () => {
     expect(trackPreview("RENTAL_OWNER").time).toBe("About 3 minutes");
     expect(trackPreview("STAY_HOST").after).toMatch(/property and rooms/);
     expect(trackPreview("RENTAL_OWNER").after).toMatch(/add your items/);
+  });
+});
+
+describe("the employer path", () => {
+  it("adds Business details after About you, the same as the website", () => {
+    expect(applicationSteps("EMPLOYER").map((step) => step.href)).toEqual([
+      "/apply/about",
+      "/apply/employer",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("is never asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"]) {
+      expect(applicationSteps(track).map((step) => step.href)).not.toContain("/apply/employer");
+    }
   });
 });

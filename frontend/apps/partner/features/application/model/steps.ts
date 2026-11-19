@@ -42,12 +42,24 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
 export type { ApplicationTrack } from "@vsolve/query/partner-work";
 
 const LISTING_STEPS = new Set(["/apply", "/apply/about", "/apply/documents", "/apply/review"]);
+/**
+ * An employer's short form adds "Business details" after "About you": the business its jobs are
+ * shown under. Its own list, so `APPLICATION_STEPS` stays exactly the services path.
+ */
+const EMPLOYER_STEPS: readonly ApplicationStep[] = [
+  { href: "/apply", labelKey: "apply.steps.overview" },
+  { href: "/apply/about", labelKey: "apply.steps.about" },
+  { href: "/apply/employer", labelKey: "apply.steps.employer" },
+  { href: "/apply/documents", labelKey: "apply.steps.documents" },
+  { href: "/apply/review", labelKey: "apply.steps.review" },
+];
 
 /** Stays, rentals and hiring share the short application. Services walk the full list. */
 export { isListingTrack };
 
 /** The step sequence for this partner. Every caller goes through here, never the constant. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
+  if (track === "EMPLOYER") return EMPLOYER_STEPS;
   return isListingTrack(track)
     ? APPLICATION_STEPS.filter((step) => LISTING_STEPS.has(step.href))
     : APPLICATION_STEPS;

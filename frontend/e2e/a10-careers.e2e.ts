@@ -1,65 +1,52 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
- * Careers (A10) end-to-end across all three portals, against the real Django API.
+ * Careers (A10) end-to-end, against the real Django API: a job goes live, a job seeker applies,
+ * the employer works the applicant through to Hired and closes the job as filled, and the job
+ * seeker sees that they were hired.
  *
- * This is the Careers counterpart to `django.e2e.ts`: it drives the actual
- * backend rather than contract-shaped route stubs, because the things worth
- * proving here cannot be stubbed — moderation is a server state machine, the
- * "one active application per listing" rule is a server guard, and contact
- * reveal is a server-side write. A stubbed version would pass while the real
- * flow was broken.
+ * It drives the actual backend rather than route stubs, because what it proves cannot be stubbed:
+ * the stage moves are a server state machine (contract 1.102.0), "one active application per
+ * job" is a server guard, contact reveal is a server write, and "close as filled" turns everyone
+ * else down on the server.
  *
- * ## Why one test and not seventeen
+ * ## The job is posted through the API, not the wizard
  *
- * The flow crosses three identities and the state it asserts on is created by
- * the previous step: the employer posts a role, Operations approves it, the
- * employer publishes it, an applicant applies, the employer works that lead.
- * Split across parallel tests, each would need its own fixture and the trace
- * would show fragments rather than the run. One test means one trace that
- * replays the whole story start to finish.
+ * Partners publish instantly (no review queue since the quick-post flow), and the 4-step post
+ * wizard has its own component tests. Posting through `POST /partner/jobs` keeps this run about
+ * the hiring journey, and a wording change in the wizard cannot turn it red.
+ *
+ * ## One test, not many
+ *
+ * The flow crosses two identities and each step asserts on state the previous one created, so
+ * one test gives one trace that replays the whole story.
  *
  * ## Prerequisites
  *
- *   backend on :8000 with the local seeds applied
- *   customer :3000, partner :3001, operations :3002 running
- *   `python manage.py make_a10_demo_sessions` to mint the three sessions
+ *   backend on :8000 with the local seeds applied (`seed_listing_catalog`)
+ *   customer :3000 and partner :3001 running
+ *   `python manage.py make_a10_demo_sessions` to mint the sessions
  *
- * Sessions are minted rather than logged-in-per-run on purpose: the OTP guard
- * allows five codes per phone per ten minutes, so a login-based spec would go
- * red on the second run for a reason that has nothing to do with Careers.
- *
- * ## It skips instead of failing when the stack is absent
- *
- * Same reasoning as `django.e2e.ts`: the rest of the suite must stay runnable
- * with no backend, and a red suite that people learn to re-run is worse than an
- * honest skip.
+ * Sessions are minted rather than logged in per run: the OTP guard allows five codes per phone
+ * per ten minutes, so a login-based spec would fail on the second run for reasons unrelated to
+ * Careers. It skips, rather than fails, when the stack is not running.
  */
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const CUSTOMER_ORIGIN = "http://localhost:3000";
 const PARTNER_ORIGIN = "http://localhost:3001";
-const OPERATIONS_ORIGIN = "http://localhost:3002";
+/** The demo job seeker minted by `make_a10_demo_sessions`. */
+const APPLICANT_PHONE = "+919900000077";
 
 const AUTH_DIR = resolve(process.cwd(), "e2e", ".auth");
 const stateFile = (role: string) => resolve(AUTH_DIR, `a10-${role}.json`);
 
-/**
- * `A10_VIDEO=1` records one video per portal.
- *
- * It has to be passed to `newContext` explicitly: `use.video` in the config only
- * covers Playwright's own `page` fixture, and this spec opens three contexts by
- * hand so each role keeps its own session.
- */
+/** `A10_VIDEO=1` records one video per portal (contexts are opened by hand, one per role). */
 const RECORD_VIDEO = process.env.A10_VIDEO === "1";
 const VIDEO_DIR = resolve(process.cwd(), "test-results", "a10-videos");
 
-/**
- * One folder per portal: Playwright names video files `page@<hash>.webm`, so
- * without a folder each the three recordings are indistinguishable.
- */
 function videoOptionsFor(label: string) {
   return RECORD_VIDEO
     ? { recordVideo: { dir: resolve(VIDEO_DIR, label), size: { width: 1280, height: 800 } } }
@@ -85,227 +72,138 @@ async function capture(page: Page, testInfo: { attach: Function }, name: string)
   });
 }
 
-test.describe("Careers (A10) — employer posts, Operations approves, applicant applies", () => {
+/** Post and publish a job as the signed-in employer, with the session's own CSRF token. */
+async function postJob(context: BrowserContext, title: string): Promise<{ id: string }> {
+  const { cookies } = await context.storageState();
+  const csrf = cookies.find((cookie) => cookie.name === "csrftoken")?.value ?? "";
+  const response = await context.request.post(`${API_ORIGIN}/api/v1/partner/jobs`, {
+    headers: { "X-CSRFToken": csrf, Referer: `${PARTNER_ORIGIN}/listings/post`, Origin: PARTNER_ORIGIN },
+    // The basics the server needs to publish (title, city, job type, salary). One vacancy, so a
+    // single hire offers "Close job as filled".
+    data: {
+      title,
+      vacancies: 1,
+      city: "Hyderabad",
+      job_type: "FULL_TIME",
+      salary_min_paise: 2_000_000,
+      salary_max_paise: 2_500_000,
+      salary_period: "MONTHLY",
+      publish: true,
+    },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()) as { id: string };
+}
+
+async function publicTitles(): Promise<string> {
+  return JSON.stringify(await fetch(`${API_ORIGIN}/api/v1/listings`).then((r) => r.json()));
+}
+
+test.describe("Careers (A10): job seeker applies, employer hires and closes the job as filled", () => {
   test.beforeEach(async () => {
     test.skip(!(await backendIsReachable()), `Django is not reachable at ${API_ORIGIN}`);
     test.skip(
-      !existsSync(stateFile("customer")) ||
-        !existsSync(stateFile("partner")) ||
-        !existsSync(stateFile("operations")),
+      !existsSync(stateFile("customer")) || !existsSync(stateFile("partner")),
       "Missing minted sessions — run: cd backend && .venv/bin/python manage.py make_a10_demo_sessions",
     );
   });
 
-  test("the whole listing lifecycle, across three portals", async ({ browser }, testInfo) => {
-    // A slow-motion recording run multiplies wall-clock time by the pause after
-    // every action, so it needs far more headroom than an ordinary run.
+  test("from a live job to Hired, across both portals", async ({ browser }, testInfo) => {
     const slowMo = Number(process.env.A10_SLOW_MO ?? 0);
     test.setTimeout(slowMo > 0 ? 900_000 : 240_000);
 
-    // Unique per run so a previous run's role can never satisfy this one.
+    // Unique per run so a previous run's job can never satisfy this one.
     const title = `A10 E2E Role ${Date.now().toString().slice(-6)}`;
-    const description =
-      "Automated end-to-end check of the Careers listing lifecycle. Safe to delete.";
-    const location = "Hyderabad, Telangana";
 
     const partnerContext = await browser.newContext({
       storageState: stateFile("partner"),
       baseURL: PARTNER_ORIGIN,
       ...videoOptionsFor("01-employer"),
     });
-    const operationsContext = await browser.newContext({
-      storageState: stateFile("operations"),
-      baseURL: OPERATIONS_ORIGIN,
-      ...videoOptionsFor("02-operations"),
-    });
     const customerContext = await browser.newContext({
       storageState: stateFile("customer"),
       baseURL: CUSTOMER_ORIGIN,
-      ...videoOptionsFor("03-applicant"),
+      ...videoOptionsFor("02-applicant"),
     });
-
     const employer = await partnerContext.newPage();
-    const operations = await operationsContext.newPage();
     const applicant = await customerContext.newPage();
 
     try {
-      // ---- 1. The employer creates the role ----------------------------------
-      await employer.goto("/listings");
-      await expect(employer.getByRole("button", { name: "Post New Opening" })).toBeVisible();
+      // ---- 1. The job goes live at once ----------------------------------------
+      const job = await postJob(partnerContext, title);
+      expect(await publicTitles()).toContain(title);
 
-      await employer.getByRole("button", { name: "Post New Opening" }).click();
-      const modal = employer.locator("form").filter({ hasText: "Job Title" });
-      await expect(modal).toBeVisible();
-
-      // The role drives the variant, and Preview stays disabled until one is
-      // chosen — so this has to happen before anything else in the form.
-      await modal.getByRole("combobox").first().selectOption({ label: "App Developers" });
-
-      // A too-short title is refused in the form before any request is made.
-      await modal.getByPlaceholder("e.g. Senior Python / React Developer").fill("abc");
-      await modal
-        .getByPlaceholder("Describe key responsibilities, qualifications, requirements, and shift timings...")
-        .fill(description);
-      await modal.getByPlaceholder("e.g. Indiranagar, Bengaluru / Remote").fill(location);
-      // The field renders a fixed +91 chip, so the value is national digits only.
-      await modal.getByLabel("Contact phone").fill("9900000088");
-      await modal.getByRole("button", { name: "Preview" }).click();
-      await expect(employer.getByText("Job title must be at least 5 characters.")).toBeVisible();
-      await capture(employer, testInfo, "01-employer-create-validation");
-
-      await modal.getByPlaceholder("e.g. Senior Python / React Developer").fill(title);
-      await modal.getByLabel("Minimum pay").fill("25000");
-      await modal.getByLabel("Maximum pay").fill("40000");
-      await modal.getByLabel("Pay period").selectOption({ label: "Monthly" });
-      await modal.getByRole("button", { name: "Preview" }).click();
-      await employer.getByRole("button", { name: "Save Changes" }).click();
-
-      await expect(employer.getByRole("heading", { name: title })).toBeVisible();
-      await capture(employer, testInfo, "02-employer-draft-created");
-
-      // ---- 2. Submit for moderation ------------------------------------------
-      // The newest draft sorts first in this list, so the first matching control
-      // belongs to the role just created. Scoping by an ancestor `div` instead
-      // resolved to a container that never contained the button.
-      await expect(employer.getByRole("heading", { name: title })).toBeVisible();
-      await employer.getByRole("button", { name: "Submit for Review" }).first().click();
-      await expect(employer.getByText("In Review").first()).toBeVisible();
-      await capture(employer, testInfo, "03-employer-submitted");
-
-      // ---- 3. Operations moderates it ----------------------------------------
-      await operations.goto("/operations/listings");
-      await operations.getByRole("button", { name: /Pending Review/ }).click();
-
-      // The Operations console renders one table per tab, so the title matches a
-      // row in several of them. Bind to the row that also carries the decision
-      // control rather than to whichever one happens to be first.
-      const row = operations
-        .getByRole("row", { hasText: title })
-        .filter({ has: operations.getByRole("button", { name: "Review & Decide" }) })
-        .first();
-      await expect(row).toBeVisible();
-      await capture(operations, testInfo, "04-operations-queue");
-
-      await row.getByRole("button", { name: "Review & Decide" }).click();
-      await operations
-        .getByPlaceholder("e.g. Verified standard job posting")
-        .fill("Verified employer and complete role details. Approved.");
-      await capture(operations, testInfo, "05-operations-decision");
-      await operations.getByRole("button", { name: "Confirm Approval" }).click();
-
-      // Approved is not published: the decision modal must close and the posting
-      // must still be absent from the public board until the employer publishes
-      // it. The publish step below can only succeed on an approved posting, so
-      // that is what proves approval actually landed.
-      await expect(operations.getByRole("button", { name: "Confirm Approval" })).toHaveCount(0);
-      const publicAfterApproval = await fetch(`${API_ORIGIN}/api/v1/listings`).then((r) => r.json());
-      expect(JSON.stringify(publicAfterApproval)).not.toContain(title);
-      await capture(operations, testInfo, "06-operations-approved");
-
-      // ---- 4. The employer publishes it --------------------------------------
-      await employer.reload();
-      await expect(employer.getByRole("heading", { name: title })).toBeVisible();
-      await employer.getByRole("button", { name: "Publish Live" }).first().click();
-      await expect(employer.getByRole("button", { name: "Publish Live" })).toHaveCount(0);
-      await capture(employer, testInfo, "07-employer-published");
-
-      // Now it must be public.
-      const publicAfterPublish = await fetch(`${API_ORIGIN}/api/v1/listings`).then((r) => r.json());
-      expect(JSON.stringify(publicAfterPublish)).toContain(title);
-
-      // ---- 5. A second applicant sees the already-applied guard --------------
+      // ---- 2. Typing in search must not query the server -----------------------
+      // Before the fix the query key held the raw input, so "software developer" was 18 requests.
       await applicant.goto("/listings");
-      await expect(applicant.getByText(title).first()).toBeVisible();
-      await capture(applicant, testInfo, "08-public-browse");
-
-      // ---- 5b. Typing must not query the server ------------------------------
-      // This is the client's loudest technical complaint. Before the fix the
-      // query key held the raw input, so "software developer" was 18 requests.
-      // Nothing else in the suite looks at the keyword box, so without this the
-      // behaviour can come back unnoticed.
+      // Let the page's own first load finish, so only requests caused by typing are counted.
+      await applicant.waitForLoadState("networkidle");
       const browseRequests: string[] = [];
       applicant.on("request", (request) => {
         if (request.url().includes("/api/v1/listings?")) browseRequests.push(request.url());
       });
-
-      const keyword = applicant.getByPlaceholder("Job title, keyword, skill, or employer...");
+      const keyword = applicant.getByPlaceholder("Job title or skill — Tally, Nurse, Full Stack");
       await keyword.click();
-      // 350ms between keys clears the 300ms threshold in the acceptance criteria,
-      // so a re-introduced debounce-only fix still fails this assertion.
+      // 350ms between keys clears a 300ms debounce, so a debounce-only fix still fails here.
       await keyword.type("software developer", { delay: 350 });
       await applicant.waitForTimeout(800);
       expect(browseRequests, "typing must not reach the API").toHaveLength(0);
-
       const committed = applicant.waitForResponse((r) => r.url().includes("/api/v1/listings?"));
-      await applicant.getByRole("button", { name: "Search", exact: true }).first().click();
+      await applicant.getByRole("button", { name: "Search jobs", exact: true }).first().click();
       await committed;
       expect(browseRequests, "Search must commit exactly one request").toHaveLength(1);
-      await capture(applicant, testInfo, "08b-search-commits-on-submit");
+      // Back to the unfiltered board for the apply flow.
+      await applicant.goto("/listings");
 
-      // Reset so the apply flow below still finds the listing.
-      await applicant.getByRole("button", { name: "Clear all filters" }).click();
+      // ---- 3. The job seeker applies -------------------------------------------
       await expect(applicant.getByText(title).first()).toBeVisible();
-
-      // ---- 6. The applicant applies ------------------------------------------
-      await applicant.getByText(title).first().click();
+      await applicant.getByRole("link", { name: `View ${title} details` }).click();
+      // The two-step form (the demo seeker has no job profile, so no Quick apply).
       await expect(applicant.getByText("Apply for this Position")).toBeVisible();
-      await applicant.getByPlaceholder("e.g. sarah@example.com").fill("a10-e2e@example.com");
-      await applicant.getByPlaceholder("e.g. 4 years in Frontend React / Python").fill("5 years");
-      await applicant
-        .getByPlaceholder("Briefly introduce yourself and your availability...")
-        .fill("Automated end-to-end application.");
-      await capture(applicant, testInfo, "09-apply-form-filled");
-
-      await applicant.getByRole("button", { name: "Submit Application" }).click();
+      await applicant.getByLabel("Full name").fill("A10 E2E Applicant");
+      await applicant.getByLabel("Email").fill("a10-e2e@example.com");
+      await applicant.getByPlaceholder("e.g. 2 years, or Fresher").fill("5 years");
+      await applicant.getByRole("button", { name: "Review Application" }).click();
+      await applicant.getByRole("button", { name: "Submit application" }).click();
       await expect(applicant.getByText("Application Submitted!")).toBeVisible();
-      await capture(applicant, testInfo, "10-application-submitted");
+      await capture(applicant, testInfo, "01-application-submitted");
 
-      // Re-opening the listing must now show the status card, not the form.
+      // One active application per job: re-opening shows the status card, not the form.
       await applicant.reload();
       await expect(applicant.getByText("You have already applied")).toBeVisible();
-      await expect(applicant.getByRole("button", { name: "Submit Application" })).toHaveCount(0);
-      await capture(applicant, testInfo, "11-already-applied-card");
+      await expect(applicant.getByRole("button", { name: "Submit application" })).toHaveCount(0);
 
-      await applicant.goto("/listings/my-applications");
-      await expect(applicant.getByText(title).first()).toBeVisible();
-      await capture(applicant, testInfo, "12-my-applications");
-
-      // ---- 7. The employer works the lead ------------------------------------
-      // Reach the lead inbox by id. The card's control differs by status
-      // ("Submit for Review" / "Publish Live" / leads), so resolving the id from
-      // the public feed is the stable route rather than guessing a button name.
-      const rowsAfterPublish = Array.isArray(publicAfterPublish)
-        ? publicAfterPublish
-        : publicAfterPublish.results;
-      const published = rowsAfterPublish.find((row: { title: string }) => row.title === title);
-      expect(published, "the published role must be resolvable from the public feed").toBeTruthy();
-
-      await employer.goto(`/listings/${published.id}`);
-      await expect(
-        employer.getByRole("button", { name: "Shortlist", exact: true }).first(),
-      ).toBeVisible();
-      await capture(employer, testInfo, "13-employer-leads");
-
-      // `exact` matters: the default substring match makes "Shortlist" collide
-      // with the "Shortlisted" filter tab, and clicking the tab silently skips
-      // the shortlisting while still looking like it worked.
+      // ---- 4. The employer works the applicant through to Hired -----------------
+      await employer.goto(`/listings/${job.id}`);
+      // `exact`: "Shortlist" would otherwise also match the "Shortlisted" filter tab.
       await employer.getByRole("button", { name: "Shortlist", exact: true }).first().click();
-      await capture(employer, testInfo, "14-employer-shortlisted");
-
-      // Shortlisting moves the card into the "Shortlisted" tab, so follow it
-      // there before reaching for the reveal control.
-      await employer.getByRole("button", { name: "Shortlisted", exact: true }).first().click();
+      await employer.getByRole("button", { name: /^Shortlisted/ }).first().click();
       await employer.getByRole("button", { name: "Reveal Contact", exact: true }).first().click();
 
-      // Revealing moves it again — to "Contacted". Read the number there, which
-      // is the only place it is actually rendered.
-      await employer.getByRole("button", { name: "Contacted", exact: true }).first().click();
-      await expect(employer.getByText("+919900000077").first()).toBeVisible();
-      await capture(employer, testInfo, "15-employer-contact-revealed");
+      // Revealing moves a shortlisted applicant to Contacted, listed under "Connected".
+      await employer.getByRole("button", { name: /^Connected/ }).first().click();
+      await expect(employer.getByText(APPLICANT_PHONE).first()).toBeVisible();
+      await capture(employer, testInfo, "02-employer-contact-revealed");
+
+      await employer.getByRole("button", { name: "Mark as hired", exact: true }).first().click();
+      await expect(employer.getByRole("button", { name: "Mark as hired", exact: true })).toHaveCount(0);
+
+      // ---- 5. One hire fills the one vacancy: close the job as filled ------------
+      await expect(employer.getByText("You have hired for this job")).toBeVisible();
+      await capture(employer, testInfo, "03-employer-offered-fill");
+      await employer.getByRole("button", { name: "Close job as filled" }).click();
+      await expect(employer.getByText("You have hired for this job")).toHaveCount(0);
+      expect(await publicTitles(), "a filled job leaves the public board").not.toContain(title);
+      await capture(employer, testInfo, "04-employer-job-filled");
+
+      // ---- 6. The job seeker sees they were hired --------------------------------
+      await applicant.goto("/listings/my-applications");
+      await expect(applicant.getByText(title).first()).toBeVisible();
+      await expect(applicant.getByText("Congratulations! The employer has hired you.").first()).toBeVisible();
+      await capture(applicant, testInfo, "05-applicant-hired");
     } finally {
-      // Closing must never mask the real failure: a teardown error here would
-      // otherwise replace the assertion that actually failed.
-      for (const context of [partnerContext, operationsContext, customerContext]) {
+      // Closing must never mask the real failure.
+      for (const context of [partnerContext, customerContext]) {
         await context.close().catch(() => undefined);
       }
     }

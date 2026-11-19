@@ -1,4 +1,5 @@
 import {
+  Award,
   Calendar,
   CheckCircle2,
   Clock,
@@ -31,12 +32,13 @@ export interface ApplicantCardProps {
   onScheduleInterview: (app: PartnerApplication) => void;
 }
 
-const STEPS = ["Applied", "Shortlisted", "Interview", "Connected"] as const;
+const STEPS = ["Applied", "Shortlisted", "Interview", "Connected", "Hired"] as const;
 const STEP_KEYS: Record<string, string> = {
   Applied: "listings.applicant.step.applied",
   Shortlisted: "listings.applicant.step.shortlisted",
   Interview: "listings.applicant.step.interview",
   Connected: "listings.applicant.step.connected",
+  Hired: "listings.applicant.step.hired",
   "Not selected": "listings.applicant.notSelected",
   Withdrawn: "listings.applicant.step.withdrawn",
   Expired: "listings.applicant.step.expired",
@@ -55,6 +57,9 @@ export function ApplicantCard({
   const step = HIRING_STEP_LABELS[app.status] ?? app.status;
   const stepLabel = STEP_KEYS[step] ? t(STEP_KEYS[step]!) : step;
   const closed = ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
+  // Hired is final too, but a success: the steps stay on screen, the stage actions go.
+  const hired = app.status === "HIRED";
+  const decided = closed || hired;
   const interview = app.interview;
   const isContactRevealed = !!app.contact_revealed_at;
   const snapshot = snapshotFields(app.applicant_snapshot);
@@ -64,7 +69,7 @@ export function ApplicantCard({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={closed ? "neutral" : step === "Connected" ? "success" : "info"}>{stepLabel}</Badge>
+            <Badge tone={closed ? "neutral" : step === "Connected" || hired ? "success" : "info"}>{stepLabel}</Badge>
 
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <Calendar className="size-3.5" />
@@ -232,7 +237,7 @@ export function ApplicantCard({
             </button>
           ) : null}
 
-          {!closed && app.status !== "CONNECTED" ? (
+          {!decided && app.status !== "CONNECTED" ? (
             <button
               type="button"
               onClick={() => onScheduleInterview(app)}
@@ -253,7 +258,18 @@ export function ApplicantCard({
             </button>
           ) : null}
 
-          {!closed && app.status !== "CONNECTED" ? (
+          {["INTERVIEW", "CONTACTED", "CONNECTED"].includes(app.status) ? (
+            <button
+              type="button"
+              onClick={() => onStatusChange({ id: app.id, next: "HIRED" })}
+              disabled={isStatusPending}
+              className="inline-flex items-center gap-1.5 rounded-control bg-success-text px-3 py-1.5 text-xs font-semibold text-surface hover:opacity-90"
+            >
+              <Award className="size-3.5" /> {t("listings.applicant.markHired")}
+            </button>
+          ) : null}
+
+          {!decided ? (
             <button
               type="button"
               onClick={() => onStatusChange({ id: app.id, next: "REJECTED" })}

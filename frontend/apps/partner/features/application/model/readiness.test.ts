@@ -38,6 +38,7 @@ function application(overrides: Partial<Application> = {}): Application {
     can_edit: status === "DRAFT" || status === "CHANGES_REQUIRED",
     required_document_kinds: ["GOVERNMENT_ID"],
     consents_complete: false,
+    business_details_complete: false,
     id: "app-1",
     partner_id: "partner-1",
     status: "DRAFT",
@@ -258,5 +259,26 @@ describe("a stay host", () => {
     const stay = requirements(application({ track: "STAY_HOST" })).map((item) => item.code);
     const rental = requirements(application({ track: "RENTAL_OWNER" })).map((item) => item.code);
     expect(rental).toEqual(stay);
+  });
+});
+
+describe("an employer's business details", () => {
+  it("are needed on the Business details step until the server says they are complete", () => {
+    const missing = requirements(application({ track: "EMPLOYER" })).find(
+      (item) => item.code === "BUSINESS_DETAILS",
+    );
+    expect(missing).toMatchObject({ href: "/apply/employer", isMet: false });
+
+    const done = requirements(application({ track: "EMPLOYER", business_details_complete: true })).find(
+      (item) => item.code === "BUSINESS_DETAILS",
+    );
+    expect(done?.isMet).toBe(true);
+  });
+
+  it("are not asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"] as const) {
+      const codes = requirements(application({ track })).map((item) => item.code);
+      expect(codes).not.toContain("BUSINESS_DETAILS");
+    }
   });
 });
