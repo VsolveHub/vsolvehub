@@ -21,6 +21,8 @@ import {
   trackLabelKey,
 } from "../model/status";
 import { isListingTrack } from "../model/steps";
+import { usePartnerBusinessProfile } from "@/features/capability/queries";
+
 import { usePartnerApplication, usePartnerAvailability } from "../queries";
 import { useApplicationReference, type ApplicationReference } from "../reference-queries";
 import { STATUS_ACCENT } from "./status-banner";
@@ -46,6 +48,7 @@ interface SectionProps {
  */
 const SECTIONS: Record<string, (props: SectionProps) => ReactNode> = {
   "/apply/about": AboutSection,
+  "/apply/employer": BusinessSection,
   "/apply/work": WorkSection,
   "/apply/areas": AreasSection,
   "/apply/schedule": HoursSection,
@@ -248,6 +251,39 @@ function Row({ name, children }: { name: string; children: ReactNode }) {
       <span className={label}>{name}</span>
       <div className="min-w-0">{children}</div>
     </div>
+  );
+}
+
+/** An employer's "Business details" step. */
+function BusinessSection({ t }: SectionProps) {
+  const business = usePartnerBusinessProfile();
+  if (business.isPending) return <Skeleton className="h-16 w-full" />;
+  const data = business.data;
+  const notSet = t("apply.review.notSet");
+  return (
+    <>
+      <Row name={t("apply.employer.name.label")}>
+        <p className={value}>{data?.legal_name || notSet}</p>
+      </Row>
+      <Row name={t("apply.employer.category.label")}>
+        <p className={value}>
+          {data?.business_category ? t(`apply.employer.category.${data.business_category}`) : notSet}
+        </p>
+      </Row>
+      <Row name={t("apply.employer.city.label")}>
+        <p className={value}>{data?.city || notSet}</p>
+      </Row>
+      {data?.address ? (
+        <Row name={t("apply.employer.address.label")}>
+          <p className={value}>{data.address}</p>
+        </Row>
+      ) : null}
+      {data?.gstin ? (
+        <Row name={t("apply.employer.gstin.label")}>
+          <p className={value}>{data.gstin}</p>
+        </Row>
+      ) : null}
+    </>
   );
 }
 

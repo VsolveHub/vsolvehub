@@ -67,6 +67,7 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
     can_edit: true,
     required_document_kinds: ["GOVERNMENT_ID"],
     consents_complete: true,
+    business_details_complete: true,
     change_request_message: "",
     submitted_at: null,
     review_assigned_to_id: null,
