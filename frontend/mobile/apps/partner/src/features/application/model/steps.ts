@@ -30,23 +30,11 @@ export const SERVICE_APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
-/**
- * An employer's short form adds "Business details" after "About you": the business its jobs are
- * shown under. The same list as the website's.
- */
-export const EMPLOYER_APPLICATION_STEPS: readonly ApplicationStep[] = [
-  { href: "/apply/about", label: "About you" },
-  { href: "/apply/employer", label: "Business details" },
-  { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/review", label: "Agree & send" },
-] as const;
-
 /** Stays, rentals and hiring share the short application. Services walk the full list. */
 export { isListingTrack };
 
 /** The step sequence for this partner. Services is the server's default track, as on the web. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
-  if (track === "EMPLOYER") return EMPLOYER_APPLICATION_STEPS;
   return isListingTrack(track) ? APPLICATION_STEPS : SERVICE_APPLICATION_STEPS;
 }
 

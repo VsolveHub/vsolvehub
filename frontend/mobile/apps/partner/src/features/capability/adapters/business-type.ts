@@ -202,9 +202,5 @@ export function normalizeForType(input: BusinessProfileInput): BusinessProfileIn
     // it here would mean a Partner who changed their mind about being an agency
     // silently lost the UPI address their wages are settled to.
     upi_vpa: input.upi_vpa,
-    // An employer's details, carried for the same reason: the PUT replaces the whole record.
-    business_category: input.business_category,
-    city: input.city,
-    address: input.address,
   };
 }

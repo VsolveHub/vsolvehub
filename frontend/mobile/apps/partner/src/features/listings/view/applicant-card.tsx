@@ -1,7 +1,6 @@
 import { Alert, Linking, Pressable, View } from "react-native";
 import { Text } from "@vsolve/mobile-ui";
 import {
-  Award,
   Calendar,
   CheckCircle2,
   Clock,
@@ -30,7 +29,7 @@ function formatDmy(dateStr?: string | null): string {
   return `${day}/${month}/${year}`;
 }
 
-const STEPS = ["Applied", "Shortlisted", "Interview", "Connected", "Hired"] as const;
+const STEPS = ["Applied", "Shortlisted", "Interview", "Connected"] as const;
 
 export interface ApplicantCardProps {
   application: PartnerApplication;
@@ -51,14 +50,9 @@ export function ApplicantCard({
   const stepLabel = HIRING_STEP_LABELS[status] ?? status;
   const closed = ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(status);
   // Which actions fit this applicant's stage, the same rules as the website's applicant card.
-  // Hired is final too: the steps stay, the stage actions go. These follow the server's
-  // allowed moves, the same as the website's applicant card.
-  const decided = closed || status === "HIRED";
-  const canShortlist = !decided && (status === "SUBMITTED" || status === "UNDER_REVIEW");
-  const canInterview = !decided && status !== "CONNECTED";
-  const canReject = !decided;
+  const canShortlist = !closed && (status === "SUBMITTED" || status === "UNDER_REVIEW");
+  const canInterviewOrReject = !closed && status !== "CONNECTED";
   const canMarkConnected = status === "INTERVIEW" || status === "CONTACTED";
-  const canMarkHired = status === "INTERVIEW" || status === "CONTACTED" || status === "CONNECTED";
   const isContactUnlocked = !!application.contact_revealed_at;
   const snapshot = snapshotFields(application.applicant_snapshot);
 
@@ -304,7 +298,7 @@ export function ApplicantCard({
           </Pressable>
         ) : null}
 
-        {canInterview ? (
+        {canInterviewOrReject ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => {
@@ -325,18 +319,7 @@ export function ApplicantCard({
           </Pressable>
         ) : null}
 
-        {canMarkHired ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onUpdateStatus(application, "HIRED")}
-            className="w-full flex-row items-center justify-center gap-2 rounded-xl bg-[#059669] py-2.5 px-4 active:opacity-90"
-          >
-            <Award size={15} color="#ffffff" />
-            <Text className="text-sm font-bold text-white">Mark as hired</Text>
-          </Pressable>
-        ) : null}
-
-        {canMarkConnected || canReject ? (
+        {canMarkConnected || canInterviewOrReject ? (
           <View className="flex-row gap-2">
             {canMarkConnected ? (
               <Pressable
@@ -349,7 +332,7 @@ export function ApplicantCard({
               </Pressable>
             ) : null}
 
-            {canReject ? (
+            {canInterviewOrReject ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => onUpdateStatus(application, "REJECTED")}

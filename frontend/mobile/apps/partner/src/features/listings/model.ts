@@ -25,8 +25,6 @@ export interface PartnerListingCounts {
   shortlisted: number;
   interviews: number;
   connected: number;
-  /** People taken on; compared with `vacancies` to offer "close as filled". */
-  hired: number;
   matches: number;
 }
 
@@ -101,7 +99,6 @@ export interface PartnerApplication {
     | "INTERVIEW"
     | "CONNECTED"
     | "CONTACTED"
-    | "HIRED"
     | "REJECTED"
     | "WITHDRAWN"
     | "EXPIRED"

@@ -18,7 +18,6 @@ import {
   fetchSubscriptionPlans,
   reportApplicantApplication,
   revealApplicationContact,
-  runListingAction,
   updateApplicationStatus,
 } from "../queries";
 import { usePlanPurchase } from "../use-plan-purchase";
@@ -71,7 +70,6 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
       updateApplicationStatus(appId, status),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
-      void queryClient.invalidateQueries({ queryKey: ["partner-listing", listingId] });
       Alert.alert("Updated", "Applicant stage updated.");
     },
     onError: (err: any) => {
@@ -146,7 +144,7 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
     ).length,
     CONNECTED: applications.filter((app) => {
       const s = (app.status ?? "").toUpperCase();
-      return s === "CONNECTED" || s === "CONTACTED" || s === "HIRED";
+      return s === "CONNECTED" || s === "CONTACTED";
     }).length,
     CLOSED: applications.filter((app) => {
       const s = (app.status ?? "").toUpperCase();
@@ -160,7 +158,7 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
     if (statusFilter === "NEW") return s === "SUBMITTED" || s === "UNDER_REVIEW";
     if (statusFilter === "SHORTLISTED") return s === "SHORTLISTED";
     if (statusFilter === "INTERVIEW") return s === "INTERVIEW";
-    if (statusFilter === "CONNECTED") return s === "CONNECTED" || s === "CONTACTED" || s === "HIRED";
+    if (statusFilter === "CONNECTED") return s === "CONNECTED" || s === "CONTACTED";
     if (statusFilter === "CLOSED") return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(s);
     return s === statusFilter;
   });
@@ -172,25 +170,6 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
   };
 
   // The listing's own title; "Applicants" only until it loads, never a stand-in job title.
-  // Hired for every vacancy: offer to close the job as filled (the server turns down the rest).
-  const listing = listingQuery.data;
-  const hiredCount = listing?.counts?.hired ?? 0;
-  const isLive = listing?.status === "PUBLISHED";
-  const offerFill = isLive && hiredCount > 0 && hiredCount >= (listing?.vacancies ?? 1);
-  const fillMutation = useMutation({
-    mutationFn: () => runListingAction(listingId, "fill"),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["partner-listing", listingId] });
-      void queryClient.invalidateQueries({ queryKey });
-      void queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
-      void queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
-      Alert.alert("Job closed", "Job closed as filled.");
-    },
-    onError: (err: any) => {
-      Alert.alert("Error", err?.message || "Could not close the job.");
-    },
-  });
-
   const listingTitle = listingQuery.data?.title || "Applicants";
   const serviceSubtitle = [
     listingQuery.data?.service_name,
@@ -228,35 +207,12 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
           {serviceSubtitle}
         </Text>
 
-        {/* Live & Active Status Pill: only while the job is actually live */}
-        {isLive ? (
-          <View className="mt-2.5 w-full rounded-full border border-emerald-200 bg-emerald-50/70 px-3.5 py-1">
-            <Text className="text-xs font-semibold text-emerald-800">
-              Live & Active
-            </Text>
-          </View>
-        ) : null}
-
-        {offerFill ? (
-          <View className="mt-4 gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <View className="gap-1">
-              <Text className="text-sm font-bold text-[#071328]">You have hired for this job</Text>
-              <Text className="text-xs text-[#475569]">
-                Close it as filled? Everyone still waiting will be told the position is filled.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={fillMutation.isPending}
-              onPress={() => fillMutation.mutate()}
-              className={`items-center rounded-xl bg-[#059669] py-2.5 active:opacity-90 ${
-                fillMutation.isPending ? "opacity-60" : ""
-              }`}
-            >
-              <Text className="text-sm font-bold text-white">Close job as filled</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        {/* Live & Active Status Pill */}
+        <View className="mt-2.5 w-full rounded-full border border-emerald-200 bg-emerald-50/70 px-3.5 py-1">
+          <Text className="text-xs font-semibold text-emerald-800">
+            Live & Active
+          </Text>
+        </View>
 
         {/* Segmented Control (Applications vs Matching candidates) */}
         <View className="mt-5 rounded-2xl bg-[#f4efe8] p-1.5 flex-row border border-[#e8e2d9]">
