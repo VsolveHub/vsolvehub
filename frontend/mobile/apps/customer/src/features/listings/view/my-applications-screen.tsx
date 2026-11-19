@@ -109,7 +109,7 @@ function MobileMyApplicationsScreen() {
     if (activeTab === "ACTIVE")
       return ["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "INTERVIEW", "CONTACTED"].includes(s);
     if (activeTab === "SHORTLISTED") return s === "SHORTLISTED";
-    if (activeTab === "CLOSED") return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(s);
+    if (activeTab === "CLOSED") return ["HIRED", "REJECTED", "WITHDRAWN", "EXPIRED"].includes(s);
     return true;
   });
 

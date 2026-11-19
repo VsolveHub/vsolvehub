@@ -105,6 +105,7 @@ export const HIRING_STEP_LABELS: Record<string, string> = {
   INTERVIEW: "Interview",
   CONTACTED: "Connected",
   CONNECTED: "Connected",
+  HIRED: "Hired",
   REJECTED: "Not selected",
   WITHDRAWN: "Withdrawn",
   EXPIRED: "Expired",

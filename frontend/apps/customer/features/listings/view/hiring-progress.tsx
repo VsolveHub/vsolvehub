@@ -3,13 +3,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Button, Textarea, formatDate } from "@vsolve/ui";
-import { CheckCircle2, Phone } from "lucide-react";
+import { Award, CheckCircle2, Phone } from "lucide-react";
 import { useState } from "react";
 
 import type { ListingApplication } from "../queries";
 import { answerInterview, HIRING_STEP_LABELS } from "../seeker-queries";
 
-const STEPS = ["Applied", "Shortlisted", "Interview", "Connected"] as const;
+const STEPS = ["Applied", "Shortlisted", "Interview", "Connected", "Hired"] as const;
 
 function stepIndex(status: string): number {
   const label = HIRING_STEP_LABELS[status] ?? "";
@@ -18,7 +18,7 @@ function stepIndex(status: string): number {
 }
 
 /**
- * Where the application is (Applied → Shortlisted → Interview → Connected), the interview
+ * Where the application is (Applied → Shortlisted → Interview → Connected → Hired), the interview
  * invitation to answer, and the employer's number once the interview is accepted.
  */
 export function HiringProgress({ app }: { app: ListingApplication }) {
@@ -37,11 +37,12 @@ export function HiringProgress({ app }: { app: ListingApplication }) {
   const current = stepIndex(app.status);
   const closed = ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
   const connected = app.status === "CONNECTED" || app.status === "CONTACTED";
+  const hired = app.status === "HIRED";
 
   return (
     <div className="flex flex-col gap-3">
       {!closed ? (
-        <ol className="grid grid-cols-4 gap-1 text-center text-[11px] font-semibold" aria-label="Application progress">
+        <ol className="grid grid-cols-5 gap-1 text-center text-[11px] font-semibold" aria-label="Application progress">
           {STEPS.map((name, i) => (
             <li key={name} className={`rounded-full px-1 py-1 ${i <= current ? "bg-action text-action-text" : "bg-surface-sunken text-text-muted"}`}>
               {name}
@@ -50,7 +51,7 @@ export function HiringProgress({ app }: { app: ListingApplication }) {
         </ol>
       ) : null}
 
-      {interview && interview.status !== "CANCELLED" && !connected ? (
+      {interview && interview.status !== "CANCELLED" && !connected && !hired ? (
         <div className="rounded-control border border-action/40 bg-action-surface/40 p-3 text-sm">
           <p className="font-bold text-navy-900">
             {interview.status === "PROPOSED" ? "Interview invitation" : `Interview · ${interview.status_label}`}
@@ -95,6 +96,13 @@ export function HiringProgress({ app }: { app: ListingApplication }) {
           ) : null}
           {answer.error ? <p className="mt-1 text-xs text-danger-text">{friendlyErrorMessage(answer.error)}</p> : null}
         </div>
+      ) : null}
+
+      {hired ? (
+        <p className="flex items-start gap-2 rounded-control border border-success-line bg-success-surface p-3 text-sm font-semibold text-success-text">
+          <Award className="mt-0.5 size-4 shrink-0" aria-hidden />
+          Congratulations! The employer has hired you. Continue directly with them for joining details.
+        </p>
       ) : null}
 
       {connected ? (

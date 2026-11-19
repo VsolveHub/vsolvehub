@@ -103,9 +103,9 @@ export function fetchListing(key: string) {
 /** "My applications" tabs as the application states the server filters on. */
 export const APPLICATION_TAB_STATUSES: Record<string, string> = {
   ALL: "",
-  ACTIVE: "SUBMITTED,UNDER_REVIEW,SHORTLISTED,CONTACTED",
+  ACTIVE: "SUBMITTED,UNDER_REVIEW,SHORTLISTED,INTERVIEW,CONTACTED",
   SHORTLISTED: "SHORTLISTED",
-  CLOSED: "REJECTED,WITHDRAWN,EXPIRED",
+  CLOSED: "HIRED,REJECTED,WITHDRAWN,EXPIRED",
 };
 
 export function fetchMyApplicationsPage(
