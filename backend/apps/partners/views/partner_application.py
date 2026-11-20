@@ -14,6 +14,7 @@ from django.utils.cache import patch_cache_control
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -21,19 +22,20 @@ from rest_framework.views import APIView
 
 from apps.identity.models import User
 from apps.locations.serializers import PartnerServiceAreaOptionSerializer
-from apps.partners.exceptions import PartnerDomainError
+from apps.partners.exceptions import EmployerDetailError, PartnerDomainError
 from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import (
     applicant_service_areas,
-    partner_application_for_user,
     applicant_skills,
+    partner_application_for_user,
     partner_profile_for_user,
     partner_schedule,
     partner_work_catalog,
     required_partner_consent_documents,
 )
 from apps.partners.serializers import (
+    EmployerDetailsUpdateSerializer,
     ExpectedVersionSerializer,
     PartnerApplicationSerializer,
     PartnerApplicationUpdateSerializer,
@@ -56,26 +58,29 @@ from apps.partners.serializers import (
     PartnerWorkCategorySerializer,
 )
 from apps.partners.services import (
-    _ensure_partner_role,
-    _record_transition,
     ScheduleExceptionInput,
     ScheduleRuleInput,
+    _ensure_partner_role,
+    _record_transition,
     create_partner_document_applicant_access,
     finalize_partner_document_upload,
     go_offline,
     go_online,
     heartbeat_presence,
     issue_partner_document_upload,
+    remove_employer_logo,
     replace_partner_schedule,
+    set_employer_logo,
     submit_partner_application,
     sync_partner_push_subscription,
+    update_employer_details,
     update_partner_application,
 )
 from common.errors.serializers import ApiErrorSerializer
 from common.schema import PARTNER_VERSION_CONFLICT_EXAMPLE
 from common.throttling import ThrottledWriteMixin
 
-from .base import _application_response, _raise_api_error, _request_ip
+from .base import _application_response, _raise_api_error, _raise_field_error, _request_ip
 
 
 class ApplicantServiceAreaListView(APIView):
@@ -239,7 +244,9 @@ class PartnerApplicationView(APIView):
                 application = PartnerApplication.objects.filter(partner=partner).first()
                 if application is None:
                     application = PartnerApplication.objects.create(partner=partner)
-        return Response(PartnerApplicationSerializer(application).data)
+        return Response(
+            PartnerApplicationSerializer(application, context={"request": request}).data
+        )
 
     @extend_schema(
         tags=["Partner application"],
@@ -277,9 +284,110 @@ class PartnerApplicationView(APIView):
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)
-        response = _application_response(user)
+        response = _application_response(user, request)
         response.status_code = HTTPStatus.OK if existed else HTTPStatus.CREATED
         return response
+
+
+class PartnerEmployerDetailsView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Partner application"],
+        request=EmployerDetailsUpdateSerializer,
+        responses={
+            200: PartnerApplicationSerializer,
+            400: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description=(
+                    "`partner_application_version_conflict`, `employer_track_required` "
+                    "(not a hire-staff application) or `partner_transition_not_allowed` "
+                    "(the application can no longer be edited)."
+                ),
+                examples=[PARTNER_VERSION_CONFLICT_EXAMPLE],
+            ),
+        },
+        description=(
+            "The only write path for the employer screens. 400 codes: `pin_code_invalid`, "
+            "`pin_incomplete`, `gstin_format`, `gstin_state`, `gstin_pan`, `gstin_checksum`, "
+            "`gstin_needs_gst_registered`, `business_proof_mismatch`, "
+            "`employer_field_not_for_type`."
+        ),
+    )
+    def patch(self, request: Request) -> Response:
+        serializer = EmployerDetailsUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        user = cast(User, request.user)
+        try:
+            update_employer_details(
+                user=user,
+                expected_version=data.pop("expected_version"),
+                data=data,
+            )
+        except EmployerDetailError as exc:
+            _raise_field_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return _application_response(user, request)
+
+
+class PartnerEmployerLogoView(APIView):
+    """A business employer's public logo: JPEG, PNG or WebP, up to 2 MB."""
+
+    permission_classes = (IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @extend_schema(
+        tags=["Partner application"],
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"file": {"type": "string", "format": "binary"}},
+                "required": ["file"],
+            }
+        },
+        responses={
+            200: PartnerApplicationSerializer,
+            400: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+        description=(
+            "400 codes: `employer_logo_type`, `employer_logo_empty`, `employer_logo_too_large`, "
+            "`employer_field_not_for_type` (not hiring for a business)."
+        ),
+    )
+    def post(self, request: Request) -> Response:
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise ValidationError({"file": ["Attach a logo file."]}, code="file_required")
+        user = cast(User, request.user)
+        try:
+            set_employer_logo(user=user, upload=upload)
+        except EmployerDetailError as exc:
+            _raise_field_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return _application_response(user, request)
+
+    @extend_schema(
+        tags=["Partner application"],
+        responses={
+            200: PartnerApplicationSerializer,
+            400: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def delete(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        try:
+            remove_employer_logo(user=user)
+        except EmployerDetailError as exc:
+            _raise_field_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return _application_response(user, request)
 
 
 class PartnerApplicationSubmitView(APIView):
@@ -300,7 +408,7 @@ class PartnerApplicationSubmitView(APIView):
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)
-        return _application_response(cast(User, request.user))
+        return _application_response(cast(User, request.user), request)
 
 
 class PartnerDocumentUploadView(ThrottledWriteMixin, APIView):

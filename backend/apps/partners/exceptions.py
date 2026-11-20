@@ -56,6 +56,23 @@ class PartnerApplicationIncompleteError(PartnerDomainError):
         )
 
 
+class EmployerTrackRequiredError(PartnerDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="employer_track_required",
+            message="Employer details can only be saved on a hire-staff application.",
+            status_code=409,
+        )
+
+
+class EmployerDetailError(PartnerDomainError):
+    """An employer detail that cannot be saved, naming the field it belongs to."""
+
+    def __init__(self, message: str, *, field: str, code: str) -> None:
+        super().__init__(code=code, message=message, status_code=400)
+        self.field = field
+
+
 class PartnerDocumentUploadError(PartnerDomainError):
     def __init__(self, message: str, *, retryable: bool = False, code: str = "") -> None:
         super().__init__(

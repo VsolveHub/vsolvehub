@@ -68,6 +68,7 @@ from .m2 import (
 )
 from .onboarding import (
     APPLICANT_AUDIENCE,
+    EmployerDetailsUpdateSerializer,
     ExpectedVersionSerializer,
     OperationsApplicationQueueItemSerializer,
     OperationsApplicationQueuePageSerializer,
@@ -113,6 +114,7 @@ __all__ = [
     "CrewMemberCreateSerializer",
     "CrewMemberSerializer",
     "CrewMemberUpdateSerializer",
+    "EmployerDetailsUpdateSerializer",
     "ExpectedVersionSerializer",
     "OperationsApplicationQueueItemSerializer",
     "OperationsApplicationQueuePageSerializer",

@@ -28,6 +28,8 @@ from apps.partners.views import (
     PartnerDocumentAccessView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
+    PartnerEmployerDetailsView,
+    PartnerEmployerLogoView,
     PartnerGateListView,
     PartnerInsuranceView,
     PartnerLanguageView,
@@ -68,6 +70,16 @@ urlpatterns = [
         "partner/application/documents/<uuid:document_id>/access/",
         PartnerDocumentAccessView.as_view(),
         name="partner-application-document-access",
+    ),
+    path(
+        "partner/application/employer/",
+        PartnerEmployerDetailsView.as_view(),
+        name="partner-application-employer",
+    ),
+    path(
+        "partner/application/employer/logo/",
+        PartnerEmployerLogoView.as_view(),
+        name="partner-application-employer-logo",
     ),
     path(
         "partner/application/submit/",
