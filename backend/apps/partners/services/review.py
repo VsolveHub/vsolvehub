@@ -412,3 +412,102 @@ def transition_partner_application(
             reason=reason or f"application_{target_status.lower()}",
         )
     return application
+
+
+@transaction.atomic
+def remove_partner_application_area(
+    *,
+    reviewer: User,
+    application_id: uuid.UUID,
+    service_area_id: uuid.UUID,
+    expected_version: int,
+    reason: str = "",
+) -> PartnerApplication:
+    """Operations removes an area during review ("Approve without Miyapur", FLOW.md §3a).
+
+    Deactivates the link and the area's availability rules, bumps version and audits the action.
+    Refuses to remove the last area unless the application has a non-dismissed area request.
+    """
+    application = (
+        PartnerApplication.objects.select_for_update()
+        .select_related("partner")
+        .filter(id=application_id)
+        .first()
+    )
+    if application is None:
+        raise PartnerApplicationNotFoundError
+    if application.partner.user_id == reviewer.id:
+        raise PartnerSelfReviewError(
+            object_type="partner_application",
+            object_id=application.id,
+        )
+    _assert_version(application, expected_version)
+
+    if application.status == PartnerApplication.Status.SUBMITTED:
+        if application.review_assigned_to_id not in {None, reviewer.id}:
+            raise PartnerReviewOwnershipError(
+                "This application is already assigned to another reviewer.",
+            )
+        application.review_assigned_to = reviewer
+        application.review_assigned_at = timezone.now()
+    elif (
+        application.status == PartnerApplication.Status.UNDER_REVIEW
+        and application.review_assigned_to_id != reviewer.id
+    ):
+        raise PartnerReviewOwnershipError(
+            "Claim this Partner application before completing its review.",
+        )
+
+    partner = application.partner
+    from apps.identity.services import record_access_event  # noqa: PLC0415
+    from apps.partners.models import PartnerServiceArea  # noqa: PLC0415
+
+    link = PartnerServiceArea.objects.filter(
+        partner=partner,
+        service_area_id=service_area_id,
+        is_active=True,
+    ).first()
+
+    if link is not None:
+        active_areas_count = PartnerServiceArea.objects.filter(
+            partner=partner,
+            is_active=True,
+        ).count()
+        has_requests = application.area_requests.filter(dismissed_at__isnull=True).exists()
+
+        if active_areas_count <= 1 and not has_requests:
+            from apps.partners.exceptions import PartnerDomainError  # noqa: PLC0415
+
+            raise PartnerDomainError(
+                code="cannot_remove_last_area",
+                message=(
+                    "Cannot remove the last service area unless the partner has an area request."
+                ),
+                status_code=400,
+            )
+
+        link.is_active = False
+        link.save(update_fields=("is_active",))
+
+        PartnerAvailabilityRule.objects.filter(
+            partner=partner,
+            service_area_id=service_area_id,
+            is_active=True,
+        ).update(is_active=False)
+
+    application.version += 1
+    application.save(update_fields=("version", "updated_at"))
+
+    record_access_event(
+        actor=reviewer,
+        subject_user=partner.user,
+        action="operations.remove_partner_area",
+        object_type="partner_application",
+        object_id=application.id,
+        metadata={
+            "service_area_id": str(service_area_id),
+            "reason": reason,
+        },
+    )
+
+    return application

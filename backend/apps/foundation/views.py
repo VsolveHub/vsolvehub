@@ -34,7 +34,9 @@ class DevStorageView(APIView):
         raw_bytes = request.data if isinstance(request.data, (bytes, bytearray)) else request.body
         file_path.write_bytes(raw_bytes)
 
-        content_type = request.content_type or request.META.get("CONTENT_TYPE", "application/octet-stream")
+        content_type = request.content_type or request.META.get(
+            "CONTENT_TYPE", "application/octet-stream"
+        )
         content_type = content_type.split(";")[0].strip()
         meta_path = file_path.with_suffix(file_path.suffix + ".meta")
         meta_path.write_text(content_type, encoding="utf-8")

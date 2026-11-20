@@ -465,7 +465,24 @@ export const queryKeys = {
      * advertise a lookup that does not exist.
      */
     dispatchExplanation: (unitId: string) =>
-      [...queryKeys.operations.all, "dispatch-explanation", unitId] as const,
+        [...queryKeys.operations.all, "dispatch-explanation", unitId] as const,
+
+    /** Service areas management (contract 1.106.0). */
+    serviceAreas: () => [...queryKeys.operations.all, "service-areas"] as const,
+    serviceArea: (areaId: string) =>
+        [...queryKeys.operations.all, "service-area", areaId] as const,
+
+    /** An area's supply targets and flags (contract 1.108.0). */
+    areaTargets: (areaId: string) =>
+        [...queryKeys.operations.all, "area-targets", areaId] as const,
+
+    /** Area requests grouped by PIN code (contract 1.106.0). */
+    areaRequests: (filters?: { status?: string; trade?: string; search?: string }) =>
+        [...queryKeys.operations.all, "area-requests", filters] as const,
+
+    /** Coverage Lite matrix and summary (contract 1.106.0). */
+    coverageLite: (filters?: { zone?: string; trade?: string }) =>
+        [...queryKeys.operations.all, "coverage-lite", filters] as const,
   },
 } as const;
 

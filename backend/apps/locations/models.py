@@ -43,6 +43,7 @@ class ServiceArea(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=120, unique=True)
     name = models.CharField(max_length=160)
+    zone = models.CharField(max_length=64, blank=True, default="")
     #: The state this area sits in, in whatever code vocabulary Operations loaded
     #: `partners.MinimumWageFloor.state_code` with. Blank means "not mapped yet", and every rule
     #: that depends on it fails closed rather than guessing — a statutory wage floor is not
@@ -240,3 +241,34 @@ class Address(models.Model):
 
     def __str__(self) -> str:
         return f"{self.label}: {self.line1}, {self.postal_code}"
+
+
+class UnservedDemandEvent(models.Model):
+    """A customer turned away because we do not serve their PIN (yet).
+
+    Written by the customer PIN check. Operations reads the 28-day count per PIN and per area to
+    see where demand is going unmet; nothing else depends on it, and it never blocks a lookup.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    postal_code = models.CharField(max_length=12, validators=(indian_postal_code_validator,))
+    variant = models.ForeignKey(
+        ServiceVariant,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    reason_code = models.CharField(max_length=40)
+    source = models.CharField(max_length=24, default="LOOKUP")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [
+            models.Index(fields=("postal_code", "created_at")),
+            models.Index(fields=("created_at",)),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.postal_code}:{self.reason_code}"

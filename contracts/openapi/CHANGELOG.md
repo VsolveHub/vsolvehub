@@ -1,5 +1,72 @@
 # API Contract Changelog
 
+## 1.108.0 - Phase 2: supply targets, coverage flags, customers turned away, trend, recruitment
+
+Additive changes for Operations (FLOW.md Phase 2).
+
+- **Added** `GET` and `PUT /api/v1/operations/service-areas/{area_id}/targets/`: an area's overall and
+  per-trade supply targets (empty or zero removes one) with approved partners and a flag each.
+- **Added** `GET /api/v1/operations/recruitment-push/` (JSON or `format=csv`): red and amber areas with
+  the shortfall per trade and a tagged apply link.
+- **Added** to each area of `GET /api/v1/operations/coverage-lite/`: `approved_partners`,
+  `target_partners`, `alert_below`, `flag` (RED, AMBER, GREEN, NONE), `trade_targets`,
+  `turned_away_28d_count` and a 12-week `trend` (null for a week with no snapshot). The summary gains
+  `total_turned_away_28d`, `red_areas`, `amber_areas`, `green_areas`, `trend_weeks` and `trend`.
+- **Added** `customer_lookups_28d` to each group of `GET /api/v1/operations/area-requests/`.
+- **Added** `area_details[]` (zone, hours set, offers the partner's services) and
+  `services_not_offered[]` to the Operations partner-application read, empty in the applicant's own
+  view; and `skill_code` on each service of an Operations service-area detail and on each trade of an
+  area-request group. A new area now lists every offerable service, switched on or off.
+- **Changed** (no schema change) the customer PIN check now records a turned-away customer, once per
+  PIN, service and reason in five minutes.
+
+## 1.107.0 - Area requests: dismiss one application's request, and notify results
+
+Additive changes to the Phase 1b Operations area-request endpoints.
+
+- **Added** optional `application_id` to `POST /api/v1/operations/area-requests/{postal_code}/dismiss/`.
+  With it, only that application's request for the PIN is marked not valid (the application review
+  screen). Without it, every open request for the PIN is dismissed (the Area requests screen).
+- **Added** `skipped_applications` to the notify result: approved partners whose area could not be
+  added with their usual hours (for example no hours to copy).
+- **Changed** (no schema change) `POST .../area-requests/{postal_code}/notify/` now answers `409`
+  `area_request_not_ready` when no open service area covers the PIN, and adds the area directly for
+  approved partners (FLOW.md section 2). The list endpoint reports `DONE` for requests whose partner
+  already holds a covering area, and leaves them out of the default list and the counts.
+
+## 1.106.0 - Phase 1b: Operations Area Management, Area Requests, Partner Add Area, and Coverage Lite
+
+Additive changes for Operations management tools (proposal 0030, FLOW.md Phase 1b).
+
+- **Added** `ServiceArea.zone` field on `ServiceArea` reads (`ServiceAreaSerializer` and `PartnerServiceAreaOptionSerializer`).
+- **Added** Operations Areas management endpoints:
+  - `GET /api/v1/operations/service-areas/` and `POST /api/v1/operations/service-areas/`
+  - `GET /api/v1/operations/service-areas/{area_id}/` and `PATCH /api/v1/operations/service-areas/{area_id}/`
+  - `POST /api/v1/operations/service-areas/{area_id}/pins/` and `DELETE /api/v1/operations/service-areas/{area_id}/pins/{postal_code}/`
+  - `POST /api/v1/operations/service-areas/{area_id}/services/`
+  - `POST /api/v1/operations/service-areas/bulk-pins/preview/` and `POST /api/v1/operations/service-areas/bulk-pins/apply/`
+- **Added** Operations Area Requests endpoints:
+  - `GET /api/v1/operations/area-requests/` (grouped by PIN code with trades breakdown and live statuses)
+  - `POST /api/v1/operations/area-requests/{postal_code}/notify/` (triggers area opened notifications to requesting partners)
+  - `POST /api/v1/operations/area-requests/{postal_code}/dismiss/` ("Mark not valid")
+- **Added** Command to add area to approved partner with schedule copying:
+  - `POST /api/v1/operations/partners/{partner_id}/add-area/`
+- **Added** Coverage Lite read-only reporting endpoint:
+  - `GET /api/v1/operations/coverage-lite/` (supports `format=csv`)
+
+## 1.105.0 - Step 3 "Where you work": asked PINs and area requests
+
+Additive changes for the simplified Step 3 "Where you work" flow (proposal 0030, FLOW.md).
+
+- **Added** `PartnerServiceAreaOption.postal_codes[]` on `GET /api/v1/service-areas/`.
+- **Added** `requested_postal_codes[]` and `area_requests[]` (`id`, `postal_code`, `place`, `status`, `covering_area_id`, `covering_area_name`, `created_at`, `notified_at`, `dismissed_at`) on `PartnerApplication` reads.
+- **Added** `requested_postal_codes` write field on `PATCH /api/v1/partner/application/` (SERVICES track only, max 5).
+- **Added** `409 partner_service_areas_unavailable` error with details `unavailable_service_area_ids[]` when saving closed areas.
+- **Added** `area_pending=true` filter on `GET /api/v1/operations/partner-applications/`.
+- **Added** `area_pending` and `area_tag` on `OperationsApplicationQueueItem`.
+- **Added** `POST /api/v1/operations/partner-applications/{id}/remove-area/` (`service_area_id`, `expected_version`, `reason`).
+- **Behaviour** Submitting a partner application now succeeds with 0 service areas if at least 1 postal code is requested. Approval strictly requires at least 1 active linked service area.
+
 ## 1.104.0 - Employer business details
 
 Additive, with one behaviour change to submitting an `EMPLOYER` application.

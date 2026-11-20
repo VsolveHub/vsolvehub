@@ -60,8 +60,21 @@ export function isVersionConflict(error: unknown): boolean {
 
 export function describeRefusal(
   error: unknown,
+  t?: (key: string, params?: Record<string, string | number>) => string,
+  removedAreaNames: readonly string[] = [],
 ): { title: string; message: string } | null {
   if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "partner_service_areas_unavailable") {
+    // Case G (FLOW.md): the screen removes only the closed areas, and says which.
+    const title = t ? t("apply.editor.refusal.areasUnavailable.title") : "Some areas are no longer available";
+    const message =
+      t && removedAreaNames.length > 0
+        ? t("apply.editor.refusal.areasUnavailable.named", { areas: removedAreaNames.join(", ") })
+        : t
+          ? t("apply.editor.refusal.areasUnavailable.message")
+          : "One or more selected areas stopped taking new partners. We've removed them so you can continue.";
+    return { title, message };
+  }
   if (error.code === "partner_application_incomplete") {
     return {
       title: "Incomplete selection",

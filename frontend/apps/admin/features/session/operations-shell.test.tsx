@@ -139,6 +139,9 @@ describe("the workspaces", () => {
       // Applications)
       "/reviews",
       "/operations/partners",
+      "/operations/areas",
+      "/operations/area-requests",
+      "/operations/coverage",
       "/operations/partners/import",
       // Customers
       "/operations/customers",

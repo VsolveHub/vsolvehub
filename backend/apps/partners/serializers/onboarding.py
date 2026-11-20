@@ -58,6 +58,10 @@ class PartnerApplicationUpdateSerializer(serializers.Serializer[dict[str, object
         child=serializers.UUIDField(),
         required=False,
     )
+    requested_postal_codes = serializers.ListField(
+        child=serializers.CharField(max_length=6),
+        required=False,
+    )
     consents = PartnerConsentInputSerializer(many=True, required=False)
     device_identifier = serializers.CharField(
         required=False,
@@ -118,6 +122,12 @@ class ExpectedVersionSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(min_value=1)
 
 
+class OperationsRemoveAreaSerializer(serializers.Serializer[dict[str, object]]):
+    expected_version = serializers.IntegerField(min_value=1)
+    service_area_id = serializers.UUIDField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class OperationsTransitionSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(min_value=1)
     target_status = serializers.ChoiceField(
@@ -154,6 +164,7 @@ class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str,
     )
     assigned_to_me = serializers.BooleanField(required=False, default=False)
     unassigned = serializers.BooleanField(required=False, default=False)
+    area_pending = serializers.BooleanField(required=False, default=False)
     cursor = serializers.CharField(required=False, write_only=True)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
@@ -320,6 +331,8 @@ class OperationsApplicationQueueItemSerializer(
 ):
     display_name = serializers.CharField(source="partner.display_name", read_only=True)
     review_assigned_to_id = serializers.UUIDField(read_only=True, allow_null=True)
+    area_pending = serializers.SerializerMethodField()
+    area_tag = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerApplication
@@ -332,8 +345,45 @@ class OperationsApplicationQueueItemSerializer(
             "review_assigned_to_id",
             "review_assigned_at",
             "updated_at",
+            "area_pending",
+            "area_tag",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_area_pending(application: PartnerApplication) -> bool:
+        has_linked_areas = application.partner.service_area_links.filter(is_active=True).exists()
+        has_open_requests = application.area_requests.filter(dismissed_at__isnull=True).exists()
+        return not has_linked_areas and has_open_requests
+
+    @staticmethod
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_area_tag(application: PartnerApplication) -> str | None:
+        from apps.partners.selectors import partner_area_request_rows  # noqa: PLC0415
+
+        requests = partner_area_request_rows(application)
+        active_areas_count = application.partner.service_area_links.filter(is_active=True).count()
+
+        if not requests:
+            return None
+
+        ready_req = next((r for r in requests if r["status"] == "READY"), None)
+        if ready_req:
+            area_name = ready_req.get("covering_area_name") or "open area"
+            return f"Ready · now in {area_name}"
+
+        if active_areas_count == 0:
+            pin = requests[0]["postal_code"]
+            return f"Area pending · {pin}"
+
+        open_requests = [r for r in requests if r["status"] in ("WAITING", "AREA_FULL")]
+        if open_requests:
+            plural_areas = "area" if active_areas_count == 1 else "areas"
+            plural_pins = "PIN" if len(open_requests) == 1 else "PINs"
+            return f"{active_areas_count} {plural_areas} · {len(open_requests)} {plural_pins} asked"
+
+        return None
 
 
 class OperationsApplicationQueuePageSerializer(serializers.Serializer[dict[str, object]]):
@@ -464,6 +514,27 @@ class PartnerProfileSerializer(serializers.ModelSerializer[PartnerProfile]):
         ).exists()
 
 
+class PartnerApplicationAreaDetailSerializer(serializers.Serializer[dict[str, Any]]):
+    service_area_id = serializers.UUIDField()
+    name = serializers.CharField()
+    zone = serializers.CharField(allow_blank=True)
+    hours_set = serializers.BooleanField()
+    #: False when the area enables none of the partner's chosen services (the mismatch flag).
+    offers_partner_trades = serializers.BooleanField()
+
+
+class PartnerAreaRequestSerializer(serializers.Serializer[dict[str, object]]):
+    id = serializers.UUIDField()
+    postal_code = serializers.CharField()
+    place = serializers.CharField(allow_null=True)
+    status = serializers.CharField()
+    covering_area_id = serializers.UUIDField(allow_null=True)
+    covering_area_name = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    notified_at = serializers.DateTimeField(allow_null=True)
+    dismissed_at = serializers.DateTimeField(allow_null=True)
+
+
 class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplication]):
     partner_id = serializers.UUIDField(source="partner.id", read_only=True)
     review_assigned_to_id = serializers.UUIDField(read_only=True, allow_null=True)
@@ -476,6 +547,10 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     skill_codes = serializers.SerializerMethodField()
     service_variant_ids = serializers.SerializerMethodField()
     service_area_ids = serializers.SerializerMethodField()
+    requested_postal_codes = serializers.SerializerMethodField()
+    area_requests = serializers.SerializerMethodField()
+    area_details = serializers.SerializerMethodField()
+    services_not_offered = serializers.SerializerMethodField()
     consents = PartnerConsentSerializer(source="partner.consents", many=True, read_only=True)
     documents = PartnerDocumentSerializer(many=True, read_only=True)
     transitions = PartnerApplicationTransitionSerializer(many=True, read_only=True)
@@ -498,6 +573,10 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "skill_codes",
             "service_variant_ids",
             "service_area_ids",
+            "requested_postal_codes",
+            "area_requests",
+            "area_details",
+            "services_not_offered",
             "change_request_message",
             "submitted_at",
             "review_assigned_to_id",
@@ -538,6 +617,82 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             return True
         return employer_business_complete(application.partner)
 
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_requested_postal_codes(application: PartnerApplication) -> list[str]:
+        return list(
+            application.area_requests.filter(dismissed_at__isnull=True)
+            .order_by("created_at", "id")
+            .values_list("postal_code", flat=True)
+        )
+
+    @staticmethod
+    @extend_schema_field(PartnerAreaRequestSerializer(many=True))
+    def get_area_requests(application: PartnerApplication) -> list[dict[str, Any]]:
+        from apps.partners.selectors import partner_area_request_rows  # noqa: PLC0415
+
+        return partner_area_request_rows(application)
+
+    @staticmethod
+    @extend_schema_field(PartnerApplicationAreaDetailSerializer(many=True))
+    def get_area_details(application: PartnerApplication) -> list[dict[str, Any]]:
+        """Each chosen area with its zone, whether hours are set, and whether it offers any of the
+        partner's services. For Operations; the applicant's view leaves it empty."""
+        from apps.partners.models import PartnerAvailabilityRule  # noqa: PLC0415
+
+        partner = application.partner
+        variant_ids = {link.variant_id for link in partner.service_links.all() if link.is_active}
+        hours_areas = set(
+            PartnerAvailabilityRule.objects.filter(partner=partner, is_active=True).values_list(
+                "service_area_id", flat=True
+            )
+        )
+        details: list[dict[str, Any]] = []
+        for link in partner.service_area_links.select_related("service_area").all():
+            if not link.is_active:
+                continue
+            area = link.service_area
+            offered = set(
+                area.service_links.filter(is_active=True).values_list("variant_id", flat=True)
+            )
+            details.append(
+                {
+                    "service_area_id": area.id,
+                    "name": area.name,
+                    "zone": area.zone,
+                    "hours_set": area.id in hours_areas,
+                    # A partner with no services chosen yet is not flagged.
+                    "offers_partner_trades": not variant_ids or bool(variant_ids & offered),
+                }
+            )
+        return sorted(details, key=lambda item: item["name"])
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_services_not_offered(application: PartnerApplication) -> list[str]:
+        """Chosen services no chosen area offers. Empty when every one is offered somewhere, or
+        when no area is chosen yet (the area-pending banner covers that)."""
+        partner = application.partner
+        area_ids = [
+            link.service_area_id for link in partner.service_area_links.all() if link.is_active
+        ]
+        if not area_ids:
+            return []
+        from apps.locations.models import ServiceAreaService  # noqa: PLC0415
+
+        offered = set(
+            ServiceAreaService.objects.filter(
+                service_area_id__in=area_ids, is_active=True
+            ).values_list("variant_id", flat=True)
+        )
+        return sorted(
+            {
+                link.variant.name
+                for link in partner.service_links.select_related("variant").all()
+                if link.is_active and link.variant_id not in offered
+            }
+        )
+
     def to_representation(self, instance: PartnerApplication) -> dict[str, Any]:
         """The applicant's own view drops what belongs to Operations.
 
@@ -549,6 +704,8 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
         if self.context.get("audience") != APPLICANT_AUDIENCE:
             return data
         data["review_assigned_to_id"] = None
+        data["area_details"] = []
+        data["services_not_offered"] = []
         data["transitions"] = [
             {
                 **transition,

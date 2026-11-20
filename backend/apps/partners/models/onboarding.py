@@ -18,7 +18,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
-from apps.locations.models import ServiceArea
+from apps.locations.models import ServiceArea, indian_postal_code_validator
 
 
 class PartnerProfile(models.Model):
@@ -333,6 +333,51 @@ class PartnerServiceArea(models.Model):
 
     def __str__(self) -> str:
         return f"{self.partner_id}:{self.service_area_id}"
+
+
+class PartnerAreaRequest(models.Model):
+    """A postal code where a partner wants to work, requested when no open service area covers it.
+
+    Captured in Step 3 "Where you work". Its status is computed live from the ServiceArea and
+    PostalCode tables, rather than stored as a static column (FLOW.md §4).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    application = models.ForeignKey(
+        PartnerApplication,
+        on_delete=models.CASCADE,
+        related_name="area_requests",
+    )
+    postal_code = models.CharField(
+        max_length=6,
+        validators=(indian_postal_code_validator,),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    dismissed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="partner_area_requests_dismissed",
+    )
+
+    class Meta:
+        ordering = ("created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application", "postal_code"),
+                name="partners_unique_application_postal_code",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("postal_code",)),
+            models.Index(fields=("application", "created_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application_id}: {self.postal_code}"
 
 
 class PartnerConsent(models.Model):

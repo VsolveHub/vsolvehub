@@ -78,7 +78,18 @@ const APPLICATION: Record<ApplicationStatus, StatusPresentation> = {
   },
 };
 
-export function applicationStatusPresentation(status: ApplicationStatus): StatusPresentation {
+export function applicationStatusPresentation(
+  status: ApplicationStatus,
+  options?: { isAreaPending?: boolean },
+): StatusPresentation {
+  if (options?.isAreaPending && (status === "SUBMITTED" || status === "UNDER_REVIEW")) {
+    return {
+      tone: "info",
+      labelKey: "apply.status.underReview.label",
+      headlineKey: "apply.status.waitingForArea.headline",
+      nextKey: "apply.status.waitingForArea.next",
+    };
+  }
   return APPLICATION[status];
 }
 
