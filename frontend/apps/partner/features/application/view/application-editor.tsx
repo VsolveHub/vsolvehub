@@ -254,7 +254,9 @@ function Editor({
 
   // Resolved from the shared sequence rather than passed in per page, so the
   // navigation and this button cannot disagree about what comes next.
-  const following = continueOnSave ? nextStep(pathname, application?.track) : null;
+  const following = continueOnSave
+    ? nextStep(pathname, application?.track, application?.employer?.hiring_as)
+    : null;
 
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
@@ -317,7 +319,7 @@ function Editor({
     });
   }
 
-  const previous = previousStep(pathname, application?.track);
+  const previous = previousStep(pathname, application?.track, application?.employer?.hiring_as);
   const backHref = previous ? previous.href : "/apply";
 
   return (

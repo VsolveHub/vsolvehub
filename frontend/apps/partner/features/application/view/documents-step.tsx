@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { previousStep } from "../model/progress";
-import { OFFERED_DOCUMENTS, requiredDocumentKinds } from "../model/readiness";
+import { offeredDocumentKinds, requiredDocumentKinds } from "../model/readiness";
 import { nextStep } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { ApplyDock } from "./apply-shell";
@@ -50,12 +50,13 @@ export function DocumentsStep() {
 
   const application = query.data ?? null;
   const track = application?.track ?? null;
+  const hiringAs = application?.employer?.hiring_as;
   const required = new Set(requiredDocumentKinds(application));
-  const kinds = [...OFFERED_DOCUMENTS]
-    .map((offered) => offered.kind)
-    .sort((a, b) => Number(required.has(b)) - Number(required.has(a)));
-  const back = previousStep(pathname, track);
-  const next = nextStep(pathname, track);
+  const kinds = [...offeredDocumentKinds(application)].sort(
+    (a, b) => Number(required.has(b)) - Number(required.has(a)),
+  );
+  const back = previousStep(pathname, track, hiringAs);
+  const next = nextStep(pathname, track, hiringAs);
 
   return (
     <>

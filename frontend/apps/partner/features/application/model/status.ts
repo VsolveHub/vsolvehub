@@ -132,6 +132,9 @@ const DOCUMENT_LABEL_KEYS: Record<DocumentKind, string> = {
   TAX: "apply.overview.documentLabels.tax",
   BANK: "apply.overview.documentLabels.bank",
   BACKGROUND_CHECK: "apply.overview.documentLabels.backgroundCheck",
+  SELFIE: "apply.overview.documentLabels.selfie",
+  BUSINESS_PROOF: "apply.overview.documentLabels.businessProof",
+  AUTHORIZATION_LETTER: "apply.overview.documentLabels.authorizationLetter",
   OTHER: "apply.overview.documentLabels.other",
 };
 

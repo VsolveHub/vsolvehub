@@ -98,7 +98,7 @@ function ApplyHeader() {
     pathname === "/apply/profile"
       ? { href: "/apply", labelKey: "apply.steps.overview" }
       : canWalkSteps
-        ? previousStep(pathname, track)
+        ? previousStep(pathname, track, application?.employer?.hiring_as)
         : null;
 
   return (

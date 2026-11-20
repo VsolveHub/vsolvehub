@@ -123,7 +123,7 @@ function ReviewForm({
   const ready = editable && outstanding.length === 0 && consentsTicked && declared;
   const isSending = update.isPending || submit.isPending;
   const failure = update.error ?? submit.error;
-  const back = previousStep(pathname, application.track);
+  const back = previousStep(pathname, application.track, application.employer?.hiring_as);
 
   function toggle(document: ConsentDocument) {
     const key = consentKey(document.purpose, document.document_version);

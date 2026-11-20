@@ -1,5 +1,6 @@
 import type { Schemas } from "@vsolve/api-client";
 
+import { employerStepFor, hiringAsOf, type EmployerStepHref } from "./employer";
 import { documentLabelKey, isDocumentRejected } from "./status";
 import { isListingTrack } from "./steps";
 
@@ -23,7 +24,10 @@ type Schedule = Schemas["PartnerSchedule"];
 
 export type RequirementCode =
   | "DISPLAY_NAME"
-  | "BUSINESS_DETAILS"
+  | "HIRING_AS"
+  | "EMPLOYER_ABOUT"
+  | "EMPLOYER_BUSINESS"
+  | "EMPLOYER_CONTACT"
   | "EXPERIENCE_YEARS"
   | "SKILLS"
   | "SERVICE_AREAS"
@@ -31,6 +35,9 @@ export type RequirementCode =
   | "WORKING_HOURS"
   | "GOVERNMENT_ID"
   | "ADDRESS_PROOF"
+  | "SELFIE"
+  | "BUSINESS_PROOF"
+  | "AUTHORIZATION_LETTER"
   | "CONSENTS";
 
 export interface Requirement {
@@ -43,16 +50,60 @@ export interface Requirement {
 }
 
 /**
- * The document kinds the onboarding flow offers, and the requirement each one satisfies.
+ * The requirement each document kind satisfies.
  *
- * Which of them are *required* is the server's answer (`required_document_kinds`), never a list
- * kept here: a copy here once demanded proof of address that Django does not require, and
- * blocked applicants who had finished. Kinds the server does not require are offered as optional.
+ * Which kinds are *required* and which are *offered* is the server's answer
+ * (`required_document_kinds`, `offered_document_kinds`), never a list kept here: a copy here once
+ * demanded proof of address that Django does not require, and blocked applicants who had finished.
  */
-export const OFFERED_DOCUMENTS: readonly { kind: DocumentKind; code: RequirementCode }[] = [
-  { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID" },
-  { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF" },
-];
+const DOCUMENT_REQUIREMENT_CODES: Partial<Record<DocumentKind, RequirementCode>> = {
+  GOVERNMENT_ID: "GOVERNMENT_ID",
+  ADDRESS_PROOF: "ADDRESS_PROOF",
+  SELFIE: "SELFIE",
+  BUSINESS_PROOF: "BUSINESS_PROOF",
+  AUTHORIZATION_LETTER: "AUTHORIZATION_LETTER",
+};
+
+/**
+ * The document slots to show. Before an application exists there is no answer to read, so the two
+ * every non-employer track has always offered stand in until the first save.
+ */
+export function offeredDocumentKinds(application: Application | null): readonly DocumentKind[] {
+  return application?.offered_document_kinds ?? ["GOVERNMENT_ID", "ADDRESS_PROOF"];
+}
+
+const EMPLOYER_STEP_REQUIREMENTS: Record<
+  EmployerStepHref,
+  { code: RequirementCode; labelKey: string }
+> = {
+  "/apply/hiring-as": { code: "HIRING_AS", labelKey: "apply.steps.hiringAs" },
+  "/apply/employer/about": { code: "EMPLOYER_ABOUT", labelKey: "apply.steps.employerAbout" },
+  "/apply/employer/business": { code: "EMPLOYER_BUSINESS", labelKey: "apply.steps.employerBusiness" },
+  "/apply/employer/contact": { code: "EMPLOYER_CONTACT", labelKey: "apply.steps.employerContact" },
+};
+
+/**
+ * What an employer still has to give, one requirement per screen they are walked through.
+ *
+ * Whether anything is missing is the server's `employer.missing_fields`; this only groups it by
+ * the screen that asks for it, so each step is "done" exactly when the server has nothing left to
+ * ask on it. Before the application exists, or before they choose, only the choice is asked.
+ */
+function employerRequirements(application: Application | null): Requirement[] {
+  const hiringAs = hiringAsOf(application?.employer);
+  const missing = application?.employer?.missing_fields ?? ["hiring_as"];
+  const screens: EmployerStepHref[] =
+    hiringAs === "INDIVIDUAL"
+      ? ["/apply/hiring-as", "/apply/employer/about"]
+      : hiringAs === "BUSINESS"
+        ? ["/apply/hiring-as", "/apply/employer/business", "/apply/employer/contact"]
+        : ["/apply/hiring-as"];
+  return screens.map((href) => ({
+    ...EMPLOYER_STEP_REQUIREMENTS[href],
+    href,
+    isMet: !missing.some((field) => employerStepFor(field, hiringAs) === href),
+  }));
+}
 
 /**
  * A document counts when it exists and has not been rejected.
@@ -91,20 +142,19 @@ export function requirements(
   application: Application | null,
   availability?: Schedule | null,
 ): Requirement[] {
+  const isEmployer = application?.track === "EMPLOYER";
   const list: Requirement[] = [
-    {
-      code: "DISPLAY_NAME",
-      labelKey: "apply.requirements.displayName",
-      href: "/apply/about",
-      isMet: (application?.display_name ?? "").trim().length > 0,
-    },
-    {
-      // The server's own rule (business name, kind and city); only employers are asked.
-      code: "BUSINESS_DETAILS",
-      labelKey: "apply.requirements.businessDetails",
-      href: "/apply/employer",
-      isMet: application?.business_details_complete ?? false,
-    },
+    // An employer's name is asked on their own screens, with the rest of who is hiring.
+    ...(isEmployer
+      ? employerRequirements(application)
+      : [
+          {
+            code: "DISPLAY_NAME" as const,
+            labelKey: "apply.requirements.displayName",
+            href: "/apply/about",
+            isMet: (application?.display_name ?? "").trim().length > 0,
+          },
+        ]),
     {
       code: "EXPERIENCE_YEARS",
       labelKey: "apply.requirements.experienceYears",
@@ -143,7 +193,7 @@ export function requirements(
         ),
     },
     ...requiredDocumentKinds(application).map((kind) => ({
-      code: OFFERED_DOCUMENTS.find((offered) => offered.kind === kind)?.code ?? "GOVERNMENT_ID",
+      code: DOCUMENT_REQUIREMENT_CODES[kind] ?? "GOVERNMENT_ID",
       labelKey: documentLabelKey(kind),
       href: "/apply/documents",
       isMet: hasUsableDocument(application, kind),
@@ -156,17 +206,13 @@ export function requirements(
     },
   ];
 
-  // A stay host, rental owner or employer lists something or hires for a business. Trades,
-  // areas and experience are for people who travel to a customer, and the server does not
-  // ask a listing track for them.
-  const forTrack =
-    application?.track === "EMPLOYER"
-      ? list
-      : list.filter((requirement) => requirement.code !== "BUSINESS_DETAILS");
+  // A stay host, rental owner or employer lists something or hires. Trades, areas and
+  // experience are for people who travel to a customer, and the server does not ask a listing
+  // track for them.
   if (isListingTrack(application?.track)) {
-    return forTrack.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
+    return list.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
   }
-  return forTrack;
+  return list;
 }
 
 const SERVICE_ONLY_REQUIREMENTS: ReadonlySet<RequirementCode> = new Set([
