@@ -1,6 +1,6 @@
-import { EmployerStep } from "@/features/application/view/employer-step";
+import { Redirect } from "expo-router";
 
-/** The employer's "Business details" step ("I want to hire staff"). */
+/** The old single "Business details" step: an employer now starts by saying who is hiring. */
 export default function EmployerPage() {
-  return <EmployerStep />;
+  return <Redirect href="/apply/hiring-as" />;
 }

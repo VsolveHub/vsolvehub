@@ -194,11 +194,13 @@ export default function ApplyLayout() {
   }, [refetchApplication, refetchAvailability]);
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
-  const back = isSideScreen ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
-  const shouldShowDock = !isSubmitted && !isSideScreen && !isOverview;
+  const back = isSideScreen ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track, application?.employer?.hiring_as));
+  // "Who is hiring?" moves on when a choice is tapped, as on the website: Back only, no Continue.
+  const isHiringAsChoice = pathname === "/apply/hiring-as";
+  const shouldShowDock = !isSubmitted && !isSideScreen && !isOverview && !isHiringAsChoice;
 
   // Find the current step in this partner's own sequence
-  const steps = applicationSteps(application?.track);
+  const steps = applicationSteps(application?.track, application?.employer?.hiring_as);
   const currentStepIdx = Math.max(
     0,
     steps.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
@@ -220,7 +222,7 @@ export default function ApplyLayout() {
       onCommitRef.current();
       return;
     }
-    const next = nextStep(pathname, application?.track);
+    const next = nextStep(pathname, application?.track, application?.employer?.hiring_as);
     if (next) {
       router.push(next.href as any);
     }
