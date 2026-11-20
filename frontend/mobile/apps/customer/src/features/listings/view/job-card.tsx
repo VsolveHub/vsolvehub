@@ -7,7 +7,6 @@ import {
   Briefcase,
   Building2,
   Calculator,
-  CheckCircle2,
   ClipboardList,
   MapPin,
   ShoppingCart,
@@ -18,6 +17,7 @@ import Svg, { Circle, Line, Path } from "react-native-svg";
 
 import { useSavedItems } from "../../stays/use-saved-items";
 import type { Listing } from "../queries";
+import { VerifiedBadge, employerDetailLine, employerName, listingEmployer } from "./employer-identity";
 
 function JewelleryIcon({ color = "#7C3AED" }: { color?: string }) {
   return (
@@ -162,12 +162,10 @@ export function JobCard({ listing }: { listing: Listing }) {
         : "Work from Office"
     : "Work from Office";
 
-  const company =
-    listing.company_name ||
-    listing.poster_name ||
-    listing.partner?.company_name ||
-    listing.partner?.full_name ||
-    "Verified Employer";
+  // Who is hiring comes from the server's employer object; "Verified" only when it says so.
+  const employer = listingEmployer(listing);
+  const company = employerName(employer);
+  const employerDetail = employerDetailLine(employer);
 
   const location =
     listing.location_text ||
@@ -217,8 +215,13 @@ export function JobCard({ listing }: { listing: Listing }) {
             <Text className="text-xs font-semibold text-slate-800 shrink" numberOfLines={1}>
               {company}
             </Text>
-            <CheckCircle2 size={13} color="#FFFFFF" fill="#2563EB" className="shrink-0" />
+            <VerifiedBadge employer={employer} textClassName="text-[11px] font-semibold text-emerald-700" />
           </View>
+          {employerDetail ? (
+            <Text className="mt-0.5 text-[11px] text-slate-500" numberOfLines={1}>
+              {employerDetail}
+            </Text>
+          ) : null}
           <View className="flex-row items-center gap-1 mt-1">
             <MapPin size={12} color="#94A3B8" />
             <Text className="text-xs text-slate-500">{location}</Text>

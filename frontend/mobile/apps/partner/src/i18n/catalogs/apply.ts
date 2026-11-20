@@ -568,6 +568,7 @@ const en: Catalog = {
   "apply.employer.business.mapPin.unavailable.title": "Location unavailable",
   "apply.employer.business.mapPin.unavailable.message": "We could not find where you are. Search for your area or landmark instead.",
   "apply.employer.business.logo.permission": "Allow access to your photos to choose a logo.",
+  "apply.upload.supportHintImage": "JPG or PNG photo · max {size}",
 };
 
 const te: Catalog = {
@@ -1097,6 +1098,7 @@ const te: Catalog = {
   "apply.employer.business.mapPin.unavailable.title": "లొకేషన్ అందుబాటులో లేదు",
   "apply.employer.business.mapPin.unavailable.message": "మీరు ఎక్కడ ఉన్నారో మేము కనుగొనలేకపోయాం. బదులుగా మీ ప్రాంతం లేదా ల్యాండ్‌మార్క్ వెతకండి.",
   "apply.employer.business.logo.permission": "లోగో ఎంచుకోవడానికి మీ ఫోటోలకు యాక్సెస్ ఇవ్వండి.",
+  "apply.upload.supportHintImage": "JPG లేదా PNG ఫోటో · గరిష్ఠం {size}",
 };
 
 const hi: Catalog = {
@@ -1623,6 +1625,7 @@ const hi: Catalog = {
   "apply.employer.business.mapPin.unavailable.title": "लोकेशन उपलब्ध नहीं है",
   "apply.employer.business.mapPin.unavailable.message": "हम यह नहीं ढूँढ सके कि आप कहाँ हैं। इसके बजाय अपना इलाका या लैंडमार्क खोजें।",
   "apply.employer.business.logo.permission": "लोगो चुनने के लिए अपनी फ़ोटो तक पहुँच की अनुमति दें।",
+  "apply.upload.supportHintImage": "JPG या PNG फ़ोटो · अधिकतम {size}",
 };
 
 export const catalogsByLocale: Record<Locale, Catalog> = {

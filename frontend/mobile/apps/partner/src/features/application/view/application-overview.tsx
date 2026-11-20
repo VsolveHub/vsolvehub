@@ -21,7 +21,7 @@ import { Platform, Pressable, useWindowDimensions, View } from "react-native";
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
 import { documentLabel } from "../model/status";
-import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import { firstStepHref, isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { ApplicationStatusTracker } from "./status-banner";
 
@@ -163,7 +163,7 @@ function NotStarted() {
           pending={start.isPending}
           failed={start.isError}
           onStart={() =>
-            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about" as never) })
+            start.mutate({ track: chosen }, { onSuccess: () => router.push(firstStepHref(chosen) as never) })
           }
           onBack={() => setChosen(null)}
         />
@@ -603,7 +603,7 @@ function SwitchTrack({ current }: { current: string }) {
             key={track}
             accessibilityRole="button"
             disabled={update.isPending}
-            onPress={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about" as never) })}
+            onPress={() => update.mutate({ track }, { onSuccess: () => router.push(firstStepHref(track) as never) })}
             style={({ pressed }) => ({
               alignSelf: "flex-start",
               flexDirection: "row",

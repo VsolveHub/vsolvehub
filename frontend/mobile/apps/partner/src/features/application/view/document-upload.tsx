@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/document-upload.tsx
-import { ErrorState, Sheet, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Sheet, Text, useT } from "@vsolve/mobile-ui";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { CloudUpload, Upload as UploadIcon } from "lucide-react-native";
@@ -47,7 +47,10 @@ export function DocumentUpload({
   disabled = false,
   onSuccess,
 }: DocumentUploadProps) {
+  const t = useT();
   const upload = useUploadDocument();
+  // A selfie is matched against the ID photo: only a photo, and the phone opens its front camera.
+  const isSelfie = kind === "SELFIE";
   const [chooserOpen, setChooserOpen] = useState(false);
   const [progress, setProgress] = useState<UploadProgress>({ phase: "idle", percent: 0 });
   const [rejection, setRejection] = useState<string | null>(null);
@@ -82,7 +85,7 @@ export function DocumentUpload({
   }
 
   function acceptFile(file: LocalDocumentFile) {
-    const problem = rejectFile({ size: file.size, type: file.mimeType });
+    const problem = rejectFile({ size: file.size, type: file.mimeType }, { imageOnly: isSelfie });
     if (problem) {
       setRejection(problem.message);
       setPendingFile(null);
@@ -101,7 +104,11 @@ export function DocumentUpload({
       setPermissionDenied(true);
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.85 });
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.85,
+      ...(isSelfie ? { cameraType: ImagePicker.CameraType?.front ?? "front" } : {}),
+    });
     if (result.canceled) return;
     const asset = result.assets[0];
     if (!asset) return;
@@ -173,7 +180,9 @@ export function DocumentUpload({
         </Text>
 
         {/* Helper Subtext */}
-        <Text style={styles.dropzoneSubtext}>JPG, PNG or PDF · max 20 MB</Text>
+        <Text style={styles.dropzoneSubtext}>
+          {isSelfie ? t("apply.upload.supportHintImage", { size: "20 MB" }) : "JPG, PNG or PDF · max 20 MB"}
+        </Text>
       </Pressable>
 
       {/* File Chooser Sheet */}
@@ -192,13 +201,15 @@ export function DocumentUpload({
         >
           <Text style={styles.sheetOptionText}>Choose from photo library</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void choosePdf()}
-          style={styles.sheetOption}
-        >
-          <Text style={styles.sheetOptionText}>Choose document (PDF / Image)</Text>
-        </Pressable>
+        {isSelfie ? null : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void choosePdf()}
+            style={styles.sheetOption}
+          >
+            <Text style={styles.sheetOptionText}>Choose document (PDF / Image)</Text>
+          </Pressable>
+        )}
       </Sheet>
 
       {permissionDenied ? (

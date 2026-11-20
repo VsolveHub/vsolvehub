@@ -15,7 +15,6 @@ import {
   AlertCircle,
   ArrowLeft,
   Briefcase,
-  Building,
   Check,
   CheckCircle2,
   Clock,
@@ -28,6 +27,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react-native";
+import { EmployerMark, VerifiedBadge, employerDetailLine, employerName, listingEmployer } from "./employer-identity";
 
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
@@ -137,7 +137,9 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
   const structuredFields = (listing.structured_fields || {}) as Record<string, any>;
   // Every fact on this page is the employer's own; a missing one is left out, never stood in
   // for. Only approved employers can post, so the web's "Verified Employer" is true of any.
-  const posterName = listing.poster_name || listing.company_name || "Verified Employer";
+  const employer = listingEmployer(listing);
+  const posterName = employerName(employer);
+  const employerDetail = employerDetailLine(employer);
   const locationText: string | null = listing.location_text || null;
   const applicationCount = listing.application_count ?? 0;
   const isFeatured =
@@ -272,10 +274,14 @@ export function DesktopListingDetail({ listing }: { listing: ListingDetail }) {
 
               {/* Meta Badges */}
               <View className="flex-row flex-wrap items-center gap-2">
-                <View className="flex-row items-center gap-1.5 rounded-full bg-[#FAF8F5] border border-[#E5E1DC] px-3 py-1">
-                  <Building size={13} color="#6B6560" />
+                <View className="flex-row items-center gap-2 rounded-full bg-[#FAF8F5] border border-[#E5E1DC] py-1 pl-1 pr-3">
+                  <View className="size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
+                    <EmployerMark employer={employer} />
+                  </View>
                   <Text className="text-xs font-semibold text-slate-700">{posterName}</Text>
                 </View>
+                <VerifiedBadge employer={employer} />
+                {employerDetail ? <Text className="text-xs text-slate-500">{employerDetail}</Text> : null}
 
                 {isFeatured ? (
                   <View className="flex-row items-center gap-1.5 rounded-full bg-[#FFF7ED] border border-[#FFEDD5] px-2.5 py-1">

@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react-native";
 
+import { usePartnerApplication } from "@/features/application/queries";
 import { setFocusedBackHandler } from "@/features/session/focused-back";
 
 import {
@@ -53,6 +54,7 @@ import {
   fetchPartnerListing,
   fetchSubscriptionPlans,
 } from "../queries";
+import { orderJobCategories } from "../job-categories";
 import { usePlanPurchase } from "../use-plan-purchase";
 import type { PartnerListing } from "../model";
 import { SubscriptionDialog } from "./subscription-dialog";
@@ -377,6 +379,12 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   };
 
   const opts = options.data as JobOptions | undefined;
+  // Someone hiring for themselves sees household help first; every category stays available.
+  const hiringAs = usePartnerApplication().data?.employer?.hiring_as;
+  const categories = useMemo(
+    () => orderJobCategories(opts?.categories ?? [], hiringAs),
+    [opts, hiringAs],
+  );
   const roles = useMemo(() => {
     const q = search.trim().toLowerCase();
     const all = (opts?.categories ?? []).flatMap((cat) =>
@@ -560,7 +568,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               <View className="gap-2">
                 <Text className="text-xs font-semibold text-text-muted">Choose a category</Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {opts.categories.map((cat) => {
+                  {categories.map((cat) => {
                     const isSelected = draft.category === cat.name;
                     return (
                       <Pressable
