@@ -28,6 +28,9 @@
 export const ACCEPTED_CONTENT_TYPES = ["image/jpeg", "image/png", "application/pdf"] as const;
 export type AcceptedContentType = (typeof ACCEPTED_CONTENT_TYPES)[number];
 
+/** A selfie is matched against the ID photo, so it must be a photo: the server refuses a PDF. */
+export const IMAGE_ONLY_CONTENT_TYPES = ["image/jpeg", "image/png"] as const;
+
 /** Django's own ceiling. Checking it here saves a doomed 20 MB upload. */
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
@@ -47,6 +50,7 @@ export type FileRejection =
 export function rejectFile(
   file: { size: number; type: string },
   t: (key: string, params?: Record<string, string | number>) => string,
+  options: { imageOnly?: boolean } = {},
 ): FileRejection | null {
   if (file.size === 0) {
     return { code: "empty", message: t("apply.upload.rejection.empty") };
@@ -60,6 +64,13 @@ export function rejectFile(
         max: formatBytes(MAX_UPLOAD_BYTES),
       }),
     };
+  }
+
+  if (
+    options.imageOnly &&
+    !(IMAGE_ONLY_CONTENT_TYPES as readonly string[]).includes(file.type)
+  ) {
+    return { code: "unsupported_type", message: t("apply.upload.rejection.imageOnly") };
   }
 
   if (!ACCEPTED_CONTENT_TYPES.includes(file.type as AcceptedContentType)) {

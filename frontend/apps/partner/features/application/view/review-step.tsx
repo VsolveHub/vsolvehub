@@ -8,6 +8,8 @@ import { useState, type ReactNode } from "react";
 
 import { PushOptInCard } from "@/features/notifications/view/partner-push-preferences";
 
+import { hiringAsOf } from "../model/employer";
+import { SIZES } from "../model/employer-form";
 import { previousStep } from "../model/progress";
 import { isEditable, outstandingRequirements, requiredDocumentKinds } from "../model/readiness";
 import { currentDocument, documentLabelKey, documentStatusPresentation } from "../model/status";
@@ -166,9 +168,13 @@ function ReviewForm({
 
       <StepFrame title={t("apply.steps.review")} description={editable ? t("apply.review.description") : undefined}>
         <dl className="flex flex-col divide-y divide-line">
-          <SummaryRow label={t("apply.steps.about")} href={editable ? "/apply/about" : null}>
-            {application.display_name || t("apply.review.notSet")}
-          </SummaryRow>
+          {application.track === "EMPLOYER" ? (
+            <EmployerRows application={application} editable={editable} />
+          ) : (
+            <SummaryRow label={t("apply.steps.about")} href={editable ? "/apply/about" : null}>
+              {application.display_name || t("apply.review.notSet")}
+            </SummaryRow>
+          )}
           {listing ? null : (
             <SummaryRow label={t("apply.steps.work")} href={editable ? "/apply/work" : null}>
               {t("apply.review.summary.work", {
@@ -294,6 +300,74 @@ function ReviewForm({
         </ApplyDock>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * An employer's summary: who is hiring, then what they gave for that type, each with a way back
+ * to its screen. Read from what the server holds, so it never disagrees with the checklist.
+ */
+function EmployerRows({ application, editable }: { application: Application; editable: boolean }) {
+  const t = useT();
+  const employer = application.employer;
+  const hiringAs = hiringAsOf(employer);
+  const notSet = t("apply.review.notSet");
+  const place = (area?: string, city?: string) => [area, city].filter(Boolean).join(", ") || notSet;
+  const business = employer?.business;
+  const size = SIZES.find((option) => option.value === business?.company_size)?.label;
+  const lines = [
+    business?.business_category ? t(`apply.employer.category.${business.business_category}`) : "",
+    size ?? "",
+  ].filter(Boolean);
+  const gst = business?.gst_registered
+    ? t("apply.employer.review.gstin", { gstin: business.gstin })
+    : business?.business_proof_type
+      ? t("apply.employer.review.noGst")
+      : "";
+
+  return (
+    <>
+      <SummaryRow label={t("apply.steps.hiringAs")} href={editable ? "/apply/hiring-as" : null}>
+        {hiringAs
+          ? t(
+              hiringAs === "INDIVIDUAL"
+                ? "apply.employer.hiringAs.individual.title"
+                : "apply.employer.hiringAs.business.title",
+            )
+          : notSet}
+      </SummaryRow>
+
+      {hiringAs === "INDIVIDUAL" ? (
+        <SummaryRow label={t("apply.steps.employerAbout")} href={editable ? "/apply/employer/about" : null}>
+          {[application.display_name || notSet, place(employer?.area, employer?.city)].join(" · ")}
+        </SummaryRow>
+      ) : null}
+
+      {hiringAs === "BUSINESS" ? (
+        <>
+          <SummaryRow
+            label={t("apply.steps.employerBusiness")}
+            href={editable ? "/apply/employer/business" : null}
+          >
+            <span className="flex flex-col">
+              <span>{business?.trade_name || business?.legal_name || notSet}</span>
+              {lines.length > 0 ? <span>{lines.join(" · ")}</span> : null}
+              <span>{place(business?.area, business?.city)}</span>
+              {gst ? <span>{gst}</span> : null}
+            </span>
+          </SummaryRow>
+          <SummaryRow
+            label={t("apply.steps.employerContact")}
+            href={editable ? "/apply/employer/contact" : null}
+          >
+            {[
+              application.display_name || notSet,
+              employer?.poster_role ? t(`apply.employer.contact.role.${employer.poster_role}`) : notSet,
+            ].join(" · ")}
+          </SummaryRow>
+        </>
+      ) : null}
+    </>
   );
 }
 

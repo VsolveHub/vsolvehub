@@ -1,9 +1,10 @@
 "use client";
 
-import { ApiRequestError } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton, buttonStyles, useT } from "@vsolve/ui";
+import { ApiRequestError, type Schemas } from "@vsolve/api-client";
+import { Button, ErrorState, Skeleton, buttonStyles, useT, type Translator } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { previousStep } from "../model/progress";
 import { offeredDocumentKinds, requiredDocumentKinds } from "../model/readiness";
@@ -11,7 +12,66 @@ import { nextStep } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { ApplyDock } from "./apply-shell";
 import { StepFrame } from "./application-editor";
+import type { DocumentKind } from "../upload-queries";
 import { DocumentSlot } from "./document-upload";
+
+type Application = Schemas["PartnerApplication"];
+
+/**
+ * What each slot says about itself: its name, why it is asked, and what it must match.
+ *
+ * An employer's documents are named for what they prove ("Your ID", "Business proof: Udyam
+ * registration"), and each says what the applicant gave that it must match, so the reviewer's
+ * checklist is no surprise to them. Every other track keeps its two documents as they were.
+ */
+function slotProps(
+  application: Application,
+  kind: DocumentKind,
+  t: Translator["t"],
+): { hintKey?: string; label?: string; note?: ReactNode } {
+  if (application.track !== "EMPLOYER") {
+    return {
+      hintKey: kind === "GOVERNMENT_ID" ? "apply.documents.why.governmentId" : "apply.documents.why.addressProof",
+    };
+  }
+  const employer = application.employer;
+  switch (kind) {
+    case "GOVERNMENT_ID":
+      return {
+        label: t("apply.employer.documents.id.label"),
+        hintKey: "apply.employer.documents.id.why",
+        note: employer?.id_document_type ? (
+          <>
+            <p>
+              {t("apply.employer.documents.idType", {
+                type: t(`apply.employer.field.idType.${employer.id_document_type}`),
+              })}
+            </p>
+            {employer.id_document_type === "AADHAAR_MASKED" ? (
+              <p>{t("apply.employer.documents.aadhaarHelp")}</p>
+            ) : null}
+          </>
+        ) : null,
+      };
+    case "SELFIE":
+      return { hintKey: "apply.employer.documents.selfie.why" };
+    case "BUSINESS_PROOF": {
+      const proof = employer?.business?.business_proof_type;
+      return {
+        label: proof
+          ? t("apply.employer.documents.businessProof.label", {
+              type: t(`apply.employer.business.proof.${proof}`),
+            })
+          : undefined,
+        hintKey: "apply.employer.documents.businessProof.why",
+      };
+    }
+    case "AUTHORIZATION_LETTER":
+      return { hintKey: "apply.employer.documents.letter.why" };
+    default:
+      return {};
+  }
+}
 
 /**
  * The documents a reviewer will look at: one slot per kind, required ones first.
@@ -71,7 +131,7 @@ export function DocumentsStep() {
                 application={application}
                 kind={kind}
                 required={required.has(kind)}
-                hintKey={kind === "GOVERNMENT_ID" ? "apply.documents.why.governmentId" : "apply.documents.why.addressProof"}
+                {...slotProps(application, kind, t)}
               />
             ))}
           </div>
