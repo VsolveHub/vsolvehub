@@ -1,5 +1,88 @@
 # API Contract Changelog
 
+## 1.105.0 - Employer onboarding: who is hiring
+
+Additive, with behaviour changes to submitting an `EMPLOYER` application, to approving one, and to
+`GET /partner/application/`. An employer now chooses whether they hire for themselves or for a
+business; what they give, upload and have checked follows from that. Agencies are not supported.
+
+**Applicant (`PartnerApplication`)**
+
+- **Added** `employer` (null for other tracks): `hiring_as` (`INDIVIDUAL` | `BUSINESS`),
+  `poster_role`, `id_document_type`, `email`, the individual's `area`, `city` and `pin_code`, a
+  `business` object (null for an individual) and `missing_fields`, the details still needed, in
+  screen order. `business` carries `trade_name`, `legal_name`, `legal_structure`,
+  `business_category`, `company_size`, `gst_registered`, `gstin`, `business_proof_type`,
+  `address`, `area`, `city`, `state`, `pin_code`, `latitude`, `longitude`, `logo_url` (absolute)
+  and `website_url`.
+- **Added** `offered_document_kinds`: the document slots to show. For an employer it is exactly
+  `required_document_kinds`.
+- **Added** document kinds `SELFIE`, `BUSINESS_PROOF` and `AUTHORIZATION_LETTER`. A `SELFIE` that is
+  a PDF is refused with `409 document_selfie_image_only`.
+- **Behaviour** `required_document_kinds` depends on the application. An employer needs
+  `GOVERNMENT_ID` until they choose; then an individual also needs `SELFIE`, and a business
+  `BUSINESS_PROOF`, plus `AUTHORIZATION_LETTER` when the person hiring is not the owner.
+- **Behaviour** `business_details_complete` now means every detail the employer's type needs is
+  given (`missing_fields` is empty). It is still always `true` for other tracks.
+- **Behaviour** `POST /partner/application/submit/` for an `EMPLOYER` answers
+  `409 partner_application_incomplete` naming the first missing detail ("Add your business address
+  before sending.") and needs the documents for its type. An individual no longer needs business
+  details.
+- **Behaviour** `GET /partner/application/` is now the applicant's own view: it no longer shows the
+  reviewer's id, decline reasons or reviewer hand-offs, as the other application reads already did.
+
+**Saving an employer's details**
+
+- **Added** `PATCH /partner/application/employer/`: `expected_version` and any of `display_name`,
+  `hiring_as`, `poster_role`, `id_document_type`, `email`, `area`, `city`, `pin_code` and a
+  `business` object. Returns the `PartnerApplication`. Switching `hiring_as` clears what the other
+  type carried (for an individual: the business and its logo). `409 employer_track_required`
+  (not a hire-staff application), `409 partner_application_version_conflict`,
+  `409 partner_transition_not_allowed` (no longer editable). `400` with the field named, and one
+  of: `pin_code_invalid`, `pin_incomplete`, `gstin_format`, `gstin_state`, `gstin_pan`,
+  `gstin_checksum`, `gstin_needs_gst_registered`, `business_proof_mismatch`,
+  `employer_field_not_for_type`.
+- **Added** `POST` and `DELETE /partner/application/employer/logo/`: a business's public logo
+  (multipart `file`; JPEG, PNG or WebP, up to 2 MB, checked by its first bytes). Returns the
+  `PartnerApplication`. `400` `employer_logo_type`, `employer_logo_empty`,
+  `employer_logo_too_large`, `employer_field_not_for_type` (not hiring for a business) and
+  `file_required`.
+- **Changed** `business_category` gains `SCHOOL`, `FACTORY`, `CONSTRUCTION`, `FACILITY`,
+  `LOGISTICS`, `HOTEL` and `SALON`. Saved values stay valid.
+
+**Operations**
+
+- **Added** `OperationsPartnerApplicationDetail` as the response of
+  `GET /operations/partner-applications/{id}/`: the `PartnerApplication` plus `employer_hints`
+  (`code`, `level` `OK` | `WARN`, `message`; read-only, they never block anything) and
+  `employer_checks` (every check this employer needs, each with `label`, `result`, `note`,
+  `checked_by_name` and `checked_at`; `result` is null until set). Both are empty for other tracks
+  and are never in the applicant's own read.
+- **Added** `PUT /operations/partner-applications/{id}/employer-checks/{code}/` (`result` `PASS` |
+  `FAIL`, `note`): returns the updated `employer_checks`. Only the reviewer holding the application
+  (`409 partner_review_ownership_conflict` otherwise). `400 employer_check_not_applicable` (a check
+  for the other type) and `400 employer_check_note_required` (a failed check needs a note).
+- **Behaviour** `POST /operations/partner-applications/{id}/transition/` to `APPROVED` for an
+  `EMPLOYER` answers `409 employer_checks_incomplete` until every required check is `PASS`; the
+  missing codes are in `error.details.missing_codes`.
+- **Added** the optional `track` filter on `GET /operations/partner-applications/` (an unknown
+  value is a `400`), and `track` on each row.
+
+**Jobs**
+
+- **Added** `employer` on listings (`ListingSummary`, so on job cards and job detail): `name`,
+  `kind` (`BUSINESS` | `INDIVIDUAL`), `locality`, `is_verified`, `logo_url`, `industry_label` and
+  `size_label`. An individual is shown as a short name ("Priya S.") with their area and city only,
+  never a full name or address.
+- **Behaviour** `poster_name` on listings and `employer_name` on applications are that public name.
+  For a business it is the trade name, else the legal name (as before).
+- **Added** `400 job_text_asks_for_money` when a job's title, description or lists ask candidates
+  to pay ("registration fee", "security deposit" and similar), on posting, editing and publishing,
+  for every employer.
+- **Added** the "Home & Personal" category to `GET /jobs/options`: nine household roles (house
+  help, home cook, family driver, elderly caretaker, nanny, patient attendant, home tutor, gardener
+  and watchman), open to every employer.
+
 ## 1.104.0 - Employer business details
 
 Additive, with one behaviour change to submitting an `EMPLOYER` application.
