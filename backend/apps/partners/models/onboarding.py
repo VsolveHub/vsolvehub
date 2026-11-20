@@ -419,6 +419,9 @@ class PartnerDocument(models.Model):
         TAX = "TAX", "Tax document"
         BANK = "BANK", "Bank document"
         BACKGROUND_CHECK = "BACKGROUND_CHECK", "Background check"
+        SELFIE = "SELFIE", "Selfie"
+        BUSINESS_PROOF = "BUSINESS_PROOF", "Business proof"
+        AUTHORIZATION_LETTER = "AUTHORIZATION_LETTER", "Authorization letter"
         OTHER = "OTHER", "Other"
 
     class Status(models.TextChoices):

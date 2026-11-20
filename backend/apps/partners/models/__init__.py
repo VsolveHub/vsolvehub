@@ -38,6 +38,7 @@ from .crew import (
     PartnerCrewMembership,
     PartnerLanguage,
 )
+from .employer import EmployerProfile, EmployerReviewCheck
 from .onboarding import (
     PartnerApplication,
     PartnerApplicationTransition,
@@ -63,6 +64,8 @@ __all__ = [
     "CrewDocument",
     "CrewMember",
     "CrewSkill",
+    "EmployerProfile",
+    "EmployerReviewCheck",
     "MinimumWageFloor",
     "PartnerApplication",
     "PartnerApplicationTransition",
