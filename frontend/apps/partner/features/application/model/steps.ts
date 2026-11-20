@@ -111,6 +111,14 @@ export function isUnchosenDraft(application: { status: string; version: number }
   return application?.status === "DRAFT" && application.version === 1;
 }
 
+/**
+ * Where a partner goes first once they have chosen how to join. An employer starts by saying who
+ * is hiring; everyone else starts with who they are.
+ */
+export function firstStepHref(track: string): string {
+  return track === "EMPLOYER" ? "/apply/hiring-as" : "/apply/about";
+}
+
 /** The ways to join offered on the first screen. */
 export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
 

@@ -1,10 +1,9 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { EmployerStep } from "@/features/application/view/employer-step";
-
-export const metadata: Metadata = { title: "Business details" };
-
-/** The employer's "Business details" step ("I want to hire staff"). */
-export default function EmployerPage() {
-  return <EmployerStep />;
+/**
+ * The old single "Business details" step. What an employer is asked now depends on who is hiring,
+ * so a saved link to it goes to that choice.
+ */
+export default function EmployerPage(): never {
+  redirect("/apply/hiring-as");
 }
