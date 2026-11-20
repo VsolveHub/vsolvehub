@@ -33,6 +33,7 @@ class PartnerApiException(APIException):
         self.status_code = error.status_code
         self.default_code = error.code
         self.retryable = error.retryable
+        self.api_details = getattr(error, "api_details", None)
         super().__init__(detail=error.message, code=error.code)
 
 

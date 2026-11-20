@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.partners.views import (
     ApplicantServiceAreaListView,
+    OperationsEmployerCheckView,
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
@@ -176,6 +177,11 @@ urlpatterns = [
         "operations/partner-applications/<uuid:application_id>/release/",
         OperationsPartnerApplicationReleaseView.as_view(),
         name="operations-partner-application-release",
+    ),
+    path(
+        "operations/partner-applications/<uuid:application_id>/employer-checks/<str:code>/",
+        OperationsEmployerCheckView.as_view(),
+        name="operations-partner-application-employer-check",
     ),
     path(
         "operations/partner-applications/<uuid:application_id>/transition/",

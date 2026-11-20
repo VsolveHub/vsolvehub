@@ -47,6 +47,7 @@ from .m2_registration import (
     _unmet_gates,
 )
 from .operations import (
+    OperationsEmployerCheckView,
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
@@ -82,6 +83,7 @@ from .partner_application import (
 __all__ = [
     "ApplicantServiceAreaListView",
     "OperationsApplicationCursorPagination",
+    "OperationsEmployerCheckView",
     "OperationsPartnerApplicationClaimView",
     "OperationsPartnerApplicationDetailView",
     "OperationsPartnerApplicationQueueView",

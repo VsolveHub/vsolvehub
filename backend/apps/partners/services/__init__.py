@@ -63,7 +63,12 @@ from .documents import (
     scan_partner_document,
     scan_pending_partner_documents,
 )
-from .employer import remove_employer_logo, set_employer_logo, update_employer_details
+from .employer import (
+    remove_employer_logo,
+    set_employer_check,
+    set_employer_logo,
+    update_employer_details,
+)
 from .presence import (
     _assert_operational_eligibility,
     _presence_payload,
@@ -148,6 +153,7 @@ __all__ = [
     "review_partner_document",
     "scan_partner_document",
     "scan_pending_partner_documents",
+    "set_employer_check",
     "set_employer_logo",
     "submit_partner_application",
     "sync_partner_push_subscription",

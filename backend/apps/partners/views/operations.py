@@ -34,6 +34,7 @@ from apps.partners.models import (
 )
 from apps.partners.permissions import IsOperationsUser
 from apps.partners.selectors import (
+    employer_checks_for,
     operations_partner_application_detail,
     operations_partner_application_queue,
     operations_partner_detail,
@@ -42,11 +43,14 @@ from apps.partners.selectors import (
     partner_schedule,
 )
 from apps.partners.serializers import (
+    EmployerCheckInputSerializer,
+    EmployerCheckSerializer,
     ExpectedVersionSerializer,
     OperationsApplicationQueueItemSerializer,
     OperationsApplicationQueuePageSerializer,
     OperationsApplicationQueueQuerySerializer,
     OperationsDocumentReviewSerializer,
+    OperationsPartnerApplicationDetailSerializer,
     OperationsPartnerDetailSerializer,
     OperationsPartnerDirectoryItemSerializer,
     OperationsPartnerDirectoryPageSerializer,
@@ -71,6 +75,7 @@ from apps.partners.services import (
     release_partner_application_review,
     replace_partner_schedule_for_operations,
     review_partner_document,
+    set_employer_check,
     transition_partner_application,
 )
 from apps.partners.services.partner_import import (
@@ -116,6 +121,7 @@ class OperationsPartnerApplicationQueueView(APIView):
             status=cast(str | None, data.get("status")),
             assigned_to_me=bool(data["assigned_to_me"]),
             unassigned=bool(data["unassigned"]),
+            track=cast(str | None, data.get("track")),
         )
         paginator = OperationsApplicationCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -264,7 +270,7 @@ class OperationsPartnerApplicationDetailView(APIView):
         tags=["Operations"],
         operation_id="operations_partner_application_detail_retrieve",
         responses={
-            200: PartnerApplicationSerializer,
+            200: OperationsPartnerApplicationDetailSerializer,
             403: ApiErrorSerializer,
             404: ApiErrorSerializer,
         },
@@ -289,7 +295,48 @@ class OperationsPartnerApplicationDetailView(APIView):
             object_id=application.id,
             request_id=get_request_id() or "",
         )
-        return Response(PartnerApplicationSerializer(application).data)
+        return Response(OperationsPartnerApplicationDetailSerializer(application).data)
+
+
+class OperationsEmployerCheckView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        tags=["Operations"],
+        operation_id="operations_partner_application_employer_check_update",
+        request=EmployerCheckInputSerializer,
+        responses={
+            200: EmployerCheckSerializer(many=True),
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+        description=(
+            "Pass or fail one manual check on an employer application. 400 codes: "
+            "`employer_check_not_applicable`, `employer_check_note_required`. 409 "
+            "`partner_review_ownership_conflict` unless you hold the application."
+        ),
+    )
+    def put(self, request: Request, application_id: uuid.UUID, code: str) -> Response:
+        serializer = EmployerCheckInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reviewer = cast(User, request.user)
+        try:
+            application = set_employer_check(
+                reviewer=reviewer,
+                application_id=application_id,
+                code=code,
+                result=serializer.validated_data["result"],
+                note=serializer.validated_data["note"],
+            )
+        except PartnerSelfReviewError as exc:
+            _audit_self_review_denial(actor=reviewer, error=exc)
+            _raise_api_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        rows = employer_checks_for(application)
+        return Response(EmployerCheckSerializer(rows, many=True).data)  # type: ignore[arg-type]
 
 
 class OperationsPartnerApplicationClaimView(APIView):

@@ -35,6 +35,7 @@ from apps.partners.selectors import (
     required_partner_consent_documents,
 )
 from apps.partners.serializers import (
+    APPLICANT_AUDIENCE,
     EmployerDetailsUpdateSerializer,
     ExpectedVersionSerializer,
     PartnerApplicationSerializer,
@@ -245,7 +246,9 @@ class PartnerApplicationView(APIView):
                 if application is None:
                     application = PartnerApplication.objects.create(partner=partner)
         return Response(
-            PartnerApplicationSerializer(application, context={"request": request}).data
+            PartnerApplicationSerializer(
+                application, context={"request": request, "audience": APPLICANT_AUDIENCE}
+            ).data
         )
 
     @extend_schema(

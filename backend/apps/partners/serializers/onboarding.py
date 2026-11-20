@@ -21,6 +21,7 @@ from apps.partners.gstin import GstinInvalidError
 from apps.partners.gstin import validate_gstin as parse_gstin
 from apps.partners.models import (
     EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerApplicationTransition,
     PartnerBusinessProfile,
@@ -31,6 +32,8 @@ from apps.partners.models import (
     Skill,
 )
 from apps.partners.selectors import (
+    employer_checks_for,
+    employer_hints,
     employer_missing_fields,
     offered_document_kinds,
     partner_has_required_consents,
@@ -163,6 +166,7 @@ class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str,
     )
     assigned_to_me = serializers.BooleanField(required=False, default=False)
     unassigned = serializers.BooleanField(required=False, default=False)
+    track = serializers.ChoiceField(choices=PartnerApplication.Track.choices, required=False)
     cursor = serializers.CharField(required=False, write_only=True)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
@@ -335,6 +339,7 @@ class OperationsApplicationQueueItemSerializer(
         fields = (
             "id",
             "status",
+            "track",
             "version",
             "display_name",
             "submitted_at",
@@ -767,3 +772,54 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             for link in application.partner.service_area_links.all()
             if link.is_active
         ]
+
+
+class EmployerHintSerializer(serializers.Serializer[dict[str, object]]):
+    code = serializers.CharField()
+    level = serializers.ChoiceField(choices=("OK", "WARN"))
+    message = serializers.CharField()
+
+
+class EmployerCheckSerializer(serializers.Serializer[dict[str, object]]):
+    code = serializers.ChoiceField(choices=EmployerReviewCheck.Code.choices)
+    label = serializers.CharField()  # type: ignore[assignment]
+    result = serializers.ChoiceField(choices=EmployerReviewCheck.Result.choices, allow_null=True)
+    note = serializers.CharField(allow_blank=True)
+    checked_by_name = serializers.CharField(allow_blank=True)
+    checked_at = serializers.DateTimeField(allow_null=True)
+
+
+class EmployerCheckInputSerializer(serializers.Serializer[dict[str, object]]):
+    result = serializers.ChoiceField(choices=EmployerReviewCheck.Result.choices)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=480, default="")
+
+
+class OperationsPartnerApplicationDetailSerializer(PartnerApplicationSerializer):
+    """The application as Operations reads it: the applicant's view plus what only a reviewer sees.
+
+    A separate class, not extra fields on `PartnerApplicationSerializer`, so the hints and checks
+    cannot reach an applicant whichever serializer context a view forgets to pass.
+    """
+
+    employer_hints = serializers.SerializerMethodField()
+    employer_checks = serializers.SerializerMethodField()
+
+    class Meta(PartnerApplicationSerializer.Meta):
+        fields = (  # type: ignore[assignment]
+            *PartnerApplicationSerializer.Meta.fields,
+            "employer_hints",
+            "employer_checks",
+        )
+        read_only_fields = fields  # type: ignore[assignment]
+
+    @extend_schema_field(EmployerHintSerializer(many=True))
+    def get_employer_hints(self, application: PartnerApplication) -> list[dict[str, Any]]:
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return []
+        return [dict(hint) for hint in employer_hints(application.partner)]
+
+    @extend_schema_field(EmployerCheckSerializer(many=True))
+    def get_employer_checks(self, application: PartnerApplication) -> list[dict[str, Any]]:
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return []
+        return [dict(row) for row in employer_checks_for(application)]

@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -14,12 +15,14 @@ from django.utils import timezone
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
-from apps.partners.gstin import GstinInvalidError, validate_gstin
+from apps.partners.gstin import PAN_HOLDER_STRUCTURE, GstinInvalidError, validate_gstin
 from apps.partners.models import (
     EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
+    PartnerBusinessProfile,
     PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
@@ -197,6 +200,129 @@ def employer_missing_fields(partner: PartnerProfile) -> list[str]:
     return missing + _blank_fields(employer, ("poster_role", "id_document_type"))
 
 
+def required_check_codes(partner: PartnerProfile) -> list[str]:
+    """The manual checks Operations must pass before approving this employer, in review order."""
+    employer = getattr(partner, "employer_profile", None)
+    if employer is None:
+        return []
+    code = EmployerReviewCheck.Code
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return [code.NAME_MATCHES_ID, code.SELFIE_MATCHES_ID]
+    if employer.hiring_as != EmployerProfile.HiringAs.BUSINESS:
+        return []
+    business = getattr(partner, "business_profile", None)
+    has_gst = business is not None and business.gst_registered
+    return [
+        *([code.GST_ACTIVE_ON_PORTAL] if has_gst else []),
+        code.PROOF_MATCHES_BUSINESS,
+        code.POSTER_ID_MATCHES,
+        code.AUTHORITY_CONFIRMED,
+    ]
+
+
+def _hint(code: str, *, warn: bool, ok: str, warning: str) -> dict[str, str]:
+    return {"code": code, "level": "WARN" if warn else "OK", "message": warning if warn else ok}
+
+
+def _gstin_hints(partner: PartnerProfile, business: PartnerBusinessProfile) -> list[dict[str, str]]:
+    try:
+        facts = validate_gstin(business.gstin)
+    except GstinInvalidError:
+        return []
+    others = (
+        PartnerBusinessProfile.objects.filter(gstin=facts.gstin)
+        .exclude(partner=partner)
+        .select_related("partner")
+    )
+    names = sorted({other.legal_name or other.partner.display_name for other in others})
+    structure = business.get_legal_structure_display() or "not given"
+    return [
+        _hint(
+            "GSTIN_STATE_MISMATCH",
+            warn=facts.state_name.casefold() != business.state.strip().casefold(),
+            ok="The GSTIN's state matches the business state.",
+            warning=(
+                f"The GSTIN is for {facts.state_name}, but the state given is {business.state}."
+            ),
+        ),
+        _hint(
+            "PAN_TYPE_MISMATCH",
+            warn=PAN_HOLDER_STRUCTURE.get(facts.pan_holder_letter) != business.legal_structure,
+            ok="The PAN's holder type fits the legal structure.",
+            warning=(
+                f"The PAN's 4th letter ({facts.pan_holder_letter}) does not fit the legal "
+                f"structure ({structure})."
+            ),
+        ),
+        _hint(
+            "DUPLICATE_GSTIN",
+            warn=bool(names),
+            ok="No other business uses this GSTIN.",
+            warning=f"Another business already uses this GSTIN: {', '.join(names)}.",
+        ),
+    ]
+
+
+def employer_hints(partner: PartnerProfile) -> list[dict[str, str]]:
+    """Read-only pointers for the reviewer; they never block anything.
+
+    Each applicable check gives one hint, OK or WARN. Business only: an individual has no GSTIN
+    or proof to compare.
+    """
+    employer = getattr(partner, "employer_profile", None)
+    business = getattr(partner, "business_profile", None)
+    if employer is None or employer.hiring_as != EmployerProfile.HiringAs.BUSINESS:
+        return []
+    if business is None:
+        return []
+    hints: list[dict[str, str]] = []
+    if business.gst_registered:
+        hints += _gstin_hints(partner, business)
+    else:
+        hints.append(
+            _hint(
+                "NO_GST",
+                warn=True,
+                ok="",
+                warning="Check the business proof carefully.",
+            )
+        )
+    if business.business_proof_type == PartnerBusinessProfile.BusinessProofType.UDYAM:
+        hints.append(
+            _hint(
+                "UDYAM_PROOF",
+                warn=True,
+                ok="",
+                warning="Udyam is self-declared. Look for other signs the business is real.",
+            )
+        )
+    return hints
+
+
+def employer_checks_for(application: PartnerApplication) -> list[dict[str, Any]]:
+    """Every check this employer needs, each with its result so far (`result` is null if unset)."""
+    recorded = {
+        check.code: check
+        for check in EmployerReviewCheck.objects.filter(application=application).select_related(
+            "checked_by"
+        )
+    }
+    rows: list[dict[str, Any]] = []
+    for code in required_check_codes(application.partner):
+        check = recorded.get(code)
+        rows.append(
+            {
+                "code": code,
+                "label": EmployerReviewCheck.Code(code).label,
+                "result": check.result if check else None,
+                "note": check.note if check else "",
+                "checked_by_name": check.checked_by.full_name if check else "",
+                "checked_at": check.checked_at if check else None,
+            }
+        )
+    return rows
+
+
 def _blank_fields(source: object | None, names: Sequence[str]) -> list[str]:
     """The names whose value is missing or blank on `source` (all of them when it is missing)."""
     return [name for name in names if source is None or not str(getattr(source, name)).strip()]
@@ -259,11 +385,14 @@ def operations_partner_application_queue(
     status: str | None,
     assigned_to_me: bool,
     unassigned: bool,
+    track: str | None = None,
 ) -> QuerySet[PartnerApplication]:
     queryset = PartnerApplication.objects.select_related(
         "partner",
         "review_assigned_to",
     )
+    if track is not None:
+        queryset = queryset.filter(track=track)
     if status is None:
         queryset = queryset.filter(
             status__in=(

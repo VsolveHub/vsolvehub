@@ -1,10 +1,12 @@
-"""Employer onboarding ("I want to hire staff"): saving who is hiring, and the business logo.
+"""Employer onboarding ("I want to hire staff"): saving who is hiring, and Operations' review.
 
 `update_employer_details` is the only write path for the employer screens. It lives apart from
 `application` because it writes three tables (the person, the employer profile and the business
-profile) and has its own rules about what each type may carry.
+profile) and has its own rules about what each type may carry. The Operations half lives here
+too: the read-only hints a reviewer sees and the manual checks they tick.
 """
 
+import uuid
 from functools import partial
 from typing import Any
 
@@ -12,15 +14,21 @@ from django.db import transaction
 
 from apps.identity.models import User
 from apps.partners.exceptions import (
+    EmployerCheckError,
     EmployerDetailError,
     EmployerTrackRequiredError,
+    PartnerApplicationNotFoundError,
+    PartnerReviewOwnershipError,
+    PartnerSelfReviewError,
     PartnerTransitionError,
 )
 from apps.partners.models import (
     EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerBusinessProfile,
 )
+from apps.partners.selectors import required_check_codes
 
 from .base import _application_for_update, _assert_version
 
@@ -220,4 +228,62 @@ def remove_employer_logo(*, user: User) -> PartnerApplication:
     _delete_file_after_commit(business.logo)
     business.logo = ""
     business.save(update_fields=("logo", "updated_at"))
+    return application
+
+
+# --- Operations review -------------------------------------------------------------------------
+
+
+@transaction.atomic
+def set_employer_check(
+    *,
+    reviewer: User,
+    application_id: uuid.UUID,
+    code: str,
+    result: str,
+    note: str,
+) -> PartnerApplication:
+    """Record one manual check. Only the reviewer holding the application may."""
+    application = (
+        PartnerApplication.objects.select_for_update()
+        .select_related("partner")
+        .filter(id=application_id)
+        .first()
+    )
+    if application is None:
+        raise PartnerApplicationNotFoundError
+    if application.partner.user_id == reviewer.id:
+        raise PartnerSelfReviewError(
+            object_type="partner_application",
+            object_id=application.id,
+        )
+    if (
+        application.status != PartnerApplication.Status.UNDER_REVIEW
+        or application.review_assigned_to_id != reviewer.id
+    ):
+        raise PartnerReviewOwnershipError(
+            "Claim this Partner application before completing its review.",
+        )
+    if application.track != PartnerApplication.Track.EMPLOYER or code not in required_check_codes(
+        application.partner
+    ):
+        raise EmployerCheckError(
+            "This check does not apply to this employer.",
+            code="employer_check_not_applicable",
+        )
+    if result == EmployerReviewCheck.Result.FAIL and not note.strip():
+        raise EmployerCheckError(
+            "Say why this check failed.",
+            code="employer_check_note_required",
+        )
+    EmployerReviewCheck.objects.update_or_create(
+        application=application,
+        code=code,
+        defaults={
+            "result": result,
+            "note": note.strip(),
+            "method": EmployerReviewCheck.Method.MANUAL,
+            "checked_by": reviewer,
+        },
+    )
     return application
