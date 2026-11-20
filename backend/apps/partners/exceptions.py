@@ -57,11 +57,14 @@ class PartnerApplicationIncompleteError(PartnerDomainError):
 
 
 class PartnerDocumentUploadError(PartnerDomainError):
-    def __init__(self, message: str, *, retryable: bool = False) -> None:
+    def __init__(self, message: str, *, retryable: bool = False, code: str = "") -> None:
         super().__init__(
-            code="partner_document_upload_unavailable"
-            if retryable
-            else "partner_document_upload_invalid",
+            code=code
+            or (
+                "partner_document_upload_unavailable"
+                if retryable
+                else "partner_document_upload_invalid"
+            ),
             message=message,
             status_code=503 if retryable else 409,
             retryable=retryable,

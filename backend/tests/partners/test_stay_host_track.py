@@ -17,11 +17,10 @@ from apps.catalog.models import (
 )
 from apps.identity.models import User
 from apps.partners.capabilities import is_approved_stay_host, workspace_grants
-from apps.partners.capabilities.registration import upsert_business_profile
 from apps.partners.exceptions import PartnerApplicationIncompleteError
 from apps.partners.models import (
+    EmployerProfile,
     PartnerApplication,
-    PartnerBusinessProfile,
     PartnerConsentDocument,
     PartnerDocument,
 )
@@ -57,8 +56,8 @@ def _start(user: User, *, track: str) -> PartnerApplication:
     )
 
 
-def _upload_required_documents(application: PartnerApplication) -> None:
-    for index, kind in enumerate(settings.PARTNER_REQUIRED_DOCUMENT_KINDS):
+def _upload_required_documents(application: PartnerApplication, *extra_kinds: str) -> None:
+    for index, kind in enumerate((*settings.PARTNER_REQUIRED_DOCUMENT_KINDS, *extra_kinds)):
         PartnerDocument.objects.create(
             application=application,
             kind=kind,
@@ -70,15 +69,17 @@ def _upload_required_documents(application: PartnerApplication) -> None:
         )
 
 
-def _business_details(application: PartnerApplication, **overrides: str) -> None:
-    """The employer's "Business details" step."""
-    values = {"legal_name": "Asha Stores", "business_category": "SHOP", "city": "Hyderabad"}
+def _individual_employer_details(application: PartnerApplication, **overrides: str) -> None:
+    """An employer hiring for themselves: where they are and which ID they upload."""
+    values = {
+        "hiring_as": EmployerProfile.HiringAs.INDIVIDUAL,
+        "area": "Kondapur",
+        "city": "Hyderabad",
+        "pin_code": "500084",
+        "id_document_type": EmployerProfile.IdDocumentType.PAN,
+    }
     values.update(overrides)
-    upsert_business_profile(
-        partner=application.partner,
-        business_type=PartnerBusinessProfile.BusinessType.EMPLOYER,
-        **values,
-    )
+    EmployerProfile.objects.create(partner=application.partner, **values)
 
 
 @pytest.fixture
@@ -113,8 +114,8 @@ def test_employer_submits_without_trades_areas_or_hours(host_user):
     employers, so an employer (who is never shown those steps) could not send an application.
     """
     application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
-    _business_details(application)
-    _upload_required_documents(application)
+    _individual_employer_details(application)
+    _upload_required_documents(application, PartnerDocument.Kind.SELFIE)
 
     submitted = submit_partner_application(user=host_user, expected_version=application.version)
 
@@ -123,24 +124,26 @@ def test_employer_submits_without_trades_areas_or_hours(host_user):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("missing", ["legal_name", "business_category", "city"])
-def test_employer_needs_business_name_type_and_city(host_user, missing):
+@pytest.mark.parametrize("missing", ["area", "city", "pin_code"])
+def test_individual_employer_needs_area_city_and_pin_code(host_user, missing):
     application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
-    _business_details(application, **{missing: ""})
-    _upload_required_documents(application)
+    _individual_employer_details(application, **{missing: ""})
+    _upload_required_documents(application, PartnerDocument.Kind.SELFIE)
 
-    with pytest.raises(PartnerApplicationIncompleteError, match="business name, type and city"):
+    with pytest.raises(
+        PartnerApplicationIncompleteError, match=f"Add your {missing.replace('_', ' ')}"
+    ):
         submit_partner_application(user=host_user, expected_version=application.version)
 
 
 @pytest.mark.django_db
-def test_application_says_whether_business_details_are_complete(host_user):
-    """The apps' "Business details" checklist step reads the server's own rule."""
+def test_application_says_whether_employer_details_are_complete(host_user):
+    """The apps' employer-details checklist step reads the server's own rule."""
     application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
     assert PartnerApplicationSerializer(application).data["business_details_complete"] is False
 
-    _business_details(application, address="", gstin="")
-    application.refresh_from_db()
+    _individual_employer_details(application)
+    application = PartnerApplication.objects.get(pk=application.pk)
     assert PartnerApplicationSerializer(application).data["business_details_complete"] is True
 
 

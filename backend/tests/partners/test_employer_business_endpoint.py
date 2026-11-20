@@ -73,8 +73,9 @@ def test_an_applicant_on_a_customer_session_can_read_and_save_business_details(a
     assert read_back.status_code == HTTPStatus.OK
     assert read_back.json()["city"] == "Hyderabad"
 
+    # Name, kind and city no longer finish an employer: who is hiring, address, proof and ID too.
     application = client.get("/api/v1/partner/application/").json()
-    assert application["business_details_complete"] is True
+    assert application["business_details_complete"] is False
 
 
 @pytest.mark.django_db

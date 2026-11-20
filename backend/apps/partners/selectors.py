@@ -14,7 +14,9 @@ from django.utils import timezone
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
+from apps.partners.gstin import GstinInvalidError, validate_gstin
 from apps.partners.models import (
+    EmployerProfile,
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
@@ -138,19 +140,74 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
     )
 
 
-def employer_business_complete(partner: PartnerProfile) -> bool:
-    """Whether an employer has given the business details its jobs are shown under.
+MIN_EMPLOYER_NAME_LENGTH = 2
 
-    Business name, kind of business and city. Address and GSTIN are optional. The one rule for
-    both submitting an employer application and the apps' "Business details" checklist step.
+
+def required_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
+    """The document kinds this application must hold to be submitted and approved."""
+    if application.track != PartnerApplication.Track.EMPLOYER:
+        return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    kind = PartnerDocument.Kind
+    employer = getattr(application.partner, "employer_profile", None)
+    if employer is None:
+        return (kind.GOVERNMENT_ID,)
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return (kind.GOVERNMENT_ID, kind.SELFIE)
+    if employer.hiring_as == EmployerProfile.HiringAs.BUSINESS:
+        kinds: tuple[str, ...] = (kind.GOVERNMENT_ID, kind.BUSINESS_PROOF)
+        if employer.poster_role != EmployerProfile.PosterRole.OWNER:
+            kinds += (kind.AUTHORIZATION_LETTER,)
+        return kinds
+    return (kind.GOVERNMENT_ID,)
+
+
+def offered_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
+    """The document slots the apps show. An employer is offered exactly what it must upload."""
+    if application.track == PartnerApplication.Track.EMPLOYER:
+        return required_document_kinds(application)
+    return (PartnerDocument.Kind.GOVERNMENT_ID, PartnerDocument.Kind.ADDRESS_PROOF)
+
+
+def employer_missing_fields(partner: PartnerProfile) -> list[str]:
+    """What an employer still has to give before submitting, in screen order.
+
+    The one rule for submitting an employer application and for the apps' "details complete"
+    step. `trade_name`, `email`, `logo` and `website_url` are optional.
     """
+    employer = getattr(partner, "employer_profile", None)
+    if employer is None or not employer.hiring_as:
+        return ["hiring_as"]
+    missing: list[str] = []
+    if len(partner.display_name.strip()) < MIN_EMPLOYER_NAME_LENGTH:
+        missing.append("display_name")
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return missing + _blank_fields(employer, ("area", "city", "pin_code", "id_document_type"))
+
     business = getattr(partner, "business_profile", None)
-    return bool(
-        business
-        and business.legal_name.strip()
-        and business.business_category
-        and business.city.strip()
+    missing += _blank_fields(
+        business,
+        ("legal_name", "legal_structure", "business_category", "company_size"),
     )
+    missing += _blank_fields(business, ("business_proof_type",))
+    if business is not None and business.gst_registered and not _gstin_is_valid(business.gstin):
+        missing.append("gstin")
+    missing += _blank_fields(business, ("address", "area", "city", "state", "pin_code"))
+    if business is None or business.latitude is None or business.longitude is None:
+        missing += ["latitude", "longitude"]
+    return missing + _blank_fields(employer, ("poster_role", "id_document_type"))
+
+
+def _blank_fields(source: object | None, names: Sequence[str]) -> list[str]:
+    """The names whose value is missing or blank on `source` (all of them when it is missing)."""
+    return [name for name in names if source is None or not str(getattr(source, name)).strip()]
+
+
+def _gstin_is_valid(raw: str) -> bool:
+    try:
+        validate_gstin(raw)
+    except GstinInvalidError:
+        return False
+    return True
 
 
 def partner_has_required_consents(partner: PartnerProfile) -> bool:
