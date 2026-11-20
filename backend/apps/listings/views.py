@@ -23,6 +23,7 @@ from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
     ApplicationRateLimitApiError,
+    JobTextAsksForMoneyApiError,
     ListingCapabilityRequiredApiError,
     ListingNotAcceptingApplicationsApiError,
     ListingPlanCapApiError,
@@ -51,7 +52,7 @@ from apps.listings.seekers import (
     set_profile_resume,
     set_saved,
 )
-from apps.listings.selectors import public_listings
+from apps.listings.selectors import EMPLOYER_IDENTITY_RELATED, public_listings
 from apps.listings.serializers import (
     ActionReasonSerializer,
     ApplicationReportSerializer,
@@ -83,6 +84,7 @@ from apps.listings.serializers import (
     VendorSubscriptionSerializer,
 )
 from apps.listings.services import (
+    JobTextAsksForMoneyError,
     ListingPlanCapError,
     ListingStateError,
     _active_subscription,
@@ -152,6 +154,8 @@ def _raise_listing_error(exc: Exception) -> NoReturn:
     if isinstance(exc, PermissionError):
         raise ListingCapabilityRequiredApiError from exc
     message = str(exc)
+    if isinstance(exc, JobTextAsksForMoneyError):
+        raise JobTextAsksForMoneyApiError(message) from exc
     if message == "APPLICATION_DUPLICATE":
         raise ApplicationDuplicateApiError from exc
     if message.startswith("Application rate limit reached"):
@@ -240,18 +244,20 @@ class ListingBrowseView(APIView):
         rows = rows.prefetch_related("media").order_by(*rows.query.order_by, "-id")[
             offset : offset + limit
         ]
-        return Response(ListingSummarySerializer(rows, many=True).data)
+        return Response(
+            ListingSummarySerializer(rows, many=True, context={"request": request}).data
+        )
 
 
 class ListingDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     @extend_schema(responses=ListingDetailSerializer)
-    def get(self, _request: Any, key: str) -> Response:
+    def get(self, request: Any, key: str) -> Response:
         """``key`` is the page slug; an old link's listing id still works."""
         listing = get_object_or_404(public_listings(), **lookup_by_slug_or_id(key))
         Listing.objects.filter(id=listing.id).update(view_count=F("view_count") + 1)
-        return Response(ListingDetailSerializer(listing).data)
+        return Response(ListingDetailSerializer(listing, context={"request": request}).data)
 
 
 _RESUME_TYPES = {
@@ -427,9 +433,9 @@ class MyApplicationsView(APIView):
         responses=page_serializer(ApplicationSerializer, "ApplicationPage"),
     )
     def get(self, request: Any) -> Response:
-        rows = Application.objects.select_related("listing__poster__business_profile").filter(
-            applicant=request.user
-        )
+        rows = Application.objects.select_related(
+            *(f"listing__{path}" for path in EMPLOYER_IDENTITY_RELATED)
+        ).filter(applicant=request.user)
         rows = filter_statuses(rows, request, Application.Status.values)
         listing_id = (request.query_params.get("listing") or "").strip()
         if listing_id:
@@ -774,7 +780,7 @@ class OpsListingCollectionView(APIView):
     )
     def get(self, request: Any) -> Response:
         rows = Listing.objects.select_related(
-            "poster", "poster__business_profile", "variant", "variant__service"
+            "poster", *EMPLOYER_IDENTITY_RELATED, "variant", "variant__service"
         )
         rows = filter_statuses(rows, request, Listing.Status.values)
         query = (request.query_params.get("q") or "").strip()
@@ -1148,10 +1154,12 @@ class MySavedJobsView(APIView):
         ids = SavedJob.objects.filter(user=request.user).values_list("listing_id", flat=True)
         rows = (
             Listing.objects.filter(id__in=list(ids))
-            .select_related("poster", "poster__business_profile", "variant", "variant__service")
+            .select_related("poster", *EMPLOYER_IDENTITY_RELATED, "variant", "variant__service")
             .prefetch_related("media")
         )
-        return Response(ListingSummarySerializer(rows, many=True).data)
+        return Response(
+            ListingSummarySerializer(rows, many=True, context={"request": request}).data
+        )
 
 
 class JobsForYouView(APIView):

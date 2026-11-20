@@ -14,7 +14,12 @@ from apps.catalog.models import (
     Subcategory,
 )
 from apps.listings.jobs import JOBS_VARIANT_CODE
-from apps.partners.models import PartnerApplication, PartnerProfile
+from apps.partners.models import (
+    EmployerProfile,
+    PartnerApplication,
+    PartnerBusinessProfile,
+    PartnerProfile,
+)
 
 User = get_user_model()
 
@@ -57,5 +62,19 @@ def employer(jobs_variant):  # noqa: ARG001
         partner=profile,
         status=PartnerApplication.Status.APPROVED,
         track=PartnerApplication.Track.EMPLOYER,
+    )
+    EmployerProfile.objects.create(
+        partner=profile,
+        hiring_as=EmployerProfile.HiringAs.BUSINESS,
+        poster_role=EmployerProfile.PosterRole.OWNER,
+        id_document_type=EmployerProfile.IdDocumentType.PAN,
+    )
+    PartnerBusinessProfile.objects.create(
+        partner=profile,
+        business_type=PartnerBusinessProfile.BusinessType.EMPLOYER,
+        legal_name="Sri Lakshmi Jewellers",
+        business_category=PartnerBusinessProfile.BusinessCategory.SHOP,
+        area="Kukatpally",
+        city="Hyderabad",
     )
     return profile

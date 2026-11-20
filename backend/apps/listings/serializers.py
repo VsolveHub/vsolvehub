@@ -18,7 +18,7 @@ from apps.listings.models import (
     VendorSubscription,
     VendorSubscriptionPlan,
 )
-from apps.listings.selectors import employer_name
+from apps.listings.selectors import employer_name, employer_public_identity
 
 
 class PhoneNumberField(serializers.CharField):
@@ -90,9 +90,22 @@ class ListingMediaSerializer(serializers.ModelSerializer[ListingMedia]):
         fields = ("id", "kind", "url", "alt_text", "display_order")
 
 
+class EmployerIdentitySerializer(serializers.Serializer[dict[str, Any]]):
+    """Who a job is shown as hiring. An individual is a short name with no street address."""
+
+    name = serializers.CharField()
+    kind = serializers.ChoiceField(choices=(("BUSINESS", "Business"), ("INDIVIDUAL", "Individual")))
+    locality = serializers.CharField()
+    is_verified = serializers.BooleanField()
+    logo_url = serializers.CharField()
+    industry_label = serializers.CharField()
+    size_label = serializers.CharField()
+
+
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
-    #: The business name when the employer gave one, else the person's name.
+    #: The employer's public name (see `employer`), kept for clients that read only a name.
     poster_name = serializers.SerializerMethodField()
+    employer = serializers.SerializerMethodField()
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
     variant_name = serializers.CharField(source="variant.name", read_only=True)
     #: Live applications (withdrawn and expired ones excluded). Uses the queryset annotation when
@@ -106,12 +119,22 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     def get_poster_name(self, obj: Listing) -> str:
         return employer_name(obj.poster)
 
+    @extend_schema_field(EmployerIdentitySerializer())
+    def get_employer(self, obj: Listing) -> dict[str, Any]:
+        identity = employer_public_identity(obj.poster)
+        request = self.context.get("request")
+        logo = identity["logo_url"]
+        if logo and request is not None:
+            identity["logo_url"] = request.build_absolute_uri(logo)
+        return identity
+
     class Meta:
         model = Listing
         fields: tuple[str, ...] = (
             "id",
             "slug",
             "poster_name",
+            "employer",
             "service_name",
             "variant_name",
             "title",

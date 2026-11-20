@@ -121,6 +121,27 @@ MAX_LIST_ITEMS = 15
 MAX_ITEM_LENGTH = 60
 MAX_VACANCIES = 500
 
+#: Jobs may never ask a candidate for money. Plain "deposit" is allowed: a cashier job
+#: legitimately says "cash deposit".
+MONEY_ASK_PHRASES = (
+    "registration fee",
+    "registration charge",
+    "joining fee",
+    "training fee",
+    "security deposit",
+    "refundable deposit",
+    "processing fee",
+    "pay to apply",
+    "advance payment",
+    "pay first",
+)
+
+
+def money_ask_phrase(text: str) -> str | None:
+    """The first phrase in `text` that asks a candidate to pay, ignoring case and spacing."""
+    normalised = " ".join(text.lower().split())
+    return next((phrase for phrase in MONEY_ASK_PHRASES if phrase in normalised), None)
+
 
 def values(options: tuple[tuple[str, str], ...]) -> set[str]:
     return {value for value, _label in options}
