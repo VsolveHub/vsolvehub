@@ -15,7 +15,7 @@ import {
   UserCheck,
   Wrench,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 
 import {
@@ -30,8 +30,11 @@ import {
   useApplicationDetail,
   useClaimApplication,
   useReleaseApplication,
+  useRemoveApplicationArea,
+  useServiceAreas,
   useTransitionApplication,
 } from "../queries";
+import { useDismissAreaRequest } from "@/features/area-requests/queries";
 import { getApiClient } from "@/lib/api/browser";
 
 import { DocumentReveal } from "./document-reveal";
@@ -116,6 +119,13 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
   const release = useReleaseApplication();
   const transition = useTransitionApplication();
   const session = useCurrentSession(getApiClient());
+  const serviceAreasQuery = useServiceAreas();
+  const removeArea = useRemoveApplicationArea();
+  const dismissAreaRequest = useDismissAreaRequest();
+  const areaNameMap = useMemo(() => {
+    const list = Array.isArray(serviceAreasQuery.data) ? serviceAreasQuery.data : [];
+    return new Map<string, string>(list.map((a: { id: string; name: string }) => [a.id, a.name]));
+  }, [serviceAreasQuery.data]);
 
   const [action, setAction] = useState<ReviewAction | null>(null);
   const [reason, setReason] = useState("");
@@ -199,6 +209,23 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
     pendingDocs.length === 0 &&
     rejectedDocs.length === 0 &&
     approvedDocs.length === nonSupersededDocs.length;
+
+  const isZeroAreaServices =
+    application.track === "SERVICES" && application.service_area_ids.length === 0;
+  // Asked PINs that stay open after approval (FLOW.md 3a): not done, not dismissed.
+  const openAskedPins = (application.area_requests ?? []).filter(
+    (request) => request.status === "WAITING" || request.status === "AREA_FULL" || request.status === "READY",
+  ).length;
+  const approveLabel = (label: string) => {
+    if (application.track !== "SERVICES") return label;
+    const areas = (application.service_area_ids ?? []).length;
+    if (areas === 0) return label;
+    const parts = [`${areas} ${areas === 1 ? "area" : "areas"}`];
+    if (openAskedPins > 0) {
+      parts.push(`${openAskedPins} asked ${openAskedPins === 1 ? "PIN stays" : "PINs stay"} open`);
+    }
+    return `${label} · ${parts.join(", ")}`;
+  };
 
   const trackInfo = TRACK_CONFIG[application.track] ?? {
     label: application.track,
@@ -462,6 +489,192 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           </div>
         )}
 
+        {/* Coverage Areas Details & Area Requests */}
+        {application.track === "SERVICES" ? (
+          <div className="space-y-3 border-t border-line pt-3 text-xs">
+            <span className="font-bold text-text block">Selected Service Areas</span>
+            {application.service_area_ids.length === 0 ? (
+              <p className="text-text-muted italic">No active service areas selected (area pending).</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {application.service_area_ids.map((areaId) => {
+                  const detail = (application.area_details ?? []).find(
+                    (item) => item.service_area_id === areaId,
+                  );
+                  const name = detail?.name ?? areaNameMap.get(areaId) ?? areaId.slice(0, 8);
+                  const mismatch = detail ? !detail.offers_partner_trades : false;
+                  return (
+                    <div
+                      key={areaId}
+                      className={[
+                        "inline-flex flex-wrap items-center gap-2 rounded bg-surface px-2.5 py-1 text-xs border",
+                        mismatch ? "border-warning-line" : "border-line",
+                      ].join(" ")}
+                    >
+                      <span className="font-semibold text-text">{name}</span>
+                      {detail?.zone ? <Badge tone="neutral">{detail.zone}</Badge> : null}
+                      {detail ? (
+                        <span
+                          className={detail.hours_set ? "text-success-text" : "text-danger-text"}
+                          title={detail.hours_set ? "Weekly hours are set" : "No weekly hours set"}
+                        >
+                          {detail.hours_set ? "Hours ✓" : "No hours"}
+                        </span>
+                      ) : null}
+                      {mismatch ? (
+                        <Badge tone="warning">Offers none of their services</Badge>
+                      ) : null}
+                      {isMine ? (
+                        <button
+                          type="button"
+                          disabled={removeArea.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Remove ${name} from this application? The area will be converted to a requested PIN and associated working hours will be removed.`,
+                              )
+                            ) {
+                              removeArea.mutate({
+                                applicationId: application.id,
+                                serviceAreaId: areaId,
+                                expectedVersion: application.version,
+                              });
+                            }
+                          }}
+                          className="text-[11px] font-semibold text-danger-text hover:underline ml-1"
+                          title="Remove area and convert to requested PIN"
+                        >
+                          {mismatch ? `Approve without ${name}` : "Remove"}
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {application.service_area_ids.length > 0 ? (
+              (application.services_not_offered ?? []).length === 0 ? (
+                <p className="text-success-text">
+                  ✓ Every service they chose is offered in at least one of these areas.
+                </p>
+              ) : (
+                <p className="text-warning-text">
+                  Not offered in any chosen area: {(application.services_not_offered ?? []).join(", ")}.
+                </p>
+              )
+            ) : null}
+
+            {/* Requested PINs */}
+            {(application.area_requests?.length ?? 0) > 0 ? (
+              <div className="space-y-2 pt-2 border-t border-line/60">
+                <span className="font-bold text-text block">
+                  Requested PIN Codes (Not Available)
+                </span>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border border-line rounded">
+                    <thead className="bg-surface-sunken border-b border-line text-text-secondary font-semibold">
+                      <tr>
+                        <th className="p-2">PIN Code</th>
+                        <th className="p-2">Live Status</th>
+                        <th className="p-2">PIN Database</th>
+                        <th className="p-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {application.area_requests!.map((req) => (
+                        <tr key={req.id} className="hover:bg-surface-hover/50">
+                          <td className="p-2 font-mono font-bold text-text">
+                            {req.postal_code}
+                          </td>
+                          <td className="p-2">
+                            {req.status === "READY" ? (
+                              <Badge tone="success">
+                                Ready · now in {req.covering_area_name ?? "area"}
+                              </Badge>
+                            ) : req.status === "AREA_FULL" ? (
+                              <Badge tone="warning">Area full</Badge>
+                            ) : req.status === "WAITING" ? (
+                              <Badge tone="neutral">Waiting</Badge>
+                            ) : req.status === "DONE" ? (
+                              <Badge tone="success">Done</Badge>
+                            ) : req.status === "NOT_VALID" ? (
+                              <Badge tone="danger">Not valid</Badge>
+                            ) : (
+                              <Badge tone="neutral">{req.status}</Badge>
+                            )}
+                          </td>
+                          <td className="p-2 text-text-secondary">
+                            {req.place ? `In our PIN list ✓ ${req.place}` : "Not in our PIN list ✗"}
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-2">
+                              {req.status === "READY" && isMine ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const changesAction = actions.find(
+                                      (a) => a.target === "CHANGES_REQUIRED",
+                                    ) ?? {
+                                      target: "CHANGES_REQUIRED" as const,
+                                      label: "Request changes",
+                                      consequence: "Application reopens for editing.",
+                                      requiresReason: true,
+                                      tone: "neutral" as const,
+                                    };
+                                    setAction(changesAction);
+                                    setReason(
+                                      `PIN ${req.postal_code} is now covered by ${req.covering_area_name ?? "an active area"}. Please add this area to your application and resubmit.`,
+                                    );
+                                  }}
+                                  className="font-semibold text-action hover:underline text-[11px]"
+                                >
+                                  Send back to add it
+                                </button>
+                              ) : null}
+
+                              <Link
+                                href={`/operations/areas?pin=${req.postal_code}`}
+                                className="font-semibold text-action hover:underline text-[11px]"
+                              >
+                                Link PIN to area...
+                              </Link>
+
+                              {req.status !== "NOT_VALID" && req.status !== "DONE" && isMine ? (
+                                <button
+                                  type="button"
+                                  disabled={dismissAreaRequest.isPending}
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `Mark requested PIN ${req.postal_code} as not valid / dismissed?`,
+                                      )
+                                    ) {
+                                      dismissAreaRequest.mutate({
+                                        postalCode: req.postal_code,
+                                        // Only this partner's request, never everyone's for the PIN.
+                                        applicationId: application.id,
+                                        reason: "Marked not valid during application review",
+                                      });
+                                    }
+                                  }}
+                                  className="font-semibold text-danger-text hover:underline text-[11px]"
+                                >
+                                  Mark not valid
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {/* Consents / Agreements */}
         <div className="border-t border-line pt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="flex items-center gap-1.5 font-medium text-text-secondary">
@@ -569,7 +782,15 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           <h3 className="text-base font-bold text-text">Decision</h3>
 
           {/* Status hints about document verification state */}
-          {pendingDocs.length > 0 ? (
+          {isZeroAreaServices ? (
+            <p className="mt-2 text-xs font-semibold text-warning-text flex items-center gap-1.5 bg-warning-surface p-2.5 rounded-control border border-warning-line">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>
+                Area pending: This application has no active service areas. It cannot be approved
+                until at least one service area is added.
+              </span>
+            </p>
+          ) : pendingDocs.length > 0 ? (
             <p className="mt-2 text-xs font-medium text-warning-text flex items-center gap-1.5 bg-warning-surface p-2.5 rounded-control border border-warning-line">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>Review and decide on all pending documents above before making an approval decision.</span>
@@ -626,8 +847,10 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           <div className="mt-3 flex flex-wrap gap-2">
             {actions.map((entry) => {
               const isApprove = entry.target === "APPROVED";
-              const isApproveDisabled = isApprove && (!allRequiredApproved || !checklistDone);
-              // During review: reviewer must hold it AND approve requires all docs.
+              const isApproveDisabled =
+                isApprove && (!allRequiredApproved || !checklistDone || isZeroAreaServices);
+              // During review: reviewer must hold it AND approve requires all docs, the employer
+              // checklist and, for services, at least one service area.
               // Post-approval (APPROVED / SUSPENDED): open to any operator!
               const isDisabled = inReview ? !isMine || isApproveDisabled : false;
 
@@ -637,13 +860,15 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
                   variant={isApprove ? "primary" : entry.tone === "danger" ? "danger" : "outline"}
                   disabled={isDisabled}
                   title={
-                    isApproveDisabled
-                      ? !checklistDone
-                        ? "Finish the checklist first."
-                        : "All required KYC documents must be verified and approved first"
-                      : !isMine && inReview
-                        ? "Claim this application before deciding"
-                        : undefined
+                    isApprove && isZeroAreaServices
+                      ? "An application with zero active service areas cannot be approved"
+                      : isApproveDisabled
+                        ? !allRequiredApproved
+                          ? "All required KYC documents must be verified and approved first"
+                          : "Finish the checklist first."
+                        : !isMine && inReview
+                          ? "Claim this application before deciding"
+                          : undefined
                   }
                   onClick={() => {
                     setAction(entry);
@@ -660,7 +885,7 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
                     }
                   }}
                 >
-                  {entry.label}
+                  {isApprove && inReview ? approveLabel(entry.label) : entry.label}
                 </Button>
               );
             })}

@@ -73,6 +73,7 @@ export interface QueueFilters {
   unassigned?: boolean;
   /** One kind of applicant. Combines with the others; left out, every kind is listed. */
   track?: ApplicantTrack;
+  areaPending?: boolean;
 }
 
 /**
@@ -98,6 +99,7 @@ export function useApplicationQueue(filters: QueueFilters = {}) {
               ...(filters.assignedToMe ? { assigned_to_me: true } : {}),
               ...(filters.unassigned ? { unassigned: true } : {}),
               ...(filters.track ? { track: filters.track } : {}),
+              ...(filters.areaPending ? { area_pending: true } : {}),
               ...(pageParam ? { cursor: pageParam } : {}),
             },
           },
@@ -351,6 +353,55 @@ export function useReviewDocument() {
     onSettled: (_data, _error, input) => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.operations.partnerApplication(input.applicationId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export function useServiceAreas() {
+  return useQuery({
+    queryKey: ["service-areas"] as const,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/service-areas/", {})),
+    ...SESSION_STATE,
+  });
+}
+
+export interface RemoveApplicationAreaInput {
+  applicationId: string;
+  serviceAreaId: string;
+  expectedVersion: number;
+  reason?: string;
+}
+
+export function useRemoveApplicationArea() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RemoveApplicationAreaInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/operations/partner-applications/{application_id}/remove-area/",
+          {
+            params: { path: { application_id: input.applicationId } },
+            body: {
+              service_area_id: input.serviceAreaId,
+              expected_version: input.expectedVersion,
+              reason: input.reason ?? "",
+            },
+          },
+        ),
+      ),
+    onSuccess: (application: Application) => {
+      queryClient.setQueryData(
+        queryKeys.operations.partnerApplication(application.id),
+        application,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerApplication(application.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["operations", "partnerApplicationQueue"],
       });
     },
     retry: false,

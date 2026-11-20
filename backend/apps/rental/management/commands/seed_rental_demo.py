@@ -232,7 +232,9 @@ class Command(BaseCommand):
                 if first_variant is None:
                     first_variant = variant
 
-        Subcategory.objects.filter(category=category).exclude(name__in=taxonomy.keys()).update(is_active=False)
+        Subcategory.objects.filter(category=category).exclude(name__in=taxonomy.keys()).update(
+            is_active=False
+        )
 
         assert first_variant is not None
 

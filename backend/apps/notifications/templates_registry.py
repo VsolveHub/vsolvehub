@@ -582,6 +582,34 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "We cannot approve your partner application. If you think this is a mistake, contact "
         "support.",
     ),
+    "area-opened-draft": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Open your application to tick it and set your hours.",
+    ),
+    "area_opened_draft": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Open your application to tick it and set your hours.",
+    ),
+    "area-ready-in-review": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Tell your reviewer to add it to your application.",
+    ),
+    "area_ready_in_review": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Tell your reviewer to add it to your application.",
+    ),
+    "area-added-approved": (
+        "New area added: {area_name}",
+        "We now work in {postal_code} ({area_name}). We added it to your coverage.",
+    ),
+    "area_added_approved": (
+        "New area added: {area_name}",
+        "We now work in {postal_code} ({area_name}). We added it to your coverage.",
+    ),
     "partner_account_suspended": (
         "Your partner account is paused",
         "You will not get new work, and your listings are hidden, until it is reinstated. "

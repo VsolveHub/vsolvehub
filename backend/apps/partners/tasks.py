@@ -66,3 +66,11 @@ def reconcile_partner_shifts() -> int:
             reconciled += 1
 
     return reconciled
+
+
+@shared_task
+def snapshot_partner_coverage() -> int:
+    """Record this week's approved-partner counts per area (idempotent within the week)."""
+    from apps.partners.services.supply import take_coverage_snapshot  # noqa: PLC0415
+
+    return take_coverage_snapshot()

@@ -113,4 +113,102 @@ describe("review detail", () => {
     expect(await screen.findByRole("button", { name: "Suspend" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Release to queue" })).toBeNull();
   });
+
+  it("disables approval and warns when application has zero service areas (area pending)", async () => {
+    api.setApplication(
+      application({
+        track: "SERVICES",
+        service_area_ids: [],
+        area_requests: [{ id: "req-1", postal_code: "509216", status: "WAITING", place: "Mahbubnagar" }],
+      }),
+    );
+    renderDetail();
+
+    expect((await screen.findAllByText(/area pending/i)).length).toBeGreaterThanOrEqual(1);
+    const approveBtn = screen.getByRole("button", { name: "Approve" });
+    expect(approveBtn).toBeDisabled();
+  });
+
+  it("renders requested PIN codes and allows sending back when ready", async () => {
+    api.setApplication(
+      application({
+        track: "SERVICES",
+        service_area_ids: ["area-1"],
+        area_requests: [
+          {
+            id: "req-1",
+            postal_code: "509001",
+            status: "READY",
+            covering_area_id: "area-2",
+            covering_area_name: "Mahbubnagar Town",
+            place: "Mahbubnagar",
+          },
+        ],
+      }),
+    );
+    renderDetail();
+
+    expect(await screen.findByText("509001")).toBeInTheDocument();
+    expect(screen.getByText(/Ready · now in Mahbubnagar Town/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send back to add it" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send back to add it" }));
+    expect(screen.getByDisplayValue(/PIN 509001 is now covered by Mahbubnagar Town/i)).toBeInTheDocument();
+  });
+
+  it("labels Approve with the areas held and the asked PINs that stay open", async () => {
+    api.setApplication(
+      application({
+        track: "SERVICES",
+        service_area_ids: ["area-1", "area-2"],
+        area_requests: [
+          { id: "r1", postal_code: "509216", status: "WAITING", place: null },
+          { id: "r2", postal_code: "500032", status: "DONE", place: "Gachibowli" },
+        ],
+      }),
+    );
+    renderDetail();
+    expect(
+      await screen.findByRole("button", { name: "Approve · 2 areas, 1 asked PIN stays open" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows each area with zone and hours, and flags one that offers none of their services", async () => {
+    api.setApplication(
+      application({
+        track: "SERVICES",
+        service_area_ids: ["area-1", "area-2"],
+        area_details: [
+          { service_area_id: "area-1", name: "Mahbubnagar", zone: "South", hours_set: true, offers_partner_trades: true },
+          { service_area_id: "area-2", name: "Miyapur", zone: "West", hours_set: false, offers_partner_trades: false },
+        ],
+        services_not_offered: ["Gas Stove Repair"],
+      }),
+    );
+    renderDetail();
+
+    expect(await screen.findByText("South")).toBeInTheDocument();
+    expect(screen.getByText("Hours ✓")).toBeInTheDocument();
+    expect(screen.getByText("No hours")).toBeInTheDocument();
+    expect(screen.getByText("Offers none of their services")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve without Miyapur" })).toBeInTheDocument();
+    expect(screen.getByText(/Not offered in any chosen area: Gas Stove Repair/)).toBeInTheDocument();
+  });
+
+  it("confirms when every chosen service is offered somewhere", async () => {
+    api.setApplication(
+      application({
+        track: "SERVICES",
+        service_area_ids: ["area-1"],
+        area_details: [
+          { service_area_id: "area-1", name: "Mahbubnagar", zone: "", hours_set: true, offers_partner_trades: true },
+        ],
+        services_not_offered: [],
+      }),
+    );
+    renderDetail();
+    expect(
+      await screen.findByText(/Every service they chose is offered in at least one of these areas/),
+    ).toBeInTheDocument();
+  });
 });

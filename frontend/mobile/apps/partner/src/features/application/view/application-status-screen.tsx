@@ -1,4 +1,4 @@
-import { Text } from "@vsolve/mobile-ui";
+import { Text, useT } from "@vsolve/mobile-ui";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertTriangle,
@@ -46,6 +46,7 @@ import {
 } from "@/features/support/contact";
 
 export function ApplicationStatusScreen() {
+  const t = useT();
   const router = useRouter();
   const query = usePartnerApplication();
   const application = query.data ?? null;
@@ -55,6 +56,10 @@ export function ApplicationStatusScreen() {
 
   const effectiveView: ApplicationStatusView = resolveStatusView(application, application?.documents);
   const effectiveReason = extractRejectionReason(application);
+  // Case I: sent with no ticked area, only asked PINs. In review, waiting for an area to open.
+  const isAreaPending =
+    (application?.service_area_ids?.length ?? 0) === 0 &&
+    (application?.area_requests ?? []).some((request) => request.status !== "NOT_VALID");
 
   // 4. Timestamps
   const timelineDates = extractTimelineDates(application);
@@ -198,7 +203,12 @@ export function ApplicationStatusScreen() {
 
             <View style={styles.nextStepBlock}>
               <Text style={styles.nextStepCaption}>Next step</Text>
-              <Text style={styles.nextStepTitle}>Wait for our decision.</Text>
+              <Text style={styles.nextStepTitle}>
+                {isAreaPending ? t("apply.status.waitingForArea.headline") : "Wait for our decision."}
+              </Text>
+              {isAreaPending ? (
+                <Text style={styles.bannerSubtitle}>{t("apply.status.waitingForArea.next")}</Text>
+              ) : null}
             </View>
           </View>
         </View>

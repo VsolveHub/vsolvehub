@@ -32,6 +32,8 @@ export interface AvailabilityEditorProps {
   /** Where Back and Continue go: the steps either side of hours, for this Partner's track. */
   backHref: string;
   nextHref: string;
+  /** An older draft had different hours per area; saving writes one set to all of them. */
+  differed?: boolean;
 }
 
 type ModalShiftState = {
@@ -53,6 +55,7 @@ export function AvailabilityEditor({
   saveError = null,
   backHref,
   nextHref,
+  differed = false,
 }: AvailabilityEditorProps) {
   const router = useRouter();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
@@ -181,9 +184,21 @@ export function AvailabilityEditor({
 
   if (areas.length === 0) {
     return (
-      <p className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
-        {t("apply.schedule.chooseAreaFirst")}
-      </p>
+      <div className="flex flex-col gap-6 pb-24">
+        <p className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
+          {t("apply.schedule.noHoursNeededYet")}
+        </p>
+        <ApplyDock>
+          <div className="flex items-center justify-between gap-4">
+            <Button variant="outline" onClick={() => router.push(backHref)}>
+              {t("common.back")}
+            </Button>
+            <Button variant="primary" onClick={() => router.push(nextHref)}>
+              {t("common.continue")}
+            </Button>
+          </div>
+        </ApplyDock>
+      </div>
     );
   }
 
@@ -196,6 +211,15 @@ export function AvailabilityEditor({
           {hours === 0 ? t("apply.schedule.noHoursSet") : t("apply.schedule.hoursPerWeek", { hours })}
         </Badge>
       </div>
+
+      {differed ? (
+        <p
+          role="status"
+          className="rounded-control border border-info-line bg-info-surface p-3 text-xs text-info-text"
+        >
+          {t("apply.schedule.sameHoursNote")}
+        </p>
+      ) : null}
 
       {/* Quick Schedule Presets */}
       <div className="flex flex-wrap items-center gap-2">

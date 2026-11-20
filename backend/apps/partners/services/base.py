@@ -131,7 +131,11 @@ def _latest_required_documents_are_approved(application: PartnerApplication) -> 
     return True
 
 
-def _base_application_is_complete(application: PartnerApplication) -> bool:
+def _base_application_is_complete(
+    application: PartnerApplication,
+    *,
+    allow_area_requests: bool = False,
+) -> bool:
     partner = application.partner
     if application.track in (
         PartnerApplication.Track.STAY_HOST,
@@ -146,12 +150,19 @@ def _base_application_is_complete(application: PartnerApplication) -> bool:
         ):
             return False
         return bool(partner.display_name.strip()) and partner_has_required_consents(partner)
+
+    areas_satisfied = PartnerServiceArea.objects.filter(
+        partner=partner, is_active=True
+    ).exists() or (
+        allow_area_requests and application.area_requests.filter(dismissed_at__isnull=True).exists()
+    )
+
     return all(
         (
             bool(partner.display_name.strip()),
             PartnerSkill.objects.filter(partner=partner, is_active=True).exists(),
             PartnerService.objects.filter(partner=partner, is_active=True).exists(),
-            PartnerServiceArea.objects.filter(partner=partner, is_active=True).exists(),
+            areas_satisfied,
             partner_has_required_consents(partner),
         ),
     )

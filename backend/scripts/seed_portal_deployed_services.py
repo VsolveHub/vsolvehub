@@ -118,7 +118,9 @@ def sync_deployed_services():
         cat.is_active = True
         cat.save(update_fields=["image_url", "is_active", "updated_at"])
 
-        deactivated = Subcategory.objects.filter(category=cat).exclude(name__in=names).update(is_active=False)
+        deactivated = (
+            Subcategory.objects.filter(category=cat).exclude(name__in=names).update(is_active=False)
+        )
         activated = Subcategory.objects.filter(category=cat, name__in=names).update(is_active=True)
 
         for sub in Subcategory.objects.filter(category=cat, name__in=names):

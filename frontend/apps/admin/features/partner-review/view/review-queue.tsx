@@ -30,6 +30,7 @@ const FILTER_TABS: { label: string; filters: QueueFilters }[] = [
   { label: "All in-review", filters: {} },
   { label: "Unassigned", filters: { unassigned: true } },
   { label: "Mine", filters: { assignedToMe: true } },
+  { label: "Area pending", filters: { areaPending: true } },
   { label: "Submitted", filters: { status: "SUBMITTED" } },
   { label: "Under review", filters: { status: "UNDER_REVIEW" } },
   { label: "Changes requested", filters: { status: "CHANGES_REQUIRED" } },
@@ -254,12 +255,24 @@ export function ReviewQueue({
 
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                           {/* Status Badge */}
-                          <Badge
-                            tone={STATUS_TONE[item.status] ?? "neutral"}
-                            className="text-[11px]"
-                          >
-                            {STATUS_LABELS[item.status] ?? item.status.toLowerCase().replace(/_/g, " ")}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              tone={STATUS_TONE[item.status] ?? "neutral"}
+                              className="text-[11px]"
+                            >
+                              {STATUS_LABELS[item.status] ?? item.status.toLowerCase().replace(/_/g, " ")}
+                            </Badge>
+                            {item.area_pending ? (
+                              <Badge tone="warning" className="text-[11px]">
+                                Area pending
+                              </Badge>
+                            ) : null}
+                            {item.area_tag ? (
+                              <span className="text-[11px] font-medium text-text-secondary">
+                                {item.area_tag}
+                              </span>
+                            ) : null}
+                          </div>
 
                           {/* Submitted Date */}
                           {item.submitted_at ? (

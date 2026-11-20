@@ -185,14 +185,41 @@ function ReviewForm({
           )}
           {listing ? null : (
             <SummaryRow label={t("apply.steps.areas")} href={editable ? "/apply/areas" : null}>
-              {application.service_area_ids.length > 0
-                ? application.service_area_ids.map((id) => areaNames.get(id) ?? id.slice(0, 8)).join(", ")
-                : t("apply.review.notSet")}
+              {application.service_area_ids.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  <span>
+                    {application.service_area_ids
+                      .map((id) => areaNames.get(id) ?? id.slice(0, 8))
+                      .join(", ")}
+                  </span>
+                  {(application.requested_postal_codes?.length ?? 0) > 0 ? (
+                    <span className="text-xs text-text-muted">
+                      {t("apply.review.summary.requestedPins", {
+                        pins: application.requested_postal_codes!.join(", "),
+                      })}
+                    </span>
+                  ) : null}
+                </div>
+              ) : (application.requested_postal_codes?.length ?? 0) > 0 ? (
+                <span className="text-xs text-text-muted">
+                  {t("apply.review.summary.requestedPins", {
+                    pins: application.requested_postal_codes!.join(", "),
+                  })}
+                </span>
+              ) : (
+                t("apply.review.notSet")
+              )}
             </SummaryRow>
           )}
           {listing ? null : (
             <SummaryRow label={t("apply.steps.schedule")} href={editable ? "/apply/schedule" : null}>
-              {t("apply.review.summary.hours", { set: hoursSet, total: application.service_area_ids.length })}
+              {application.service_area_ids.length === 0 &&
+              (application.requested_postal_codes?.length ?? 0) > 0
+                ? t("apply.review.summary.hoursNotNeededYet")
+                : t("apply.review.summary.hours", {
+                    set: hoursSet,
+                    total: application.service_area_ids.length,
+                  })}
             </SummaryRow>
           )}
           <SummaryRow label={t("apply.steps.documents")} href={editable ? "/apply/documents" : null}>

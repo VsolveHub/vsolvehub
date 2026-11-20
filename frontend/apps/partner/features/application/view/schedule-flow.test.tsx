@@ -29,6 +29,10 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
     skill_codes: ["electrician"],
     service_variant_ids: ["v-1"],
     service_area_ids: ["area-1"],
+    requested_postal_codes: [],
+    area_requests: [],
+    area_details: [],
+    services_not_offered: [],
     consents: [
       {
         id: "c-1",

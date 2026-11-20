@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.105.0
+  version: 1.109.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -6653,6 +6653,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/area-requests/:
+    get:
+      operationId: operations_area_requests_list
+      summary: List area requests grouped by PIN code
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: PIN or place search query
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Status filter: WAITING, AREA_FULL, READY, DONE, NOT_VALID, ALL'
+      - in: query
+        name: trade
+        schema:
+          type: string
+        description: Trade name filter
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsAreaRequestGroup'
+          description: ''
+  /api/v1/operations/area-requests/{postal_code}/dismiss/:
+    post:
+      operationId: operations_area_requests_dismiss_create
+      summary: Dismiss area request(s) ('Mark not valid')
+      parameters:
+      - in: path
+        name: postal_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaRequestDismissRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaRequestDismissRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaRequestDismissRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Requests dismissed
+  /api/v1/operations/area-requests/{postal_code}/notify/:
+    post:
+      operationId: operations_area_requests_notify_create
+      summary: Notify partners who asked for a postal code
+      parameters:
+      - in: path
+        name: postal_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAreaRequestNotifyResult'
+          description: ''
   /api/v1/operations/assisted-checkouts/:
     post:
       operationId: operations_assisted_checkouts_create
@@ -8103,6 +8185,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/coverage-lite/:
+    get:
+      operationId: operations_coverage_lite_retrieve
+      summary: Coverage lite report across areas, zones and trades
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+        description: 'Export format: json or csv'
+      - in: query
+        name: trade
+        schema:
+          type: string
+        description: Trade filter
+      - in: query
+        name: zone
+        schema:
+          type: string
+        description: Zone filter
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCoverageLite'
+            text/csv:
+              schema:
+                $ref: '#/components/schemas/OperationsCoverageLite'
+          description: ''
   /api/v1/operations/crew-documents/{document_id}/review/:
     post:
       operationId: m2_operations_crew_document_review
@@ -9060,6 +9176,11 @@ paths:
       operationId: operations_partner_application_queue_list
       parameters:
       - in: query
+        name: area_pending
+        schema:
+          type: boolean
+          default: false
+      - in: query
         name: assigned_to_me
         schema:
           type: boolean
@@ -9357,6 +9478,63 @@ paths:
                       request_id: req_example
                   summary: Partner application version conflict
           description: ''
+  /api/v1/operations/partner-applications/{application_id}/remove-area/:
+    post:
+      operationId: operations_partner_application_remove_area
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsRemoveAreaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsRemoveAreaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsRemoveAreaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/partner-applications/{application_id}/transition/:
     post:
       operationId: operations_partner_applications_transition_create
@@ -9636,6 +9814,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/partners/{partner_id}/add-area/:
+    post:
+      operationId: operations_partners_add_area_create
+      summary: Add an area to an approved partner and copy their usual hours
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerAddAreaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerAddAreaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerAddAreaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Area added and schedule copied
   /api/v1/operations/partners/{partner_id}/availability/:
     get:
       operationId: operations_partner_schedule_retrieve
@@ -11018,6 +11226,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/recruitment-push/:
+    get:
+      operationId: operations_recruitment_push_list
+      summary: Red and amber areas to recruit for, with a tagged apply link each
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+        description: 'Export format: json or csv'
+      - in: query
+        name: zone
+        schema:
+          type: string
+        description: Zone filter
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsRecruitmentNeed'
+            text/csv:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsRecruitmentNeed'
+          description: ''
   /api/v1/operations/refunds/:
     get:
       operationId: operations_refunds_list
@@ -11586,6 +11827,293 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/service-areas/:
+    get:
+      operationId: operations_service_areas_list
+      summary: List all service areas for operations
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsServiceAreaList'
+          description: ''
+    post:
+      operationId: operations_service_areas_create
+      summary: Create a new service area
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsServiceAreaList'
+          description: ''
+  /api/v1/operations/service-areas/{area_id}/:
+    get:
+      operationId: operations_service_areas_retrieve
+      summary: Get service area detail including PINs and services
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsServiceAreaDetail'
+          description: ''
+    patch:
+      operationId: operations_service_areas_partial_update
+      summary: Update service area attributes
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationsServiceAreaUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationsServiceAreaUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationsServiceAreaUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsServiceAreaDetail'
+          description: ''
+  /api/v1/operations/service-areas/{area_id}/pins/:
+    post:
+      operationId: operations_service_areas_pins_create
+      summary: Add a postal code to a service area
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaAddPinRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaAddPinRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaAddPinRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          description: PIN linked successfully
+  /api/v1/operations/service-areas/{area_id}/pins/{postal_code}/:
+    delete:
+      operationId: operations_service_areas_pins_destroy
+      summary: Remove a postal code from a service area
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: postal_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: PIN unlinked successfully
+  /api/v1/operations/service-areas/{area_id}/services/:
+    post:
+      operationId: operations_service_areas_services_create
+      summary: Toggle active status of a service variant in a service area
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaToggleServiceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaToggleServiceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaToggleServiceRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Service variant status updated
+  /api/v1/operations/service-areas/{area_id}/targets/:
+    get:
+      operationId: operations_service_areas_targets_retrieve
+      summary: An area's supply targets and how many approved partners it has against
+        them
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAreaTargets'
+          description: ''
+    put:
+      operationId: operations_service_areas_targets_update
+      summary: Replace an area's supply targets (empty or zero removes one)
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaTargetsUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaTargetsUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaTargetsUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAreaTargets'
+          description: ''
+  /api/v1/operations/service-areas/bulk-pins/apply/:
+    post:
+      operationId: operations_service_areas_bulk_pins_apply_create
+      summary: Apply bulk PIN CSV upload with conflict resolutions
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBulkPinApplyResult'
+          description: ''
+  /api/v1/operations/service-areas/bulk-pins/preview/:
+    post:
+      operationId: operations_service_areas_bulk_pins_preview_create
+      summary: Preview bulk PIN CSV upload
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBulkPinPreviewResult'
           description: ''
   /api/v1/operations/service-feedback/:
     get:
@@ -33623,7 +34151,16 @@ components:
           type: string
           format: date-time
           readOnly: true
+        area_pending:
+          type: boolean
+          readOnly: true
+        area_tag:
+          type: string
+          nullable: true
+          readOnly: true
       required:
+      - area_pending
+      - area_tag
       - display_name
       - id
       - review_assigned_at
@@ -33655,6 +34192,157 @@ components:
       - next
       - previous
       - results
+    OperationsAreaOverallSupply:
+      type: object
+      properties:
+        target_partners:
+          type: integer
+          nullable: true
+        alert_below:
+          type: integer
+          nullable: true
+        approved_partners:
+          type: integer
+        flag:
+          type: string
+      required:
+      - alert_below
+      - approved_partners
+      - flag
+      - target_partners
+    OperationsAreaRequestDismissRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+        postal_code:
+          type: string
+          default: ''
+        application_id:
+          type: string
+          format: uuid
+          nullable: true
+    OperationsAreaRequestGroup:
+      type: object
+      properties:
+        postal_code:
+          type: string
+        place:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        in_pin_list:
+          type: boolean
+        status:
+          type: string
+        covering_area_id:
+          type: string
+          format: uuid
+          nullable: true
+        covering_area_name:
+          type: string
+          nullable: true
+        request_count:
+          type: integer
+        trades:
+          type: array
+          items:
+            type: string
+        trade_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsAreaRequestTradeCount'
+        first_requested_at:
+          type: string
+          format: date-time
+        latest_requested_at:
+          type: string
+          format: date-time
+        notified_at:
+          type: string
+          format: date-time
+          nullable: true
+        customer_lookups_28d:
+          type: integer
+      required:
+      - covering_area_id
+      - covering_area_name
+      - customer_lookups_28d
+      - first_requested_at
+      - in_pin_list
+      - latest_requested_at
+      - notified_at
+      - place
+      - postal_code
+      - request_count
+      - state
+      - status
+      - trade_counts
+      - trades
+    OperationsAreaRequestNotifyResult:
+      type: object
+      properties:
+        postal_code:
+          type: string
+        notified_count:
+          type: integer
+        notified_applications:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        skipped_applications:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - notified_applications
+      - notified_count
+      - postal_code
+    OperationsAreaRequestTradeCount:
+      type: object
+      properties:
+        trade_name:
+          type: string
+        skill_code:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - skill_code
+      - trade_name
+    OperationsAreaTargets:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        overall:
+          $ref: '#/components/schemas/OperationsAreaOverallSupply'
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTradeSupply'
+      required:
+      - overall
+      - service_area_id
+      - trades
+    OperationsAreaTargetsUpdateRequest:
+      type: object
+      properties:
+        overall:
+          allOf:
+          - $ref: '#/components/schemas/OperationsSupplyTargetInputRequest'
+          nullable: true
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTradeSupplyTargetInputRequest'
     OperationsBooking:
       type: object
       description: |-
@@ -33901,6 +34589,130 @@ components:
       - services
       - status
       - total_paise
+    OperationsBulkPinApplyRequest:
+      type: object
+      properties:
+        csv_content:
+          type: string
+          default: ''
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBulkPinRowRequest'
+        conflict_resolutions:
+          type: object
+          additionalProperties:
+            enum:
+            - MOVE
+            - SKIP
+            type: string
+            description: |-
+              * `MOVE` - MOVE
+              * `SKIP` - SKIP
+    OperationsBulkPinApplyResult:
+      type: object
+      properties:
+        added:
+          type: integer
+        moved:
+          type: integer
+        skipped:
+          type: integer
+        created_postal_codes:
+          type: integer
+        row_errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - added
+      - created_postal_codes
+      - moved
+      - row_errors
+      - skipped
+    OperationsBulkPinConflict:
+      type: object
+      properties:
+        pin:
+          type: string
+        target_area_slug:
+          type: string
+        target_area_id:
+          type: string
+          format: uuid
+        current_area_slug:
+          type: string
+        current_area_id:
+          type: string
+          format: uuid
+        current_area_name:
+          type: string
+      required:
+      - current_area_id
+      - current_area_name
+      - current_area_slug
+      - pin
+      - target_area_id
+      - target_area_slug
+    OperationsBulkPinPreviewResult:
+      type: object
+      properties:
+        total:
+          type: integer
+        add:
+          type: integer
+        same:
+          type: integer
+        conflict:
+          type: integer
+        invalid:
+          type: integer
+        unknown_area:
+          type: integer
+        unknown_pin:
+          type: integer
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBulkPinConflict'
+        row_errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - add
+      - conflict
+      - conflicts
+      - invalid
+      - row_errors
+      - same
+      - total
+      - unknown_area
+      - unknown_pin
+    OperationsBulkPinRowRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          minLength: 1
+          pattern: ^\d{6}$
+        area_slug:
+          type: string
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+        city:
+          type: string
+          default: ''
+          maxLength: 120
+        state:
+          type: string
+          default: ''
+          maxLength: 120
+      required:
+      - area_slug
+      - pin
     OperationsCancelRequestRequest:
       type: object
       description: |-
@@ -34470,6 +35282,142 @@ components:
         * `QUALITY_SUPPORT` - Quality support
         * `SAFETY` - Restricted safety team
         * `FINANCE` - Finance Operations
+    OperationsCoverageLite:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/OperationsCoverageLiteSummary'
+        areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCoverageLiteArea'
+      required:
+      - areas
+      - summary
+    OperationsCoverageLiteArea:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        zone:
+          type: string
+        is_active:
+          type: boolean
+        is_accepting_partners:
+          type: boolean
+        postal_codes:
+          type: array
+          items:
+            type: string
+        partner_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        partner_trades:
+          type: object
+          additionalProperties:
+            type: integer
+        open_asked_pins_count:
+          type: integer
+        bookings_28d_count:
+          type: integer
+        offer_expiries_28d_count:
+          type: integer
+        approved_partners:
+          type: integer
+        target_partners:
+          type: integer
+          nullable: true
+        alert_below:
+          type: integer
+          nullable: true
+        flag:
+          type: string
+        trade_targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTradeSupply'
+        turned_away_28d_count:
+          type: integer
+        trend:
+          type: array
+          items:
+            type: integer
+            nullable: true
+      required:
+      - alert_below
+      - approved_partners
+      - bookings_28d_count
+      - flag
+      - id
+      - is_accepting_partners
+      - is_active
+      - name
+      - offer_expiries_28d_count
+      - open_asked_pins_count
+      - partner_counts
+      - partner_trades
+      - postal_codes
+      - slug
+      - target_partners
+      - trade_targets
+      - trend
+      - turned_away_28d_count
+      - zone
+    OperationsCoverageLiteSummary:
+      type: object
+      properties:
+        total_areas:
+          type: integer
+        total_zones:
+          type: integer
+        total_pins:
+          type: integer
+        total_partners:
+          type: integer
+        total_open_asked_pins:
+          type: integer
+        total_bookings_28d:
+          type: integer
+        total_offer_expiries_28d:
+          type: integer
+        total_turned_away_28d:
+          type: integer
+        red_areas:
+          type: integer
+        amber_areas:
+          type: integer
+        green_areas:
+          type: integer
+        trend_weeks:
+          type: array
+          items:
+            type: string
+            format: date
+        trend:
+          type: array
+          items:
+            type: integer
+            nullable: true
+      required:
+      - amber_areas
+      - green_areas
+      - red_areas
+      - total_areas
+      - total_bookings_28d
+      - total_offer_expiries_28d
+      - total_open_asked_pins
+      - total_partners
+      - total_pins
+      - total_turned_away_28d
+      - total_zones
+      - trend
+      - trend_weeks
     OperationsCustomerBlock:
       type: object
       properties:
@@ -34738,6 +35686,17 @@ components:
       required:
       - balance
       - bookings
+    OperationsPartnerAddAreaRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          default: Area opened
+      required:
+      - service_area_id
     OperationsPartnerApplicationDetail:
       type: object
       description: |-
@@ -34785,6 +35744,26 @@ components:
             type: string
           readOnly: true
         service_area_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAreaRequest'
+          readOnly: true
+        area_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationAreaDetail'
+          readOnly: true
+        services_not_offered:
           type: array
           items:
             type: string
@@ -34870,6 +35849,8 @@ components:
             $ref: '#/components/schemas/EmployerCheck'
           readOnly: true
       required:
+      - area_details
+      - area_requests
       - biography
       - business_details_complete
       - can_edit
@@ -34886,12 +35867,14 @@ components:
       - id
       - offered_document_kinds
       - partner_id
+      - requested_postal_codes
       - required_document_kinds
       - review_assigned_at
       - review_assigned_to_id
       - reviewed_at
       - service_area_ids
       - service_variant_ids
+      - services_not_offered
       - skill_codes
       - status
       - submitted_at
@@ -35373,6 +36356,72 @@ components:
       required:
       - reason
       - to_archetype
+    OperationsRecruitmentNeed:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        zone:
+          type: string
+        flag:
+          type: string
+        approved_partners:
+          type: integer
+        target_partners:
+          type: integer
+          nullable: true
+        shortfall:
+          type: integer
+        trade_gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsRecruitmentTradeGap'
+        open_asked_pins_count:
+          type: integer
+        turned_away_28d_count:
+          type: integer
+        apply_link:
+          type: string
+      required:
+      - apply_link
+      - approved_partners
+      - flag
+      - name
+      - open_asked_pins_count
+      - service_area_id
+      - shortfall
+      - slug
+      - target_partners
+      - trade_gaps
+      - turned_away_28d_count
+      - zone
+    OperationsRecruitmentTradeGap:
+      type: object
+      properties:
+        skill_code:
+          type: string
+        skill_name:
+          type: string
+        approved_partners:
+          type: integer
+        target_partners:
+          type: integer
+        shortfall:
+          type: integer
+        flag:
+          type: string
+      required:
+      - approved_partners
+      - flag
+      - shortfall
+      - skill_code
+      - skill_name
+      - target_partners
     OperationsRefundReviewDecisionEnum:
       enum:
       - APPROVED
@@ -35395,6 +36444,21 @@ components:
       required:
       - decision
       - reason
+    OperationsRemoveAreaRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        service_area_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          default: ''
+      required:
+      - expected_version
+      - service_area_id
     OperationsRequestPage:
       type: object
       properties:
@@ -35524,6 +36588,234 @@ components:
       - accepted_at
       - document_version
       - purpose
+    OperationsServiceAreaAddPinRequest:
+      type: object
+      properties:
+        postal_code:
+          type: string
+          minLength: 1
+          pattern: ^\d{6}$
+        city:
+          type: string
+          maxLength: 120
+        state:
+          type: string
+          maxLength: 120
+      required:
+      - postal_code
+    OperationsServiceAreaCreateRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        zone:
+          type: string
+          default: ''
+          maxLength: 64
+        state_code:
+          type: string
+          default: ''
+          maxLength: 8
+        timezone:
+          type: string
+          minLength: 1
+          default: Asia/Kolkata
+          maxLength: 64
+        is_accepting_partners:
+          type: boolean
+          default: true
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - name
+      - slug
+    OperationsServiceAreaDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        zone:
+          type: string
+          readOnly: true
+        state_code:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        is_accepting_partners:
+          type: boolean
+          readOnly: true
+        postal_code_count:
+          type: integer
+          readOnly: true
+        postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        services_active_count:
+          type: integer
+          readOnly: true
+        services_total_count:
+          type: integer
+          readOnly: true
+        partner_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        postal_code_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostalCodeItem'
+          readOnly: true
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAreaServiceItem'
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_accepting_partners
+      - is_active
+      - name
+      - partner_count
+      - postal_code_count
+      - postal_code_items
+      - postal_codes
+      - services
+      - services_active_count
+      - services_total_count
+      - slug
+      - state_code
+      - timezone
+      - updated_at
+      - zone
+    OperationsServiceAreaList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        zone:
+          type: string
+          readOnly: true
+        state_code:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        is_accepting_partners:
+          type: boolean
+          readOnly: true
+        postal_code_count:
+          type: integer
+          readOnly: true
+        postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        services_active_count:
+          type: integer
+          readOnly: true
+        services_total_count:
+          type: integer
+          readOnly: true
+        partner_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_accepting_partners
+      - is_active
+      - name
+      - partner_count
+      - postal_code_count
+      - postal_codes
+      - services_active_count
+      - services_total_count
+      - slug
+      - state_code
+      - timezone
+      - updated_at
+      - zone
+    OperationsServiceAreaToggleServiceRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+          nullable: true
+        variant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        is_active:
+          type: boolean
+      required:
+      - is_active
+    OperationsSupplyTargetInputRequest:
+      type: object
+      properties:
+        target_partners:
+          type: integer
+          minimum: 0
+          nullable: true
+        alert_below:
+          type: integer
+          minimum: 0
+          nullable: true
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -35550,6 +36842,46 @@ components:
       - id
       - occurred_at
       - reason
+    OperationsTradeSupply:
+      type: object
+      properties:
+        skill_code:
+          type: string
+        skill_name:
+          type: string
+        target_partners:
+          type: integer
+          nullable: true
+        alert_below:
+          type: integer
+          nullable: true
+        approved_partners:
+          type: integer
+        flag:
+          type: string
+      required:
+      - alert_below
+      - approved_partners
+      - flag
+      - skill_code
+      - skill_name
+      - target_partners
+    OperationsTradeSupplyTargetInputRequest:
+      type: object
+      properties:
+        target_partners:
+          type: integer
+          minimum: 0
+          nullable: true
+        alert_below:
+          type: integer
+          minimum: 0
+          nullable: true
+        skill_code:
+          type: string
+          minLength: 1
+      required:
+      - skill_code
     OperationsTransitionRequest:
       type: object
       properties:
@@ -36923,6 +38255,26 @@ components:
           items:
             type: string
           readOnly: true
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAreaRequest'
+          readOnly: true
+        area_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationAreaDetail'
+          readOnly: true
+        services_not_offered:
+          type: array
+          items:
+            type: string
+          readOnly: true
         change_request_message:
           type: string
           readOnly: true
@@ -36994,6 +38346,8 @@ components:
           format: date-time
           readOnly: true
       required:
+      - area_details
+      - area_requests
       - biography
       - business_details_complete
       - can_edit
@@ -37008,12 +38362,14 @@ components:
       - id
       - offered_document_kinds
       - partner_id
+      - requested_postal_codes
       - required_document_kinds
       - review_assigned_at
       - review_assigned_to_id
       - reviewed_at
       - service_area_ids
       - service_variant_ids
+      - services_not_offered
       - skill_codes
       - status
       - submitted_at
@@ -37021,6 +38377,26 @@ components:
       - transitions
       - updated_at
       - version
+    PartnerApplicationAreaDetail:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        zone:
+          type: string
+        hours_set:
+          type: boolean
+        offers_partner_trades:
+          type: boolean
+      required:
+      - hours_set
+      - name
+      - offers_partner_trades
+      - service_area_id
+      - zone
     PartnerApplicationPage:
       type: object
       properties:
@@ -37095,6 +38471,47 @@ components:
       - reason
       - reason_code
       - to_status
+    PartnerAreaRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        postal_code:
+          type: string
+        place:
+          type: string
+          nullable: true
+        status:
+          type: string
+        covering_area_id:
+          type: string
+          format: uuid
+          nullable: true
+        covering_area_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        notified_at:
+          type: string
+          format: date-time
+          nullable: true
+        dismissed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - covering_area_id
+      - covering_area_name
+      - created_at
+      - dismissed_at
+      - id
+      - notified_at
+      - place
+      - postal_code
+      - status
     PartnerAvailabilityException:
       type: object
       properties:
@@ -39497,18 +40914,28 @@ components:
         name:
           type: string
           readOnly: true
+        zone:
+          type: string
+          readOnly: true
         timezone:
           type: string
           readOnly: true
         is_accepting_partners:
           type: boolean
           readOnly: true
+        postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
       required:
       - id
       - is_accepting_partners
       - name
+      - postal_codes
       - slug
       - timezone
+      - zone
     PartnerSiteAddress:
       type: object
       description: |-
@@ -40565,6 +41992,27 @@ components:
           type: integer
           maximum: 2147483647
           minimum: 0
+    PatchedOperationsServiceAreaUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        zone:
+          type: string
+          maxLength: 64
+        state_code:
+          type: string
+          maxLength: 8
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        is_accepting_partners:
+          type: boolean
+        is_active:
+          type: boolean
     PatchedOpsDashboardPreferenceRequest:
       type: object
       properties:
@@ -40694,6 +42142,12 @@ components:
           items:
             type: string
             format: uuid
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 6
         consents:
           type: array
           items:
@@ -41875,6 +43329,26 @@ components:
       - code
       - is_exclusive
       - label
+    PostalCodeItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - city
+      - code
+      - id
+      - is_active
+      - state
     PosterRoleEnum:
       enum:
       - OWNER
@@ -48429,6 +49903,9 @@ components:
         name:
           type: string
           readOnly: true
+        zone:
+          type: string
+          readOnly: true
         timezone:
           type: string
           readOnly: true
@@ -48437,6 +49914,27 @@ components:
       - name
       - slug
       - timezone
+      - zone
+    ServiceAreaServiceItem:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        variant_name:
+          type: string
+        trade_name:
+          type: string
+        skill_code:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - skill_code
+      - trade_name
+      - variant_id
+      - variant_name
     ServiceCard:
       type: object
       properties:

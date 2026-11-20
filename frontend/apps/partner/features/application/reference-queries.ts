@@ -33,7 +33,7 @@ import { getApiClient } from "@/lib/api/browser";
  * endpoints removed.
  */
 
-export type ServiceArea = Schemas["ServiceArea"];
+export type ServiceArea = Schemas["PartnerServiceAreaOption"];
 export type PartnerSkill = Schemas["PartnerSkillOption"];
 export type RequiredConsent = Schemas["PartnerConsentDocument"];
 

@@ -49,7 +49,9 @@ def test_a_demo_business_is_owned_by_its_poster_with_no_invented_gstin(phone: st
     assert partner.employer_profile.poster_role == EmployerProfile.PosterRole.OWNER
     assert business.gst_registered is False
     assert business.gstin == ""
-    assert business.business_proof_type == PartnerBusinessProfile.BusinessProofType.SHOP_ESTABLISHMENT
+    assert (
+        business.business_proof_type == PartnerBusinessProfile.BusinessProofType.SHOP_ESTABLISHMENT
+    )
 
 
 @pytest.mark.usefixtures("seeded")
@@ -76,7 +78,8 @@ def test_a_business_job_card_names_the_business_and_its_kind() -> None:
     assert identity["industry_label"] == "Shop / retail"
 
 
-def test_running_the_seeds_twice_changes_nothing(seeded: None) -> None:
+@pytest.mark.usefixtures("seeded")
+def test_running_the_seeds_twice_changes_nothing() -> None:
     before = (
         EmployerProfile.objects.count(),
         PartnerBusinessProfile.objects.count(),

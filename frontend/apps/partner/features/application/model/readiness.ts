@@ -1,4 +1,8 @@
 import type { Schemas } from "@vsolve/api-client";
+import {
+  isServiceAreaRequirementMet,
+  isWorkingHoursRequirementMet,
+} from "@vsolve/query";
 
 import { employerStepFor, hiringAsOf, type EmployerStepHref } from "./employer";
 import { documentLabelKey, isDocumentRejected } from "./status";
@@ -124,6 +128,13 @@ function hasUsableDocument(application: Application | null, kind: DocumentKind):
   );
 }
 
+/** Requests the reviewer has not dismissed: the server ignores "Not valid" ones at submit too. */
+function openAreaRequestCount(
+  application: { area_requests?: readonly { status: string }[] } | null | undefined,
+): number {
+  return (application?.area_requests ?? []).filter((r) => r.status !== "NOT_VALID").length;
+}
+
 /**
  * Takes `null` for the applicant who has not started.
  *
@@ -177,20 +188,22 @@ export function requirements(
       code: "SERVICE_AREAS",
       labelKey: "apply.requirements.serviceAreas",
       href: "/apply/areas",
-      isMet: (application?.service_area_ids.length ?? 0) > 0,
+      isMet: isServiceAreaRequirementMet({
+        serviceAreaIds: application?.service_area_ids ?? [],
+        requestedPostalCodes: application?.requested_postal_codes ?? [],
+        areaRequestsCount: openAreaRequestCount(application),
+      }),
     },
     {
       code: "WORKING_HOURS",
       labelKey: "apply.requirements.workingHours",
       href: "/apply/schedule",
-      isMet:
-        (application?.service_area_ids.length ?? 0) > 0 &&
-        Boolean(availability) &&
-        (application?.service_area_ids ?? []).every((areaId) =>
-          (availability?.rules ?? []).some(
-            (rule) => rule.service_area_id === areaId && rule.is_active,
-          ),
-        ),
+      isMet: isWorkingHoursRequirementMet({
+        serviceAreaIds: application?.service_area_ids ?? [],
+        requestedPostalCodes: application?.requested_postal_codes ?? [],
+        areaRequestsCount: openAreaRequestCount(application),
+        availabilityRules: availability?.rules ?? [],
+      }),
     },
     ...requiredDocumentKinds(application).map((kind) => ({
       code: DOCUMENT_REQUIREMENT_CODES[kind] ?? "GOVERNMENT_ID",

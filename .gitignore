@@ -30,6 +30,8 @@ Thumbs.db
 **/.pub/
 **/build/
 **/coverage/
+!frontend/apps/admin/**/coverage/
+!frontend/apps/admin/**/coverage/**
 **/.flutter-plugins-dependencies
 
 # Android
