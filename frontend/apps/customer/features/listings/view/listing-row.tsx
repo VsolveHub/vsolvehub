@@ -13,6 +13,12 @@ import { listingHref } from "@/lib/routes";
 
 import { listingFields, type Listing } from "../queries";
 import { getCareerImage } from "../career-images";
+import {
+  VerifiedBadge,
+  employerDetailLine,
+  employerName,
+  listingEmployer,
+} from "./employer-identity";
 
 export interface ListingRowProps {
   listing: Listing;
@@ -81,7 +87,8 @@ export function ListingRow({ listing }: ListingRowProps) {
     .replace(/^general(\s*shift)?$/i, "General shift")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const employerName = listing.poster_name || "Apex Staffing Solutions";
+  const employer = listingEmployer(listing);
+  const employerDetail = employerDetailLine(employer);
 
   return (
     <article className="group relative flex flex-col md:flex-row w-full min-h-[220px] md:h-[230px] rounded-[24px] border border-[#E8E3DE] bg-[#FFFFFF] shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.07)] hover:border-[#ded8d2] transition-all duration-300 overflow-hidden">
@@ -121,26 +128,23 @@ export function ListingRow({ listing }: ListingRowProps) {
               {/* Second Row: Company Name, Separator, Verified Badge, and Label */}
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span className="text-[15px] md:text-[16px] font-semibold text-[#15264D]/90 truncate">
-                  {employerName}
+                  {employerName(employer)}
                 </span>
-                <span className="text-slate-400 font-bold" aria-hidden="true">
-                  ·
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-[13px] md:text-[14px] text-[#555555] font-normal whitespace-nowrap">
-                  <svg
-                    className="size-4 shrink-0 text-[#FF7900] fill-current"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z"
-                      clipRule="evenodd"
+                {employer.is_verified ? (
+                  <>
+                    <span className="text-slate-400 font-bold" aria-hidden="true">
+                      ·
+                    </span>
+                    <VerifiedBadge
+                      employer={employer}
+                      className="text-[13px] md:text-[14px] text-[#555555] font-normal [&_svg]:text-[#FF7900]"
                     />
-                  </svg>
-                  <span>Verified employer</span>
-                </span>
+                  </>
+                ) : null}
               </div>
+              {employerDetail ? (
+                <p className="mt-1 text-[13px] text-[#5F6B7E] font-normal truncate">{employerDetail}</p>
+              ) : null}
             </div>
 
             {/* Favorite / Heart Icon */}

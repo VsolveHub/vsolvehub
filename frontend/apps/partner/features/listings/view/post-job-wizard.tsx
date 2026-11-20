@@ -7,6 +7,9 @@ import { ArrowLeft, Check, ChevronDown, MapPin, Plus, Search, Sparkles } from "l
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { usePartnerApplication } from "@/features/application/queries";
+
+import { orderJobCategories } from "../job-categories";
 import {
   fetchJobOptions,
   hhmm,
@@ -332,6 +335,8 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   const qc = useQueryClient();
   const { notify } = useToast();
   const options = useQuery({ queryKey: ["job-options"], queryFn: fetchJobOptions });
+  const application = usePartnerApplication();
+  const hiringAs = application.data?.employer?.hiring_as;
   const existing = useQuery({
     queryKey: ["partner-listing", editId],
     queryFn: () => fetchPartnerListing(editId!),
@@ -360,6 +365,10 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   };
 
   const opts = options.data as JobOptions | undefined;
+  const categories = useMemo(
+    () => orderJobCategories(opts?.categories ?? [], hiringAs),
+    [opts, hiringAs],
+  );
   const roles = useMemo(() => {
     const q = search.trim().toLowerCase();
     const all = (opts?.categories ?? []).flatMap((cat) =>
@@ -475,7 +484,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           </div>
           {!search ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {opts.categories.map((cat) => (
+              {categories.map((cat) => (
                 <button
                   key={cat.name}
                   type="button"
