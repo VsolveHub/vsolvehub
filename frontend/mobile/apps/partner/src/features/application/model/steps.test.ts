@@ -3,6 +3,7 @@ import {
   APPLICATION_STEPS,
   SERVICE_APPLICATION_STEPS,
   applicationSteps,
+  firstStepHref,
   isLastStep,
   isUnchosenDraft,
   nextStep,
@@ -102,9 +103,45 @@ describe("what the first screen shows before starting", () => {
 });
 
 describe("the employer path", () => {
-  it("adds Business details after About you, the same as the website", () => {
-    expect(applicationSteps("EMPLOYER").map((step) => step.href)).toEqual([
-      "/apply/about",
+  const hrefs = (hiringAs?: string) =>
+    applicationSteps("EMPLOYER", hiringAs).map((step) => step.href);
+
+  it("starts with who is hiring, and shows nothing more until they choose", () => {
+    expect(hrefs()).toEqual(["/apply/hiring-as"]);
+    expect(hrefs("")).toEqual(["/apply/hiring-as"]);
+  });
+
+  it("walks an individual through About you, Documents, then Agree & send", () => {
+    expect(hrefs("INDIVIDUAL")).toEqual([
+      "/apply/hiring-as",
+      "/apply/employer/about",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("walks a business through its details and the person's role first", () => {
+    expect(hrefs("BUSINESS")).toEqual([
+      "/apply/hiring-as",
+      "/apply/employer/business",
+      "/apply/employer/contact",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+    expect(nextStep("/apply/employer/business", "EMPLOYER", "BUSINESS")?.href).toBe(
+      "/apply/employer/contact",
+    );
+    expect(isLastStep("/apply/review", "EMPLOYER", "BUSINESS")).toBe(true);
+  });
+
+  it("starts an employer on the choice and everyone else on About you", () => {
+    expect(firstStepHref("EMPLOYER")).toBe("/apply/hiring-as");
+    expect(firstStepHref("SERVICES")).toBe("/apply/about");
+  });
+
+  it("previews one 'Your details' stage rather than either path", () => {
+    expect(trackPreview("EMPLOYER").steps.map((step) => step.href)).toEqual([
+      "/apply/hiring-as",
       "/apply/employer",
       "/apply/documents",
       "/apply/review",
@@ -113,7 +150,9 @@ describe("the employer path", () => {
 
   it("is never asked of other tracks", () => {
     for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"]) {
-      expect(applicationSteps(track).map((step) => step.href)).not.toContain("/apply/employer");
+      for (const href of applicationSteps(track).map((step) => step.href)) {
+        expect(href).not.toMatch(/employer|hiring-as/);
+      }
     }
   });
 });
