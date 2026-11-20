@@ -78,13 +78,17 @@ class Command(BaseCommand):
                     subcategories = category.subcategories.filter(slug__in=subcat_slugs)
 
                 for subcategory in subcategories:
-                    tile_file = SUBCATEGORY_TILE_FILENAMES.get(subcategory.slug, f"{subcategory.slug}.png")
+                    tile_file = SUBCATEGORY_TILE_FILENAMES.get(
+                        subcategory.slug, f"{subcategory.slug}.png"
+                    )
                     subcat_target_url = f"{base_url}/catalog/tiles/{tile_file}"
                     if force or not subcategory.image_url or subcategory.image_url.startswith("/"):
                         subcategory.image_url = subcat_target_url
                         subcategory.save(update_fields=["image_url", "updated_at"])
                         updated_subcategories += 1
-                        self.stdout.write(f"Updated subcategory: {subcategory.slug} -> {subcategory.image_url}")
+                        self.stdout.write(
+                            f"Updated subcategory: {subcategory.slug} -> {subcategory.image_url}"
+                        )
 
         self.stdout.write(
             self.style.SUCCESS(

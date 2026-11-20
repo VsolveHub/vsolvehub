@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./native": "./src/native.ts",
     "./partner-work": "./src/partner-work.ts",
-    "./partner-hours": "./src/partner-hours.ts"
+    "./partner-hours": "./src/partner-hours.ts",
+    "./partner-areas": "./src/partner-areas.ts",
+    "./partner-readiness": "./src/partner-readiness.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

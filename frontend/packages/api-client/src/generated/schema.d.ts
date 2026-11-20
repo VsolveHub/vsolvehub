@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.102.0)
- * Checksum: 51d0693d1b397722
+ * Source:   contracts/openapi/v1.yaml (version 1.106.0)
+ * Checksum: 62091ef9ef58667e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2894,6 +2894,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/area-requests/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List area requests grouped by PIN code */
+        get: operations["operations_area_requests_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/area-requests/{postal_code}/dismiss/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss area request(s) ('Mark not valid') */
+        post: operations["operations_area_requests_dismiss_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/area-requests/{postal_code}/notify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Notify partners who asked for a postal code */
+        post: operations["operations_area_requests_notify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/assisted-checkouts/": {
         parameters: {
             query?: never;
@@ -3373,6 +3424,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/coverage-lite/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Coverage lite report across areas, zones and trades */
+        get: operations["operations_coverage_lite_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/crew-documents/{document_id}/review/": {
         parameters: {
             query?: never;
@@ -3808,6 +3876,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/partner-applications/{application_id}/remove-area/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_partner_application_remove_area"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/partner-applications/{application_id}/transition/": {
         parameters: {
             query?: never;
@@ -3915,6 +3999,23 @@ export interface paths {
         get: operations["operations_partner_activity"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/partners/{partner_id}/add-area/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an area to an approved partner and copy their usual hours */
+        post: operations["operations_partners_add_area_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4432,6 +4533,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/recruitment-push/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Red and amber areas to recruit for, with a tagged apply link each */
+        get: operations["operations_recruitment_push_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/refunds/": {
         parameters: {
             query?: never;
@@ -4620,6 +4738,145 @@ export interface paths {
          *     The report body is frozen by the model, so this can only ever add a status and a resolution — an operator cannot revise what somebody said happened, which is the property that makes the record worth keeping.
          */
         post: operations["m2_safety_incident_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all service areas for operations */
+        get: operations["operations_service_areas_list"];
+        put?: never;
+        /** Create a new service area */
+        post: operations["operations_service_areas_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/{area_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get service area detail including PINs and services */
+        get: operations["operations_service_areas_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update service area attributes */
+        patch: operations["operations_service_areas_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/{area_id}/pins/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a postal code to a service area */
+        post: operations["operations_service_areas_pins_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/{area_id}/pins/{postal_code}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a postal code from a service area */
+        delete: operations["operations_service_areas_pins_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/{area_id}/services/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle active status of a service variant in a service area */
+        post: operations["operations_service_areas_services_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/{area_id}/targets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An area's supply targets and how many approved partners it has against them */
+        get: operations["operations_service_areas_targets_retrieve"];
+        /** Replace an area's supply targets (empty or zero removes one) */
+        put: operations["operations_service_areas_targets_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/bulk-pins/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply bulk PIN CSV upload with conflict resolutions */
+        post: operations["operations_service_areas_bulk_pins_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-areas/bulk-pins/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview bulk PIN CSV upload */
+        post: operations["operations_service_areas_bulk_pins_preview_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13389,6 +13646,8 @@ export interface components {
             readonly review_assigned_at: string | null;
             /** Format: date-time */
             readonly updated_at: string;
+            readonly area_pending: boolean;
+            readonly area_tag: string | null;
         };
         OperationsApplicationQueuePage: {
             /** Format: uri */
@@ -13396,6 +13655,65 @@ export interface components {
             /** Format: uri */
             readonly previous: string | null;
             readonly results: components["schemas"]["OperationsApplicationQueueItem"][];
+        };
+        OperationsAreaOverallSupply: {
+            target_partners: number | null;
+            alert_below: number | null;
+            approved_partners: number;
+            flag: string;
+        };
+        OperationsAreaRequestDismissRequest: {
+            /** @default  */
+            reason: string;
+            /** @default  */
+            postal_code: string;
+            /** Format: uuid */
+            application_id?: string | null;
+        };
+        OperationsAreaRequestGroup: {
+            postal_code: string;
+            place: string | null;
+            state: string | null;
+            in_pin_list: boolean;
+            status: string;
+            /** Format: uuid */
+            covering_area_id: string | null;
+            covering_area_name: string | null;
+            request_count: number;
+            trades: string[];
+            trade_counts: components["schemas"]["OperationsAreaRequestTradeCount"][];
+            /** Format: date-time */
+            first_requested_at: string;
+            /** Format: date-time */
+            latest_requested_at: string;
+            /** Format: date-time */
+            notified_at: string | null;
+            customer_lookups_28d: number;
+        };
+        OperationsAreaRequestNotifyResult: {
+            postal_code: string;
+            notified_count: number;
+            notified_applications: {
+                [key: string]: unknown;
+            }[];
+            skipped_applications?: {
+                [key: string]: unknown;
+            }[];
+        };
+        OperationsAreaRequestTradeCount: {
+            trade_name: string;
+            skill_code: string;
+            count: number;
+        };
+        OperationsAreaTargets: {
+            /** Format: uuid */
+            service_area_id: string;
+            overall: components["schemas"]["OperationsAreaOverallSupply"];
+            trades: components["schemas"]["OperationsTradeSupply"][];
+        };
+        OperationsAreaTargetsUpdateRequest: {
+            overall?: components["schemas"]["OperationsSupplyTargetInputRequest"] | null;
+            trades?: components["schemas"]["OperationsTradeSupplyTargetInputRequest"][];
         };
         /**
          * @description Cross-unit recovery context, with the audit trail that justifies it.
@@ -13480,6 +13798,54 @@ export interface components {
             readonly is_late: boolean;
             readonly payout_hold: boolean;
             readonly needs_redispatch: boolean;
+        };
+        OperationsBulkPinApplyRequest: {
+            /** @default  */
+            csv_content: string;
+            rows?: components["schemas"]["OperationsBulkPinRowRequest"][];
+            conflict_resolutions?: {
+                [key: string]: "MOVE" | "SKIP";
+            };
+        };
+        OperationsBulkPinApplyResult: {
+            added: number;
+            moved: number;
+            skipped: number;
+            created_postal_codes: number;
+            row_errors: {
+                [key: string]: unknown;
+            }[];
+        };
+        OperationsBulkPinConflict: {
+            pin: string;
+            target_area_slug: string;
+            /** Format: uuid */
+            target_area_id: string;
+            current_area_slug: string;
+            /** Format: uuid */
+            current_area_id: string;
+            current_area_name: string;
+        };
+        OperationsBulkPinPreviewResult: {
+            total: number;
+            add: number;
+            same: number;
+            conflict: number;
+            invalid: number;
+            unknown_area: number;
+            unknown_pin: number;
+            conflicts: components["schemas"]["OperationsBulkPinConflict"][];
+            row_errors: {
+                [key: string]: unknown;
+            }[];
+        };
+        OperationsBulkPinRowRequest: {
+            pin: string;
+            area_slug: string;
+            /** @default  */
+            city: string;
+            /** @default  */
+            state: string;
         };
         /**
          * @description The floor every state-changing fulfilment command sits on.
@@ -13719,6 +14085,51 @@ export interface components {
          * @enum {string}
          */
         OperationsCaseTeamEnum: "DISPATCH" | "BOOKING_SUPPORT" | "QUALITY_SUPPORT" | "SAFETY" | "FINANCE";
+        OperationsCoverageLite: {
+            summary: components["schemas"]["OperationsCoverageLiteSummary"];
+            areas: components["schemas"]["OperationsCoverageLiteArea"][];
+        };
+        OperationsCoverageLiteArea: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            zone: string;
+            is_active: boolean;
+            is_accepting_partners: boolean;
+            postal_codes: string[];
+            partner_counts: {
+                [key: string]: number;
+            };
+            partner_trades: {
+                [key: string]: number;
+            };
+            open_asked_pins_count: number;
+            bookings_28d_count: number;
+            offer_expiries_28d_count: number;
+            approved_partners: number;
+            target_partners: number | null;
+            alert_below: number | null;
+            flag: string;
+            trade_targets: components["schemas"]["OperationsTradeSupply"][];
+            turned_away_28d_count: number;
+            trend: (number | null)[];
+        };
+        OperationsCoverageLiteSummary: {
+            total_areas: number;
+            total_zones: number;
+            total_pins: number;
+            total_partners: number;
+            total_open_asked_pins: number;
+            total_bookings_28d: number;
+            total_offer_expiries_28d: number;
+            total_turned_away_28d: number;
+            red_areas: number;
+            amber_areas: number;
+            green_areas: number;
+            trend_weeks: string[];
+            trend: (number | null)[];
+        };
         OperationsCustomerBlock: {
             reason: string;
             /** Format: date-time */
@@ -13833,6 +14244,12 @@ export interface components {
             balance: components["schemas"]["OperationsPartnerBalance"];
             /** @description The 25 most recent. */
             bookings: components["schemas"]["OperationsCustomerBooking"][];
+        };
+        OperationsPartnerAddAreaRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            /** @default Area opened */
+            reason: string;
         };
         OperationsPartnerBalance: {
             /** @description Payable now. Negative when refunds exceed it. */
@@ -14000,6 +14417,29 @@ export interface components {
             reason: string;
             to_archetype: components["schemas"]["ToArchetypeEnum"];
         };
+        OperationsRecruitmentNeed: {
+            /** Format: uuid */
+            service_area_id: string;
+            name: string;
+            slug: string;
+            zone: string;
+            flag: string;
+            approved_partners: number;
+            target_partners: number | null;
+            shortfall: number;
+            trade_gaps: components["schemas"]["OperationsRecruitmentTradeGap"][];
+            open_asked_pins_count: number;
+            turned_away_28d_count: number;
+            apply_link: string;
+        };
+        OperationsRecruitmentTradeGap: {
+            skill_code: string;
+            skill_name: string;
+            approved_partners: number;
+            target_partners: number;
+            shortfall: number;
+            flag: string;
+        };
         /**
          * @description * `APPROVED` - Approved
          *     * `DECLINED` - Declined
@@ -14010,6 +14450,13 @@ export interface components {
         OperationsRefundReviewRequest: {
             reason: string;
             decision: components["schemas"]["OperationsRefundReviewDecisionEnum"];
+        };
+        OperationsRemoveAreaRequest: {
+            expected_version: number;
+            /** Format: uuid */
+            service_area_id: string;
+            /** @default  */
+            reason: string;
         };
         OperationsRequestPage: {
             /** Format: uri */
@@ -14054,6 +14501,77 @@ export interface components {
             /** Format: date-time */
             accepted_at: string;
         };
+        OperationsServiceAreaAddPinRequest: {
+            postal_code: string;
+            city?: string;
+            state?: string;
+        };
+        OperationsServiceAreaCreateRequest: {
+            slug: string;
+            name: string;
+            /** @default  */
+            zone: string;
+            /** @default  */
+            state_code: string;
+            /** @default Asia/Kolkata */
+            timezone: string;
+            /** @default true */
+            is_accepting_partners: boolean;
+            /** @default true */
+            is_active: boolean;
+        };
+        OperationsServiceAreaDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly name: string;
+            readonly zone: string;
+            readonly state_code: string;
+            readonly timezone: string;
+            readonly is_active: boolean;
+            readonly is_accepting_partners: boolean;
+            readonly postal_code_count: number;
+            readonly postal_codes: string[];
+            readonly services_active_count: number;
+            readonly services_total_count: number;
+            readonly partner_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly postal_code_items: components["schemas"]["PostalCodeItem"][];
+            readonly services: components["schemas"]["ServiceAreaServiceItem"][];
+        };
+        OperationsServiceAreaList: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly name: string;
+            readonly zone: string;
+            readonly state_code: string;
+            readonly timezone: string;
+            readonly is_active: boolean;
+            readonly is_accepting_partners: boolean;
+            readonly postal_code_count: number;
+            readonly postal_codes: string[];
+            readonly services_active_count: number;
+            readonly services_total_count: number;
+            readonly partner_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        OperationsServiceAreaToggleServiceRequest: {
+            /** Format: uuid */
+            variant_id?: string;
+            variant_ids?: string[];
+            is_active: boolean;
+        };
+        OperationsSupplyTargetInputRequest: {
+            target_partners?: number | null;
+            alert_below?: number | null;
+        };
         OperationsTaxProfileVerifyRequest: {
             /** @default  */
             registered_state_code: string;
@@ -14065,6 +14583,19 @@ export interface components {
             reason: string;
             /** Format: date-time */
             occurred_at: string;
+        };
+        OperationsTradeSupply: {
+            skill_code: string;
+            skill_name: string;
+            target_partners: number | null;
+            alert_below: number | null;
+            approved_partners: number;
+            flag: string;
+        };
+        OperationsTradeSupplyTargetInputRequest: {
+            target_partners?: number | null;
+            alert_below?: number | null;
+            skill_code: string;
         };
         OperationsTransitionRequest: {
             expected_version: number;
@@ -14564,6 +15095,10 @@ export interface components {
             readonly skill_codes: string[];
             readonly service_variant_ids: string[];
             readonly service_area_ids: string[];
+            readonly requested_postal_codes: string[];
+            readonly area_requests: components["schemas"]["PartnerAreaRequest"][];
+            readonly area_details: components["schemas"]["PartnerApplicationAreaDetail"][];
+            readonly services_not_offered: string[];
             readonly change_request_message: string;
             /** Format: date-time */
             readonly submitted_at: string | null;
@@ -14583,6 +15118,14 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        PartnerApplicationAreaDetail: {
+            /** Format: uuid */
+            service_area_id: string;
+            name: string;
+            zone: string;
+            hours_set: boolean;
+            offers_partner_trades: boolean;
         };
         PartnerApplicationPage: {
             /** Format: uri */
@@ -14613,6 +15156,22 @@ export interface components {
             readonly application_version: number;
             /** Format: date-time */
             readonly occurred_at: string;
+        };
+        PartnerAreaRequest: {
+            /** Format: uuid */
+            id: string;
+            postal_code: string;
+            place: string | null;
+            status: string;
+            /** Format: uuid */
+            covering_area_id: string | null;
+            covering_area_name: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            notified_at: string | null;
+            /** Format: date-time */
+            dismissed_at: string | null;
         };
         PartnerAvailabilityException: {
             /** Format: uuid */
@@ -15507,8 +16066,10 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly name: string;
+            readonly zone: string;
             readonly timezone: string;
             readonly is_accepting_partners: boolean;
+            readonly postal_codes: string[];
         };
         /**
          * @description The visit destination, disclosed to the Partner only once the visit is genuinely theirs.
@@ -15933,6 +16494,14 @@ export interface components {
             reward_hold_days?: number;
             referral_monthly_cap?: number;
         };
+        PatchedOperationsServiceAreaUpdateRequest: {
+            name?: string;
+            zone?: string;
+            state_code?: string;
+            timezone?: string;
+            is_accepting_partners?: boolean;
+            is_active?: boolean;
+        };
         PatchedOpsDashboardPreferenceRequest: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
@@ -15983,6 +16552,7 @@ export interface components {
             skill_codes?: string[];
             service_variant_ids?: string[];
             service_area_ids?: string[];
+            requested_postal_codes?: string[];
             consents?: components["schemas"]["PartnerConsentInputRequest"][];
             device_identifier?: string;
         };
@@ -16482,6 +17052,14 @@ export interface components {
             code: components["schemas"]["PlatformFeedbackTagEnum"];
             label: string;
             is_exclusive: boolean;
+        };
+        PostalCodeItem: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            city: string;
+            state: string;
+            is_active: boolean;
         };
         /** @description One visit's chosen start, keyed by the scheduling group it belongs to. */
         PreferredStartRequest: {
@@ -19115,7 +19693,16 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly name: string;
+            readonly zone: string;
             readonly timezone: string;
+        };
+        ServiceAreaServiceItem: {
+            /** Format: uuid */
+            variant_id: string;
+            variant_name: string;
+            trade_name: string;
+            skill_code: string;
+            is_active: boolean;
         };
         ServiceCard: {
             /** Format: uuid */
@@ -27152,6 +27739,79 @@ export interface operations {
             };
         };
     };
+    operations_area_requests_list: {
+        parameters: {
+            query?: {
+                /** @description PIN or place search query */
+                search?: string;
+                /** @description Status filter: WAITING, AREA_FULL, READY, DONE, NOT_VALID, ALL */
+                status?: string;
+                /** @description Trade name filter */
+                trade?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsAreaRequestGroup"][];
+                };
+            };
+        };
+    };
+    operations_area_requests_dismiss_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postal_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OperationsAreaRequestDismissRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsAreaRequestDismissRequest"];
+                "multipart/form-data": components["schemas"]["OperationsAreaRequestDismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Requests dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    operations_area_requests_notify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postal_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsAreaRequestNotifyResult"];
+                };
+            };
+        };
+    };
     operations_assisted_checkouts_create: {
         parameters: {
             query?: never;
@@ -28501,6 +29161,33 @@ export interface operations {
             };
         };
     };
+    operations_coverage_lite_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Export format: json or csv */
+                format?: string;
+                /** @description Trade filter */
+                trade?: string;
+                /** @description Zone filter */
+                zone?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCoverageLite"];
+                    "text/csv": components["schemas"]["OperationsCoverageLite"];
+                };
+            };
+        };
+    };
     m2_operations_crew_document_review: {
         parameters: {
             query?: never;
@@ -29416,6 +30103,7 @@ export interface operations {
     operations_partner_application_queue_list: {
         parameters: {
             query?: {
+                area_pending?: boolean;
                 assigned_to_me?: boolean;
                 cursor?: string;
                 /**
@@ -29569,6 +30257,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_application_remove_area: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsRemoveAreaRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsRemoveAreaRequest"];
+                "multipart/form-data": components["schemas"]["OperationsRemoveAreaRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             403: {
@@ -29867,6 +30614,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApiError"];
                 };
+            };
+        };
+    };
+    operations_partners_add_area_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsPartnerAddAreaRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsPartnerAddAreaRequest"];
+                "multipart/form-data": components["schemas"]["OperationsPartnerAddAreaRequest"];
+            };
+        };
+        responses: {
+            /** @description Area added and schedule copied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -31245,6 +32018,31 @@ export interface operations {
             };
         };
     };
+    operations_recruitment_push_list: {
+        parameters: {
+            query?: {
+                /** @description Export format: json or csv */
+                format?: string;
+                /** @description Zone filter */
+                zone?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsRecruitmentNeed"][];
+                    "text/csv": components["schemas"]["OperationsRecruitmentNeed"][];
+                };
+            };
+        };
+    };
     operations_refunds_list: {
         parameters: {
             query?: {
@@ -31748,6 +32546,269 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_service_areas_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsServiceAreaList"][];
+                };
+            };
+        };
+    };
+    operations_service_areas_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsServiceAreaCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsServiceAreaCreateRequest"];
+                "multipart/form-data": components["schemas"]["OperationsServiceAreaCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsServiceAreaList"];
+                };
+            };
+        };
+    };
+    operations_service_areas_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsServiceAreaDetail"];
+                };
+            };
+        };
+    };
+    operations_service_areas_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedOperationsServiceAreaUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedOperationsServiceAreaUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedOperationsServiceAreaUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsServiceAreaDetail"];
+                };
+            };
+        };
+    };
+    operations_service_areas_pins_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsServiceAreaAddPinRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsServiceAreaAddPinRequest"];
+                "multipart/form-data": components["schemas"]["OperationsServiceAreaAddPinRequest"];
+            };
+        };
+        responses: {
+            /** @description PIN linked successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    operations_service_areas_pins_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+                postal_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PIN unlinked successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    operations_service_areas_services_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsServiceAreaToggleServiceRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsServiceAreaToggleServiceRequest"];
+                "multipart/form-data": components["schemas"]["OperationsServiceAreaToggleServiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Service variant status updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    operations_service_areas_targets_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsAreaTargets"];
+                };
+            };
+        };
+    };
+    operations_service_areas_targets_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                area_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OperationsAreaTargetsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsAreaTargetsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["OperationsAreaTargetsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsAreaTargets"];
+                };
+            };
+        };
+    };
+    operations_service_areas_bulk_pins_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OperationsBulkPinApplyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsBulkPinApplyRequest"];
+                "multipart/form-data": components["schemas"]["OperationsBulkPinApplyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBulkPinApplyResult"];
+                };
+            };
+        };
+    };
+    operations_service_areas_bulk_pins_preview_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OperationsBulkPinApplyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsBulkPinApplyRequest"];
+                "multipart/form-data": components["schemas"]["OperationsBulkPinApplyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBulkPinPreviewResult"];
                 };
             };
         };

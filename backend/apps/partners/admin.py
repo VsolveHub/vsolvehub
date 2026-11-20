@@ -3,6 +3,7 @@ from django.contrib import admin
 from apps.partners.models import (
     PartnerApplication,
     PartnerApplicationTransition,
+    PartnerAreaRequest,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerConsent,
@@ -20,6 +21,7 @@ from apps.partners.models import (
 
 admin.site.register(PartnerProfile)
 admin.site.register(PartnerApplication)
+admin.site.register(PartnerAreaRequest)
 admin.site.register(PartnerApplicationTransition)
 admin.site.register(Skill)
 admin.site.register(PartnerSkill)

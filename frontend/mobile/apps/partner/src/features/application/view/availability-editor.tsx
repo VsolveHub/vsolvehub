@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/availability-editor.tsx
-import { Badge, Button, Dialog, Input, Text } from "@vsolve/mobile-ui";
+import { Badge, Button, Dialog, Input, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { Clock, Edit2, Plus, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -32,6 +32,8 @@ export interface AvailabilityEditorProps {
   backHref: string;
   nextHref: string;
   nextStepName: string | null;
+  /** An older draft had different hours per area; saving writes one set to all of them. */
+  differed?: boolean;
 }
 
 type ModalShiftState = {
@@ -53,7 +55,9 @@ export function AvailabilityEditor({
   backHref,
   nextHref,
   nextStepName,
+  differed = false,
 }: AvailabilityEditorProps) {
+  const t = useT();
   const router = useRouter();
   const { registerDock } = useApplyDock();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
@@ -181,13 +185,21 @@ export function AvailabilityEditor({
   if (areas.length === 0) {
     return (
       <Text className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
-        Choose where you work before publishing hours — your schedule is per area.
+        {t("apply.schedule.noHoursNeededYet")}
       </Text>
     );
   }
 
   return (
     <View className="flex-col gap-6">
+      {differed ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          className="rounded-control border border-info-line bg-info-surface p-3 text-xs text-info-text"
+        >
+          {t("apply.schedule.sameHoursNote")}
+        </Text>
+      ) : null}
       <View className="flex-row items-center justify-between">
         <Text className="text-sm font-bold text-navy-900">Weekly Schedule</Text>
         <Badge tone={hours > 0 ? "success" : "neutral"} className="font-bold">

@@ -1,5 +1,6 @@
 """Transactional address changes and serviceability decisions."""
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -17,10 +18,13 @@ from apps.locations.models import (
     Address,
     ServiceArea,
     ServiceAreaOperatingException,
+    UnservedDemandEvent,
 )
 from apps.locations.pauses import SERVICE_AREA_PAUSED, paused_area_slugs
 
 INDIA_POSTAL_CODE_PATTERN = re.compile(r"^\d{6}$")
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_postal_code(value: str) -> str:
@@ -203,3 +207,48 @@ def _localized_range(
     close_date = local_date + timedelta(days=1) if closes_next_day else local_date
     closes = datetime.combine(close_date, closes_at, tzinfo=zone)
     return opens, closes
+
+
+#: Reasons that mean "we do not serve this PIN (for this service) yet", as opposed to a slot
+#: problem. Only these are demand Operations can act on by opening or growing an area.
+UNSERVED_REASON_CODES = frozenset(
+    {"OUTSIDE_SERVICE_AREA", SERVICE_AREA_PAUSED, "SERVICE_NOT_AVAILABLE_IN_AREA"}
+)
+_UNSERVED_DEDUPE_WINDOW = timedelta(minutes=5)
+
+
+def record_unserved_demand(
+    *,
+    postal_code: str,
+    reason_code: str | None,
+    variant_id: uuid.UUID | None = None,
+    source: str = "LOOKUP",
+) -> bool:
+    """Note that a customer was turned away. Never raises: a lookup must not fail because of it.
+
+    The same PIN, service and reason inside five minutes counts once, so a customer retrying (or
+    a page that re-checks) does not inflate the demand figure.
+    """
+    if reason_code not in UNSERVED_REASON_CODES:
+        return False
+    try:
+        normalized = normalize_postal_code(postal_code)
+        with transaction.atomic():
+            since = timezone.now() - _UNSERVED_DEDUPE_WINDOW
+            if UnservedDemandEvent.objects.filter(
+                postal_code=normalized,
+                variant_id=variant_id,
+                reason_code=reason_code,
+                created_at__gte=since,
+            ).exists():
+                return False
+            UnservedDemandEvent.objects.create(
+                postal_code=normalized,
+                variant_id=variant_id,
+                reason_code=reason_code,
+                source=source,
+            )
+    except Exception:
+        logger.warning("could not record unserved demand", exc_info=True)
+        return False
+    return True

@@ -260,3 +260,19 @@ describe("a stay host", () => {
     expect(rental).toEqual(stay);
   });
 });
+
+describe("asked PINs (FLOW.md Step 3)", () => {
+  it("a PIN Operations marked not valid no longer satisfies Where you work", () => {
+    const withRequest = (status: string) =>
+      application({
+        service_area_ids: [],
+        // The server leaves a dismissed PIN out of this list but keeps its row in area_requests.
+        requested_postal_codes: status === "NOT_VALID" ? [] : ["509216"],
+        area_requests: [{ status }],
+      } as unknown as Partial<Application>);
+    const met = (app: Application) =>
+      requirements(app).find((r) => r.code === "SERVICE_AREAS")?.isMet;
+    expect(met(withRequest("WAITING"))).toBe(true);
+    expect(met(withRequest("NOT_VALID"))).toBe(false);
+  });
+});

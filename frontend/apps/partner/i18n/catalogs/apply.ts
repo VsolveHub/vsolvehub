@@ -41,6 +41,10 @@ const en: Catalog = {
   "apply.editor.refusal.incomplete.title": "Something on this step is missing",
   "apply.editor.refusal.incomplete.message":
     "One of the job types you picked needs a trade that is not on your application. Check your trades and job types, then save again.",
+  "apply.editor.refusal.areasUnavailable.title": "Some areas are no longer available",
+  "apply.editor.refusal.areasUnavailable.message":
+    "One or more selected areas stopped taking new partners. We've removed them so you can continue.",
+  "apply.editor.refusal.areasUnavailable.named": "{areas} stopped taking new partners. We removed it from your list. Check the rest and save again.",
   "apply.editor.refusal.notAllowed.title": "This application cannot be changed right now",
   "apply.editor.refusal.notAllowed.message": "It is with our team. You can make changes again if we ask you to.",
   "apply.editor.readOnlyNotice":
@@ -148,9 +152,25 @@ const en: Catalog = {
   "apply.areas.deselectAll": "Deselect all",
   "apply.areas.legend": "Service Locations",
   "apply.areas.selectAtLeastOne": "* Please select at least one service location.",
+  "apply.areas.selectOrRequest": "* Select at least one service location or enter your PIN code.",
   "apply.areas.pageTitle": "Where you work",
   "apply.areas.pageDescription": "Pick the areas you can travel to. You will only get jobs inside them.",
-  "apply.areas.notListed": "Can't find your area? We are adding more. Ask us from Help and we will tell you when it opens.",
+  "apply.areas.notListedButton": "+ My area is not listed",
+  "apply.areas.notListedHint": "Enter your 6-digit PIN code and we'll notify you when we open in your area.",
+  "apply.areas.zeroAreasNotice":
+    "We're not active in your city yet. Tell us your PIN code and we'll notify you when we open.",
+  "apply.areas.pinPlaceholder": "e.g. 509216",
+  "apply.areas.addPin": "Add",
+  "apply.areas.pinInvalid": "Enter a valid 6-digit Indian PIN code.",
+  "apply.areas.pinAlreadyAdded": "This PIN code is already added.",
+  "apply.areas.pinMaxReached": "You can request up to 5 PIN codes.",
+  "apply.areas.pinMatchedNotice": "{pin} is in {area}. We ticked it for you.",
+  "apply.areas.pinNotedNotice": "Noted: We don't work in {pin} yet.",
+  "apply.areas.pinWaiting": "Waiting",
+  "apply.areas.pinAreaFull": "Area full",
+  "apply.areas.pinReady": "Ready · now in {area}",
+  "apply.areas.pinTickIt": "Tick it",
+  "apply.areas.removePin": "Remove PIN {pin}",
 
   // consent-step.tsx / app/apply/consent/page.tsx
   "apply.consent.empty": "No agreements are required at this time.",
@@ -198,6 +218,8 @@ const en: Catalog = {
   "apply.schedule.saveFailed.contract": "Your hours were not saved. Check the periods below and try again.",
   "apply.schedule.saveFailed.generic": "Your hours were not saved. Check your connection and try again.",
   "apply.schedule.chooseAreaFirst": "Choose where you work before publishing hours — your schedule is per area.",
+  "apply.schedule.sameHoursNote": "Saving uses these hours for all your areas.",
+  "apply.schedule.noHoursNeededYet": "No hours needed yet. You'll set them when your area opens.",
   "apply.schedule.weeklySchedule": "Weekly Schedule",
   "apply.schedule.noHoursSet": "No hours set",
   "apply.schedule.hoursPerWeek": "{hours} hrs / week",
@@ -257,6 +279,7 @@ const en: Catalog = {
   "apply.statusBanner.changesRequired.fallbackDetail":
     "A reviewer asked for changes but did not leave a note. Contact support and we will tell you what is needed.",
   "apply.statusBanner.submittedOn": "Submitted on {date}",
+  "apply.statusBanner.requestedPinsTitle": "Requested PIN codes",
 
   // availability-editor.tsx (additions)
   "apply.schedule.shiftFallback": "Shift",
@@ -296,6 +319,8 @@ const en: Catalog = {
   "apply.status.submitted.headline": "We have your application",
   "apply.status.underReview.label": "In review",
   "apply.status.underReview.headline": "A reviewer is checking it",
+  "apply.status.waitingForArea.headline": "In review · Waiting for your area to open",
+  "apply.status.waitingForArea.next": "We'll notify you as soon as we start operations in your area.",
   "apply.status.waiting.next": "Nothing to do now. We'll notify you when it's decided.",
   "apply.status.changesRequired.label": "Changes needed",
   "apply.status.changesRequired.headline": "Fix what the reviewer asked for",
@@ -363,6 +388,8 @@ const en: Catalog = {
   "apply.review.description": "Check your details, accept the agreements and send.",
   "apply.review.summary.work": "{trades} trades · {jobs} job types",
   "apply.review.summary.hours": "Hours set for {set} of {total} areas",
+  "apply.review.summary.hoursNotNeededYet": "No hours needed yet (waiting for area)",
+  "apply.review.summary.requestedPins": "Requested: {pins} (No jobs there until we open it.)",
   "apply.review.declaration": "The details and documents I've given are true.",
   "apply.review.submit": "Send application",
   "apply.review.resubmit": "Send again",
@@ -406,6 +433,10 @@ const te: Catalog = {
   "apply.editor.refusal.incomplete.title": "ఈ స్టెప్‌లో ఏదో లేదు",
   "apply.editor.refusal.incomplete.message":
     "మీరు ఎంచుకున్న జాబ్ టైప్‌లలో ఒకదానికి మీ అప్లికేషన్‌లో లేని ట్రేడ్ అవసరం. మీ ట్రేడ్‌లు మరియు జాబ్ టైప్‌లను చూసి, మళ్ళీ సేవ్ చేయండి.",
+  "apply.editor.refusal.areasUnavailable.title": "కొన్ని ప్రాంతాలు అందుబాటులో లేవు",
+  "apply.editor.refusal.areasUnavailable.message":
+    "ఎంచుకున్న ప్రాంతాలలో ఒకటి లేదా అంతకంటే ఎక్కువ కొత్త భాగస్వాములను తీసుకోవడం ఆపివేసింది. మీరు కొనసాగడానికి మేము వాటిని తీసివేశాము.",
+  "apply.editor.refusal.areasUnavailable.named": "{areas} కొత్త భాగస్వాములను తీసుకోవడం ఆపింది. మేము దాన్ని మీ జాబితా నుండి తొలగించాము. మిగిలినవి చూసి మళ్లీ సేవ్ చేయండి.",
   "apply.editor.refusal.notAllowed.title": "ఇప్పుడు ఈ అప్లికేషన్‌ని మార్చలేరు",
   "apply.editor.refusal.notAllowed.message": "ఇది మా టీమ్ దగ్గర ఉంది. మేము అడిగితే మీరు మళ్ళీ మార్పులు చేయవచ్చు.",
   "apply.editor.readOnlyNotice":
@@ -502,9 +533,25 @@ const te: Catalog = {
   "apply.areas.deselectAll": "అన్నీ తీసివేయండి",
   "apply.areas.legend": "సర్వీస్ లొకేషన్‌లు",
   "apply.areas.selectAtLeastOne": "* దయచేసి కనీసం ఒక సర్వీస్ లొకేషన్‌ని ఎంచుకోండి.",
+  "apply.areas.selectOrRequest": "* కనీసం ఒక సర్వీస్ లొకేషన్‌ని ఎంచుకోండి లేదా మీ పిన్ కోడ్ నమోదు చేయండి.",
   "apply.areas.pageTitle": "మీరు పని చేసే చోటు",
   "apply.areas.pageDescription": "మీరు వెళ్ళగలిగే ఏరియాలను ఎంచుకోండి. వాటిలోనే మీకు పనులు వస్తాయి.",
-  "apply.areas.notListed": "మీ ఏరియా కనిపించడం లేదా? మేము మరిన్ని జోడిస్తున్నాం. హెల్ప్ నుండి అడగండి, అది మొదలైనప్పుడు మీకు చెబుతాం.",
+  "apply.areas.notListedButton": "+ నా ఏరియా జాబితాలో లేదు",
+  "apply.areas.notListedHint": "మీ 6 అంకెల పిన్ కోడ్ నమోదు చేయండి, మీ ఏరియా ప్రారంభించినప్పుడు మేము మీకు తెలియజేస్తాము.",
+  "apply.areas.zeroAreasNotice":
+    "మేము ఇంకా మీ నగరంలో ప్రారంభించలేదు. మీ పిన్ కోడ్ తెలపండి, మేము ప్రారంభించినప్పుడు మీకు తెలియజేస్తాము.",
+  "apply.areas.pinPlaceholder": "ఉదా. 509216",
+  "apply.areas.addPin": "జోడించండి",
+  "apply.areas.pinInvalid": "సరైన 6 అంకెల భారతీయ పిన్ కోడ్‌ను నమోదు చేయండి.",
+  "apply.areas.pinAlreadyAdded": "ఈ పిన్ కోడ్ ఇప్పటికే జోడించబడింది.",
+  "apply.areas.pinMaxReached": "మీరు గరిష్టంగా 5 పిన్ కోడ్‌లను అభ్యర్థించవచ్చు.",
+  "apply.areas.pinMatchedNotice": "{pin} అనేది {area}లో ఉంది. మేము మీ కోసం ఎంచుకున్నాము.",
+  "apply.areas.pinNotedNotice": "గమనించబడింది: మేము ఇంకా {pin}లో పనిచేయడం లేదు.",
+  "apply.areas.pinWaiting": "వేచి ఉంది",
+  "apply.areas.pinAreaFull": "ఏరియా నిండింది",
+  "apply.areas.pinReady": "సిద్ధంగా ఉంది · ఇప్పుడు {area}లో",
+  "apply.areas.pinTickIt": "ఎంచుకోండి",
+  "apply.areas.removePin": "పిన్ {pin} తొలగించండి",
 
   "apply.consent.empty": "ఇప్పుడు ఏ అంగీకారాలు అవసరం లేవు.",
   "apply.consent.iAgreeTo": "నేను {title}కి అంగీకరిస్తున్నాను",
@@ -546,6 +593,8 @@ const te: Catalog = {
   "apply.schedule.saveFailed.contract": "మీ వేళలు సేవ్ కాలేదు. కింద ఉన్న పీరియడ్‌లను చూసి మళ్ళీ ప్రయత్నించండి.",
   "apply.schedule.saveFailed.generic": "మీ వేళలు సేవ్ కాలేదు. మీ కనెక్షన్‌ని చూసి మళ్ళీ ప్రయత్నించండి.",
   "apply.schedule.chooseAreaFirst": "వేళలను పబ్లిష్ చేయడానికి ముందు మీరు పనిచేసే చోటును ఎంచుకోండి — మీ షెడ్యూల్ ఏరియా వారీగా ఉంటుంది.",
+  "apply.schedule.sameHoursNote": "సేవ్ చేస్తే ఈ వేళలు మీ అన్ని ప్రాంతాలకు వర్తిస్తాయి.",
+  "apply.schedule.noHoursNeededYet": "ఇంకా వేళలు అవసరం లేదు. మీ ప్రాంతం ప్రారంభమైనప్పుడు మీరు వాటిని సెట్ చేయవచ్చు.",
   "apply.schedule.weeklySchedule": "వారపు షెడ్యూల్",
   "apply.schedule.noHoursSet": "వేళలు సెట్ చేయలేదు",
   "apply.schedule.hoursPerWeek": "వారానికి {hours} గంటలు",
@@ -600,6 +649,7 @@ const te: Catalog = {
 
   "apply.statusBanner.changesRequired.fallbackDetail": "ఒక రివ్యూయర్ మార్పులు అడిగారు కానీ నోట్ వదలలేదు. సపోర్ట్‌ని సంప్రదించండి, మేము ఏమి అవసరమో చెప్తాం.",
   "apply.statusBanner.submittedOn": "{date}న సమర్పించారు",
+  "apply.statusBanner.requestedPinsTitle": "కోరిన పిన్ కోడ్‌లు",
 
   // availability-editor.tsx (additions)
   "apply.schedule.shiftFallback": "షిఫ్ట్",
@@ -639,6 +689,8 @@ const te: Catalog = {
   "apply.status.submitted.headline": "మీ అప్లికేషన్ మాకు అందింది",
   "apply.status.underReview.label": "రివ్యూలో ఉంది",
   "apply.status.underReview.headline": "ఒక రివ్యూయర్ దీన్ని చూస్తున్నారు",
+  "apply.status.waitingForArea.headline": "రివ్యూలో ఉంది · మీ ఏరియా ప్రారంభం కోసం వేచి చూస్తున్నాం",
+  "apply.status.waitingForArea.next": "మీ ప్రాంతంలో మేము కార్యకలాపాలు ప్రారంభించిన వెంటనే మీకు తెలియజేస్తాము.",
   "apply.status.waiting.next": "ఇప్పుడు చేయాల్సిందేమీ లేదు. నిర్ణయం అయ్యాక మీకు తెలియజేస్తాం.",
   "apply.status.changesRequired.label": "మార్పులు అవసరం",
   "apply.status.changesRequired.headline": "రివ్యూయర్ అడిగినది సరిచేయండి",
@@ -706,6 +758,8 @@ const te: Catalog = {
   "apply.review.description": "మీ వివరాలు చూసి, అంగీకారాలు ఆమోదించి పంపండి.",
   "apply.review.summary.work": "{trades} ట్రేడ్‌లు · {jobs} పని రకాలు",
   "apply.review.summary.hours": "{total} ప్రాంతాల్లో {set} కి వేళలు సెట్ చేశారు",
+  "apply.review.summary.hoursNotNeededYet": "ఇంకా వేళలు అవసరం లేదు (ఏరియా ప్రారంభం కోసం వేచి చూస్తున్నాం)",
+  "apply.review.summary.requestedPins": "కోరినవి: {pins} (మేము ప్రారంభించే వరకు అక్కడ పనులు ఉండవు.)",
   "apply.review.declaration": "నేను ఇచ్చిన వివరాలు, పత్రాలు నిజమైనవి.",
   "apply.review.submit": "అప్లికేషన్ పంపండి",
   "apply.review.resubmit": "మళ్ళీ పంపండి",
@@ -749,6 +803,10 @@ const hi: Catalog = {
   "apply.editor.refusal.incomplete.title": "इस स्टेप में कुछ कमी है",
   "apply.editor.refusal.incomplete.message":
     "आपने चुने गए जॉब टाइप में से एक को ऐसे ट्रेड की ज़रूरत है जो आपके आवेदन में नहीं है। अपने ट्रेड और जॉब टाइप देखें, फिर से सेव करें।",
+  "apply.editor.refusal.areasUnavailable.title": "कुछ इलाके अब उपलब्ध नहीं हैं",
+  "apply.editor.refusal.areasUnavailable.message":
+    "चुने गए इलाकों में से एक या अधिक ने नए पार्टनर्स लेना बंद कर दिया है। जारी रखने के लिए हमने उन्हें हटा दिया है।",
+  "apply.editor.refusal.areasUnavailable.named": "{areas} ने नए पार्टनर लेना बंद कर दिया है। हमने इसे आपकी सूची से हटा दिया है। बाकी देखकर फिर से सेव करें।",
   "apply.editor.refusal.notAllowed.title": "अभी इस आवेदन को बदला नहीं जा सकता",
   "apply.editor.refusal.notAllowed.message": "यह हमारी टीम के पास है। हमारे कहने पर आप फिर से बदलाव कर सकते हैं।",
   "apply.editor.readOnlyNotice":
@@ -843,9 +901,25 @@ const hi: Catalog = {
   "apply.areas.deselectAll": "सभी हटाएं",
   "apply.areas.legend": "सेवा स्थान",
   "apply.areas.selectAtLeastOne": "* कृपया कम से कम एक सेवा स्थान चुनें।",
+  "apply.areas.selectOrRequest": "* कम से कम एक सेवा स्थान चुनें या अपना पिन कोड दर्ज करें।",
   "apply.areas.pageTitle": "आप कहाँ काम करते हैं",
   "apply.areas.pageDescription": "वे क्षेत्र चुनें जहाँ आप जा सकते हैं। आपको काम सिर्फ़ उन्हीं में मिलेगा।",
-  "apply.areas.notListed": "आपका क्षेत्र नहीं दिख रहा? हम और जोड़ रहे हैं। हेल्प से पूछें, शुरू होने पर हम बताएँगे।",
+  "apply.areas.notListedButton": "+ मेरा क्षेत्र सूची में नहीं है",
+  "apply.areas.notListedHint": "अपना 6 अंकों का पिन कोड दर्ज करें और आपके क्षेत्र में शुरू होने पर हम आपको सूचित करेंगे।",
+  "apply.areas.zeroAreasNotice":
+    "हम अभी आपके शहर में सक्रिय नहीं हैं। अपना पिन कोड बताएं और शुरू होने पर हम आपको सूचित करेंगे।",
+  "apply.areas.pinPlaceholder": "उदा. 509216",
+  "apply.areas.addPin": "जोड़ें",
+  "apply.areas.pinInvalid": "एक मान्य 6-अंकों का भारतीय पिन कोड दर्ज करें।",
+  "apply.areas.pinAlreadyAdded": "यह पिन कोड पहले से जोड़ा गया है।",
+  "apply.areas.pinMaxReached": "आप अधिकतम 5 पिन कोड का अनुरोध कर सकते हैं।",
+  "apply.areas.pinMatchedNotice": "{pin} {area} में है। हमने इसे आपके लिए चुन लिया है।",
+  "apply.areas.pinNotedNotice": "ध्यान दिया गया: हम अभी {pin} में काम नहीं करते।",
+  "apply.areas.pinWaiting": "इंतज़ार में",
+  "apply.areas.pinAreaFull": "इलाका भरा है",
+  "apply.areas.pinReady": "तैयार · अब {area} में",
+  "apply.areas.pinTickIt": "चुनें",
+  "apply.areas.removePin": "पिन {pin} हटाएं",
 
   "apply.consent.empty": "अभी कोई सहमति ज़रूरी नहीं है।",
   "apply.consent.iAgreeTo": "मैं {title} से सहमत हूँ",
@@ -887,6 +961,8 @@ const hi: Catalog = {
   "apply.schedule.saveFailed.contract": "आपके घंटे सेव नहीं हुए। नीचे दी गई अवधियाँ देखें और फिर से कोशिश करें।",
   "apply.schedule.saveFailed.generic": "आपके घंटे सेव नहीं हुए। अपना कनेक्शन देखें और फिर से कोशिश करें।",
   "apply.schedule.chooseAreaFirst": "घंटे पब्लिश करने से पहले वह जगह चुनें जहाँ आप काम करते हैं — आपका शेड्यूल हर इलाके के लिए अलग है।",
+  "apply.schedule.sameHoursNote": "सेव करने पर यही समय आपके सभी इलाकों के लिए लागू होगा।",
+  "apply.schedule.noHoursNeededYet": "अभी समय तय करने की ज़रूरत नहीं है। आपका इलाका शुरू होने पर आप समय तय कर सकते हैं।",
   "apply.schedule.weeklySchedule": "साप्ताहिक शेड्यूल",
   "apply.schedule.noHoursSet": "कोई घंटे सेट नहीं",
   "apply.schedule.hoursPerWeek": "{hours} घंटे / हफ़्ता",
@@ -941,6 +1017,7 @@ const hi: Catalog = {
 
   "apply.statusBanner.changesRequired.fallbackDetail": "एक रिव्यूअर ने बदलाव माँगे पर कोई नोट नहीं छोड़ा। सपोर्ट से संपर्क करें, हम बताएंगे कि क्या ज़रूरी है।",
   "apply.statusBanner.submittedOn": "{date} को सबमिट किया",
+  "apply.statusBanner.requestedPinsTitle": "अनुरोध किए गए पिन कोड",
 
   // availability-editor.tsx (additions)
   "apply.schedule.shiftFallback": "शिफ्ट",
@@ -980,6 +1057,8 @@ const hi: Catalog = {
   "apply.status.submitted.headline": "आपका आवेदन हमें मिल गया है",
   "apply.status.underReview.label": "रिव्यू में",
   "apply.status.underReview.headline": "एक रिव्यूअर इसे देख रहे हैं",
+  "apply.status.waitingForArea.headline": "रिव्यू में · आपका इलाका शुरू होने का इंतज़ार",
+  "apply.status.waitingForArea.next": "जैसे ही हम आपके इलाके में सेवाएं शुरू करेंगे, हम आपको सूचित करेंगे।",
   "apply.status.waiting.next": "अभी कुछ करने की ज़रूरत नहीं। फ़ैसला होने पर हम आपको बताएंगे।",
   "apply.status.changesRequired.label": "बदलाव ज़रूरी",
   "apply.status.changesRequired.headline": "रिव्यूअर ने जो कहा, उसे ठीक करें",
@@ -1047,6 +1126,8 @@ const hi: Catalog = {
   "apply.review.description": "अपनी जानकारी जांचें, शर्तें मानें और भेजें।",
   "apply.review.summary.work": "{trades} ट्रेड · {jobs} काम के प्रकार",
   "apply.review.summary.hours": "{total} में से {set} इलाकों के लिए समय तय है",
+  "apply.review.summary.hoursNotNeededYet": "अभी समय तय करने की ज़रूरत नहीं (इलाका शुरू होने का इंतज़ार)",
+  "apply.review.summary.requestedPins": "अनुरोध किए गए: {pins} (हमारे शुरू करने तक वहाँ काम नहीं मिलेगा।)",
   "apply.review.declaration": "मेरी दी गई जानकारी और दस्तावेज़ सही हैं।",
   "apply.review.submit": "आवेदन भेजें",
   "apply.review.resubmit": "दोबारा भेजें",

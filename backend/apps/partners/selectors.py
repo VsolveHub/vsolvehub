@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -48,10 +49,92 @@ class InstantMatchingPresence:
 
 
 def applicant_service_areas() -> QuerySet[ServiceArea]:
-    return ServiceArea.objects.filter(
-        is_active=True,
-        is_accepting_partners=True,
-    ).only("id", "slug", "name", "timezone", "is_accepting_partners")
+    return (
+        ServiceArea.objects.filter(
+            is_active=True,
+            is_accepting_partners=True,
+        )
+        .prefetch_related("postal_code_links__postal_code")
+        .only("id", "slug", "name", "zone", "timezone", "is_accepting_partners")
+    )
+
+
+def partner_area_request_rows(application: PartnerApplication) -> list[dict[str, Any]]:
+    """Evaluates live status for an application's requested postal codes per FLOW.md §4."""
+    requests = list(
+        application.area_requests.all().select_related("dismissed_by").order_by("created_at", "id")
+    )
+    if not requests:
+        return []
+
+    pins = {req.postal_code for req in requests}
+    from apps.locations.models import (  # noqa: PLC0415
+        PostalCode,
+        ServiceArea,
+        ServiceAreaPostalCode,
+    )
+    from apps.partners.models import PartnerServiceArea  # noqa: PLC0415
+
+    postal_codes_map = {pc.code: pc.city for pc in PostalCode.objects.filter(code__in=pins)}
+
+    links = list(
+        ServiceAreaPostalCode.objects.filter(
+            postal_code__code__in=pins,
+            service_area__is_active=True,
+        ).select_related("service_area", "postal_code")
+    )
+
+    partner_area_ids = set(
+        PartnerServiceArea.objects.filter(
+            partner=application.partner,
+            is_active=True,
+        ).values_list("service_area_id", flat=True)
+    )
+
+    links_by_pin: dict[str, list[ServiceArea]] = {}
+    for link in links:
+        pin = link.postal_code.code
+        links_by_pin.setdefault(pin, []).append(link.service_area)
+
+    rows: list[dict[str, Any]] = []
+    for req in requests:
+        pin = req.postal_code
+        place = postal_codes_map.get(pin)
+        covering_areas = links_by_pin.get(pin, [])
+
+        covering_area = None
+        if req.dismissed_at is not None:
+            status = "NOT_VALID"
+        else:
+            held = [a for a in covering_areas if a.id in partner_area_ids]
+            if held:
+                status = "DONE"
+                covering_area = held[0]
+            else:
+                ready = [a for a in covering_areas if a.is_accepting_partners]
+                if ready:
+                    status = "READY"
+                    covering_area = ready[0]
+                elif covering_areas:
+                    status = "AREA_FULL"
+                    covering_area = covering_areas[0]
+                else:
+                    status = "WAITING"
+
+        rows.append(
+            {
+                "id": req.id,
+                "postal_code": pin,
+                "place": place,
+                "status": status,
+                "covering_area_id": covering_area.id if covering_area else None,
+                "covering_area_name": covering_area.name if covering_area else None,
+                "created_at": req.created_at,
+                "notified_at": req.notified_at,
+                "dismissed_at": req.dismissed_at,
+            }
+        )
+    return rows
 
 
 #: Catalog categories that are not trades on the "Your work" step. Stays, rentals, hiring and crew
@@ -187,12 +270,27 @@ def operations_partner_application_queue(
     status: str | None,
     assigned_to_me: bool,
     unassigned: bool,
+    area_pending: bool = False,
 ) -> QuerySet[PartnerApplication]:
     queryset = PartnerApplication.objects.select_related(
         "partner",
         "review_assigned_to",
     )
-    if status is None:
+    if area_pending:
+        queryset = (
+            queryset.filter(
+                status__in=(
+                    PartnerApplication.Status.SUBMITTED,
+                    PartnerApplication.Status.UNDER_REVIEW,
+                ),
+                area_requests__dismissed_at__isnull=True,
+            )
+            .exclude(
+                partner__service_area_links__is_active=True,
+            )
+            .distinct()
+        )
+    elif status is None:
         queryset = queryset.filter(
             status__in=(
                 PartnerApplication.Status.SUBMITTED,

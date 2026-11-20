@@ -26,6 +26,7 @@ import { isEditable } from "../model/readiness";
 import { nextStep } from "../model/steps";
 import { ApplyDock } from "./apply-shell";
 import { isVersionConflict, usePartnerApplication, useUpdateApplication } from "../queries";
+import { useApplicationReference } from "../reference-queries";
 
 /**
  * The frame every editing step sits in.
@@ -84,8 +85,21 @@ export function useApplicationEditor(): ApplicationEditorRenderProps {
 function describeRefusal(
   error: unknown,
   t: Translator["t"],
+  removedAreaNames: readonly string[] = [],
 ): { title: string; message: string } | null {
   if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "partner_service_areas_unavailable") {
+    return {
+      title: t("apply.editor.refusal.areasUnavailable.title"),
+      // Names the areas we removed ("Gachibowli stopped taking new partners. We removed it.").
+      message:
+        removedAreaNames.length > 0
+          ? t("apply.editor.refusal.areasUnavailable.named", {
+              areas: removedAreaNames.join(", "),
+            })
+          : t("apply.editor.refusal.areasUnavailable.message"),
+    };
+  }
   if (error.code === "partner_application_incomplete") {
     return {
       title: t("apply.editor.refusal.incomplete.title"),
@@ -249,6 +263,9 @@ function Editor({
     });
   }, []);
   const save = useUpdateApplication();
+  const reference = useApplicationReference();
+  const referenceRefetch = reference.refetch;
+  const [removedAreaNames, setRemovedAreaNames] = useState<readonly string[]>([]);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -259,11 +276,40 @@ function Editor({
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
 
+  // If the server rejected because one or more chosen areas stopped taking new partners,
+  // remove them from the draft immediately so the applicant sees their updated list and
+  // can re-save.
+  useEffect(() => {
+    if (
+      save.error instanceof ApiRequestError &&
+      save.error.code === "partner_service_areas_unavailable"
+    ) {
+      const details = save.error.details as
+        | { unavailable_service_area_ids?: string[] }
+        | undefined;
+      const unavailable = details?.unavailable_service_area_ids;
+      if (Array.isArray(unavailable) && unavailable.length > 0) {
+        // Names come from the list the partner was looking at, before it is refreshed.
+        const names = reference.serviceAreas
+          .filter((area) => unavailable.includes(area.id))
+          .map((area) => area.name);
+        setRemovedAreaNames(names);
+        setDraft((current) => ({
+          ...current,
+          serviceAreaIds: current.serviceAreaIds.filter((id) => !unavailable.includes(id)),
+        }));
+        // The closed area must stop being offered as tickable.
+        referenceRefetch();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.error]);
+
   // A domain refusal (incomplete, not allowed now) arrives with `details` of
   // `{message, code}`, which `fieldErrors` would print as two "fields":
   // "message: Select the required skills for: cctv-technician." and
   // "code: partner_application_incomplete". It is one sentence, not field errors.
-  const refusal = describeRefusal(save.error, t);
+  const refusal = describeRefusal(save.error, t, removedAreaNames);
   const fieldErrors =
     save.error instanceof ApiRequestError && refusal === null ? save.error.fieldErrors : {};
   const fieldMessages = Object.entries(fieldErrors).flatMap(([field, messages]) =>

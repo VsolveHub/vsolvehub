@@ -26,8 +26,8 @@ from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import (
     applicant_service_areas,
-    partner_application_for_user,
     applicant_skills,
+    partner_application_for_user,
     partner_profile_for_user,
     partner_schedule,
     partner_work_catalog,
@@ -56,10 +56,10 @@ from apps.partners.serializers import (
     PartnerWorkCategorySerializer,
 )
 from apps.partners.services import (
-    _ensure_partner_role,
-    _record_transition,
     ScheduleExceptionInput,
     ScheduleRuleInput,
+    _ensure_partner_role,
+    _record_transition,
     create_partner_document_applicant_access,
     finalize_partner_document_upload,
     go_offline,
@@ -239,7 +239,11 @@ class PartnerApplicationView(APIView):
                 application = PartnerApplication.objects.filter(partner=partner).first()
                 if application is None:
                     application = PartnerApplication.objects.create(partner=partner)
-        return Response(PartnerApplicationSerializer(application).data)
+        data = dict(PartnerApplicationSerializer(application).data)
+        # Review detail about the partner's own areas is for Operations only.
+        data["area_details"] = []
+        data["services_not_offered"] = []
+        return Response(data)
 
     @extend_schema(
         tags=["Partner application"],
@@ -270,6 +274,7 @@ class PartnerApplicationView(APIView):
                 skill_codes=data.get("skill_codes"),
                 service_variant_ids=data.get("service_variant_ids"),
                 service_area_ids=data.get("service_area_ids"),
+                requested_postal_codes=data.get("requested_postal_codes"),
                 consents=data.get("consents"),
                 request_ip=_request_ip(request),
                 device_identifier=data.get("device_identifier", ""),

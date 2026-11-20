@@ -497,6 +497,7 @@ def _erase_partner(*, user: User, actor: User, now: datetime) -> tuple[list[str]
     """Scrub the Partner side. Returns the storage keys to delete and whether it offboarded."""
 
     from apps.partners.models import (  # noqa: PLC0415
+        PartnerAreaRequest,
         PartnerBusinessProfile,
         PartnerDocument,
         PartnerDocumentUpload,
@@ -521,6 +522,7 @@ def _erase_partner(*, user: User, actor: User, now: datetime) -> tuple[list[str]
     )
     PartnerDocument.objects.filter(application__partner=partner).update(object_key="")
     PartnerDocumentUpload.objects.filter(application__partner=partner).delete()
+    PartnerAreaRequest.objects.filter(application__partner=partner).delete()
     PartnerBusinessProfile.objects.filter(partner=partner).update(legal_name="", upi_vpa="")
     PartnerLocation.objects.filter(partner=partner).delete()
     # The retired account keeps its last four digits and IFSC: past payouts reconcile against

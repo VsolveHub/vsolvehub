@@ -424,7 +424,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.102.0",
+    "VERSION": "1.106.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -1046,6 +1046,12 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-booking-group-dispatch": {
         "task": "apps.assignments.tasks.reconcile_booking_group_dispatch",
         "schedule": 10.0,
+    },
+    # Weekly approved-partner counts per area, for the 12-week coverage trend. Re-running within a
+    # week only refreshes that week's row.
+    "snapshot-partner-coverage": {
+        "task": "apps.partners.tasks.snapshot_partner_coverage",
+        "schedule": 6.0 * 60 * 60,
     },
     "cleanup-partner-document-uploads": {
         "task": "apps.partners.tasks.cleanup_partner_document_uploads",

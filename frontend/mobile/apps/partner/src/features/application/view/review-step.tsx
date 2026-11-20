@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/review-step.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { AlertCircle, Bell, Check, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -50,6 +50,7 @@ function currentDocument(
 const consentKey = (purpose: string, version: string) => `${purpose}@${version}`;
 
 export function ReviewStep() {
+  const t = useT();
   const router = useRouter();
   const query = usePartnerApplication();
   const submit = useSubmitApplication();
@@ -167,7 +168,7 @@ export function ReviewStep() {
 
   const activeError = submit.error || updateApp.error;
   const conflict = isVersionConflict(activeError);
-  const refusal = describeRefusal(activeError);
+  const refusal = describeRefusal(activeError, t);
 
   useEffect(() => {
     if (!editable) {
@@ -334,9 +335,18 @@ export function ReviewStep() {
               <View style={styles.summaryRow}>
                 <View style={styles.summaryLeftCol}>
                   <Text style={styles.summaryLabel}>Where you work</Text>
-                  <Text style={styles.summaryValue}>
-                    {areaNames.length > 0 ? areaNames.join(", ") : "Not set"}
-                  </Text>
+                  {areaNames.length > 0 ? (
+                    <Text style={styles.summaryValue}>{areaNames.join(", ")}</Text>
+                  ) : null}
+                  {(application.requested_postal_codes?.length ?? 0) > 0 ? (
+                    <Text style={[styles.summaryValue, { fontSize: 12, opacity: 0.7 }]}>
+                      {t("apply.review.summary.requestedPins", {
+                        pins: (application.requested_postal_codes ?? []).join(", "),
+                      })}
+                    </Text>
+                  ) : areaNames.length === 0 ? (
+                    <Text style={styles.summaryValue}>{t("apply.review.notSet")}</Text>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -354,7 +364,13 @@ export function ReviewStep() {
                 <View style={styles.summaryLeftCol}>
                   <Text style={styles.summaryLabel}>Your hours</Text>
                   <Text style={styles.summaryValue}>
-                    {`Hours set for ${hoursSet} of ${application.service_area_ids.length} areas`}
+                    {application.service_area_ids.length === 0 &&
+                    (application.requested_postal_codes?.length ?? 0) > 0
+                      ? t("apply.review.summary.hoursNotNeededYet")
+                      : t("apply.review.summary.hours", {
+                          set: hoursSet,
+                          total: application.service_area_ids.length,
+                        })}
                   </Text>
                 </View>
                 <Pressable

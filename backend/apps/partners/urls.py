@@ -2,10 +2,16 @@ from django.urls import path
 
 from apps.partners.views import (
     ApplicantServiceAreaListView,
+    OperationsAreaRequestDismissView,
+    OperationsAreaRequestListView,
+    OperationsAreaRequestNotifyView,
+    OperationsCoverageLiteView,
+    OperationsPartnerAddAreaView,
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
     OperationsPartnerApplicationReleaseView,
+    OperationsPartnerApplicationRemoveAreaView,
     OperationsPartnerApplicationTransitionView,
     OperationsPartnerDetailView,
     OperationsPartnerDirectoryView,
@@ -13,6 +19,15 @@ from apps.partners.views import (
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
     OperationsPartnerTaxProfileVerificationView,
+    OperationsRecruitmentPushView,
+    OperationsServiceAreaAddPinView,
+    OperationsServiceAreaBulkPinApplyView,
+    OperationsServiceAreaBulkPinPreviewView,
+    OperationsServiceAreaDetailView,
+    OperationsServiceAreaListView,
+    OperationsServiceAreaRemovePinView,
+    OperationsServiceAreaServiceToggleView,
+    OperationsServiceAreaTargetsView,
     PartnerApplicationSubmitView,
     PartnerApplicationView,
     PartnerBusinessProfileView,
@@ -171,6 +186,11 @@ urlpatterns = [
         name="operations-partner-application-transition",
     ),
     path(
+        "operations/partner-applications/<uuid:application_id>/remove-area/",
+        OperationsPartnerApplicationRemoveAreaView.as_view(),
+        name="operations-partner-application-remove-area",
+    ),
+    path(
         "operations/partner-documents/<uuid:document_id>/access/",
         OperationsPartnerDocumentAccessView.as_view(),
         name="operations-partner-document-access",
@@ -199,6 +219,76 @@ urlpatterns = [
         "operations/partners/<uuid:partner_id>/tax-profile/verify/",
         OperationsPartnerTaxProfileVerificationView.as_view(),
         name="operations-partner-tax-profile-verify",
+    ),
+    path(
+        "operations/partners/<uuid:partner_id>/add-area/",
+        OperationsPartnerAddAreaView.as_view(),
+        name="operations-partner-add-area",
+    ),
+    path(
+        "operations/service-areas/",
+        OperationsServiceAreaListView.as_view(),
+        name="operations-service-area-list",
+    ),
+    path(
+        "operations/service-areas/<uuid:area_id>/",
+        OperationsServiceAreaDetailView.as_view(),
+        name="operations-service-area-detail",
+    ),
+    path(
+        "operations/service-areas/<uuid:area_id>/pins/",
+        OperationsServiceAreaAddPinView.as_view(),
+        name="operations-service-area-add-pin",
+    ),
+    path(
+        "operations/service-areas/<uuid:area_id>/pins/<str:postal_code>/",
+        OperationsServiceAreaRemovePinView.as_view(),
+        name="operations-service-area-remove-pin",
+    ),
+    path(
+        "operations/service-areas/<uuid:area_id>/services/",
+        OperationsServiceAreaServiceToggleView.as_view(),
+        name="operations-service-area-toggle-service",
+    ),
+    path(
+        "operations/service-areas/bulk-pins/preview/",
+        OperationsServiceAreaBulkPinPreviewView.as_view(),
+        name="operations-service-area-bulk-pins-preview",
+    ),
+    path(
+        "operations/service-areas/bulk-pins/apply/",
+        OperationsServiceAreaBulkPinApplyView.as_view(),
+        name="operations-service-area-bulk-pins-apply",
+    ),
+    path(
+        "operations/area-requests/",
+        OperationsAreaRequestListView.as_view(),
+        name="operations-area-request-list",
+    ),
+    path(
+        "operations/area-requests/<str:postal_code>/notify/",
+        OperationsAreaRequestNotifyView.as_view(),
+        name="operations-area-request-notify",
+    ),
+    path(
+        "operations/area-requests/<str:postal_code>/dismiss/",
+        OperationsAreaRequestDismissView.as_view(),
+        name="operations-area-request-dismiss",
+    ),
+    path(
+        "operations/service-areas/<uuid:area_id>/targets/",
+        OperationsServiceAreaTargetsView.as_view(),
+        name="operations-service-area-targets",
+    ),
+    path(
+        "operations/recruitment-push/",
+        OperationsRecruitmentPushView.as_view(),
+        name="operations-recruitment-push",
+    ),
+    path(
+        "operations/coverage-lite/",
+        OperationsCoverageLiteView.as_view(),
+        name="operations-coverage-lite",
     ),
 ]
 

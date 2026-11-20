@@ -1,6 +1,8 @@
 # Partner onboarding Step 3 "Where you work": simple flow
 
-> **Status:** design agreed on 2026-11-19. Nothing is built yet.
+> **Status:** design agreed on 2026-11-19. **Phase 1a is built** on the backend, web and phone
+> (partner flow, rule changes, `PartnerAreaRequest`, review screen and queue tab). Phase 1b
+> (Operations Areas / Area requests / Coverage lite) has backend services in place. Phase 2 is not started.
 >
 > This replaces the first proposal in commit `e4b78ad2` (GPS lookup, waitlists, activation, four new
 > tables). The owner judged that proposal too heavy for this step.

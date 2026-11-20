@@ -40,6 +40,7 @@ def fake_push_provider() -> Iterator[None]:
     with override_settings(MOBILE_PUSH_PROVIDER="fake", MOBILE_PUSH_ALLOW_FAKE=True):
         yield
 
+
 _PUSH_CALL = re.compile(
     r"""(?:channel\s*=\s*(?:NotificationIntent\.Channel\.PUSH|"PUSH"|'PUSH')"""
     r"""[\s\S]{0,500}?template_code\s*=\s*["']([^"']+)["']"""

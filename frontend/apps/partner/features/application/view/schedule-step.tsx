@@ -1,10 +1,15 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
+import {
+  collapseToWeeklySet,
+  expandExceptions,
+  expandWeeklySet,
+} from "@vsolve/query";
 import { ErrorState, Spinner, useT } from "@vsolve/ui";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
-import { toDraft, toRuleInputs, type DraftPeriod } from "../model/schedule";
+import { toRuleInputs, type DraftPeriod } from "../model/schedule";
 import {
   usePartnerApplication,
   usePartnerAvailability,
@@ -67,10 +72,78 @@ export function ScheduleStep() {
     }));
   }, [application.data?.service_area_ids, reference.serviceAreas, t]);
 
-  const initialPeriods = useMemo<DraftPeriod[]>(
-    () => toDraft(availability.data?.rules ?? []),
-    [availability.data?.rules],
-  );
+  const { shifts, differed } = useMemo(() => {
+    const activeRules = (availability.data?.rules ?? [])
+      .filter((r) => r.is_active)
+      .map((r) => ({
+        serviceAreaId: r.service_area_id,
+        weekday: r.weekday,
+        startsAt: r.starts_at.slice(0, 5),
+        endsAt: r.ends_at.slice(0, 5),
+        endsNextDay: r.ends_next_day,
+      }));
+    return collapseToWeeklySet(activeRules);
+  }, [availability.data?.rules]);
+
+  const initialPeriods = useMemo<DraftPeriod[]>(() => {
+    const primaryAreaId = areas[0]?.id ?? "";
+    return shifts.map((shift, idx) => ({
+      key: `period-${shift.weekday}-${idx}`,
+      serviceAreaId: primaryAreaId,
+      weekday: shift.weekday,
+      startsAt: shift.startsAt,
+      endsAt: shift.endsAt,
+      endsNextDay: shift.endsNextDay,
+    }));
+  }, [shifts, areas]);
+
+  // An area was added in Step 3 after hours were already set: give it the same weekly set, so
+  // submit does not stop on "hours for each area" for a partner who already did the work.
+  const autoCopied = useRef(false);
+  const savedRules = availability.data?.rules;
+  const savedExceptions = availability.data?.exceptions;
+  const mutateAvailability = save.mutate;
+  useEffect(() => {
+    if (autoCopied.current || availability.isPending || !savedRules || areas.length === 0) return;
+    const activeRules = savedRules.filter((r) => r.is_active);
+    const covered = new Set(activeRules.map((r) => r.service_area_id));
+    const missing = areas.some((a) => !covered.has(a.id));
+    if (!missing || shifts.length === 0) return;
+    autoCopied.current = true;
+    const areaIds = areas.map((a) => a.id);
+    const primaryAreaId = areas[0]?.id ?? "";
+    const periods: DraftPeriod[] = shifts.map((shift, idx) => ({
+      key: `auto-${shift.weekday}-${idx}`,
+      serviceAreaId: primaryAreaId,
+      weekday: shift.weekday,
+      startsAt: shift.startsAt,
+      endsAt: shift.endsAt,
+      endsNextDay: shift.endsNextDay,
+    }));
+    mutateAvailability({
+      rules: toRuleInputs(expandWeeklySet(periods, areaIds)),
+      exceptions: expandExceptions(
+        (savedExceptions ?? []).map((exception) => ({
+          serviceAreaId: exception.service_area_id,
+          date: exception.date,
+          isAvailable: exception.is_available,
+          startsAt: exception.starts_at,
+          endsAt: exception.ends_at,
+          endsNextDay: exception.ends_next_day,
+          reason: exception.reason,
+        })),
+        areaIds,
+      ).map((e) => ({
+        service_area_id: e.serviceAreaId,
+        date: e.date,
+        is_available: e.isAvailable ?? true,
+        starts_at: e.startsAt ?? null,
+        ends_at: e.endsAt ?? null,
+        ends_next_day: e.endsNextDay ?? false,
+        reason: e.reason ?? null,
+      })),
+    });
+  }, [areas, availability.isPending, savedRules, savedExceptions, shifts, mutateAvailability]);
 
   if (availability.isPending || application.isPending || reference.isPending) {
     return (
@@ -100,6 +173,7 @@ export function ScheduleStep() {
       backHref={previousStep("/apply/schedule", application.data?.track)?.href ?? "/apply"}
       nextHref={nextStep("/apply/schedule", application.data?.track)?.href ?? "/apply/review"}
       areas={areas}
+      differed={differed}
       initialPeriods={initialPeriods}
       isSaving={save.isPending}
       saveError={
@@ -110,19 +184,29 @@ export function ScheduleStep() {
           : null
       }
       onSave={async (periods) => {
+        const areaIds = areas.map((a) => a.id);
+        const expandedRules = expandWeeklySet(periods, areaIds);
+        const rawExceptions = (availability.data?.exceptions ?? []).map((exception) => ({
+          serviceAreaId: exception.service_area_id,
+          date: exception.date,
+          isAvailable: exception.is_available,
+          startsAt: exception.starts_at,
+          endsAt: exception.ends_at,
+          endsNextDay: exception.ends_next_day,
+          reason: exception.reason,
+        }));
+        const expandedExceptions = expandExceptions(rawExceptions, areaIds).map((e) => ({
+          service_area_id: e.serviceAreaId,
+          date: e.date,
+          is_available: e.isAvailable ?? true,
+          starts_at: e.startsAt ?? null,
+          ends_at: e.endsAt ?? null,
+          ends_next_day: e.endsNextDay ?? false,
+          reason: e.reason ?? null,
+        }));
         await save.mutateAsync({
-          rules: toRuleInputs(periods),
-          // Dated exceptions are edited elsewhere; sending the ones already on
-          // file keeps a whole-schedule PUT from deleting them.
-          exceptions: (availability.data?.exceptions ?? []).map((exception) => ({
-            service_area_id: exception.service_area_id,
-            date: exception.date,
-            is_available: exception.is_available,
-            starts_at: exception.starts_at,
-            ends_at: exception.ends_at,
-            ends_next_day: exception.ends_next_day,
-            reason: exception.reason,
-          })),
+          rules: toRuleInputs(expandedRules),
+          exceptions: expandedExceptions,
         });
       }}
     />

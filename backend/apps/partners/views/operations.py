@@ -53,6 +53,7 @@ from apps.partners.serializers import (
     OperationsPartnerDirectoryQuerySerializer,
     OperationsPartnerScheduleSerializer,
     OperationsPartnerScheduleUpdateSerializer,
+    OperationsRemoveAreaSerializer,
     OperationsTaxProfileVerifySerializer,
     OperationsTransitionSerializer,
     PartnerApplicationSerializer,
@@ -69,6 +70,7 @@ from apps.partners.services import (
     claim_partner_application,
     create_partner_document_review_access,
     release_partner_application_review,
+    remove_partner_application_area,
     replace_partner_schedule_for_operations,
     review_partner_document,
     transition_partner_application,
@@ -116,6 +118,7 @@ class OperationsPartnerApplicationQueueView(APIView):
             status=cast(str | None, data.get("status")),
             assigned_to_me=bool(data["assigned_to_me"]),
             unassigned=bool(data["unassigned"]),
+            area_pending=bool(data.get("area_pending", False)),
         )
         paginator = OperationsApplicationCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -455,6 +458,47 @@ class OperationsPartnerApplicationTransitionView(APIView):
             )
         except PartnerSelfReviewError as exc:
             _audit_self_review_denial(actor=cast(User, request.user), error=exc)
+            _raise_api_error(exc)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        refreshed = partner_application_for_user(application.partner.user)
+        return Response(PartnerApplicationSerializer(refreshed).data)
+
+
+class OperationsPartnerApplicationRemoveAreaView(APIView):
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["Operations - Partners"],
+        operation_id="operations_partner_application_remove_area",
+        request=OperationsRemoveAreaSerializer,
+        responses={
+            200: PartnerApplicationSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(
+        self,
+        request: Request,
+        application_id: uuid.UUID,
+    ) -> Response:
+        serializer = OperationsRemoveAreaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        reviewer = cast(User, request.user)
+        try:
+            application = remove_partner_application_area(
+                reviewer=reviewer,
+                application_id=application_id,
+                service_area_id=cast(uuid.UUID, data["service_area_id"]),
+                expected_version=cast(int, data["expected_version"]),
+                reason=cast(str, data.get("reason", "")),
+            )
+        except PartnerSelfReviewError as exc:
+            _audit_self_review_denial(actor=reviewer, error=exc)
             _raise_api_error(exc)
         except PartnerDomainError as exc:
             _raise_api_error(exc)

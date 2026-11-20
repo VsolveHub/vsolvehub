@@ -1,5 +1,6 @@
 // Ported from frontend/apps/partner/features/application/model/readiness.ts
 import type { Schemas } from "@vsolve/api-client";
+import { isServiceAreaRequirementMet, isWorkingHoursRequirementMet } from "@vsolve/query/native";
 
 /**
  * What is still missing before an application can be submitted.
@@ -53,6 +54,11 @@ function hasUsableDocument(application: Application | null, kind: DocumentKind):
   );
 }
 
+/** Requests the reviewer has not dismissed: the server ignores "Not valid" ones at submit too. */
+function openAreaRequestCount(application: Application): number {
+  return (application.area_requests ?? []).filter((request) => request.status !== "NOT_VALID").length;
+}
+
 export function requirements(
   application: Application | null,
   availability?: Schedule | null,
@@ -88,7 +94,12 @@ export function requirements(
             code: "SERVICE_AREAS",
             label: "Where you work",
             href: "/apply/areas",
-            isMet: application.service_area_ids.length > 0,
+            // A ticked area, or a PIN asked for that no open area covers yet.
+            isMet: isServiceAreaRequirementMet({
+              serviceAreaIds: application.service_area_ids,
+              requestedPostalCodes: application.requested_postal_codes ?? [],
+              areaRequestsCount: openAreaRequestCount(application),
+            }),
           },
           {
             // The server refuses to send an application without hours for every chosen area,
@@ -98,13 +109,13 @@ export function requirements(
             href: "/apply/schedule",
             isMet:
               availability === undefined ||
-              (application.service_area_ids.length > 0 &&
-                Boolean(availability) &&
-                application.service_area_ids.every((areaId) =>
-                  (availability?.rules ?? []).some(
-                    (rule) => rule.service_area_id === areaId && rule.is_active,
-                  ),
-                )),
+              (Boolean(availability) &&
+                isWorkingHoursRequirementMet({
+                  serviceAreaIds: application.service_area_ids,
+                  requestedPostalCodes: application.requested_postal_codes ?? [],
+                  areaRequestsCount: openAreaRequestCount(application),
+                  availabilityRules: availability?.rules ?? [],
+                })),
           },
         ] satisfies Requirement[])
       : []),

@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/application-editor.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Skeleton, Text, useT } from "@vsolve/mobile-ui";
 import { usePathname, useRouter } from "expo-router";
 import {
   createContext,
@@ -24,6 +24,7 @@ import {
 import { previousStep } from "../model/progress";
 import { isEditable } from "../model/readiness";
 import { nextStep } from "../model/steps";
+import { useApplicationReference } from "../reference-queries";
 import {
   describeRefusal,
   isVersionConflict,
@@ -120,6 +121,10 @@ function Editor({
   const [draft, setDraft] = useState(() => draftFromApplication(application));
   const [childProceedDisabled, setChildProceedDisabled] = useState(false);
   const save = useUpdateApplication();
+  const t = useT();
+  const reference = useApplicationReference();
+  const referenceRefetch = reference.refetch;
+  const [removedAreaNames, setRemovedAreaNames] = useState<readonly string[]>([]);
   const router = useRouter();
   const pathname = usePathname();
   const { registerDock } = useApplyDock();
@@ -128,7 +133,30 @@ function Editor({
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
   const currentVersion = useCurrentVersion();
-  const refusal = describeRefusal(save.error);
+  const refusal = describeRefusal(save.error, t, removedAreaNames);
+
+  // Case G: a ticked area stopped taking partners before the save. Drop only that area, name it,
+  // and refresh the list so it is not offered again. The other areas are kept.
+  useEffect(() => {
+    if (
+      save.error instanceof ApiRequestError &&
+      save.error.code === "partner_service_areas_unavailable"
+    ) {
+      const details = save.error.details as { unavailable_service_area_ids?: string[] } | undefined;
+      const unavailable = details?.unavailable_service_area_ids;
+      if (Array.isArray(unavailable) && unavailable.length > 0) {
+        setRemovedAreaNames(
+          reference.serviceAreas.filter((area) => unavailable.includes(area.id)).map((area) => area.name),
+        );
+        setDraft((current) => ({
+          ...current,
+          serviceAreaIds: current.serviceAreaIds.filter((id) => !unavailable.includes(id)),
+        }));
+        referenceRefetch();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.error]);
 
   const fieldErrors =
     save.error instanceof ApiRequestError && refusal === null ? save.error.fieldErrors : {};

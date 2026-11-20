@@ -32,6 +32,7 @@ from apps.locations.services import (
     archive_address,
     check_serviceability,
     create_address,
+    record_unserved_demand,
     update_address,
 )
 from common.errors.serializers import ApiErrorSerializer
@@ -204,6 +205,12 @@ class ServiceabilityCheckView(APIView):
             requested_start=cast(datetime | None, requested_start),
             duration_minutes=duration,
         )
+        if not decision.is_serviceable:
+            record_unserved_demand(
+                postal_code=postal_code,
+                reason_code=decision.reason_code,
+                variant_id=variant_id,
+            )
         payload: dict[str, object] = {
             "is_serviceable": decision.is_serviceable,
             "reason_code": decision.reason_code,

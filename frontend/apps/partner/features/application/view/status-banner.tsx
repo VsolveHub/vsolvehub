@@ -25,7 +25,11 @@ const STOPS = [
 
 export function ApplicationStatusTracker({ application }: { application: Application }) {
   const t = useT();
-  const presentation = applicationStatusPresentation(application.status);
+  const isAreaPending =
+    (application.service_area_ids?.length ?? 0) === 0 &&
+    ((application.requested_postal_codes?.length ?? 0) > 0 ||
+      (application.area_requests ?? []).some((r) => r.status !== "NOT_VALID"));
+  const presentation = applicationStatusPresentation(application.status, { isAreaPending });
   const stage = trackerStage(application.status);
   const isWaiting = application.status === "SUBMITTED" || application.status === "UNDER_REVIEW";
 
@@ -76,6 +80,22 @@ export function ApplicationStatusTracker({ application }: { application: Applica
         <p className="rounded-control border border-warning-line bg-warning-surface p-3 text-sm text-text">
           {application.change_request_message || t("apply.statusBanner.changesRequired.fallbackDetail")}
         </p>
+      ) : null}
+
+      {isAreaPending && (application.requested_postal_codes?.length ?? 0) > 0 ? (
+        <div className="rounded-control border border-line bg-surface-sunken p-3 text-xs text-text-secondary">
+          <p className="font-semibold text-text">{t("apply.statusBanner.requestedPinsTitle")}</p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {application.requested_postal_codes?.map((pin) => (
+              <span
+                key={pin}
+                className="rounded bg-surface px-2 py-0.5 font-mono text-xs border border-line"
+              >
+                {pin}
+              </span>
+            ))}
+          </div>
+        </div>
       ) : null}
 
       <p className="text-sm text-text-secondary">{t(presentation.nextKey)}</p>
