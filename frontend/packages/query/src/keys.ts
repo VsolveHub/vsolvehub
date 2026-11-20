@@ -365,6 +365,7 @@ export const queryKeys = {
       status?: string;
       assignedToMe?: boolean;
       unassigned?: boolean;
+      track?: string;
     }) => [...queryKeys.operations.all, "partner-application-queue", filters] as const,
     /**
      * The Partner directory — everyone who works here, not just who is awaiting review.
