@@ -140,7 +140,7 @@ export default function PartnerListingsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
               activeTab === tab.key
-                ? "bg-navy-900 text-warm-0 shadow-xs"
+                ? "bg-navy-900 text-warm-0"
                 : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
             }`}
           >

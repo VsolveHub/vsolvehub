@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   TextInput,
@@ -14,9 +12,6 @@ import {
   Badge,
   Button,
   Card,
-  ChoiceChips,
-  MultiChoiceChips,
-  QuantityStepper,
   Text,
   TouchTimePicker,
 } from "@vsolve/mobile-ui";
@@ -28,6 +23,7 @@ import {
   Clock,
   DollarSign,
   MapPin,
+  Minus,
   Plus,
   Search,
   Sparkles,
@@ -36,7 +32,7 @@ import {
 } from "lucide-react-native";
 
 import { usePartnerApplication } from "@/features/application/queries";
-import { setFocusedBackHandler } from "@/features/session/focused-back";
+import { handleFocusedBack, setFocusedBackHandler } from "@/features/session/focused-back";
 
 import {
   fetchJobOptions,
@@ -55,6 +51,7 @@ import {
   fetchSubscriptionPlans,
 } from "../queries";
 import { jobCategoryLayout, rankRoleMatches } from "../job-categories";
+import { ScrollFieldProvider, useKeyboardScroll, useScrollFieldIntoView } from "../use-keyboard-scroll";
 import { usePlanPurchase } from "../use-plan-purchase";
 import type { PartnerListing } from "../model";
 import { SubscriptionDialog } from "./subscription-dialog";
@@ -218,6 +215,166 @@ function toBody(draft: Draft): JobCreate {
 }
 
 /** Chip-based tag picker with text input */
+type ChipOption = { label: string; value: string };
+
+/** Compact option pill shared by every chip group in the wizard. */
+function Chip({ label, on, onPress, testID }: { label: string; on: boolean; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={label}
+      hitSlop={4}
+      onPress={onPress}
+      testID={testID}
+      className={`min-h-10 justify-center rounded-full border px-3.5 py-1.5 ${
+        on ? "border-signal-500 bg-signal-50" : "border-line bg-surface"
+      }`}
+    >
+      <Text className={`text-[13px] ${on ? "font-semibold text-text" : "font-medium text-text-secondary"}`}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** Pick one. Tapping the chosen option again clears it, as the shared chips did. */
+function Chips({
+  label,
+  name,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  options: ChipOption[];
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-medium text-text">{label}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel={label} className="flex-row flex-wrap gap-2">
+        {options.map((option) => (
+          <Chip
+            key={option.value}
+            label={option.label}
+            on={value === option.value}
+            testID={`${name}-${option.value}`}
+            onPress={() => onChange(value === option.value ? "" : option.value)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Pick several. */
+function MultiChips({
+  label,
+  name,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  options: ChipOption[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-medium text-text">{label}</Text>
+      <View className="flex-row flex-wrap gap-2">
+        {options.map((option) => {
+          const on = value.includes(option.value);
+          return (
+            <Chip
+              key={option.value}
+              label={option.label}
+              on={on}
+              testID={`${name}-${option.value}`}
+              onPress={() => onChange(on ? value.filter((v) => v !== option.value) : [...value, option.value])}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** How many people to hire: the label on the left, a small − count + control on the right. */
+function VacancyStepper({
+  label,
+  value,
+  min,
+  max,
+  unit,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  onChange: (next: number) => void;
+}) {
+  const atMin = value <= min;
+  const atMax = value >= max;
+  return (
+    <View className="flex-row items-center justify-between gap-3">
+      <Text className="flex-1 text-sm font-medium text-text">{label}</Text>
+      <View className="flex-row items-center rounded-full border border-line bg-surface">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Decrease vacancies"
+          accessibilityState={{ disabled: atMin }}
+          disabled={atMin}
+          hitSlop={4}
+          onPress={() => onChange(Math.max(min, value - 1))}
+          className={`size-10 items-center justify-center rounded-full active:bg-surface-hover ${atMin ? "opacity-30" : ""}`}
+        >
+          <Minus size={16} color="#071328" strokeWidth={2.2} />
+        </Pressable>
+        <Text className="min-w-16 text-center text-[15px] font-semibold text-text">
+          {value} <Text className="text-xs font-normal text-text-muted">{unit}</Text>
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Increase vacancies"
+          accessibilityState={{ disabled: atMax }}
+          disabled={atMax}
+          hitSlop={4}
+          onPress={() => onChange(Math.min(max, value + 1))}
+          className={`size-10 items-center justify-center rounded-full active:bg-surface-hover ${atMax ? "opacity-30" : ""}`}
+        >
+          <Plus size={16} color="#071328" strokeWidth={2.2} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/** One step of the wizard: a single white card with the step title on top. */
+function StepCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="gap-6 rounded-2xl border border-line bg-surface p-4">
+      <Text className="text-xl font-bold tracking-tight text-text">{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+/** A titled group of fields inside a step: a quiet heading, then the fields. */
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="gap-3">
+      <Text className="text-sm font-semibold text-text">{title}</Text>
+      {children}
+    </View>
+  );
+}
+
 function TagPicker({
   label,
   hint,
@@ -235,6 +392,7 @@ function TagPicker({
   addLabel: string;
   exclude?: readonly string[];
 }) {
+  const scrollFieldIntoView = useScrollFieldIntoView();
   const [text, setText] = useState("");
   const shown = [...new Set([...ideas, ...value])].filter((idea) => !exclude.includes(idea));
 
@@ -249,7 +407,7 @@ function TagPicker({
 
   return (
     <View className="gap-2">
-      <Text className="text-sm font-semibold text-navy-900">{label}</Text>
+      <Text className="text-sm font-semibold text-text">{label}</Text>
       {hint ? <Text className="-mt-1 text-xs text-text-muted">{hint}</Text> : null}
       <View className="flex-row flex-wrap gap-2">
         {shown.map((idea) => {
@@ -258,14 +416,14 @@ function TagPicker({
             <Pressable
               key={idea}
               onPress={() => onChange(on ? value.filter((v) => v !== idea) : [...value, idea])}
-              className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 ${
+              className={`min-h-11 flex-row items-center gap-1.5 min-h-10 justify-center rounded-full border px-3.5 py-1.5 ${
                 on
-                  ? "border-navy-900 bg-navy-900"
+                  ? "border-signal-500 bg-signal-50"
                   : "border-line bg-surface"
               }`}
             >
-              {on ? <Check size={14} color="#ffffff" /> : <Plus size={14} color="#64748b" />}
-              <Text className={`text-xs font-semibold ${on ? "text-white" : "text-text"}`}>
+              {on ? <Check size={14} color="#071328" /> : <Plus size={14} color="#756c5e" />}
+              <Text className={`text-sm font-medium text-text`}>
                 {idea}
               </Text>
             </Pressable>
@@ -274,14 +432,15 @@ function TagPicker({
       </View>
       <View className="flex-row items-center gap-2">
         <TextInput
+ onFocus={scrollFieldIntoView}
           placeholder={addLabel}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor="#a89f90"
           value={text}
           maxLength={60}
           onChangeText={setText}
           onSubmitEditing={add}
           returnKeyType="done"
-          className="flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+          className="flex-1 h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
         />
         <Button
           variant="secondary"
@@ -309,13 +468,13 @@ function TimePickerField({
   const [open, setOpen] = useState(false);
   return (
     <View className="flex-1 gap-1.5">
-      <Text className="text-xs font-semibold text-text-muted">{label}</Text>
+      <Text className="text-sm font-medium text-text">{label}</Text>
       <Pressable
         onPress={() => setOpen(true)}
-        className="flex-row items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5"
+        className="h-12 flex-row items-center justify-between rounded-xl border border-line bg-surface px-4"
       >
         <Text className="text-sm text-text">{value || "Pick time"}</Text>
-        <Clock size={16} color="#64748b" />
+        <Clock size={16} color="#756c5e" />
       </Pressable>
       <TouchTimePicker
         open={open}
@@ -329,6 +488,7 @@ function TimePickerField({
 }
 
 export function PostJobWizard({ editId }: { editId?: string | null }) {
+  const { scrollRef, keyboardHeight, keyboardOpen, keyboardGap, scrollFieldIntoView, onScroll } = useKeyboardScroll();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -415,11 +575,11 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           setDraft((d) => fromTemplate(d, category, role));
           setStep(1);
         }}
-        className={`rounded-full border px-4 py-2 ${
-          isSelected ? "border-amber-500 bg-amber-50" : "border-line bg-surface"
+        className={`min-h-10 justify-center rounded-full border px-3.5 py-1.5 ${
+          isSelected ? "border-signal-500 bg-signal-50" : "border-line bg-surface"
         }`}
       >
-        <Text className={`text-xs font-bold ${isSelected ? "text-amber-800" : "text-navy-900"}`}>
+        <Text className={`text-sm font-medium text-text`}>
           {role.name}
           {search ? ` · ${category}` : ""}
         </Text>
@@ -530,7 +690,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   if (options.error || !opts) {
     return (
       <View className="flex-1 items-center justify-center bg-canvas p-6">
-        <Text className="text-sm text-red-600">Failed to load job configuration.</Text>
+        <Text className="text-sm text-danger-text">Failed to load job configuration.</Text>
       </View>
     );
   }
@@ -539,59 +699,80 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
     Number(draft.salaryMin) === low && (high ? Number(draft.salaryMax) === high : !draft.salaryMax);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-canvas"
-    >
+    <ScrollFieldProvider value={scrollFieldIntoView}>
+    <View className="flex-1 bg-canvas">
       {/* Wizard Step Header */}
-      <View className="border-b border-line bg-surface px-4 pb-3 pt-3">
-        <View className="gap-0.5">
-          <Text className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
-            Step {step + 1} of {STEPS.length} · {STEPS[step]}
-          </Text>
-          <Text className="text-base font-extrabold text-navy-900" numberOfLines={1}>
+      <View className="border-b border-line bg-surface px-4 pb-5 pt-4">
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => handleFocusedBack(() => router.back())}
+            hitSlop={8}
+            className="-ml-1 size-10 items-center justify-center rounded-full active:bg-surface-hover"
+          >
+            <ArrowLeft size={20} color="#071328" />
+          </Pressable>
+          <Text className="flex-1 text-lg font-bold tracking-tight text-text" numberOfLines={1}>
             {editId ? "Edit job opening" : "Post a job opening"}
-            {draft.title && step > 0 ? ` · ${draft.title}` : ""}
+          </Text>
+          <Text className="text-xs font-medium text-text-muted">
+            Step {step + 1} of {STEPS.length}
           </Text>
         </View>
 
-        {/* Step Progress Indicators */}
-        <View className="mt-3 flex-row gap-1.5">
+        {/* Step progress: one bar and one label per step. Labels wrap, so none is cut off. */}
+        <View className="mt-6 flex-row items-start gap-3">
           {STEPS.map((name, i) => (
-            <View
-              key={name}
-              className={`h-1.5 flex-1 rounded-full ${
-                i <= step ? "bg-amber-500" : "bg-line"
-              }`}
-            />
+            <View key={name} className="flex-1 gap-2.5">
+              <View className={`h-1.5 rounded-full ${i <= step ? "bg-signal-500" : "bg-line"}`} />
+              <Text
+                className={`text-xs leading-4 ${i === step ? "font-semibold text-text" : "text-text-muted"}`}
+              >
+                {name}
+              </Text>
+            </View>
           ))}
         </View>
       </View>
 
+      {/* Error banner: right under the header so it is seen without scrolling */}
+      {error ? (
+        <View accessibilityRole="alert" className="mx-4 mt-4 rounded-xl border border-danger-line bg-danger-surface px-4 py-3">
+          <Text className="text-sm font-medium text-danger-text">{error}</Text>
+        </View>
+      ) : null}
+
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 16 }}
+        onScroll={(event) => onScroll(event.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
+        contentContainerStyle={{
+          padding: 16,
+          // Under the last field while typing: as tall as the keyboard, so it can scroll clear.
+          paddingBottom: keyboardOpen ? keyboardHeight + keyboardGap : 32,
+          gap: 16,
+        }}
       >
         {/* Step 0: Job role / category selection */}
         {step === 0 ? (
-          <Card className="gap-4 p-4">
-            <Text className="text-base font-extrabold text-navy-900">
-              What job are you hiring for?
-            </Text>
+          <StepCard title="What job are you hiring for?">
 
             {/* Search Box */}
-            <View className="flex-row items-center rounded-xl border border-line bg-surface px-3 py-2">
-              <Search size={16} color="#94a3b8" />
+            <View className="h-12 flex-row items-center rounded-xl border border-line bg-surface px-4">
+              <Search size={16} color="#a89f90" />
               <TextInput
+ onFocus={scrollFieldIntoView}
                 placeholder="Search a job, e.g. cashier, driver, cook"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#a89f90"
                 value={search}
                 onChangeText={setSearch}
-                className="ml-2 flex-1 text-sm text-text"
+                className="ml-2 flex-1 text-base text-text"
               />
               {search ? (
                 <Pressable onPress={() => setSearch("")}>
-                  <X size={16} color="#94a3b8" />
+                  <X size={16} color="#a89f90" />
                 </Pressable>
               ) : null}
             </View>
@@ -599,7 +780,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             {/* Someone hiring for themselves: household roles straight away */}
             {!search && layout.home ? (
               <View className="gap-2">
-                <Text className="text-xs font-semibold text-text-muted">Help for your home — tap one</Text>
+                <Text className="text-sm font-medium text-text">Help for your home — tap one</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {layout.home.roles.map((role) => roleChip(layout.home!.name, role))}
                 </View>
@@ -614,17 +795,17 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 onPress={() => setShowAllCategories(true)}
                 className="min-h-11 flex-row items-center justify-between gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5"
               >
-                <Text className="flex-1 text-xs font-bold text-amber-800">
+                <Text className="flex-1 text-sm font-medium text-text-link">
                   Hiring for something else? Show all categories
                 </Text>
-                <ChevronDown size={16} color="#64748b" />
+                <ChevronDown size={16} color="#756c5e" />
               </Pressable>
             ) : null}
 
             {/* Category Grid when no search text */}
             {!search && gridOpen ? (
               <View className="gap-2">
-                <Text className="text-xs font-semibold text-text-muted">Choose a category</Text>
+                <Text className="text-sm font-medium text-text">Choose a category</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {layout.others.map((cat) => {
                     const isSelected = draft.category === cat.name;
@@ -632,16 +813,14 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                       <Pressable
                         key={cat.name}
                         onPress={() => set({ category: cat.name })}
-                        className={`rounded-xl border px-3.5 py-2.5 ${
+                        className={`min-h-10 justify-center rounded-xl border px-3.5 py-2 ${
                           isSelected
-                            ? "border-navy-900 bg-navy-900"
+                            ? "border-signal-500 bg-signal-50"
                             : "border-line bg-surface"
                         }`}
                       >
                         <Text
-                          className={`text-xs font-bold ${
-                            isSelected ? "text-white" : "text-navy-900"
-                          }`}
+                          className={`text-sm font-medium text-text`}
                         >
                           {cat.name}
                         </Text>
@@ -655,7 +834,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             {/* Matching / Common Role Templates */}
             {roles.length > 0 ? (
               <View className="gap-2">
-                <Text className="text-xs font-semibold text-text-muted">
+                <Text className="text-sm font-medium text-text">
                   {search ? "Matching jobs — tap to autofill" : "Common jobs in category — tap one"}
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
@@ -665,52 +844,55 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             ) : null}
 
             {/* Manual Title Entry */}
-            <View className="gap-1.5 border-t border-line/60 pt-3">
-              <Text className="text-xs font-semibold text-text-muted">
+            <View className="gap-1.5 border-t border-line pt-3">
+              <Text className="text-sm font-medium text-text">
                 Not listed? Type custom job title:
               </Text>
               <TextInput
+ onFocus={scrollFieldIntoView}
                 placeholder="e.g. Jewellery Craftsman"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#a89f90"
                 maxLength={120}
                 value={draft.templateId ? "" : draft.title}
                 onChangeText={(title) => set({ title, templateId: null })}
-                className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+                className="h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
               />
             </View>
-          </Card>
+          </StepCard>
         ) : null}
 
         {/* Step 1: The Basics */}
         {step === 1 ? (
-          <Card className="gap-4 p-4">
-            <Text className="text-base font-extrabold text-navy-900">Job Basics</Text>
+          <StepCard title="Job Basics">
 
+            <FormSection title="Role">
             {/* Title */}
             <View className="gap-1.5">
-              <Text className="text-xs font-semibold text-text-muted">Job title</Text>
+              <Text className="text-sm font-medium text-text">Job title</Text>
               <TextInput
+ onFocus={scrollFieldIntoView}
                 value={draft.title}
                 maxLength={120}
                 onChangeText={(title) => set({ title })}
-                className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+                className="h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
               />
             </View>
 
             {/* Vacancy Stepper */}
-            <QuantityStepper
+            <VacancyStepper
               label="How many vacancies do you have?"
               value={draft.vacancies}
               min={1}
               max={500}
               unit="people"
-              decrementLabel="Decrease vacancies"
-              incrementLabel="Increase vacancies"
               onChange={(vacancies) => set({ vacancies })}
             />
 
+            </FormSection>
+
+            <FormSection title="Employment">
             {/* Job Type Chips */}
-            <ChoiceChips
+            <Chips
               label="Job type"
               name="job_type"
               options={opts.job_types.map((t) => ({ label: t.label, value: t.value }))}
@@ -719,7 +901,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             />
 
             {/* Experience Band Chips */}
-            <ChoiceChips
+            <Chips
               label="Experience needed"
               name="experience"
               options={opts.experience_bands.map((b) => ({ label: b.label, value: b.value }))}
@@ -727,9 +909,12 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               onChange={(v) => set({ experience: v })}
             />
 
+            </FormSection>
+
+            <FormSection title="Pay">
             {/* Monthly Salary Bands */}
             <View className="gap-2">
-              <Text className="text-xs font-semibold text-text-muted">Monthly salary presets</Text>
+              <Text className="text-sm font-medium text-text">Monthly salary presets</Text>
               <View className="flex-row flex-wrap gap-2">
                 {opts.salary_bands.map((band) => {
                   const on = bandOn(band.min_rupees, band.max_rupees);
@@ -743,17 +928,13 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                           salaryMax: band.max_rupees ? String(band.max_rupees) : "",
                         })
                       }
-                      className={`rounded-full border px-3 py-1.5 ${
+                      className={`min-h-10 justify-center rounded-full border px-3.5 py-1.5 ${
                         on
-                          ? "border-navy-900 bg-navy-900"
+                          ? "border-signal-500 bg-signal-50"
                           : "border-line bg-surface"
                       }`}
                     >
-                      <Text
-                        className={`text-xs font-bold ${
-                          on ? "text-white" : "text-text"
-                        }`}
-                      >
+                      <Text className={`text-[13px] ${on ? "font-semibold text-text" : "font-medium text-text-secondary"}`}>
                         {band.max_rupees
                           ? `${rupeesLabel(band.min_rupees)} – ${rupeesLabel(band.max_rupees)}`
                           : `${rupeesLabel(band.min_rupees)}+`}
@@ -764,34 +945,36 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               </View>
 
               {/* Exact Min and Max Inputs */}
-              <View className="mt-2 flex-row gap-3">
+              <View className="mt-1 flex-row gap-3">
                 <View className="flex-1 gap-1">
-                  <Text className="text-[11px] font-semibold text-text-muted">Min ₹ / month</Text>
+                  <Text className="text-xs font-medium text-text-secondary">Min ₹ / month</Text>
                   <TextInput
+ onFocus={scrollFieldIntoView}
                     keyboardType="numeric"
                     placeholder="15000"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#a89f90"
                     value={draft.salaryMin}
                     onChangeText={(salaryMin) => set({ salaryMin })}
-                    className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+                    className="h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
                   />
                 </View>
                 <View className="flex-1 gap-1">
-                  <Text className="text-[11px] font-semibold text-text-muted">Max ₹ / month</Text>
+                  <Text className="text-xs font-medium text-text-secondary">Max ₹ / month</Text>
                   <TextInput
+ onFocus={scrollFieldIntoView}
                     keyboardType="numeric"
                     placeholder="25000"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#a89f90"
                     value={draft.salaryMax}
                     onChangeText={(salaryMax) => set({ salaryMax })}
-                    className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+                    className="h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
                   />
                 </View>
               </View>
             </View>
 
             {/* Salary Frequency / Period */}
-            <ChoiceChips
+            <Chips
               label="Salary period"
               name="salary_period"
               options={opts.salary_periods.map((p) => ({ label: p.label, value: p.value }))}
@@ -799,24 +982,25 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               onChange={(v) => set({ period: v || "MONTHLY" })}
             />
 
+            </FormSection>
+
+            <FormSection title="Hiring timeline">
             {/* Hiring Urgency */}
-            <ChoiceChips
+            <Chips
               label="How soon?"
               name="urgency"
               options={opts.urgencies.map((u) => ({ label: u.label, value: u.value }))}
               value={draft.urgency}
               onChange={(v) => set({ urgency: v || "NORMAL" })}
             />
-          </Card>
+          </FormSection>
+          </StepCard>
         ) : null}
 
         {/* Step 2: Skills & Duties */}
         {step === 2 ? (
-          <Card className="gap-5 p-4">
-            <Text className="text-base font-extrabold text-navy-900">
-              Skills & Requirements
-            </Text>
-
+          <StepCard title="Skills & Requirements">
+            <FormSection title="Skills">
             <TagPicker
               label="Must-have skills"
               hint="Candidates are matched on these first. Pick at least one."
@@ -837,6 +1021,8 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               addLabel="Add a preferred skill"
             />
 
+            </FormSection>
+
             {/* Expandable Accordion for More Options */}
             <Pressable
               onPress={() => setMoreOpen(!moreOpen)}
@@ -847,15 +1033,15 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 color="#0284c7"
                 style={{ transform: [{ rotate: moreOpen ? "180deg" : "0deg" }] }}
               />
-              <Text className="text-xs font-bold text-sky-700">
+              <Text className="text-sm font-semibold text-text-link">
                 {moreOpen ? "Hide extra details" : "More options (timings, benefits, languages, duties)"}
               </Text>
             </Pressable>
 
             {moreOpen ? (
-              <View className="gap-4 border-t border-line/60 pt-4">
+              <View className="gap-4 border-t border-line pt-4">
                 {/* Shift */}
-                <ChoiceChips
+                <Chips
                   label="Shift"
                   name="shift"
                   options={opts.shifts.map((s) => ({ label: s.label, value: s.value }))}
@@ -878,7 +1064,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 </View>
 
                 {/* Weekly Off */}
-                <ChoiceChips
+                <Chips
                   label="Weekly off"
                   name="weekly_off"
                   options={opts.weekly_offs.map((w) => ({ label: w.label, value: w.value }))}
@@ -887,7 +1073,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 />
 
                 {/* Workplace mode */}
-                <ChoiceChips
+                <Chips
                   label="Workplace mode"
                   name="work_mode"
                   options={opts.work_modes.map((w) => ({ label: w.label, value: w.value }))}
@@ -905,7 +1091,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 />
 
                 {/* Languages */}
-                <MultiChoiceChips
+                <MultiChips
                   label="Languages spoken"
                   name="languages"
                   options={opts.languages.map((l) => ({ label: l.label, value: l.value }))}
@@ -914,7 +1100,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 />
 
                 {/* Qualification */}
-                <ChoiceChips
+                <Chips
                   label="Minimum qualification"
                   name="qualification"
                   options={opts.qualifications.map((q) => ({ label: q.label, value: q.value }))}
@@ -932,17 +1118,17 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 />
               </View>
             ) : null}
-          </Card>
+          </StepCard>
         ) : null}
 
         {/* Step 3: Location & Preview */}
         {step === 3 ? (
           <View className="gap-4">
-            <Card className="gap-4 p-4">
-              <Text className="text-base font-extrabold text-navy-900">Where is the job?</Text>
+            <StepCard title="Where is the job?">
+              <FormSection title="Location">
 
               {/* City Chips */}
-              <ChoiceChips
+              <Chips
                 label="City"
                 name="city"
                 options={opts.cities.map((city) => ({ label: city, value: city }))}
@@ -952,28 +1138,30 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
 
               {/* Custom City */}
               <View className="gap-1.5">
-                <Text className="text-xs font-semibold text-text-muted">
+                <Text className="text-sm font-medium text-text">
                   Other city (if not listed above)
                 </Text>
                 <TextInput
+ onFocus={scrollFieldIntoView}
                   placeholder="Type city name"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#a89f90"
                   value={opts.cities.includes(draft.city) ? "" : draft.city}
                   onChangeText={(city) => set({ city })}
-                  className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+                  className="h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
                 />
               </View>
 
               {/* Area / Locality */}
               <View className="gap-1.5">
-                <Text className="text-xs font-semibold text-text-muted">Area / Locality</Text>
+                <Text className="text-sm font-medium text-text">Area / Locality</Text>
                 <TextInput
+ onFocus={scrollFieldIntoView}
                   placeholder="e.g. Kukatpally, Madhapur"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#a89f90"
                   maxLength={120}
                   value={draft.area}
                   onChangeText={(area) => set({ area })}
-                  className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text"
+                  className="h-11 rounded-xl border border-line bg-surface px-3.5 text-[15px] text-text"
                 />
               </View>
 
@@ -987,17 +1175,18 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                   className="mt-2 w-full flex-row items-center justify-center gap-2"
                 >
                   <Sparkles size={16} color="#ffffff" />
-                  <Text className="text-sm font-bold text-white">Generate Job Preview</Text>
+                  <Text className="text-sm font-semibold text-white">Generate Job Preview</Text>
                 </Button>
               ) : null}
-            </Card>
+            </FormSection>
+            </StepCard>
 
             {/* Generated Preview Card */}
             {preview ? (
-              <Card className="gap-4 border-2 border-amber-500/30 p-4">
+              <Card className="gap-4 border border-line p-4">
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-2">
-                    <Text className="text-lg font-extrabold text-navy-900">{preview.title}</Text>
+                    <Text className="text-lg font-semibold text-text">{preview.title}</Text>
                     <Text className="text-xs text-text-muted">
                       {preview.poster_name || "Your Company"}
                     </Text>
@@ -1012,11 +1201,11 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 {/* Key Summary Meta */}
                 <View className="flex-row flex-wrap gap-3">
                   <View className="flex-row items-center gap-1">
-                    <MapPin size={13} color="#64748b" />
+                    <MapPin size={13} color="#756c5e" />
                     <Text className="text-xs text-text-secondary">{preview.location_text || draft.city}</Text>
                   </View>
                   <View className="flex-row items-center gap-1">
-                    <DollarSign size={13} color="#64748b" />
+                    <DollarSign size={13} color="#756c5e" />
                     <Text className="text-xs text-text-secondary">
                       {rupeesLabel(Number(draft.salaryMin))}
                       {draft.salaryMax ? ` – ${rupeesLabel(Number(draft.salaryMax))}` : "+"}{" "}
@@ -1024,11 +1213,11 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                     </Text>
                   </View>
                   <View className="flex-row items-center gap-1">
-                    <Users size={13} color="#64748b" />
+                    <Users size={13} color="#756c5e" />
                     <Text className="text-xs text-text-secondary">{draft.vacancies} needed</Text>
                   </View>
                   <View className="flex-row items-center gap-1">
-                    <Briefcase size={13} color="#64748b" />
+                    <Briefcase size={13} color="#756c5e" />
                     <Text className="text-xs text-text-secondary">
                       {optionLabel(opts.job_types, draft.jobType)}
                     </Text>
@@ -1049,6 +1238,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 {editingText ? (
                   <View className="gap-2">
                     <TextInput
+ onFocus={scrollFieldIntoView}
                       multiline
                       numberOfLines={6}
                       maxLength={5000}
@@ -1085,7 +1275,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                       {draft.description}
                     </Text>
                     <Pressable onPress={() => setEditingText(true)} className="mt-2 self-start">
-                      <Text className="text-xs font-bold text-sky-700">Edit description text</Text>
+                      <Text className="text-sm font-semibold text-text-link">Edit description text</Text>
                     </Pressable>
                   </View>
                 )}
@@ -1098,16 +1288,11 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           </View>
         ) : null}
 
-        {/* Global Error Banner */}
-        {error ? (
-          <View className="rounded-xl border border-red-200 bg-red-50 p-3">
-            <Text className="text-xs font-medium text-red-700">{error}</Text>
-          </View>
-        ) : null}
       </ScrollView>
 
-      {/* Sticky Bottom Bar */}
-      <View className="border-t border-line bg-surface p-3 shadow-sm">
+      {/* Sticky Bottom Bar: steps aside while typing so it cannot cover a field */}
+      {keyboardOpen ? null : (
+      <View className="border-t border-line bg-surface px-4 pb-5 pt-3">
         <View className="flex-row gap-2">
           {step < 3 ? (
             <Button
@@ -1153,6 +1338,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           )}
         </View>
       </View>
+      )}
 
       {/* Subscription Dialog Modal */}
       <SubscriptionDialog
@@ -1162,6 +1348,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
         onSubscribe={(planId) => subscribeMutation.mutate(planId)}
         isPending={subscribeMutation.isPending}
       />
-    </KeyboardAvoidingView>
+    </View>
+    </ScrollFieldProvider>
   );
 }

@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Plus,
   User,
+  UserCheck,
   UserPlus,
   Users,
 } from "lucide-react-native";
@@ -156,43 +157,49 @@ export function ListingHome() {
   return (
     <ScrollView
       className="flex-1 bg-canvas"
-      contentContainerClassName="px-4 pt-4 pb-36 gap-5"
+      contentContainerClassName="px-4 pt-5 pb-8 gap-6"
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
     >
-      {/* 2x2 Metric Stat Cards Grid - Matching Image 1 Perfectly */}
-      <View className="gap-2.5">
-        <View className="flex-row gap-2.5">
+      {/* Overview */}
+      <View className="gap-0.5 px-0.5">
+        <Text className="text-xl font-semibold tracking-tight text-text">Dashboard</Text>
+        <Text className="text-sm text-text-secondary">
+          {now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </Text>
+      </View>
+
+      <View className="gap-3">
+        <View className="flex-row gap-3">
           <View className="flex-1">
             <TallyCard
               label="Open jobs"
               value={h?.active_listings ?? open.length}
-              icon={<Briefcase size={15} color="#64748b" strokeWidth={1.8} />}
+              icon={<Briefcase size={15} color="#756c5e" strokeWidth={1.8} />}
             />
           </View>
           <View className="flex-1">
             <TallyCard
               label="New applicants"
               value={h?.new_applications ?? toReview.length}
-              tone="text-[#ea580c]"
-              icon={<Users size={15} color="#64748b" strokeWidth={1.8} />}
+              icon={<Users size={15} color="#756c5e" strokeWidth={1.8} />}
             />
           </View>
         </View>
 
-        <View className="flex-row gap-2.5">
+        <View className="flex-row gap-3">
           <View className="flex-1">
             <TallyCard
               label="Shortlisted"
               value={totals.shortlisted}
-              icon={<User size={15} color="#64748b" strokeWidth={1.8} />}
+              icon={<User size={15} color="#756c5e" strokeWidth={1.8} />}
             />
           </View>
           <View className="flex-1">
             <TallyCard
               label="Hired / connected"
               value={totals.connected}
-              tone="text-[#15803d]"
               hint={`${totals.views} job views`}
+              icon={<UserCheck size={15} color="#756c5e" strokeWidth={1.8} />}
             />
           </View>
         </View>
@@ -203,22 +210,22 @@ export function ListingHome() {
         <View
           style={{
             backgroundColor: "#ffffff",
-            borderColor: "#e5e7eb",
+            borderColor: "#e7e2da",
             borderWidth: 1,
-            borderRadius: 20,
+            borderRadius: 14,
           }}
           className="items-center gap-3 p-6 text-center"
         >
-          <Text className="text-base font-bold text-[#071328]">No open jobs right now</Text>
+          <Text className="text-base font-semibold text-text">No open jobs right now</Text>
           <Text className="text-center text-xs text-text-secondary leading-relaxed">
             Post a job in a couple of minutes. Matching candidates are told straight away.
           </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push("/listings/post" as never)}
-            className="mt-1 rounded-xl bg-[#f87000] py-2.5 px-4 active:opacity-90"
+            className="mt-1 rounded-xl bg-signal-500 py-2.5 px-4 active:opacity-90"
           >
-            <Text className="text-xs font-bold text-white">Post a job</Text>
+            <Text className="text-xs font-semibold text-white">Post a job</Text>
           </Pressable>
         </View>
       ) : null}
@@ -227,8 +234,8 @@ export function ListingHome() {
       {toReview.length > 0 ? (
         <View className="gap-2.5">
           <SectionHeader
-            title="NEW APPLICANTS TO REVIEW"
-            icon={<Users size={15} color="#64748b" strokeWidth={1.8} />}
+            title="New applicants to review"
+            icon={<Users size={15} color="#756c5e" strokeWidth={1.8} />}
             count={toReview.length}
           />
           <View className="gap-2">
@@ -249,8 +256,8 @@ export function ListingHome() {
       {interviews.length > 0 ? (
         <View className="gap-2.5">
           <SectionHeader
-            title="UPCOMING INTERVIEWS"
-            icon={<CalendarClock size={15} color="#64748b" strokeWidth={1.8} />}
+            title="Upcoming interviews"
+            icon={<CalendarClock size={15} color="#756c5e" strokeWidth={1.8} />}
             count={interviews.length}
           />
           <View className="gap-2">
@@ -281,7 +288,7 @@ export function ListingHome() {
         </View>
       ) : (
         <View className="px-1 py-1">
-          <Text className="text-xs text-[#64748b]">No interviews booked.</Text>
+          <Text className="text-xs text-text-secondary">No interviews booked.</Text>
         </View>
       )}
 
@@ -289,8 +296,8 @@ export function ListingHome() {
       {withMatches.length > 0 ? (
         <View className="gap-2.5">
           <SectionHeader
-            title="MATCHING CANDIDATES YOU CAN INVITE"
-            icon={<UserPlus size={15} color="#64748b" strokeWidth={1.8} />}
+            title="Matching candidates you can invite"
+            icon={<UserPlus size={15} color="#756c5e" strokeWidth={1.8} />}
             count={totalMatchesCount}
           />
           <View className="gap-2">
@@ -315,8 +322,8 @@ export function ListingHome() {
       {open.length > 0 ? (
         <View className="gap-2.5">
           <SectionHeader
-            title="YOUR OPEN JOBS"
-            icon={<Briefcase size={15} color="#64748b" strokeWidth={1.8} />}
+            title="Your open jobs"
+            icon={<Briefcase size={15} color="#756c5e" strokeWidth={1.8} />}
             count={open.length}
           />
           <View className="gap-2">
@@ -345,14 +352,14 @@ export function ListingHome() {
       ) : null}
 
       {/* Bottom Action Buttons */}
-      <View className="flex-row items-center gap-3 pt-3">
+      <View className="gap-2.5 pt-1">
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/listings/post" as never)}
-          className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-[#f87000] py-3.5 px-4 shadow-sm active:opacity-90"
+          className="flex-row items-center justify-center gap-1.5 rounded-xl bg-signal-500 py-3.5 px-4 active:opacity-90"
         >
           <Plus size={16} color="#ffffff" strokeWidth={2.5} />
-          <Text className="text-sm font-bold text-white">Post a job</Text>
+          <Text className="text-sm font-semibold text-white">Post a job</Text>
         </Pressable>
 
         <Pressable
@@ -360,12 +367,12 @@ export function ListingHome() {
           onPress={() => router.push("/listings" as never)}
           style={{
             backgroundColor: "#ffffff",
-            borderColor: "#e5e7eb",
+            borderColor: "#e7e2da",
             borderWidth: 1,
           }}
-          className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-3.5 px-4 active:bg-slate-50"
+          className="flex-row items-center justify-center gap-1.5 rounded-xl py-3.5 px-4 active:bg-surface-hover"
         >
-          <Text className="text-sm font-bold text-[#071328]">All jobs</Text>
+          <Text className="text-sm font-semibold text-text">All jobs</Text>
           <ArrowRight size={15} color="#071328" strokeWidth={2.2} />
         </Pressable>
       </View>
@@ -373,75 +380,52 @@ export function ListingHome() {
   );
 }
 
-/* 2x2 Tally Stat Card - Exact 1:1 match with Image 1 */
+/* Stat card: icon + label on top, number below, optional hint. Same layout for all four. */
 function TallyCard({
   label,
   value,
-  tone,
   hint,
   icon,
 }: {
   label: string;
   value: number;
-  tone?: string;
   hint?: string;
   icon?: ReactNode;
 }) {
   return (
     <View
-      style={{
-        backgroundColor: "#ffffff",
-        borderColor: "#e5e7eb",
-        borderWidth: 1,
-        borderRadius: 20,
-      }}
-      className="p-4 flex-1 justify-between min-h-[96px]"
+      style={{ backgroundColor: "#ffffff", borderColor: "#e7e2da", borderWidth: 1, borderRadius: 14 }}
+      className="min-h-[104px] flex-1 justify-between p-4"
     >
       <View className="flex-row items-center gap-2">
         {icon}
-        <Text className="text-[13px] font-semibold text-[#52525b]">{label}</Text>
+        <Text className="flex-1 text-[13px] font-medium text-text-secondary" numberOfLines={1}>
+          {label}
+        </Text>
       </View>
-      <View className="mt-1">
+      <View className="mt-3">
         <Text
           style={Platform.OS === "android" ? { includeFontPadding: false } : undefined}
-          className={`text-[28px] font-extrabold leading-none ${tone ?? "text-[#071328]"}`}
+          className="text-[28px] font-semibold leading-none text-text"
         >
           {value}
         </Text>
-        {hint ? (
-          <Text className="mt-1 text-[11px] font-normal text-[#64748b]">{hint}</Text>
-        ) : null}
+        <Text className="mt-1 text-[11px] text-text-muted" numberOfLines={1}>
+          {hint ?? " "}
+        </Text>
       </View>
     </View>
   );
 }
 
-/* Section Header with Icon and Solid Orange Pill Badge */
-function SectionHeader({
-  title,
-  icon,
-  count,
-}: {
-  title: string;
-  icon: ReactNode;
-  count: number;
-}) {
+/* Section heading: plain title with a small neutral count */
+function SectionHeader({ title, count }: { title: string; count: number; icon?: ReactNode }) {
   return (
-    <View className="flex-row items-center gap-1.5 px-0.5">
-      {icon}
-      <Text className="text-xs font-bold uppercase tracking-wider text-[#64748b]">{title}</Text>
+    <View className="flex-row items-center gap-2 px-0.5">
+      <Text className="text-sm font-semibold text-text">{title}</Text>
       {count > 0 ? (
-        <View
-          style={{
-            backgroundColor: "#f87000",
-            borderRadius: 9999,
-            minWidth: 20,
-            height: 20,
-            paddingHorizontal: 6,
-          }}
-          className="items-center justify-center"
-        >
-          <Text className="text-[11px] font-extrabold text-white leading-none">{count}</Text>
+        <View className="h-5 min-w-5 items-center justify-center rounded-full bg-surface-sunken px-1.5">
+          <Text className="text-[11px] font-semibold text-text-secondary">{count}</Text>
         </View>
       ) : null}
     </View>
@@ -466,24 +450,24 @@ function ApplicantCard({
       onPress={onPress}
       style={{
         backgroundColor: "#ffffff",
-        borderColor: "#e5e7eb",
+        borderColor: "#e7e2da",
         borderWidth: 1,
-        borderRadius: 18,
+        borderRadius: 14,
       }}
-      className="flex-row items-center justify-between px-4 py-3.5 active:bg-slate-50"
+      className="flex-row items-center justify-between px-4 py-3.5 active:bg-surface-hover"
     >
       <View className="flex-1 pr-3">
-        <Text className="text-base font-bold text-[#071328]" numberOfLines={1}>
+        <Text className="text-base font-semibold text-text" numberOfLines={1}>
           {name}
         </Text>
-        <Text className="mt-0.5 text-xs text-[#64748b]" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>
           {role}
         </Text>
-        <Text className="mt-1.5 text-xs font-bold text-[#071328]">{meta}</Text>
+        <Text className="mt-1.5 text-xs font-semibold text-text">{meta}</Text>
       </View>
       <View className="flex-row items-center gap-1">
-        <Text className="text-sm font-bold text-[#1e3a8a]">Review</Text>
-        <ArrowRight size={14} color="#1e3a8a" strokeWidth={2.4} />
+        <Text className="text-sm font-semibold text-navy-700">Review</Text>
+        <ArrowRight size={14} color="#1f3f80" strokeWidth={2.4} />
       </View>
     </Pressable>
   );
@@ -511,27 +495,27 @@ function InterviewCard({
       onPress={onPress}
       style={{
         backgroundColor: "#ffffff",
-        borderColor: "#e5e7eb",
+        borderColor: "#e7e2da",
         borderWidth: 1,
-        borderRadius: 18,
+        borderRadius: 14,
       }}
-      className="flex-row items-center justify-between px-4 py-3.5 active:bg-slate-50"
+      className="flex-row items-center justify-between px-4 py-3.5 active:bg-surface-hover"
     >
       <View className="flex-1 pr-3">
-        <Text className="text-base font-bold text-[#071328]" numberOfLines={1}>
+        <Text className="text-base font-semibold text-text" numberOfLines={1}>
           {name}
         </Text>
-        <Text className="mt-0.5 text-xs text-[#64748b]" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>
           {sub}
         </Text>
         <View className="mt-1.5 flex-row items-center gap-2">
-          {time ? <Text className="text-xs font-bold text-[#071328]">{time}</Text> : null}
+          {time ? <Text className="text-xs font-semibold text-text">{time}</Text> : null}
           <Badge tone={badgeTone}>{badgeText}</Badge>
         </View>
       </View>
       <View className="flex-row items-center gap-1">
-        <Text className="text-sm font-bold text-[#1e3a8a]">Details</Text>
-        <ArrowRight size={14} color="#1e3a8a" strokeWidth={2.4} />
+        <Text className="text-sm font-semibold text-navy-700">Details</Text>
+        <ArrowRight size={14} color="#1f3f80" strokeWidth={2.4} />
       </View>
     </Pressable>
   );
@@ -555,23 +539,23 @@ function MatchCandidateCard({
       onPress={onPress}
       style={{
         backgroundColor: "#ffffff",
-        borderColor: "#e5e7eb",
+        borderColor: "#e7e2da",
         borderWidth: 1,
-        borderRadius: 18,
+        borderRadius: 14,
       }}
-      className="flex-row items-center justify-between px-4 py-3.5 active:bg-slate-50"
+      className="flex-row items-center justify-between px-4 py-3.5 active:bg-surface-hover"
     >
       <View className="flex-1 pr-3">
-        <Text className="text-base font-bold text-[#071328]" numberOfLines={1}>
+        <Text className="text-base font-semibold text-text" numberOfLines={1}>
           {title}
         </Text>
-        <Text className="mt-0.5 text-xs text-[#64748b]" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>
           {sub}
         </Text>
       </View>
       <View className="flex-row items-center gap-1">
-        <Text className="text-sm font-bold text-[#1e3a8a]">{actionText}</Text>
-        <ArrowRight size={14} color="#1e3a8a" strokeWidth={2.4} />
+        <Text className="text-sm font-semibold text-navy-700">{actionText}</Text>
+        <ArrowRight size={14} color="#1f3f80" strokeWidth={2.4} />
       </View>
     </Pressable>
   );
@@ -597,27 +581,27 @@ function OpenJobCard({
       onPress={onPress}
       style={{
         backgroundColor: "#ffffff",
-        borderColor: "#e5e7eb",
+        borderColor: "#e7e2da",
         borderWidth: 1,
-        borderRadius: 18,
+        borderRadius: 14,
       }}
-      className="flex-row items-center justify-between px-4 py-3.5 active:bg-slate-50"
+      className="flex-row items-center justify-between px-4 py-3.5 active:bg-surface-hover"
     >
       <View className="flex-1 pr-3">
-        <Text className="text-base font-bold text-[#071328]" numberOfLines={1}>
+        <Text className="text-base font-semibold text-text" numberOfLines={1}>
           {title}
         </Text>
-        <Text className="mt-0.5 text-xs text-[#64748b]" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>
           {sub}
         </Text>
         <View className="mt-1 flex-row items-center gap-2">
-          <Text className="text-xs font-bold text-[#071328]">{views}</Text>
+          <Text className="text-xs font-semibold text-text">{views}</Text>
           {badge}
         </View>
       </View>
       <View className="flex-row items-center gap-1">
-        <Text className="text-sm font-bold text-[#1e3a8a]">Open</Text>
-        <ArrowRight size={14} color="#1e3a8a" strokeWidth={2.4} />
+        <Text className="text-sm font-semibold text-navy-700">Open</Text>
+        <ArrowRight size={14} color="#1f3f80" strokeWidth={2.4} />
       </View>
     </Pressable>
   );

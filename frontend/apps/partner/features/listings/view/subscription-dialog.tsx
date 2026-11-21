@@ -106,7 +106,7 @@ export function SubscriptionDialog({
                   <p className="mt-1 text-[11px] text-text-muted">{serviceLabel}</p>
 
                   <div className="mt-3">
-                    <span className="text-2xl font-extrabold text-text">₹{priceInRupees}</span>
+                    <span className="text-2xl font-bold text-text">₹{priceInRupees}</span>
                     <span className="text-xs text-text-muted"> {t("listings.subscription.perDays", { days: plan.duration_days ?? "" })}</span>
                   </div>
 

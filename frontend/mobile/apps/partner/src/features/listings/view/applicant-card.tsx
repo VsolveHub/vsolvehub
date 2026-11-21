@@ -111,58 +111,53 @@ export function ApplicantCard({
   // Status events in order
   const statusEvents = (application as any).status_events ?? [];
 
-  return (
-    <View className="rounded-3xl border border-[#e2e8f0] bg-white p-5 shadow-xs">
-      {/* Top Badges Row */}
-      <View className="flex-row items-center justify-between">
-        {/* Status Pill on Left */}
-        <View className="rounded-full border border-[#a7f3d0] bg-[#ecfdf5] px-3 py-1">
-          <Text className="text-xs font-semibold text-[#059669]">
-            {stepLabel}
-          </Text>
-        </View>
+  const currentIdx = STEPS.indexOf(stepLabel as (typeof STEPS)[number]);
+  const details = [
+    { label: "Location", value: locationText },
+    { label: "Jobs wanted", value: jobsWanted },
+    { label: "Experience", value: snapshot.experience },
+  ].filter((row) => row.value);
 
-        {/* Applied Date on Right */}
-        <View className="flex-row items-center gap-1.5">
-          <Calendar size={13} color="#64748b" />
-          <Text className="text-xs text-[#64748b]">
-            Applied {formatDmy(application.created_at)}
-          </Text>
+  return (
+    <View className="rounded-2xl border border-line bg-surface p-4">
+      {/* Header: avatar, name, applied date, current stage */}
+      <View className="flex-row items-start gap-3">
+        <View className="size-11 items-center justify-center rounded-full bg-surface-sunken">
+          <Text className="text-base font-bold text-text">{candidateName.trim().charAt(0).toUpperCase()}</Text>
         </View>
+        <View className="min-w-0 flex-1">
+          <Text className="text-lg font-semibold text-text" numberOfLines={1}>
+            {candidateName}
+          </Text>
+          <View className="mt-0.5 flex-row items-center gap-1.5">
+            <Calendar size={12} color="#756c5e" />
+            <Text className="text-xs text-text-muted">Applied {formatDmy(application.created_at)}</Text>
+          </View>
+        </View>
+        {closed ? (
+          <View className="rounded-full bg-surface-sunken px-2.5 py-1">
+            <Text className="text-xs font-semibold text-text-secondary">
+              {status === "REJECTED" ? "Not selected" : status}
+            </Text>
+          </View>
+        ) : (
+          <View className="rounded-full bg-success-surface px-2.5 py-1">
+            <Text className="text-xs font-semibold text-success-text">{stepLabel}</Text>
+          </View>
+        )}
       </View>
 
-      {/* Contact Unlocked Pill (Row 2) */}
-      {isContactUnlocked ? (
-        <View className="mt-2.5 self-start flex-row items-center gap-1.5 rounded-full border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-1">
-          <CheckCircle2 size={13} color="#059669" />
-          <Text className="text-xs font-semibold text-[#059669]">
-            Contact unlocked
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Candidate Name */}
-      <Text className="mt-3 text-xl font-extrabold text-[#071328]">
-        {candidateName}
-      </Text>
-
-      {/* Hiring Step Progress Badges (Orange Pills) */}
+      {/* Hiring progress: one bar and one label per stage */}
       {!closed ? (
-        <View className="mt-2.5 flex-row flex-wrap items-center gap-1.5">
+        <View className="mt-4 flex-row gap-2">
           {STEPS.map((name, i) => {
-            const currentIdx = STEPS.indexOf(stepLabel as (typeof STEPS)[number]);
             const reached = currentIdx >= i;
             return (
-              <View
-                key={name}
-                className={`rounded-full px-3 py-0.5 ${
-                  reached ? "bg-[#ea580c]" : "bg-[#f4efe8]"
-                }`}
-              >
+              <View key={name} className="flex-1 gap-1.5">
+                <View className={`h-1 rounded-full ${reached ? "bg-signal-500" : "bg-line"}`} />
                 <Text
-                  className={`text-xs font-bold ${
-                    reached ? "text-[#071328]" : "text-[#64748b]"
-                  }`}
+                  numberOfLines={1}
+                  className={`text-[11px] ${i === currentIdx ? "font-semibold text-text" : "text-text-muted"}`}
                 >
                   {name}
                 </Text>
@@ -170,119 +165,87 @@ export function ApplicantCard({
             );
           })}
         </View>
-      ) : (
-        <View className="mt-2 self-start rounded-full bg-[#f1f5f9] px-3 py-1 border border-[#e2e8f0]">
-          <Text className="text-xs font-semibold text-[#64748b]">
-            {status === "REJECTED" ? "Not selected" : status}
-          </Text>
-        </View>
-      )}
+      ) : null}
 
-      {/* Candidate Metadata */}
-      <View className="mt-3 gap-1">
-        {locationText ? (
-          <Text className="text-xs text-[#334155]">
-            <Text className="font-semibold text-[#64748b]">location: </Text>
-            {locationText}
-          </Text>
-        ) : null}
-        {jobsWanted ? (
-          <Text className="text-xs text-[#334155]">
-            <Text className="font-semibold text-[#64748b]">jobs wanted: </Text>
-            {jobsWanted}
-          </Text>
-        ) : null}
-        {snapshot.experience ? (
-          <Text className="text-xs text-[#334155]">
-            <Text className="font-semibold text-[#64748b]">experience: </Text>
-            {snapshot.experience}
-          </Text>
-        ) : null}
-      </View>
-
-      {/* Cover Note (if provided) */}
-      {application.cover_note ? (
-        <View className="mt-2.5 rounded-xl border border-[#e8e2d9] bg-[#f4efe8] p-2.5">
-          <Text className="text-xs italic text-[#475569]">
-            “{application.cover_note}”
-          </Text>
+      {/* Candidate details */}
+      {details.length > 0 ? (
+        <View className="mt-4 gap-2 border-t border-line pt-4">
+          {details.map((row) => (
+            <View key={row.label} className="flex-row gap-3">
+              <Text className="w-24 text-sm text-text-muted">{row.label}</Text>
+              <Text className="flex-1 text-sm text-text">{row.value}</Text>
+            </View>
+          ))}
         </View>
       ) : null}
 
-      {/* Resume Section */}
-      <View className="mt-3 rounded-xl border border-[#e8e2d9]/60 bg-[#f4efe8] p-3">
-        {resumeUrl ? (
-          <Pressable
-            onPress={handleOpenResume}
-            className="flex-row items-center gap-1.5"
-          >
-            <Text className="text-xs font-semibold text-[#071328] underline">
-              Resume Link: View Profile / CV
-            </Text>
-            <ExternalLink size={13} color="#071328" />
-          </Pressable>
-        ) : (
-          <Text className="text-xs text-[#64748b]">
-            No resume link provided
-          </Text>
-        )}
-      </View>
+      {/* Cover note (if provided) */}
+      {application.cover_note ? (
+        <View className="mt-4 border-l-2 border-line pl-3">
+          <Text className="text-sm italic leading-5 text-text-secondary">“{application.cover_note}”</Text>
+        </View>
+      ) : null}
 
-      {/* Contact Info (Unlocked or Masked Box) */}
-      <View className="mt-3 rounded-xl border border-[#e2e8f0] bg-white p-3 flex-row items-center justify-between">
-        {isContactUnlocked ? (
-          <>
-            {phone ? (
-              <Pressable
-                onPress={handleCall}
-                className="flex-row items-center gap-2"
-              >
-                <Phone size={15} color="#059669" />
-                <Text className="text-sm font-bold text-[#071328]">{phone}</Text>
-              </Pressable>
-            ) : (
-              <Text className="text-xs text-[#64748b]">No phone number on file</Text>
-            )}
-            <Text className="text-xs text-[#64748b]">
-              Unlocked on {formatDmy(application.contact_revealed_at)}
-            </Text>
-          </>
-        ) : (
-          <>
-            <View className="flex-row items-center gap-1.5 flex-1 pr-2">
-              <Lock size={14} color="#64748b" />
-              <Text className="text-xs text-[#64748b]" numberOfLines={1}>
-                Direct contact masked
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => onRevealContact(application)}
-              className="rounded-lg bg-[#071328] px-3 py-1.5 flex-row items-center gap-1"
-            >
-              <Unlock size={12} color="#ffffff" />
-              <Text className="text-xs font-bold text-white">
-                Reveal Phone
-              </Text>
+      {/* Resume and contact */}
+      <View className="mt-4 overflow-hidden rounded-xl border border-line">
+        <View className="px-3.5 py-3">
+          {resumeUrl ? (
+            <Pressable onPress={handleOpenResume} className="flex-row items-center gap-2">
+              <ExternalLink size={15} color="#071328" />
+              <Text className="text-sm font-medium text-text">Resume Link: View Profile / CV</Text>
             </Pressable>
-          </>
-        )}
+          ) : (
+            <Text className="text-sm text-text-muted">No resume link provided</Text>
+          )}
+        </View>
+        <View className="flex-row items-center justify-between gap-3 border-t border-line bg-surface-sunken px-3.5 py-3">
+          {isContactUnlocked ? (
+            <>
+              {phone ? (
+                <Pressable onPress={handleCall} className="flex-row items-center gap-2">
+                  <Phone size={15} color="#0e7c3a" />
+                  <Text className="text-sm font-semibold text-text">{phone}</Text>
+                </Pressable>
+              ) : (
+                <Text className="text-sm text-text-muted">No phone number on file</Text>
+              )}
+              <View className="flex-row items-center gap-1">
+                <CheckCircle2 size={13} color="#0e7c3a" />
+                <Text className="text-xs font-medium text-success-text">Contact unlocked</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View className="flex-1 flex-row items-center gap-2">
+                <Lock size={15} color="#756c5e" />
+                <Text className="text-sm text-text-muted" numberOfLines={1}>
+                  Direct contact masked
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => onRevealContact(application)}
+                className="min-h-9 flex-row items-center gap-1.5 rounded-lg bg-navy-900 px-3.5 active:opacity-90"
+              >
+                <Unlock size={13} color="#ffffff" />
+                <Text className="text-sm font-semibold text-white">Reveal Phone</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
       </View>
 
-      {/* Status History Timeline Pills */}
+      {/* Recent status changes */}
       {statusEvents && statusEvents.length > 0 ? (
-        <View className="mt-2.5 flex-col gap-1.5">
+        <View className="mt-3 gap-1.5">
           {statusEvents
             .slice(-2)
             .reverse()
             .map((ev: any, idx: number) => {
               const evLabel = HIRING_STEP_LABELS[ev.to_status] || ev.to_status;
               return (
-                <View
-                  key={ev.id || idx}
-                  className="self-start flex-row items-center gap-1.5 rounded-full border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1"
-                >
-                  <Clock size={12} color="#64748b" />
-                  <Text className="text-[11px] text-[#64748b]">
+                <View key={ev.id || idx} className="flex-row items-center gap-1.5">
+                  <Clock size={12} color="#756c5e" />
+                  <Text className="text-xs text-text-muted">
                     {evLabel} ({formatDmy(ev.created_at)})
                   </Text>
                 </View>
@@ -291,19 +254,8 @@ export function ApplicantCard({
         </View>
       ) : null}
 
-      {/* Action Buttons */}
-      <View className="mt-4 flex-col gap-2.5">
-        {canShortlist ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onUpdateStatus(application, "SHORTLISTED")}
-            className="w-full flex-row items-center justify-center gap-2 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] py-2.5 px-4 active:bg-[#d1fae5]"
-          >
-            <UserCheck size={15} color="#059669" />
-            <Text className="text-sm font-bold text-[#059669]">Shortlist</Text>
-          </Pressable>
-        ) : null}
-
+      {/* Actions: the main next step first, the rest quieter */}
+      <View className="mt-4 gap-2.5">
         {canInterview ? (
           <Pressable
             accessibilityRole="button"
@@ -314,10 +266,10 @@ export function ApplicantCard({
                 onUpdateStatus(application, "INTERVIEW");
               }
             }}
-            className="w-full flex-row items-center justify-center gap-2 rounded-xl bg-[#ea580c] py-2.5 px-4 shadow-xs active:opacity-90"
+            className="min-h-12 flex-row items-center justify-center gap-2 rounded-xl bg-signal-500 px-4 active:opacity-90"
           >
-            <Calendar size={15} color="#071328" />
-            <Text className="text-sm font-bold text-[#071328]">
+            <Calendar size={16} color="#071328" />
+            <Text className="text-sm font-semibold text-text">
               {application.interview && application.interview.status !== "CANCELLED"
                 ? "New interview time"
                 : "Schedule interview"}
@@ -329,23 +281,34 @@ export function ApplicantCard({
           <Pressable
             accessibilityRole="button"
             onPress={() => onUpdateStatus(application, "HIRED")}
-            className="w-full flex-row items-center justify-center gap-2 rounded-xl bg-[#059669] py-2.5 px-4 active:opacity-90"
+            className="min-h-12 flex-row items-center justify-center gap-2 rounded-xl bg-success px-4 active:opacity-90"
           >
-            <Award size={15} color="#ffffff" />
-            <Text className="text-sm font-bold text-white">Mark as hired</Text>
+            <Award size={16} color="#ffffff" />
+            <Text className="text-sm font-semibold text-white">Mark as hired</Text>
           </Pressable>
         ) : null}
 
-        {canMarkConnected || canReject ? (
-          <View className="flex-row gap-2">
+        {canShortlist || canMarkConnected || canReject ? (
+          <View className="flex-row gap-2.5">
+            {canShortlist ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onUpdateStatus(application, "SHORTLISTED")}
+                className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-success-line bg-success-surface px-3 active:opacity-80"
+              >
+                <UserCheck size={15} color="#0e7c3a" />
+                <Text className="text-sm font-semibold text-success-text">Shortlist</Text>
+              </Pressable>
+            ) : null}
+
             {canMarkConnected ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => onUpdateStatus(application, "CONNECTED")}
-                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] py-2.5 px-3 active:bg-[#d1fae5]"
+                className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-success-line bg-success-surface px-3 active:opacity-80"
               >
-                <CheckCircle2 size={15} color="#059669" />
-                <Text className="text-xs font-bold text-[#059669]">Mark connected</Text>
+                <CheckCircle2 size={15} color="#0e7c3a" />
+                <Text className="text-sm font-semibold text-success-text">Mark connected</Text>
               </Pressable>
             ) : null}
 
@@ -353,25 +316,22 @@ export function ApplicantCard({
               <Pressable
                 accessibilityRole="button"
                 onPress={() => onUpdateStatus(application, "REJECTED")}
-                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-[#e2e8f0] bg-white py-2.5 px-3 active:bg-[#f8fafc]"
+                className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-3 active:bg-surface-hover"
               >
-                <UserX size={15} color="#64748b" />
-                <Text className="text-xs font-semibold text-[#64748b]">Not selected</Text>
+                <UserX size={15} color="#756c5e" />
+                <Text className="text-sm font-medium text-text-secondary">Not selected</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
 
-        {/* Third Row: Report button */}
         {onReport ? (
           <Pressable
             onPress={() => onReport(application)}
-            className="self-start flex-row items-center justify-center gap-1.5 rounded-xl border border-[#e2e8f0] bg-white py-2 px-3.5 active:bg-[#f8fafc]"
+            className="min-h-9 flex-row items-center justify-center gap-1.5 self-center px-3 active:opacity-70"
           >
-            <Flag size={13} color="#64748b" />
-            <Text className="text-xs font-semibold text-[#64748b]">
-              Report
-            </Text>
+            <Flag size={13} color="#756c5e" />
+            <Text className="text-xs font-medium text-text-muted">Report</Text>
           </Pressable>
         ) : null}
       </View>

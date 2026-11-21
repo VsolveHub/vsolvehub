@@ -60,7 +60,7 @@ export function SubscriptionDialog({
                 <Crown size={20} color="#eab308" />
               </View>
               <View>
-                <Text className="text-base font-extrabold text-navy-900">
+                <Text className="text-base font-bold text-navy-900">
                   Hiring Subscription Plans
                 </Text>
                 <Text className="text-xs text-text-muted">
@@ -105,20 +105,20 @@ export function SubscriptionDialog({
                   key={plan.id}
                   className={`rounded-2xl border p-4 ${
                     isCurrent
-                      ? "border-amber-400 bg-amber-50/40"
+                      ? "border-warning-line bg-warning-surface/40"
                       : "border-line bg-surface"
                   }`}
                 >
                   <View className="flex-row items-center justify-between">
                     <View className="flex-row items-center gap-2">
-                      <Text className="text-base font-extrabold text-navy-900">
+                      <Text className="text-base font-bold text-navy-900">
                         {plan.name}
                       </Text>
                       {isCurrent ? (
                         <Badge tone="warning">Current plan</Badge>
                       ) : null}
                     </View>
-                    <Text className="text-lg font-extrabold text-navy-900">
+                    <Text className="text-lg font-bold text-navy-900">
                       ₹{priceInRupees.toLocaleString("en-IN")}
                     </Text>
                   </View>
@@ -132,7 +132,7 @@ export function SubscriptionDialog({
                     <View className="mt-3 gap-1.5 border-t border-line/60 pt-2.5">
                       {capabilities.map((cap, idx) => (
                         <View key={idx} className="flex-row items-center gap-2">
-                          <Check size={14} color="#16a34a" />
+                          <Check size={14} color="#0e7c3a" />
                           <Text className="text-xs text-text-secondary">{cap}</Text>
                         </View>
                       ))}

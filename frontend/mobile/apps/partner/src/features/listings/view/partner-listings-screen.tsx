@@ -184,16 +184,16 @@ export function PartnerListingsScreen() {
   return (
     <ScrollView
       className="flex-1 bg-canvas"
-      contentContainerClassName="px-4 pt-4 pb-36 gap-4"
+      contentContainerClassName="px-4 pt-5 pb-8 gap-5"
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
     >
       {/* 1. Header Section */}
       <View className="gap-1.5">
-        <Text className="text-[11px] font-bold uppercase tracking-wider text-[#2563eb]">
+        <Text className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
           GROWING TEAM IN HYDERABAD
         </Text>
-        <Text className="text-2xl font-bold text-[#071328]">Jobs & applicants</Text>
-        <Text className="text-xs text-[#64748b] leading-relaxed">
+        <Text className="text-xl font-bold tracking-tight text-text">Jobs & applicants</Text>
+        <Text className="text-xs text-[#756c5e] leading-relaxed">
           Post a role, see who applied, download resumes and hire. Applicants confirm their interview times.
         </Text>
 
@@ -205,14 +205,14 @@ export function PartnerListingsScreen() {
             onPress={() => setShowSubscription(true)}
             style={{
               backgroundColor: "#ffffff",
-              borderColor: "#e5e7eb",
+              borderColor: "#e7e2da",
               borderWidth: 1,
               borderRadius: 14,
             }}
-            className="flex-1 flex-row items-center justify-center gap-1.5 py-3 px-3 shadow-sm active:bg-slate-50"
+            className="flex-1 flex-row items-center justify-center gap-1.5 py-3 px-3 active:bg-surface-hover"
           >
             <Crown size={15} color="#f87000" />
-            <Text className="text-xs font-bold text-[#071328]">Choose plan</Text>
+            <Text className="text-xs font-bold text-text">Choose plan</Text>
           </Pressable>
 
           {/* Post a Job Button */}
@@ -223,7 +223,7 @@ export function PartnerListingsScreen() {
               backgroundColor: "#f87000",
               borderRadius: 14,
             }}
-            className="flex-1 flex-row items-center justify-center gap-1.5 py-3 px-3 shadow-sm active:opacity-90"
+            className="flex-1 flex-row items-center justify-center gap-1.5 py-3 px-3 active:opacity-90"
           >
             <Plus size={16} color="#ffffff" strokeWidth={2.5} />
             <Text className="text-xs font-bold text-white">Post a job</Text>
@@ -238,31 +238,31 @@ export function PartnerListingsScreen() {
           <View
             style={{
               backgroundColor: "#ffffff",
-              borderColor: "#e5e7eb",
+              borderColor: "#e7e2da",
               borderWidth: 1,
-              borderRadius: 18,
+              borderRadius: 14,
             }}
             className="flex-1 p-3.5 justify-between min-h-[96px]"
           >
-            <Text className="text-[11px] font-medium text-[#64748b]">Verified listings</Text>
-            <Text className="text-2xl font-black text-[#071328] mt-1">{activeCount || 6}</Text>
-            <Text className="text-[11px] text-[#64748b] mt-0.5">1 hiring package</Text>
-            <Text className="text-[11px] font-bold text-emerald-600 mt-1">Live on platform</Text>
+            <Text className="text-[11px] font-medium text-[#756c5e]">Verified listings</Text>
+            <Text className="text-xl font-bold tracking-tight text-text mt-1">{activeCount || 6}</Text>
+            <Text className="text-[11px] text-[#756c5e] mt-0.5">1 hiring package</Text>
+            <Text className="text-[11px] font-bold text-success-text mt-1">Live on platform</Text>
           </View>
 
           {/* Card 2: Applicant pool */}
           <View
             style={{
               backgroundColor: "#ffffff",
-              borderColor: "#e5e7eb",
+              borderColor: "#e7e2da",
               borderWidth: 1,
-              borderRadius: 18,
+              borderRadius: 14,
             }}
             className="flex-1 p-3.5 justify-between min-h-[96px]"
           >
-            <Text className="text-[11px] font-medium text-[#64748b]">Applicant pool</Text>
-            <Text className="text-2xl font-black text-[#071328] mt-1">{applicantsCount || 2}</Text>
-            <Text className="text-[11px] text-[#64748b] mt-0.5">12 all-time profiles</Text>
+            <Text className="text-[11px] font-medium text-[#756c5e]">Applicant pool</Text>
+            <Text className="text-xl font-bold tracking-tight text-text mt-1">{applicantsCount || 2}</Text>
+            <Text className="text-[11px] text-[#756c5e] mt-0.5">12 all-time profiles</Text>
             <View className="h-4" />
           </View>
         </View>
@@ -271,16 +271,16 @@ export function PartnerListingsScreen() {
         <View
           style={{
             backgroundColor: "#ffffff",
-            borderColor: "#e5e7eb",
+            borderColor: "#e7e2da",
             borderWidth: 1,
-            borderRadius: 18,
+            borderRadius: 14,
           }}
           className="p-3.5"
         >
-          <Text className="text-[11px] font-medium text-[#64748b]">Active placement plan</Text>
-          <Text className="text-sm font-bold text-[#071328] mt-1">{planName}</Text>
+          <Text className="text-[11px] font-medium text-[#756c5e]">Active placement plan</Text>
+          <Text className="text-sm font-bold text-text mt-1">{planName}</Text>
           {planEndsAt ? (
-            <Text className="text-[11px] text-[#64748b] mt-0.5">Valid until {planEndsAt}</Text>
+            <Text className="text-[11px] text-[#756c5e] mt-0.5">Valid until {planEndsAt}</Text>
           ) : null}
         </View>
       </View>
@@ -300,8 +300,8 @@ export function PartnerListingsScreen() {
                 accessibilityRole="button"
                 onPress={() => setActiveTab(tab.key)}
                 style={{
-                  backgroundColor: isSelected ? "#00112e" : "#ffffff",
-                  borderColor: isSelected ? "#00112e" : "#e5e7eb",
+                  backgroundColor: isSelected ? "#071328" : "#ffffff",
+                  borderColor: isSelected ? "#071328" : "#e7e2da",
                   borderWidth: 1,
                   borderRadius: 9999,
                 }}
@@ -309,7 +309,7 @@ export function PartnerListingsScreen() {
               >
                 <Text
                   className={`text-xs font-bold ${
-                    isSelected ? "text-white" : "text-[#071328]"
+                    isSelected ? "text-white" : "text-text"
                   }`}
                 >
                   {tab.label}
@@ -318,7 +318,7 @@ export function PartnerListingsScreen() {
             );
           })}
         </ScrollView>
-        <Text className="text-xs text-[#64748b] px-0.5">
+        <Text className="text-xs text-[#756c5e] px-0.5">
           Showing {filteredListings.length} roles
         </Text>
       </View>

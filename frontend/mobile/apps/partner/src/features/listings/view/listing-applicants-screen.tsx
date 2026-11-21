@@ -39,8 +39,8 @@ const FILTER_TABS = [
 ] as const;
 
 export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
-  const router = useRouter();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [section, setSection] = useState<"APPLICATIONS" | "MATCHES">("APPLICATIONS");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [interviewing, setInterviewing] = useState<PartnerApplication | null>(null);
@@ -192,56 +192,63 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
   });
 
   const listingTitle = listingQuery.data?.title || "Applicants";
-  const serviceSubtitle = [
-    listingQuery.data?.service_name,
-    `${applications.length} total applicant(s) received`,
-  ]
-    .filter(Boolean)
-    .join(" • ");
-
   return (
-    <View className="flex-1 bg-[#faf8f5]">
+    <View className="flex-1 bg-canvas">
       {/* Main Content Area */}
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
       >
-        {/* Back Link Breadcrumb */}
+        {/* One back control: a small link above the summary, not a bar */}
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to Listings Workspace"
           onPress={() => router.back()}
-          className="flex-row items-center gap-1.5 self-start py-1"
+          hitSlop={8}
+          className="mb-3 min-h-10 flex-row items-center gap-1.5 self-start rounded-full pr-3 active:opacity-70"
         >
-          <ArrowLeft size={14} color="#64748b" />
-          <Text className="text-sm font-medium text-[#64748b]">
-            Back to Listings Workspace
-          </Text>
+          <ArrowLeft size={18} color="#071328" />
+          <Text className="text-sm font-medium text-text">Back</Text>
         </Pressable>
 
-        {/* Job Title */}
-        <Text className="mt-2 text-2xl font-bold tracking-tight text-[#071328]">
-          {listingTitle}
-        </Text>
-
-        {/* Subtitle */}
-        <Text className="mt-1 text-xs text-[#64748b]">
-          {serviceSubtitle}
-        </Text>
-
-        {/* Live & Active Status Pill: only while the job is actually live */}
-        {isLive ? (
-          <View className="mt-2.5 w-full rounded-full border border-emerald-200 bg-emerald-50/70 px-3.5 py-1">
-            <Text className="text-xs font-semibold text-emerald-800">
-              Live & Active
-            </Text>
+        {/* Job summary: title, status, and the counts that matter */}
+        <View className="overflow-hidden rounded-2xl border border-line bg-surface">
+          <View className="p-4">
+            <View className="flex-row items-start justify-between gap-3">
+              <Text className="flex-1 text-xl font-bold tracking-tight text-text">{listingTitle}</Text>
+              {/* Live pill: only while the job is actually live */}
+              {isLive ? (
+                <View className="flex-row items-center gap-1.5 rounded-full bg-success-surface px-2.5 py-1">
+                  <View className="size-1.5 rounded-full bg-success" />
+                  <Text className="text-xs font-semibold text-success-text">Live</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-        ) : null}
+          <View className="flex-row border-t border-line">
+            {[
+              { label: "Applicants", value: applications.length },
+              { label: "Shortlisted", value: listing?.counts?.shortlisted ?? 0 },
+              { label: "Interviews", value: listing?.counts?.interviews ?? 0 },
+              { label: "Views", value: listing?.counts?.views ?? 0 },
+            ].map((stat, i) => (
+              <View
+                key={stat.label}
+                className={`flex-1 items-center py-3 ${i > 0 ? "border-l border-line" : ""}`}
+              >
+                <Text className="text-lg font-bold text-text">{stat.value}</Text>
+                <Text className="text-[11px] text-text-muted">{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         {offerFill ? (
-          <View className="mt-4 gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <View className="mt-5 gap-3 rounded-2xl border border-success-line bg-success-surface p-4">
             <View className="gap-1">
-              <Text className="text-sm font-bold text-[#071328]">You have hired for this job</Text>
-              <Text className="text-xs text-[#475569]">
+              <Text className="text-sm font-semibold text-text">You have hired for this job</Text>
+              <Text className="text-xs text-text-secondary">
                 Close it as filled? Everyone still waiting will be told the position is filled.
               </Text>
             </View>
@@ -249,26 +256,26 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
               accessibilityRole="button"
               disabled={fillMutation.isPending}
               onPress={() => fillMutation.mutate()}
-              className={`items-center rounded-xl bg-[#059669] py-2.5 active:opacity-90 ${
+              className={`items-center rounded-xl bg-success py-2.5 active:opacity-90 ${
                 fillMutation.isPending ? "opacity-60" : ""
               }`}
             >
-              <Text className="text-sm font-bold text-white">Close job as filled</Text>
+              <Text className="text-sm font-semibold text-white">Close job as filled</Text>
             </Pressable>
           </View>
         ) : null}
 
         {/* Segmented Control (Applications vs Matching candidates) */}
-        <View className="mt-5 rounded-2xl bg-[#f4efe8] p-1.5 flex-row border border-[#e8e2d9]">
+        <View className="mt-6 flex-row rounded-xl bg-surface-sunken p-1">
           <Pressable
             onPress={() => setSection("APPLICATIONS")}
-            className={`flex-1 rounded-xl py-3 items-center justify-center ${
-              section === "APPLICATIONS" ? "bg-white shadow-xs" : ""
+            className={`flex-1 items-center justify-center rounded-lg py-2.5 ${
+              section === "APPLICATIONS" ? "bg-white" : ""
             }`}
           >
             <Text
-              className={`text-sm font-bold ${
-                section === "APPLICATIONS" ? "text-[#071328]" : "text-[#475569]"
+              className={`text-sm font-semibold ${
+                section === "APPLICATIONS" ? "text-text" : "text-text-secondary"
               }`}
             >
               Applications ({applications.length})
@@ -277,13 +284,13 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
 
           <Pressable
             onPress={() => setSection("MATCHES")}
-            className={`flex-1 rounded-xl py-3 items-center justify-center ${
-              section === "MATCHES" ? "bg-white shadow-xs" : ""
+            className={`flex-1 items-center justify-center rounded-lg py-2.5 ${
+              section === "MATCHES" ? "bg-white" : ""
             }`}
           >
             <Text
-              className={`text-sm font-bold text-center ${
-                section === "MATCHES" ? "text-[#071328]" : "text-[#475569]"
+              className={`text-sm font-semibold text-center ${
+                section === "MATCHES" ? "text-text" : "text-text-secondary"
               }`}
             >
               Matching candidates
@@ -294,7 +301,12 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
         {section === "APPLICATIONS" ? (
           <>
             {/* Filter Pills Grid */}
-            <View className="mt-5 flex-row flex-wrap gap-2">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mt-5 -mx-4"
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+            >
               {FILTER_TABS.map((tab) => {
                 const count = tabCounts[tab.key] ?? 0;
                 const isSelected = statusFilter === tab.key;
@@ -302,27 +314,27 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
                   <Pressable
                     key={tab.key}
                     onPress={() => setStatusFilter(tab.key)}
-                    className={`rounded-full px-3.5 py-1.5 flex-row items-center border ${
+                    className={`min-h-10 flex-row items-center rounded-full border px-4 ${
                       isSelected
-                        ? "bg-[#071328] border-[#071328]"
-                        : "bg-white border-[#e2e8f0]"
+                        ? "border-navy-900 bg-navy-900"
+                        : "border-line bg-surface"
                     }`}
                   >
                     <Text
-                      className={`text-xs font-semibold ${
-                        isSelected ? "text-white" : "text-[#334155]"
+                      className={`text-sm font-medium ${
+                        isSelected ? "text-white" : "text-text-secondary"
                       }`}
                     >
                       {tab.label}
                     </Text>
                     <View
                       className={`ml-1.5 rounded-full px-2 py-0.5 ${
-                        isSelected ? "bg-[#1e293b]" : "bg-[#f1f5f9]"
+                        isSelected ? "bg-white/20" : "bg-surface-sunken"
                       }`}
                     >
                       <Text
                         className={`text-[11px] font-bold ${
-                          isSelected ? "text-white" : "text-[#64748b]"
+                          isSelected ? "text-white" : "text-text-muted"
                         }`}
                       >
                         {count}
@@ -331,14 +343,14 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
 
             {/* Applications List */}
-            <View className="mt-4">
+            <View className="mt-5">
               {applicantsQuery.isPending ? (
                 <View className="items-center py-16">
                   <Spinner size="lg" />
-                  <Text className="mt-2 text-xs text-[#64748b]">Loading applicants...</Text>
+                  <Text className="mt-2 text-xs text-text-muted">Loading applicants...</Text>
                 </View>
               ) : applicantsQuery.isError ? (
                 <ErrorState
@@ -361,7 +373,7 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
                   }
                 />
               ) : (
-                <View className="flex-col gap-4">
+                <View className="flex-col gap-3">
                   {filteredApps.map((app) => (
                     <ApplicantCard
                       key={app.id}
